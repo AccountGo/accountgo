@@ -1,0 +1,40 @@
+﻿@model Web.Models.ViewModels.Administration.TaxesViewModel
+@{
+    ViewBag.Title = "Taxes";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<h2>Taxes</h2>
+
+@using (Html.BeginForm())
+{
+    <div class="panel panel-default panel-body">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Code</th>
+                    <th>Name</th>
+                    <th>Rate (%)</th>
+                    <th>Sales GL Account</th>
+                    <th>Purchasing GL Account</th>
+                    <th>Active</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var tax in Model.Taxes)
+                {
+                    <tr>
+                        <td>@tax.TaxCode</td>
+                        <td>@tax.TaxName</td>
+                        <td>@tax.Rate</td>
+                        <td>@tax.SalesAccountId</td>
+                        <td>@tax.PurchasingAccountId</td>
+                        <td>@tax.IsActive</td>
+                        <td></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}

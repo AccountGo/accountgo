@@ -1,0 +1,43 @@
+﻿@model Web.Models.ViewModels.Sales.EditCustomer
+@using Web.Models;
+@{
+    ViewBag.Title = "EditCustomer";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<h2>Edit Customer</h2>
+@using (Html.BeginForm())
+{
+    @Html.HiddenFor(m => m.Id)
+    <div class="form-group">
+        <label class="col-md-3 control-label">Name</label>
+        @Html.TextBoxFor(m => m.Name)
+    </div>
+    <div class="form-group">
+        <label class="col-md-3 control-label">Firstname</label>
+        @Html.TextBoxFor(m => m.FirstName)
+    </div>
+    <div class="form-group">
+        <label class="col-md-3 control-label">Lastname</label>
+        @Html.TextBoxFor(m => m.LastName)
+    </div>
+    <div class="form-group">
+        <label class="col-md-3 control-label">Accounts Receivable</label>
+        @Html.DropDownListFor(m => m.AccountsReceivableAccountId, ModelViewHelper.Accounts(null))
+    </div>
+    <div class="form-group">
+        <label class="col-md-3 control-label">Sales Account</label>
+        @Html.DropDownListFor(m => m.SalesAccountId, ModelViewHelper.Accounts(null))
+    </div>
+    <div class="form-group">
+        <label class="col-md-3 control-label">Sales Discount Account</label>
+        @Html.DropDownListFor(m => m.SalesDiscountAccountId, ModelViewHelper.Accounts(null))
+    </div>
+    <div class="form-group">
+        <label class="col-md-3 control-label">Prompt Payment Discount Account</label>
+        @Html.DropDownListFor(m => m.PromptPaymentDiscountAccountId, ModelViewHelper.Accounts(null))
+    </div>
+    <div class="form-group">
+        <input type="submit" value="Save" name="SaveCustomer" />
+    </div>
+}

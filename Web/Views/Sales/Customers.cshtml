@@ -1,0 +1,30 @@
+﻿@model Web.Models.ViewModels.Sales.Customers
+@{
+    ViewBag.Title = "Customers";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<h2>Customers</h2>
+
+@Html.ActionLink("Add Customer", "AddCustomer", "Sales")
+<table class="table">
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>First Name</th>
+            <th>Last Name</th>
+            <th>Balance</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var customer in Model.CustomerListLines)
+        {
+            <tr>
+                <td>@Html.ActionLink((string)string.Format("{0}", customer.Name), "Customer", new { id = customer.Id })</td>
+                <th>@customer.FirstName</th>
+                <th>@customer.LastName</th>
+                <td>@customer.Balance</td>
+            </tr>
+        }
+    </tbody>
+</table>

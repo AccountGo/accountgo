@@ -1,0 +1,45 @@
+﻿@model Web.Models.ViewModels.Financials.Banks
+@using Web.Models;
+@{
+    ViewBag.Title = "Banks";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<h2>Banks</h2>
+
+@using (Html.BeginForm())
+{
+    <div class="panel panel-default panel-body">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Account Name</th>
+                    <th>Type</th>
+                    <th>GL Account</th>
+                    <th>Bank</th>
+                    <th>Number</th>
+                    <th>Address</th>
+                    <th>Default</th>
+                    <th>Active</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var bank in Model.BankList)
+                {
+                    <tr>
+                        <td>@bank.Name</td>
+                        <td>@bank.Type</td>
+                        <td>@bank.AccountId</td>
+                        <td>@bank.BankName</td>
+                        <td>@bank.Number</td>
+                        <td>@bank.Address</td>
+                        <td>@bank.IsDefault</td>
+                        <td>@bank.IsActive</td>
+                        <td></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}

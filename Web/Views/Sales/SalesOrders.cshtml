@@ -1,0 +1,29 @@
+﻿@model Web.Models.ViewModels.Sales.SalesOrders
+@using Web.Models;
+@{
+    ViewBag.Title = "SalesOrders";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<h2>Sales Orders</h2>
+<table class="table">
+    <thead>
+        <tr>
+            <th>Customer</th>
+            <th>Date</th>
+            <th>Amount</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var order in Model.SalesOrdersViewModel)
+        {
+            <tr>
+                <td>@order.Customer</td>
+                <td>@order.Date</td>
+                <td>@order.Amount</td>
+                <td>@Html.ActionLink("Edit", "SalesOrder", new { id = order.Id })</td>
+            </tr>
+        }
+    </tbody>
+</table>
