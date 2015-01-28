@@ -12,6 +12,15 @@ It is initially designed for a small size businesses and the idea is to help the
 3. Build the solution
 4. The project is utilising Entity Framework Code First so when you first run the Web project it automatically creates the database for you. The default name of the database is AccountGo. You can change this in web.config
 
+# Features
+
+On a high level, this solution will provide modules including
+
+1. Accounts Receivable
+2. Accounts Payable
+3. Inventory Control
+4. Financial/Accounting
+
 # Help Wanted
 
 Wether you are a Developer, Consultant, Accountant, QA, Marketing expert, Project Manager we can all be part of this great and promising project.
