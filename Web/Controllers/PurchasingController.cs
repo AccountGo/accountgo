@@ -325,34 +325,51 @@ namespace Web.Controllers
             return View(model);
         }
 
-        public ActionResult EditVendor(int id)
+        public ActionResult AddOrEditVendor(int id = 0)
         {
-            var vendor = _purchasingService.GetVendorById(id);
+            Vendor vendor = null;
             var model = new Web.Models.ViewModels.Purchases.Vendor();
-
-            var accounts = _financialService.GetAccounts();
-            foreach (var account in accounts)
-                model.Accounts.Add(new SelectListItem() { Text = account.AccountName, Value = account.Id.ToString() });
-
-            model.Id = vendor.Id;
-            model.VendorName = vendor.Name;
-            model.AccountsPayableAccountId = vendor.AccountsPayableAccountId;
-            model.PurchaseAccountId = vendor.PurchaseAccountId;
-            model.PurchaseDiscountAccountId = vendor.PurchaseDiscountAccountId;
+            model.Id = id;
+            if (id != 0)
+            {
+                vendor = _purchasingService.GetVendorById(id);                
+                model.VendorName = vendor.Name;
+                model.AccountsPayableAccountId = vendor.AccountsPayableAccountId;
+                model.PurchaseAccountId = vendor.PurchaseAccountId;
+                model.PurchaseDiscountAccountId = vendor.PurchaseDiscountAccountId;
+            }
 
             return View(model);
         }
 
-        [HttpPost, ActionName("EditVendor")]
+        [HttpPost, ActionName("AddOrEditVendor")]
         [FormValueRequiredAttribute("SaveVendor")]
-        public ActionResult EditVendor(Web.Models.ViewModels.Purchases.Vendor model)
+        public ActionResult AddOrEditVendor(Web.Models.ViewModels.Purchases.Vendor model)
         {
-            var vendor = _purchasingService.GetVendorById(model.Id.Value);
+            Vendor vendor = null;
+            if (model.Id != 0)
+            {
+                vendor = _purchasingService.GetVendorById(model.Id.Value);
+            }
+            else
+            {
+                vendor = new Vendor();
+                vendor.CreatedBy = User.Identity.Name;
+                vendor.CreatedOn = DateTime.Now;
+            }
+
+            vendor.ModifiedBy = User.Identity.Name;
+            vendor.ModifiedOn = DateTime.Now;
             vendor.Name = model.VendorName;
             vendor.AccountsPayableAccountId = model.AccountsPayableAccountId.Value == -1 ? null : model.AccountsPayableAccountId;
             vendor.PurchaseAccountId = model.PurchaseAccountId.Value == -1 ? null : model.PurchaseAccountId;
             vendor.PurchaseDiscountAccountId = model.PurchaseDiscountAccountId.Value == -1 ? null : model.PurchaseDiscountAccountId;
-            _purchasingService.UpdateVendor(vendor);
+
+            if (model.Id != 0)
+                _purchasingService.UpdateVendor(vendor);
+            else
+                _purchasingService.AddVendor(vendor);
+
             return RedirectToAction("Vendors");
         }
 

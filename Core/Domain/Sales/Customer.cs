@@ -16,14 +16,13 @@ namespace Core.Domain.Sales
             //Contacts = new HashSet<Contact>();
         }
 
+        public string No { get; set; }
+        public int? PrimaryContactId { get; set; }
         public int? TaxGroupId { get; set; }
-        [Display(Name = "Accounts Receivable")]
         public int? AccountsReceivableAccountId { get; set; }
         public int? SalesAccountId { get; set; }
         public int? SalesDiscountAccountId { get; set; }
         public int? PromptPaymentDiscountAccountId { get; set; }
-        public string No { get; set; }
-        public int? PrimaryContactId { get; set; }
         public int? PaymentTermId { get; set; }
 
         public virtual TaxGroup TaxGroup { get; set; }
@@ -38,7 +37,6 @@ namespace Core.Domain.Sales
         public virtual ICollection<SalesReceiptHeader> SalesReceipts { get; set; }
         public virtual ICollection<SalesOrderHeader> SalesOrders { get; set; }
         //public virtual ICollection<Contact> Contacts { get; set; }
-
 
         [NotMapped]
         public decimal Balance { get { return GetBalance(); } }

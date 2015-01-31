@@ -8,6 +8,7 @@
 
 @using (Html.BeginForm())
 {
+    <h2>General</h2>
     <div class="panel panel-default panel-body">
         <div class="form-group">
             <label class="col-md-2 control-label">Customer</label>
@@ -19,7 +20,7 @@
         </div>
         @Html.ActionLink("Edit", "EditCustomer", new { @id = Model.Id })
     </div>
-    <h3>Receipts</h3>
+    <h2>Receipts</h2>
     <div class="panel panel-default panel-body">
         <table class="table">
             <thead>
@@ -46,7 +47,7 @@
             </thead>
         </table>
     </div>
-    <h3>Invoices</h3>
+    <h2>Invoicing</h2>
     <div class="panel panel-default panel-body">
         <table class="table">
             <thead>

@@ -1,14 +1,20 @@
-﻿using System.ComponentModel.DataAnnotations.Schema;
+﻿using System;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Core.Domain
 {
     [Table("Contact")]
     public partial class Contact : Party
     {
-        public ContactTypes ContactType { get; set; }
         /// <summary>
         /// Check ContactyType to determine whether CompanyNo is Customer No or Vendor No
         /// </summary>
-        public string CompanyNo { get; set; }
+        public ContactTypes ContactType { get; set; }
+        public int? PartyId { get; set; }
+        public virtual string FirstName { get; set; }
+        public virtual string LastName { get; set; }
+        public virtual string MiddleName { get; set; }
+
+        public virtual Party Party { get; set; }
     }
 }

@@ -314,8 +314,8 @@ namespace Web.Controllers
                 {
                     Id = customer.Id,
                     Name = customer.Name,
-                    FirstName = customer.FirstName,
-                    LastName = customer.LastName,
+                    //FirstName = customer.FirstName,
+                    //LastName = customer.LastName,
                     Balance = customer.Balance
                 });
             }
@@ -382,37 +382,53 @@ namespace Web.Controllers
             return RedirectToAction("EditCustomer", new { id = customer.Id });
         }
 
-        public ActionResult EditCustomer(int id)
+        public ActionResult AddOrEditCustomer(int id = 0)
         {
-            var customer = _salesService.GetCustomerById(id);
+            Models.ViewModels.Sales.EditCustomer model = new Models.ViewModels.Sales.EditCustomer();
             var accounts = _financialService.GetAccounts();
-            var model = new Models.ViewModels.Sales.EditCustomer();
-            model.Id = customer.Id;
-            model.Name = customer.Name;
-            model.FirstName = customer.FirstName;
-            model.LastName = customer.LastName;
-            model.AccountsReceivableAccountId = customer.AccountsReceivableAccountId.HasValue ? customer.AccountsReceivableAccountId : -1;
-            model.SalesAccountId = customer.SalesAccountId.HasValue ? customer.SalesAccountId : -1;
-            model.SalesDiscountAccountId = customer.SalesDiscountAccountId.HasValue ? customer.SalesDiscountAccountId : -1;
-            model.PromptPaymentDiscountAccountId = customer.PromptPaymentDiscountAccountId.HasValue ? customer.PromptPaymentDiscountAccountId : -1;
-
+            if (id != 0)
+            {
+                var customer = _salesService.GetCustomerById(id);
+                model.Id = customer.Id;
+                model.Name = customer.Name;
+                model.AccountsReceivableAccountId = customer.AccountsReceivableAccountId.HasValue ? customer.AccountsReceivableAccountId : -1;
+                model.SalesAccountId = customer.SalesAccountId.HasValue ? customer.SalesAccountId : -1;
+                model.SalesDiscountAccountId = customer.SalesDiscountAccountId.HasValue ? customer.SalesDiscountAccountId : -1;
+                model.PromptPaymentDiscountAccountId = customer.PromptPaymentDiscountAccountId.HasValue ? customer.PromptPaymentDiscountAccountId : -1;
+            }
             return View(model);
         }
 
-        [HttpPost, ActionName("EditCustomer")]
+        [HttpPost, ActionName("AddOrEditCustomer")]
         [FormValueRequiredAttribute("SaveCustomer")]
-        public ActionResult SaveCustomer(Models.ViewModels.Sales.EditCustomer model)
+        public ActionResult AddOrEditCustomer(Models.ViewModels.Sales.EditCustomer model)
         {
-            var customer = _salesService.GetCustomerById(model.Id);
+            Customer customer = null;
+            if (model.Id != 0)
+            {
+                customer = _salesService.GetCustomerById(model.Id);                
+            }
+            else
+            {
+                customer = new Customer();
+                customer.CreatedBy = User.Identity.Name;
+                customer.CreatedOn = DateTime.Now;
+            }
+
+            customer.ModifiedBy = User.Identity.Name;
+            customer.ModifiedOn = DateTime.Now;
             customer.Name = model.Name;
-            customer.FirstName = model.FirstName;
-            customer.LastName = model.LastName;
             customer.AccountsReceivableAccountId = model.AccountsReceivableAccountId.Value == -1 ? null : model.AccountsReceivableAccountId;
             customer.SalesAccountId = model.SalesAccountId.Value == -1 ? null : model.SalesAccountId;
             customer.SalesDiscountAccountId = model.SalesDiscountAccountId.Value == -1 ? null : model.SalesDiscountAccountId;
             customer.PromptPaymentDiscountAccountId = model.PromptPaymentDiscountAccountId.Value == -1 ? null : model.PromptPaymentDiscountAccountId;
-            _salesService.UpdateCustomer(customer);
-            return RedirectToAction("CustomerDetail", new { id = model.Id });
+
+            if (model.Id != 0)
+                _salesService.UpdateCustomer(customer);
+            else
+                _salesService.AddCustomer(customer);
+
+            return RedirectToAction("Customers");
         }
 
         public ActionResult CustomerDetail(int id)

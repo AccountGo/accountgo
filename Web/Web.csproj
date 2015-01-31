@@ -344,7 +344,7 @@
     <Content Include="Views\Purchasing\AddPurchaseReceipt.cshtml" />
     <Content Include="Views\Purchasing\AddPurchaseInvoice.cshtml" />
     <Content Include="Views\Purchasing\Vendors.cshtml" />
-    <Content Include="Views\Purchasing\EditVendor.cshtml" />
+    <Content Include="Views\Purchasing\AddOrEditVendor.cshtml" />
     <Content Include="Views\Sales\SalesInvoices.cshtml" />
     <Content Include="Views\Sales\AddSalesInvoice.cshtml" />
     <Content Include="Views\Sales\AddSalesReceipt.cshtml" />
@@ -359,7 +359,7 @@
     <Content Include="Views\Financial\MasterGeneralLedger.cshtml" />
     <Content Include="Views\Sales\CustomerDetail.cshtml" />
     <Content Include="Views\Sales\Allocate.cshtml" />
-    <Content Include="Views\Sales\EditCustomer.cshtml" />
+    <Content Include="Views\Sales\AddOrEditCustomer.cshtml" />
     <Content Include="Views\Purchasing\PurchaseInvoices.cshtml" />
     <Content Include="Views\Purchasing\MakePayment.cshtml" />
     <Content Include="Views\Inventory\AddItem.cshtml" />

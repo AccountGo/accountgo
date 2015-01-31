@@ -6,7 +6,7 @@
 
 <h2>Vendors</h2>
 
-@Html.ActionLink("Add Vendor", "AddVendor", "Purchasing")
+@Html.ActionLink("Add Vendor", "AddOrEditVendor", "Purchasing")
 <table class="table">
     <thead>
         <tr>
@@ -18,7 +18,7 @@
         @foreach (var vendor in Model.VendorsList)
         {
             <tr>
-                <td>@Html.ActionLink((string)string.Format("{0}", vendor.Name), "EditVendor", new { id = vendor.Id })</td>
+                <td>@Html.ActionLink((string)string.Format("{0}", vendor.Name), "AddOrEditVendor", new { id = vendor.Id })</td>
                 <td>@vendor.Balance</td>
             </tr>
         }

@@ -11,7 +11,7 @@ using System.Data.Entity;
 using System.Linq;
 using System.Transactions;
 
-namespace Data
+namespace UnitTests
 {
     public class DbInitializer<TContext> : IDatabaseInitializer<TContext> where TContext : ApplicationContext, new()
     {
@@ -58,14 +58,14 @@ namespace Data
 
         private void InitData()
         {
+
             InitCompany();
             InitAccounts();
             InitGeneralLedgerSetting();
             InitTax();
-            //InitCustomers();
             InitItems();
-            InitCustomer();
             InitVendor();
+            InitCustomers();
             InitFiscalYear();
             InitPaymentTerms();
             InitBanks();
@@ -166,7 +166,7 @@ namespace Data
 
         private void InitFiscalYear()
         {
-            _context.FiscalYears.Add(new FiscalYear() { FiscalYearCode = "FY1516", FiscalYearName = "FY 2015/2016", StartDate = new DateTime(2015, 01, 01), EndDate = new DateTime(2015, 12, 31), IsActive = true});
+            _context.FiscalYears.Add(new FiscalYear() { FiscalYearCode = "FY1415", FiscalYearName = "FY 2014/2015", StartDate = new DateTime(2014, 01, 01), EndDate = new DateTime(2014, 12, 31), IsActive = true});
             _context.SaveChanges();
         }
 
@@ -176,8 +176,6 @@ namespace Data
             {
                 Company = _context.Companies.FirstOrDefault(),
                 GoodsReceiptNoteClearingAccount = _context.Accounts.Where(a => a.AccountCode == "10810").FirstOrDefault(),
-                ShippingChargeAccount = _context.Accounts.Where(a => a.AccountCode == "40500").FirstOrDefault(),
-                SalesDiscountAccount = _context.Accounts.Where(a => a.AccountCode == "40400").FirstOrDefault(),
                 CreatedBy = "System",
                 CreatedOn = DateTime.Now,
                 ModifiedBy = "System",
@@ -196,9 +194,8 @@ namespace Data
             _context.AccountClasses.Add(new AccountClass() { Name = "Expense", NormalBalance = "Dr" });
             _context.SaveChanges();
 
-            string path = AppDomain.CurrentDomain.BaseDirectory + "/App_Data/coa.csv"; 
             DataTable csvData = new DataTable();
-            using (TextFieldParser csvReader = new TextFieldParser(path))
+            using (TextFieldParser csvReader = new TextFieldParser(@"C:\Development\Practice\apphb\Solution\src\UnitTests\App_Data\coa.csv"))
             {
                 csvReader.SetDelimiters(new string[] { "," });
                 csvReader.HasFieldsEnclosedInQuotes = true;
@@ -296,20 +293,6 @@ namespace Data
 
         private void InitTax()
         {
-            var vat5 = new Tax()
-            {
-                TaxCode = "VAT5%",
-                TaxName = "VAT 5%",
-                Rate = 5,
-                IsActive = true,
-                SalesAccountId = 37,
-                PurchasingAccountId = 37,
-                CreatedBy = "System",
-                CreatedOn = DateTime.Now,
-                ModifiedBy = "System",
-                ModifiedOn = DateTime.Now
-            };
-
             var vat10 = new Tax()
             {
                 TaxCode = "VAT10%",
@@ -352,7 +335,6 @@ namespace Data
                 ModifiedOn = DateTime.Now
             };
 
-            _context.Taxes.Add(vat5);
             _context.Taxes.Add(vat10);
             _context.Taxes.Add(evat12);
             _context.Taxes.Add(exportTax1);
@@ -405,7 +387,7 @@ namespace Data
             _context.ItemTaxGroups.Add(itemTaxGroupRegular);
             _context.ItemTaxGroups.Add(itemTaxGroupRegularPreferenced);
 
-            vat5.TaxGroupTaxes.Add(new TaxGroupTax()
+            vat10.TaxGroupTaxes.Add(new TaxGroupTax()
             {
                 TaxGroup = taxGroupVAT,
                 CreatedBy = "System",
@@ -432,10 +414,9 @@ namespace Data
                 ModifiedOn = DateTime.Now
             });
 
-            vat5.ItemTaxGroupTaxes.Add(new ItemTaxGroupTax()
+            vat10.ItemTaxGroupTaxes.Add(new ItemTaxGroupTax()
             {
                 ItemTaxGroup = itemTaxGroupRegular,
-                IsExempt = false,
                 CreatedBy = "System",
                 CreatedOn = DateTime.Now,
                 ModifiedBy = "System",
@@ -445,7 +426,6 @@ namespace Data
             evat12.ItemTaxGroupTaxes.Add(new ItemTaxGroupTax()
             {
                 ItemTaxGroup = itemTaxGroupRegularPreferenced,
-                IsExempt = false,
                 CreatedBy = "System",
                 CreatedOn = DateTime.Now,
                 ModifiedBy = "System",
@@ -496,8 +476,7 @@ namespace Data
                 Price = 350,
                 SmallestMeasurement = _context.Measurements.Where(m => m.Code == "MO").FirstOrDefault(),
                 SellMeasurement = _context.Measurements.Where(m => m.Code == "MO").FirstOrDefault(),
-                SalesAccount = _context.Accounts.Where(a => a.AccountCode == "40200").FirstOrDefault(),
-                No = "1"
+                SalesAccount = _context.Accounts.Where(a => a.AccountCode == "40200").FirstOrDefault()
             });
 
             var componentCategory = new ItemCategory()
@@ -534,8 +513,7 @@ namespace Data
                 InventoryAccount = inventory,
                 CostOfGoodsSoldAccount = cogs,
                 InventoryAdjustmentAccount = invAdjusment,
-                ItemTaxGroup = _context.ItemTaxGroups.Where(m => m.Name == "Regular").FirstOrDefault(),
-                No = "2"
+                ItemTaxGroup = _context.ItemTaxGroups.Where(m => m.Name == "Regular").FirstOrDefault()
             };
 
             var otherItem = new Item()
@@ -556,8 +534,7 @@ namespace Data
                 InventoryAccount = inventory,
                 CostOfGoodsSoldAccount = cogs,
                 InventoryAdjustmentAccount = invAdjusment,
-                ItemTaxGroup = _context.ItemTaxGroups.Where(m => m.Name == "Regular").FirstOrDefault(),
-                No = "3"
+                ItemTaxGroup = _context.ItemTaxGroups.Where(m => m.Name == "Regular").FirstOrDefault()
             };
 
             componentCategory.Items.Add(carStickerItem);
@@ -602,7 +579,6 @@ namespace Data
         private void InitVendor()
         {
             Vendor vendor = new Vendor();
-            vendor.No = "1";
             vendor.Name = "ABC Sample Supplier";
             vendor.AccountsPayableAccountId = _context.Accounts.Where(a => a.AccountName == "Accounts Payable").FirstOrDefault().Id;
             vendor.PurchaseAccountId = _context.Accounts.Where(a => a.AccountName == "Purchase A/C").FirstOrDefault().Id;
@@ -612,53 +588,7 @@ namespace Data
             vendor.CreatedOn = DateTime.Now;
             vendor.ModifiedBy = "System";
             vendor.ModifiedOn = DateTime.Now;
-
-            Contact primaryContact = new Contact();            
-            primaryContact.ContactType = ContactTypes.Vendor;
-            primaryContact.PartyType = PartyTypes.Contact;
-            primaryContact.FirstName = "Mary";
-            primaryContact.LastName = "Walter";
-            primaryContact.CreatedBy = "System";
-            primaryContact.CreatedOn = DateTime.Now;
-            primaryContact.ModifiedBy = "System";
-            primaryContact.ModifiedOn = DateTime.Now;
-            primaryContact.Party = vendor;
-
-            vendor.PrimaryContact = primaryContact;
-
             _context.Vendors.Add(vendor);
-        }
-
-        private void InitCustomer()
-        {
-            var accountAR = _context.Accounts.Where(e => e.AccountCode == "10120").FirstOrDefault();
-
-            Customer customer = new Customer();
-            customer.No = "1";
-            customer.IsActive = true;
-            customer.PartyType = Core.Domain.PartyTypes.Customer;
-            customer.Name = "ABC Customer";
-            customer.AccountsReceivableAccountId = accountAR != null ? (int?)accountAR.Id : null;
-            customer.CreatedBy = "System";
-            customer.CreatedOn = DateTime.Now;
-            customer.ModifiedBy = "System";
-            customer.ModifiedOn = DateTime.Now;
-            
-            Contact primaryContact = new Contact();
-            primaryContact.ContactType = ContactTypes.Customer;
-            primaryContact.PartyType = PartyTypes.Contact;
-            primaryContact.FirstName = "John";
-            primaryContact.LastName = "Doe";
-            primaryContact.CreatedBy = "System";
-            primaryContact.CreatedOn = DateTime.Now;
-            primaryContact.ModifiedBy = "System";
-            primaryContact.ModifiedOn = DateTime.Now;
-            primaryContact.Party = customer;
-
-            customer.PrimaryContact = primaryContact;
-
-            _context.Customers.Add(customer);
-            _context.SaveChanges();
         }
 
         private void InitCustomers()
@@ -695,9 +625,9 @@ namespace Data
                 Customer customer = new Customer();
                 customer.IsActive = true;
                 customer.PartyType = Core.Domain.PartyTypes.Customer;
-                //customer.FirstName = row[1].ToString();
-                //customer.LastName = row[2].ToString();
-                //customer.Name = row[0].ToString() + " " + customer.FirstName + " " + customer.LastName;
+                customer.FirstName = row[1].ToString();
+                customer.LastName = row[2].ToString();
+                customer.Name = row[0].ToString() + " " + customer.FirstName + " " + customer.LastName;
                 customer.AccountsReceivableAccountId = accountAR != null ? (int?)accountAR.Id : null;
                 customer.CreatedBy = "System";
                 customer.CreatedOn = DateTime.Now;

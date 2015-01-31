@@ -18,15 +18,14 @@ namespace Core.Domain.Purchases
             //Contacts = new HashSet<Contact>();
         }
 
-        [Display(Name = "Accounts Payable")]
+        public string No { get; set; }
         public int? AccountsPayableAccountId { get; set; }
         public int? PurchaseAccountId { get; set; }
-        public int? PurchaseDiscountAccountId { get; set; }
-        public string No { get; set; }
+        public int? PurchaseDiscountAccountId { get; set; }        
         public int? PrimaryContactId { get; set; }
         public int? PaymentTermId { get; set; }
 
-        public virtual Account Account { get; set; }
+        public virtual Account AccountsPayableAccount { get; set; }
         public virtual Account PurchaseAccount { get; set; }
         public virtual Account PurchaseDiscountAccount { get; set; }
         public virtual Contact PrimaryContact { get; set; }

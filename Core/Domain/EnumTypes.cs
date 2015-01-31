@@ -37,8 +37,8 @@
     public enum PartyTypes
     {
         Customer = 1,
-        Vendor,
-        Contact
+        Vendor = 2,
+        Contact = 3
     }
 
     public enum JournalVoucherTypes
@@ -87,8 +87,9 @@
 
     public enum ContactTypes
     {
-        Customer,
-        Vendor
+        Customer = 1,
+        Vendor = 2,
+        Company = 3
     }
 
     public enum ItemTypes
