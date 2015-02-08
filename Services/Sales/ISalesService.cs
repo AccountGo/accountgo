@@ -30,5 +30,7 @@ namespace Services.Sales
         IEnumerable<SalesOrderHeader> GetSalesOrders();
         SalesOrderHeader GetSalesOrderById(int id);
         SalesDeliveryHeader GetSalesDeliveryById(int id);
+        IEnumerable<Contact> GetContacts();
+        int SaveContact(Contact contact);
     }
 }

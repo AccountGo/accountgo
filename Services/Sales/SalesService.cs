@@ -28,6 +28,7 @@ namespace Services.Sales
         private readonly IRepository<SalesDeliveryHeader> _salesDeliveryRepo;
         private readonly IRepository<Bank> _bankRepo;
         private readonly IRepository<GeneralLedgerSetting> _genetalLedgerSetting;
+        private readonly IRepository<Contact> _contactRepo;
 
         public SalesService(IFinancialService financialService,
             IInventoryService inventoryService,
@@ -42,7 +43,8 @@ namespace Services.Sales
             IRepository<PaymentTerm> paymentTermRepo,
             IRepository<SalesDeliveryHeader> salesDeliveryRepo,
             IRepository<Bank> bankRepo,
-            IRepository<GeneralLedgerSetting> generalLedgerSetting)
+            IRepository<GeneralLedgerSetting> generalLedgerSetting,
+            IRepository<Contact> contactRepo)
             : base(sequenceNumberRepo, generalLedgerSetting, paymentTermRepo, bankRepo)
         {
             _financialService = financialService;
@@ -59,6 +61,7 @@ namespace Services.Sales
             _salesDeliveryRepo = salesDeliveryRepo;
             _bankRepo = bankRepo;
             _genetalLedgerSetting = generalLedgerSetting;
+            _contactRepo = contactRepo;
         }
 
         public void AddSalesOrder(SalesOrderHeader salesOrder, bool toSave)
@@ -464,6 +467,19 @@ namespace Services.Sales
         public SalesDeliveryHeader GetSalesDeliveryById(int id)
         {
             return _salesDeliveryRepo.GetById(id);
+        }
+
+        public IEnumerable<Contact> GetContacts()
+        {
+            var query = from f in _contactRepo.Table
+                        select f;
+            return query;
+        }
+
+        public int SaveContact(Contact contact)
+        {
+            _contactRepo.Insert(contact);
+            return contact.Id;
         }
     }
 }

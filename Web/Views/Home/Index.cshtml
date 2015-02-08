@@ -1,6 +1,14 @@
 ﻿@{
     ViewBag.Title = "Home Page";
+    Layout = "~/Views/Shared/_Layout.cshtml";
 }
+@*<div>
+    <input type="text" id="txtName" readonly="readonly" />
+    @Html.ActionLink("Popup Window Test", "PopupWindowTest", null, new { id = "lnkEdit" })
+</div>
+
+<input type="hidden" id="dialogReturnValue" value="" />
+<div id="dialog-edit" style="display: none" />*@
 
 @*<div class="jumbotron">
     <h1>ASP.NET</h1>
@@ -29,3 +37,53 @@
         <p><a class="btn btn-default" href="http://go.microsoft.com/fwlink/?LinkId=301867">Learn more &raquo;</a></p>*@
     </div>
 </div>
+
+<script type="text/javascript">
+    $(document).ready(function () {
+        var url = "";
+        $("#dialog-edit").dialog({
+            title: 'Modal',
+            autoOpen: false,
+            resizable: false,
+            width: 400,
+            show: { effect: 'drop', direction: "up" },
+            modal: true,
+            draggable: true,
+            open: function (event, ui) {
+                $(".ui-dialog-titlebar-close").hide();
+                $(this).load(url);
+            },
+            //buttons: {
+            //    "Save": function () {
+            //        $(this).dialog("close");
+            //        HandlePopupResult('Value from popup');
+            //    },
+            //    "Cancel": function () {
+            //        $(this).dialog("close");
+            //    }
+            //},
+            close: function () {
+                HandlePopupResult($("#dialogReturnValue").val());
+            }
+        });
+
+        //$("#lnkEdit").on("click", function (e) {
+        //    e.preventDefault();
+        //    url = $(this).attr('href');
+        //    var w = window.open(url, "popupWindow", "width=600, height=400, scrollbars=yes");
+        //    return false;
+        //});
+        $("#lnkEdit").on("click", function (e) {
+            e.preventDefault();
+            url = $(this).attr('href');
+            $(".ui-dialog-title").html("Update User");
+            $("#dialog-edit").dialog('open');
+            return false;
+        });
+    });
+
+    function HandlePopupResult(result) {
+        var txtName = document.getElementById("txtName");
+        txtName.value = result;
+    }
+</script>

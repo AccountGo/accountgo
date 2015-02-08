@@ -24,5 +24,10 @@ namespace Web.Controllers
 
             return View();
         }
+
+        public ActionResult PopupWIndowTest()
+        {
+            return PartialView("_PopupWindowTest");
+        }
     }
 }

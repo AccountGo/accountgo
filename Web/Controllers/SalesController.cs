@@ -391,6 +391,7 @@ namespace Web.Controllers
                 var customer = _salesService.GetCustomerById(id);
                 model.Id = customer.Id;
                 model.Name = customer.Name;
+                model.PrimaryContactId = customer.PrimaryContactId.HasValue ? customer.PrimaryContactId.Value : -1;
                 model.AccountsReceivableAccountId = customer.AccountsReceivableAccountId.HasValue ? customer.AccountsReceivableAccountId : -1;
                 model.SalesAccountId = customer.SalesAccountId.HasValue ? customer.SalesAccountId : -1;
                 model.SalesDiscountAccountId = customer.SalesDiscountAccountId.HasValue ? customer.SalesDiscountAccountId : -1;
@@ -418,6 +419,7 @@ namespace Web.Controllers
             customer.ModifiedBy = User.Identity.Name;
             customer.ModifiedOn = DateTime.Now;
             customer.Name = model.Name;
+            if (model.PrimaryContactId != -1) customer.PrimaryContactId = model.PrimaryContactId;
             customer.AccountsReceivableAccountId = model.AccountsReceivableAccountId.Value == -1 ? null : model.AccountsReceivableAccountId;
             customer.SalesAccountId = model.SalesAccountId.Value == -1 ? null : model.SalesAccountId;
             customer.SalesDiscountAccountId = model.SalesDiscountAccountId.Value == -1 ? null : model.SalesDiscountAccountId;
@@ -1012,6 +1014,32 @@ namespace Web.Controllers
             {
                 model.SalesLine.SalesLineItems.RemoveAt(int.Parse(deletedItem));
             }
+        }
+
+        public ActionResult AddCustomerContact()
+        {
+            var model = new Web.Models.ViewModels.ContactViewModel();
+            return View("Contact", model);
+        }
+
+        [HttpPost]
+        public ActionResult AddCustomerContact(Web.Models.ViewModels.ContactViewModel model)
+        {
+            var contact = new Core.Domain.Contact();
+            contact.ContactType = Core.Domain.ContactTypes.Customer;
+            contact.FirstName = model.FirstName;
+            contact.MiddleName = model.MiddleName;
+            contact.LastName = model.LastName;
+            contact.IsActive = true;
+            contact.CreatedBy = User.Identity.Name;
+            contact.CreatedOn = DateTime.Now;
+            contact.ModifiedBy = User.Identity.Name;
+            contact.ModifiedOn = DateTime.Now;
+            _salesService.SaveContact(contact);
+            if(contact.Id > 0)
+                return Json(new { Status = "success" });
+            else
+                return Json(new { Status = "falied" });
         }
     }
 }

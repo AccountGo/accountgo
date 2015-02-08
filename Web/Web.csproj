@@ -213,6 +213,7 @@
     <Compile Include="Models\Singleton.cs" />
     <Compile Include="Models\ViewModels\Administration\CreateBulkInvoice.cs" />
     <Compile Include="Models\ViewModels\Administration\TaxesViewModel.cs" />
+    <Compile Include="Models\ViewModels\ContactViewModel.cs" />
     <Compile Include="Models\ViewModels\Financials\Accounts.cs" />
     <Compile Include="Models\ViewModels\Financials\Banks.cs" />
     <Compile Include="Models\ViewModels\Financials\GeneralLedgerSettingViewModel.cs" />
@@ -285,12 +286,15 @@
     <Content Include="Scripts\bootstrap.min.js" />
     <Content Include="App_Data\coa.csv" />
     <None Include="Properties\PublishProfiles\Deployable.pubxml" />
-    <None Include="Scripts\jquery-1.10.2.intellisense.js" />
-    <Content Include="Scripts\jquery-1.10.2.js" />
-    <Content Include="Scripts\jquery-1.10.2.min.js" />
-    <None Include="Scripts\jquery.validate-vsdoc.js" />
+    <None Include="Scripts\jquery-2.1.3.intellisense.js" />
+    <Content Include="Scripts\jquery-2.1.3.js" />
+    <Content Include="Scripts\jquery-2.1.3.min.js" />
+    <Content Include="Scripts\jquery-2.1.3.min.map" />
     <Content Include="Scripts\jquery-ui-1.11.2.js" />
     <Content Include="Scripts\jquery-ui-1.11.2.min.js" />
+    <None Include="Scripts\jquery.validate-vsdoc.js" />
+    <Content Include="Scripts\jquery.unobtrusive-ajax.js" />
+    <Content Include="Scripts\jquery.unobtrusive-ajax.min.js" />
     <Content Include="Scripts\jquery.validate.js" />
     <Content Include="Scripts\jquery.validate.min.js" />
     <Content Include="Scripts\jquery.validate.unobtrusive.js" />
@@ -313,7 +317,6 @@
     <Content Include="Views\Home\About.cshtml" />
     <Content Include="Views\Home\Contact.cshtml" />
     <Content Include="Views\Home\Index.cshtml" />
-    <Content Include="Scripts\jquery-1.10.2.min.map" />
     <Content Include="Views\Account\_ExternalLoginsListPartial.cshtml" />
     <Content Include="Views\Account\ConfirmEmail.cshtml" />
     <Content Include="Views\Account\ExternalLoginConfirmation.cshtml" />
@@ -389,6 +392,8 @@
     <Content Include="Views\Financial\GeneralLedgerSetting.cshtml" />
     <Content Include="Views\Administration\ItemTaxGroup.cshtml" />
     <Content Include="Views\Sales\Customer.cshtml" />
+    <Content Include="Views\Home\_PopupWIndowTest.cshtml" />
+    <Content Include="Views\Shared\Contact.cshtml" />
   </ItemGroup>
   <ItemGroup />
   <ItemGroup>

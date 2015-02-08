@@ -13,9 +13,14 @@
             <label class="col-md-3 control-label">Name</label>
             @Html.TextBoxFor(m => m.Name)
         </div>
-        <div>
-            @Html.ActionLink("Details", "CustomerDetail", new { id = Model.Id })
+        <div class="form-group">
+            <label class="col-md-3 control-label">Primary Contact</label>
+            @Html.DropDownListFor(m => m.PrimaryContactId, ModelViewHelper.Contacts())
+            @Html.ActionLink("Add", "AddCustomerContact", null, new { id = "AddCustomerContact" })
         </div>
+    </div>
+    <div>
+        @Html.ActionLink("Details", "CustomerDetail", new { id = Model.Id })
     </div>
     <h2>Invoicing</h2>
     <div class="panel panel-default panel-body">
@@ -39,4 +44,43 @@
     <div class="form-group">
         <input type="submit" value="Save" name="SaveCustomer" />
     </div>
+    <input type="hidden" id="dialogAddCustomerContactReturnValue" value="" />
+    <div id="addCustomerContact" style="display: none; clear: both;" />
 }
+
+<script type="text/javascript">
+    $(document).ready(function () {
+        var url = "";
+        $("#addCustomerContact").dialog({
+            title: 'Modal',
+            autoOpen: false,
+            resizable: false,
+            width: 700,
+            height: 500,
+            show: { effect: 'drop', direction: "up" },
+            modal: true,
+            draggable: true,
+            open: function (event, ui) {
+                $(".ui-dialog-titlebar-close").hide();
+                $(this).load(url);
+            },
+            close: function () {
+                //var newOption = "<option value='" + result.contactid + "'>" + result.FirstName + "</option>";
+                //$("#PrimaryContactId").append(newOption);
+                HandlePopupResult($("#dialogReturnValue").val());
+            }
+        });
+        $("#AddCustomerContact").on("click", function (e) {
+            e.preventDefault();
+            url = $(this).attr('href');
+            $(".ui-dialog-title").html("Contact");
+            $("#addCustomerContact").dialog('open');
+            return false;
+        });
+    });
+
+    function HandlePopupResult(result) {
+        //var txtName = document.getElementById("txtName");
+        //txtName.value = result;
+    }
+</script>
