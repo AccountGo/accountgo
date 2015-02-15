@@ -27,8 +27,12 @@ Wether you are a Developer, Consultant, Accountant, QA, Marketing expert, Projec
 
 If you are a developer and wanted to take part as contributor/collaborator we are happy to welcome you! To start with, you can visit the issues page and pick an issue that you would like to work on.
 
+So go ahead, add your code. Looking forward to your first pull request.
+
 # Contact Support
 Feel free to email mvpsolution@gmail.com of any questions.
 
 Don't miss regular source code updates, join http://accountgo.googlegroups.com
+
+Also, you can view demo site here (http://accountgo.apphb.com)
 
