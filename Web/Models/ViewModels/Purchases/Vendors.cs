@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using System.Web.Mvc;
 
 namespace Web.Models.ViewModels.Purchases
@@ -28,6 +29,7 @@ namespace Web.Models.ViewModels.Purchases
         }
 
         public int? Id { get; set; }
+        [Required]
         public string VendorName { get; set; }
         public int? TaxGroupId { get; set; }
         public int? AccountsPayableAccountId { get; set; }

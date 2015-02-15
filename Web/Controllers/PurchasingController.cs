@@ -317,7 +317,7 @@ namespace Web.Controllers
                     model.VendorsList.Add(new Models.ViewModels.Purchases.VendorsListLine()
                     {
                         Id = vendor.Id,
-                        Name = vendor.Name,
+                        Name = vendor.Name == null ? "Name" : vendor.Name,
                         Balance = vendor.GetBalance()
                     });
                 }
