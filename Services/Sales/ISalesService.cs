@@ -32,5 +32,7 @@ namespace Services.Sales
         SalesDeliveryHeader GetSalesDeliveryById(int id);
         IEnumerable<Contact> GetContacts();
         int SaveContact(Contact contact);
+        ICollection<SalesInvoiceHeader> GetSalesInvoicesByCustomerId(int customerId, SalesInvoiceStatus status);
+        ICollection<CustomerAllocation> GetCustomerAllocations(int customerId);
     }
 }

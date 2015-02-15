@@ -13,6 +13,7 @@ namespace Core.Domain.Sales
             SalesInvoices = new HashSet<SalesInvoiceHeader>();
             SalesReceipts = new HashSet<SalesReceiptHeader>();
             SalesOrders = new HashSet<SalesOrderHeader>();
+            CustomerAllocations = new HashSet<CustomerAllocation>();
             //Contacts = new HashSet<Contact>();
         }
 
@@ -36,6 +37,7 @@ namespace Core.Domain.Sales
         public virtual ICollection<SalesInvoiceHeader> SalesInvoices { get; set; }
         public virtual ICollection<SalesReceiptHeader> SalesReceipts { get; set; }
         public virtual ICollection<SalesOrderHeader> SalesOrders { get; set; }
+        public virtual ICollection<CustomerAllocation> CustomerAllocations { get; set; }
         //public virtual ICollection<Contact> Contacts { get; set; }
 
         [NotMapped]
@@ -50,7 +52,7 @@ namespace Core.Domain.Sales
 
             foreach (var header in SalesInvoices)
             {
-                totalInvoiceAmount += header.SalesInvoiceLines.Sum(d => d.Amount);
+                totalInvoiceAmount += header.ComputeTotalAmount();
                 totalAllocation += header.CustomerAllocations.Sum(a => a.Amount);
 
                 foreach (var receipt in header.SalesReceipts)

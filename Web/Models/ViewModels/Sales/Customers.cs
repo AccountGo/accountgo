@@ -32,6 +32,7 @@ namespace Web.Models.ViewModels.Sales
         {
             CustomerAllocations = new HashSet<CustomerAllocation>();
             CustomerInvoices = new HashSet<CustomerSalesInvoice>();
+            ActualAllocations = new HashSet<Allocations>();
         }
 
         public int Id { get; set; }
@@ -40,6 +41,7 @@ namespace Web.Models.ViewModels.Sales
 
         public virtual ICollection<CustomerAllocation> CustomerAllocations { get; set; }
         public virtual ICollection<CustomerSalesInvoice> CustomerInvoices { get; set; }
+        public ICollection<Allocations> ActualAllocations { get; set; }
     }
 
     public class CustomerReceipt
@@ -66,6 +68,14 @@ namespace Web.Models.ViewModels.Sales
         public int Id { get; set; }
         public decimal AmountAllocated { get; set; }
         public decimal AvailableAmountToAllocate { get; set; }
+    }
+
+    public class Allocations
+    {
+        public string InvoiceNo { get; set; }
+        public string ReceiptNo { get; set; }
+        public DateTime Date { get; set; }
+        public decimal Amount { get; set; }
     }
 
     public class Allocate

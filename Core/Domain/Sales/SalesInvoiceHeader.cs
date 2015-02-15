@@ -22,6 +22,7 @@ namespace Core.Domain.Sales
         public string No { get; set; }
         public DateTime Date { get; set; }
         public decimal ShippingHandlingCharge{ get; set; }
+        public SalesInvoiceStatus Status { get; set; }
 
         public string CreatedBy { get; set; }
         public DateTime CreatedOn { get; set; }
@@ -33,6 +34,7 @@ namespace Core.Domain.Sales
         public virtual SalesDeliveryHeader SalesDeliveryHeader { get; set; }
 
         public virtual ICollection<SalesInvoiceLine> SalesInvoiceLines { get; set; }
+        [NotMapped]
         public virtual ICollection<SalesReceiptHeader> SalesReceipts { get; set; }
         public virtual ICollection<CustomerAllocation> CustomerAllocations { get; set; }
 
@@ -57,7 +59,17 @@ namespace Core.Domain.Sales
             {
                 totalPaidAmount += line.GetAmountPaid();
             }
-            return totalInvoiceAmount == (totalPaidAmount + totalAllocation);
+            return (totalPaidAmount + totalAllocation) >= totalInvoiceAmount;
+        }
+
+        public decimal ComputeTotalAmount()
+        {
+            decimal totalInvoiceAmount = 0;
+            foreach (var line in SalesInvoiceLines)
+            {
+                totalInvoiceAmount += line.Quantity * line.Amount;
+            }
+            return totalInvoiceAmount;
         }
     }
 }

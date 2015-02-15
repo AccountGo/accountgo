@@ -332,8 +332,9 @@ namespace Services.Sales
             var customerReceiptsWithNoInvoice = new HashSet<SalesReceiptHeader>();
             foreach (var receipt in customerReceipts)
             {
-                if (receipt.SalesInvoiceHeaderId == null)
-                    customerReceiptsWithNoInvoice.Add(receipt);
+                //if (receipt.SalesInvoiceHeaderId == null)
+                //    customerReceiptsWithNoInvoice.Add(receipt);
+                customerReceiptsWithNoInvoice.Add(receipt);
             }
             return customerReceiptsWithNoInvoice;
         }
@@ -480,6 +481,19 @@ namespace Services.Sales
         {
             _contactRepo.Insert(contact);
             return contact.Id;
+        }
+
+        public ICollection<SalesInvoiceHeader> GetSalesInvoicesByCustomerId(int customerId, SalesInvoiceStatus status)
+        {
+            var query = from invoice in _salesInvoiceRepo.Table
+                        where invoice.CustomerId == customerId && invoice.Status == status
+                        select invoice;
+            return query.ToList();
+        }
+
+        public ICollection<CustomerAllocation> GetCustomerAllocations(int customerId)
+        {
+            return null;
         }
     }
 }

@@ -132,7 +132,7 @@ namespace Web.Controllers
                     No = invoice.No,
                     Customer = invoice.Customer.Name,
                     Date = invoice.Date,
-                    Amount = invoice.SalesInvoiceLines.Sum(s => s.Amount),
+                    Amount = invoice.ComputeTotalAmount(),
                     IsFullPaid = invoice.IsFullPaid()
                 });
             }
@@ -272,7 +272,7 @@ namespace Web.Controllers
             var receipt = new SalesReceiptHeader()
             {
                 AccountToDebitId = model.AccountToDebitId,
-                SalesInvoiceHeaderId = model.SalesInvoiceId,
+                //SalesInvoiceHeaderId = model.SalesInvoiceId,
                 CustomerId = model.CustomerId.Value,
                 Date = model.Date,
                 CreatedBy = User.Identity.Name,
@@ -452,6 +452,16 @@ namespace Web.Controllers
                     AvailableAmountToAllocate = receipt.AvailableAmountToAllocate
                 });
             }
+            foreach (var allocation in customer.CustomerAllocations)
+            {
+                model.ActualAllocations.Add(new Models.ViewModels.Sales.Allocations()
+                {
+                    InvoiceNo = allocation.SalesInvoiceHeader.No,
+                    ReceiptNo = allocation.SalesReceiptHeader.No,
+                    Date = allocation.Date,
+                    Amount = allocation.Amount
+                });
+            }
             foreach(var invoice in customer.SalesInvoices)
             {
                 model.CustomerInvoices.Add(new Models.ViewModels.Sales.CustomerSalesInvoice()
@@ -459,8 +469,8 @@ namespace Web.Controllers
                     Id = invoice.Id,
                     InvoiceNo = invoice.No,
                     Date = invoice.Date,
-                    Amount = invoice.SalesInvoiceLines.Sum(a => a.Amount),
-                    Status = invoice.IsFullPaid() ? "Paid" : "Open"
+                    Amount = invoice.ComputeTotalAmount(),
+                    Status = invoice.Status.ToString()
                  });
             }
             return View(model);
@@ -481,7 +491,7 @@ namespace Web.Controllers
                 model.OpenInvoices.Add(new SelectListItem()
                 {
                     Value = invoice.Id.ToString(),
-                    Text = invoice.No + " - " + (invoice.SalesInvoiceLines.Sum(a => a.Amount) - invoice.SalesInvoiceLines.Sum(a => a.GetAmountPaid()))
+                    Text = invoice.No + " - " + (invoice.ComputeTotalAmount() - invoice.SalesInvoiceLines.Sum(a => a.GetAmountPaid()))
                 });
             }
             return View(model);
@@ -504,10 +514,10 @@ namespace Web.Controllers
             }
             else
             {
-                var invoiceTotalAmount = invoice.SalesInvoiceLines.Sum(a => a.Amount);
+                var invoiceTotalAmount = invoice.ComputeTotalAmount();
                 if (model.AmountToAllocate > invoiceTotalAmount
                     || model.AmountToAllocate > receipt.AvailableAmountToAllocate
-                    || invoice.IsFullPaid())
+                    || invoice.Status == Core.Domain.SalesInvoiceStatus.Closed)
                 {
                     return View(model);
                 }
@@ -522,7 +532,7 @@ namespace Web.Controllers
                 };
                 _salesService.SaveCustomerAllocation(allocation);
             }
-            return RedirectToAction("SalesInvoices");
+            return RedirectToAction("CustomerDetail", new { id = customer.Id });
         }
 
         /// <summary>
@@ -633,7 +643,7 @@ namespace Web.Controllers
                 model.SalesReceiptListLines.Add(new Models.ViewModels.Sales.SalesReceiptListLine()
                 {
                     No = receipt.No,
-                    InvoiceNo = receipt.SalesInvoiceHeader != null ? receipt.SalesInvoiceHeader.No : string.Empty,
+                    //InvoiceNo = receipt.SalesInvoiceHeader != null ? receipt.SalesInvoiceHeader.No : string.Empty,
                     CustomerId = receipt.CustomerId,
                     CustomerName = receipt.Customer.Name,
                     Date = receipt.Date,

@@ -18,7 +18,7 @@
         @foreach (var customer in Model.CustomerListLines)
         {
             <tr>
-                <td>@Html.ActionLink((string)string.Format("{0}", customer.Name), "AddOrEditCustomer", new { id = customer.Id })</td>
+                <td>@Html.ActionLink((string)string.Format("{0}", customer.Name), "CustomerDetail", new { id = customer.Id })</td>
                 <td>@customer.Balance</td>
             </tr>
         }

@@ -15,8 +15,10 @@
             <label class="col-md-2 control-label">Balance</label>
             @Html.DisplayFor(m => m.Balance, new { @class = "form-control" })
         </div>
-        @Html.ActionLink("Edit", "AddOrEditCustomer", new { @id = Model.Id })
     </div>
+</div>
+<div>
+        @Html.ActionLink("Edit", "AddOrEditCustomer", new { @id = Model.Id })
 </div>
 <h3>Receipts</h3>
 <div class="panel panel-default">
@@ -47,6 +49,30 @@
         </table>
     </div>
 </div>
+<h3>Allocations</h3>
+<div class="panel panel-default panel-body">
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Invoice No</th>
+                <th>Receipt No</th>
+                <th>Date</th>
+                <th>Amount</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var allocation in Model.ActualAllocations)
+            {
+                <tr>
+                    <td>@allocation.InvoiceNo</td>
+                    <td>@allocation.ReceiptNo</td>
+                    <td>@allocation.Date</td>
+                    <td>@allocation.Amount</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
 <h3>Invoices</h3>
 <div class="panel panel-default">
     <div class="panel-body">
@@ -61,7 +87,7 @@
             </thead>
             <tbody>
                 @foreach (var receipt in Model.CustomerInvoices)
-            {
+                {
                     <tr>
                         <td>@receipt.InvoiceNo</td>
                         <td>@receipt.Date</td>

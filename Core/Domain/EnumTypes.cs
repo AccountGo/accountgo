@@ -114,4 +114,13 @@
         SavingsAccount,
         CashAccount
     }
+
+    public enum SalesInvoiceStatus
+    {
+        //Draft,
+        Open,       
+        Overdue,
+        Closed,
+        Void
+    }
 }
