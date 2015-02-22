@@ -465,7 +465,7 @@ namespace Web.Controllers
                     lineItem.ItemDescription = line.Item.Description;
                     lineItem.Measurement = line.Measurement.Description;
                     lineItem.Quantity = line.Quantity;
-                    lineItem.PriceBeforeTax = line.Amount;
+                    lineItem.Price = line.Amount;
                     model.PurchaseLine.PurchaseLineItems.Add(lineItem);
                 }
                 return View(model);
@@ -495,7 +495,7 @@ namespace Web.Controllers
                         lineItem.ItemDescription = line.Item.Description;
                         lineItem.Measurement = line.Measurement.Description;
                         lineItem.Quantity = line.Quantity;
-                        lineItem.PriceBeforeTax = line.Amount;
+                        lineItem.Price = line.Amount;
                         model.PurchaseLine.PurchaseLineItems.Add(lineItem);
                     }
                 }
@@ -517,7 +517,7 @@ namespace Web.Controllers
                     lineItem.ItemDescription = line.Item.Description;
                     lineItem.Measurement = line.Measurement.Description;
                     lineItem.Quantity = line.Quantity;
-                    lineItem.PriceBeforeTax = line.Amount;
+                    lineItem.Price = line.Amount;
                     model.PurchaseLine.PurchaseLineItems.Add(lineItem);
                 }
                 return View(model);
@@ -550,7 +550,7 @@ namespace Web.Controllers
                     lineItem.ItemDescription = line.Item.Description;
                     lineItem.Measurement = line.Measurement.Description;
                     lineItem.Quantity = line.Quantity;
-                    lineItem.PriceBeforeTax = line.Amount;
+                    lineItem.Price = line.Amount;
                     model.PurchaseLine.PurchaseLineItems.Add(lineItem);
                 }
                 return View(model);
@@ -568,13 +568,13 @@ namespace Web.Controllers
                 ItemDescription = item.Description,
                 Measurement = item.SellMeasurement.Description,
                 Quantity = model.PurchaseLine.Quantity,
-                PriceBeforeTax = model.PurchaseLine.PriceBeforeTax,
+                Price = model.PurchaseLine.PriceBeforeTax,
             };
             model.PurchaseLine.PurchaseLineItems.Add(newLine);
 
             foreach (var line in model.PurchaseLine.PurchaseLineItems)
             {
-                var taxes = _financialService.ComputeInputTax(line.ItemId, line.Quantity, line.PriceBeforeTax);
+                var taxes = _financialService.ComputeInputTax(line.ItemId, line.Quantity, line.Price);
                 var taxVM = new Models.ViewModels.Purchases.PurchaseLineItemTaxViewModel();
                 foreach (var tax in taxes)
                 {
@@ -692,7 +692,7 @@ namespace Web.Controllers
                 var item = _inventoryService.GetItemById(line.ItemId);
                 order.PurchaseOrderLines.Add(new PurchaseOrderLine()
                 {
-                    Amount = line.PriceBeforeTax,
+                    Amount = line.Price,
                     ItemId = item.Id,
                     Quantity = line.Quantity,
                     MeasurementId = item.PurchaseMeasurementId.Value,

@@ -94,7 +94,7 @@
                     <th>Measurement</th>
                     <th>Quantity</th>
                     <th>Received</th>
-                    <th>Price Before Tax</th>
+                    <th>Price</th>
                     <th>Total</th>
                     <th></th>
                 </tr>
@@ -127,7 +127,7 @@
                     @Html.HiddenFor(m => Model.PurchaseLine.PurchaseLineItems[i].Measurement)
                     @Html.HiddenFor(m => Model.PurchaseLine.PurchaseLineItems[i].Quantity)
                     @Html.HiddenFor(m => Model.PurchaseLine.PurchaseLineItems[i].Received)
-                    @Html.HiddenFor(m => Model.PurchaseLine.PurchaseLineItems[i].PriceBeforeTax)
+                    @Html.HiddenFor(m => Model.PurchaseLine.PurchaseLineItems[i].Price)
                     @Html.HiddenFor(m => Model.PurchaseLine.PurchaseLineItems[i].Total)
                     <tr>
                         <td>@Model.PurchaseLine.PurchaseLineItems[i].ItemNo</td>
@@ -135,7 +135,7 @@
                         <td>@Model.PurchaseLine.PurchaseLineItems[i].Measurement</td>
                         <td>@Model.PurchaseLine.PurchaseLineItems[i].Quantity</td>
                         <td>@Model.PurchaseLine.PurchaseLineItems[i].Received</td>
-                        <td>@Model.PurchaseLine.PurchaseLineItems[i].PriceBeforeTax</td>
+                        <td>@Model.PurchaseLine.PurchaseLineItems[i].Price</td>
                         <td>@Model.PurchaseLine.PurchaseLineItems[i].Total</td>
                         <td>
                             <input type="submit" value="Delete" name="DeleteLineItem" onclick="deleteLineItem(this)" id="@i" />

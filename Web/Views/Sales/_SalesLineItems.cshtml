@@ -5,7 +5,7 @@
         var SalesLineItemViewModel = new Object();
         SalesLineItemViewModel.ItemNo = $('#txtItemNo').val();
         SalesLineItemViewModel.Quantity = $('#Quantity').val();
-        SalesLineItemViewModel.PriceBeforeTax = $('#PriceBeforeTax').val();
+        SalesLineItemViewModel.Price = $('#Price').val();
         SalesLineItemViewModel.Discount = $('#Discount').val();
     }
 
@@ -100,7 +100,7 @@
                     <th>Item Description</th>
                     <th>Measurement</th>
                     <th>Quantity</th>
-                    <th>Price Before Tax</th>
+                    <th>Price</th>
                     <th>Discount %</th>
                     <th>Total</th>
                     <th></th>
@@ -130,7 +130,7 @@
                     @Html.HiddenFor(m => Model.SalesLine.SalesLineItems[i].ItemDescription)
                     @Html.HiddenFor(m => Model.SalesLine.SalesLineItems[i].Measurement)
                     @Html.HiddenFor(m => Model.SalesLine.SalesLineItems[i].Quantity)
-                    @Html.HiddenFor(m => Model.SalesLine.SalesLineItems[i].PriceBeforeTax)
+                    @Html.HiddenFor(m => Model.SalesLine.SalesLineItems[i].Price)
                     @Html.HiddenFor(m => Model.SalesLine.SalesLineItems[i].Discount)
                     @Html.HiddenFor(m => Model.SalesLine.SalesLineItems[i].Total)
                     <tr>
@@ -138,7 +138,7 @@
                         <td>@Model.SalesLine.SalesLineItems[i].ItemDescription</td>
                         <td>@Model.SalesLine.SalesLineItems[i].Measurement</td>
                         <td>@Model.SalesLine.SalesLineItems[i].Quantity</td>
-                        <td>@Model.SalesLine.SalesLineItems[i].PriceBeforeTax</td>
+                        <td>@Model.SalesLine.SalesLineItems[i].Price</td>
                         <td>@Model.SalesLine.SalesLineItems[i].Discount</td>
                         <td>@Model.SalesLine.SalesLineItems[i].Total</td>
                         <td>

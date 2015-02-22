@@ -18,7 +18,7 @@
     </div>
 </div>
 <div>
-        @Html.ActionLink("Edit", "AddOrEditCustomer", new { @id = Model.Id })
+    @Html.ActionLink("Edit", "AddOrEditCustomer", new { @id = Model.Id })
 </div>
 <h3>Receipts</h3>
 <div class="panel panel-default">
@@ -40,7 +40,7 @@
                         <td>
                             @if (receipt.AvailableAmountToAllocate > 0)
                             {
-                                @Html.ActionLink("Allocate", "Allocate", new { id = receipt.Id })
+                                @Html.ActionLink("Allocate", "Allocate", new { id = receipt.Id }, new { id = "Allocate" })
                             }
                         </td>
                     </tr>
@@ -99,3 +99,34 @@
         </table>
     </div>
 </div>
+<div id="dlgAllocation" />
+
+<script>
+    $(document).ready(function () {
+        var url = "";
+        $("#dlgAllocation").dialog({
+            title: 'Modal',
+            autoOpen: false,
+            resizable: false,
+            width: 700,
+            height: 500,
+            show: { effect: 'drop', direction: "up" },
+            modal: true,
+            draggable: true,
+            open: function (event, ui) {
+                $(".ui-dialog-titlebar-close").hide();
+                $(this).load(url);
+            },
+            close: function () {
+                $('#dlgAllocation').dialog('close');
+            }
+        });
+        $("#Allocate").on("click", function (e) {
+            e.preventDefault();
+            url = $(this).attr('href');
+            $(".ui-dialog-title").html("Allocation");
+            $("#dlgAllocation").dialog('open');
+            return false;
+        });
+    });
+</script>

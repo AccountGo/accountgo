@@ -50,7 +50,7 @@ namespace Web.Controllers
                 lineItem.Measurement = line.Measurement.Description;
                 lineItem.Quantity = line.Quantity;
                 lineItem.Discount = line.Discount;
-                lineItem.PriceBeforeTax = line.Amount;
+                lineItem.Price = line.Amount;
                 model.SalesLine.SalesLineItems.Add(lineItem);
             }
             
@@ -80,7 +80,7 @@ namespace Web.Controllers
                 lineItem.Measurement = line.Measurement.Description;
                 lineItem.Quantity = line.Quantity;
                 lineItem.Discount = line.Discount;
-                lineItem.PriceBeforeTax = line.Amount;
+                lineItem.Price = line.Amount;
                 model.SalesLine.SalesLineItems.Add(lineItem);
             }
 

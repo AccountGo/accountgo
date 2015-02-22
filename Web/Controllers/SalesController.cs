@@ -494,7 +494,7 @@ namespace Web.Controllers
                     Text = invoice.No + " - " + (invoice.ComputeTotalAmount() - invoice.SalesInvoiceLines.Sum(a => a.GetAmountPaid()))
                 });
             }
-            return View(model);
+            return PartialView(model);
         }
 
         [HttpPost, ActionName("Allocate")]
@@ -680,7 +680,7 @@ namespace Web.Controllers
                     lineItem.Measurement = line.Measurement.Description;
                     lineItem.Quantity = line.Quantity;
                     lineItem.Discount = line.Discount;
-                    lineItem.PriceBeforeTax = line.Amount;
+                    lineItem.Price = line.Amount;
                     model.SalesLine.SalesLineItems.Add(lineItem);
                 }
                 return View(model);
@@ -714,7 +714,7 @@ namespace Web.Controllers
                     lineItem.Measurement = line.Measurement.Description;
                     lineItem.Quantity = line.Quantity;
                     lineItem.Discount = line.Discount;
-                    lineItem.PriceBeforeTax = line.Amount;
+                    lineItem.Price = line.Amount;
                     model.SalesLine.SalesLineItems.Add(lineItem);
                 }
                 return View(model);
@@ -750,7 +750,7 @@ namespace Web.Controllers
                     lineItem.Measurement = line.Measurement.Description;
                     lineItem.Quantity = line.Quantity;
                     lineItem.Discount = line.Discount;
-                    lineItem.PriceBeforeTax = line.Amount;
+                    lineItem.Price = line.Amount;
                     model.SalesLine.SalesLineItems.Add(lineItem);
                 }
                 return View(model);
@@ -801,7 +801,7 @@ namespace Web.Controllers
                 lineItem.MeasurementId = item.SellMeasurementId.Value;
                 lineItem.Quantity = line.Quantity;
                 lineItem.Discount = line.Discount;
-                lineItem.Amount = line.PriceBeforeTax;
+                lineItem.Amount = line.Price;
             }
 
             if (model.Id == 0)
@@ -856,7 +856,7 @@ namespace Web.Controllers
                 lineItem.MeasurementId = item.SellMeasurementId.Value;
                 lineItem.Quantity = line.Quantity;
                 lineItem.Discount = line.Discount;
-                lineItem.Price = line.PriceBeforeTax;
+                lineItem.Price = line.Price;
             }
 
             if (model.Id == 0)
@@ -916,7 +916,7 @@ namespace Web.Controllers
                 lineItem.MeasurementId = item.SellMeasurementId.Value;
                 lineItem.Quantity = line.Quantity;
                 lineItem.Discount = line.Discount;
-                lineItem.Amount = line.PriceBeforeTax;
+                lineItem.Amount = line.Price;
             }
 
             if (model.Id == 0)
@@ -983,7 +983,7 @@ namespace Web.Controllers
             newLine.ItemDescription = item.Description;
             newLine.Measurement = item.SellMeasurement.Description;
             newLine.Quantity = model.SalesLine.Quantity;
-            newLine.PriceBeforeTax = model.SalesLine.PriceBeforeTax;
+            newLine.Price = model.SalesLine.PriceBeforeTax;
             newLine.Discount = model.SalesLine.Discount;            
             model.SalesLine.SalesLineItems.Add(newLine);
 

@@ -94,21 +94,21 @@ namespace Web.Models.ViewModels.Sales
         public string ItemDescription { get; set; }
         public string Measurement { get; set; }
         public decimal Quantity { get; set; }
-        public decimal PriceBeforeTax { get; set; }
+        public decimal Price { get; set; }
         public decimal Discount { get; set; }
         public decimal Total { get { return ComputeLineTotal(); } }
         public decimal TaxAmount { get { return ComputeLineTaxAmount(); } }
 
         private decimal ComputeLineTotal()
         {
-            return (Quantity * PriceBeforeTax) - ComputeLineDiscount();
+            return (Quantity * Price) - ComputeLineDiscount();
         }
 
         public decimal ComputeLineDiscount()
         {
             decimal discountAmount = 0;
             if (Discount > 0)
-                discountAmount = (Quantity * PriceBeforeTax) * (Discount / 100);
+                discountAmount = (Quantity * Price) * (Discount / 100);
             return discountAmount;
         }
 

@@ -70,12 +70,12 @@ namespace Web.Models.ViewModels.Purchases
         public string Measurement { get; set; }
         public decimal Quantity { get; set; }
         public decimal Received { get; set; }
-        public decimal PriceBeforeTax { get; set; }
+        public decimal Price { get; set; }
         public decimal Total { get { return ComputeLineTotal(); } }
 
         private decimal ComputeLineTotal()
         {
-            return (Quantity * PriceBeforeTax);
+            return (Quantity * Price);
         }
     }
 
