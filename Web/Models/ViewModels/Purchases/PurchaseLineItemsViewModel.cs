@@ -26,7 +26,7 @@ namespace Web.Models.ViewModels.Purchases
         public string ItemId { get; set; }
         public string ItemNo { get; set; }
         public decimal Quantity { get; set; }
-        public decimal PriceBeforeTax { get; set; }
+        public decimal Price { get; set; }
         #endregion
 
         private decimal ComputeSubTotal()

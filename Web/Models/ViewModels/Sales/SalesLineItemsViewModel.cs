@@ -36,7 +36,7 @@ namespace Web.Models.ViewModels.Sales
         public string ItemId { get; set; }
         public string ItemNo { get; set; }
         public decimal Quantity { get; set; }
-        public decimal PriceBeforeTax { get; set; }
+        public decimal Price { get; set; }
         public decimal Discount { get; set; }
         #endregion
 

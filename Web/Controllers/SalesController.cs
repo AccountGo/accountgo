@@ -983,7 +983,7 @@ namespace Web.Controllers
             newLine.ItemDescription = item.Description;
             newLine.Measurement = item.SellMeasurement.Description;
             newLine.Quantity = model.SalesLine.Quantity;
-            newLine.Price = model.SalesLine.PriceBeforeTax;
+            newLine.Price = model.SalesLine.Price;
             newLine.Discount = model.SalesLine.Discount;            
             model.SalesLine.SalesLineItems.Add(newLine);
 

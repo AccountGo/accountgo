@@ -42,7 +42,7 @@
             processData: true,
             cache: false,
             success: function (d) {
-                $('#PriceBeforeTax').val(d.Price);
+                $('#Price').val(d.Price);
                 setLineTotal();
             },
             error: function (xhr) {
@@ -77,7 +77,7 @@
 
     function setLineTotal() {
         var qty = $('#Quantity').val();
-        var price = $('#PriceBeforeTax').val();
+        var price = $('#Price').val();
         var discount = $('#Discount').val();
         var discountAmount = (price * qty) * (discount / 100);
         document.getElementById("lblLineTotal").innerHTML = (price * qty) - discountAmount;
@@ -114,7 +114,7 @@
                         <label id="lblMeasurement" />
                     </td>
                     <td>@Html.TextBoxFor(m => m.SalesLine.Quantity, new { @onchange = "onChangedQuantity()", @id = "Quantity", @style = "width: 100px;" })</td>
-                    <td>@Html.TextBoxFor(m => m.SalesLine.PriceBeforeTax, new { @id = "PriceBeforeTax", @style = "width: 100px;" })</td>
+                    <td>@Html.TextBoxFor(m => m.SalesLine.Price, new { @id = "Price", @style = "width: 100px;" })</td>
                     <td>@Html.TextBoxFor(m => m.SalesLine.Discount, new { @id = "Discount", @style = "width: 100px;" })</td>
                     <td>
                         <label id="lblLineTotal" />

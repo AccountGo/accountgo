@@ -568,7 +568,7 @@ namespace Web.Controllers
                 ItemDescription = item.Description,
                 Measurement = item.SellMeasurement.Description,
                 Quantity = model.PurchaseLine.Quantity,
-                Price = model.PurchaseLine.PriceBeforeTax,
+                Price = model.PurchaseLine.Price,
             };
             model.PurchaseLine.PurchaseLineItems.Add(newLine);
 

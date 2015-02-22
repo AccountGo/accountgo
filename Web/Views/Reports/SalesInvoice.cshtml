@@ -37,7 +37,7 @@
                     @Html.HiddenFor(m => Model.SalesLine.SalesLineItems[i].ItemDescription)
                     @Html.HiddenFor(m => Model.SalesLine.SalesLineItems[i].Measurement)
                     @Html.HiddenFor(m => Model.SalesLine.SalesLineItems[i].Quantity)
-                    @Html.HiddenFor(m => Model.SalesLine.SalesLineItems[i].PriceBeforeTax)
+                    @Html.HiddenFor(m => Model.SalesLine.SalesLineItems[i].Price)
                     @Html.HiddenFor(m => Model.SalesLine.SalesLineItems[i].Discount)
                     @Html.HiddenFor(m => Model.SalesLine.SalesLineItems[i].Total)
                     <tr>
@@ -45,7 +45,7 @@
                         <td>@Model.SalesLine.SalesLineItems[i].ItemDescription</td>
                         <td>@Model.SalesLine.SalesLineItems[i].Measurement</td>
                         <td>@Model.SalesLine.SalesLineItems[i].Quantity</td>
-                        <td>@Model.SalesLine.SalesLineItems[i].PriceBeforeTax</td>
+                        <td>@Model.SalesLine.SalesLineItems[i].Price</td>
                         <td>@Model.SalesLine.SalesLineItems[i].Discount</td>
                         <td>@Model.SalesLine.SalesLineItems[i].Total</td>
                     </tr>
