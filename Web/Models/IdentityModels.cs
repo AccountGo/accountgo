@@ -24,7 +24,7 @@ namespace Web.Models
         public ApplicationDbContext()
             : base("ApplicationContext", throwIfV1Schema: false)
         {
-            //Database.SetInitializer<ApplicationDbContext>(null);
+            Database.SetInitializer<ApplicationDbContext>(null);
         }
 
         public static ApplicationDbContext Create()
