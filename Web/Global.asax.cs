@@ -48,13 +48,10 @@ namespace Web
             //dbcontext
             if (HttpContext.Current.Request.IsLocal)
             {
-                //var context = new ApplicationContext(ConfigurationManager.ConnectionStrings["ApplicationContext"].ConnectionString);
-                //var dbInitializer = new DbInitializer<ApplicationContext>();
-                //Database.SetInitializer<ApplicationContext>(dbInitializer);
-                //dbInitializer.InitializeDatabase(context);
-                //builder.Register<IDbContext>(c => context).SingleInstance();
-                Database.SetInitializer<ApplicationContext>(null);
-                var context = new ApplicationContext("ApplicationContext");
+                var context = new ApplicationContext(ConfigurationManager.ConnectionStrings["ApplicationContext"].ConnectionString);
+                var dbInitializer = new DbInitializer<ApplicationContext>();
+                Database.SetInitializer<ApplicationContext>(dbInitializer);
+                dbInitializer.InitializeDatabase(context);
                 builder.Register<IDbContext>(c => context).SingleInstance();
             }
             else
