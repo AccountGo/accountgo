@@ -1,0 +1,32 @@
+﻿@model Web.Models.ViewModels.Items.Items
+@{
+    ViewBag.Title = "Items";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<h2>Items</h2>
+@Html.ActionLink("Add Item", "AddItem", "Inventory")
+@using (Html.BeginForm())
+{
+    <div class="panel panel-default panel-body">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>No</th>
+                    <th>Description</th>
+                    <th>On Hand</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in Model.ItemsList)
+                {
+                    <tr>
+                        <td>@Html.ActionLink((string)string.Format("{0}", item.ItemId), "EditItem", new { id = item.ItemId })</td>
+                        <td>@item.Description</td>
+                        <td>@item.QtyOnHand</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}

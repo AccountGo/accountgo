@@ -1,0 +1,35 @@
+﻿@model Web.Models.ViewModels.Sales.Allocate
+@{
+    //ViewBag.Title = "Allocate";
+    //Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+@*<h2>Allocate</h2>*@
+@using (Html.BeginForm())
+{
+    @Html.HiddenFor(m => m.ReceiptId)
+    <div class="form-group">
+        <label class="col-md-8 control-label">Invoice</label>
+        @Html.DropDownListFor(m => m.InvoiceId, Model.OpenInvoices)
+    </div>
+    @*<div class="form-group">
+        <label class="col-md-8 control-label">Invoice No</label>
+        @Html.TextBoxFor(m => m.InvoiceNo, new { @class = "control-field" })
+    </div>*@
+    <div class="form-group">
+        <label class="col-md-8 control-label">Available Amount to Allocate</label>
+        @Html.DisplayFor(m => m.TotalAmountAvailableToAllocate, new { @class = "control-field" })
+    </div>
+    <div class="form-group">
+        <label class="col-md-8 control-label">Left to Allocate</label>
+        @Html.DisplayFor(m => m.LeftToAllocateFromReceipt, new { @class = "control-field" })
+    </div>
+    <div class="form-group">
+        <label class="col-md-8 control-label">Amount</label>
+        @Html.TextBoxFor(m => m.AmountToAllocate, new { @class = "control-field" })
+    </div>
+    <div>
+        <input type="submit" value="Save" name="SaveAllocation" />
+    </div>
+}
+
