@@ -1,0 +1,90 @@
+﻿@model Web.Models.ViewModels.Purchases.AddPurchaseInvoice
+@{
+    ViewBag.Title = "AddPurchaseInvoice";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<h2>Add Purchase Invoice</h2>
+
+@using (Html.BeginForm())
+{
+    @Html.HiddenFor(m => Model.Id)
+    @Html.HiddenFor(m => Model.PurchaseInvoiceHeaderId)
+    @Html.HiddenFor(m => Model.Date)
+    @Html.HiddenFor(m => Model.No)
+    @Html.HiddenFor(m => Model.Vendor)
+
+    <div class="form-group">
+        <label class="col-md-2 control-label">Vendor</label>
+        @Html.DisplayFor(m => m.Vendor)
+    </div>
+    <div class="form-group">
+        <label class="col-md-2 control-label">Vendor Invoice No</label>
+        @Html.TextBoxFor(m => m.VendorInvoiceNo)
+    </div>
+    <div class="form-group">
+        <label class="col-md-2 control-label">Date</label>
+        @Html.DisplayFor(m => m.Date)
+    </div>
+    <div class="form-group">
+        <label class="col-md-2 control-label">Purchase Amount</label>
+        @Html.DisplayFor(m => m.Amount)
+    </div>
+    <h3>Purchase Line</h3>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Item</th>
+                <th>Measurement</th>
+                <th>Cost</th>
+                <th>Quantity</th>
+                <th>Tota Line Cost</th>
+                <th>Received Qty</th>
+                <th>In Qty</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @for (int i = 0; i < Model.PurchaseInvoiceLines.Count; i++)
+            {
+                @Html.HiddenFor(m => Model.PurchaseInvoiceLines[i].Id)
+                @Html.HiddenFor(m => Model.PurchaseInvoiceLines[i].ItemId)
+                @Html.HiddenFor(m => Model.PurchaseInvoiceLines[i].Description)
+                @Html.HiddenFor(m => Model.PurchaseInvoiceLines[i].UnitOfMeasurementId)
+                @Html.HiddenFor(m => Model.PurchaseInvoiceLines[i].Cost)
+                @Html.HiddenFor(m => Model.PurchaseInvoiceLines[i].Quantity)
+                @Html.HiddenFor(m => Model.PurchaseInvoiceLines[i].ReceivedQuantity)
+                @Html.HiddenFor(m => Model.PurchaseInvoiceLines[i].PurchaseOrderLineId)
+                <tr>
+                    <td>@Model.PurchaseInvoiceLines[i].Description</td>
+                    <td>@Model.PurchaseInvoiceLines[i].UnitOfMeasurementId</td>
+                    <td>@Model.PurchaseInvoiceLines[i].Cost</td>
+                    <td>@Model.PurchaseInvoiceLines[i].Quantity</td>
+                    <td>@Model.PurchaseInvoiceLines[i].TotalLineCost</td>
+                    <td>@Model.PurchaseInvoiceLines[i].ReceivedQuantity</td>
+                    @if (Model.PurchaseInvoiceLines[i].ReceivedQuantity < Model.PurchaseInvoiceLines[i].Quantity)
+                    {
+                        <td>@Html.TextBoxFor(r => Model.PurchaseInvoiceLines[i].InQty)</td>
+                    }
+                    else
+                    {
+                        <td>@Html.TextBoxFor(r => Model.PurchaseInvoiceLines[i].InQty, new { @disabled = "disabled" })</td>
+                    }
+                    <td></td>
+                </tr>
+            }
+        </tbody>
+        @*<tfoot>
+            <tr>
+                <td colspan="5" style="text-align: right;">Total Amount: @Model.PurchaseInvoiceLines.Sum(m => m.TotalLineCost)</td>
+                <td></td>
+            </tr>
+        </tfoot>*@
+    </table>
+    if (Model.PurchaseInvoiceLines.Sum(q => q.ReceivedQuantity) == Model.PurchaseInvoiceLines.Sum(q => q.Quantity))
+    {
+        <div>
+            <input type="submit" value="Save" name="SavePurchaseInvoice" />
+        </div>
+    }
+}

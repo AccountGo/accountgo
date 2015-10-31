@@ -1,0 +1,184 @@
+﻿@model Web.Models.ViewModels.Purchases.PurchaseHeaderViewModel
+@using Web.Models;
+<script type="text/javascript">
+    function validateNewLineItem() {
+    }
+
+    function onChangedItem(_this) {
+        var ddl = document.getElementById('ddlItemNo');
+        $('#Quantity').val("1");
+        if ($(_this).attr('id') == 'txtItemNo') {
+            var opts = ddl.options.length;
+            for (var i = 0; i < opts; i++) {
+                if (ddl.options[i].value == $('#txtItemNo').val()) {
+                    ddl.options[i].selected = true;
+                    break;
+                }
+            }
+        }
+        else if ($(_this).attr('id') == 'ddlItemNo') {
+            var itemNo = ddl.options[ddl.selectedIndex].value;
+            if (itemNo != "-1")
+                $('#txtItemNo').val(itemNo);
+            else
+                $('#txtItemNo').val("");
+        }
+
+        var _itemNo = ddl.options[ddl.selectedIndex].value;
+        var url = '/Inventory/GetItemByNo';
+        /*GET*/
+        $.ajax({
+            url: url,
+            dataType: "json",
+            type: "GET",
+            contentType: 'application/x-www-form-urlencoded; charset=utf-8',
+            data: { itemNo: _itemNo },
+            async: true,
+            processData: true,
+            cache: false,
+            success: function (d) {
+                $('#Price').val(d.Cost);
+                setLineTotal();
+            },
+            error: function (xhr) {
+                alert('error');
+            }
+        });
+    }
+
+    function onChangedQuantity() {
+        var ddl = document.getElementById('ddlItemNo');
+        var _itemNo = ddl.options[ddl.selectedIndex].value;
+        var url = '/Inventory/GetItemByNo';
+        /*GET*/
+        $.ajax({
+            url: url,
+            dataType: "json",
+            type: "GET",
+            contentType: 'application/x-www-form-urlencoded; charset=utf-8',
+            data: { itemNo: _itemNo },
+            async: true,
+            processData: true,
+            cache: false,
+            success: function (d) {
+                setLineTotal();
+
+            },
+            error: function (xhr) {
+                alert('error');
+            }
+        });
+    }
+
+    function setLineTotal() {
+        var qty = $('#Quantity').val();
+        var price = $('#Price').val();
+        document.getElementById("lblLineTotal").innerHTML = (price * qty);
+    }
+</script>
+<script type="text/javascript">
+    function deleteLineItem(_this) {
+        var id = $(_this).attr('id');
+        $('input[name="DeletedLineItem"]').val(id);
+    }
+</script>
+<h2>@ViewBag.Transaction Items</h2>
+<input type="hidden" value="" name="DeletedLineItem" />
+<div class="panel panel-default">
+    <div class="panel-body table-responsive">
+        <table class="table table-bordered table-condensed f11">
+            <thead>
+                <tr>
+                    <th>Item No</th>
+                    <th>Item Description</th>
+                    <th>Measurement</th>
+                    <th>Quantity</th>
+                    <th>Received</th>
+                    <th>Price</th>
+                    <th>Total</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (Model.Id == 0)
+                {
+                    <tr>
+                        <td>@Html.TextBoxFor(m => m.PurchaseLine.ItemNo, new { @onchange = "onChangedItem(this)", @id = "txtItemNo", @style = "width: 100px;" })</td>
+                        <td>@Html.DropDownListFor(m => m.PurchaseLine.ItemNo, ModelViewHelper.Items(), new { @onchange = "onChangedItem(this)", @id = "ddlItemNo" }) </td>
+                        <td>
+                            <label id="lblMeasurement" />
+                        </td>
+                        <td>@Html.TextBoxFor(m => m.PurchaseLine.Quantity, new { @onchange = "onChangedQuantity()", @id = "Quantity", @style = "width: 100px;" })</td>
+                        <td></td>
+                        <td>@Html.TextBoxFor(m => m.PurchaseLine.Price, new { @id = "Price", @style = "width: 100px;" })</td>
+                        <td>
+                            <label id="lblLineTotal" />
+                        </td>
+                        <td>
+                            <input type="submit" value="Add Item" name="AddLineItem" onclick="return validateNewLineItem();" /></td>
+                    </tr>
+                }
+                @for (int i = 0; i < Model.PurchaseLine.PurchaseLineItems.Count; i++)
+                {
+                    @Html.HiddenFor(m => Model.PurchaseLine.PurchaseLineItems[i].Id)
+                    @Html.HiddenFor(m => Model.PurchaseLine.PurchaseLineItems[i].ItemId)
+                    @Html.HiddenFor(m => Model.PurchaseLine.PurchaseLineItems[i].ItemNo)
+                    @Html.HiddenFor(m => Model.PurchaseLine.PurchaseLineItems[i].ItemDescription)
+                    @Html.HiddenFor(m => Model.PurchaseLine.PurchaseLineItems[i].Measurement)
+                    @Html.HiddenFor(m => Model.PurchaseLine.PurchaseLineItems[i].Quantity)
+                    @Html.HiddenFor(m => Model.PurchaseLine.PurchaseLineItems[i].Received)
+                    @Html.HiddenFor(m => Model.PurchaseLine.PurchaseLineItems[i].Price)
+                    @Html.HiddenFor(m => Model.PurchaseLine.PurchaseLineItems[i].Total)
+                    <tr>
+                        <td>@Model.PurchaseLine.PurchaseLineItems[i].ItemNo</td>
+                        <td>@Model.PurchaseLine.PurchaseLineItems[i].ItemDescription</td>
+                        <td>@Model.PurchaseLine.PurchaseLineItems[i].Measurement</td>
+                        <td>@Model.PurchaseLine.PurchaseLineItems[i].Quantity</td>
+                        <td>@Model.PurchaseLine.PurchaseLineItems[i].Received</td>
+                        <td>@Model.PurchaseLine.PurchaseLineItems[i].Price</td>
+                        <td>@Model.PurchaseLine.PurchaseLineItems[i].Total</td>
+                        <td>
+                            <input type="submit" value="Delete" name="DeleteLineItem" onclick="deleteLineItem(this)" id="@i" />
+                        </td>
+                    </tr>
+                }
+            </tbody>
+            <tfoot style="text-align: right;">
+                <tr>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                    <td>Sub-Total</td>
+                    <td colspan="2">@Html.DisplayFor(m => m.PurchaseLine.SubTotal)</td>
+                    @*<td></td>*@
+                </tr>
+                <tr>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                    <td>Tax</td>
+                    <td colspan="2">@Html.DisplayFor(m => m.PurchaseLine.AmountTax)</td>
+                    @*<td></td>*@
+                </tr>
+                <tr>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                    <td>Amount Total</td>
+                    <td colspan="2">@{                            
+                        var amountTotal = Model.PurchaseLine.SubTotal;
+                        amountTotal += Model.PurchaseLine.AmountTax;
+                    }
+                        @amountTotal</td>
+                    @*<td></td>*@
+                </tr>
+                @Html.HiddenFor(m => m.PurchaseLine.AmountTotal, new { @Value = Model.PurchaseLine.AmountTotal })
+                @Html.HiddenFor(m => m.PurchaseLine.AmountTax, new { @Value = Model.PurchaseLine.AmountTax })
+
+            </tfoot>
+        </table>
+    </div>
+</div>

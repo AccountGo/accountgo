@@ -1,0 +1,27 @@
+﻿@model Web.Models.ViewModels.Financials.Accounts
+@{
+    ViewBag.Title = "Accounts";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<h2>Accounts</h2>
+@Html.ActionLink("View Pdf", "ViewAccountsPDF")
+<table class="table">
+    <thead>
+        <tr>
+            <td>Account Code</td>
+            <td>Account Name</td>
+            <td>Balance</td>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var account in Model.AccountsListLines)
+        {
+            <tr>
+                <td>@account.AccountCode</td>
+                <td>@account.AccountName</td>
+                <td>@account.Balance</td>
+            </tr>
+        }
+    </tbody>
+</table>

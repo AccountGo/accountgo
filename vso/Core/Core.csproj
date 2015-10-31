@@ -1,0 +1,103 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="14.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{9B652491-4E9C-45E0-BE5B-EA6AF892F380}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <AppDesignerFolder>Properties</AppDesignerFolder>
+    <RootNamespace>Core</RootNamespace>
+    <AssemblyName>Core</AssemblyName>
+    <TargetFrameworkVersion>v4.6</TargetFrameworkVersion>
+    <FileAlignment>512</FileAlignment>
+    <TargetFrameworkProfile />
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System" />
+    <Reference Include="System.ComponentModel.DataAnnotations" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Data.Linq" />
+    <Reference Include="System.Xml.Linq" />
+    <Reference Include="System.Data.DataSetExtensions" />
+    <Reference Include="Microsoft.CSharp" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Xml" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Data\IRepository.cs" />
+    <Compile Include="Domain\Address.cs" />
+    <Compile Include="Domain\BaseEntity.cs" />
+    <Compile Include="Domain\Company.cs" />
+    <Compile Include="Domain\CompanySetting.cs" />
+    <Compile Include="Domain\Contact.cs" />
+    <Compile Include="Domain\EnumTypes.cs" />
+    <Compile Include="Domain\Financials\Account.cs" />
+    <Compile Include="Domain\Financials\AccountClass.cs" />
+    <Compile Include="Domain\Financials\Bank.cs" />
+    <Compile Include="Domain\Financials\FiscalYear.cs" />
+    <Compile Include="Domain\Financials\GeneralLedgerHeader.cs" />
+    <Compile Include="Domain\Financials\GeneralLedgerLine.cs" />
+    <Compile Include="Domain\Financials\GeneralLedgerSetting.cs" />
+    <Compile Include="Domain\Financials\JournalEntryHeader.cs" />
+    <Compile Include="Domain\Financials\JournalEntryLine.cs" />
+    <Compile Include="Domain\Items\InventoryControlJournal.cs" />
+    <Compile Include="Domain\Items\Item.cs" />
+    <Compile Include="Domain\Items\ItemCategory.cs" />
+    <Compile Include="Domain\Items\Measurement.cs" />
+    <Compile Include="Domain\ItemTaxGroup.cs" />
+    <Compile Include="Domain\Party.cs" />
+    <Compile Include="Domain\PaymentTerm.cs" />
+    <Compile Include="Domain\Purchases\PurchaseInvoiceHeader.cs" />
+    <Compile Include="Domain\Purchases\PurchaseInvoiceLine.cs" />
+    <Compile Include="Domain\Purchases\PurchaseOrderHeader.cs" />
+    <Compile Include="Domain\Purchases\PurchaseOrderLine.cs" />
+    <Compile Include="Domain\Purchases\PurchaseReceiptHeader.cs" />
+    <Compile Include="Domain\Purchases\PurchaseReceiptLine.cs" />
+    <Compile Include="Domain\Purchases\Vendor.cs" />
+    <Compile Include="Domain\Purchases\VendorPayment.cs" />
+    <Compile Include="Domain\Sales\Customer.cs" />
+    <Compile Include="Domain\Sales\CustomerAllocation.cs" />
+    <Compile Include="Domain\Sales\SalesDeliveryHeader.cs" />
+    <Compile Include="Domain\Sales\SalesDeliveryLine.cs" />
+    <Compile Include="Domain\Sales\SalesInvoiceHeader.cs" />
+    <Compile Include="Domain\Sales\SalesInvoiceLine.cs" />
+    <Compile Include="Domain\Sales\SalesOrderHeader.cs" />
+    <Compile Include="Domain\Sales\SalesOrderLine.cs" />
+    <Compile Include="Domain\Sales\SalesQuoteHeader.cs" />
+    <Compile Include="Domain\Sales\SalesQuoteLine.cs" />
+    <Compile Include="Domain\Sales\SalesReceiptHeader.cs" />
+    <Compile Include="Domain\Sales\SalesReceiptLine.cs" />
+    <Compile Include="Domain\SequenceNumber.cs" />
+    <Compile Include="Domain\Tax.cs" />
+    <Compile Include="Domain\TaxGroup.cs" />
+    <Compile Include="MessageSource.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+  </ItemGroup>
+  <ItemGroup />
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
+       Other similar extension points exist, see Microsoft.Common.targets.
+  <Target Name="BeforeBuild">
+  </Target>
+  <Target Name="AfterBuild">
+  </Target>
+  -->
+</Project>

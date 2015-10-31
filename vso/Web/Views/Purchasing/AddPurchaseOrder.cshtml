@@ -1,0 +1,86 @@
+﻿@model Web.Models.ViewModels.Purchases.AddPurchaseOrder
+@{
+    ViewBag.Title = "AddPurhaseOrder";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<h2>Add Purhase Order</h2>
+
+@using (Html.BeginForm())
+{
+    <div class="panel panel-default panel-body">
+        <div class="form-group">
+            <label class="col-md-2 control-label">Vendor</label>
+            @Html.DropDownListFor(m => m.VendorId, Model.Vendors)
+        </div>
+        <div class="form-group">
+            <label class="col-md-2 control-label">Date</label>
+            @Html.EditorFor(m => m.Date)
+        </div>
+    </div>
+    <h3>Items</h3>
+    <div class="panel panel-default panel-body">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th class="col-md-3">Item</th>
+                    <th class="col-md-3">Unit</th>
+                    <th class="col-md-3">Cost</th>
+                    <th class="col-md-3">Quantity</th>
+                    <th class="col-md-3"></th>
+                </tr>
+                <tr>
+                    <td>@Html.DropDownListFor(m => m.ItemId, Model.Items)</td>
+                    <td>@Html.DropDownListFor(m => m.UnitOfMeasurementId, Model.UnitOfMeasurements)</td>
+                    <td></td>
+                    <td>@Html.TextBoxFor(m => m.Quantity)</td>
+                    <td>
+                        <input type="submit" value="Add Item" name="AddPurchaseOrderLine" />
+                    </td>
+                </tr>
+            </thead>
+            <tbody>
+                @for (int i = 0; i < Model.PurchaseOrderLines.Count; i++)
+                {
+                    @Html.HiddenFor(x => Model.PurchaseOrderLines[i].TotalLineCost)
+                    <tr>
+                        <td>
+                            @Html.DisplayFor(x => Model.PurchaseOrderLines[i].Description)
+                            @Html.HiddenFor(x => Model.PurchaseOrderLines[i].ItemId)
+                        </td>
+                        <td>
+                            @Html.DisplayFor(x => Model.PurchaseOrderLines[i].UnitOfMeasurementId)
+                            @Html.HiddenFor(x => Model.PurchaseOrderLines[i].UnitOfMeasurementId)
+                        </td>
+                        <td>
+                            @Html.DisplayFor(x => Model.PurchaseOrderLines[i].Cost)
+                            @Html.HiddenFor(x => Model.PurchaseOrderLines[i].Cost)
+                        </td>
+                        <td>
+                            @Html.DisplayFor(x => Model.PurchaseOrderLines[i].Quantity)
+                            @Html.HiddenFor(x => Model.PurchaseOrderLines[i].Quantity)
+                        </td>
+                        <td>
+                            <input type="submit" value="Delete" name="DeleteInvoiceLineItem" id="@Model.PurchaseOrderLines[i].ItemId" onclick="return DeleteLineItem($(this).attr('id'));" />
+                        </td>
+                    </tr>
+                }
+            </tbody>
+            <tfoot>
+                <tr>
+                    <td colspan="5" style="text-align: right;">Total Amount: @Model.PurchaseOrderLines.Sum(m => m.TotalLineCost)</td>
+                    <td></td>
+                </tr>
+            </tfoot>
+        </table>
+        <input type="hidden" value="" name="DeletedLineItem" />
+        <div>
+            <input type="submit" value="Save" name="SavePurchaseOrder" />
+        </div>
+    </div>
+}
+<script type="text/javascript">
+    function DeleteLineItem(id) {
+        $('input[name="DeletedLineItem"]').val(id);
+    }
+</script>
