@@ -1,0 +1,89 @@
+﻿@{
+    ViewBag.Title = "Home Page";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+@*<div>
+    <input type="text" id="txtName" readonly="readonly" />
+    @Html.ActionLink("Popup Window Test", "PopupWindowTest", null, new { id = "lnkEdit" })
+</div>
+
+<input type="hidden" id="dialogReturnValue" value="" />
+<div id="dialog-edit" style="display: none" />*@
+
+@*<div class="jumbotron">
+    <h1>ASP.NET</h1>
+    <p class="lead">ASP.NET is a free web framework for building great Web sites and Web applications using HTML, CSS and JavaScript.</p>
+    <p><a href="http://asp.net" class="btn btn-primary btn-lg">Learn more &raquo;</a></p>
+</div>*@
+
+<div class="row">
+    <div class="col-md-4">
+        @*<h2>Getting started</h2>
+        <p>
+            ASP.NET MVC gives you a powerful, patterns-based way to build dynamic websites that
+            enables a clean separation of concerns and gives you full control over markup
+            for enjoyable, agile development.
+        </p>
+        <p><a class="btn btn-default" href="http://go.microsoft.com/fwlink/?LinkId=301865">Learn more &raquo;</a></p>*@
+    </div>
+    <div class="col-md-4">
+        @*<h2>Get more libraries</h2>
+        <p>NuGet is a free Visual Studio extension that makes it easy to add, remove, and update libraries and tools in Visual Studio projects.</p>
+        <p><a class="btn btn-default" href="http://go.microsoft.com/fwlink/?LinkId=301866">Learn more &raquo;</a></p>*@
+    </div>
+    <div class="col-md-4">
+        @*<h2>Web Hosting</h2>
+        <p>You can easily find a web hosting company that offers the right mix of features and price for your applications.</p>
+        <p><a class="btn btn-default" href="http://go.microsoft.com/fwlink/?LinkId=301867">Learn more &raquo;</a></p>*@
+    </div>
+</div>
+
+<script type="text/javascript">
+    $(document).ready(function () {
+        var url = "";
+        $("#dialog-edit").dialog({
+            title: 'Modal',
+            autoOpen: false,
+            resizable: false,
+            width: 400,
+            show: { effect: 'drop', direction: "up" },
+            modal: true,
+            draggable: true,
+            open: function (event, ui) {
+                $(".ui-dialog-titlebar-close").hide();
+                $(this).load(url);
+            },
+            //buttons: {
+            //    "Save": function () {
+            //        $(this).dialog("close");
+            //        HandlePopupResult('Value from popup');
+            //    },
+            //    "Cancel": function () {
+            //        $(this).dialog("close");
+            //    }
+            //},
+            close: function () {
+                HandlePopupResult($("#dialogReturnValue").val());
+            }
+        });
+
+        //$("#lnkEdit").on("click", function (e) {
+        //    e.preventDefault();
+        //    url = $(this).attr('href');
+        //    var w = window.open(url, "popupWindow", "width=600, height=400, scrollbars=yes");
+        //    return false;
+        //});
+        $("#lnkEdit").on("click", function (e) {
+            e.preventDefault();
+            url = $(this).attr('href');
+            $(".ui-dialog-title").html("Update User");
+            $("#dialog-edit").dialog('open');
+            return false;
+        });
+    });
+
+    function HandlePopupResult(result) {
+        var txtName = document.getElementById("txtName");
+        txtName.value = result;
+    }
+</script>

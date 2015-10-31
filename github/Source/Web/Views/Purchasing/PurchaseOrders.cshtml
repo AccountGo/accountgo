@@ -1,0 +1,44 @@
+﻿@model Web.Models.ViewModels.Purchases.PurchaseOrders
+
+@{
+    ViewBag.Title = "PurhaseOrders";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<h2>Purchase Orders</h2>
+
+@Html.ActionLink("Add Purchase Order", "AddPurchaseOrder", "Purchasing")
+
+<table class="table">
+    <thead>
+        <tr>
+            <th>Date</th>
+            <th>No</th>
+            <th>Vendor</th>
+            <th>Amount</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var po in Model.PurchaseOrderListLines)
+        {
+            <tr>
+                <td>@po.Date.ToShortDateString()</td>
+                <td>@Html.ActionLink((string)string.Format("{0}", po.Id), "Edit", new { id = po.Id })</td>
+                <td>@po.Vendor</td>
+                <td>@po.Amount</td>
+                @if (po.Completed)
+                {
+                    if (!po.HasInvoiced)
+                    {
+                        <td>@Html.ActionLink("Create Invoice", "AddPurchaseInvoice", new { id = @po.Id })</td>
+                    }
+                }
+                else
+                {
+                    <td>@Html.ActionLink("Receipt", "AddPurchaseReceipt", new { @id = @po.Id })</td>
+                }
+            </tr>
+        }
+    </tbody>
+</table>

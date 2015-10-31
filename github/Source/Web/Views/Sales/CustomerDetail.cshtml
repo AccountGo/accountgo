@@ -1,0 +1,132 @@
+﻿@model Web.Models.ViewModels.Sales.CustomerDetail
+@{
+    ViewBag.Title = "CustomerDetail";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<h2>Customer Detail</h2>
+<div class="panel panel-default">
+    <div class="panel-body">
+        <div class="form-group">
+            <label class="col-md-2 control-label">Customer</label>
+            @Html.DisplayFor(m => m.Name, new { @class = "form-control" })
+        </div>
+        <div class="form-group">
+            <label class="col-md-2 control-label">Balance</label>
+            @Html.DisplayFor(m => m.Balance, new { @class = "form-control" })
+        </div>
+    </div>
+</div>
+<div>
+    @Html.ActionLink("Edit", "AddOrEditCustomer", new { @id = Model.Id })
+</div>
+<h3>Receipts</h3>
+<div class="panel panel-default">
+    <div class="panel-body">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>No</th>
+                    <th>Allocated</th>
+                    <th>Left to Allocate</th>
+                    <th></th>
+                </tr>
+                @foreach (var receipt in Model.CustomerAllocations)
+                {
+                    <tr>
+                        <td>@receipt.Id</td>
+                        <td>@receipt.AmountAllocated</td>
+                        <td>@receipt.AvailableAmountToAllocate</td>
+                        <td>
+                            @if (receipt.AvailableAmountToAllocate > 0)
+                            {
+                                @Html.ActionLink("Allocate", "Allocate", new { id = receipt.Id }, new { id = "Allocate" })
+                            }
+                        </td>
+                    </tr>
+                }
+            </thead>
+        </table>
+    </div>
+</div>
+<h3>Allocations</h3>
+<div class="panel panel-default panel-body">
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Invoice No</th>
+                <th>Receipt No</th>
+                <th>Date</th>
+                <th>Amount</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var allocation in Model.ActualAllocations)
+            {
+                <tr>
+                    <td>@allocation.InvoiceNo</td>
+                    <td>@allocation.ReceiptNo</td>
+                    <td>@allocation.Date</td>
+                    <td>@allocation.Amount</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+<h3>Invoices</h3>
+<div class="panel panel-default">
+    <div class="panel-body">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>No</th>
+                    <th>Date</th>
+                    <th>Amount</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var receipt in Model.CustomerInvoices)
+                {
+                    <tr>
+                        <td>@receipt.InvoiceNo</td>
+                        <td>@receipt.Date</td>
+                        <td>@receipt.Amount</td>
+                        <td>@receipt.Status</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+<div id="dlgAllocation" />
+
+<script>
+    $(document).ready(function () {
+        var url = "";
+        $("#dlgAllocation").dialog({
+            title: 'Modal',
+            autoOpen: false,
+            resizable: false,
+            width: 700,
+            height: 500,
+            show: { effect: 'drop', direction: "up" },
+            modal: true,
+            draggable: true,
+            open: function (event, ui) {
+                $(".ui-dialog-titlebar-close").hide();
+                $(this).load(url);
+            },
+            close: function () {
+                $('#dlgAllocation').dialog('close');
+            }
+        });
+        $("#Allocate").on("click", function (e) {
+            e.preventDefault();
+            url = $(this).attr('href');
+            $(".ui-dialog-title").html("Allocation");
+            $("#dlgAllocation").dialog('open');
+            return false;
+        });
+    });
+</script>

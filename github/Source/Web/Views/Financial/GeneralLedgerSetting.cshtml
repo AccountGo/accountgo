@@ -1,0 +1,41 @@
+﻿@model Web.Models.ViewModels.Financials.GeneralLedgerSettingViewModel
+@using Web.Models;
+@{
+    ViewBag.Title = "GeneralLedgerSetting";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<h2>General Ledger Setting</h2>
+
+@using (Html.BeginForm())
+{
+    <div class="panel panel-default panel-body">
+        <div>
+            <label class="col-md-8 control-label">Company</label>
+            @Html.DisplayFor(m => m.CompanyId)
+        </div>
+        <div>
+            <label class="col-md-8 control-label">Payable Account</label>
+            @Html.DropDownListFor(m => m.PayableAccountId, ModelViewHelper.Accounts(null))
+        </div>
+        <div>
+            <label class="col-md-8 control-label">Purchase Discount Account</label>
+            @Html.DropDownListFor(m => m.PurchaseDiscountAccountId, ModelViewHelper.Accounts(null))
+        </div>
+        <div>
+            <label class="col-md-8 control-label">Goods Receipt Note Clearing Account</label>
+            @Html.DropDownListFor(m => m.GoodsReceiptNoteClearingAccountId, ModelViewHelper.Accounts(null))
+        </div>
+        <div>
+            <label class="col-md-8 control-label">Sales Discount Account</label>
+            @Html.DropDownListFor(m => m.SalesDiscountAccountId, ModelViewHelper.Accounts(null))
+        </div>
+        <div>
+            <label class="col-md-8 control-label">Shipping Charge Account</label>
+            @Html.DropDownListFor(m => m.ShippingChargeAccountId, ModelViewHelper.Accounts(null))
+        </div>
+    </div>
+    <div>
+        <input type="submit" value="Save" name="Save" />
+    </div>
+}

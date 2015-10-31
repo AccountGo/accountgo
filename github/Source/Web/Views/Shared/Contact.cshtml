@@ -1,0 +1,48 @@
+﻿@model Web.Models.ViewModels.ContactViewModel
+@{
+    Layout = null;
+}
+
+@using (Html.BeginForm())
+{
+    <h2>General</h2>
+    <div class="panel panel-default panel-body">
+        <div class="form-group">
+            <label class="col-md-3 control-label">First Name</label>
+            @Html.TextBoxFor(m => m.FirstName)
+        </div>
+        <div class="form-group">
+            <label class="col-md-3 control-label">Middle Name</label>
+            @Html.TextBoxFor(m => m.MiddleName)
+        </div>
+        <div class="form-group">
+            <label class="col-md-3 control-label">Last Name</label>
+            @Html.TextBoxFor(m => m.LastName)
+        </div>
+    </div>
+    <div>
+        <input type="submit" value="Save" name="SaveContact" id="SaveContact" />
+        <input type="button" value="Cancel" onclick="$('#addCustomerContact').dialog('close');" />
+    </div>
+}
+
+<script>
+    $(document).ready(function () {
+        $('#SaveContact').submit(function (event) {
+            event.preventDefault();
+            $.ajax({
+                url: this.action,
+                type: this.method,
+                dataType: "json",
+                data: $(this).serialize(),
+                success: function (result) {
+                    alert(result.Status);
+                },
+                error: function () {
+
+                }
+            });
+            return false;
+        });
+    });
+</script>

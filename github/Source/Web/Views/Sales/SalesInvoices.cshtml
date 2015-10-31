@@ -1,0 +1,40 @@
+﻿@model Web.Models.ViewModels.Sales.SalesInvoices
+@{
+    ViewBag.Title = "SalesInvoices";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<h2>Sales Invoices</h2>
+
+@Html.ActionLink("Add Sale Invoice", "SalesInvoice", "Sales")
+
+<table class="table">
+    <thead>
+        <tr>
+            <th>No</th>
+            <th>Customer</th>
+            <th>Date</th>
+            <th>Amount</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach(var invoice in Model.SalesInvoiceListLines)
+        {
+            <tr>
+                <td>@Html.ActionLink(@invoice.No, "SalesInvoice", new { id = invoice.Id })</td>
+                <td>@invoice.Customer</td>
+                <td>@invoice.Date</td>
+                <td>@invoice.Amount</td>
+@*                @if (invoice.IsFullPaid)
+                {
+                    <td>@Html.Raw("Paid")</td>
+                }
+                else
+                {
+                    <th>@Html.ActionLink("Receipt", "AddSalesReceipt", new { salesInvoiceId = invoice.Id })</th>
+                }*@
+            </tr>
+        }
+    </tbody>
+</table>
