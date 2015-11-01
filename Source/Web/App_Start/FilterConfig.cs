@@ -1,4 +1,12 @@
-﻿using System.Web;
+//-----------------------------------------------------------------------
+// <copyright file="FilterConfig.cs" company="AccountGo">
+// Copyright (c) AccountGo. All rights reserved.
+// <author>Marvin Perez</author>
+// <date>1/11/2015 9:50:13 AM</date>
+// </copyright>
+//-----------------------------------------------------------------------
+
+using System.Web;
 using System.Web.Mvc;
 
 namespace Web

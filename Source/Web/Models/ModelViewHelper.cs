@@ -1,4 +1,12 @@
-﻿using Core.Domain;
+//-----------------------------------------------------------------------
+// <copyright file="ModelViewHelper.cs" company="AccountGo">
+// Copyright (c) AccountGo. All rights reserved.
+// <author>Marvin Perez</author>
+// <date>1/11/2015 9:50:13 AM</date>
+// </copyright>
+//-----------------------------------------------------------------------
+
+using Core.Domain;
 using Core.Domain.Financials;
 using Core.Domain.Items;
 using Core.Domain.Purchases;

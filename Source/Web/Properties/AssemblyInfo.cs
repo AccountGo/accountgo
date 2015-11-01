@@ -1,4 +1,12 @@
-﻿using System.Reflection;
+//-----------------------------------------------------------------------
+// <copyright file="AssemblyInfo.cs" company="AccountGo">
+// Copyright (c) AccountGo. All rights reserved.
+// <author>Marvin Perez</author>
+// <date>1/11/2015 9:50:13 AM</date>
+// </copyright>
+//-----------------------------------------------------------------------
+
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
@@ -10,7 +18,7 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("")]
 [assembly: AssemblyProduct("Web")]
-[assembly: AssemblyCopyright("Copyright ©  2014")]
+[assembly: AssemblyCopyright("Copyright �  2014")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 

@@ -1,4 +1,12 @@
-﻿using System.Linq;
+//-----------------------------------------------------------------------
+// <copyright file="ManageController.cs" company="AccountGo">
+// Copyright (c) AccountGo. All rights reserved.
+// <author>Marvin Perez</author>
+// <date>1/11/2015 9:50:13 AM</date>
+// </copyright>
+//-----------------------------------------------------------------------
+
+using System.Linq;
 using System.Threading.Tasks;
 using System.Web;
 using System.Web.Mvc;

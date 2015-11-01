@@ -1,4 +1,12 @@
-﻿using Core.Data;
+//-----------------------------------------------------------------------
+// <copyright file="EfRepository.cs" company="AccountGo">
+// Copyright (c) AccountGo. All rights reserved.
+// <author>Marvin Perez</author>
+// <date>1/11/2015 9:50:13 AM</date>
+// </copyright>
+//-----------------------------------------------------------------------
+
+using Core.Data;
 using Core.Domain;
 using System;
 using System.Collections.Generic;

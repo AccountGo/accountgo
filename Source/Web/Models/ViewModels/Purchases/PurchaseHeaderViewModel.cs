@@ -1,4 +1,12 @@
-﻿using Services.Inventory;
+//-----------------------------------------------------------------------
+// <copyright file="PurchaseHeaderViewModel.cs" company="AccountGo">
+// Copyright (c) AccountGo. All rights reserved.
+// <author>Marvin Perez</author>
+// <date>1/11/2015 9:50:13 AM</date>
+// </copyright>
+//-----------------------------------------------------------------------
+
+using Services.Inventory;
 using System;
 using System.Collections.Generic;
 using System.Linq;

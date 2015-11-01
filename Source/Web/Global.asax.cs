@@ -1,4 +1,12 @@
-﻿using Autofac;
+//-----------------------------------------------------------------------
+// <copyright file="Global.asax.cs" company="AccountGo">
+// Copyright (c) AccountGo. All rights reserved.
+// <author>Marvin Perez</author>
+// <date>1/11/2015 9:50:13 AM</date>
+// </copyright>
+//-----------------------------------------------------------------------
+
+using Autofac;
 using Autofac.Integration.Mvc;
 using Core.Data;
 using Data;
