@@ -2,7 +2,7 @@
 // <copyright file="FinancialController.cs" company="AccountGo">
 // Copyright (c) AccountGo. All rights reserved.
 // <author>Marvin Perez</author>
-// <date>1/11/2015 9:50:13 AM</date>
+// <date>1/11/2015 9:48:38 AM</date>
 // </copyright>
 //-----------------------------------------------------------------------
 
@@ -62,7 +62,8 @@ namespace Web.Controllers
             HttpContext.Response.Clear();
             HttpContext.Response.AddHeader("Content-Type", "application/pdf");
             HttpContext.Response.Filter = new PdfFilter(HttpContext.Response.Filter, html);
-            return Json(html, JsonRequestBehavior.AllowGet);
+            //return Json(html, JsonRequestBehavior.AllowGet);
+            return Content(html);
         }
 
         public ActionResult JournalEntries()

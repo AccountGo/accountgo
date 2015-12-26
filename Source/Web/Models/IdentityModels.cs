@@ -2,16 +2,14 @@
 // <copyright file="IdentityModels.cs" company="AccountGo">
 // Copyright (c) AccountGo. All rights reserved.
 // <author>Marvin Perez</author>
-// <date>1/11/2015 9:50:13 AM</date>
+// <date>2/11/2015 9:48:38 AM</date>
 // </copyright>
 //-----------------------------------------------------------------------
 
-using System.Configuration;
-using System.Data.Entity;
-using System.Security.Claims;
-using System.Threading.Tasks;
 using Microsoft.AspNet.Identity;
 using Microsoft.AspNet.Identity.EntityFramework;
+using System.Security.Claims;
+using System.Threading.Tasks;
 
 namespace Web.Models
 {

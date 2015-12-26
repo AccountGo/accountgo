@@ -2,7 +2,7 @@
 // <copyright file="Global.asax.cs" company="AccountGo">
 // Copyright (c) AccountGo. All rights reserved.
 // <author>Marvin Perez</author>
-// <date>1/11/2015 9:50:13 AM</date>
+// <date>1/11/2015 9:48:38 AM</date>
 // </copyright>
 //-----------------------------------------------------------------------
 
@@ -54,20 +54,21 @@ namespace Web
             builder.RegisterGeneric(typeof(EfRepository<>)).As(typeof(IRepository<>)).InstancePerLifetimeScope();
 
             //dbcontext
-            if (HttpContext.Current.Request.IsLocal)
-            {
-                var context = new ApplicationContext(ConfigurationManager.ConnectionStrings["ApplicationContext"].ConnectionString);
-                var dbInitializer = new DbInitializer<ApplicationContext>();
-                Database.SetInitializer<ApplicationContext>(dbInitializer);
-                dbInitializer.InitializeDatabase(context);
-                builder.Register<IDbContext>(c => context).SingleInstance();
-            }
-            else
-            {
-                Database.SetInitializer<ApplicationContext>(null);
-                var context = new ApplicationContext("ApplicationContext");
-                builder.Register<IDbContext>(c => context).SingleInstance();
-            }
+            builder.Register<IDbContext>(c => new ApplicationContext()).InstancePerLifetimeScope();
+            //if (HttpContext.Current.Request.IsLocal)
+            //{
+            //    var context = new ApplicationContext(ConfigurationManager.ConnectionStrings["ApplicationContext"].ConnectionString);
+            //    var dbInitializer = new DbInitializer<ApplicationContext>();
+            //    Database.SetInitializer<ApplicationContext>(dbInitializer);
+            //    dbInitializer.InitializeDatabase(context);
+            //    builder.Register<IDbContext>(c => context).SingleInstance();
+            //}
+            //else
+            //{
+            //    Database.SetInitializer<ApplicationContext>(null);
+            //    var context = new ApplicationContext("ApplicationContext");
+            //    builder.Register<IDbContext>(c => context).SingleInstance();
+            //}
 
             //services
             builder.RegisterType<FinancialService>().As<IFinancialService>().InstancePerLifetimeScope();

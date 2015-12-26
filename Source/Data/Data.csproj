@@ -54,6 +54,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="ApplicationContext.cs" />
+    <Compile Include="AuditLogHelper.cs" />
     <Compile Include="DbInitializer.cs" />
     <Compile Include="EfRepository.cs" />
     <Compile Include="IDbContext.cs" />

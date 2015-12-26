@@ -2,7 +2,7 @@
 // <copyright file="DbInitializer.cs" company="AccountGo">
 // Copyright (c) AccountGo. All rights reserved.
 // <author>Marvin Perez</author>
-// <date>1/11/2015 9:50:13 AM</date>
+// <date>1/11/2015 9:48:38 AM</date>
 // </copyright>
 //-----------------------------------------------------------------------
 
@@ -252,7 +252,7 @@ namespace Data
         private void UpdateAccounts()
         {
             DataTable csvData = new DataTable();
-            using (TextFieldParser csvReader = new TextFieldParser(@"C:\Development\Practice\apphb\Solution\src\UnitTests\App_Data\coa.csv"))
+            using (TextFieldParser csvReader = new TextFieldParser(@"C:\Users\mperez\AppData\Roaming\Skype\My Skype Received Files\coa.csv"))
             {
                 csvReader.SetDelimiters(new string[] { "," });
                 csvReader.HasFieldsEnclosedInQuotes = true;

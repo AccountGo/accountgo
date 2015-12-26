@@ -2,11 +2,12 @@
 // <copyright file="ApplicationContext.cs" company="AccountGo">
 // Copyright (c) AccountGo. All rights reserved.
 // <author>Marvin Perez</author>
-// <date>1/11/2015 9:50:13 AM</date>
+// <date>1/11/2015 9:48:38 AM</date>
 // </copyright>
 //-----------------------------------------------------------------------
 
 using Core.Domain;
+using Core.Domain.Auditing;
 using Core.Domain.Financials;
 using Core.Domain.Items;
 using Core.Domain.Purchases;
@@ -23,6 +24,11 @@ namespace Data
 {
     public partial class ApplicationContext : DbContext, IDbContext
     {
+        public string UserName
+        {
+            get { return System.Threading.Thread.CurrentPrincipal.Identity.Name; }
+        }
+        
         public ApplicationContext() 
             : this("ApplicationContext")
         {
@@ -74,8 +80,22 @@ namespace Data
         public DbSet<GeneralLedgerSetting> GeneralLedgerSettings { get; set; }
         public DbSet<PaymentTerm> PaymentTerms { get; set; }
         public DbSet<Bank> Banks { get; set; }
+        public virtual DbSet<AuditLog> AuditLogs { get; set; }
+        public virtual DbSet<AuditableEntity> AuditableEntities { get; set; }
+        public virtual DbSet<AuditableAttribute> AuditableAttributes { get; set; }
 
         #region Methods
+
+        public override int SaveChanges()
+        {
+            SaveAuditLog(UserName);
+
+            var ret = base.SaveChanges();
+
+            UpdateAuditLogRecordId();
+
+            return ret;
+        }
 
         /// <summary>
         /// Create database script
@@ -204,5 +224,47 @@ namespace Data
             //entity is already loaded
             return alreadyAttached;
         }
+
+        #region Audit Logs
+        private void SaveAuditLog(string username)
+        {
+            if (!string.IsNullOrEmpty(username))
+            {
+                var dbEntityEntries = this.ChangeTracker.Entries().Where(p => p.State == System.Data.Entity.EntityState.Modified || p.State == System.Data.Entity.EntityState.Added || p.State == System.Data.Entity.EntityState.Deleted);
+                foreach (var dbEntityEntry in dbEntityEntries)
+                {
+                    try
+                    {
+                        var auditLogs = AuditLogHelper.GetChangesForAuditLog(dbEntityEntry, username, this);
+                        foreach (var auditlog in auditLogs)
+                            if (auditlog != null)
+                                this.AuditLogs.Add(auditlog);
+                    }
+                    catch
+                    {
+                        continue;
+                    }
+                }
+            }
+        }
+
+        private void UpdateAuditLogRecordId()
+        {
+            foreach (var entity in AuditLogHelper.addedEntities)
+            {
+                if (this.ChangeTracker.Entries().Contains(entity.Value))
+                {
+                    string keyName = entity.Value.Entity.GetType().GetProperties().Single(p => p.GetCustomAttributes(typeof(System.ComponentModel.DataAnnotations.KeyAttribute), false).Count() > 0).Name;
+                    string recid = entity.Value.CurrentValues.GetValue<object>(keyName).ToString();
+                    var auditLog = this.AuditLogs.Where(log => log.AuditEventDateUTC == entity.Key).FirstOrDefault();
+                    if (auditLog != null)
+                    {
+                        auditLog.RecordId = recid;
+                        base.SaveChanges();
+                    }
+                }
+            }
+        }
+        #endregion
     }
 }

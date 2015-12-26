@@ -44,6 +44,9 @@
   <ItemGroup>
     <Compile Include="Data\IRepository.cs" />
     <Compile Include="Domain\Address.cs" />
+    <Compile Include="Domain\Auditing\AuditableAttribute.cs" />
+    <Compile Include="Domain\Auditing\AuditableEntity.cs" />
+    <Compile Include="Domain\Auditing\AuditLog.cs" />
     <Compile Include="Domain\BaseEntity.cs" />
     <Compile Include="Domain\Company.cs" />
     <Compile Include="Domain\CompanySetting.cs" />
