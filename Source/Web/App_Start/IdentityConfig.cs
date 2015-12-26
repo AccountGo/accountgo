@@ -88,8 +88,8 @@ namespace Web
                 manager.UserTokenProvider = 
                     new DataProtectorTokenProvider<ApplicationUser>(dataProtectionProvider.Create("ASP.NET Identity"));
             }
-            //var user = new ApplicationUser { UserName = "admin", Email = "admin@email.com" };
-            //var result = manager.Create(user, "P@ssw0rd1");
+            var user = new ApplicationUser { UserName = "admin", Email = "admin@email.com" };
+            var result = manager.Create(user, "P@ssw0rd1");
             return manager;
         }
     }
