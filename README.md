@@ -1,32 +1,37 @@
-# You've added your first ReadMe file!
-A README.md file is intended to quickly orient readers to what your project can do.  New to Markdown? [Learn more](http://go.microsoft.com/fwlink/p/?LinkId=524306&clcid=0x409)
+# AccountGo
 
-## Edit this ReadMe and commit your change to a topic branch
-In Git, branches are cheap.  You should use them whenever you're making changes to your repository.  Edit this file by clicking on the edit icon.
+Do you like the idea of sharing and giving back to the open source community?
 
-Then make some changes to this ReadMe file.
+Accounting System built in ASP.NET MVC is in early stage and lots of work to do but happy to share it to anyone. This will be very useful if you have future project to develop accounting system. We do the hard work for you!
+It is initially designed for a small size businesses and the idea is to help them running efficient business by using Accounting System fit to them.
 
-> Make some **edits** to _this_ blockquote
+# Manual Installation for development
 
-When you are done, click the dropdown arrow next to the save button - that will allow you to commit your changes to a new branch.
+1. Clone or download copy of AccountGo solution
+2. Open the solution file in Visual Studio 2012 or later
+3. Build the solution
+4. The project is utilising Entity Framework Code First so when you first run the Web project it automatically creates the database for you. The default name of the database is AccountGo. You can change this in web.config
 
-## Create a pull request to contribute your changes back into master
-Pull requests are the way to move changes from a topic branch back into the master branch.
+# Features
 
-Click on the **Pull Requests** page in the **CODE** hub, then click "New Pull Request" to create a new pull request from your topic branch to the master branch.
+On a high level, this solution will provide modules including
 
-When you are done adding details, click "Create Pull request". Once a pull request is sent, reviewers can see your changes, recommend modifications, or even push follow-up commits.
+1. Accounts Receivable
+2. Accounts Payable
+3. Inventory Control
+4. Financial/Accounting
 
-First time creating a pull request?  [Learn more](http://go.microsoft.com/fwlink/?LinkId=533211&clcid=0x409)
+# Help Wanted
 
-### Congratulations! You've completed the grand tour of the CODE hub!
+Wether you are a Developer, Consultant, Accountant, QA, Marketing expert, Project Manager we can all be part of this great and promising project.
 
-# Next steps
+If you are a developer and wanted to take part as contributor/collaborator we are happy to welcome you! To start with, you can visit the issues page and pick an issue that you would like to work on.
 
-If you haven't done so yet:
-* [Install Visual Studio](http://go.microsoft.com/fwlink/?LinkId=309297&clcid=0x409&slcid=0x409)
-* [Install Git](http://git-scm.com/downloads)
+So go ahead, add your code. Looking forward to your first pull request.
 
-Then clone this repo to your local machine to get started with your own project.
+# Contact Support
+Feel free to email mvpsolution@gmail.com of any questions.
 
-Happy coding!
+Don't miss regular source code updates, join http://accountgo.googlegroups.com
+
+Also, you can view demo site here (http://accountgo.apphb.com)
