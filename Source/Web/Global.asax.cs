@@ -50,9 +50,6 @@ namespace Web
             //controllers
             builder.RegisterControllers(Assembly.GetExecutingAssembly());
 
-            //generic repositories
-            builder.RegisterGeneric(typeof(EfRepository<>)).As(typeof(IRepository<>)).InstancePerLifetimeScope();
-
             //dbcontext
             builder.Register<IDbContext>(c => new ApplicationContext()).InstancePerLifetimeScope();
             //if (HttpContext.Current.Request.IsLocal)
@@ -69,6 +66,9 @@ namespace Web
             //    var context = new ApplicationContext("ApplicationContext");
             //    builder.Register<IDbContext>(c => context).SingleInstance();
             //}
+
+            //generic repositories
+            builder.RegisterGeneric(typeof(EfRepository<>)).As(typeof(IRepository<>)).InstancePerLifetimeScope();
 
             //services
             builder.RegisterType<FinancialService>().As<IFinancialService>().InstancePerLifetimeScope();

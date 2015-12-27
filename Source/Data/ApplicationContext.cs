@@ -35,7 +35,8 @@ namespace Data
         }
         public ApplicationContext(string name) 
             : base(name)
-        {            
+        {
+            Database.SetInitializer<ApplicationContext>(null); //disable code first
         }
 
         public DbSet<AccountClass> AccountClasses { get; set; }
