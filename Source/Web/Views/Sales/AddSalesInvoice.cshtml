@@ -1,4 +1,5 @@
 ﻿@model Web.Models.ViewModels.Sales.AddSalesInvoice
+@using Web.Models;
 @{
     ViewBag.Title = "AddSalesInvoice";
     Layout = "~/Views/Shared/_Layout.cshtml";
@@ -12,7 +13,7 @@
     <div>
         <div class="form-group">
             @Html.LabelFor(m => m.CustomerId, new { @class = "col-md-2 control-label" })
-            @Html.DropDownListFor(m => m.CustomerId, Model.Customers)
+            @Html.DropDownListFor(m => m.CustomerId, ModelViewHelper.Customers())
         </div>
         <div class="form-group">
             @Html.LabelFor(m => m.Date, new { @class = "col-md-2 control-label" })

@@ -13,7 +13,7 @@
         <div class="panel-body">
             <div class="form-group">
                 <label class="col-md-2 control-label">Customer</label>
-                @Html.DropDownListFor(m => m.CustomerId, ModelViewHelper.Customers(null))
+                @Html.DropDownListFor(m => m.CustomerId, ModelViewHelper.Customers())
             </div>
             <div class="form-group">
                 <label class="col-md-2 control-label">Payment Term</label>
@@ -41,8 +41,8 @@
                         <th></th>
                     </tr>
                     <tr>
-                        <td>@Html.DropDownListFor(m => m.ItemId, ModelViewHelper.Items(null))</td>
-                        <td>@Html.DropDownListFor(m => m.MeasurementId, ModelViewHelper.Measurements(null))</td>
+                        <td>@Html.DropDownListFor(m => m.ItemId, ModelViewHelper.Items())</td>
+                        <td>@Html.DropDownListFor(m => m.MeasurementId, ModelViewHelper.Measurements())</td>
                         <td>@Html.TextBoxFor(m => m.Quantity)</td>
                         <td>@Html.TextBoxFor(m => m.Price)</td>
                         <td>@Html.TextBoxFor(m => m.Discount)</td>
