@@ -62,7 +62,7 @@ namespace Web.Controllers
             HttpContext.Response.Clear();
             HttpContext.Response.AddHeader("Content-Type", "application/pdf");
             HttpContext.Response.Filter = new PdfFilter(HttpContext.Response.Filter, html);
-            //return Json(html, JsonRequestBehavior.AllowGet);
+
             return Content(html);
         }
 
@@ -168,6 +168,23 @@ namespace Web.Controllers
         public ActionResult BalanceSheet()
         {
             var model = _financialService.BalanceSheet();
+            var incomestatement = _financialService.IncomeStatement();
+            var netincome = incomestatement.Where(a => a.IsExpense == false).Sum(a => a.Amount) - incomestatement.Where(a => a.IsExpense == true).Sum(a => a.Amount);
+
+            // TODO: Add logic to get the correct account for accumulated profit/loss. Currently, the account code is hard-coded here.
+            // Solution 1: Add two columns in general ledger setting for the account id of accumulated profit and loss.
+            // Solution 2: Add column to Account table to flag if account is net income (profit and loss)
+            if (netincome < 0)
+            {
+                var loss = model.Where(a => a.AccountCode == "30500").FirstOrDefault();
+                loss.Amount = netincome;
+            }
+            else
+            {
+                var profit = model.Where(a => a.AccountCode == "30400").FirstOrDefault();
+                profit.Amount = netincome;
+            }
+
             return View(model);
         }
 
