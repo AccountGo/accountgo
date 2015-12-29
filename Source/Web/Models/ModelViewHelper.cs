@@ -34,17 +34,24 @@ namespace Web.Models
                 //Getting the current context of HTTP request
                 var context = HttpContext.Current;
 
-                //Checking the current context content
-                if (context != null)
+                if (context.Request.IsLocal)
                 {
-                    //Formatting the fully qualified website url/name
-                    appPath = string.Format("{0}://{1}{2}{3}",
-                                            context.Request.Url.Scheme,
-                                            context.Request.Url.Host,
-                                            context.Request.Url.Port == 80
-                                                ? string.Empty
-                                                : ":" + context.Request.Url.Port,
-                                            context.Request.ApplicationPath);
+                    //Checking the current context content
+                    if (context != null)
+                    {
+                        //Formatting the fully qualified website url/name
+                        appPath = string.Format("{0}://{1}{2}{3}",
+                                                context.Request.Url.Scheme,
+                                                context.Request.Url.Host,
+                                                context.Request.Url.Port == 80
+                                                    ? string.Empty
+                                                    : ":" + context.Request.Url.Port,
+                                                context.Request.ApplicationPath);
+                    }
+                }
+                else
+                {
+                    appPath = System.Configuration.ConfigurationManager.AppSettings["BaseUrl"];
                 }
 
                 if (!appPath.EndsWith("/"))
