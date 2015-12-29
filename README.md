@@ -10,7 +10,7 @@ It is initially designed for a small size businesses and the idea is to help the
 1. Clone or download copy of AccountGo solution
 2. Open the solution file in Visual Studio 2012 or later
 3. Build the solution
-4. The project is utilising Entity Framework Code First so when you first run the Web project it automatically creates the database for you. The default name of the database is AccountGo. You can change this in web.config
+4. Publish database to your local (SQL.AccountGo project). This include a post deployment script to load initial data.
 
 # Features
 
