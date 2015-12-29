@@ -18,7 +18,7 @@ namespace Core.Domain.Auditing
     [Table("AuditLog", Schema = "dbo")]
     public class AuditLog : BaseEntity
     {
-        [Key]
+        //[Key]
         public int AuditLogId { get; set; }
         public string UserName { get; set; }
         public DateTime AuditEventDateUTC { get; set; }
@@ -28,5 +28,10 @@ namespace Core.Domain.Auditing
         public string FieldName { get; set; }
         public string OriginalValue { get; set; }
         public string NewValue { get; set; }
+        public override int Id
+        {
+            get { return AuditLogId; }
+            set { AuditLogId = value; }
+        }
     }
 }
