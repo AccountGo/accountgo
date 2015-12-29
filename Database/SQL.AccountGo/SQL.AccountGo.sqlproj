@@ -119,4 +119,14 @@
     <Build Include="dbo\Tables\AuditableEntity.sql" />
     <Build Include="dbo\Tables\AuditLog.sql" />
   </ItemGroup>
+  <ItemGroup>
+    <PostDeploy Include="PostDeployment.sql">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </PostDeploy>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="InitialDataScript.sql">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
 </Project>
