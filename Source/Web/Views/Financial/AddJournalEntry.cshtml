@@ -36,7 +36,7 @@
             </thead>
             <tbody>
                 <tr>
-                    <td>@Html.DropDownListFor(m => m.AccountId, ModelViewHelper.Accounts(null))</td>
+                    <td>@Html.DropDownListFor(m => m.AccountId, ModelViewHelper.Accounts())</td>
                     <td>@Html.EnumDropDownListFor(m => m.DrCr, new { @style = "width: 70px;" })</td>
                     <td>@Html.TextBoxFor(m => m.Amount, new { @style = "width: 100px;" })</td>
                     <td>@Html.TextBoxFor(m => m.Memo)</td>

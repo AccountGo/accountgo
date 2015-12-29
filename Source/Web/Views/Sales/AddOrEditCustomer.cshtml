@@ -26,19 +26,19 @@
     <div class="panel panel-default panel-body">
         <div class="form-group">
             <label class="col-md-3 control-label">Accounts Receivable</label>
-            @Html.DropDownListFor(m => m.AccountsReceivableAccountId, ModelViewHelper.Accounts(null))
+            @Html.DropDownListFor(m => m.AccountsReceivableAccountId, ModelViewHelper.Accounts())
         </div>
         <div class="form-group">
             <label class="col-md-3 control-label">Sales Account</label>
-            @Html.DropDownListFor(m => m.SalesAccountId, ModelViewHelper.Accounts(null))
+            @Html.DropDownListFor(m => m.SalesAccountId, ModelViewHelper.Accounts())
         </div>
         <div class="form-group">
             <label class="col-md-3 control-label">Sales Discount Account</label>
-            @Html.DropDownListFor(m => m.SalesDiscountAccountId, ModelViewHelper.Accounts(null))
+            @Html.DropDownListFor(m => m.SalesDiscountAccountId, ModelViewHelper.Accounts())
         </div>
         <div class="form-group">
             <label class="col-md-3 control-label">Prompt Payment Discount Account</label>
-            @Html.DropDownListFor(m => m.PromptPaymentDiscountAccountId, ModelViewHelper.Accounts(null))
+            @Html.DropDownListFor(m => m.PromptPaymentDiscountAccountId, ModelViewHelper.Accounts())
         </div>
     </div>
     <div class="form-group">

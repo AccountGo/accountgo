@@ -20,15 +20,15 @@
     <div class="panel panel-default panel-body">
         <div class="form-group">
             <label class="col-md-3 control-label">Accounts Payable Account</label>
-            @Html.DropDownListFor(m => m.AccountsPayableAccountId, ModelViewHelper.Accounts(null))
+            @Html.DropDownListFor(m => m.AccountsPayableAccountId, ModelViewHelper.Accounts())
         </div>
         <div class="form-group">
             <label class="col-md-3 control-label">Purchase Account</label>
-            @Html.DropDownListFor(m => m.PurchaseAccountId, ModelViewHelper.Accounts(null))
+            @Html.DropDownListFor(m => m.PurchaseAccountId, ModelViewHelper.Accounts())
         </div>
         <div class="form-group">
             <label class="col-md-3 control-label">Purchase Discount Account</label>
-            @Html.DropDownListFor(m => m.PurchaseDiscountAccountId, ModelViewHelper.Accounts(null))
+            @Html.DropDownListFor(m => m.PurchaseDiscountAccountId, ModelViewHelper.Accounts())
         </div>
 
     </div>
