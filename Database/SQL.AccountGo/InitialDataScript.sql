@@ -343,3 +343,24 @@ INSERT [dbo].[FinancialYear] ([Id], [FiscalYearCode], [FiscalYearName], [StartDa
 GO
 SET IDENTITY_INSERT [dbo].[FinancialYear] OFF
 GO
+
+SET IDENTITY_INSERT [dbo].[AuditableEntity] ON 
+
+GO
+INSERT [dbo].[AuditableEntity] ([Id], [EntityName], [EnableAudit]) VALUES (1, N'Account', 1)
+GO
+SET IDENTITY_INSERT [dbo].[AuditableEntity] OFF
+GO
+SET IDENTITY_INSERT [dbo].[AuditableAttribute] ON 
+
+GO
+INSERT [dbo].[AuditableAttribute] ([Id], [AuditableEntityId], [AttributeName], [EnableAudit]) VALUES (1, 1, N'AccountCode', 1)
+GO
+INSERT [dbo].[AuditableAttribute] ([Id], [AuditableEntityId], [AttributeName], [EnableAudit]) VALUES (2, 1, N'AccountName', 1)
+GO
+INSERT [dbo].[AuditableAttribute] ([Id], [AuditableEntityId], [AttributeName], [EnableAudit]) VALUES (3, 1, N'Description', 1)
+GO
+INSERT [dbo].[AuditableAttribute] ([Id], [AuditableEntityId], [AttributeName], [EnableAudit]) VALUES (4, 1, N'IsCash', 1)
+GO
+SET IDENTITY_INSERT [dbo].[AuditableAttribute] OFF
+GO
