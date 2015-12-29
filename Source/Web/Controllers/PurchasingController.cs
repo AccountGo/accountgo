@@ -62,9 +62,9 @@ namespace Web.Controllers
             var taxes = _financialService.GetTaxes();
             var itemCategories = _inventoryService.GetItemCategories();
             var vendors = _purchasingService.GetVendors();
-            model.Items = Models.ModelViewHelper.Items(items);
-            model.Vendors = Models.ModelViewHelper.Vendors(vendors);
-            model.UnitOfMeasurements = Models.ModelViewHelper.Measurements(measurements);
+            model.Items = Models.ModelViewHelper.Items();
+            model.Vendors = Models.ModelViewHelper.Vendors();
+            model.UnitOfMeasurements = Models.ModelViewHelper.Measurements();
             return View(model);
         }
 
@@ -78,9 +78,9 @@ namespace Web.Controllers
             var taxes = _financialService.GetTaxes();
             var itemCategories = _inventoryService.GetItemCategories();
             var vendors = _purchasingService.GetVendors();
-            model.Items = Models.ModelViewHelper.Items(items);
-            model.Vendors = Models.ModelViewHelper.Vendors(vendors);
-            model.UnitOfMeasurements = Models.ModelViewHelper.Measurements(measurements);
+            model.Items = Models.ModelViewHelper.Items();
+            model.Vendors = Models.ModelViewHelper.Vendors();
+            model.UnitOfMeasurements = Models.ModelViewHelper.Measurements();
             try
             {
                 if (model.Quantity > 0)
@@ -115,9 +115,9 @@ namespace Web.Controllers
             var taxes = _financialService.GetTaxes();
             var itemCategories = _inventoryService.GetItemCategories();
             var vendors = _purchasingService.GetVendors();
-            model.Items = Models.ModelViewHelper.Items(items);
-            model.Vendors = Models.ModelViewHelper.Vendors(vendors);
-            model.UnitOfMeasurements = Models.ModelViewHelper.Measurements(measurements);
+            model.Items = Models.ModelViewHelper.Items();
+            model.Vendors = Models.ModelViewHelper.Vendors();
+            model.UnitOfMeasurements = Models.ModelViewHelper.Measurements();
             try
             {
                 var po = new PurchaseOrderHeader()
@@ -166,9 +166,9 @@ namespace Web.Controllers
             var taxes = _financialService.GetTaxes();
             var itemCategories = _inventoryService.GetItemCategories();
             var vendors = _purchasingService.GetVendors();
-            model.Items = Models.ModelViewHelper.Items(items);
-            model.Vendors = Models.ModelViewHelper.Vendors(vendors);
-            model.UnitOfMeasurements = Models.ModelViewHelper.Measurements(measurements);
+            model.Items = Models.ModelViewHelper.Items();
+            model.Vendors = Models.ModelViewHelper.Vendors();
+            model.UnitOfMeasurements = Models.ModelViewHelper.Measurements();
 
             var request = HttpContext.Request;
             var deletedItem = request.Form["DeletedLineItem"];
@@ -384,7 +384,7 @@ namespace Web.Controllers
         public ActionResult AddVendor()
         {
             var model = new Models.ViewModels.Purchases.AddVendor();
-            model.Accounts = Models.ModelViewHelper.Accounts(_financialService.GetAccounts());
+            model.Accounts = Models.ModelViewHelper.Accounts();
             return View(model);
         }
 

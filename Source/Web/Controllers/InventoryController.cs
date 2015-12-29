@@ -89,12 +89,12 @@ namespace Web.Controllers
 
             var model = new Models.ViewModels.Items.EditItem();
             model.PrepareEditItemViewModel(item);
-            model.Accounts = ModelViewHelper.Accounts(accounts);
-            model.UnitOfMeasurements = ModelViewHelper.Measurements(measurements);
-            model.Taxes = ModelViewHelper.Taxes(taxes);
-            model.ItemTaxGroups = ModelViewHelper.ItemTaxGroups(itemTaxGroups);
-            model.Vendors = ModelViewHelper.Vendors(vendors);
-            model.ItemCategories = ModelViewHelper.ItemCategories(itemCategories);
+            model.Accounts = ModelViewHelper.Accounts();
+            model.UnitOfMeasurements = ModelViewHelper.Measurements();
+            model.Taxes = ModelViewHelper.Taxes();
+            model.ItemTaxGroups = ModelViewHelper.ItemTaxGroups();
+            model.Vendors = ModelViewHelper.Vendors();
+            model.ItemCategories = ModelViewHelper.ItemCategories();
             model.ItemTaxGroupId = model.ItemTaxGroupId == null ? -1 : model.ItemTaxGroupId;
             model.InventoryAccountId = model.InventoryAccountId == null ? -1 : model.InventoryAccountId;
             model.SellAccountId = model.SellAccountId == null ? -1 : model.SellAccountId;

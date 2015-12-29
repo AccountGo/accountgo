@@ -13,8 +13,8 @@
     @Html.HiddenFor(m => m.DocumentType)
     <div>
         <div class="form-group">
-            <label class="col-md-2 control-label">Customer</label>
-            @Html.DropDownListFor(m => m.VendorId, ModelViewHelper.Vendors(null))
+            <label class="col-md-2 control-label">Vendor</label>
+            @Html.DropDownListFor(m => m.VendorId, ModelViewHelper.Vendors())
         </div>
         <div class="form-group">
             <label class="col-md-2 control-label">Date</label>

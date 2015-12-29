@@ -319,9 +319,12 @@ namespace Services.Sales
 
         public IEnumerable<Customer> GetCustomers()
         {
-            var query = from customer in _customerRepo.Table
-                        select customer;
-            return query.ToList();
+            var query = from c in _customerRepo.Table
+                        select c;
+
+            int count = query.Count();
+
+            return query.AsEnumerable();
         }
 
         public Customer GetCustomerById(int id)

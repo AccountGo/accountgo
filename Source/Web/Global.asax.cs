@@ -55,6 +55,7 @@ namespace Web
 
             //controllers
             builder.RegisterControllers(Assembly.GetExecutingAssembly());
+            builder.RegisterApiControllers(Assembly.GetExecutingAssembly());
 
             //dbcontext
             builder.Register<IDbContext>(c => new ApplicationContext()).InstancePerLifetimeScope();

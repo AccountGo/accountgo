@@ -10,58 +10,71 @@ using Core.Domain;
 using Core.Domain.Financials;
 using Core.Domain.Items;
 using Core.Domain.Purchases;
-using Core.Domain.Sales;
-using Services.Financial;
-using Services.Inventory;
-using Services.Purchasing;
-using Services.Sales;
 using System;
 using System.Collections.Generic;
+using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Web;
 using System.Web.Mvc;
+using Web.ModelsApi.Inventory;
+using Web.ModelsApi.Purchasing;
+using Web.ModelsApi.Sales;
 
 namespace Web.Models
 {
     public sealed class ModelViewHelper
     {
-        private static ISalesService _salesService = DependencyResolver.Current.GetService<ISalesService>();
-        private static IPurchasingService _purchasingService = DependencyResolver.Current.GetService<IPurchasingService>();
-        private static IFinancialService _financialService = DependencyResolver.Current.GetService<IFinancialService>();
-        private static IInventoryService _inventoryService = DependencyResolver.Current.GetService<IInventoryService>();
+        public static string FullyQualifiedApplicationPath
+        {
+            get
+            {
+                //Return variable declaration
+                var appPath = string.Empty;
 
-        /// <summary>
-        /// [Deprecated] Change to Accounts()
-        /// </summary>
-        /// <param name="accounts"></param>
-        /// <returns></returns>
-        public static ICollection<SelectListItem> Accounts(IEnumerable<Account> accounts)
-        {             
-            var selections = new HashSet<SelectListItem>();
-            selections.Add(new SelectListItem() { Text = string.Empty, Value = "-1", Selected = true });
-            foreach (var account in _financialService.GetAccounts())
-                selections.Add(new SelectListItem() { Text = account.AccountName, Value = account.Id.ToString() });
-            return selections;
+                //Getting the current context of HTTP request
+                var context = HttpContext.Current;
+
+                //Checking the current context content
+                if (context != null)
+                {
+                    //Formatting the fully qualified website url/name
+                    appPath = string.Format("{0}://{1}{2}{3}",
+                                            context.Request.Url.Scheme,
+                                            context.Request.Url.Host,
+                                            context.Request.Url.Port == 80
+                                                ? string.Empty
+                                                : ":" + context.Request.Url.Port,
+                                            context.Request.ApplicationPath);
+                }
+
+                if (!appPath.EndsWith("/"))
+                    appPath += "/";
+
+                return appPath;
+            }
         }
 
         public static ICollection<SelectListItem> Accounts()
         {
             var selections = new HashSet<SelectListItem>();
             selections.Add(new SelectListItem() { Text = string.Empty, Value = "-1", Selected = true });
-            foreach (var account in _financialService.GetAccounts())
-                selections.Add(new SelectListItem() { Text = account.AccountName, Value = account.Id.ToString() });
-            return selections;
-        }
 
-        /// <summary>
-        /// [Deprecated] Change to Items()
-        /// </summary>
-        /// <param name="items"></param>
-        /// <returns></returns>
-        public static ICollection<SelectListItem> Items(IEnumerable<Item> items)
-        {
-            var selections = new HashSet<SelectListItem>();
-            selections.Add(new SelectListItem() { Text = string.Empty, Value = "-1", Selected = true });
-            foreach (var item in _inventoryService.GetAllItems())
-                selections.Add(new SelectListItem() { Text = item.Description, Value = item.Id.ToString() });
+            using (var client = new HttpClient())
+            {
+                client.BaseAddress = new Uri(FullyQualifiedApplicationPath);
+                client.DefaultRequestHeaders.Accept.Clear();
+                client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+                HttpResponseMessage response = client.GetAsync("api/common/accounts").Result;
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var accounts = response.Content.ReadAsAsync<IEnumerable<Account>>().Result;
+                    foreach (var account in accounts)
+                        selections.Add(new SelectListItem() { Text = account.AccountName, Value = account.Id.ToString() });
+                }
+            }
+
             return selections;
         }
 
@@ -69,22 +82,23 @@ namespace Web.Models
         {
             var selections = new HashSet<SelectListItem>();
             selections.Add(new SelectListItem() { Text = string.Empty, Value = "-1", Selected = true });
-            foreach (var item in _inventoryService.GetAllItems())
-                selections.Add(new SelectListItem() { Text = item.Description, Value = item.No });
-            return selections;
-        }
 
-        /// <summary>
-        /// [Deprecated] Change to Measurements()
-        /// </summary>
-        /// <param name="measurements"></param>
-        /// <returns></returns>
-        public static ICollection<SelectListItem> Measurements(IEnumerable<Measurement> measurements)
-        {
-            var selections = new HashSet<SelectListItem>();
-            selections.Add(new SelectListItem() { Text = string.Empty, Value = "-1", Selected = true });
-            foreach (var measurement in _inventoryService.GetMeasurements())
-                selections.Add(new SelectListItem() { Text = measurement.Code, Value = measurement.Id.ToString() });
+            using (var client = new HttpClient())
+            {
+                client.BaseAddress = new Uri(FullyQualifiedApplicationPath);
+                client.DefaultRequestHeaders.Accept.Clear();
+                client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+                HttpResponseMessage response = client.GetAsync("api/common/items").Result;
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var items = response.Content.ReadAsAsync<IEnumerable<ItemDto>>().Result;
+                    foreach (var item in items)
+                        selections.Add(new SelectListItem() { Text = item.Description, Value = item.No });
+                }
+            }
+
             return selections;
         }
 
@@ -92,64 +106,69 @@ namespace Web.Models
         {
             var selections = new HashSet<SelectListItem>();
             selections.Add(new SelectListItem() { Text = string.Empty, Value = "-1", Selected = true });
-            foreach (var measurement in _inventoryService.GetMeasurements())
-                selections.Add(new SelectListItem() { Text = measurement.Code, Value = measurement.Id.ToString() });
-            return selections;
-        }
 
-        /// <summary>
-        /// [Deprecated] Change to ItemCategories()
-        /// </summary>
-        /// <param name="itemCategories"></param>
-        /// <returns></returns>
-        public static ICollection<SelectListItem> ItemCategories(IEnumerable<ItemCategory> itemCategories)
-        {
-            var selections = new HashSet<SelectListItem>();
-            foreach (var itemCategory in _inventoryService.GetItemCategories())
-                selections.Add(new SelectListItem() { Text = itemCategory.Name, Value = itemCategory.Id.ToString() });
+            using (var client = new HttpClient())
+            {
+                client.BaseAddress = new Uri(FullyQualifiedApplicationPath);
+                client.DefaultRequestHeaders.Accept.Clear();
+                client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+                HttpResponseMessage response = client.GetAsync("api/common/measurements").Result;
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var measurements = response.Content.ReadAsAsync<IEnumerable<Measurement>>().Result;
+                    foreach (var measurement in measurements)
+                        selections.Add(new SelectListItem() { Text = measurement.Code, Value = measurement.Id.ToString() });
+                }
+            }
+
             return selections;
         }
 
         public static ICollection<SelectListItem> ItemCategories()
         {
             var selections = new HashSet<SelectListItem>();
-            foreach (var itemCategory in _inventoryService.GetItemCategories())
-                selections.Add(new SelectListItem() { Text = itemCategory.Name, Value = itemCategory.Id.ToString() });
-            return selections;
-        }
 
-        /// <summary>
-        /// [Deprecated] Change to Vendors()
-        /// </summary>
-        /// <param name="vendors"></param>
-        /// <returns></returns>
-        public static ICollection<SelectListItem> Vendors(IEnumerable<Vendor> vendors)
-        {
-            var selections = new HashSet<SelectListItem>();
-            foreach (var vendor in _purchasingService.GetVendors())
-                selections.Add(new SelectListItem() { Text = vendor.Name, Value = vendor.Id.ToString() });
+            using (var client = new HttpClient())
+            {
+                client.BaseAddress = new Uri(FullyQualifiedApplicationPath);
+                client.DefaultRequestHeaders.Accept.Clear();
+                client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+                HttpResponseMessage response = client.GetAsync("api/common/itemcategories").Result;
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var itemcategories = response.Content.ReadAsAsync<IEnumerable<ItemCategory>>().Result;
+                    foreach (var itemCategory in itemcategories)
+                        selections.Add(new SelectListItem() { Text = itemCategory.Name, Value = itemCategory.Id.ToString() });
+                }
+            }
+
             return selections;
         }
 
         public static ICollection<SelectListItem> Vendors()
         {
             var selections = new HashSet<SelectListItem>();
-            foreach (var vendor in _purchasingService.GetVendors())
-                selections.Add(new SelectListItem() { Text = vendor.Name, Value = vendor.Id.ToString() });
-            return selections;
-        }
 
-        /// <summary>
-        /// [Deprecated] Change to Customers()
-        /// </summary>
-        /// <param name="customers"></param>
-        /// <returns></returns>
-        public static ICollection<SelectListItem> Customers(IEnumerable<Customer> customers)
-        {
-            var selections = new HashSet<SelectListItem>();
-            selections.Add(new SelectListItem() { Text = string.Empty, Value = "-1", Selected = true });
-            foreach (var customer in _salesService.GetCustomers())
-                selections.Add(new SelectListItem() { Text = customer.Name, Value = customer.Id.ToString() });
+            using (var client = new HttpClient())
+            {
+                client.BaseAddress = new Uri(FullyQualifiedApplicationPath);
+                client.DefaultRequestHeaders.Accept.Clear();
+                client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+                HttpResponseMessage response = client.GetAsync("api/common/vendors").Result;
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var vendors = response.Content.ReadAsAsync<IEnumerable<VendorDto>>().Result;
+                    foreach (var vendor in vendors)
+                        selections.Add(new SelectListItem() { Text = vendor.Name, Value = vendor.Id.ToString() });
+                }
+            }
+
             return selections;
         }
 
@@ -157,8 +176,23 @@ namespace Web.Models
         {
             var selections = new HashSet<SelectListItem>();
             selections.Add(new SelectListItem() { Text = string.Empty, Value = "-1", Selected = true });
-            foreach (var customer in _salesService.GetCustomers())
-                selections.Add(new SelectListItem() { Text = customer.Name, Value = customer.Id.ToString() });
+
+            using (var client = new HttpClient())
+            {
+                client.BaseAddress = new Uri(FullyQualifiedApplicationPath);
+                client.DefaultRequestHeaders.Accept.Clear();
+                client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+                HttpResponseMessage response = client.GetAsync("api/common/customers").Result;
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var customers = response.Content.ReadAsAsync<IEnumerable<CustomerDto>>().Result;
+                    foreach (var customer in customers)
+                        selections.Add(new SelectListItem() { Text = customer.Name, Value = customer.Id.ToString() });
+                }
+            }
+
             return selections;
         }
 
@@ -166,45 +200,47 @@ namespace Web.Models
         {
             var selections = new HashSet<SelectListItem>();
             selections.Add(new SelectListItem() { Text = string.Empty, Value = "-1", Selected = true });
-            foreach (var contact in _salesService.GetContacts())
-                selections.Add(new SelectListItem() { Text = contact.FirstName + " " + contact.LastName, Value = contact.Id.ToString() });
+
+            using (var client = new HttpClient())
+            {
+                client.BaseAddress = new Uri(FullyQualifiedApplicationPath);
+                client.DefaultRequestHeaders.Accept.Clear();
+                client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+                HttpResponseMessage response = client.GetAsync("api/common/contacts").Result;
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var contacts = response.Content.ReadAsAsync<IEnumerable<Contact>>().Result;
+                    foreach (var contact in contacts)
+                        selections.Add(new SelectListItem() { Text = contact.FirstName + " " + contact.LastName, Value = contact.Id.ToString() });
+                }
+            }
+
             return selections;
         }
-
-        /// <summary>
-        /// [Deprecated] Change to Taxes()
-        /// </summary>
-        /// <param name="taxes"></param>
-        /// <returns></returns>
-        public static ICollection<SelectListItem> Taxes(IEnumerable<Tax> taxes)
-        {
-            var selections = new HashSet<SelectListItem>();
-            selections.Add(new SelectListItem() { Text = string.Empty, Value = "-1", Selected = true });
-            foreach (var tax in _financialService.GetTaxes())
-                selections.Add(new SelectListItem() { Text = tax.TaxCode, Value = tax.Id.ToString() });
-            return selections;
-        }
-
+        
         public static ICollection<SelectListItem> Taxes()
         {
             var selections = new HashSet<SelectListItem>();
             selections.Add(new SelectListItem() { Text = string.Empty, Value = "-1", Selected = true });
-            foreach (var tax in _financialService.GetTaxes())
-                selections.Add(new SelectListItem() { Text = tax.TaxCode, Value = tax.Id.ToString() });
-            return selections;
-        }
 
-        /// <summary>
-        /// [Deprecated] Change to ItemTaxGroups()
-        /// </summary>
-        /// <param name="itemTaxGroups"></param>
-        /// <returns></returns>
-        public static ICollection<SelectListItem> ItemTaxGroups(IEnumerable<ItemTaxGroup> itemTaxGroups)
-        {
-            var selections = new HashSet<SelectListItem>();
-            selections.Add(new SelectListItem() { Text = string.Empty, Value = "-1", Selected = true });
-            foreach (var tax in _financialService.GetItemTaxGroups())
-                selections.Add(new SelectListItem() { Text = tax.Name, Value = tax.Id.ToString() });
+            using (var client = new HttpClient())
+            {
+                client.BaseAddress = new Uri(FullyQualifiedApplicationPath);
+                client.DefaultRequestHeaders.Accept.Clear();
+                client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+                HttpResponseMessage response = client.GetAsync("api/common/taxes").Result;
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var taxes = response.Content.ReadAsAsync<IEnumerable<Tax>>().Result;
+                    foreach (var tax in taxes)
+                        selections.Add(new SelectListItem() { Text = tax.TaxCode, Value = tax.Id.ToString() });
+                }
+            }
+
             return selections;
         }
 
@@ -212,22 +248,22 @@ namespace Web.Models
         {
             var selections = new HashSet<SelectListItem>();
             selections.Add(new SelectListItem() { Text = string.Empty, Value = "-1", Selected = true });
-            foreach (var tax in _financialService.GetItemTaxGroups())
-                selections.Add(new SelectListItem() { Text = tax.Name, Value = tax.Id.ToString() });
-            return selections;
-        }
+            using (var client = new HttpClient())
+            {
+                client.BaseAddress = new Uri(FullyQualifiedApplicationPath);
+                client.DefaultRequestHeaders.Accept.Clear();
+                client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
-        /// <summary>
-        /// [Deprecated] Change to TaxGroups()
-        /// </summary>
-        /// <param name="taxGroups"></param>
-        /// <returns></returns>
-        public static ICollection<SelectListItem> TaxGroups(IEnumerable<ItemTaxGroup> taxGroups)
-        {
-            var selections = new HashSet<SelectListItem>();
-            selections.Add(new SelectListItem() { Text = string.Empty, Value = "-1", Selected = true });
-            foreach (var tax in _financialService.GetItemTaxGroups())
-                selections.Add(new SelectListItem() { Text = tax.Name, Value = tax.Id.ToString() });
+                HttpResponseMessage response = client.GetAsync("api/common/itemtaxgroups").Result;
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var itemtaxgroups = response.Content.ReadAsAsync<IEnumerable<ItemTaxGroup>>().Result;
+                    foreach (var tax in itemtaxgroups)
+                        selections.Add(new SelectListItem() { Text = tax.Name, Value = tax.Id.ToString() });
+                }
+            }
+
             return selections;
         }
 
@@ -235,8 +271,22 @@ namespace Web.Models
         {
             var selections = new HashSet<SelectListItem>();
             selections.Add(new SelectListItem() { Text = string.Empty, Value = "-1", Selected = true });
-            foreach (var tax in _financialService.GetItemTaxGroups())
-                selections.Add(new SelectListItem() { Text = tax.Name, Value = tax.Id.ToString() });
+            using (var client = new HttpClient())
+            {
+                client.BaseAddress = new Uri(FullyQualifiedApplicationPath);
+                client.DefaultRequestHeaders.Accept.Clear();
+                client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+                HttpResponseMessage response = client.GetAsync("api/common/taxgroups").Result;
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var taxgroups = response.Content.ReadAsAsync<IEnumerable<TaxGroup>>().Result;
+                    foreach (var tax in taxgroups)
+                        selections.Add(new SelectListItem() { Text = tax.Description, Value = tax.Id.ToString() });
+                }
+            }
+
             return selections;
         }
 
@@ -250,17 +300,45 @@ namespace Web.Models
         {
             var selections = new HashSet<SelectListItem>();
             selections.Add(new SelectListItem() { Text = string.Empty, Value = "-1", Selected = true });
-            foreach (var paymentTerm in _salesService.GetPaymentTerms())
-                selections.Add(new SelectListItem() { Text = paymentTerm.Description, Value = paymentTerm.Id.ToString() });
+
+            using (var client = new HttpClient())
+            {
+                client.BaseAddress = new Uri(FullyQualifiedApplicationPath);
+                client.DefaultRequestHeaders.Accept.Clear();
+                client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+                HttpResponseMessage response = client.GetAsync("api/common/paymentterms").Result;
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var paymentterms = response.Content.ReadAsAsync<IEnumerable<PaymentTerm>>().Result;
+                    foreach (var paymentterm in paymentterms)
+                        selections.Add(new SelectListItem() { Text = paymentterm.Description, Value = paymentterm.Id.ToString() });
+                }
+            }
+
             return selections;
         }
 
         public static ICollection<SelectListItem> Banks()
         {
             var selections = new HashSet<SelectListItem>();
-            //selections.Add(new SelectListItem() { Text = string.Empty, Value = "-1", Selected = true });
-            foreach (var bank in _financialService.GetCashAndBanks())
-                selections.Add(new SelectListItem() { Text = bank.Name, Value = bank.AccountId.Value.ToString() });
+            using (var client = new HttpClient())
+            {
+                client.BaseAddress = new Uri(FullyQualifiedApplicationPath);
+                client.DefaultRequestHeaders.Accept.Clear();
+                client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+                HttpResponseMessage response = client.GetAsync("api/common/banks").Result;
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var banks = response.Content.ReadAsAsync<IEnumerable<Bank>>().Result;
+                    foreach (var bank in banks)
+                        selections.Add(new SelectListItem() { Text = bank.Name, Value = bank.AccountId.Value.ToString() });
+                }
+            }
+
             return selections;
         }
     }

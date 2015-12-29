@@ -14,6 +14,7 @@ using System.Linq;
 using Core.Domain.Sales;
 using System.Collections.Generic;
 using System;
+using System.Threading.Tasks;
 
 namespace Web.Controllers
 {
@@ -150,9 +151,9 @@ namespace Web.Controllers
         public ActionResult AddSalesInvoice(bool direct = false)
         {
             var model = new Web.Models.ViewModels.Sales.AddSalesInvoice();
-            model.Customers = Models.ModelViewHelper.Customers(_salesService.GetCustomers());
-            model.Items = Models.ModelViewHelper.Items(_inventoryService.GetAllItems());
-            model.Measurements = Models.ModelViewHelper.Measurements(_inventoryService.GetMeasurements());
+            model.Customers = Models.ModelViewHelper.Customers();
+            model.Items = Models.ModelViewHelper.Items();
+            model.Measurements = Models.ModelViewHelper.Measurements();
 
             return View(model);
         }
@@ -163,9 +164,9 @@ namespace Web.Controllers
         {
             if (model.AddSalesInvoiceLines.Sum(i => i.Amount) == 0 || model.AddSalesInvoiceLines.Count < 1)
             {
-                model.Customers = Models.ModelViewHelper.Customers(_salesService.GetCustomers());
-                model.Items = Models.ModelViewHelper.Items(_inventoryService.GetAllItems());
-                model.Measurements = Models.ModelViewHelper.Measurements(_inventoryService.GetMeasurements());
+                model.Customers = Models.ModelViewHelper.Customers();
+                model.Items = Models.ModelViewHelper.Items();
+                model.Measurements = Models.ModelViewHelper.Measurements();
                 ModelState.AddModelError("Amount", "No invoice line");
                 return View(model);
             }
@@ -204,9 +205,9 @@ namespace Web.Controllers
         [FormValueRequiredAttribute("AddSalesInvoiceLine")]
         public ActionResult AddSalesInvoiceLine(Models.ViewModels.Sales.AddSalesInvoice model)
         {
-            model.Customers = Models.ModelViewHelper.Customers(_salesService.GetCustomers());
-            model.Items = Models.ModelViewHelper.Items(_inventoryService.GetAllItems());
-            model.Measurements = Models.ModelViewHelper.Measurements(_inventoryService.GetMeasurements());
+            model.Customers = Models.ModelViewHelper.Customers();
+            model.Items = Models.ModelViewHelper.Items();
+            model.Measurements = Models.ModelViewHelper.Measurements();
             if (model.Quantity > 0)
             {
                 var item = _inventoryService.GetItemById(model.ItemId);
@@ -234,9 +235,9 @@ namespace Web.Controllers
         [FormValueRequiredAttribute("DeleteInvoiceLineItem")]
         public ActionResult DeleteInvoiceLineItem(Models.ViewModels.Sales.AddSalesInvoice model)
         {
-            model.Customers = Models.ModelViewHelper.Customers(_salesService.GetCustomers());
-            model.Items = Models.ModelViewHelper.Items(_inventoryService.GetAllItems());
-            model.Measurements = Models.ModelViewHelper.Measurements(_inventoryService.GetMeasurements());
+            model.Customers = Models.ModelViewHelper.Customers();
+            model.Items = Models.ModelViewHelper.Items();
+            model.Measurements = Models.ModelViewHelper.Measurements();
 
             var request = HttpContext.Request;
             var deletedItem = request.Form["DeletedLineItem"];
