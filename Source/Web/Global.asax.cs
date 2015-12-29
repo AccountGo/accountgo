@@ -8,21 +8,23 @@
 
 using Autofac;
 using Autofac.Integration.Mvc;
+using Autofac.Integration.WebApi;
 using Core.Data;
 using Data;
+using Newtonsoft.Json.Serialization;
+using Services.Administration;
 using Services.Financial;
 using Services.Inventory;
 using Services.Purchasing;
 using Services.Sales;
 using System;
-using System.Configuration;
-using System.Data.Entity;
+using System.Linq;
+using System.Net.Http.Formatting;
 using System.Reflection;
-using System.Web;
+using System.Web.Http;
 using System.Web.Mvc;
 using System.Web.Optimization;
 using System.Web.Routing;
-using Services.Administration;
 
 namespace Web
 {
@@ -34,9 +36,13 @@ namespace Web
         protected void Application_Start()
         {
             AreaRegistration.RegisterAllAreas();
+            GlobalConfiguration.Configure(WebApiConfig.Register);
             FilterConfig.RegisterGlobalFilters(GlobalFilters.Filters);
             RouteConfig.RegisterRoutes(RouteTable.Routes);
             BundleConfig.RegisterBundles(BundleTable.Bundles);
+
+            JsonMediaTypeFormatter formatter = GlobalConfiguration.Configuration.Formatters.OfType<JsonMediaTypeFormatter>().FirstOrDefault();
+            formatter.SerializerSettings.ContractResolver = new CamelCasePropertyNamesContractResolver();
         }
         protected void Application_BeginRequest(Object sender, EventArgs e)
         {
@@ -76,11 +82,10 @@ namespace Web
             builder.RegisterType<SalesService>().As<ISalesService>().InstancePerLifetimeScope();
             builder.RegisterType<PurchasingService>().As<IPurchasingService>().InstancePerLifetimeScope();
             builder.RegisterType<AdministrationService>().As<IAdministrationService>().InstancePerLifetimeScope();
-            //builder.RegisterType<UserManager<ApplicationUser>>().As<UserStore<ApplicationUser>>().InstancePerLifetimeScope();
-            //builder.RegisterType<RoleManager<ApplicationRole>>().As<RoleStore<ApplicationRole>>().InstancePerLifetimeScope();
 
             container = builder.Build();
             DependencyResolver.SetResolver(new AutofacDependencyResolver(container));
+            GlobalConfiguration.Configuration.DependencyResolver = new AutofacWebApiDependencyResolver(container);
         }
     }
 }
