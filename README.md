@@ -29,6 +29,10 @@ If you are a developer and wanted to take part as contributor/collaborator we ar
 
 So go ahead, add your code. Looking forward to your first pull request.
 
+# Co-authors
+
+Md. Sajedul Haque Romi
+
 # Contact Support
 Feel free to email mvpsolution@gmail.com of any questions.
 
