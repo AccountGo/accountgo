@@ -125,7 +125,7 @@ namespace Web.Models.ViewModels.Sales
             decimal lineTaxAmount = 0;
             if (_financialService != null)
             {
-                var taxes = _financialService.ComputeOutputTax(ItemId, Quantity, Total, Discount);
+                var taxes = _financialService.ComputeOutputTax(ItemId, Quantity, Price, Discount);
                 lineTaxAmount = Math.Round(taxes.Sum(t => t.Value), 2);
             }
             return lineTaxAmount;

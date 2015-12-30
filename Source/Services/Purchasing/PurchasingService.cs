@@ -160,7 +160,7 @@ namespace Services.Purchasing
                 //        taxes.Add(new KeyValuePair<int, decimal>(tax.Tax.PurchasingAccountId.Value, lineTaxAmount.Value));
                 //    }
                 //}
-                var lineTaxes = _financialService.ComputeInputTax(line.ItemId, line.Quantity, line.Amount);
+                var lineTaxes = _financialService.ComputeInputTax(line.ItemId, line.Quantity, line.Cost.Value);
                 foreach (var t in lineTaxes)
                     taxes.Add(t);
             }
