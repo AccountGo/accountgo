@@ -251,8 +251,9 @@ namespace Data
 
         private void UpdateAccounts()
         {
+            string path = AppDomain.CurrentDomain.BaseDirectory + "/App_Data/coa.csv";
             DataTable csvData = new DataTable();
-            using (TextFieldParser csvReader = new TextFieldParser(@"C:\Development\Practice\apphb\Solution\src\UnitTests\App_Data\coa.csv"))
+            using (TextFieldParser csvReader = new TextFieldParser(path))
             {
                 csvReader.SetDelimiters(new string[] { "," });
                 csvReader.HasFieldsEnclosedInQuotes = true;
