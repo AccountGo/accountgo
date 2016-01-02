@@ -22,7 +22,8 @@ using System.Linq;
 
 namespace Data
 {
-    public partial class ApplicationContext : DbContext, IDbContext
+    [DbConfigurationType("Data.Configuration, Data")]
+    public class ApplicationContext : DbContext, IDbContext
     {
         public string UserName
         {
