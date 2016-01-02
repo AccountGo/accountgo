@@ -12,6 +12,9 @@
     @Scripts.Render("~/bundles/jqueryunobtrusive")
     @Scripts.Render("~/bundles/bootstrap")
     @System.Web.Optimization.Styles.Render("~/Content/themes/base/css", "~/Content/css")
+    <script>
+        var rootSite = '@HttpContext.Current.Request.Url.GetLeftPart(UriPartial.Authority)@Url.Content("~/")';
+    </script>
 </head>
 <body>
     <div class="navbar navbar-inverse navbar-fixed-top">
@@ -178,7 +181,7 @@
     <script>
         function PrintPdf(action) {
             var id = $('#Id').val();
-            window.open('/Reports/' + action + '?id=' + id, '_blank');
+            window.open(rootSite + 'Reports/' + action + '?id=' + id, '_blank');
         }
     </script>
 </body>
