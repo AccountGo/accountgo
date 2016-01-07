@@ -155,7 +155,9 @@ namespace Services.Financial
                 throw new InvalidOperationException("One or more line(s) amount is zero.");
 
             var fiscalYear = CurrentFiscalYear();
-            if (fiscalYear == null || !FinancialHelper.InRange(glEntry.Date, fiscalYear.StartDate, fiscalYear.EndDate))
+            if (fiscalYear == null 
+                || !FinancialHelper.InRange(glEntry.Date, fiscalYear.StartDate, fiscalYear.EndDate)
+                || !FinancialHelper.InRange(DateTime.Now, fiscalYear.StartDate, fiscalYear.EndDate))
                 throw new InvalidOperationException("Date is out of range. Must within financial year.");
 
             //var duplicateAccounts = glEntry.GeneralLedgerLines.GroupBy(gl => gl.AccountId).Where(gl => gl.Count() > 1);
