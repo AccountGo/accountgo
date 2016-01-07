@@ -17,6 +17,7 @@ using Services.Financial;
 using Services.Inventory;
 using Services.Purchasing;
 using Services.Sales;
+using Services.Security;
 using System;
 using System.Linq;
 using System.Net.Http.Formatting;
@@ -83,6 +84,7 @@ namespace Web
             builder.RegisterType<SalesService>().As<ISalesService>().InstancePerLifetimeScope();
             builder.RegisterType<PurchasingService>().As<IPurchasingService>().InstancePerLifetimeScope();
             builder.RegisterType<AdministrationService>().As<IAdministrationService>().InstancePerLifetimeScope();
+            builder.RegisterType<SecurityService>().As<ISecurityService>().InstancePerLifetimeScope();
 
             container = builder.Build();
             DependencyResolver.SetResolver(new AutofacDependencyResolver(container));
