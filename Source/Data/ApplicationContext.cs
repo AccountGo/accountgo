@@ -12,6 +12,7 @@ using Core.Domain.Financials;
 using Core.Domain.Items;
 using Core.Domain.Purchases;
 using Core.Domain.Sales;
+using Core.Domain.Security;
 using System;
 using System.Collections.Generic;
 using System.Data;
@@ -85,6 +86,12 @@ namespace Data
         public virtual DbSet<AuditLog> AuditLogs { get; set; }
         public virtual DbSet<AuditableEntity> AuditableEntities { get; set; }
         public virtual DbSet<AuditableAttribute> AuditableAttributes { get; set; }
+        public virtual DbSet<User> Users { get; set; }
+        public virtual DbSet<SecurityRole> SecurityRoles { get; set; }
+        public virtual DbSet<SecurityPermission> SecurityPermissions { get; set; }
+        public virtual DbSet<SecurityUserRole> SecurityUserRoles { get; set; }
+        public virtual DbSet<SecurityGroup> SecurityGroups { get; set; }
+        public virtual DbSet<SecurityRolePermission> SecurityRolePermissions { get; set; }
 
         #region Methods
 

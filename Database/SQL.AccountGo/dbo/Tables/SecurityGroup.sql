@@ -1,0 +1,5 @@
+﻿CREATE TABLE [dbo].[SecurityGroup] (
+	[Id] INT IDENTITY(1,1) NOT NULL,
+    [GroupName] NVARCHAR(50) NULL
+	CONSTRAINT [PK_SecurityGroup] PRIMARY KEY CLUSTERED ([Id] ASC)
+)

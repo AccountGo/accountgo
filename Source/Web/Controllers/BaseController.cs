@@ -7,9 +7,16 @@
 //-----------------------------------------------------------------------
 
 using Core;
+using System;
+using System.Collections.Generic;
+using System.Configuration;
 using System.IO;
+using System.Linq;
+using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Security.Claims;
 using System.Web.Mvc;
-using Web.Models;
+using System.Web.Mvc.Filters;
 
 namespace Web.Controllers
 {
@@ -63,6 +70,35 @@ namespace Web.Controllers
             }
         }
 
-        //protected abstract string GetPageTitle();
+        protected override void OnAuthentication(AuthenticationContext filterContext)
+        {
+            if (filterContext.HttpContext.User.Identity.IsAuthenticated)
+            {
+                IEnumerable<string> permissions = null;
+
+                using (var client = new HttpClient())
+                {
+                    client.BaseAddress = new Uri(ConfigurationManager.AppSettings["BaseUrl"]);
+                    client.DefaultRequestHeaders.Accept.Clear();
+                    client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+                    HttpResponseMessage response = client.GetAsync("api/security/GetPermissionsForUser?username=" + User.Identity.Name).Result;
+
+                    if (response.IsSuccessStatusCode)
+                    {
+                        permissions = response.Content.ReadAsAsync<IEnumerable<string>>().Result;
+                    }
+                }
+
+                var id = ClaimsPrincipal.Current.Identities.First();
+                if (permissions != null)
+                {
+                    foreach (var permission in permissions)
+                    {
+                        id.AddClaim(new Claim(ClaimTypes.Role, permission));
+                    }
+                }
+            }
+        }
     }
 }

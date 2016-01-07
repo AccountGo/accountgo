@@ -10,6 +10,7 @@ namespace Core.Domain
 {
     public abstract partial class BaseEntity
     {
+        //[System.ComponentModel.DataAnnotations.Schema.NotMapped]
         [System.ComponentModel.DataAnnotations.Key]
         /// <summary>
         /// Gets or sets the entity identifier

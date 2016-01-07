@@ -54,6 +54,8 @@
     <Compile Include="Purchasing\PurchasingService.cs" />
     <Compile Include="Sales\ISalesService.cs" />
     <Compile Include="Sales\SalesService.cs" />
+    <Compile Include="Security\ISecurityService.cs" />
+    <Compile Include="Security\SecurityService.cs" />
   </ItemGroup>
   <ItemGroup />
   <ItemGroup>

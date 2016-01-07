@@ -225,6 +225,9 @@
     <Compile Include="App_Start\RouteConfig.cs" />
     <Compile Include="App_Start\Startup.Auth.cs" />
     <Compile Include="App_Start\WebApiConfig.cs" />
+    <Compile Include="Attributes\AuthorizedApiAttribute.cs" />
+    <Compile Include="ControllersApi\Administration\SecurityController.cs" />
+    <Compile Include="ControllersApi\BaseApiController.cs" />
     <Compile Include="ControllersApi\CommonController.cs" />
     <Compile Include="Controllers\AccountController.cs" />
     <Compile Include="Controllers\AdministrationController.cs" />
@@ -243,6 +246,7 @@
     <Compile Include="Global.asax.cs">
       <DependentUpon>Global.asax</DependentUpon>
     </Compile>
+    <Compile Include="Helpers\CollectionHelper.cs" />
     <Compile Include="ModelsApi\Financial\AccountDto.cs" />
     <Compile Include="ModelsApi\Inventory\TaxGroupDto.cs" />
     <Compile Include="ModelsApi\Inventory\ItemCategoryDto.cs" />
@@ -255,7 +259,13 @@
     <Compile Include="Models\ManageViewModels.cs" />
     <Compile Include="Models\ModelViewHelper.cs" />
     <Compile Include="Models\Singleton.cs" />
+    <Compile Include="Models\ViewModels\ActionResponse.cs" />
     <Compile Include="Models\ViewModels\Administration\CreateBulkInvoice.cs" />
+    <Compile Include="Models\ViewModels\Administration\Security\SecurityGroupModel.cs" />
+    <Compile Include="Models\ViewModels\Administration\Security\SecurityPermissionModel.cs" />
+    <Compile Include="Models\ViewModels\Administration\Security\SecurityRoleModel.cs" />
+    <Compile Include="Models\ViewModels\Administration\Security\SecurityUserModel.cs" />
+    <Compile Include="Models\ViewModels\Administration\Security\UserModel.cs" />
     <Compile Include="Models\ViewModels\Administration\TaxesViewModel.cs" />
     <Compile Include="Models\ViewModels\ContactViewModel.cs" />
     <Compile Include="Models\ViewModels\Financials\Accounts.cs" />

@@ -118,11 +118,18 @@
     <Build Include="dbo\Tables\AuditableAttribute.sql" />
     <Build Include="dbo\Tables\AuditableEntity.sql" />
     <Build Include="dbo\Tables\AuditLog.sql" />
+    <Build Include="dbo\Tables\SecurityGroup.sql" />
+    <Build Include="dbo\Tables\SecurityPermission.sql" />
+    <Build Include="dbo\Tables\SecurityRole.sql" />
+    <Build Include="dbo\Tables\SecurityRolePermission.sql" />
+    <Build Include="dbo\Tables\SecurityUserRole.sql" />
+    <Build Include="dbo\Tables\User.sql" />
   </ItemGroup>
   <ItemGroup>
-    <PostDeploy Include="PostDeployment.sql">
+    <None Include="PostDeployment.sql">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </PostDeploy>
+    </None>
+    <None Include="SecurityModelInitialData.sql" />
   </ItemGroup>
   <ItemGroup>
     <None Include="InitialDataScript.sql">

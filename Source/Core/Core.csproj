@@ -88,6 +88,12 @@
     <Compile Include="Domain\Sales\SalesQuoteLine.cs" />
     <Compile Include="Domain\Sales\SalesReceiptHeader.cs" />
     <Compile Include="Domain\Sales\SalesReceiptLine.cs" />
+    <Compile Include="Domain\Security\SecurityGroup.cs" />
+    <Compile Include="Domain\Security\SecurityPermission.cs" />
+    <Compile Include="Domain\Security\SecurityRole.cs" />
+    <Compile Include="Domain\Security\SecurityRolePermission.cs" />
+    <Compile Include="Domain\Security\SecurityUserRole.cs" />
+    <Compile Include="Domain\Security\User.cs" />
     <Compile Include="Domain\SequenceNumber.cs" />
     <Compile Include="Domain\Tax.cs" />
     <Compile Include="Domain\TaxGroup.cs" />

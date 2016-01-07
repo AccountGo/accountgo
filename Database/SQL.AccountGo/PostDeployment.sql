@@ -10,3 +10,4 @@ Post-Deployment Script Template
 --------------------------------------------------------------------------------------
 */
 :r .\InitialDataScript.sql
+:r .\SecurityModelInitialData.sql
