@@ -8,7 +8,7 @@ SecurityPermission
 /*******************************************************************
 --- Inserts Data in SecurityGroup Table ---
 ********************************************************************/
-IF NOT EXISTS (SELECT 1 FROM [core].[SecurityGroup]) 
+IF NOT EXISTS (SELECT 1 FROM [dbo].[SecurityGroup]) 
 
 BEGIN
 SET IDENTITY_INSERT [dbo].[SecurityGroup] ON
