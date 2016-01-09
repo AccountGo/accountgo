@@ -17,7 +17,7 @@ using System.Web.Http;
 
 namespace Web.Controllers
 {
-    public class ReportController : ApiController
+    public class ReportController : ControllersApi.BaseApiController
     {
         public HttpResponseMessage Get()
         {

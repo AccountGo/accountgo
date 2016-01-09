@@ -32,5 +32,6 @@ namespace Services.Security
         IEnumerable<User> GetAllUser();
         void AddRole(string roleName,int roleId);
         void DeleteRole(int roleId);
+        void AddUser(string username, string email, string firstname, string lastname);
     }
 }

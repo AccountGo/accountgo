@@ -19,7 +19,7 @@ using Web.Models.ViewModels.Administration;
 namespace Web.Controllers
 {
     [Authorize]
-    public class AdministrationController : Controller
+    public class AdministrationController : BaseController
     {
         private readonly IInventoryService _inventoryService = null;
         private readonly ISalesService _salesService = null;

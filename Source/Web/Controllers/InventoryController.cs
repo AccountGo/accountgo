@@ -17,7 +17,7 @@ using Web.Models;
 namespace Web.Controllers
 {
     [Authorize]
-    public class InventoryController : Controller
+    public class InventoryController : BaseController
     {
         private readonly IInventoryService _inventoryService;
         private readonly IFinancialService _financialService;

@@ -62,7 +62,7 @@ namespace Services.Security
 
         public User GetUser(string username)
         {
-            return _userRepo.Table.ToList().Where(u => u.Email == username).FirstOrDefault();
+            return _userRepo.Table.ToList().Where(u => u.UserName == username).FirstOrDefault();
         }
 
         public SecurityRole GetRole(string rolename)
@@ -195,6 +195,19 @@ namespace Services.Security
             var entity = _securityRoleRepo.GetById(roleId);
 
             _securityRoleRepo.Delete(entity);
+        }
+
+        public void AddUser(string username, string email, string firstname, string lastname)
+        {
+            var user = new User()
+            {
+                UserName = username,
+                EmailAddress = email,
+                Firstname = firstname,
+                Lastname = lastname
+            };
+
+            _userRepo.Insert(user);
         }
     }
 }

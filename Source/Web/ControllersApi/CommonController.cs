@@ -13,7 +13,7 @@ using Web.ModelsApi.Sales;
 
 namespace Web.ControllersApi
 {
-    public class CommonController : ApiController
+    public class CommonController : BaseApiController
     {
         private readonly IFinancialService _financialService = null;
         private readonly IInventoryService _inventoryService = null;

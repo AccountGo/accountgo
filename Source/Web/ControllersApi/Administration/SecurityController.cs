@@ -57,9 +57,9 @@ namespace Web.ControllersApi.Administration
                           {
                               SecurityUserRoleId = e.Id,
                               UserId = e.UserId,
-                              Email = e.User.Email,
+                              Email = e.User.EmailAddress,
                               FullName = e.User.Firstname + " " + e.User.Lastname,
-                              UserName = e.User.Username
+                              UserName = e.User.UserName
                           }).ToList();
 
             return returnList;
@@ -78,10 +78,10 @@ namespace Web.ControllersApi.Administration
                             .Select(z => new UserModel()
                             {
                                 UserId = z.Id,
-                                Email = z.Email,
+                                Email = z.EmailAddress,
                                 Firstname = z.Firstname,
                                 Lastname = z.Lastname,
-                                Username = z.Username,
+                                Username = z.UserName,
                                 Fullname = z.Firstname + " " + z.Lastname
                             }).ToList();
 

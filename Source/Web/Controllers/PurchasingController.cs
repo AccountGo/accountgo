@@ -17,7 +17,7 @@ using System.Web.Mvc;
 namespace Web.Controllers
 {
     [Authorize]
-    public class PurchasingController : Controller
+    public class PurchasingController : BaseController
     {
         private readonly IInventoryService _inventoryService;
         private readonly IFinancialService _financialService;
