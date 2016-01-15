@@ -29,5 +29,24 @@ namespace Web.Models.ViewModels.Financials
         public string AccountCode { get; set; }
         public string AccountName { get; set; }
         public decimal Balance { get; set; }
+        public decimal DebitBalance { get; set; }
+        public decimal CreditBalance { get; set; }
+    }
+
+    public class EditAccountViewModel
+    {
+        public int Id { get; set; }
+        public string AccountCode { get; set; }
+        public string AccountName { get; set; }
+        public string AccountClass { get; set; }
+        public decimal Balance { get; set; }
+        public bool IsContraAccount { get; set; }
+        public ICollection<Services.Financial.MasterGeneralLedger> Transactions { get; set; }
+    }
+
+    public class AccountTransactionViewModel
+    {
+        public int Id { get; set; }
+        public ICollection<Services.Financial.MasterGeneralLedger> Transactions { get; set; }
     }
 }

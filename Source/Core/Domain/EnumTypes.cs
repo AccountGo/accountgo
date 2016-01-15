@@ -8,6 +8,15 @@
 
 namespace Core.Domain
 {
+    public enum AccountClasses
+    {
+        Assets = 1,
+        Liabilities = 2,
+        Equity = 3,
+        Revenue = 4,
+        Expense = 5
+    }
+
     public enum DocumentTypes
     {
         SalesQuote = 1,
@@ -126,7 +135,7 @@ namespace Core.Domain
     public enum SalesInvoiceStatus
     {
         //Draft,
-        Open,       
+        Open,
         Overdue,
         Closed,
         Void

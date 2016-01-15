@@ -16,6 +16,7 @@ namespace Services.Financial
 {
     public class TrialBalance
     {
+        public int AccountId { get; set; }
         public string AccountCode { get; set; }
         public string AccountName { get; set; }
         public decimal Debit { get; set; }
@@ -24,6 +25,7 @@ namespace Services.Financial
 
     public class BalanceSheet
     {
+        public int AccountId { get; set; }
         public int AccountClassId { get; set; }
         public string AccountCode { get; set; }
         public string AccountName { get; set; }
@@ -32,6 +34,7 @@ namespace Services.Financial
 
     public class IncomeStatement
     {
+        public int AccountId { get; set; }
         public bool IsExpense { get; set; }
         public string AccountCode { get; set; }
         public string AccountName { get; set; }

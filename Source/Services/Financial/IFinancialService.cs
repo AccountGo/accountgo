@@ -25,7 +25,7 @@ namespace Services.Financial
         ICollection<TrialBalance> TrialBalance(DateTime? from = null, DateTime? to = null);
         ICollection<BalanceSheet> BalanceSheet(DateTime? from = null, DateTime? to = null);
         ICollection<IncomeStatement> IncomeStatement(DateTime? from = null, DateTime? to = null);
-        ICollection<MasterGeneralLedger> MasterGeneralLedger(DateTime? from = null, DateTime? to = null);
+        ICollection<MasterGeneralLedger> MasterGeneralLedger(DateTime? from = null, DateTime? to = null, string accountCode = null, int? transactionNo = null);
         FiscalYear CurrentFiscalYear();
         IEnumerable<Tax> GetTaxes();
         IEnumerable<ItemTaxGroup> GetItemTaxGroups();
@@ -35,5 +35,10 @@ namespace Services.Financial
         List<KeyValuePair<int, decimal>> ComputeOutputTax(int itemId, decimal quantity, decimal amount, decimal discount);
         GeneralLedgerSetting GetGeneralLedgerSetting(int? companyId = null);
         void UpdateGeneralLedgerSetting(GeneralLedgerSetting setting);
+        void AddMainContraAccountSetting(int masterAccountId, int contraAccountId);
+        void UpdateAccount(Account account);
+        JournalEntryHeader GetJournalEntry(int id, bool fromGL = false);
+        void UpdateJournalEntry(JournalEntryHeader journalEntry);
+        GeneralLedgerHeader GetGeneralLedgerHeader(int id);
     }
 }

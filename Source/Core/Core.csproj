@@ -61,6 +61,7 @@
     <Compile Include="Domain\Financials\GeneralLedgerSetting.cs" />
     <Compile Include="Domain\Financials\JournalEntryHeader.cs" />
     <Compile Include="Domain\Financials\JournalEntryLine.cs" />
+    <Compile Include="Domain\Financials\MainContraAccount.cs" />
     <Compile Include="Domain\Items\InventoryControlJournal.cs" />
     <Compile Include="Domain\Items\Item.cs" />
     <Compile Include="Domain\Items\ItemCategory.cs" />
@@ -99,6 +100,9 @@
     <Compile Include="Domain\TaxGroup.cs" />
     <Compile Include="MessageSource.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="Domain\Financials\Financial accounting principles\DebitCreditRules.txt" />
   </ItemGroup>
   <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

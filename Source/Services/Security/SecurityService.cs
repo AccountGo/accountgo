@@ -128,6 +128,9 @@ namespace Services.Security
         {
             var user = GetUser(username);
 
+            if (user == null)
+                return null;
+
             if (user.IsSysAdmin())
             {
                 var permissionsSysAdmin = from p in _securityPermissionRepo.Table.ToList()

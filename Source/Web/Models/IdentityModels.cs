@@ -30,7 +30,7 @@ namespace Web.Models
         public ApplicationDbContext()
             : base("ApplicationContext", throwIfV1Schema: false)
         {
-            //Database.SetInitializer<ApplicationDbContext>(null);
+            System.Data.Entity.Database.SetInitializer<ApplicationDbContext>(null);
         }
 
         public static ApplicationDbContext Create()

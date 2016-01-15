@@ -11,7 +11,6 @@ using System.Web.Mvc;
 using System;
 using System.Linq;
 using Core.Domain.Financials;
-using System.IO;
 
 namespace Web.Controllers
 {
@@ -36,12 +35,42 @@ namespace Web.Controllers
                     Id = account.Id,
                     AccountCode = account.AccountCode,
                     AccountName = account.AccountName,
-                    Balance = account.Balance
+                    Balance = account.Balance,
+                    DebitBalance = account.DebitBalance,
+                    CreditBalance = account.CreditBalance
                 });
             }
             return View(model);
         }
 
+        public ActionResult EditAccount(int id)
+        {
+            var account = _financialService.GetAccounts().Where(a => a.Id == id).FirstOrDefault();
+
+            Models.ViewModels.Financials.EditAccountViewModel model = new Models.ViewModels.Financials.EditAccountViewModel()
+            {
+                Id = account.Id,
+                AccountCode = account.AccountCode,
+                AccountName = account.AccountName,
+                AccountClass = account.AccountClass.Name,
+                IsContraAccount = account.IsContraAccount,
+                Balance = account.Balance
+            };
+
+            model.Transactions = _financialService.MasterGeneralLedger(null, null, model.AccountCode);
+
+            return View(model);
+        }
+
+        [HttpPost, ActionName("EditAccount")]
+        [FormValueRequiredAttribute("Save")]
+        public ActionResult EditAccount(Models.ViewModels.Financials.EditAccountViewModel model)
+        {
+            var account = _financialService.GetAccounts().Where(a => a.Id == model.Id).FirstOrDefault();
+            account.IsContraAccount = model.IsContraAccount;
+            _financialService.UpdateAccount(account);
+            return View(model);
+        }
 
         public ActionResult ViewAccountsPDF()
         {
@@ -76,12 +105,15 @@ namespace Web.Controllers
                 {
                     model.JournalEntriesListLines.Add(new Models.ViewModels.Financials.JournalEntriesListLine()
                     {
+                        Id = line.Id,
                         AccountId = line.AccountId,
                         AccountCode = line.Account.AccountCode,
                         AccountName = line.Account.AccountName,
                         DrCr = (int)line.DrCr == 1 ? "Dr" : "Cr",
-                        Amount = line.Amount
-                    });
+                        Amount = line.Amount,
+                        JournalHeaderId = line.JournalEntryHeaderId,
+                        GeneralLedgerHeaderId = je.GeneralLedgerHeaderId.HasValue ? je.GeneralLedgerHeaderId.Value : 0
+                });
                 }
             }
             return View(model);
@@ -113,9 +145,89 @@ namespace Web.Controllers
             return View(model);
         }
 
+        public ActionResult EditJournalEntry(int id, bool fromGL = false)
+        {
+            // for now, use the same view model as add journal entry. nothing different
+            var je = _financialService.GetJournalEntry(id, fromGL);
+
+            var model = new Models.ViewModels.Financials.AddJournalEntry();
+            model.Date = je.Date;
+            model.Memo = je.Memo;
+            model.ReferenceNo = je.ReferenceNo;
+            model.Id = je.Id;
+            model.JournalEntryId = je.Id;
+
+            foreach (var line in je.JournalEntryLines)
+            {
+                model.AddJournalEntryLines.Add(new Models.ViewModels.Financials.AddJournalEntryLine()
+                {
+                    RowId = line.Id.ToString(),
+                    AccountId = line.AccountId,
+                    AccountName = line.Account.AccountName,
+                    DrCr = line.DrCr,
+                    Amount = line.Amount,
+                    Memo = line.Memo
+                });
+            }
+
+            return View(model);
+        }
+
+        [HttpPost, ActionName("EditJournalEntry")]
+        [FormValueRequiredAttribute("UpdateJournalEntry")]
+        public ActionResult EditJournalEntry(Models.ViewModels.Financials.AddJournalEntry model)
+        {
+            if (model.AddJournalEntryLines.Count < 2)
+                return View(model);
+
+            var journalEntry = _financialService.GetJournalEntry(model.JournalEntryId);
+
+            journalEntry.Date = model.Date;
+            journalEntry.Memo = model.Memo;
+            journalEntry.ReferenceNo = model.ReferenceNo;
+            journalEntry.ModifiedBy = User.Identity.Name;
+            journalEntry.ModifiedOn = DateTime.Now;
+
+            foreach (var line in model.AddJournalEntryLines)
+            {
+                if (journalEntry.JournalEntryLines.Any(l => l.AccountId == line.AccountId))
+                {
+                    var existingLine = journalEntry.JournalEntryLines.Where(l => l.AccountId == line.AccountId).FirstOrDefault();
+                    existingLine.DrCr = line.DrCr;
+                    existingLine.Amount = line.Amount;
+                    existingLine.Memo = line.Memo;
+                }
+                else
+                {
+                    journalEntry.JournalEntryLines.Add(new JournalEntryLine()
+                    {
+                        AccountId = line.AccountId,
+                        DrCr = line.DrCr,
+                        Amount = line.Amount,
+                        Memo = line.Memo
+                    });
+                }
+            }
+
+            _financialService.UpdateJournalEntry(journalEntry);
+
+            return RedirectToAction("JournalEntries");
+        }
+
+
         [HttpPost, ActionName("AddJournalEntry")]
         [FormValueRequiredAttribute("DeleteJournalEntryLine")]
         public ActionResult DeleteJournalEntryLine(Models.ViewModels.Financials.AddJournalEntry model)
+        {
+            var request = HttpContext.Request;
+            var deletedItem = request.Form["DeletedLineItem"];
+            model.AddJournalEntryLines.Remove(model.AddJournalEntryLines.Where(i => i.RowId.ToString() == deletedItem.ToString()).FirstOrDefault());
+            return View(model);
+        }
+
+        [HttpPost, ActionName("EditJournalEntry")]
+        [FormValueRequiredAttribute("DeleteJournalEntryLine")]
+        public ActionResult UpdateJournalEntryLine(Models.ViewModels.Financials.AddJournalEntry model)
         {
             var request = HttpContext.Request;
             var deletedItem = request.Form["DeletedLineItem"];
@@ -153,9 +265,12 @@ namespace Web.Controllers
             return RedirectToAction("JournalEntries");
         }
 
-        public ActionResult MasterGeneralLedger()
+        public ActionResult MasterGeneralLedger(DateTime? from = default(DateTime?),
+            DateTime? to = default(DateTime?),
+            string accountCode = null,
+            int? transactionNo = null)
         {
-            var model = _financialService.MasterGeneralLedger();
+            var model = _financialService.MasterGeneralLedger(from, to, accountCode, transactionNo);
             return View(model);
         }
 
@@ -249,6 +364,16 @@ namespace Web.Controllers
             glSetting.GoodsReceiptNoteClearingAccountId = model.GoodsReceiptNoteClearingAccountId;
             _financialService.UpdateGeneralLedgerSetting(glSetting);
             return View(model);
+        }
+
+        public ActionResult EditMasterGL(int id)
+        {
+            var gl = _financialService.GetGeneralLedgerHeader(id);
+
+            if (gl.DocumentType == Core.Domain.DocumentTypes.JournalEntry)
+                return RedirectToAction("EditJournalEntry", new { id = id, fromGL = true });
+
+            return View();
         }
     }
 }

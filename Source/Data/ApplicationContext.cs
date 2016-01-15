@@ -92,6 +92,7 @@ namespace Data
         public virtual DbSet<SecurityUserRole> SecurityUserRoles { get; set; }
         public virtual DbSet<SecurityGroup> SecurityGroups { get; set; }
         public virtual DbSet<SecurityRolePermission> SecurityRolePermissions { get; set; }
+        public virtual DbSet<MainContraAccount> MainContraAccounts { get; set; }
 
         #region Methods
 

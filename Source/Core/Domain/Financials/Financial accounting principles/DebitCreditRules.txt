@@ -1,0 +1,33 @@
+﻿In financial accounting debit and credit are simply the left and right side of a T-Account respectively. 
+They are used to indicate the increase or decrease in certain accounts. 
+When there is a change in an account, that change is indicated by either debiting or crediting that account according to following rules:
+
+Assets and Expenses 
+An increase is recorded as debit (left side) 
+A decrease is recorded as credit (right side) 
+
+Liabilities, Equities and Revenues 
+A decrease is recorded as debit (left side) 
+An increase is recorded as credit (right side) 
+
+Contra-accounts 
+Contra-accounts behave exactly in opposite way to the respective normal accounts.
+
+Examples:
+
+The owner brings cash from his personal account into the business 
+Analysis: 
+Cash (an asset) is increased thus debit Cash 
+Owner capital (an equity) is increased thus credit Owners' Capital
+Office supplies are purchased on account 
+Analysis: 
+Office Supplies (an asset) is increased thus debit Office Supplies 
+Accounts Payable (a liability) is increased thus credit Accounts Payable
+Wages payable are paid 
+Analysis: 
+Wages Payable (a liability) is decreased thus debit Wages Payable 
+Cash (an asset) is decreased thus credit Cash
+Revenue is earned but not yet received 
+Analysis: 
+Accounts Receivable (an asset) is increased thus debit Accounts Receivable 
+Revenue (a revenue) is increased thus credit Revenue

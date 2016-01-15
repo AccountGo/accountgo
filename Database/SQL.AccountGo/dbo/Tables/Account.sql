@@ -7,14 +7,15 @@
     [AccountName]     NVARCHAR (200) NOT NULL,
     [Description]     NVARCHAR (200) NULL,
     [IsCash]          BIT            NOT NULL,
+	[IsContraAccount] BIT            NOT NULL DEFAULT(0),
     [AuditTimestamp]  ROWVERSION     NOT NULL,
     [CreatedBy]       NVARCHAR (MAX) NULL,
     [CreatedOn]       DATETIME       NOT NULL,
     [ModifiedBy]      NVARCHAR (MAX) NULL,
     [ModifiedOn]      DATETIME       NOT NULL,
-    CONSTRAINT [PK_dbo.Account] PRIMARY KEY CLUSTERED ([Id] ASC),
-    CONSTRAINT [FK_dbo.Account_dbo.Account_ParentAccountId] FOREIGN KEY ([ParentAccountId]) REFERENCES [dbo].[Account] ([Id]),
-    CONSTRAINT [FK_dbo.Account_dbo.AccountClass_AccountClassId] FOREIGN KEY ([AccountClassId]) REFERENCES [dbo].[AccountClass] ([Id]) ON DELETE CASCADE
+    CONSTRAINT [PK_Account] PRIMARY KEY CLUSTERED ([Id] ASC),
+    CONSTRAINT [FK_Account_ParentAccountId_Account_AccountId] FOREIGN KEY ([ParentAccountId]) REFERENCES [Account] ([Id]),
+    CONSTRAINT [FK_Account_AccountClassId_AccountClass_AccountClassId] FOREIGN KEY ([AccountClassId]) REFERENCES [AccountClass] ([Id]) ON DELETE CASCADE
 );
 
 

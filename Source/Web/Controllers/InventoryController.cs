@@ -112,6 +112,9 @@ namespace Web.Controllers
         {
             try
             {
+                if (string.IsNullOrEmpty(model.Description))
+                    throw new Exception("Item description cannot be empty.");
+
                 var item = _inventoryService.GetItemById(model.Id);
                 item.Id = model.Id;
                 item.SmallestMeasurementId = model.SmallestMeasurementId;

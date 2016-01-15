@@ -30,10 +30,10 @@
     </tr>
     <tbody>
         @foreach (var gl in Model)
-            {
+        {
             <tr>
-                <td>@gl.TransactionNo</td>
-                <td>@gl.AccountCode</td>
+                <td>@Html.ActionLink((string)string.Format("{0}", gl.TransactionNo), "EditMasterGL", new { id = gl.TransactionNo })</td>
+                <td>@Html.ActionLink((string)string.Format("{0}", gl.AccountCode), "EditAccount", new { id = gl.AccountId })</td>
                 <td>@gl.AccountName</td>
                 <td>@gl.Date</td>
                 <td style="text-align: right">@gl.Debit</td>

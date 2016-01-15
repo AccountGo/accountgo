@@ -12,15 +12,19 @@
             <td>Account Code</td>
             <td>Account Name</td>
             <td>Balance</td>
+            <td>Debit Balance</td>
+            <td>Credit Balance</td>
         </tr>
     </thead>
     <tbody>
         @foreach (var account in Model.AccountsListLines)
         {
             <tr>
-                <td>@account.AccountCode</td>
+                <td>@Html.ActionLink((string)string.Format("{0}", account.AccountCode), "EditAccount", new { id = account.Id })</td>
                 <td>@account.AccountName</td>
                 <td>@account.Balance</td>
+                <td>@account.DebitBalance</td>
+                <td>@account.CreditBalance</td>
             </tr>
         }
     </tbody>

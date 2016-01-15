@@ -35,6 +35,7 @@ namespace Services.Financial
         private readonly IRepository<Bank> _bankRepo;
         private readonly IRepository<Item> _itemRepo;
         private readonly IRepository<GeneralLedgerSetting> _glSettingRepo;
+        private readonly IRepository<MainContraAccount> _maincontraAccount;
 
         public FinancialService(IInventoryService inventoryService, 
             IRepository<GeneralLedgerHeader> generalLedgerRepository,
@@ -48,7 +49,8 @@ namespace Services.Financial
             IRepository<PaymentTerm> paymentTermRepo,
             IRepository<Bank> bankRepo,
             IRepository<Item> itemRepo,
-            IRepository<GeneralLedgerSetting> glSettingRepo
+            IRepository<GeneralLedgerSetting> glSettingRepo,
+            IRepository<MainContraAccount> maincontraAccount = null
             )
             :base(null, null, paymentTermRepo, bankRepo)
         {
@@ -65,6 +67,7 @@ namespace Services.Financial
             _bankRepo = bankRepo;
             _itemRepo = itemRepo;
             _glSettingRepo = glSettingRepo;
+            _maincontraAccount = maincontraAccount;
         }
 
         public FiscalYear CurrentFiscalYear()
@@ -166,8 +169,11 @@ namespace Services.Financial
 
             foreach (var account in glEntry.GeneralLedgerLines)
                 if (!_accountRepo.GetById(account.AccountId).CanPost())
-                    throw new InvalidOperationException("Account is not valid for posting");
-        
+                    throw new InvalidOperationException("One of the account is not valid for posting");
+
+            if(!glEntry.ValidateAccountingEquation())
+                throw new InvalidOperationException("One of the account not equal.");
+
             return true;
         }
 
@@ -272,13 +278,13 @@ namespace Services.Financial
         public ICollection<BalanceSheet> BalanceSheet(DateTime? from = default(DateTime?), DateTime? to = default(DateTime?))
         {
             var assets = from a in _accountRepo.Table
-                         where a.AccountClassId == 1 && a.ParentAccountId != null
+                         where a.AccountClassId == 1 && a.ParentAccountId != null && !a.IsContraAccount
                          select a;
             var liabilities = from a in _accountRepo.Table
-                              where a.AccountClassId == 2 && a.ParentAccountId != null
+                              where a.AccountClassId == 2 && a.ParentAccountId != null && !a.IsContraAccount
                               select a;
             var equities = from a in _accountRepo.Table
-                           where a.AccountClassId == 3 && a.ParentAccountId != null
+                           where a.AccountClassId == 3 && a.ParentAccountId != null && !a.IsContraAccount
                            select a;
 
             var balanceSheet = new HashSet<BalanceSheet>();
@@ -286,30 +292,33 @@ namespace Services.Financial
             {
                 balanceSheet.Add(new BalanceSheet()
                 {
+                    AccountId = asset.Id,
                     AccountClassId = asset.AccountClassId,
                     AccountCode = asset.AccountCode,
                     AccountName = asset.AccountName,
-                    Amount = asset.Balance
+                    Amount = asset.Balance - ((asset.IsContraAccount && asset.ContraAccounts.Count > 0) == true ? asset.ContraAccounts.FirstOrDefault().RelatedContraAccount.Balance : 0)
                 });
             }
             foreach (var liability in liabilities)
             {
                 balanceSheet.Add(new BalanceSheet()
                 {
+                    AccountId = liability.Id,
                     AccountClassId = liability.AccountClassId,
                     AccountCode = liability.AccountCode,
                     AccountName = liability.AccountName,
-                    Amount = liability.Balance
+                    Amount = liability.Balance - ((liability.IsContraAccount && liability.ContraAccounts.Count > 0) == true ? liability.ContraAccounts.FirstOrDefault().RelatedContraAccount.Balance : 0)
                 });
             }
             foreach (var equity in equities)
             {
                 balanceSheet.Add(new BalanceSheet()
                 {
+                    AccountId = equity.Id,
                     AccountClassId = equity.AccountClassId,
                     AccountCode = equity.AccountCode,
                     AccountName = equity.AccountName,
-                    Amount = equity.Balance
+                    Amount = equity.Balance - ((equity.IsContraAccount && equity.ContraAccounts.Count > 0) == true ? equity.ContraAccounts.FirstOrDefault().RelatedContraAccount.Balance : 0)
                 });
             }
             return balanceSheet;
@@ -318,11 +327,11 @@ namespace Services.Financial
         public ICollection<IncomeStatement> IncomeStatement(DateTime? from = default(DateTime?), DateTime? to = default(DateTime?))
         {
             var revenues = from r in _accountRepo.Table
-                           where r.AccountClassId == 4 && r.ParentAccountId != null
+                           where r.AccountClassId == 4 && r.ParentAccountId != null && !r.IsContraAccount
                            select r;
 
             var expenses = from e in _accountRepo.Table
-                           where e.AccountClassId == 5 && e.ParentAccountId != null
+                           where e.AccountClassId == 5 && e.ParentAccountId != null && !e.IsContraAccount
                            select e;
 
             var revenues_expenses = new HashSet<IncomeStatement>();
@@ -330,9 +339,10 @@ namespace Services.Financial
             {
                 revenues_expenses.Add(new IncomeStatement()
                 {
+                    AccountId = revenue.Id,
                     AccountCode = revenue.AccountCode,
                     AccountName = revenue.AccountName,
-                    Amount = revenue.Balance,
+                    Amount = revenue.Balance - ((revenue.IsContraAccount && revenue.ContraAccounts.Count > 0) == true ? revenue.ContraAccounts.FirstOrDefault().RelatedContraAccount.Balance : 0),
                     IsExpense = false
                 });
             }
@@ -340,16 +350,20 @@ namespace Services.Financial
             {
                 revenues_expenses.Add(new IncomeStatement()
                 {
+                    AccountId = expense.Id,
                     AccountCode = expense.AccountCode,
                     AccountName = expense.AccountName,
-                    Amount = expense.Balance,
+                    Amount = expense.Balance - ((expense.IsContraAccount && expense.ContraAccounts.Count > 0) == true ? expense.ContraAccounts.FirstOrDefault().RelatedContraAccount.Balance : 0),
                     IsExpense = true
                 });
             }
             return revenues_expenses;
         }
 
-        public ICollection<MasterGeneralLedger> MasterGeneralLedger(DateTime? from = default(DateTime?), DateTime? to = default(DateTime?))
+        public ICollection<MasterGeneralLedger> MasterGeneralLedger(DateTime? from = default(DateTime?), 
+            DateTime? to = default(DateTime?), 
+            string accountCode = null, 
+            int? transactionNo = null)
         {
             var allDr = (from dr in _generalLedgerLineRepository.Table.AsEnumerable()
                          where dr.DrCr == TransactionTypes.Dr
@@ -414,7 +428,13 @@ namespace Services.Financial
                                        DocumentType = y.DocumentType
                                    });
 
+            if (!string.IsNullOrEmpty(accountCode))
+                allDrcr = allDrcr.Where(a => a.AccountCode == accountCode);
+            if(transactionNo != null)
+                allDrcr = allDrcr.Where(a => a.TransactionNo == transactionNo);
+
             var sortedList = allDrcr.OrderBy(gl => gl.Id).ToList().Reverse<MasterGeneralLedger>();
+
             return sortedList.ToList();
         }
 
@@ -501,6 +521,81 @@ namespace Services.Financial
         public void UpdateGeneralLedgerSetting(GeneralLedgerSetting setting)
         {
             _glSettingRepo.Update(setting);
+        }
+
+        public void AddMainContraAccountSetting(int mainAccountId, int contraAccountId)
+        {
+            var contraAccount = _accountRepo.GetById(contraAccountId);
+            var mainAccount = _accountRepo.GetById(mainAccountId);
+
+            if (mainAccountId == contraAccountId)
+                throw new Exception("Main account is same as contra account.");
+            if (!contraAccount.IsContraAccount)
+                throw new Exception("Account is not a contra account.");
+            if(_maincontraAccount.Table.Any(a => a.MainAccountId == mainAccountId))
+                throw new Exception("Main account already has contra account set.");
+
+            _maincontraAccount.Insert(new MainContraAccount() { MainAccountId = mainAccountId, RelatedContraAccountId = contraAccountId });
+        }
+
+        public void UpdateAccount(Account account)
+        {
+            if(account.IsContraAccount && account.ContraAccounts.Count > 0)
+                throw new Exception("An account cannot have contra account if the account is already contra account.");
+
+            _accountRepo.Update(account);
+        }
+
+        public JournalEntryHeader GetJournalEntry(int id, bool fromGL = false)
+        {
+            if(fromGL)
+                return _journalEntryRepo.Table.Where(je => je.GeneralLedgerHeaderId == id).FirstOrDefault();
+            return _journalEntryRepo.Table.Where(je => je.Id == id).FirstOrDefault();
+        }
+
+        public void UpdateJournalEntry(JournalEntryHeader journalEntry)
+        {
+            var glEntry = _generalLedgerRepository.Table.Where(gl => gl.Id == journalEntry.GeneralLedgerHeaderId).FirstOrDefault();
+            
+            glEntry.Date = journalEntry.Date;
+            glEntry.ModifiedBy = journalEntry.ModifiedBy;
+            glEntry.ModifiedOn = journalEntry.ModifiedOn;
+
+            foreach (var je in journalEntry.JournalEntryLines)
+            {
+                if (glEntry.GeneralLedgerLines.Any(l => l.AccountId == je.AccountId))
+                {
+                    var existingLine = glEntry.GeneralLedgerLines.Where(l => l.AccountId == je.AccountId).FirstOrDefault();
+                    existingLine.Amount = je.Amount;
+                    existingLine.DrCr = je.DrCr;
+                    existingLine.ModifiedBy = journalEntry.ModifiedBy;
+                    existingLine.ModifiedOn = journalEntry.ModifiedOn;
+                }
+                else
+                {
+                    glEntry.GeneralLedgerLines.Add(new GeneralLedgerLine()
+                    {
+                        AccountId = je.AccountId,
+                        DrCr = je.DrCr,
+                        Amount = je.Amount,
+                        CreatedBy = journalEntry.CreatedBy,
+                        CreatedOn = journalEntry.CreatedOn,
+                        ModifiedBy = journalEntry.ModifiedBy,
+                        ModifiedOn = journalEntry.ModifiedOn,
+                    });
+                }
+            }
+
+            if (ValidateGeneralLedgerEntry(glEntry) && glEntry.ValidateAccountingEquation())
+            {
+                journalEntry.GeneralLedgerHeader = glEntry;
+                _journalEntryRepo.Update(journalEntry);
+            }
+        }
+
+        public GeneralLedgerHeader GetGeneralLedgerHeader(int id)
+        {
+            return _generalLedgerRepository.Table.Where(gl => gl.Id == id).FirstOrDefault();
         }
     }
 }

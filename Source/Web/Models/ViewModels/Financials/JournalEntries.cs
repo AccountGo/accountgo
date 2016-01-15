@@ -30,11 +30,14 @@ namespace Web.Models.ViewModels.Financials
 
     public class JournalEntriesListLine
     {
+        public int Id { get; set; }
+        public int JournalHeaderId { get; set; }
         public int AccountId { get; set; }
         public string AccountCode { get; set; }
         public string AccountName { get; set; }
         public string DrCr { get; set; }
         public decimal Amount { get; set; }
+        public int GeneralLedgerHeaderId { get; set; }
     }
 
     public class AddJournalEntry
@@ -49,6 +52,8 @@ namespace Web.Models.ViewModels.Financials
         public DateTime Date { get; set; }
         public string ReferenceNo { get; set; }
         public string Memo { get; set; }
+        public int Id { get; set; }
+        public int JournalEntryId { get; set; }
 
         public ICollection<SelectListItem> Accounts { get; set; }
         public IList<AddJournalEntryLine> AddJournalEntryLines { get; set; }
