@@ -104,13 +104,17 @@
                         <li class="dropdown">
                             <a href="#" class="dropdown-toggle" data-toggle="dropdown">Financial<span class="caret"></span></a>
                             <ul class="dropdown-menu" role="menu">
-                                <li>@Html.ActionLink("Trial Balance", "TrialBalance", "Financial")</li>
-                                <li>@Html.ActionLink("Income Statement", "IncomeStatement", "Financial")</li>
-                                <li>@Html.ActionLink("Balance Sheet", "BalanceSheet", "Financial")</li>
-                                @*                        <li>@Html.ActionLink("Outstanding Balances", "OutstandingBalances", "Financial")</li>*@
                                 <li>@Html.ActionLink("Master General Ledger", "MasterGeneralLedger", "Financial")</li>
                                 <li>@Html.ActionLink("Chart of Accounts", "Accounts", "Financial", null, null)</li>
                                 <li>@Html.ActionLink("Journal Entries", "JournalEntries", "Financial")</li>
+                            </ul>
+                        </li>
+                        <li class="dropdown">
+                            <a href="#" class="dropdown-toggle" data-toggle="dropdown">Reports<span class="caret"></span></a>
+                            <ul class="dropdown-menu" role="menu">
+                                <li>@Html.ActionLink("Trial Balance", "TrialBalance", "Financial")</li>
+                                <li>@Html.ActionLink("Income Statement", "IncomeStatement", "Financial")</li>
+                                <li>@Html.ActionLink("Balance Sheet", "BalanceSheet", "Financial")</li>
                             </ul>
                         </li>
                         //if (User.IsInRole("Admin"))

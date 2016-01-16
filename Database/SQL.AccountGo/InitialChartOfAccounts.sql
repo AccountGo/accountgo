@@ -311,9 +311,10 @@ VALUES (72, 5, 57, 1, N'52800', N'Other expenses', NULL, 0, 0, N'System', CAST(N
 INSERT [dbo].[Account] ([Id], [AccountClassId], [ParentAccountId], [AccountType], [AccountCode], [AccountName], [Description], [IsCash], [IsContraAccount], [CreatedBy], [CreatedOn], [ModifiedBy], [ModifiedOn]) 
 VALUES (73, 5, 57, 1, N'52900', N'Losses', NULL, 0, 0, N'System', CAST(N'2016-01-01 00:00:00.00' AS DateTime), N'System', CAST(N'2016-01-01 00:00:00.00' AS DateTime))
 
-SET IDENTITY_INSERT [dbo].[AccountClass] OFF
+SET IDENTITY_INSERT [dbo].[Account] OFF
 END
 
+GO
 /*
 Account #	Summary	Nature	Normal or Contra	Sign	Account Name
 10000	✓	Asset	Normal	Debit	Assets
