@@ -3,7 +3,7 @@
     [AccountClassId]  INT            NOT NULL,
     [ParentAccountId] INT            NULL,
     [AccountType]     INT            NOT NULL,
-    [AccountCode]     NVARCHAR (50)  NOT NULL,
+    [AccountCode]     NVARCHAR (50)  UNIQUE NOT NULL,
     [AccountName]     NVARCHAR (200) NOT NULL,
     [Description]     NVARCHAR (200) NULL,
     [IsCash]          BIT            NOT NULL,
@@ -18,13 +18,16 @@
     CONSTRAINT [FK_Account_AccountClassId_AccountClass_AccountClassId] FOREIGN KEY ([AccountClassId]) REFERENCES [AccountClass] ([Id]) ON DELETE CASCADE
 );
 
-
 GO
+
+
 CREATE NONCLUSTERED INDEX [IX_AccountClassId]
     ON [dbo].[Account]([AccountClassId] ASC);
 
-
 GO
+
+
 CREATE NONCLUSTERED INDEX [IX_ParentAccountId]
     ON [dbo].[Account]([ParentAccountId] ASC);
 
+GO

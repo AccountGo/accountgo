@@ -40,5 +40,7 @@ namespace Services.Financial
         JournalEntryHeader GetJournalEntry(int id, bool fromGL = false);
         void UpdateJournalEntry(JournalEntryHeader journalEntry);
         GeneralLedgerHeader GetGeneralLedgerHeader(int id);
+        Account GetAccountByAccountCode(string accountcode);
+        Account GetAccount(int id);
     }
 }

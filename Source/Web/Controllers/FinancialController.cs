@@ -54,7 +54,8 @@ namespace Web.Controllers
                 AccountName = account.AccountName,
                 AccountClass = account.AccountClass.Name,
                 IsContraAccount = account.IsContraAccount,
-                Balance = account.Balance
+                Balance = account.Balance,
+                ParentAccountId = account.ParentAccountId
             };
 
             model.Transactions = _financialService.MasterGeneralLedger(null, null, model.AccountCode);
@@ -67,9 +68,15 @@ namespace Web.Controllers
         public ActionResult EditAccount(Models.ViewModels.Financials.EditAccountViewModel model)
         {
             var account = _financialService.GetAccounts().Where(a => a.Id == model.Id).FirstOrDefault();
+
             account.IsContraAccount = model.IsContraAccount;
+            account.AccountCode = model.AccountCode;
+            account.AccountName = model.AccountName;
+            account.ParentAccountId = model.ParentAccountId;
+            
             _financialService.UpdateAccount(account);
-            return View(model);
+
+            return RedirectToAction("Accounts");
         }
 
         public ActionResult ViewAccountsPDF()

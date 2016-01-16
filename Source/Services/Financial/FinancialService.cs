@@ -116,6 +116,16 @@ namespace Services.Financial
             return query.AsEnumerable();
         }
 
+        public Account GetAccount(int id)
+        {
+            return _accountRepo.Table.Where(a => a.Id == id).FirstOrDefault();
+        }
+
+        public Account GetAccountByAccountCode(string accountcode)
+        {
+            return _accountRepo.Table.Where(a => a.AccountCode == accountcode).FirstOrDefault();
+        }
+
         public IEnumerable<Tax> GetTaxes()
         {
             var query = from f in _taxRepo.Table
@@ -548,6 +558,16 @@ namespace Services.Financial
         {
             if(account.IsContraAccount && account.ContraAccounts.Count > 0)
                 throw new Exception("An account cannot have contra account if the account is already contra account.");
+
+            if (GetAccounts().Any(a => a.AccountCode == account.AccountCode && a.Id != account.Id))
+                throw new Exception("Account code already exist.");
+
+            if (account.ParentAccountId.HasValue)
+            {
+                var parent = GetAccount(account.ParentAccountId.Value);
+                if(account.Id == parent.ParentAccountId)
+                    throw new Exception("Cyclic parent/child account.");
+            }
 
             _accountRepo.Update(account);
         }

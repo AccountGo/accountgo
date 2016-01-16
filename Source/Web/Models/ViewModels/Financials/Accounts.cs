@@ -8,6 +8,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Web;
 
@@ -36,11 +37,14 @@ namespace Web.Models.ViewModels.Financials
     public class EditAccountViewModel
     {
         public int Id { get; set; }
+        [Required]
         public string AccountCode { get; set; }
+        [Required]
         public string AccountName { get; set; }
         public string AccountClass { get; set; }
         public decimal Balance { get; set; }
         public bool IsContraAccount { get; set; }
+        public int? ParentAccountId { get; set; }
         public ICollection<Services.Financial.MasterGeneralLedger> Transactions { get; set; }
     }
 

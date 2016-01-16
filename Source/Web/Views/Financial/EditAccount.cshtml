@@ -1,5 +1,5 @@
 ﻿@model Web.Models.ViewModels.Financials.EditAccountViewModel
-
+@using Web.Models;
 @{
     ViewBag.Title = "Edit Account";
     Layout = "~/Views/Shared/_Layout.cshtml";
@@ -22,6 +22,10 @@
         <div class="form-group">
             <label class="col-md-3 control-label">Account Class</label>
             @Html.DisplayFor(m => m.AccountClass)
+        </div>
+        <div class="form-group">
+            <label class="col-md-3 control-label">Parent Account</label>
+            @Html.DropDownListFor(m => m.ParentAccountId, ModelViewHelper.Accounts())
         </div>
         <div class="form-group">
             <label class="col-md-3 control-label">Is Contra Account</label>
