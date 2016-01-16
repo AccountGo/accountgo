@@ -77,7 +77,11 @@ namespace Core.Domain.Financials
         {
             bool isEqual = true;
 
-            isEqual = Assets().Sum(a => a.Amount) == Liabilities().Sum(l => l.Amount) + Equities().Sum(e => e.Amount);
+            var assetsAmount = Assets() != null ? Assets().Sum(a => a.Amount) : 0;
+            var liabilitiesAmount = Liabilities() != null ? Liabilities().Sum(a => a.Amount) : 0;
+            var equitiesAmount = Equities() != null ? Equities().Sum(a => a.Amount) : 0;
+
+            isEqual = assetsAmount == liabilitiesAmount + equitiesAmount;
 
             return isEqual;
         }

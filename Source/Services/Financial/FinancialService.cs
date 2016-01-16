@@ -201,6 +201,7 @@ namespace Services.Financial
             {
                 glEntry.GeneralLedgerLines.Add(new GeneralLedgerLine()
                 {
+                    Account = GetAccounts().Where(a => a.Id == je.AccountId).FirstOrDefault(),
                     AccountId = je.AccountId,
                     DrCr = je.DrCr,
                     Amount = je.Amount,
@@ -223,9 +224,10 @@ namespace Services.Financial
             var allDr = (from dr in _generalLedgerLineRepository.Table.AsEnumerable()
                          where dr.DrCr == TransactionTypes.Dr
                          //&& IsDateBetweenFinancialYearStartDateAndEndDate(dr.GLHeader.Date)
-                         group dr by new { dr.Account.AccountCode, dr.Account.AccountName, dr.Amount } into tb
+                         group dr by new { dr.AccountId, dr.Account.AccountCode, dr.Account.AccountName, dr.Amount } into tb
                          select new
                          {
+                             AccountId = tb.Key.AccountId,
                              AccountCode = tb.Key.AccountCode,
                              AccountName = tb.Key.AccountName,
                              Debit = tb.Sum(d => d.Amount),
@@ -234,9 +236,10 @@ namespace Services.Financial
             var allCr = (from cr in _generalLedgerLineRepository.Table.AsEnumerable()
                          where cr.DrCr == TransactionTypes.Cr
                          //&& IsDateBetweenFinancialYearStartDateAndEndDate(cr.GLHeader.Date)
-                         group cr by new { cr.Account.AccountCode, cr.Account.AccountName, cr.Amount } into tb
+                         group cr by new { cr.AccountId, cr.Account.AccountCode, cr.Account.AccountName, cr.Amount } into tb
                          select new
                          {
+                             AccountId = tb.Key.AccountId,
                              AccountCode = tb.Key.AccountCode,
                              AccountName = tb.Key.AccountName,
                              Credit = tb.Sum(c => c.Amount),
@@ -245,6 +248,7 @@ namespace Services.Financial
             var allDrcr = (from x in allDr
                            select new TrialBalance
                            {
+                               AccountId = x.AccountId,
                                AccountCode = x.AccountCode,
                                AccountName = x.AccountName,
                                Debit = x.Debit,
@@ -253,6 +257,7 @@ namespace Services.Financial
                           ).Concat(from y in allCr
                                    select new TrialBalance
                                    {
+                                       AccountId = y.AccountId,
                                        AccountCode = y.AccountCode,
                                        AccountName = y.AccountName,
                                        Debit = (decimal)0,
@@ -267,6 +272,7 @@ namespace Services.Financial
             var accounts = sortedList.ToList().GroupBy(a => a.AccountCode)
                 .Select(tb => new TrialBalance
                 {
+                    AccountId = tb.First().AccountId,
                     AccountCode = tb.First().AccountCode,
                     AccountName = tb.First().AccountName,
                     Credit = tb.Sum(x => x.Credit),

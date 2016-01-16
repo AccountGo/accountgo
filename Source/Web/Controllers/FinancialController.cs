@@ -290,16 +290,16 @@ namespace Web.Controllers
             // TODO: Add logic to get the correct account for accumulated profit/loss. Currently, the account code is hard-coded here.
             // Solution 1: Add two columns in general ledger setting for the account id of accumulated profit and loss.
             // Solution 2: Add column to Account table to flag if account is net income (profit and loss)
-            if (netincome < 0)
-            {
-                var loss = model.Where(a => a.AccountCode == "30500").FirstOrDefault();
-                loss.Amount = netincome;
-            }
-            else
-            {
-                var profit = model.Where(a => a.AccountCode == "30400").FirstOrDefault();
-                profit.Amount = netincome;
-            }
+            //if (netincome < 0)
+            //{
+            //    var loss = model.Where(a => a.AccountCode == "30500").FirstOrDefault();
+            //    loss.Amount = netincome;
+            //}
+            //else
+            //{
+            //    var profit = model.Where(a => a.AccountCode == "30400").FirstOrDefault();
+            //    profit.Amount = netincome;
+            //}
 
             return View(model);
         }

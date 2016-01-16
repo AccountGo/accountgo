@@ -223,11 +223,11 @@ VALUES (50, 4, 49, 2, N'41100', N'Gross sales', NULL, 0, 0, N'System', CAST(N'20
 GO
 
 INSERT [dbo].[Account] ([Id], [AccountClassId], [ParentAccountId], [AccountType], [AccountCode], [AccountName], [Description], [IsCash], [IsContraAccount], [CreatedBy], [CreatedOn], [ModifiedBy], [ModifiedOn]) 
-VALUES (51, 4, 50, 2, N'41100', N'Product-A sales', NULL, 0, 0, N'System', CAST(N'2016-01-01 00:00:00.00' AS DateTime), N'System', CAST(N'2016-01-01 00:00:00.00' AS DateTime))
+VALUES (51, 4, 50, 2, N'41110', N'Product-A sales', NULL, 0, 0, N'System', CAST(N'2016-01-01 00:00:00.00' AS DateTime), N'System', CAST(N'2016-01-01 00:00:00.00' AS DateTime))
 GO
 
 INSERT [dbo].[Account] ([Id], [AccountClassId], [ParentAccountId], [AccountType], [AccountCode], [AccountName], [Description], [IsCash], [IsContraAccount], [CreatedBy], [CreatedOn], [ModifiedBy], [ModifiedOn]) 
-VALUES (52, 4, 50, 2, N'41100', N'Service-B sales', NULL, 0, 0, N'System', CAST(N'2016-01-01 00:00:00.00' AS DateTime), N'System', CAST(N'2016-01-01 00:00:00.00' AS DateTime))
+VALUES (52, 4, 50, 2, N'41120', N'Service-B sales', NULL, 0, 0, N'System', CAST(N'2016-01-01 00:00:00.00' AS DateTime), N'System', CAST(N'2016-01-01 00:00:00.00' AS DateTime))
 GO
 
 INSERT [dbo].[Account] ([Id], [AccountClassId], [ParentAccountId], [AccountType], [AccountCode], [AccountName], [Description], [IsCash], [IsContraAccount], [CreatedBy], [CreatedOn], [ModifiedBy], [ModifiedOn]) 

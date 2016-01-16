@@ -21,7 +21,7 @@
         @foreach (var account in Model)
         {
             <tr>
-                <td>@account.AccountCode</td>
+                <td>@Html.ActionLink((string)string.Format("{0}", account.AccountCode), "EditAccount", new { id = account.AccountId })</td>
                 <td>@account.AccountName</td>
                 <td style="text-align: right;">@account.Debit</td>
                 <td style="text-align: right;">@account.Credit</td>
