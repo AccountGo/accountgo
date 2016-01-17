@@ -48,6 +48,23 @@ namespace Web.Models.ViewModels.Financials
         public ICollection<Services.Financial.MasterGeneralLedger> Transactions { get; set; }
     }
 
+    public class AddAccountViewModel
+    {
+        public int Id { get; set; }
+        [Required]
+        public string AccountCode { get; set; }
+        [Required]
+        public string AccountName { get; set; }
+        public int AccountClass { get; set; }
+        public bool IsContraAccount { get; set; }
+        public bool IsCash { get; set; }
+        public int? ParentAccountId { get; set; }
+
+        public AddAccountViewModel()
+        {
+        }
+    }
+
     public class AccountTransactionViewModel
     {
         public int Id { get; set; }

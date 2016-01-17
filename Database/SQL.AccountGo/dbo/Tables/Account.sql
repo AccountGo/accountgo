@@ -1,5 +1,6 @@
 ﻿CREATE TABLE [dbo].[Account] (
     [Id]              INT            IDENTITY (1, 1) NOT NULL,
+	[CompanyId] INT            NULL,
     [AccountClassId]  INT            NOT NULL,
     [ParentAccountId] INT            NULL,
     [AccountType]     INT            NOT NULL,
@@ -14,6 +15,7 @@
     [ModifiedBy]      NVARCHAR (MAX) NULL,
     [ModifiedOn]      DATETIME       NOT NULL,
     CONSTRAINT [PK_Account] PRIMARY KEY CLUSTERED ([Id] ASC),
+	CONSTRAINT [FK_Account_CompanyId_Company_CompanyId] FOREIGN KEY ([CompanyId]) REFERENCES [Company] ([Id]),
     CONSTRAINT [FK_Account_ParentAccountId_Account_AccountId] FOREIGN KEY ([ParentAccountId]) REFERENCES [Account] ([Id]),
     CONSTRAINT [FK_Account_AccountClassId_AccountClass_AccountClassId] FOREIGN KEY ([AccountClassId]) REFERENCES [AccountClass] ([Id]) ON DELETE CASCADE
 );

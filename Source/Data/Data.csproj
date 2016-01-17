@@ -60,6 +60,7 @@
     <Compile Include="ApplicationContextConfiguration.cs" />
     <Compile Include="AuditLogHelper.cs" />
     <Compile Include="DbInitializer.cs" />
+    <Compile Include="DbInitializerHelper.cs" />
     <Compile Include="EfRepository.cs" />
     <Compile Include="IDbContext.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

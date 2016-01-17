@@ -11,6 +11,7 @@ using System.Web.Mvc;
 using System;
 using System.Linq;
 using Core.Domain.Financials;
+using Web.Models.ViewModels.Financials;
 
 namespace Web.Controllers
 {
@@ -41,6 +42,32 @@ namespace Web.Controllers
                 });
             }
             return View(model);
+        }
+
+        public ActionResult AddAccount()
+        {
+            return View(new AddAccountViewModel());
+        }
+
+        [HttpPost, ActionName("AddAccount")]
+        [FormValueRequiredAttribute("Create")]
+        public ActionResult AddAccount(AddAccountViewModel model)
+        {
+            Account account = new Account()
+            {
+                AccountCode = model.AccountCode,
+                AccountName = model.AccountName,
+                AccountClassId = model.AccountClass,
+                ParentAccountId = model.ParentAccountId == -1 ? null : model.ParentAccountId,
+                CreatedBy = User.Identity.Name,
+                ModifiedBy = User.Identity.Name,
+                CreatedOn = DateTime.Now,
+                ModifiedOn = DateTime.Now
+            };
+
+            _financialService.AddAccount(account);
+
+            return RedirectToAction("Accounts");
         }
 
         public ActionResult EditAccount(int id)

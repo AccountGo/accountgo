@@ -42,5 +42,7 @@ namespace Services.Financial
         GeneralLedgerHeader GetGeneralLedgerHeader(int id);
         Account GetAccountByAccountCode(string accountcode);
         Account GetAccount(int id);
+
+        void AddAccount(Account account);
     }
 }

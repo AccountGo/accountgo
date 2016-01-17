@@ -16,7 +16,7 @@ namespace Core.Domain
     {
         public string Name { get; set; }
         public string ShortName { get; set; }
-
+        public string CompanyCode { get; set; }
         public string CreatedBy { get; set; }
         public DateTime CreatedOn { get; set; }
         public string ModifiedBy { get; set; }

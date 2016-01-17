@@ -15,6 +15,7 @@ using System.Collections.Generic;
 using Core.Domain.Sales;
 using Services.Administration;
 using Web.Models.ViewModels.Administration;
+using Data;
 
 namespace Web.Controllers
 {
@@ -98,7 +99,7 @@ namespace Web.Controllers
                 invoiceLine.ModifiedOn = DateTime.Now;
 
                 var invoice = new SalesInvoiceHeader();
-                invoice.Date = invoiceDate;                
+                invoice.Date = invoiceDate;
                 invoice.CustomerId = customer.Id;
                 invoice.CreatedBy = User.Identity.Name;
                 invoice.CreatedOn = DateTime.Now;
@@ -143,7 +144,7 @@ namespace Web.Controllers
                 m.Id = itemTax.Id;
                 m.IsFullyExempt = itemTax.IsFullyExempt;
                 m.Name = itemTax.Name;
-                foreach(var itemTaxGroup in itemTax.ItemTaxGroupTax)
+                foreach (var itemTaxGroup in itemTax.ItemTaxGroupTax)
                 {
                     var m_ = new ItemTaxGroupTaxViewModel();
                     m_.IsExempt = itemTaxGroup.IsExempt;
@@ -177,6 +178,26 @@ namespace Web.Controllers
         {
             var taxGroups = _administrationService.GetTaxGroups(false);
             return View();
+        }
+
+        [HttpPost]
+        public ActionResult Upload()
+        {
+            DbInitializer<ApplicationContext> initializer = new DbInitializer<ApplicationContext>();
+            if (Request.Files.Count > 0)
+            {
+                var file = Request.Files[0];
+
+                if (file != null && file.ContentLength > 0)
+                {
+                    var fileName = System.IO.Path.GetFileName(file.FileName);
+                    var path = System.IO.Path.Combine(Server.MapPath("~/App_Data/"), fileName);
+                    file.SaveAs(path);
+
+                    DbInitializerHelper.LoadChartOfAccountsFromFile(fileName);
+                }
+            }
+            return RedirectToAction("Index");
         }
     }
 }

@@ -195,7 +195,7 @@ namespace Data
             _context.SaveChanges();
         }
 
-        private void InitAccounts()
+        public void InitAccounts()
         {
             _context.AccountClasses.Add(new AccountClass() { Name = "Assets", NormalBalance = "Dr" });
             _context.AccountClasses.Add(new AccountClass() { Name = "Liabilities", NormalBalance = "Cr" });

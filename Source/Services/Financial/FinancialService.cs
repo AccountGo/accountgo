@@ -572,6 +572,24 @@ namespace Services.Financial
             _accountRepo.Update(account);
         }
 
+        public void AddAccount(Account account)
+        {
+            if (account.IsContraAccount && account.ContraAccounts.Count > 0)
+                throw new Exception("An account cannot have contra account if the account is already contra account.");
+
+            if (GetAccounts().Any(a => a.AccountCode == account.AccountCode && a.Id != account.Id))
+                throw new Exception("Account code already exist.");
+
+            if (account.ParentAccountId.HasValue)
+            {
+                var parent = GetAccount(account.ParentAccountId.Value);
+                if (account.Id == parent.ParentAccountId)
+                    throw new Exception("Cyclic parent/child account.");
+            }
+
+            _accountRepo.Insert(account);
+        }
+
         public JournalEntryHeader GetJournalEntry(int id, bool fromGL = false)
         {
             if(fromGL)

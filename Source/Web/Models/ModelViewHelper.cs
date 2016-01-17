@@ -19,6 +19,7 @@ using System.Web.Mvc;
 using Web.ModelsApi.Inventory;
 using Web.ModelsApi.Purchasing;
 using Web.ModelsApi.Sales;
+using System.Linq;
 
 namespace Web.Models
 {
@@ -301,6 +302,16 @@ namespace Web.Models
         {
             var selections = new HashSet<SelectListItem>();
             return selections;
+        }
+
+        public static ICollection<SelectListItem> AccountClasses()
+        {
+            var EntityState = new SelectList(Enum.GetValues(typeof(AccountClasses)).Cast<AccountClasses>().Select(v => new SelectListItem
+            {
+                Text = v.ToString(),
+                Value = ((int)v).ToString()
+            }).ToList(), "Value", "Text");
+            return EntityState.ToList();
         }
 
         public static ICollection<SelectListItem> PaymentTerms()

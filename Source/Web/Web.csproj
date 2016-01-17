@@ -465,6 +465,7 @@
     <Content Include="Views\Shared\Contact.cshtml" />
     <Content Include="Views\Financial\EditAccount.cshtml" />
     <Content Include="Views\Financial\EditJournalEntry.cshtml" />
+    <Content Include="Views\Financial\AddAccount.cshtml" />
   </ItemGroup>
   <ItemGroup />
   <ItemGroup>

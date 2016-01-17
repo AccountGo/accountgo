@@ -5,3 +5,8 @@
 
 <h2>This page is not yet completed, work in progress.</h2>
 
+@using (Html.BeginForm("Upload", "Administration", FormMethod.Post, new { enctype = "multipart/form-data" }))
+{
+    <input type="file" name="FileUpload" />
+    <input type="submit" name="Submit" id="Submit" value="Upload" />
+}
