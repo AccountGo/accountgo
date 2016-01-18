@@ -111,7 +111,7 @@ namespace Web.Models.ViewModels.Sales
         public int Id { get; set; }
         [Required]
         public string Name { get; set; }
-        public int PrimaryContactId { get; set; }
+        public int? PrimaryContactId { get; set; }
 
         public int? AccountsReceivableAccountId { get; set; }
         public int? SalesAccountId { get; set; }

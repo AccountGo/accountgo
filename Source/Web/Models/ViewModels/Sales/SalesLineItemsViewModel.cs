@@ -97,6 +97,7 @@ namespace Web.Models.ViewModels.Sales
         }
 
         public int? Id { get; set; }
+        public int CustomerId { get; set; }
         public int ItemId { get; set; }
         public string ItemNo { get; set; }
         public string ItemDescription { get; set; }
@@ -125,7 +126,7 @@ namespace Web.Models.ViewModels.Sales
             decimal lineTaxAmount = 0;
             if (_financialService != null)
             {
-                var taxes = _financialService.ComputeOutputTax(ItemId, Quantity, Price, Discount);
+                var taxes = _financialService.ComputeOutputTax(CustomerId, ItemId, Quantity, Price, Discount);
                 lineTaxAmount = Math.Round(taxes.Sum(t => t.Value), 2);
             }
             return lineTaxAmount;

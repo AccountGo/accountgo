@@ -985,8 +985,12 @@ namespace Web.Controllers
 
         private void AddLineItem(Models.ViewModels.Sales.SalesHeaderViewModel model)
         {
+            if (!model.CustomerId.HasValue)
+                throw new Exception("Please enter customer.");
+
             var item = _inventoryService.GetItemByNo(model.SalesLine.ItemNo);
             var newLine = new Models.ViewModels.Sales.SalesLineItemViewModel(_financialService);
+            newLine.CustomerId = model.CustomerId.HasValue ? model.CustomerId.Value : 0;
             newLine.ItemId = item.Id;
             newLine.ItemNo = item.No;
             newLine.ItemDescription = item.Description;

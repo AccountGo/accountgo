@@ -20,6 +20,7 @@ using Web.ModelsApi.Inventory;
 using Web.ModelsApi.Purchasing;
 using Web.ModelsApi.Sales;
 using System.Linq;
+using Web.ModelsApi;
 
 namespace Web.Models
 {
@@ -219,9 +220,9 @@ namespace Web.Models
 
                 if (response.IsSuccessStatusCode)
                 {
-                    var contacts = response.Content.ReadAsAsync<IEnumerable<Contact>>().Result;
+                    var contacts = response.Content.ReadAsAsync<IEnumerable<ContactDto>>().Result;
                     foreach (var contact in contacts)
-                        selections.Add(new SelectListItem() { Text = contact.FirstName + " " + contact.LastName, Value = contact.Id.ToString() });
+                        selections.Add(new SelectListItem() { Text = contact.FullName, Value = contact.Id.ToString() });
                 }
             }
 

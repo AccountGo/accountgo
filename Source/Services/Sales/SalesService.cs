@@ -123,7 +123,7 @@ namespace Services.Sales
                 
                 totalAmount += lineAmount;
                 
-                var lineTaxes = _financialService.ComputeOutputTax(item.Id, lineItem.Quantity, lineItem.Amount, lineItem.Discount);
+                var lineTaxes = _financialService.ComputeOutputTax(salesInvoice.CustomerId, item.Id, lineItem.Quantity, lineItem.Amount, lineItem.Discount);
                 
                 foreach (var t in lineTaxes)
                     taxes.Add(t);

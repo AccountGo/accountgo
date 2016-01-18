@@ -16,6 +16,8 @@ using System.Linq;
 using System.Threading;
 using Core.Domain.Items;
 using Services.Inventory;
+using Core.Domain.Sales;
+using Core.Domain.Purchases;
 
 namespace Services.Financial
 {
@@ -36,6 +38,8 @@ namespace Services.Financial
         private readonly IRepository<Item> _itemRepo;
         private readonly IRepository<GeneralLedgerSetting> _glSettingRepo;
         private readonly IRepository<MainContraAccount> _maincontraAccount;
+        private readonly IRepository<Customer> _customerRepo;
+        private readonly IRepository<Vendor> _vendorRepo;
 
         public FinancialService(IInventoryService inventoryService, 
             IRepository<GeneralLedgerHeader> generalLedgerRepository,
@@ -50,7 +54,9 @@ namespace Services.Financial
             IRepository<Bank> bankRepo,
             IRepository<Item> itemRepo,
             IRepository<GeneralLedgerSetting> glSettingRepo,
-            IRepository<MainContraAccount> maincontraAccount = null
+            IRepository<MainContraAccount> maincontraAccount = null,
+            IRepository<Customer> customerRepo = null,
+            IRepository<Vendor> vendorRepo = null
             )
             :base(null, null, paymentTermRepo, bankRepo)
         {
@@ -68,6 +74,8 @@ namespace Services.Financial
             _itemRepo = itemRepo;
             _glSettingRepo = glSettingRepo;
             _maincontraAccount = maincontraAccount;
+            _customerRepo = customerRepo;
+            _vendorRepo = vendorRepo;
         }
 
         public FiscalYear CurrentFiscalYear()
@@ -470,8 +478,9 @@ namespace Services.Financial
         /// <returns></returns>
         public List<KeyValuePair<int, decimal>> ComputeInputTax(int itemId, decimal quantity, decimal amount)
         {
-            var taxes = new List<KeyValuePair<int, decimal>>();
             decimal taxAmount = 0;
+
+            var taxes = new List<KeyValuePair<int, decimal>>();            
             var item = _inventoryService.GetItemById(itemId);
             var lineAmount = quantity * amount;
 
@@ -487,6 +496,7 @@ namespace Services.Financial
                     }
                 }
             }
+
             return taxes;
         }
 
@@ -497,11 +507,14 @@ namespace Services.Financial
         /// <param name="quantity"></param>
         /// <param name="amount"></param>
         /// <returns></returns>
-        public List<KeyValuePair<int, decimal>> ComputeOutputTax(int itemId, decimal quantity, decimal amount, decimal discount)
+        public List<KeyValuePair<int, decimal>> ComputeOutputTax(int customerId, int itemId, decimal quantity, decimal amount, decimal discount)
         {
             decimal taxAmount = 0, amountXquantity = 0, discountAmount = 0, subTotalAmount = 0;
+
             var item = _itemRepo.GetById(itemId);
+            var customer = _customerRepo.GetById(customerId);
             var taxes = new List<KeyValuePair<int, decimal>>();
+
             amountXquantity = amount * quantity;
 
             if(discount > 0)
@@ -520,6 +533,19 @@ namespace Services.Financial
                     }
                 }
             }
+
+            if(customer.TaxGroup != null)
+            {
+                foreach (var tax in customer.TaxGroup.TaxGroupTax)
+                {
+                    if (taxes.Any(t => t.Key == tax.Id))
+                        continue;
+
+                    taxAmount = subTotalAmount - (subTotalAmount / (1 + (tax.Tax.Rate / 100)));
+                    taxes.Add(new KeyValuePair<int, decimal>(tax.Id, taxAmount));
+                }
+            }
+
             return taxes;
         }
 

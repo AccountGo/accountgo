@@ -32,7 +32,7 @@ namespace Services.Financial
         IEnumerable<TaxGroup> GetTaxGroups();
         IEnumerable<Bank> GetCashAndBanks();
         List<KeyValuePair<int, decimal>> ComputeInputTax(int itemId, decimal quantity, decimal amount);
-        List<KeyValuePair<int, decimal>> ComputeOutputTax(int itemId, decimal quantity, decimal amount, decimal discount);
+        List<KeyValuePair<int, decimal>> ComputeOutputTax(int customerId, int itemId, decimal quantity, decimal amount, decimal discount);
         GeneralLedgerSetting GetGeneralLedgerSetting(int? companyId = null);
         void UpdateGeneralLedgerSetting(GeneralLedgerSetting setting);
         void AddMainContraAccountSetting(int masterAccountId, int contraAccountId);

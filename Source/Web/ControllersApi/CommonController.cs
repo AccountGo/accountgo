@@ -6,6 +6,7 @@ using Services.Sales;
 using System.Collections.Generic;
 using System.Linq;
 using System.Web.Http;
+using Web.ModelsApi;
 using Web.ModelsApi.Financial;
 using Web.ModelsApi.Inventory;
 using Web.ModelsApi.Purchasing;
@@ -64,7 +65,13 @@ namespace Web.ControllersApi
         public IHttpActionResult Contacts()
         {
             var contacts = _salesService.GetContacts();
-            return Ok(contacts.AsEnumerable());
+
+            ICollection<ContactDto> contactsDto = new HashSet<ContactDto>();
+
+            foreach (var contact in contacts)
+                contactsDto.Add(new ContactDto() { Id = contact.Id,  FirstName = contact.FirstName, LastName = contact.LastName });
+
+            return Ok(contactsDto.AsEnumerable());
         }
 
         [HttpGet]
