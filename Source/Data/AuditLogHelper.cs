@@ -17,13 +17,18 @@ namespace Data
 
         public static List<AuditLog> GetChangesForAuditLog(DbEntityEntry dbEntry, string username, ApplicationContext context)
         {
-            //if (_context == null && _context != context)
-            //    _context = context;
             _context = context;
             var result = new List<AuditLog>();
 
             // Get the Table() attribute, if one exists
-            TableAttribute tableAttr = dbEntry.Entity.GetType().GetCustomAttributes(typeof(TableAttribute), false).SingleOrDefault() as TableAttribute;
+            Type entryType = dbEntry.Entity.GetType();
+
+            TableAttribute tableAttr = entryType.GetCustomAttributes(typeof(TableAttribute), false).SingleOrDefault() as TableAttribute;
+
+            if (tableAttr == null)
+            {
+                tableAttr = entryType.BaseType.GetCustomAttributes(typeof(TableAttribute), false).SingleOrDefault() as TableAttribute;
+            }
 
             // Get table name (if it has a Table attribute, use that, otherwise get the pluralized name)
             string tableName = tableAttr != null ? tableAttr.Name : dbEntry.Entity.GetType().Name;

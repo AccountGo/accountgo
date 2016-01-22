@@ -194,7 +194,7 @@ namespace Web.Controllers
                     var path = System.IO.Path.Combine(Server.MapPath("~/App_Data/"), fileName);
                     file.SaveAs(path);
 
-                    DbInitializerHelper.LoadChartOfAccountsFromFile(fileName);
+                    DbInitializerHelper.LoadChartOfAccountsFromFile(fileName, 100);
                 }
             }
             return RedirectToAction("Index");

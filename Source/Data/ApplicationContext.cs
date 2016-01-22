@@ -38,7 +38,7 @@ namespace Data
         public ApplicationContext(string name) 
             : base(name)
         {
-            Database.SetInitializer<ApplicationContext>(null); //disable code first
+            Database.SetInitializer<ApplicationContext>(null); //uncomment this line to disable code first
         }
 
         public DbSet<AccountClass> AccountClasses { get; set; }
@@ -96,9 +96,35 @@ namespace Data
 
         #region Methods
 
+        protected override void OnModelCreating(DbModelBuilder modelBuilder)
+        {
+            modelBuilder.Conventions.Remove<System.Data.Entity.ModelConfiguration.Conventions.OneToManyCascadeDeleteConvention>();
+            base.OnModelCreating(modelBuilder);
+        }
+
         public override int SaveChanges()
         {
             SaveAuditLog(UserName);
+
+            // CAN BE USE IN THE FUTURE : Track Created and Modified fields Automatically with Entity Framework Code First
+
+            //var entities = ChangeTracker.Entries().Where(x => x.Entity is BaseEntity && (x.State == EntityState.Added || x.State == EntityState.Modified));
+
+            //var currentUsername = HttpContext.Current != null && HttpContext.Current.User != null
+            //    ? HttpContext.Current.User.Identity.Name
+            //    : "Anonymous";
+
+            //foreach (var entity in entities)
+            //{
+            //    if (entity.State == EntityState.Added)
+            //    {
+            //        ((BaseEntity)entity.Entity).DateCreated = DateTime.Now;
+            //        ((BaseEntity)entity.Entity).UserCreated = currentUsername;
+            //    }
+
+            //    ((BaseEntity)entity.Entity).DateModified = DateTime.Now;
+            //    ((BaseEntity)entity.Entity).UserModified = currentUsername;
+            //}
 
             var ret = base.SaveChanges();
 

@@ -61,9 +61,12 @@ namespace Data
         protected virtual void Seed(TContext context)
         {
             _context = context;
-            InitData();
+            DbInitializerHelper._context = context;
+            DbInitializerHelper._filename = AppDomain.CurrentDomain.BaseDirectory +  "/App_Data/coa.csv";
+            DbInitializerHelper.Initialize();
         }
 
+        /*
         private void InitData()
         {
             InitCompany();
@@ -716,5 +719,6 @@ namespace Data
             }
             _context.SaveChanges();
         }
+        */
     }
 }

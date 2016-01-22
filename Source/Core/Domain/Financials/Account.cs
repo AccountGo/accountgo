@@ -26,6 +26,8 @@ namespace Core.Domain.Financials
         public int AccountClassId { get; set; }
         public int? ParentAccountId { get; set; }
         public AccountTypes AccountType { get; set; }
+        public TransactionTypes TransactionType { get; set; }
+        public int CompanyId { get; set; }
         [Required]
         [StringLength(50)]
         public string AccountCode { get; set; }
@@ -47,6 +49,7 @@ namespace Core.Domain.Financials
 
         public virtual Account ParentAccount { get; set; }
         public virtual AccountClass AccountClass { get; set; }
+        public virtual Company Company { get; set; }
 
         public virtual ICollection<Account> ChildAccounts { get; set; }
         public virtual ICollection<MainContraAccount> ContraAccounts { get; set; }

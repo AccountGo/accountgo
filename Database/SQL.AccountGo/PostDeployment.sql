@@ -9,6 +9,3 @@ Post-Deployment Script Template
                SELECT * FROM [$(TableName)]					
 --------------------------------------------------------------------------------------
 */
-:r .\InitialChartOfAccounts.sql
-:r .\InitialDataScript.sql
-:r .\SecurityModelInitialData.sql

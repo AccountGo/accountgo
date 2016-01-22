@@ -1,9 +1,10 @@
 ﻿CREATE TABLE [dbo].[Account] (
     [Id]              INT            IDENTITY (1, 1) NOT NULL,
-	[CompanyId] INT            NULL,
+	[CompanyId]		  INT            NULL,
     [AccountClassId]  INT            NOT NULL,
     [ParentAccountId] INT            NULL,
     [AccountType]     INT            NOT NULL,
+	[TransactionType] INT            NOT NULL,
     [AccountCode]     NVARCHAR (50)  UNIQUE NOT NULL,
     [AccountName]     NVARCHAR (200) NOT NULL,
     [Description]     NVARCHAR (200) NULL,

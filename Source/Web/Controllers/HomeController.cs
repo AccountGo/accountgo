@@ -12,10 +12,19 @@ namespace Web.Controllers
 {
     public class HomeController : BaseController
     {
+        private readonly Services.Administration.IAdministrationService _administrationService;
+        public HomeController(Services.Administration.IAdministrationService administrationService)
+        {
+            _administrationService = administrationService;
+        }
+
         public ActionResult Index()
         {
             if (!User.Identity.IsAuthenticated)
                 return RedirectToAction("Login", "Account");
+
+            _administrationService.InitializeCompany();
+
             return View();
         }
 

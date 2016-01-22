@@ -60,19 +60,20 @@ namespace Web
 
             //dbcontext
             builder.Register<IDbContext>(c => new ApplicationContext()).InstancePerLifetimeScope();
+            //var dbInitializer = new DbInitializer<ApplicationContext>();
+            //System.Data.Entity.Database.SetInitializer<ApplicationContext>(dbInitializer);
+            //dbInitializer.InitializeDatabase(new ApplicationContext());
             //if (HttpContext.Current.Request.IsLocal)
             //{
-            //    var context = new ApplicationContext(ConfigurationManager.ConnectionStrings["ApplicationContext"].ConnectionString);
             //    var dbInitializer = new DbInitializer<ApplicationContext>();
             //    Database.SetInitializer<ApplicationContext>(dbInitializer);
-            //    dbInitializer.InitializeDatabase(context);
-            //    builder.Register<IDbContext>(c => context).SingleInstance();
+            //    dbInitializer.InitializeDatabase(new ApplicationContext());
+            //    builder.Register<IDbContext>(c => new ApplicationContext()).InstancePerLifetimeScope();
             //}
             //else
             //{
             //    Database.SetInitializer<ApplicationContext>(null);
-            //    var context = new ApplicationContext("ApplicationContext");
-            //    builder.Register<IDbContext>(c => context).SingleInstance();
+            //    builder.Register<IDbContext>(c => new ApplicationContext()).InstancePerLifetimeScope();
             //}
 
             //generic repositories

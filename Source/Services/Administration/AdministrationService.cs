@@ -11,6 +11,7 @@ using System.Collections.Generic;
 using Core.Data;
 using Core.Domain;
 using Core.Domain.Financials;
+using System;
 
 namespace Services.Administration
 {
@@ -23,6 +24,7 @@ namespace Services.Administration
         private readonly IRepository<Bank> _bankRepo;
         private readonly IRepository<GeneralLedgerSetting> _genetalLedgerSetting;
         private readonly IRepository<Tax> _taxRepo;
+        private readonly IRepository<Company> _company;
 
         public AdministrationService(IRepository<FiscalYear> fiscalYearRepo,
             IRepository<TaxGroup> taxGroupRepo,
@@ -30,7 +32,8 @@ namespace Services.Administration
             IRepository<PaymentTerm> paymentTermRepo,
             IRepository<Bank> bankRepo,
             IRepository<Tax> taxRepo,
-            IRepository<GeneralLedgerSetting> generalLedgerSetting)
+            IRepository<GeneralLedgerSetting> generalLedgerSetting,
+            IRepository<Company> company = null)
             : base(null, generalLedgerSetting, paymentTermRepo, bankRepo)
         {
             _fiscalYearRepo = fiscalYearRepo;
@@ -40,6 +43,7 @@ namespace Services.Administration
             _bankRepo = bankRepo;
             _genetalLedgerSetting = generalLedgerSetting;
             _taxRepo = taxRepo;
+            _company = company;
         }
 
         public ICollection<Tax> GetAllTaxes(bool includeInActive)
@@ -76,6 +80,14 @@ namespace Services.Administration
             var query = from f in _taxGroupRepo.Table
                         select f;
             return query.ToList();
+        }
+
+        public void InitializeCompany()
+        {
+            if (_company.Table.FirstOrDefault() == null)
+            {
+                Data.DbInitializerHelper.Initialize();
+            }
         }
     }
 }

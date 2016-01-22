@@ -127,9 +127,9 @@
     <Build Include="dbo\Tables\MainContraAccount.sql" />
   </ItemGroup>
   <ItemGroup>
-    <PostDeploy Include="PostDeployment.sql">
+    <None Include="PostDeployment.sql">
       <CopyToOutputDirectory>DoNotCopy</CopyToOutputDirectory>
-    </PostDeploy>
+    </None>
     <None Include="SecurityModelInitialData.sql" />
     <None Include="InitialChartOfAccounts.sql" />
   </ItemGroup>
