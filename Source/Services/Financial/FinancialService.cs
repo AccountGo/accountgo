@@ -189,8 +189,8 @@ namespace Services.Financial
                 if (!_accountRepo.GetById(account.AccountId).CanPost())
                     throw new InvalidOperationException("One of the account is not valid for posting");
 
-            if(!glEntry.ValidateAccountingEquation())
-                throw new InvalidOperationException("One of the account not equal.");
+            //if(!glEntry.ValidateAccountingEquation())
+            //    throw new InvalidOperationException("One of the account not equal.");
 
             return true;
         }

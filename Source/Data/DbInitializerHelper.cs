@@ -19,61 +19,73 @@ namespace Data
 
         public static void Initialize()
         {
-            if (_context == null)
-                _context = new ApplicationContext();
-            if (string.IsNullOrEmpty(_filename))
-                _filename = AppDomain.CurrentDomain.BaseDirectory + "/App_Data/coa.csv";
-
-            DbInitializerHelper.InsertAdminUser();
-
-            if (_context.Users.Count() == 0)
-                DbInitializerHelper.InitialUserAndSecurityModel();
-
-            Company company = null;
-            if (_context.Companies.Count() == 0)
-                company = DbInitializerHelper.CreateDefaultCompany();
-            else
-                company = _context.Companies.FirstOrDefault();
-
-            FiscalYear fy = null;
-            if (_context.FiscalYears.Count() == 0)
-                fy = InitFiscalYear();
-
-            List<PaymentTerm> paymentTerms = null;
-            if (_context.PaymentTerms.Count() == 0)
-                paymentTerms = InitPaymentTerms();
-
-            if (_context.AccountClasses.Count() == 0)
-                DbInitializerHelper.InitializeAccountClasses();
-
-            if (_context.Accounts.Count() == 0)
+            try
             {
-                DbInitializerHelper.LoadChartOfAccountsFromFile(_filename, company.Id);
-                DbInitializerHelper.UpdateAccountsParentCodes(_filename);
+                if (_context == null)
+                    _context = new ApplicationContext();
+                if (string.IsNullOrEmpty(_filename))
+                    _filename = AppDomain.CurrentDomain.BaseDirectory + "/App_Data/coa.csv";
+
+                DbInitializerHelper.InsertAdminUser();
+
+                if (_context.Users.Count() == 0)
+                    DbInitializerHelper.InitialUserAndSecurityModel();
+
+                Company company = null;
+                if (_context.Companies.Count() == 0)
+                    company = DbInitializerHelper.CreateDefaultCompany();
+                else
+                    company = _context.Companies.FirstOrDefault();
+
+                FiscalYear fy = null;
+                if (_context.FiscalYears.Count() == 0)
+                    fy = InitFiscalYear();
+
+                List<PaymentTerm> paymentTerms = null;
+                if (_context.PaymentTerms.Count() == 0)
+                    paymentTerms = InitPaymentTerms();
+
+                if (_context.AccountClasses.Count() == 0)
+                    DbInitializerHelper.InitializeAccountClasses();
+
+                if (_context.Accounts.Count() == 0)
+                {
+                    DbInitializerHelper.LoadChartOfAccountsFromFile(_filename, company.Id);
+                    DbInitializerHelper.UpdateAccountsParentCodes(_filename);
+                }
+
+                GeneralLedgerSetting glSetting = null;
+                if (_context.GeneralLedgerSettings.Count() == 0)
+                    glSetting = InitGeneralLedgerSetting();
+
+                if (_context.Taxes.Count() == 0)
+                    DbInitializerHelper.InitTax();
+
+                Vendor vendor = null;
+                if (_context.Vendors.Count() == 0)
+                    vendor = DbInitializerHelper.InitVendor();
+
+                Customer customer = null;
+                if (_context.Customers.Count() == 0)
+                    customer = DbInitializerHelper.InitCustomer();
+
+                List<Item> items = null;
+                if (_context.Items.Count() == 0)
+                    items = InitItems();
+
+                List<Bank> banks = null;
+                if (_context.Banks.Count() == 0)
+                    banks = InitBanks();
+
+                
             }
-
-            GeneralLedgerSetting glSetting = null;
-            if (_context.GeneralLedgerSettings.Count() == 0)
-                glSetting = InitGeneralLedgerSetting();
-
-            if(_context.Taxes.Count() == 0)
-                DbInitializerHelper.InitTax();
-
-            Vendor vendor = null;
-            if (_context.Vendors.Count() == 0)
-                vendor = DbInitializerHelper.InitVendor();
-
-            Customer customer = null;
-            if (_context.Customers.Count() == 0)
-                customer = DbInitializerHelper.InitCustomer();
-
-            List<Item> items = null;
-            if (_context.Items.Count() == 0)
-                items = InitItems();
-
-            List<Bank> banks = null;
-            if (_context.Banks.Count() == 0)
-                banks = InitBanks();
+            catch
+            {
+            }
+            finally
+            {
+                _context.Dispose();
+            }
         }
 
         public static void InsertAdminUser()

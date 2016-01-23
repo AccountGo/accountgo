@@ -36,37 +36,37 @@ namespace Core.Domain.Financials
 
         public ICollection<GeneralLedgerLine> Assets()
         {
-            var assets = GeneralLedgerLines.Where(a => a.Account.AccountClassId == (int)AccountClasses.Assets).ToList();
+            var assets = GeneralLedgerLines.ToList().Where(a => a.Account.AccountClassId == (int)AccountClasses.Assets);
 
-            return assets;
+            return assets.ToList();
         }
 
         public ICollection<GeneralLedgerLine> Liabilities()
         {
-            var liablities = GeneralLedgerLines.Where(a => a.Account.AccountClassId == (int)AccountClasses.Liabilities).ToList();
+            var liablities = GeneralLedgerLines.ToList().Where(a => a.Account.AccountClassId == (int)AccountClasses.Liabilities);
 
-            return liablities;
+            return liablities.ToList();
         }
 
         public ICollection<GeneralLedgerLine> Equities()
         {
-            var equities = GeneralLedgerLines.Where(a => a.Account.AccountClassId == (int)AccountClasses.Equity).ToList();
+            var equities = GeneralLedgerLines.ToList().Where(a => a.Account.AccountClassId == (int)AccountClasses.Equity);
 
-            return equities;
+            return equities.ToList();
         }
 
         public ICollection<GeneralLedgerLine> Revenues()
         {
-            var revenues = GeneralLedgerLines.Where(a => a.Account.AccountClassId == (int)AccountClasses.Revenue).ToList();
+            var revenues = GeneralLedgerLines.ToList().Where(a => a.Account.AccountClassId == (int)AccountClasses.Revenue);
 
-            return revenues;
+            return revenues.ToList();
         }
 
         public ICollection<GeneralLedgerLine> Expenses()
         {
-            var expenses = GeneralLedgerLines.Where(a => a.Account.AccountClassId == (int)AccountClasses.Expense).ToList();
+            var expenses = GeneralLedgerLines.ToList().Where(a => a.Account.AccountClassId == (int)AccountClasses.Expense);
 
-            return expenses;
+            return expenses.ToList();
         }
 
         /// <summary>
@@ -90,7 +90,10 @@ namespace Core.Domain.Financials
         {
             bool isEqual = true;
 
-            isEqual = Liabilities().Sum(l => l.Amount) >= Expenses().Sum(e => e.Amount);
+            var liabilitiesAmount = Liabilities() != null ? Liabilities().Sum(a => a.Amount) : 0;
+            var expensesAmount = Expenses() != null ? Expenses().Sum(a => a.Amount) : 0;
+
+            isEqual = liabilitiesAmount >= expensesAmount;
 
             return isEqual;
         }
@@ -99,7 +102,10 @@ namespace Core.Domain.Financials
         {
             bool isEqual = true;
 
-            isEqual = Assets().Sum(a => a.Amount) >= Revenues().Sum(r => r.Amount);
+            var assetsAmount = Assets() != null ? Assets().Sum(a => a.Amount) : 0;
+            var revenuesAmount = Revenues() != null ? Revenues().Sum(a => a.Amount) : 0;
+
+            isEqual = assetsAmount >= revenuesAmount;
 
             return isEqual;
         }
@@ -107,8 +113,11 @@ namespace Core.Domain.Financials
         public bool ValidateAssetsEqualsEquities()
         {
             bool isEqual = true;
+            
+            var assetsAmount = Assets() != null ? Assets().Sum(a => a.Amount) : 0;
+            var equitiesAmount = Equities() != null ? Equities().Sum(a => a.Amount) : 0;
 
-            isEqual = Assets().Sum(a => a.Amount) >= Equities().Sum(e => e.Amount);
+            isEqual = assetsAmount >= equitiesAmount;
 
             return isEqual;
         }
