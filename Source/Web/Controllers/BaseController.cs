@@ -7,9 +7,13 @@
 //-----------------------------------------------------------------------
 
 using Core;
+using System;
 using System.IO;
+using System.Linq.Expressions;
 using System.Web.Mvc;
 using Web.Models;
+
+using Microsoft.Web.Mvc
 
 namespace Web.Controllers
 {
@@ -64,5 +68,15 @@ namespace Web.Controllers
         }
 
         //protected abstract string GetPageTitle();
+
+        /// <summary>
+        /// RedirectToAction Support strong type controller calling
+        /// ex. RedirectToAction<SalesController>(c => c.Customers());
+        /// insted of RedirectToAction("Customers");
+        /// </summary>
+        protected ActionResult RedirectToAction<TController>(Expression<Action<TController>> action) where TController : Controller
+        {
+            return ControllerExtensions.RedirectToAction(this, action);
+        }
     }
 }

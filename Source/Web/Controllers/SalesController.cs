@@ -438,7 +438,8 @@ namespace Web.Controllers
             else
                 _salesService.AddCustomer(customer);
 
-            return RedirectToAction("Customers");
+            //return RedirectToAction("Customers");
+            return RedirectToAction<SalesController>(c => c.Customers());
         }
 
         public ActionResult CustomerDetail(int id)
