@@ -329,7 +329,9 @@ namespace Services.Sales
 
         public Customer GetCustomerById(int id)
         {
-            return _customerRepo.GetById(id);
+            //var customer = _customerRepo.Table.Where(c => c.Id == id).FirstOrDefault();
+            var customer = _customerRepo.GetById(id);
+            return customer;
         }
 
         public void UpdateCustomer(Customer customer)

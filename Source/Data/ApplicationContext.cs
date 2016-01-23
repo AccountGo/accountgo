@@ -23,7 +23,7 @@ using System.Linq;
 
 namespace Data
 {
-    [DbConfigurationType("Data.Configuration, Data")]
+    //[DbConfigurationType("Data.Configuration, Data")]
     public class ApplicationContext : DbContext, IDbContext
     {
         public string UserName
