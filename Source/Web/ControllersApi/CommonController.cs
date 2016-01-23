@@ -159,7 +159,13 @@ namespace Web.ControllersApi
         [Route("api/common/banks")]
         public IHttpActionResult Banks()
         {
-            return Ok(_financialService.GetCashAndBanks());
+            var banks = _financialService.GetCashAndBanks();
+            ICollection<BankDto> banksDto = new HashSet<BankDto>();
+
+            foreach (var bank in banks)
+                banksDto.Add(new BankDto() { AccountId = bank.AccountId.Value, BankName = bank.Name });
+
+            return Ok(banksDto);
         }
     }
 }

@@ -21,6 +21,7 @@ using Web.ModelsApi.Purchasing;
 using Web.ModelsApi.Sales;
 using System.Linq;
 using Web.ModelsApi;
+using Web.ModelsApi.Financial;
 
 namespace Web.Models
 {
@@ -352,9 +353,10 @@ namespace Web.Models
 
                 if (response.IsSuccessStatusCode)
                 {
-                    var banks = response.Content.ReadAsAsync<IEnumerable<Bank>>().Result;
+                    var banks = response.Content.ReadAsAsync<IEnumerable<BankDto>>().Result;
+
                     foreach (var bank in banks)
-                        selections.Add(new SelectListItem() { Text = bank.Name, Value = bank.AccountId.Value.ToString() });
+                        selections.Add(new SelectListItem() { Text = bank.BankName, Value = bank.AccountId.ToString() });
                 }
             }
 

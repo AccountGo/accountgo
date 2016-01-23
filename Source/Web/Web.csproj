@@ -268,6 +268,7 @@
     <Compile Include="Helpers\CollectionHelper.cs" />
     <Compile Include="ModelsApi\ContactDto.cs" />
     <Compile Include="ModelsApi\Financial\AccountDto.cs" />
+    <Compile Include="ModelsApi\Financial\BankDto.cs" />
     <Compile Include="ModelsApi\Inventory\TaxGroupDto.cs" />
     <Compile Include="ModelsApi\Inventory\ItemCategoryDto.cs" />
     <Compile Include="ModelsApi\Inventory\ItemDto.cs" />
