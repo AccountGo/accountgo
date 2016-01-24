@@ -32,6 +32,7 @@ namespace Core.Domain.Sales
         public int? SalesDiscountAccountId { get; set; }
         public int? PromptPaymentDiscountAccountId { get; set; }
         public int? PaymentTermId { get; set; }
+        public int? CustomerAdvancesAccountId { get; set; }
 
         public virtual TaxGroup TaxGroup { get; set; }
         public virtual Account AccountsReceivableAccount { get; set; }
@@ -40,6 +41,7 @@ namespace Core.Domain.Sales
         public virtual Account PromptPaymentDiscountAccount { get; set; }
         public virtual Contact PrimaryContact { get; set; }
         public virtual PaymentTerm PaymentTerm { get; set; }
+        public virtual Account CustomerAdvancesAccount { get; set; }
 
         public virtual ICollection<SalesInvoiceHeader> SalesInvoices { get; set; }
         public virtual ICollection<SalesReceiptHeader> SalesReceipts { get; set; }

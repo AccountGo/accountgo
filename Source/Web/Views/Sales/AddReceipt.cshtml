@@ -29,7 +29,7 @@
         <div class="panel-body">
             <div class="form-group">
                 <label class="col-md-2 control-label">Credit to Account</label>
-                @Html.DropDownListFor(m => m.AccountToCreditId, ModelViewHelper.Accounts())
+                @Html.DropDownListFor(m => m.AccountToCreditId, ModelViewHelper.Accounts(), new { @disabled = "disabled" })
             </div>
             <div class="form-group">
                 <label class="col-md-2 control-label">Amount</label>

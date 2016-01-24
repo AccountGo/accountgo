@@ -83,7 +83,9 @@
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
-    <None Include="App_Data\coa.csv" />
+    <None Include="..\..\Source\Web\App_Data\coa.csv">
+      <Link>App_Data\coa.csv</Link>
+    </None>
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup />

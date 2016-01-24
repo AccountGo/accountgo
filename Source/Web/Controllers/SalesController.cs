@@ -405,6 +405,7 @@ namespace Web.Controllers
                 model.SalesAccountId = customer.SalesAccountId.HasValue ? customer.SalesAccountId : -1;
                 model.SalesDiscountAccountId = customer.SalesDiscountAccountId.HasValue ? customer.SalesDiscountAccountId : -1;
                 model.PromptPaymentDiscountAccountId = customer.PromptPaymentDiscountAccountId.HasValue ? customer.PromptPaymentDiscountAccountId : -1;
+                model.CustomerAdvancesAccountId = customer.CustomerAdvancesAccountId.HasValue ? customer.CustomerAdvancesAccountId : -1;
             }
             return View(model);
         }
@@ -433,6 +434,7 @@ namespace Web.Controllers
             customer.SalesAccountId = model.SalesAccountId.Value == -1 ? null : model.SalesAccountId;
             customer.SalesDiscountAccountId = model.SalesDiscountAccountId.Value == -1 ? null : model.SalesDiscountAccountId;
             customer.PromptPaymentDiscountAccountId = model.PromptPaymentDiscountAccountId.Value == -1 ? null : model.PromptPaymentDiscountAccountId;
+            customer.CustomerAdvancesAccountId = model.CustomerAdvancesAccountId.Value == -1 ? null : model.CustomerAdvancesAccountId;
 
             if (model.Id != 0)
                 _salesService.UpdateCustomer(customer);
@@ -551,7 +553,11 @@ namespace Web.Controllers
         public ActionResult AddReceipt()
         {
             var model = new Models.ViewModels.Sales.AddSalesReceipt();
-            model.AccountToCreditId = _financialService.GetAccounts().Where(a => a.AccountName == "Accounts Receivable").FirstOrDefault().Id;
+            //TODO: get the default customer advances account from GL setting if there is.
+            model.AccountToCreditId = _financialService.GetAccounts().Where(a => a.AccountName == "Customer Advances").FirstOrDefault() != null
+                ? _financialService.GetAccounts().Where(a => a.AccountName == "Customer Advances").FirstOrDefault().Id
+                : -1;
+
             return View(model);
         }
 

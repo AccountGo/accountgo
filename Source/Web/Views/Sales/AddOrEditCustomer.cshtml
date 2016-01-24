@@ -40,6 +40,10 @@
             <label class="col-md-3 control-label">Prompt Payment Discount Account</label>
             @Html.DropDownListFor(m => m.PromptPaymentDiscountAccountId, ModelViewHelper.Accounts())
         </div>
+        <div class="form-group">
+            <label class="col-md-3 control-label">Customer Advances Account</label>
+            @Html.DropDownListFor(m => m.CustomerAdvancesAccountId, ModelViewHelper.Accounts())
+        </div>
     </div>
     <div class="form-group">
         <input type="submit" value="Save" name="SaveCustomer" />

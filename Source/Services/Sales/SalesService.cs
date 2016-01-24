@@ -253,6 +253,10 @@ namespace Services.Sales
             }
         }
 
+        /// <summary>
+        /// Customer advances. Initial recognition. Debit to cash (asset), credit to customer advances (liability)
+        /// </summary>
+        /// <param name="salesReceipt"></param>
         public void AddSalesReceiptNoInvoice(SalesReceiptHeader salesReceipt)
         {
             var customer = _customerRepo.GetById(salesReceipt.CustomerId);
@@ -362,11 +366,12 @@ namespace Services.Sales
 
             foreach (var line in receipt.SalesReceiptLines)
             {
-                var debit = _financialService.CreateGeneralLedgerLine(Core.Domain.TransactionTypes.Dr, line.AccountToCreditId.Value, allocation.Amount);
+                Account accountToDebit = invoice.Customer.CustomerAdvancesAccount;
+                var debit = _financialService.CreateGeneralLedgerLine(Core.Domain.TransactionTypes.Dr, accountToDebit.Id, allocation.Amount);
                 glHeader.GeneralLedgerLines.Add(debit);
             }
 
-            Account accountToCredit = invoice.Customer.AccountsReceivableAccount;
+            Account accountToCredit = invoice.Customer.SalesAccount;
             var credit = _financialService.CreateGeneralLedgerLine(Core.Domain.TransactionTypes.Cr, accountToCredit.Id, allocation.Amount);
             glHeader.GeneralLedgerLines.Add(credit);
 

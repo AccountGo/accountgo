@@ -31,6 +31,7 @@ AccountCode,AccountName,ParentAccountCode,AccountClass,ContraAccount,Cash,Compan
 20000,Liabilities,,2,FALSE,FALSE,100,CR
 20100,Current Liabilities,20000,2,FALSE,FALSE,100,CR
 20110,Accounts Payable,20100,2,FALSE,FALSE,100,CR
+20120,Customer Advances,20100,2,FALSE,FALSE,100,CR
 20201,Accrued Expenses,20100,2,FALSE,FALSE,100,CR
 20202,Wages Payable,20100,2,FALSE,FALSE,100,CR
 20203,Deductions Payable,20100,2,FALSE,FALSE,100,CR

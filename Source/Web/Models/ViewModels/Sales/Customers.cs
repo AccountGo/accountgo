@@ -117,6 +117,7 @@ namespace Web.Models.ViewModels.Sales
         public int? SalesAccountId { get; set; }
         public int? SalesDiscountAccountId { get; set; }
         public int? PromptPaymentDiscountAccountId { get; set; }
+        public int? CustomerAdvancesAccountId { get; set; }
     }
 
     public class AddCustomer
