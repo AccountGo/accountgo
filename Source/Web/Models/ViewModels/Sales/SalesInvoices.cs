@@ -29,6 +29,7 @@ namespace Web.Models.ViewModels.Sales
         public int Id { get; set; }
         public string No { get; set; }
         public string Customer { get; set; }
+        public int CustomerId { get; set; }
         public DateTime Date { get; set; }
         public decimal Amount { get; set; }
         public bool IsFullPaid { get; set; }

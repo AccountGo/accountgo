@@ -107,11 +107,14 @@ namespace Services.Sales
 
         public void AddSalesInvoice(SalesInvoiceHeader salesInvoice, int? salesDeliveryId)
         {   
-            decimal taxAmount = 0, totalAmount = 0, totalDiscount = 0;
+            decimal totalAmount = 0, totalDiscount = 0;
 
             var taxes = new List<KeyValuePair<int, decimal>>();
             var sales = new List<KeyValuePair<int, decimal>>();
-            
+
+            var glHeader = _financialService.CreateGeneralLedgerHeader(DocumentTypes.SalesInvoice, salesInvoice.Date, string.Empty);
+            var customer = _customerRepo.GetById(salesInvoice.CustomerId);
+
             foreach (var lineItem in salesInvoice.SalesInvoiceLines)
             {
                 var item = _itemRepo.GetById(lineItem.ItemId);
@@ -124,9 +127,12 @@ namespace Services.Sales
                 totalAmount += lineAmount;
                 
                 var lineTaxes = _financialService.ComputeOutputTax(salesInvoice.CustomerId, item.Id, lineItem.Quantity, lineItem.Amount, lineItem.Discount);
-                
+
                 foreach (var t in lineTaxes)
                     taxes.Add(t);
+
+                var lineTaxAmount = lineTaxes != null && lineTaxes.Count > 0 ? lineTaxes.Sum(t => t.Value) : 0;
+                lineAmount = (lineAmount + lineDiscountAmount) - lineTaxAmount;
                 
                 sales.Add(new KeyValuePair<int, decimal>(item.SalesAccountId.Value, lineAmount));
 
@@ -141,9 +147,7 @@ namespace Services.Sales
                         lineItem.Quantity * item.Price);
                 }
             }
-
-            var glHeader = _financialService.CreateGeneralLedgerHeader(DocumentTypes.SalesInvoice, salesInvoice.Date, string.Empty);
-            var customer = _customerRepo.GetById(salesInvoice.CustomerId);
+            
             totalAmount += salesInvoice.ShippingHandlingCharge;
             var debitCustomerAR = _financialService.CreateGeneralLedgerLine(TransactionTypes.Dr, customer.AccountsReceivableAccount.Id, Math.Round(totalAmount, 2, MidpointRounding.ToEven));
             glHeader.GeneralLedgerLines.Add(debitCustomerAR);
@@ -158,12 +162,12 @@ namespace Services.Sales
 
             foreach (var salesAccount in groupedSalesAccount)
             {
-                var salesAmount = (salesAccount.Value + totalDiscount) - taxAmount;
+                var salesAmount = salesAccount.Value;
                 var creditSalesAccount = _financialService.CreateGeneralLedgerLine(TransactionTypes.Cr, salesAccount.Key, Math.Round(salesAmount, 2, MidpointRounding.ToEven));
                 glHeader.GeneralLedgerLines.Add(creditSalesAccount);
             }
 
-            if (taxAmount > 0)
+            if (taxes != null && taxes.Count > 0)
             {
                 var groupedTaxes = from t in taxes
                                    group t by t.Key into grouped
@@ -359,6 +363,7 @@ namespace Services.Sales
         public void SaveCustomerAllocation(CustomerAllocation allocation)
         {
             //Revenue recognition. Debit the customer advances (liability) account and credit the revenue account.
+            // However, in this case of allocation, credit the accounts receivable as sales account is already credited in the invoice.
             var invoice = _salesInvoiceRepo.GetById(allocation.SalesInvoiceHeaderId);
             var receipt = _salesReceiptRepo.GetById(allocation.SalesReceiptHeaderId);
 
@@ -371,7 +376,7 @@ namespace Services.Sales
                 glHeader.GeneralLedgerLines.Add(debit);
             }
 
-            Account accountToCredit = invoice.Customer.SalesAccount;
+            Account accountToCredit = invoice.Customer.AccountsReceivableAccount;
             var credit = _financialService.CreateGeneralLedgerLine(Core.Domain.TransactionTypes.Cr, accountToCredit.Id, allocation.Amount);
             glHeader.GeneralLedgerLines.Add(credit);
 

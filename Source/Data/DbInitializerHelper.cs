@@ -327,14 +327,18 @@ namespace Data
 
         public static void InitTax()
         {
+            // NOTE: each tax should have its own tax account.
+
+            var taxPayableAccount = _context.Accounts.Where(a => a.AccountCode == "20300").FirstOrDefault();
+
             var vat5 = new Tax()
             {
                 TaxCode = "VAT5%",
                 TaxName = "VAT 5%",
                 Rate = 5,
                 IsActive = true,
-                SalesAccountId = 37,
-                PurchasingAccountId = 37,
+                SalesAccountId = taxPayableAccount.Id,
+                PurchasingAccountId = taxPayableAccount.Id,
                 CreatedBy = "System",
                 CreatedOn = DateTime.Now,
                 ModifiedBy = "System",
@@ -347,8 +351,8 @@ namespace Data
                 TaxName = "VAT 10%",
                 Rate = 10,
                 IsActive = true,
-                SalesAccountId = 37,
-                PurchasingAccountId = 37,
+                SalesAccountId = taxPayableAccount.Id,
+                PurchasingAccountId = taxPayableAccount.Id,
                 CreatedBy = "System",
                 CreatedOn = DateTime.Now,
                 ModifiedBy = "System",
@@ -361,8 +365,8 @@ namespace Data
                 TaxName = "VAT 12%",
                 Rate = 12,
                 IsActive = true,
-                SalesAccountId = 37,
-                PurchasingAccountId = 37,
+                SalesAccountId = taxPayableAccount.Id,
+                PurchasingAccountId = taxPayableAccount.Id,
                 CreatedBy = "System",
                 CreatedOn = DateTime.Now,
                 ModifiedBy = "System",
@@ -375,8 +379,8 @@ namespace Data
                 TaxName = "Export Tax 1%",
                 Rate = 1,
                 IsActive = true,
-                SalesAccountId = 37,
-                PurchasingAccountId = 37,
+                SalesAccountId = taxPayableAccount.Id,
+                PurchasingAccountId = taxPayableAccount.Id,
                 CreatedBy = "System",
                 CreatedOn = DateTime.Now,
                 ModifiedBy = "System",
@@ -521,6 +525,8 @@ namespace Data
         public  static Customer InitCustomer()
         {
             var accountAR = _context.Accounts.Where(e => e.AccountCode == "10120").FirstOrDefault();
+            var accountSales = _context.Accounts.Where(e => e.AccountCode == "10120").FirstOrDefault();
+            var accountAdvances = _context.Accounts.Where(e => e.AccountCode == "10120").FirstOrDefault();
 
             Customer customer = new Customer();
             customer.No = "1";
@@ -528,6 +534,9 @@ namespace Data
             customer.PartyType = Core.Domain.PartyTypes.Customer;
             customer.Name = "ABC Customer";
             customer.AccountsReceivableAccountId = accountAR != null ? (int?)accountAR.Id : null;
+            customer.SalesAccountId = accountSales != null ? (int?)accountSales.Id : null;
+            customer.CustomerAdvancesAccountId = accountAdvances != null ? (int?)accountAdvances.Id : null;
+            customer.TaxGroupId = _context.TaxGroups.Where(tg => tg.Description == "VAT").FirstOrDefault().Id;
             customer.CreatedBy = "System";
             customer.CreatedOn = DateTime.Now;
             customer.ModifiedBy = "System";

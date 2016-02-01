@@ -140,6 +140,7 @@ namespace Web.Controllers
                     Id = invoice.Id,
                     No = invoice.No,
                     Customer = invoice.Customer.Name,
+                    CustomerId = invoice.CustomerId,
                     Date = invoice.Date,
                     Amount = invoice.ComputeTotalAmount(),
                     IsFullPaid = invoice.IsFullPaid()
@@ -723,6 +724,7 @@ namespace Web.Controllers
                     var lineItem = new Models.ViewModels.Sales.SalesLineItemViewModel(_financialService);
                     lineItem.SetServiceHelpers(_financialService);
                     lineItem.Id = line.Id;
+                    lineItem.CustomerId = invoice.CustomerId;
                     lineItem.ItemId = line.ItemId;
                     lineItem.ItemNo = line.Item.No;
                     lineItem.ItemDescription = line.Item.Description;
