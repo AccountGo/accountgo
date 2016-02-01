@@ -20,5 +20,6 @@ namespace Services.Administration
         void UpdateTax(Tax tax);
         void DeleteTax(int id);
         void InitializeCompany();
+        Company GetDefaultCompany();
     }
 }

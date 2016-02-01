@@ -89,5 +89,10 @@ namespace Services.Administration
                 Data.DbInitializerHelper.Initialize();
             }
         }
+
+        public Company GetDefaultCompany()
+        {
+            return _company.Table.ToList().FirstOrDefault();
+        }
     }
 }

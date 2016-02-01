@@ -667,5 +667,10 @@ namespace Services.Financial
         {
             return _generalLedgerRepository.Table.Where(gl => gl.Id == id).FirstOrDefault();
         }
+
+        public void ClosedAccountingPeriod()
+        {
+
+        }
     }
 }

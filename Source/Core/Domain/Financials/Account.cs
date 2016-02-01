@@ -96,6 +96,7 @@ namespace Core.Domain.Financials
             var dr = from d in GeneralLedgerLines
                      where d.DrCr == TransactionTypes.Dr
                      select d;
+
             var cr = from c in GeneralLedgerLines
                      where c.DrCr == TransactionTypes.Cr
                      select c;
@@ -103,10 +104,14 @@ namespace Core.Domain.Financials
             decimal drAmount = dr.Sum(d => d.Amount);
             decimal crAmount = cr.Sum(c => c.Amount);
 
-            balance = drAmount - crAmount;
-
-            if (!AccountClass.NormalBalance.Equals(Enum.GetName(typeof(TransactionTypes), DebitOrCredit(balance))))
-                balance = balance * -1;
+            if (AccountClass.NormalBalance == "Dr")
+            {
+                balance = drAmount - crAmount;
+            }
+            else
+            {
+                balance = crAmount - drAmount;
+            }            
 
             return balance;
         }

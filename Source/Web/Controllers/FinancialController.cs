@@ -12,6 +12,7 @@ using System;
 using System.Linq;
 using Core.Domain.Financials;
 using Web.Models.ViewModels.Financials;
+using Services.Administration;
 
 namespace Web.Controllers
 {
@@ -19,10 +20,12 @@ namespace Web.Controllers
     public class FinancialController : BaseController
     {
         private readonly IFinancialService _financialService;
+        private readonly IAdministrationService _administrationService;
 
-        public FinancialController(IFinancialService financialService)
+        public FinancialController(IFinancialService financialService, IAdministrationService administrationService)
         {
             _financialService = financialService;
+            _administrationService = administrationService;
         }
 
         public ActionResult Accounts()
@@ -59,6 +62,7 @@ namespace Web.Controllers
                 AccountName = model.AccountName,
                 AccountClassId = model.AccountClass,
                 ParentAccountId = model.ParentAccountId == -1 ? null : model.ParentAccountId,
+                CompanyId = _administrationService.GetDefaultCompany().Id,
                 CreatedBy = User.Identity.Name,
                 ModifiedBy = User.Identity.Name,
                 CreatedOn = DateTime.Now,
