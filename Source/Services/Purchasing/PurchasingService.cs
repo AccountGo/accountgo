@@ -83,10 +83,6 @@ namespace Services.Purchasing
                     Vendor = purchaseIvoice.Vendor,
                     VendorId = purchaseIvoice.VendorId.Value,
                     Description = purchaseIvoice.Description,
-                    CreatedBy = purchaseIvoice.CreatedBy,
-                    CreatedOn = purchaseIvoice.CreatedOn,
-                    ModifiedBy = purchaseIvoice.ModifiedBy,
-                    ModifiedOn = purchaseIvoice.ModifiedOn
                 };
                 foreach (var line in purchaseIvoice.PurchaseInvoiceLines)
                 {
@@ -100,10 +96,6 @@ namespace Services.Purchasing
                         Cost = item.Cost.Value,
                         Discount = line.Discount.HasValue ? line.Discount.Value : 0,
                         Amount = item.Cost.Value * line.Quantity,
-                        CreatedBy = line.CreatedBy,
-                        CreatedOn = line.CreatedOn,
-                        ModifiedBy = line.ModifiedBy,
-                        ModifiedOn = line.ModifiedOn
                     });
                 }
                 purchaseIvoice.PurchaseOrders.Add(po);
@@ -112,12 +104,8 @@ namespace Services.Purchasing
                 {
                     Date = DateTime.Now,
                     Vendor = po.Vendor,
-                    VendorId = po.VendorId,
+                    VendorId = po.VendorId.Value,
                     PurchaseOrderHeaderId = po.Id,
-                    CreatedBy = po.CreatedBy,
-                    CreatedOn = DateTime.Now,
-                    ModifiedBy = po.ModifiedBy,
-                    ModifiedOn = DateTime.Now
                 };
 
                 foreach (var line in purchaseIvoice.PurchaseInvoiceLines)
@@ -130,10 +118,6 @@ namespace Services.Purchasing
                         ReceivedQuantity = (line.ReceivedQuantity.HasValue ? line.ReceivedQuantity.Value : 0),
                         Cost = line.Cost.Value,
                         Amount = line.Cost.Value * (line.ReceivedQuantity.HasValue ? line.ReceivedQuantity.Value : 0),
-                        CreatedBy = po.CreatedBy,
-                        CreatedOn = DateTime.Now,
-                        ModifiedBy = po.ModifiedBy,
-                        ModifiedOn = DateTime.Now
                     });
                 }
 
@@ -145,37 +129,24 @@ namespace Services.Purchasing
 
             var glHeader = _financialService.CreateGeneralLedgerHeader(DocumentTypes.PurchaseInvoice, purchaseIvoice.Date, purchaseIvoice.Description);
 
-            decimal taxAmount = 0;
+            decimal totalTaxAmount = 0, totalAmount = 0, totalDiscount = 0;
             var taxes = new List<KeyValuePair<int, decimal>>();
+
             foreach (var line in purchaseIvoice.PurchaseInvoiceLines)
             {
+                var lineTaxes = _financialService.ComputeInputTax(purchaseIvoice.VendorId.Value, line.ItemId, line.Quantity, line.Cost.Value, decimal.Zero);
+
                 var lineAmount = line.Quantity * line.Cost;
-                //var item = _inventoryService.GetItemById(line.ItemId);
-                //foreach (var tax in item.ItemTaxGroup.ItemTaxGroupTax)
-                //{
-                //    if(!tax.IsExempt)
-                //    {
-                //        var lineTaxAmount = (tax.Tax.Rate / 100) * lineAmount;
-                //        taxAmount += lineTaxAmount.Value;
-                //        taxes.Add(new KeyValuePair<int, decimal>(tax.Tax.PurchasingAccountId.Value, lineTaxAmount.Value));
-                //    }
-                //}
-                var lineTaxes = _financialService.ComputeInputTax(line.ItemId, line.Quantity, line.Cost.Value);
+
+                var totalLineAmount = lineAmount + lineTaxes.Sum(t => t.Value);
+
+                totalAmount += (decimal)totalLineAmount;
+                
                 foreach (var t in lineTaxes)
                     taxes.Add(t);
             }
 
-            decimal totalAmount = purchaseIvoice.PurchaseInvoiceLines.Sum(d => d.Amount);
-            decimal totalDiscount = 0;
-
-            Vendor vendor = _vendorRepo.GetById(purchaseIvoice.VendorId.Value);
-            var creditVendorAccount = _financialService.CreateGeneralLedgerLine(TransactionTypes.Cr, vendor.AccountsPayableAccountId.Value, totalAmount + taxAmount);
-            glHeader.GeneralLedgerLines.Add(creditVendorAccount);
-
-            var creditGRNClearingAccount = _financialService.CreateGeneralLedgerLine(TransactionTypes.Dr, GetGeneralLedgerSetting().GoodsReceiptNoteClearingAccountId.Value, totalAmount);
-            glHeader.GeneralLedgerLines.Add(creditGRNClearingAccount);
-
-            if (taxAmount > 0)
+            if (taxes != null && taxes.Count > 0)
             {
                 var groupedTaxes = from t in taxes
                            group t by t.Key into grouped
@@ -185,10 +156,12 @@ namespace Services.Purchasing
                                Value = grouped.Sum(t => t.Value)
                            };
 
+                totalTaxAmount = taxes.Sum(t => t.Value);
+
                 foreach (var tax in groupedTaxes)
                 {
                     var tx = _financialService.GetTaxes().Where(t => t.Id == tax.Key).FirstOrDefault();
-                    var debitPurchaseTaxAccount = _financialService.CreateGeneralLedgerLine(TransactionTypes.Dr, tx.SalesAccountId.Value, tax.Value);
+                    var debitPurchaseTaxAccount = _financialService.CreateGeneralLedgerLine(DrOrCrSide.Dr, tx.PurchasingAccountId.Value, tax.Value);
                     glHeader.GeneralLedgerLines.Add(debitPurchaseTaxAccount);
                 }
             }
@@ -198,6 +171,13 @@ namespace Services.Purchasing
 
             }
 
+            Vendor vendor = _vendorRepo.GetById(purchaseIvoice.VendorId.Value);
+            var creditVendorAccount = _financialService.CreateGeneralLedgerLine(DrOrCrSide.Cr, vendor.AccountsPayableAccountId.Value, totalAmount);
+            glHeader.GeneralLedgerLines.Add(creditVendorAccount);
+
+            var debitGRNClearingAccount = _financialService.CreateGeneralLedgerLine(DrOrCrSide.Dr, GetGeneralLedgerSetting().GoodsReceiptNoteClearingAccountId.Value, totalAmount - totalTaxAmount);
+            glHeader.GeneralLedgerLines.Add(debitGRNClearingAccount);
+
             if (_financialService.ValidateGeneralLedgerEntry(glHeader))
             {
                 purchaseIvoice.GeneralLedgerHeader = glHeader;
@@ -205,11 +185,9 @@ namespace Services.Purchasing
                 purchaseIvoice.No = GetNextNumber(SequenceNumberTypes.PurchaseInvoice).ToString();
                 _purchaseInvoiceRepo.Insert(purchaseIvoice);
 
-                // TODO: Look for another way to update the purchase order's invoice header id field so that it shall be in a single transaction along with purchase invoice saving
+                // TODO: Look for other way to update the purchase order's invoice header id field so that it shall be in a single transaction along with purchase invoice saving
                 var purchOrder = _purchaseOrderRepo.GetById(purchaseOrderId.Value);
                 purchOrder.PurchaseInvoiceHeaderId = purchaseIvoice.Id;
-                purchOrder.ModifiedBy = purchaseIvoice.ModifiedBy;
-                purchOrder.ModifiedOn = purchaseIvoice.ModifiedOn;
                 _purchaseOrderRepo.Update(purchOrder);
             }
         }
@@ -234,10 +212,10 @@ namespace Services.Purchasing
                 var item = _itemRepo.GetById(lineItem.ItemId);
                 decimal lineItemTotalAmountAfterTax = lineItem.Amount - lineItem.LineTaxAmount;
 
-                GeneralLedgerLine debitInventory = _financialService.CreateGeneralLedgerLine(TransactionTypes.Dr, item.InventoryAccount.Id, lineItemTotalAmountAfterTax);
+                GeneralLedgerLine debitInventory = _financialService.CreateGeneralLedgerLine(DrOrCrSide.Dr, item.InventoryAccount.Id, lineItemTotalAmountAfterTax);
                 glLines.Add(debitInventory);
 
-                GeneralLedgerLine creditGRNClearingAccount = _financialService.CreateGeneralLedgerLine(TransactionTypes.Cr, GetGeneralLedgerSetting().GoodsReceiptNoteClearingAccountId.Value, lineItemTotalAmountAfterTax);
+                GeneralLedgerLine creditGRNClearingAccount = _financialService.CreateGeneralLedgerLine(DrOrCrSide.Cr, GetGeneralLedgerSetting().GoodsReceiptNoteClearingAccountId.Value, lineItemTotalAmountAfterTax);
                 glLines.Add(creditGRNClearingAccount);
 
                 lineItem.InventoryControlJournal = _inventoryService.CreateInventoryControlJournal(lineItem.ItemId,
@@ -283,8 +261,8 @@ namespace Services.Purchasing
 
         public IEnumerable<PurchaseOrderHeader> GetPurchaseOrders()
         {
-            var query = from f in _purchaseOrderRepo.Table
-                        select f;
+            var query = _purchaseOrderRepo.Table;
+
             return query.AsEnumerable();
         }
 
@@ -328,14 +306,10 @@ namespace Services.Purchasing
                 PurchaseInvoiceHeaderId = invoiceId,
                 Date = date,
                 Amount = amount,
-                CreatedBy = Thread.CurrentPrincipal.Identity.Name,
-                CreatedOn = DateTime.Now,
-                ModifiedBy = Thread.CurrentPrincipal.Identity.Name,
-                ModifiedOn = DateTime.Now
             };
             var vendor = GetVendorById(vendorId);
-            var debit = _financialService.CreateGeneralLedgerLine(TransactionTypes.Dr, vendor.AccountsPayableAccountId.Value, amount);
-            var credit = _financialService.CreateGeneralLedgerLine(TransactionTypes.Cr, accountId, amount);
+            var debit = _financialService.CreateGeneralLedgerLine(DrOrCrSide.Dr, vendor.AccountsPayableAccountId.Value, amount);
+            var credit = _financialService.CreateGeneralLedgerLine(DrOrCrSide.Cr, accountId, amount);
             var glHeader = _financialService.CreateGeneralLedgerHeader(DocumentTypes.PurchaseInvoicePayment, date, string.Empty);
             glHeader.GeneralLedgerLines.Add(debit);
             glHeader.GeneralLedgerLines.Add(credit);

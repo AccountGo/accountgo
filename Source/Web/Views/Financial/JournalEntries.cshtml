@@ -11,7 +11,8 @@
 <table class="table">
     <thead>
         <tr>
-            <th>GL Transaction No</th>
+            <th>JE Header ID</th>
+            <th>GL ID</th>
             <th>Account Code</th>
             <th>Account Name</th>
             <th>DrCr</th>
@@ -22,7 +23,8 @@
         @foreach(var je in Model.JournalEntriesListLines)
         {
             <tr>
-                <td>@je.GeneralLedgerHeaderId</td>
+                <td>@Html.ActionLink((string)string.Format("{0}", je.JournalHeaderId), "EditJournalEntry", new { id = je.JournalHeaderId })</td>
+                <td>@Html.ActionLink((string)string.Format("{0}", je.GeneralLedgerHeaderId), "MasterGeneralLedger", new { transactionNo = je.GeneralLedgerHeaderId })</td>
                 <td>@je.AccountCode</td>
                 <td>@je.AccountName</td>
                 <td>@je.DrCr</td>

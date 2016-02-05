@@ -9,8 +9,6 @@
     [TotalCost]     DECIMAL (18, 2) NULL,
     [TotalAmount]   DECIMAL (18, 2) NULL,
     [IsReverse]     BIT             NOT NULL,
-    [CreatedBy]     NVARCHAR (MAX)  NULL,
-    [CreatedOn]     DATETIME        NOT NULL,
     CONSTRAINT [PK_dbo.InventoryControlJournal] PRIMARY KEY CLUSTERED ([Id] ASC),
     CONSTRAINT [FK_dbo.InventoryControlJournal_dbo.Item_ItemId] FOREIGN KEY ([ItemId]) REFERENCES [dbo].[Item] ([Id]) ON DELETE CASCADE,
     CONSTRAINT [FK_dbo.InventoryControlJournal_dbo.Measurement_MeasurementId] FOREIGN KEY ([MeasurementId]) REFERENCES [dbo].[Measurement] ([Id]) ON DELETE CASCADE

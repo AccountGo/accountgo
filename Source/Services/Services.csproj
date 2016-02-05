@@ -56,6 +56,8 @@
     <Compile Include="Sales\SalesService.cs" />
     <Compile Include="Security\ISecurityService.cs" />
     <Compile Include="Security\SecurityService.cs" />
+    <Compile Include="TaxSystem\ITaxService.cs" />
+    <Compile Include="TaxSystem\TaxService.cs" />
   </ItemGroup>
   <ItemGroup />
   <ItemGroup>

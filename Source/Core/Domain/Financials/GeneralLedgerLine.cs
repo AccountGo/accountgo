@@ -21,13 +21,8 @@ namespace Core.Domain.Financials
 
         public int GeneralLedgerHeaderId { get; set; }
         public int AccountId { get; set; }
-        public TransactionTypes DrCr { get; set; }
+        public DrOrCrSide DrCr { get; set; }
         public decimal Amount { get; set; }
-        public string CreatedBy { get; set; }
-        public DateTime CreatedOn { get; set; }
-        public string ModifiedBy { get; set; }
-        public DateTime ModifiedOn { get; set; }
-
         public virtual Account Account { get; set; }
         public virtual GeneralLedgerHeader GeneralLedgerHeader { get; set; }
     }

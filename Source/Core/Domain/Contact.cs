@@ -19,9 +19,9 @@ namespace Core.Domain
         /// </summary>
         public ContactTypes ContactType { get; set; }
         public int? PartyId { get; set; }
-        public virtual string FirstName { get; set; }
-        public virtual string LastName { get; set; }
-        public virtual string MiddleName { get; set; }
+        public string FirstName { get; set; }
+        public string LastName { get; set; }
+        public string MiddleName { get; set; }
 
         public virtual Party Party { get; set; }
     }

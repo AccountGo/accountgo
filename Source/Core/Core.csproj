@@ -66,7 +66,7 @@
     <Compile Include="Domain\Items\Item.cs" />
     <Compile Include="Domain\Items\ItemCategory.cs" />
     <Compile Include="Domain\Items\Measurement.cs" />
-    <Compile Include="Domain\ItemTaxGroup.cs" />
+    <Compile Include="Domain\TaxSystem\ItemTaxGroup.cs" />
     <Compile Include="Domain\Party.cs" />
     <Compile Include="Domain\PaymentTerm.cs" />
     <Compile Include="Domain\Purchases\PurchaseInvoiceHeader.cs" />
@@ -96,8 +96,8 @@
     <Compile Include="Domain\Security\SecurityUserRole.cs" />
     <Compile Include="Domain\Security\User.cs" />
     <Compile Include="Domain\SequenceNumber.cs" />
-    <Compile Include="Domain\Tax.cs" />
-    <Compile Include="Domain\TaxGroup.cs" />
+    <Compile Include="Domain\TaxSystem\Tax.cs" />
+    <Compile Include="Domain\TaxSystem\TaxGroup.cs" />
     <Compile Include="MessageSource.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>

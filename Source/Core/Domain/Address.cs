@@ -17,9 +17,5 @@ namespace Core.Domain
         public string No { get; set; }
         public string Street { get; set; }
         public string City { get; set; }
-        public string CreatedBy { get; set; }
-        public DateTime CreatedOn { get; set; }
-        public string ModifiedBy { get; set; }
-        public DateTime ModifiedOn { get; set; }
     }
 }

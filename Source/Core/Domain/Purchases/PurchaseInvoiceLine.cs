@@ -17,7 +17,6 @@ namespace Core.Domain.Purchases
     {
         public int PurchaseInvoiceHeaderId { get; set; }
         public int ItemId { get; set; }
-        public int? TaxId { get; set; }
         public int MeasurementId { get; set; }
         public int? InventoryControlJournalId { get; set; }
         public decimal Quantity { get; set; }
@@ -26,15 +25,9 @@ namespace Core.Domain.Purchases
         public decimal? Discount { get; set; }
         public decimal Amount { get; set; }
 
-        public string CreatedBy { get; set; }
-        public DateTime CreatedOn { get; set; }
-        public string ModifiedBy { get; set; }
-        public DateTime ModifiedOn { get; set; }
-
         public virtual PurchaseInvoiceHeader PurchaseInvoiceHeader { get; set; }
         public virtual Item Item { get; set; }
         public virtual Measurement Measurement { get; set; }
-        public virtual Tax Tax { get; set; }
         public virtual InventoryControlJournal InventoryControlJournal { get; set; }
 
         [NotMapped]
@@ -45,7 +38,7 @@ namespace Core.Domain.Purchases
             decimal? lineTaxAmount = 0;
             foreach(var tax in Item.ItemTaxGroup.ItemTaxGroupTax)
             {
-                lineTaxAmount += (tax.Tax.Rate / (Quantity * Cost)) * 100;
+                lineTaxAmount += ((tax.Tax.Rate / 100)  * (Quantity * Cost));
             }
             return lineTaxAmount.Value;
         }

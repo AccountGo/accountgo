@@ -9,6 +9,7 @@
 using Core.Domain.Financials;
 using Core.Domain.Purchases;
 using Core.Domain.Sales;
+using Core.Domain.TaxSystem;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -44,12 +45,6 @@ namespace Core.Domain.Items
         public string SellDescription { get; set; }
         public decimal? Cost { get; set; }
         public decimal? Price { get; set; }
-
-        public string CreatedBy { get; set; }
-        public DateTime CreatedOn { get; set; }
-        public string ModifiedBy { get; set; }
-        public DateTime ModifiedOn { get; set; }
-
         public virtual ItemCategory ItemCategory { get; set; }
         public virtual ItemTaxGroup ItemTaxGroup { get; set; }
         public virtual Vendor PreferredVendor { get; set; }
@@ -121,6 +116,21 @@ namespace Core.Domain.Items
                 outQty += invControlJOurnals.Current.OUTQty.HasValue ? invControlJOurnals.Current.OUTQty.Value : 0;
             }
             return inQty - outQty;
+        }
+
+        public bool GLAccountsValidated()
+        {
+            bool validated = true;
+
+            if (this.CostOfGoodsSoldAccount == null
+                || this.InventoryAccount == null
+                || this.InventoryAdjustmentAccount == null
+                || this.SalesAccount == null)
+            {
+                validated = false;
+            }
+
+            return validated;
         }
     }
 }

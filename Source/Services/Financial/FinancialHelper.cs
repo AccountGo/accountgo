@@ -17,15 +17,15 @@ namespace Services.Financial
     {
         public static bool DrCrEqualityValidated(GeneralLedgerHeader glHeader)
         {
-            decimal totalDebit = glHeader.GeneralLedgerLines.Where(d => d.DrCr == Core.Domain.TransactionTypes.Dr).Sum(d => d.Amount);
-            decimal totalCredit = glHeader.GeneralLedgerLines.Where(d => d.DrCr == Core.Domain.TransactionTypes.Cr).Sum(d => d.Amount);
+            decimal totalDebit = glHeader.GeneralLedgerLines.Where(d => d.DrCr == Core.Domain.DrOrCrSide.Dr).Sum(d => d.Amount);
+            decimal totalCredit = glHeader.GeneralLedgerLines.Where(d => d.DrCr == Core.Domain.DrOrCrSide.Cr).Sum(d => d.Amount);
             return (totalDebit - totalCredit) == 0;
         }
 
         public static bool NoLineAmountIsEqualToZero(GeneralLedgerHeader glHeader)
         {
-            decimal totalDebit = glHeader.GeneralLedgerLines.Where(d => d.DrCr == Core.Domain.TransactionTypes.Dr).Sum(d => d.Amount);
-            decimal totalCredit = glHeader.GeneralLedgerLines.Where(d => d.DrCr == Core.Domain.TransactionTypes.Cr).Sum(d => d.Amount);
+            decimal totalDebit = glHeader.GeneralLedgerLines.Where(d => d.DrCr == Core.Domain.DrOrCrSide.Dr).Sum(d => d.Amount);
+            decimal totalCredit = glHeader.GeneralLedgerLines.Where(d => d.DrCr == Core.Domain.DrOrCrSide.Cr).Sum(d => d.Amount);
             if (totalDebit == 0)
                 return false;
             if (totalCredit == 0)

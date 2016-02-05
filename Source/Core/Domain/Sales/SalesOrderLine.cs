@@ -21,12 +21,6 @@ namespace Core.Domain.Sales
         public decimal Quantity { get; set; }
         public decimal Discount { get; set; }
         public decimal Amount { get; set; }
-
-        public string CreatedBy { get; set; }
-        public DateTime CreatedOn { get; set; }
-        public string ModifiedBy { get; set; }
-        public DateTime ModifiedOn { get; set; }
-
         public virtual SalesOrderHeader SalesOrderHeader { get; set; }
         public virtual Item Item { get; set; }
         public virtual Measurement Measurement { get; set; }

@@ -20,18 +20,13 @@ namespace Core.Domain
             Contacts = new HashSet<Contact>();
         }
 
-        public virtual PartyTypes PartyType { get; set; }
-        public virtual string Name { get; set; }
-        public virtual string Email { get; set; }
-        public virtual string Website { get; set; }
-        public virtual string Phone { get; set; }
-        public virtual string Fax { get; set; }
-        public virtual bool IsActive { get; set; }
-
-        public string CreatedBy { get; set; }
-        public DateTime CreatedOn { get; set; }
-        public string ModifiedBy { get; set; }
-        public DateTime ModifiedOn { get; set; }
+        public PartyTypes PartyType { get; set; }
+        public string Name { get; set; }
+        public string Email { get; set; }
+        public string Website { get; set; }
+        public string Phone { get; set; }
+        public string Fax { get; set; }
+        public bool IsActive { get; set; }
 
         public virtual ICollection<Contact> Contacts { get; set; }
     }

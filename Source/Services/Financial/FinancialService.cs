@@ -9,15 +9,14 @@
 using Core.Data;
 using Core.Domain;
 using Core.Domain.Financials;
-using Data;
+using Core.Domain.Items;
+using Core.Domain.Purchases;
+using Core.Domain.Sales;
+using Core.Domain.TaxSystem;
+using Services.Inventory;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading;
-using Core.Domain.Items;
-using Services.Inventory;
-using Core.Domain.Sales;
-using Core.Domain.Purchases;
 
 namespace Services.Financial
 {
@@ -94,25 +93,17 @@ namespace Services.Financial
                 DocumentType = documentType,
                 Date = date,
                 Description = description,
-                CreatedBy = Thread.CurrentPrincipal.Identity.Name,
-                CreatedOn = DateTime.Now,
-                ModifiedBy = Thread.CurrentPrincipal.Identity.Name,
-                ModifiedOn = DateTime.Now
             };
             return entry;
         }
 
-        public GeneralLedgerLine CreateGeneralLedgerLine(TransactionTypes DrCr, int accountId, decimal amount)
+        public GeneralLedgerLine CreateGeneralLedgerLine(DrOrCrSide DrCr, int accountId, decimal amount)
         {
             var line = new GeneralLedgerLine()
             {
                 DrCr = DrCr,
                 AccountId = accountId,
                 Amount = amount,
-                CreatedBy = Thread.CurrentPrincipal.Identity.Name,
-                CreatedOn = DateTime.Now,
-                ModifiedBy = Thread.CurrentPrincipal.Identity.Name,
-                ModifiedOn = DateTime.Now
             };
             return line;
         }
@@ -199,48 +190,20 @@ namespace Services.Financial
         {
             var query = from je in _journalEntryRepo.Table
                         select je;
-            return query.ToList();
+            return query.AsEnumerable();
         }
 
         public void AddJournalEntry(JournalEntryHeader journalEntry)
         {
-            var glEntry = new GeneralLedgerHeader()
-            {
-                Date = journalEntry.Date,
-                DocumentType = Core.Domain.DocumentTypes.JournalEntry,
-                Description = journalEntry.Memo,
-                CreatedBy = journalEntry.CreatedBy,
-                CreatedOn = journalEntry.CreatedOn,
-                ModifiedBy = journalEntry.ModifiedBy,
-                ModifiedOn = journalEntry.ModifiedOn,
-            };
+            journalEntry.Posted = false;
 
-            foreach (var je in journalEntry.JournalEntryLines)
-            {
-                glEntry.GeneralLedgerLines.Add(new GeneralLedgerLine()
-                {
-                    Account = GetAccounts().Where(a => a.Id == je.AccountId).FirstOrDefault(),
-                    AccountId = je.AccountId,
-                    DrCr = je.DrCr,
-                    Amount = je.Amount,
-                    CreatedBy = journalEntry.CreatedBy,
-                    CreatedOn = journalEntry.CreatedOn,
-                    ModifiedBy = journalEntry.ModifiedBy,
-                    ModifiedOn = journalEntry.ModifiedOn,
-                });
-            }
-
-            if (ValidateGeneralLedgerEntry(glEntry))
-            {
-                journalEntry.GeneralLedgerHeader = glEntry;
-                _journalEntryRepo.Insert(journalEntry);
-            }
+            _journalEntryRepo.Insert(journalEntry);
         }
 
         public ICollection<TrialBalance> TrialBalance(DateTime? from = default(DateTime?), DateTime? to = default(DateTime?))
         {            
             var allDr = (from dr in _generalLedgerLineRepository.Table.AsEnumerable()
-                         where dr.DrCr == TransactionTypes.Dr
+                         where dr.DrCr == DrOrCrSide.Dr
                          //&& IsDateBetweenFinancialYearStartDateAndEndDate(dr.GLHeader.Date)
                          group dr by new { dr.AccountId, dr.Account.AccountCode, dr.Account.AccountName, dr.Amount } into tb
                          select new
@@ -252,7 +215,7 @@ namespace Services.Financial
                          });
 
             var allCr = (from cr in _generalLedgerLineRepository.Table.AsEnumerable()
-                         where cr.DrCr == TransactionTypes.Cr
+                         where cr.DrCr == DrOrCrSide.Cr
                          //&& IsDateBetweenFinancialYearStartDateAndEndDate(cr.GLHeader.Date)
                          group cr by new { cr.AccountId, cr.Account.AccountCode, cr.Account.AccountName, cr.Amount } into tb
                          select new
@@ -390,7 +353,7 @@ namespace Services.Financial
             int? transactionNo = null)
         {
             var allDr = (from dr in _generalLedgerLineRepository.Table.AsEnumerable()
-                         where dr.DrCr == TransactionTypes.Dr
+                         where dr.DrCr == DrOrCrSide.Dr
                          //&& GeneralLedgerHelper.IsBetween(dr.GLHeader.Date, (DateTime)fromDate, (DateTime)toDate) == true
                          select new MasterGeneralLedger
                          {
@@ -407,7 +370,7 @@ namespace Services.Financial
                          });
 
             var allCr = (from cr in _generalLedgerLineRepository.Table.AsEnumerable()
-                         where cr.DrCr == TransactionTypes.Cr
+                         where cr.DrCr == DrOrCrSide.Cr
                          //&& GeneralLedgerHelper.IsBetween(cr.GLHeader.Date, (DateTime)fromDate, (DateTime)toDate) == true
                          select new MasterGeneralLedger
                          {
@@ -476,13 +439,19 @@ namespace Services.Financial
         /// <param name="quantity"></param>
         /// <param name="amount"></param>
         /// <returns></returns>
-        public List<KeyValuePair<int, decimal>> ComputeInputTax(int itemId, decimal quantity, decimal amount)
+        public List<KeyValuePair<int, decimal>> ComputeInputTax(int vendorId, int itemId, decimal quantity, decimal amount, decimal discount)
         {
-            decimal taxAmount = 0;
+            decimal taxAmount = 0, amountXquantity = 0, discountAmount = 0, subTotalAmount = 0;
 
-            var taxes = new List<KeyValuePair<int, decimal>>();            
+            var taxes = new List<KeyValuePair<int, decimal>>();
             var item = _inventoryService.GetItemById(itemId);
-            var lineAmount = quantity * amount;
+
+            amountXquantity = amount * quantity;
+
+            if (discount > 0)
+                discountAmount = (discount / 100) * amountXquantity;
+
+            subTotalAmount = amountXquantity - discountAmount;
 
             if (item.ItemTaxGroup != null)
             {
@@ -490,10 +459,23 @@ namespace Services.Financial
                 {
                     if (!tax.IsExempt)
                     {
-                        var lineTaxAmount = (tax.Tax.Rate / 100) * lineAmount;
-                        taxAmount += lineTaxAmount;
-                        taxes.Add(new KeyValuePair<int, decimal>(tax.Id, lineTaxAmount));
+                        taxAmount = subTotalAmount - (subTotalAmount / (1 + (tax.Tax.Rate / 100)));
+                        taxes.Add(new KeyValuePair<int, decimal>(tax.Id, taxAmount));
                     }
+                }
+            }
+
+            var vendor = _vendorRepo.GetById(vendorId);
+
+            if (vendor != null && vendor.TaxGroup != null)
+            {
+                foreach (var tax in vendor.TaxGroup.TaxGroupTax)
+                {
+                    if (taxes.Any(t => t.Key == tax.Id))
+                        continue;
+
+                    taxAmount = subTotalAmount - (subTotalAmount / (1 + (tax.Tax.Rate / 100)));
+                    taxes.Add(new KeyValuePair<int, decimal>(tax.Id, taxAmount));
                 }
             }
 
@@ -534,7 +516,7 @@ namespace Services.Financial
                 }
             }
 
-            if(customer.TaxGroup != null)
+            if(customer != null && customer.TaxGroup != null)
             {
                 foreach (var tax in customer.TaxGroup.TaxGroupTax)
                 {
@@ -588,7 +570,7 @@ namespace Services.Financial
             if (GetAccounts().Any(a => a.AccountCode == account.AccountCode && a.Id != account.Id))
                 throw new Exception("Account code already exist.");
 
-            if (account.ParentAccountId.HasValue)
+            if (account.ParentAccountId.HasValue && account.ParentAccountId.Value != -1)
             {
                 var parent = GetAccount(account.ParentAccountId.Value);
                 if(account.Id == parent.ParentAccountId)
@@ -623,44 +605,69 @@ namespace Services.Financial
             return _journalEntryRepo.Table.Where(je => je.Id == id).FirstOrDefault();
         }
 
-        public void UpdateJournalEntry(JournalEntryHeader journalEntry)
+        public void UpdateJournalEntry(JournalEntryHeader journalEntry, bool posted = false)
         {
-            var glEntry = _generalLedgerRepository.Table.Where(gl => gl.Id == journalEntry.GeneralLedgerHeaderId).FirstOrDefault();
-            
-            glEntry.Date = journalEntry.Date;
-            glEntry.ModifiedBy = journalEntry.ModifiedBy;
-            glEntry.ModifiedOn = journalEntry.ModifiedOn;
-
-            foreach (var je in journalEntry.JournalEntryLines)
+            if (posted)
             {
-                if (glEntry.GeneralLedgerLines.Any(l => l.AccountId == je.AccountId))
+                journalEntry.Posted = posted;
+
+                if (journalEntry.GeneralLedgerHeaderId == 0)
                 {
-                    var existingLine = glEntry.GeneralLedgerLines.Where(l => l.AccountId == je.AccountId).FirstOrDefault();
-                    existingLine.Amount = je.Amount;
-                    existingLine.DrCr = je.DrCr;
-                    existingLine.ModifiedBy = journalEntry.ModifiedBy;
-                    existingLine.ModifiedOn = journalEntry.ModifiedOn;
-                }
-                else
-                {
-                    glEntry.GeneralLedgerLines.Add(new GeneralLedgerLine()
+                    var glEntry = new GeneralLedgerHeader()
                     {
-                        AccountId = je.AccountId,
-                        DrCr = je.DrCr,
-                        Amount = je.Amount,
-                        CreatedBy = journalEntry.CreatedBy,
-                        CreatedOn = journalEntry.CreatedOn,
-                        ModifiedBy = journalEntry.ModifiedBy,
-                        ModifiedOn = journalEntry.ModifiedOn,
-                    });
+                        Date = DateTime.Now,
+                        DocumentType = Core.Domain.DocumentTypes.JournalEntry,
+                        Description = journalEntry.Memo,
+                    };
+
+                    foreach (var je in journalEntry.JournalEntryLines)
+                    {
+                        glEntry.GeneralLedgerLines.Add(new GeneralLedgerLine()
+                        {
+                            Account = GetAccounts().Where(a => a.Id == je.AccountId).FirstOrDefault(),
+                            AccountId = je.AccountId,
+                            DrCr = je.DrCr,
+                            Amount = je.Amount,
+                        });
+                    }
+
+                    if (ValidateGeneralLedgerEntry(glEntry))
+                    {
+                        journalEntry.GeneralLedgerHeader = glEntry;
+                    }
                 }
             }
 
-            if (ValidateGeneralLedgerEntry(glEntry) && glEntry.ValidateAccountingEquation())
-            {
-                journalEntry.GeneralLedgerHeader = glEntry;
-                _journalEntryRepo.Update(journalEntry);
-            }
+            _journalEntryRepo.Update(journalEntry);
+
+            //var glEntry = _generalLedgerRepository.Table.Where(gl => gl.Id == journalEntry.GeneralLedgerHeaderId).FirstOrDefault();
+
+            //glEntry.Date = journalEntry.Date;
+
+            //foreach (var je in journalEntry.JournalEntryLines)
+            //{
+            //    if (glEntry.GeneralLedgerLines.Any(l => l.AccountId == je.AccountId))
+            //    {
+            //        var existingLine = glEntry.GeneralLedgerLines.Where(l => l.AccountId == je.AccountId).FirstOrDefault();
+            //        existingLine.Amount = je.Amount;
+            //        existingLine.DrCr = je.DrCr;
+            //    }
+            //    else
+            //    {
+            //        glEntry.GeneralLedgerLines.Add(new GeneralLedgerLine()
+            //        {
+            //            AccountId = je.AccountId,
+            //            DrCr = je.DrCr,
+            //            Amount = je.Amount,
+            //        });
+            //    }
+            //}
+
+            //if (ValidateGeneralLedgerEntry(glEntry) && glEntry.ValidateAccountingEquation())
+            //{
+            //    journalEntry.GeneralLedgerHeader = glEntry;
+            //    _journalEntryRepo.Update(journalEntry);
+            //}
         }
 
         public GeneralLedgerHeader GetGeneralLedgerHeader(int id)

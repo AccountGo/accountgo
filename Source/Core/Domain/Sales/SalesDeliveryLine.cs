@@ -25,12 +25,6 @@ namespace Core.Domain.Sales
         public virtual SalesDeliveryHeader SalesDeliveryHeader { get; set; }
         public virtual Item Item { get; set; }
         public virtual Measurement Measurement { get; set; }
-
-        public string CreatedBy { get; set; }
-        public DateTime CreatedOn { get; set; }
-        public string ModifiedBy { get; set; }
-        public DateTime ModifiedOn { get; set; }
-
         public decimal GetPriceAfterTax()
         {
             decimal priceAfterTax = 0;

@@ -8,6 +8,7 @@
 
 using Core.Domain;
 using Core.Domain.Financials;
+using Core.Domain.TaxSystem;
 using System;
 using System.Collections.Generic;
 
@@ -17,7 +18,7 @@ namespace Services.Financial
     {
         bool ValidateGeneralLedgerEntry(GeneralLedgerHeader glEntry);
         void SaveGeneralLedgerEntry(GeneralLedgerHeader entry);
-        GeneralLedgerLine CreateGeneralLedgerLine(TransactionTypes DrCr, int accountId, decimal amount);
+        GeneralLedgerLine CreateGeneralLedgerLine(DrOrCrSide DrCr, int accountId, decimal amount);
         GeneralLedgerHeader CreateGeneralLedgerHeader(DocumentTypes documentType, DateTime Date, string description);
         IEnumerable<Account> GetAccounts();
         IEnumerable<JournalEntryHeader> GetJournalEntries();
@@ -31,14 +32,14 @@ namespace Services.Financial
         IEnumerable<ItemTaxGroup> GetItemTaxGroups();
         IEnumerable<TaxGroup> GetTaxGroups();
         IEnumerable<Bank> GetCashAndBanks();
-        List<KeyValuePair<int, decimal>> ComputeInputTax(int itemId, decimal quantity, decimal amount);
+        List<KeyValuePair<int, decimal>> ComputeInputTax(int vendorId, int itemId, decimal quantity, decimal amount, decimal discount);
         List<KeyValuePair<int, decimal>> ComputeOutputTax(int customerId, int itemId, decimal quantity, decimal amount, decimal discount);
         GeneralLedgerSetting GetGeneralLedgerSetting(int? companyId = null);
         void UpdateGeneralLedgerSetting(GeneralLedgerSetting setting);
         void AddMainContraAccountSetting(int masterAccountId, int contraAccountId);
         void UpdateAccount(Account account);
         JournalEntryHeader GetJournalEntry(int id, bool fromGL = false);
-        void UpdateJournalEntry(JournalEntryHeader journalEntry);
+        void UpdateJournalEntry(JournalEntryHeader journalEntry, bool posted = false);
         GeneralLedgerHeader GetGeneralLedgerHeader(int id);
         Account GetAccountByAccountCode(string accountcode);
         Account GetAccount(int id);

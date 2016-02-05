@@ -54,13 +54,14 @@ namespace Web.Models.ViewModels.Financials
         public string Memo { get; set; }
         public int Id { get; set; }
         public int JournalEntryId { get; set; }
+        public bool Posted { get; set; }
 
         public ICollection<SelectListItem> Accounts { get; set; }
         public IList<AddJournalEntryLine> AddJournalEntryLines { get; set; }
 
         #region Fields for New Journal Entry
         public int AccountId { get; set; }
-        public TransactionTypes DrCr { get; set; }
+        public DrOrCrSide DrCr { get; set; }
         public decimal Amount { get; set; }
         public string MemoLine { get; set; }
         #endregion
@@ -71,7 +72,7 @@ namespace Web.Models.ViewModels.Financials
         public string RowId { get; set; }
         public int AccountId { get; set; }
         public string AccountName { get; set; }
-        public TransactionTypes DrCr { get; set; }
+        public DrOrCrSide DrCr { get; set; }
         public decimal Amount { get; set; }
         public string Memo { get; set; }
     }

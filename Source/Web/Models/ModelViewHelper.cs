@@ -22,6 +22,7 @@ using Web.ModelsApi.Sales;
 using System.Linq;
 using Web.ModelsApi;
 using Web.ModelsApi.Financial;
+using Core.Domain.TaxSystem;
 
 namespace Web.Models
 {

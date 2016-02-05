@@ -58,8 +58,6 @@ namespace Services.Inventory
                 OUTQty = outQty,
                 TotalCost = totalCost,
                 TotalAmount = totalAmount,
-                CreatedBy = Thread.CurrentPrincipal.Identity.Name,
-                CreatedOn = DateTime.Now
             };
             return icj;
         }

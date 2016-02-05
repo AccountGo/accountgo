@@ -125,6 +125,7 @@
     <Build Include="dbo\Tables\SecurityUserRole.sql" />
     <Build Include="dbo\Tables\User.sql" />
     <Build Include="dbo\Tables\MainContraAccount.sql" />
+    <Build Include="dbo\Tables\Log.sql" />
   </ItemGroup>
   <ItemGroup>
     <None Include="PostDeployment.sql">

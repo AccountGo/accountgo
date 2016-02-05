@@ -24,9 +24,6 @@ namespace Core.Domain.Items
         public decimal? TotalAmount { get; set; }
         public bool IsReverse { get; set; }
 
-        public string CreatedBy { get; set; }
-        public DateTime CreatedOn { get; set; }
-
         public virtual Item Item { get; set; }
         public virtual Measurement Measurement { get; set; }
     }

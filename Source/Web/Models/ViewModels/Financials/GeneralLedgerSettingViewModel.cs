@@ -22,9 +22,5 @@ namespace Web.Models.ViewModels.Financials
         public int? GoodsReceiptNoteClearingAccountId { get; set; }
         public int? SalesDiscountAccountId { get; set; }
         public int? ShippingChargeAccountId { get; set; }
-        public string CreatedBy { get; set; }
-        public DateTime CreatedOn { get; set; }
-        public string ModifiedBy { get; set; }
-        public DateTime ModifiedOn { get; set; }
     }
 }

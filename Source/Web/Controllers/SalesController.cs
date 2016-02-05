@@ -76,10 +76,6 @@ namespace Web.Controllers
                 CustomerId = model.CustomerId,
                 PaymentTermId = model.PaymentTermId,
                 Date = model.Date,
-                CreatedBy = User.Identity.Name,
-                CreatedOn = DateTime.Now,
-                ModifiedBy = User.Identity.Name,
-                ModifiedOn = DateTime.Now,
             };
             foreach(var line in model.SalesDeliveryLines)
             {
@@ -90,10 +86,6 @@ namespace Web.Controllers
                     Quantity = line.Quantity,
                     Discount = line.Discount,
                     Price = line.Quantity * line.Price,
-                    CreatedBy = User.Identity.Name,
-                    CreatedOn = DateTime.Now,
-                    ModifiedBy = User.Identity.Name,
-                    ModifiedOn = DateTime.Now,
                 });
             }
             _salesService.AddSalesDelivery(salesDelivery, true);
@@ -183,20 +175,12 @@ namespace Web.Controllers
                 invoiceDetail.Quantity = item.Quantity;
                 invoiceDetail.Discount = item.Discount;
                 invoiceDetail.Amount = Convert.ToDecimal(item.Quantity * Item.Price);
-                invoiceDetail.CreatedBy = User.Identity.Name;
-                invoiceDetail.CreatedOn = DateTime.Now;
-                invoiceDetail.ModifiedBy = User.Identity.Name;
-                invoiceDetail.ModifiedOn = DateTime.Now;
                 invoiceLines.Add(invoiceDetail);
             }
             invoiceHeader.SalesInvoiceLines = invoiceLines;
             invoiceHeader.CustomerId = model.CustomerId;
             invoiceHeader.Date = model.Date;
             invoiceHeader.ShippingHandlingCharge = 4;// model.ShippingHandlingCharge;
-            invoiceHeader.CreatedBy = User.Identity.Name;
-            invoiceHeader.CreatedOn = DateTime.Now;
-            invoiceHeader.ModifiedBy = User.Identity.Name;
-            invoiceHeader.ModifiedOn = DateTime.Now;
 
             _salesService.AddSalesInvoice(invoiceHeader, model.SalesOrderId);
             return RedirectToAction("SalesInvoices");
@@ -285,10 +269,6 @@ namespace Web.Controllers
                 //SalesInvoiceHeaderId = model.SalesInvoiceId,
                 CustomerId = model.CustomerId.Value,
                 Date = model.Date,
-                CreatedBy = User.Identity.Name,
-                CreatedOn = DateTime.Now,
-                ModifiedBy = User.Identity.Name,
-                ModifiedOn = DateTime.Now,
             };
             foreach(var line in model.AddSalesReceiptLines)
             {
@@ -304,10 +284,6 @@ namespace Web.Controllers
                     Discount = line.Discount,
                     Amount = line.Amount,
                     AmountPaid = line.AmountToPay,
-                    CreatedBy = User.Identity.Name,
-                    CreatedOn = DateTime.Now,
-                    ModifiedBy = User.Identity.Name,
-                    ModifiedOn = DateTime.Now,
                 });
             }
             _salesService.AddSalesReceipt(receipt);
@@ -383,10 +359,6 @@ namespace Web.Controllers
             var customer = new Customer()
             {
                 Name = model.Name,
-                CreatedBy = User.Identity.Name,
-                CreatedOn = DateTime.Now,
-                ModifiedBy = User.Identity.Name,
-                ModifiedOn = DateTime.Now,
             };
             _salesService.AddCustomer(customer);
             return RedirectToAction("EditCustomer", new { id = customer.Id });
@@ -423,12 +395,8 @@ namespace Web.Controllers
             else
             {
                 customer = new Customer();
-                customer.CreatedBy = User.Identity.Name;
-                customer.CreatedOn = DateTime.Now;
             }
-
-            customer.ModifiedBy = User.Identity.Name;
-            customer.ModifiedOn = DateTime.Now;
+            
             customer.Name = model.Name;
             if (model.PrimaryContactId != -1) customer.PrimaryContactId = model.PrimaryContactId;
             customer.AccountsReceivableAccountId = model.AccountsReceivableAccountId.Value == -1 ? null : model.AccountsReceivableAccountId;
@@ -574,10 +542,6 @@ namespace Web.Controllers
                 AccountToDebitId = model.AccountToDebitId,
                 CustomerId = model.CustomerId.Value,
                 Date = model.Date,
-                CreatedBy = User.Identity.Name,
-                CreatedOn = DateTime.Now,
-                ModifiedBy = User.Identity.Name,
-                ModifiedOn = DateTime.Now,
                 Amount = model.PaymentAmount
             };
 
@@ -586,10 +550,6 @@ namespace Web.Controllers
                 AccountToCreditId = model.AccountToCreditId,
                 Amount = model.Amount,
                 AmountPaid = model.PaymentAmount,
-                CreatedBy = User.Identity.Name,
-                CreatedOn = DateTime.Now,
-                ModifiedBy = User.Identity.Name,
-                ModifiedOn = DateTime.Now,
             });
 
             _salesService.AddSalesReceiptNoInvoice(receipt);
@@ -782,16 +742,12 @@ namespace Web.Controllers
             if (model.Id == 0)
             {
                 order = new SalesOrderHeader();
-                order.CreatedBy = User.Identity.Name;
-                order.CreatedOn = DateTime.Now;
             }
             else
             {
                 order = _salesService.GetSalesOrderById(model.Id);
             }
-
-            order.ModifiedBy = User.Identity.Name;
-            order.ModifiedOn = DateTime.Now;
+            
             order.CustomerId = model.CustomerId.Value;
             order.PaymentTermId = model.PaymentTermId;
             order.Date = model.Date;
@@ -803,17 +759,13 @@ namespace Web.Controllers
                 if (!line.Id.HasValue)
                 {
                     lineItem = new SalesOrderLine();
-                    lineItem.CreatedBy = User.Identity.Name;
-                    lineItem.CreatedOn = DateTime.Now;
                     order.SalesOrderLines.Add(lineItem);
                 }
                 else
                 {
                     lineItem = order.SalesOrderLines.Where(i => i.Id == line.Id).FirstOrDefault();
                 }
-
-                lineItem.ModifiedBy = User.Identity.Name;
-                lineItem.ModifiedOn = DateTime.Now;
+                
                 lineItem.ItemId = line.ItemId;
                 lineItem.MeasurementId = item.SellMeasurementId.Value;
                 lineItem.Quantity = line.Quantity;
@@ -837,16 +789,12 @@ namespace Web.Controllers
             if (model.Id == 0)
             {
                 delivery = new SalesDeliveryHeader();
-                delivery.CreatedBy = User.Identity.Name;
-                delivery.CreatedOn = DateTime.Now;
             }
             else
             {
                 delivery = _salesService.GetSalesDeliveryById(model.Id);
             }
-
-            delivery.ModifiedBy = User.Identity.Name;
-            delivery.ModifiedOn = DateTime.Now;
+            
             delivery.CustomerId = model.CustomerId.Value;
             delivery.PaymentTermId = model.PaymentTermId;
             delivery.Date = model.Date;
@@ -858,17 +806,13 @@ namespace Web.Controllers
                 if (!line.Id.HasValue)
                 {
                     lineItem = new SalesDeliveryLine();
-                    lineItem.CreatedBy = User.Identity.Name;
-                    lineItem.CreatedOn = DateTime.Now;
                     delivery.SalesDeliveryLines.Add(lineItem);
                 }
                 else
                 {
                     lineItem = delivery.SalesDeliveryLines.Where(i => i.Id == line.Id).FirstOrDefault();
                 }
-
-                lineItem.ModifiedBy = User.Identity.Name;
-                lineItem.ModifiedOn = DateTime.Now;
+                
                 lineItem.ItemId = line.ItemId;
                 lineItem.MeasurementId = item.SellMeasurementId.Value;
                 lineItem.Quantity = line.Quantity;
@@ -897,16 +841,12 @@ namespace Web.Controllers
             if (model.Id == 0)
             {
                 invoice = new SalesInvoiceHeader();
-                invoice.CreatedBy = User.Identity.Name;
-                invoice.CreatedOn = DateTime.Now;
             }
             else
             {
                 invoice = _salesService.GetSalesInvoiceById(model.Id);
             }
-
-            invoice.ModifiedBy = User.Identity.Name;
-            invoice.ModifiedOn = DateTime.Now;
+            
             invoice.CustomerId = model.CustomerId.Value;
             invoice.Date = model.Date;
             invoice.ShippingHandlingCharge = model.ShippingHandlingCharges;
@@ -918,17 +858,13 @@ namespace Web.Controllers
                 if (!line.Id.HasValue)
                 {
                     lineItem = new SalesInvoiceLine();
-                    lineItem.CreatedBy = User.Identity.Name;
-                    lineItem.CreatedOn = DateTime.Now;
                     invoice.SalesInvoiceLines.Add(lineItem);
                 }
                 else
                 {
                     lineItem = invoice.SalesInvoiceLines.Where(i => i.Id == line.Id).FirstOrDefault();
                 }
-
-                lineItem.ModifiedBy = User.Identity.Name;
-                lineItem.ModifiedOn = DateTime.Now;
+                
                 lineItem.ItemId = line.ItemId;
                 lineItem.MeasurementId = item.SellMeasurementId.Value;
                 lineItem.Quantity = line.Quantity;
@@ -1062,10 +998,6 @@ namespace Web.Controllers
             contact.MiddleName = model.MiddleName;
             contact.LastName = model.LastName;
             contact.IsActive = true;
-            contact.CreatedBy = User.Identity.Name;
-            contact.CreatedOn = DateTime.Now;
-            contact.ModifiedBy = User.Identity.Name;
-            contact.ModifiedOn = DateTime.Now;
             _salesService.SaveContact(contact);
             if(contact.Id > 0)
                 return Json(new { Status = "success" });

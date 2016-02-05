@@ -30,7 +30,8 @@ namespace Web.Models.ViewModels.Purchases
         public string No { get; set; }
         public DateTime Date { get; set; }
         public string Vendor { get; set; }
-        public decimal Amount { get; set; }
+        public decimal TotalAmount { get; set; }
+        public decimal TotalTax { get; set; }
         public string Status { get; set; }
         public bool IsPaid { get; set; }
     }

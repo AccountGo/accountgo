@@ -6,13 +6,15 @@
     [PurchaseDiscountAccountId] INT            NULL,
     [PrimaryContactId]          INT            NULL,
     [PaymentTermId]             INT            NULL,
+    [TaxGroupId]				INT				NULL, 
     CONSTRAINT [PK_dbo.Vendor] PRIMARY KEY CLUSTERED ([Id] ASC),
     CONSTRAINT [FK_dbo.Vendor_dbo.Account_AccountsPayableAccountId] FOREIGN KEY ([AccountsPayableAccountId]) REFERENCES [dbo].[Account] ([Id]),
     CONSTRAINT [FK_dbo.Vendor_dbo.Account_PurchaseAccountId] FOREIGN KEY ([PurchaseAccountId]) REFERENCES [dbo].[Account] ([Id]),
     CONSTRAINT [FK_dbo.Vendor_dbo.Account_PurchaseDiscountAccountId] FOREIGN KEY ([PurchaseDiscountAccountId]) REFERENCES [dbo].[Account] ([Id]),
     CONSTRAINT [FK_dbo.Vendor_dbo.Contact_PrimaryContactId] FOREIGN KEY ([PrimaryContactId]) REFERENCES [dbo].[Contact] ([Id]),
     CONSTRAINT [FK_dbo.Vendor_dbo.Party_Id] FOREIGN KEY ([Id]) REFERENCES [dbo].[Party] ([Id]),
-    CONSTRAINT [FK_dbo.Vendor_dbo.PaymentTerm_PaymentTermId] FOREIGN KEY ([PaymentTermId]) REFERENCES [dbo].[PaymentTerm] ([Id])
+    CONSTRAINT [FK_dbo.Vendor_dbo.PaymentTerm_PaymentTermId] FOREIGN KEY ([PaymentTermId]) REFERENCES [dbo].[PaymentTerm] ([Id]),
+	CONSTRAINT [FK_dbo.Vendor_dbo.TaxGroup_TaxGroupId] FOREIGN KEY ([TaxGroupId]) REFERENCES [dbo].[TaxGroup] ([Id])
 );
 
 

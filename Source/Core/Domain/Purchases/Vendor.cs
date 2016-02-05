@@ -11,6 +11,7 @@ using System.Linq;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using Core.Domain.TaxSystem;
 
 namespace Core.Domain.Purchases
 {
@@ -32,12 +33,14 @@ namespace Core.Domain.Purchases
         public int? PurchaseDiscountAccountId { get; set; }        
         public int? PrimaryContactId { get; set; }
         public int? PaymentTermId { get; set; }
+        public int? TaxGroupId { get; set; }
 
         public virtual Account AccountsPayableAccount { get; set; }
         public virtual Account PurchaseAccount { get; set; }
         public virtual Account PurchaseDiscountAccount { get; set; }
         public virtual Contact PrimaryContact { get; set; }
         public virtual PaymentTerm PaymentTerm { get; set; }
+        public virtual TaxGroup TaxGroup { get; set; }
 
         public virtual ICollection<PurchaseOrderHeader> PurchaseOrders { get; set; }
         public virtual ICollection<PurchaseReceiptHeader> PurchaseReceipts { get; set; }

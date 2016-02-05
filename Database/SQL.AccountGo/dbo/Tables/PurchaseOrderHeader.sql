@@ -5,10 +5,6 @@
     [No]                      NVARCHAR (MAX) NULL,
     [Date]                    DATETIME       NOT NULL,
     [Description]             NVARCHAR (MAX) NULL,
-    [CreatedBy]               NVARCHAR (MAX) NULL,
-    [CreatedOn]               DATETIME       NOT NULL,
-    [ModifiedBy]              NVARCHAR (MAX) NULL,
-    [ModifiedOn]              DATETIME       NOT NULL,
     CONSTRAINT [PK_dbo.PurchaseOrderHeader] PRIMARY KEY CLUSTERED ([Id] ASC),
     CONSTRAINT [FK_dbo.PurchaseOrderHeader_dbo.PurchaseInvoiceHeader_PurchaseInvoiceHeaderId] FOREIGN KEY ([PurchaseInvoiceHeaderId]) REFERENCES [dbo].[PurchaseInvoiceHeader] ([Id]),
     CONSTRAINT [FK_dbo.PurchaseOrderHeader_dbo.Vendor_VendorId] FOREIGN KEY ([VendorId]) REFERENCES [dbo].[Vendor] ([Id])

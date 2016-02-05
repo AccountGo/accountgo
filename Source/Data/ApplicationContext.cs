@@ -13,6 +13,7 @@ using Core.Domain.Items;
 using Core.Domain.Purchases;
 using Core.Domain.Sales;
 using Core.Domain.Security;
+using Core.Domain.TaxSystem;
 using System;
 using System.Collections.Generic;
 using System.Data;
@@ -104,7 +105,11 @@ namespace Data
 
         public override int SaveChanges()
         {
-            SaveAuditLog(UserName);
+            var user = "System";
+            if(string.IsNullOrEmpty(UserName))
+                SaveAuditLog(user);
+            else
+                SaveAuditLog(UserName);
 
             // CAN BE USE IN THE FUTURE : Track Created and Modified fields Automatically with Entity Framework Code First
 

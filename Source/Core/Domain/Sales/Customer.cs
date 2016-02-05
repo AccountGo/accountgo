@@ -7,6 +7,7 @@
 //-----------------------------------------------------------------------
 
 using Core.Domain.Financials;
+using Core.Domain.TaxSystem;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Linq;

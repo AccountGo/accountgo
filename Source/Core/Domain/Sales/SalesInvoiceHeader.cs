@@ -31,12 +31,6 @@ namespace Core.Domain.Sales
         public DateTime Date { get; set; }
         public decimal ShippingHandlingCharge{ get; set; }
         public SalesInvoiceStatus Status { get; set; }
-
-        public string CreatedBy { get; set; }
-        public DateTime CreatedOn { get; set; }
-        public string ModifiedBy { get; set; }
-        public DateTime ModifiedOn { get; set; }
-
         public virtual Customer Customer { get; set; }
         public virtual GeneralLedgerHeader GeneralLedgerHeader { get; set; }
         public virtual SalesDeliveryHeader SalesDeliveryHeader { get; set; }

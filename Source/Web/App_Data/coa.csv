@@ -36,7 +36,7 @@ AccountCode,AccountName,ParentAccountCode,AccountClass,ContraAccount,Cash,Compan
 20202,Wages Payable,20100,2,FALSE,FALSE,100,CR
 20203,Deductions Payable,20100,2,FALSE,FALSE,100,CR
 20204,Health Insurance Payable,20100,2,FALSE,FALSE,100,CR
-20300,Tax Payables,20100,2,FALSE,FALSE,100,CR
+20300,Sales Tax,20100,2,FALSE,FALSE,100,CR
 20301,Local Payroll Taxes Payable,20100,2,FALSE,FALSE,100,CR
 20302,Income Taxes Payable,20100,2,FALSE,FALSE,100,CR
 20303,Other Taxes Payable,20100,2,FALSE,FALSE,100,CR
@@ -86,3 +86,5 @@ AccountCode,AccountName,ParentAccountCode,AccountClass,ContraAccount,Cash,Compan
 50400,Purchase Discounts,50000,5,FALSE,FALSE,100,DR
 50500,Purchase price Variance,50000,5,FALSE,FALSE,100,DR
 50600,Other Expenses,50000,5,FALSE,FALSE,100,DR
+50700,Purchase Tax,50000,5,FALSE,FALSE,100,DR
+99999,Income Summary,NULL,6,FALSE,FALSE,100,NA

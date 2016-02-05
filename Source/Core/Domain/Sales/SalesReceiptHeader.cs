@@ -30,12 +30,6 @@ namespace Core.Domain.Sales
         public string No { get; set; }
         public DateTime Date { get; set; }
         public decimal Amount { get; set; }
-
-        public string CreatedBy { get; set; }
-        public DateTime CreatedOn { get; set; }
-        public string ModifiedBy { get; set; }
-        public DateTime ModifiedOn { get; set; }
-
         public virtual Customer Customer { get; set; }
         public virtual GeneralLedgerHeader GeneralLedgerHeader { get; set; }
         public virtual Account AccountToDebit { get; set; }

@@ -25,8 +25,7 @@ namespace Core.Domain.Financials
         }
         public int AccountClassId { get; set; }
         public int? ParentAccountId { get; set; }
-        public AccountTypes AccountType { get; set; }
-        public TransactionTypes TransactionType { get; set; }
+        public DrOrCrSide DrOrCrSide { get; set; }
         public int CompanyId { get; set; }
         [Required]
         [StringLength(50)]
@@ -41,12 +40,7 @@ namespace Core.Domain.Financials
         [Column(TypeName = "timestamp")]
         [DatabaseGenerated(DatabaseGeneratedOption.Computed)]
         [MaxLength(8)]
-        public byte[] AuditTimestamp { get; set; }
-        public string CreatedBy { get; set; }
-        public DateTime CreatedOn { get; set; }
-        public string ModifiedBy { get; set; }
-        public DateTime ModifiedOn { get; set; }
-
+        public byte[] RowVersion { get; set; }
         public virtual Account ParentAccount { get; set; }
         public virtual AccountClass AccountClass { get; set; }
         public virtual Company Company { get; set; }
@@ -59,20 +53,20 @@ namespace Core.Domain.Financials
         [NotMapped]
         public decimal Balance { get { return GetBalance(); } }
         [NotMapped]
-        public decimal DebitBalance { get { return GetDebitCreditBalance(TransactionTypes.Dr); } }
+        public decimal DebitBalance { get { return GetDebitCreditBalance(DrOrCrSide.Dr); } }
         [NotMapped]
-        public decimal CreditBalance { get { return GetDebitCreditBalance(TransactionTypes.Cr); } }
+        public decimal CreditBalance { get { return GetDebitCreditBalance(DrOrCrSide.Cr); } }
         [NotMapped]
         public string BalanceSide { get; set; }
 
-        private decimal GetDebitCreditBalance(TransactionTypes side)
+        private decimal GetDebitCreditBalance(DrOrCrSide side)
         {
             decimal balance = 0;
 
-            if (side == TransactionTypes.Dr)
+            if (side == DrOrCrSide.Dr)
             {
                 var dr = from d in GeneralLedgerLines
-                         where d.DrCr == TransactionTypes.Dr
+                         where d.DrCr == DrOrCrSide.Dr
                          select d;
 
                 balance = dr.Sum(d => d.Amount);
@@ -80,7 +74,7 @@ namespace Core.Domain.Financials
             else
             {
                 var cr = from d in GeneralLedgerLines
-                         where d.DrCr == TransactionTypes.Cr
+                         where d.DrCr == DrOrCrSide.Cr
                          select d;
 
                 balance = cr.Sum(d => d.Amount);
@@ -94,11 +88,11 @@ namespace Core.Domain.Financials
             decimal balance = 0;
 
             var dr = from d in GeneralLedgerLines
-                     where d.DrCr == TransactionTypes.Dr
+                     where d.DrCr == DrOrCrSide.Dr
                      select d;
 
             var cr = from c in GeneralLedgerLines
-                     where c.DrCr == TransactionTypes.Cr
+                     where c.DrCr == DrOrCrSide.Cr
                      select c;
 
             decimal drAmount = dr.Sum(d => d.Amount);
@@ -128,32 +122,32 @@ namespace Core.Domain.Financials
         /// </summary>
         /// <param name="amount">The amount to enter on account.</param>
         /// <returns></returns>
-        public TransactionTypes DebitOrCredit(decimal amount)
+        public DrOrCrSide DebitOrCredit(decimal amount)
         {
-            var side = TransactionTypes.Dr;
+            var side = DrOrCrSide.Dr;
 
             if (this.AccountClassId == (int)AccountClasses.Assets || this.AccountClassId == (int)AccountClasses.Expense)
             {
                 if (amount > 0)
-                    side = TransactionTypes.Dr;
+                    side = DrOrCrSide.Dr;
                 else
-                    side = TransactionTypes.Cr;
+                    side = DrOrCrSide.Cr;
             }
 
             if (this.AccountClassId == (int)AccountClasses.Liabilities || this.AccountClassId == (int)AccountClasses.Equity || this.AccountClassId == (int)AccountClasses.Revenue)
             {
                 if (amount < 0)
-                    side = TransactionTypes.Dr;
+                    side = DrOrCrSide.Dr;
                 else
-                    side = TransactionTypes.Cr;
+                    side = DrOrCrSide.Cr;
             }
 
             if (this.IsContraAccount)
             {
-                if (side == TransactionTypes.Dr)
-                    return TransactionTypes.Cr;
-                if (side == TransactionTypes.Cr)
-                    return TransactionTypes.Dr;
+                if (side == DrOrCrSide.Dr)
+                    return DrOrCrSide.Cr;
+                if (side == DrOrCrSide.Cr)
+                    return DrOrCrSide.Dr;
             }
 
             return side;

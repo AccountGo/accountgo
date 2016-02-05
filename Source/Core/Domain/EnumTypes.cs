@@ -14,7 +14,8 @@ namespace Core.Domain
         Liabilities = 2,
         Equity = 3,
         Revenue = 4,
-        Expense = 5
+        Expense = 5,
+        Temporary = 6
     }
 
     public enum DocumentTypes
@@ -45,8 +46,9 @@ namespace Core.Domain
         EndTotal
     }
 
-    public enum TransactionTypes
+    public enum DrOrCrSide
     {
+        NA = 0,
         Dr = 1,
         Cr = 2
     }

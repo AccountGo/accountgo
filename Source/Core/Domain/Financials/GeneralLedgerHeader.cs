@@ -23,13 +23,9 @@ namespace Core.Domain.Financials
             PurchaseOrderReceipts = new HashSet<PurchaseReceiptHeader>();
         }
 
-        public virtual DateTime Date { get; set; }
-        public virtual DocumentTypes DocumentType { get; set; }
-        public virtual string Description { get; set; }
-        public string CreatedBy { get; set; }
-        public DateTime CreatedOn { get; set; }
-        public string ModifiedBy { get; set; }
-        public DateTime ModifiedOn { get; set; }
+        public DateTime Date { get; set; }
+        public DocumentTypes DocumentType { get; set; }
+        public string Description { get; set; }
 
         public virtual ICollection<GeneralLedgerLine> GeneralLedgerLines { get; set; }
         public virtual ICollection<PurchaseReceiptHeader> PurchaseOrderReceipts { get; set; }
@@ -67,6 +63,16 @@ namespace Core.Domain.Financials
             var expenses = GeneralLedgerLines.ToList().Where(a => a.Account.AccountClassId == (int)AccountClasses.Expense);
 
             return expenses.ToList();
+        }
+
+        public bool HaveAtLeastTwoAccountClass()
+        {
+            var grouped = this.GeneralLedgerLines.GroupBy(a => a.Account.AccountClassId);
+
+            if (grouped.Count() > 1)
+                return true;
+            else
+                return false;
         }
 
         /// <summary>

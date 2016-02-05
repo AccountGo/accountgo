@@ -8,6 +8,7 @@
 
 using System.Collections.Generic;
 using Core.Domain;
+using Core.Domain.TaxSystem;
 
 namespace Services.Administration
 {

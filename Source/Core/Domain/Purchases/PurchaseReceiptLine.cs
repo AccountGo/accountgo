@@ -7,6 +7,7 @@
 //-----------------------------------------------------------------------
 
 using Core.Domain.Items;
+using Core.Domain.TaxSystem;
 using System;
 using System.ComponentModel.DataAnnotations.Schema;
 
@@ -26,12 +27,6 @@ namespace Core.Domain.Purchases
         public decimal Cost { get; set; }
         public decimal Discount { get; set; }
         public decimal Amount { get; set; }
-
-        public string CreatedBy { get; set; }
-        public DateTime CreatedOn { get; set; }
-        public string ModifiedBy { get; set; }
-        public DateTime ModifiedOn { get; set; }
-
         public virtual PurchaseReceiptHeader PurchaseReceiptHeader { get; set; }
         public virtual Item Item { get; set; }
         public virtual Measurement Measurement { get; set; }

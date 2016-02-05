@@ -4,10 +4,6 @@
     [AccountId]             INT             NOT NULL,
     [DrCr]                  INT             NOT NULL,
     [Amount]                DECIMAL (18, 2) NOT NULL,
-    [CreatedBy]             NVARCHAR (MAX)  NULL,
-    [CreatedOn]             DATETIME        NOT NULL,
-    [ModifiedBy]            NVARCHAR (MAX)  NULL,
-    [ModifiedOn]            DATETIME        NOT NULL,
     CONSTRAINT [PK_dbo.GeneralLedgerLine] PRIMARY KEY CLUSTERED ([Id] ASC),
     CONSTRAINT [FK_dbo.GeneralLedgerLine_dbo.Account_AccountId] FOREIGN KEY ([AccountId]) REFERENCES [dbo].[Account] ([Id]) ON DELETE CASCADE,
     CONSTRAINT [FK_dbo.GeneralLedgerLine_dbo.GeneralLedgerHeader_GeneralLedgerHeaderId] FOREIGN KEY ([GeneralLedgerHeaderId]) REFERENCES [dbo].[GeneralLedgerHeader] ([Id]) ON DELETE CASCADE

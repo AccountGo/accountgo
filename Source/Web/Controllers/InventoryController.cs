@@ -60,19 +60,19 @@ namespace Web.Controllers
         {
             try
             {
+                if (string.IsNullOrEmpty(model.Description))
+                    throw new Exception("Description cannot be empty.");
+
                 _inventoryService.AddItem(new Core.Domain.Items.Item() {
                     Code = model.Code,
                     Description = model.Description,
-                    CreatedBy = User.Identity.Name,
-                    CreatedOn = DateTime.Now,
-                    ModifiedBy = User.Identity.Name,
-                    ModifiedOn = DateTime.Now
                 });
+
                 return RedirectToAction("Items");
             }
             catch
             {
-                return View();
+                return View(model);
             }
         }
 
@@ -128,8 +128,6 @@ namespace Web.Controllers
                 item.SellDescription = model.SellDescription;
                 item.Cost = model.Cost;
                 item.Price = model.Price;
-                item.ModifiedBy = User.Identity.Name;
-                item.ModifiedOn = DateTime.Now;
                 item.ItemTaxGroupId = model.ItemTaxGroupId == -1 ? null : model.ItemTaxGroupId;
                 item.SalesAccountId = model.SellAccountId == -1 ? null : model.SellAccountId;
                 item.InventoryAdjustmentAccountId = model.InventoryAdjustmentAccountId == -1 ? null : model.InventoryAdjustmentAccountId;

@@ -122,10 +122,6 @@ namespace Web.Controllers
             {
                 var po = new PurchaseOrderHeader()
                 {
-                    CreatedBy = User.Identity.Name,
-                    CreatedOn = DateTime.Now,
-                    ModifiedBy = User.Identity.Name,
-                    ModifiedOn = DateTime.Now,
                     VendorId = model.VendorId,
                     Date = model.Date,
                     //No = _settingService.GetNextNumber(Core.Module.Common.Data.SequenceNumberTypes.PurchaseOrder).ToString(),
@@ -141,10 +137,6 @@ namespace Web.Controllers
                         Quantity = item.Quantity,
                         MeasurementId = item.UnitOfMeasurementId,
                         Cost = persistedItem.Cost.Value,
-                        CreatedBy = User.Identity.Name,
-                        CreatedOn = DateTime.Now,
-                        ModifiedBy = User.Identity.Name,
-                        ModifiedOn = DateTime.Now,
                     });
                 }
                 _purchasingService.AddPurchaseOrder(po, true);
@@ -207,12 +199,8 @@ namespace Web.Controllers
             {
                 Date = DateTime.Now,
                 Vendor = po.Vendor,
-                VendorId = po.VendorId,
+                VendorId = po.VendorId.Value,
                 PurchaseOrderHeaderId = po.Id,
-                CreatedBy = User.Identity.Name,
-                CreatedOn = DateTime.Now,
-                ModifiedBy = User.Identity.Name,
-                ModifiedOn = DateTime.Now
             };
 
             foreach (var receipt in model.PurchaseReceiptLines)
@@ -229,10 +217,6 @@ namespace Web.Controllers
                     ReceivedQuantity = (receipt.InQty.HasValue ? receipt.InQty.Value : 0),
                     Cost = receipt.Cost.Value,
                     Amount = receipt.Cost.Value * (receipt.InQty.HasValue ? receipt.InQty.Value : 0),
-                    CreatedBy = User.Identity.Name,
-                    CreatedOn = DateTime.Now,
-                    ModifiedBy = User.Identity.Name,
-                    ModifiedOn = DateTime.Now
                 });
             }
 
@@ -277,7 +261,7 @@ namespace Web.Controllers
                 return RedirectToAction("PurchaseOrders");
 
             var existingPO = _purchasingService.GetPurchaseOrderById(model.Id);
-            var vendor = _purchasingService.GetVendorById(existingPO.VendorId);
+            var vendor = _purchasingService.GetVendorById(existingPO.VendorId.Value);
 
             var purchInvoice = new PurchaseInvoiceHeader()
             {
@@ -285,10 +269,6 @@ namespace Web.Controllers
                 VendorInvoiceNo = model.VendorInvoiceNo,
                 Vendor = vendor,
                 VendorId = vendor.Id,
-                CreatedBy = User.Identity.Name,
-                CreatedOn = DateTime.Now,
-                ModifiedBy = User.Identity.Name,
-                ModifiedOn = DateTime.Now
             };
 
             foreach (var line in model.PurchaseInvoiceLines)
@@ -304,10 +284,6 @@ namespace Web.Controllers
                     Cost = item.Cost.Value,
                     Discount = 0,
                     Amount = item.Cost.Value * line.ReceivedQuantity,
-                    CreatedBy = User.Identity.Name,
-                    CreatedOn = DateTime.Now,
-                    ModifiedBy = User.Identity.Name,
-                    ModifiedOn = DateTime.Now
                 });
             }
             _purchasingService.AddPurchaseInvoice(purchInvoice, existingPO.Id);
@@ -362,12 +338,8 @@ namespace Web.Controllers
             else
             {
                 vendor = new Vendor();
-                vendor.CreatedBy = User.Identity.Name;
-                vendor.CreatedOn = DateTime.Now;
             }
-
-            vendor.ModifiedBy = User.Identity.Name;
-            vendor.ModifiedOn = DateTime.Now;
+            
             vendor.Name = model.VendorName;
             vendor.AccountsPayableAccountId = model.AccountsPayableAccountId.Value == -1 ? null : model.AccountsPayableAccountId;
             vendor.PurchaseAccountId = model.PurchaseAccountId.Value == -1 ? null : model.PurchaseAccountId;
@@ -398,10 +370,6 @@ namespace Web.Controllers
                 AccountsPayableAccountId = model.AccountsPayableAccountId.Value == -1 ? null : model.AccountsPayableAccountId,
                 PurchaseAccountId = model.PurchaseAccountId.Value == -1 ? null : model.PurchaseAccountId,
                 PurchaseDiscountAccountId = model.PurchaseDiscountAccountId.Value == -1 ? null : model.PurchaseDiscountAccountId,
-                CreatedBy = User.Identity.Name,
-                CreatedOn = DateTime.Now,
-                ModifiedBy = User.Identity.Name,
-                ModifiedOn = DateTime.Now
             };
             _purchasingService.AddVendor(vendor);
             return RedirectToAction("Vendors");
@@ -419,7 +387,8 @@ namespace Web.Controllers
                     No = invoice.No,
                     Date = invoice.Date,
                     Vendor = invoice.Vendor.Name,
-                    Amount = invoice.PurchaseInvoiceLines.Sum(a => a.Amount),
+                    TotalAmount = invoice.PurchaseInvoiceLines.Sum(a => a.Amount),
+                    TotalTax = invoice.GetTotalTax(),
                     IsPaid = invoice.IsPaid()
                 });
             }
@@ -430,10 +399,12 @@ namespace Web.Controllers
         {
             var model = new Models.ViewModels.Purchases.MakePayment();
             var invoice = _purchasingService.GetPurchaseInvoiceById(id);
+
             model.InvoiceId = invoice.Id;
             model.InvoiceNo = invoice.No;
             model.Vendor = invoice.Vendor.Name;
-            model.Amount = invoice.PurchaseInvoiceLines.Sum(a => a.Amount);
+            model.Amount = invoice.GeneralLedgerHeader.GeneralLedgerLines.Where(dr => dr.DrCr == Core.Domain.DrOrCrSide.Dr).Sum(l => l.Amount);
+
             return View(model);
         }
 
@@ -582,7 +553,7 @@ namespace Web.Controllers
 
             foreach (var line in model.PurchaseLine.PurchaseLineItems)
             {
-                var taxes = _financialService.ComputeInputTax(line.ItemId, line.Quantity, line.Price);
+                var taxes = _financialService.ComputeInputTax(model.VendorId.Value, line.ItemId, line.Quantity, line.Price, decimal.Zero);
                 var taxVM = new Models.ViewModels.Purchases.PurchaseLineItemTaxViewModel();
                 foreach (var tax in taxes)
                 {
@@ -682,8 +653,6 @@ namespace Web.Controllers
             if (model.Id.HasValue == false || model.Id == 0)
             {
                 order = new PurchaseOrderHeader();
-                order.CreatedBy = User.Identity.Name;
-                order.CreatedOn = DateTime.Now;
             }
             else
             {
@@ -692,8 +661,6 @@ namespace Web.Controllers
             order.VendorId = model.VendorId.Value;
             order.Date = model.Date;
             order.Description = string.Empty;
-            order.ModifiedBy = User.Identity.Name;
-            order.ModifiedOn = DateTime.Now;
 
             foreach (var line in model.PurchaseLine.PurchaseLineItems)
             {
@@ -705,10 +672,6 @@ namespace Web.Controllers
                     Quantity = line.Quantity,
                     MeasurementId = item.PurchaseMeasurementId.Value,
                     Cost = item.Cost.Value,
-                    CreatedBy = User.Identity.Name,
-                    CreatedOn = DateTime.Now,
-                    ModifiedBy = User.Identity.Name,
-                    ModifiedOn = DateTime.Now,
                 });
             }
 

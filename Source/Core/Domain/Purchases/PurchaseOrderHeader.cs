@@ -21,16 +21,11 @@ namespace Core.Domain.Purchases
             PurchaseOrderLines = new HashSet<PurchaseOrderLine>();
             PurchaseReceipts = new HashSet<PurchaseReceiptHeader>();
         }
-        public int VendorId { get; set; }
+        public int? VendorId { get; set; }
         public int? PurchaseInvoiceHeaderId { get; set; }
         public string No { get; set; }
         public DateTime Date { get; set; }
         public string Description { get; set; }
-
-        public string CreatedBy { get; set; }
-        public DateTime CreatedOn { get; set; }
-        public string ModifiedBy { get; set; }
-        public DateTime ModifiedOn { get; set; }
 
         public virtual Vendor Vendor { get; set; }
         public virtual PurchaseInvoiceHeader PurchaseInvoiceHeader { get; set; }
@@ -40,16 +35,18 @@ namespace Core.Domain.Purchases
 
         public bool IsCompleted()
         {
-            bool completed = false;
-            decimal totalReceiptAmount = 0;
-            decimal poTotalAmount = PurchaseOrderLines.Sum(d => d.Amount);
-            foreach (var detail in PurchaseOrderLines)
+            foreach (var line in PurchaseOrderLines)
             {
-                totalReceiptAmount += detail.PurchaseReceiptLines.Sum(d => d.Amount);
+                foreach (var receipt in PurchaseReceipts)
+                {
+                    var totalReceivedQuatity = receipt.PurchaseReceiptLines.Where(l => l.PurchaseOrderLineId == line.Id).Sum(q => q.ReceivedQuantity);
+
+                    if (totalReceivedQuatity >= line.Quantity)
+                        return true;
+                }
             }
-            if (totalReceiptAmount == poTotalAmount)
-                completed = true;
-            return completed;
+
+            return false;
         }
 
         public bool IsPaid()

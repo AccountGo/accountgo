@@ -26,11 +26,7 @@ namespace Core.Domain.Financials
         public DateTime Date { get; set; }
         public string Memo { get; set; }
         public string ReferenceNo { get; set; }
-        public string CreatedBy { get; set; }
-        public DateTime CreatedOn { get; set; }
-        public string ModifiedBy { get; set; }
-        public DateTime ModifiedOn { get; set; }
-
+        public bool? Posted { get; set; }
         public virtual GeneralLedgerHeader GeneralLedgerHeader { get; set; }
         public virtual Party Party { get; set; }
 

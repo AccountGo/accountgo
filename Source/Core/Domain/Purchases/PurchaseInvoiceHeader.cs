@@ -33,11 +33,6 @@ namespace Core.Domain.Purchases
         public string VendorInvoiceNo { get; set; }
         public string Description { get; set; }
 
-        public string CreatedBy { get; set; }
-        public DateTime CreatedOn { get; set; }
-        public string ModifiedBy { get; set; }
-        public DateTime ModifiedOn { get; set; }
-
         public virtual Vendor Vendor { get; set; }
         public virtual GeneralLedgerHeader GeneralLedgerHeader { get; set; }
 
@@ -57,7 +52,7 @@ namespace Core.Domain.Purchases
 
         public bool IsPaid()
         {
-            return PurchaseInvoiceLines.Sum(a => a.Amount) == VendorPayments.Sum(a => a.Amount);
+            return this.GeneralLedgerHeader.GeneralLedgerLines.Where(dr => dr.DrCr == DrOrCrSide.Dr).Sum(l => l.Amount) == VendorPayments.Sum(a => a.Amount);
         }
     }
 }

@@ -93,18 +93,10 @@ namespace Web.Controllers
                 invoiceLine.Quantity = 1;
                 invoiceLine.Amount = Convert.ToDecimal(itemAssociationDues.Price * invoiceLine.Quantity);
                 invoiceLine.MeasurementId = itemAssociationDues.SmallestMeasurementId.Value;
-                invoiceLine.CreatedBy = User.Identity.Name;
-                invoiceLine.CreatedOn = DateTime.Now;
-                invoiceLine.ModifiedBy = User.Identity.Name;
-                invoiceLine.ModifiedOn = DateTime.Now;
 
                 var invoice = new SalesInvoiceHeader();
                 invoice.Date = invoiceDate;
                 invoice.CustomerId = customer.Id;
-                invoice.CreatedBy = User.Identity.Name;
-                invoice.CreatedOn = DateTime.Now;
-                invoice.ModifiedBy = User.Identity.Name;
-                invoice.ModifiedOn = DateTime.Now;
                 invoice.SalesInvoiceLines.Add(invoiceLine);
 
                 invoices.Add(invoice);

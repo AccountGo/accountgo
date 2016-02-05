@@ -7,12 +7,11 @@
 //-----------------------------------------------------------------------
 
 using Core.Domain.Financials;
-using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
-namespace Core.Domain
+namespace Core.Domain.TaxSystem
 {
     [Table("Tax")]
     public partial class Tax : BaseEntity
@@ -33,12 +32,6 @@ namespace Core.Domain
         public string TaxCode { get; set; }
         public decimal Rate { get; set; }
         public bool IsActive { get; set; }
-
-        public string CreatedBy { get; set; }
-        public DateTime CreatedOn { get; set; }
-        public string ModifiedBy { get; set; }
-        public DateTime ModifiedOn { get; set; }
-
         public virtual Account SalesAccount { get; set; }
         public virtual Account PurchasingAccount { get; set; }
 

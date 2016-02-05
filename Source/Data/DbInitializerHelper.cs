@@ -1,9 +1,11 @@
 ﻿using Core.Domain;
+using Core.Domain.Auditing;
 using Core.Domain.Financials;
 using Core.Domain.Items;
 using Core.Domain.Purchases;
 using Core.Domain.Sales;
 using Core.Domain.Security;
+using Core.Domain.TaxSystem;
 using Microsoft.VisualBasic.FileIO;
 using System;
 using System.Collections.Generic;
@@ -23,6 +25,10 @@ namespace Data
             {
                 if (_context == null)
                     _context = new ApplicationContext();
+
+                if (_context.AuditableEntities.Count() == 0)
+                    InitializeEntityToAudit();
+
                 if (string.IsNullOrEmpty(_filename))
                     _filename = AppDomain.CurrentDomain.BaseDirectory + "/App_Data/coa.csv";
 
@@ -76,11 +82,10 @@ namespace Data
                 List<Bank> banks = null;
                 if (_context.Banks.Count() == 0)
                     banks = InitBanks();
-
-                
             }
-            catch
+            catch (Exception ex)
             {
+                throw ex;
             }
             finally
             {
@@ -129,10 +134,6 @@ namespace Data
                 Name = "Financial Solutions Inc.",
                 CompanyCode = "100",
                 ShortName = "FSI",
-                CreatedBy = "System",
-                CreatedOn = DateTime.Now,
-                ModifiedBy = "System",
-                ModifiedOn = DateTime.Now
             };
 
             _context.Companies.Add(company);
@@ -157,10 +158,6 @@ namespace Data
                 PaymentType = PaymentTypes.AfterNoOfDays,
                 DueAfterDays = 10,
                 IsActive = true,
-                CreatedBy = "System",
-                CreatedOn = DateTime.Now,
-                ModifiedBy = "System",
-                ModifiedOn = DateTime.Now
             });
             _context.PaymentTerms.Add(new PaymentTerm()
             {
@@ -168,20 +165,12 @@ namespace Data
                 PaymentType = PaymentTypes.DayInTheFollowingMonth,
                 DueAfterDays = 15,
                 IsActive = true,
-                CreatedBy = "System",
-                CreatedOn = DateTime.Now,
-                ModifiedBy = "System",
-                ModifiedOn = DateTime.Now
             });
             _context.PaymentTerms.Add(new PaymentTerm()
             {
                 Description = "Cash Only",
                 PaymentType = PaymentTypes.Cash,
                 IsActive = true,
-                CreatedBy = "System",
-                CreatedOn = DateTime.Now,
-                ModifiedBy = "System",
-                ModifiedOn = DateTime.Now
             });
             _context.SaveChanges();
 
@@ -195,6 +184,7 @@ namespace Data
             _context.AccountClasses.Add(new AccountClass() { Name = "Equity", NormalBalance = "Cr" });
             _context.AccountClasses.Add(new AccountClass() { Name = "Revenue", NormalBalance = "Cr" });
             _context.AccountClasses.Add(new AccountClass() { Name = "Expense", NormalBalance = "Dr" });
+            _context.AccountClasses.Add(new AccountClass() { Name = "Temporary", NormalBalance = "NA" });
 
             _context.SaveChanges();
 
@@ -236,18 +226,27 @@ namespace Data
                     account.AccountClassId = int.Parse(row["AccountClass"].ToString());
                     account.IsCash = bool.Parse(row["Cash"].ToString());
                     account.IsContraAccount = bool.Parse(row["ContraAccount"].ToString());
-                    account.TransactionType = row["Sign"].ToString() == "DR" ? TransactionTypes.Dr : TransactionTypes.Cr;
-                    account.CompanyId = companyId;
 
-                    account.CreatedBy = "System";
-                    account.CreatedOn = DateTime.Now;
-                    account.ModifiedBy = "System";
-                    account.ModifiedOn = DateTime.Now;
+                    if (row["Sign"].ToString() == "DR")
+                        account.DrOrCrSide = DrOrCrSide.Dr;
+                    else if(row["Sign"].ToString() == "CR")
+                        account.DrOrCrSide = DrOrCrSide.Cr;
+                    else
+                        account.DrOrCrSide = DrOrCrSide.NA;
+
+                    account.CompanyId = companyId;
                     accounts.Add(account);
                 }
 
                 _context.Accounts.AddRange(accounts);
-                _context.SaveChanges();
+                try
+                {
+                    _context.SaveChanges();
+                }
+                catch(Exception ex)
+                {
+                    throw ex;
+                }
 
                 return _context.Accounts.ToList();
             }
@@ -293,16 +292,16 @@ namespace Data
                     _context.SaveChanges();
                 }
                 var accounts = _context.Accounts.ToList();
-                foreach (var account in accounts)
-                {
-                    var acc = _context.Accounts.Where(a => a.AccountCode == account.AccountCode).FirstOrDefault();
-                    _context.Set<Account>().Attach(acc);
-                    if (acc.ChildAccounts != null && acc.ChildAccounts.Count > 0)
-                        acc.AccountType = Core.Domain.AccountTypes.Heading;
-                    else
-                        acc.AccountType = Core.Domain.AccountTypes.Posting;
-                    _context.SaveChanges();
-                }
+                //foreach (var account in accounts)
+                //{
+                //    var acc = _context.Accounts.Where(a => a.AccountCode == account.AccountCode).FirstOrDefault();
+                //    _context.Set<Account>().Attach(acc);
+                //    if (acc.ChildAccounts != null && acc.ChildAccounts.Count > 0)
+                //        acc.AccountType = Core.Domain.AccountTypes.Heading;
+                //    else
+                //        acc.AccountType = Core.Domain.AccountTypes.Posting;
+                //    _context.SaveChanges();
+                //}
             }
         }
 
@@ -314,10 +313,6 @@ namespace Data
                 GoodsReceiptNoteClearingAccount = _context.Accounts.Where(a => a.AccountCode == "10810").FirstOrDefault(),
                 ShippingChargeAccount = _context.Accounts.Where(a => a.AccountCode == "40500").FirstOrDefault(),
                 SalesDiscountAccount = _context.Accounts.Where(a => a.AccountCode == "40400").FirstOrDefault(),
-                CreatedBy = "System",
-                CreatedOn = DateTime.Now,
-                ModifiedBy = "System",
-                ModifiedOn = DateTime.Now
             };
             _context.GeneralLedgerSettings.Add(glSetting);
             _context.SaveChanges();
@@ -329,7 +324,8 @@ namespace Data
         {
             // NOTE: each tax should have its own tax account.
 
-            var taxPayableAccount = _context.Accounts.Where(a => a.AccountCode == "20300").FirstOrDefault();
+            var salesTaxAccount = _context.Accounts.Where(a => a.AccountCode == "20300").FirstOrDefault();
+            var purchaseTaxAccount = _context.Accounts.Where(a => a.AccountCode == "50700").FirstOrDefault();
 
             var vat5 = new Tax()
             {
@@ -337,12 +333,8 @@ namespace Data
                 TaxName = "VAT 5%",
                 Rate = 5,
                 IsActive = true,
-                SalesAccountId = taxPayableAccount.Id,
-                PurchasingAccountId = taxPayableAccount.Id,
-                CreatedBy = "System",
-                CreatedOn = DateTime.Now,
-                ModifiedBy = "System",
-                ModifiedOn = DateTime.Now
+                SalesAccountId = salesTaxAccount.Id,
+                PurchasingAccountId = purchaseTaxAccount.Id,
             };
 
             var vat10 = new Tax()
@@ -351,12 +343,8 @@ namespace Data
                 TaxName = "VAT 10%",
                 Rate = 10,
                 IsActive = true,
-                SalesAccountId = taxPayableAccount.Id,
-                PurchasingAccountId = taxPayableAccount.Id,
-                CreatedBy = "System",
-                CreatedOn = DateTime.Now,
-                ModifiedBy = "System",
-                ModifiedOn = DateTime.Now
+                SalesAccountId = salesTaxAccount.Id,
+                PurchasingAccountId = purchaseTaxAccount.Id,
             };
 
             var evat12 = new Tax()
@@ -365,12 +353,8 @@ namespace Data
                 TaxName = "VAT 12%",
                 Rate = 12,
                 IsActive = true,
-                SalesAccountId = taxPayableAccount.Id,
-                PurchasingAccountId = taxPayableAccount.Id,
-                CreatedBy = "System",
-                CreatedOn = DateTime.Now,
-                ModifiedBy = "System",
-                ModifiedOn = DateTime.Now
+                SalesAccountId = salesTaxAccount.Id,
+                PurchasingAccountId = purchaseTaxAccount.Id,
             };
 
             var exportTax1 = new Tax()
@@ -379,12 +363,8 @@ namespace Data
                 TaxName = "Export Tax 1%",
                 Rate = 1,
                 IsActive = true,
-                SalesAccountId = taxPayableAccount.Id,
-                PurchasingAccountId = taxPayableAccount.Id,
-                CreatedBy = "System",
-                CreatedOn = DateTime.Now,
-                ModifiedBy = "System",
-                ModifiedOn = DateTime.Now
+                SalesAccountId = salesTaxAccount.Id,
+                PurchasingAccountId = purchaseTaxAccount.Id,
             };
 
             _context.Taxes.Add(vat5);
@@ -397,10 +377,6 @@ namespace Data
                 Description = "VAT",
                 TaxAppliedToShipping = false,
                 IsActive = true,
-                CreatedBy = "System",
-                CreatedOn = DateTime.Now,
-                ModifiedBy = "System",
-                ModifiedOn = DateTime.Now
             };
 
             var taxGroupExport = new TaxGroup()
@@ -408,10 +384,6 @@ namespace Data
                 Description = "Export",
                 TaxAppliedToShipping = false,
                 IsActive = true,
-                CreatedBy = "System",
-                CreatedOn = DateTime.Now,
-                ModifiedBy = "System",
-                ModifiedOn = DateTime.Now
             };
 
             _context.TaxGroups.Add(taxGroupVAT);
@@ -421,20 +393,12 @@ namespace Data
             {
                 Name = "Regular",
                 IsFullyExempt = false,
-                CreatedBy = "System",
-                CreatedOn = DateTime.Now,
-                ModifiedBy = "System",
-                ModifiedOn = DateTime.Now
             };
 
             var itemTaxGroupRegularPreferenced = new ItemTaxGroup()
             {
                 Name = "Preferenced",
                 IsFullyExempt = false,
-                CreatedBy = "System",
-                CreatedOn = DateTime.Now,
-                ModifiedBy = "System",
-                ModifiedOn = DateTime.Now
             };
 
             _context.ItemTaxGroups.Add(itemTaxGroupRegular);
@@ -443,48 +407,28 @@ namespace Data
             vat5.TaxGroupTaxes.Add(new TaxGroupTax()
             {
                 TaxGroup = taxGroupVAT,
-                CreatedBy = "System",
-                CreatedOn = DateTime.Now,
-                ModifiedBy = "System",
-                ModifiedOn = DateTime.Now
             });
 
             evat12.TaxGroupTaxes.Add(new TaxGroupTax()
             {
                 TaxGroup = taxGroupVAT,
-                CreatedBy = "System",
-                CreatedOn = DateTime.Now,
-                ModifiedBy = "System",
-                ModifiedOn = DateTime.Now
             });
 
             exportTax1.TaxGroupTaxes.Add(new TaxGroupTax()
             {
                 TaxGroup = taxGroupExport,
-                CreatedBy = "System",
-                CreatedOn = DateTime.Now,
-                ModifiedBy = "System",
-                ModifiedOn = DateTime.Now
             });
 
             vat5.ItemTaxGroupTaxes.Add(new ItemTaxGroupTax()
             {
                 ItemTaxGroup = itemTaxGroupRegular,
                 IsExempt = false,
-                CreatedBy = "System",
-                CreatedOn = DateTime.Now,
-                ModifiedBy = "System",
-                ModifiedOn = DateTime.Now
             });
 
             evat12.ItemTaxGroupTaxes.Add(new ItemTaxGroupTax()
             {
                 ItemTaxGroup = itemTaxGroupRegularPreferenced,
                 IsExempt = false,
-                CreatedBy = "System",
-                CreatedOn = DateTime.Now,
-                ModifiedBy = "System",
-                ModifiedOn = DateTime.Now
             });
 
             _context.SaveChanges();
@@ -499,20 +443,12 @@ namespace Data
             vendor.PurchaseAccountId = _context.Accounts.Where(a => a.AccountName == "Purchase A/C").FirstOrDefault().Id;
             vendor.PurchaseDiscountAccountId = _context.Accounts.Where(a => a.AccountName == "Purchase Discounts").FirstOrDefault().Id;
             vendor.PartyType = Core.Domain.PartyTypes.Vendor;
-            vendor.CreatedBy = "System";
-            vendor.CreatedOn = DateTime.Now;
-            vendor.ModifiedBy = "System";
-            vendor.ModifiedOn = DateTime.Now;
 
             Contact primaryContact = new Contact();
             primaryContact.ContactType = ContactTypes.Vendor;
             primaryContact.PartyType = PartyTypes.Contact;
             primaryContact.FirstName = "Mary";
             primaryContact.LastName = "Walter";
-            primaryContact.CreatedBy = "System";
-            primaryContact.CreatedOn = DateTime.Now;
-            primaryContact.ModifiedBy = "System";
-            primaryContact.ModifiedOn = DateTime.Now;
             primaryContact.Party = vendor;
 
             vendor.PrimaryContact = primaryContact;
@@ -525,8 +461,9 @@ namespace Data
         public  static Customer InitCustomer()
         {
             var accountAR = _context.Accounts.Where(e => e.AccountCode == "10120").FirstOrDefault();
-            var accountSales = _context.Accounts.Where(e => e.AccountCode == "10120").FirstOrDefault();
-            var accountAdvances = _context.Accounts.Where(e => e.AccountCode == "10120").FirstOrDefault();
+            var accountSales = _context.Accounts.Where(e => e.AccountCode == "40100").FirstOrDefault();
+            var accountAdvances = _context.Accounts.Where(e => e.AccountCode == "20120").FirstOrDefault();
+            var accountSalesDiscount = _context.Accounts.Where(e => e.AccountCode == "40400").FirstOrDefault();
 
             Customer customer = new Customer();
             customer.No = "1";
@@ -536,21 +473,14 @@ namespace Data
             customer.AccountsReceivableAccountId = accountAR != null ? (int?)accountAR.Id : null;
             customer.SalesAccountId = accountSales != null ? (int?)accountSales.Id : null;
             customer.CustomerAdvancesAccountId = accountAdvances != null ? (int?)accountAdvances.Id : null;
+            customer.SalesDiscountAccountId = accountSalesDiscount != null ? (int?)accountSalesDiscount.Id : null;
             customer.TaxGroupId = _context.TaxGroups.Where(tg => tg.Description == "VAT").FirstOrDefault().Id;
-            customer.CreatedBy = "System";
-            customer.CreatedOn = DateTime.Now;
-            customer.ModifiedBy = "System";
-            customer.ModifiedOn = DateTime.Now;
 
             Contact primaryContact = new Contact();
             primaryContact.ContactType = ContactTypes.Customer;
             primaryContact.PartyType = PartyTypes.Contact;
             primaryContact.FirstName = "John";
             primaryContact.LastName = "Doe";
-            primaryContact.CreatedBy = "System";
-            primaryContact.CreatedOn = DateTime.Now;
-            primaryContact.ModifiedBy = "System";
-            primaryContact.ModifiedOn = DateTime.Now;
             primaryContact.Party = customer;
 
             customer.PrimaryContact = primaryContact;
@@ -586,16 +516,8 @@ namespace Data
                 AdjustmentAccount = invAdjusment,
                 CostOfGoodsSoldAccount = cogs,
                 AssemblyAccount = assemblyCost,
-                CreatedBy = "System",
-                CreatedOn = DateTime.Now,
-                ModifiedBy = "System",
-                ModifiedOn = DateTime.Now,
             }).Items.Add(new Item()
             {
-                CreatedBy = "System",
-                CreatedOn = DateTime.Now,
-                ModifiedBy = "System",
-                ModifiedOn = DateTime.Now,
                 Description = "HOA Dues",
                 SellDescription = "HOA Dues",
                 PurchaseDescription = "HOA Dues",
@@ -616,18 +538,10 @@ namespace Data
                 AdjustmentAccount = invAdjusment,
                 CostOfGoodsSoldAccount = cogs,
                 AssemblyAccount = assemblyCost,
-                CreatedBy = "System",
-                CreatedOn = DateTime.Now,
-                ModifiedBy = "System",
-                ModifiedOn = DateTime.Now
             };
 
             var carStickerItem = new Item()
             {
-                CreatedBy = "System",
-                CreatedOn = DateTime.Now,
-                ModifiedBy = "System",
-                ModifiedOn = DateTime.Now,
                 Description = "Car Sticker",
                 SellDescription = "Car Sticker",
                 PurchaseDescription = "Car Sticker",
@@ -646,10 +560,6 @@ namespace Data
 
             var otherItem = new Item()
             {
-                CreatedBy = "System",
-                CreatedOn = DateTime.Now,
-                ModifiedBy = "System",
-                ModifiedOn = DateTime.Now,
                 Description = "Optical Mouse",
                 SellDescription = "Optical Mouse",
                 PurchaseDescription = "Optical Mouse",
@@ -680,10 +590,6 @@ namespace Data
                 AdjustmentAccount = invAdjusment,
                 CostOfGoodsSoldAccount = cogs,
                 AssemblyAccount = assemblyCost,
-                CreatedBy = "System",
-                CreatedOn = DateTime.Now,
-                ModifiedBy = "System",
-                ModifiedOn = DateTime.Now
             });
 
             _context.ItemCategories.Add(new ItemCategory()
@@ -696,10 +602,6 @@ namespace Data
                 AdjustmentAccount = invAdjusment,
                 CostOfGoodsSoldAccount = cogs,
                 AssemblyAccount = assemblyCost,
-                CreatedBy = "System",
-                CreatedOn = DateTime.Now,
-                ModifiedBy = "System",
-                ModifiedOn = DateTime.Now
             });
 
             _context.SaveChanges();
@@ -719,10 +621,6 @@ namespace Data
                 Address = "123 Main St.",
                 IsDefault = true,
                 IsActive = true,
-                CreatedBy = "System",
-                CreatedOn = DateTime.Now,
-                ModifiedBy = "System",
-                ModifiedOn = DateTime.Now
             };
             _context.Banks.Add(bank);
 
@@ -733,15 +631,40 @@ namespace Data
                 Type = BankTypes.CashAccount,
                 IsDefault = false,
                 IsActive = true,
-                CreatedBy = "System",
-                CreatedOn = DateTime.Now,
-                ModifiedBy = "System",
-                ModifiedOn = DateTime.Now
             };
             _context.Banks.Add(bank);
             _context.SaveChanges();
 
             return _context.Banks.ToList();
+        }
+
+        public static void InitializeEntityToAudit()
+        {
+            var auditAccount = new AuditableEntity();
+            auditAccount.EntityName = "Account";
+            auditAccount.EnableAudit = true;
+
+            auditAccount.AuditableAttributes.Add(new AuditableAttribute() { AttributeName = "CompanyId", EnableAudit = true });
+            auditAccount.AuditableAttributes.Add(new AuditableAttribute() { AttributeName = "AccountClassId", EnableAudit = true });
+            auditAccount.AuditableAttributes.Add(new AuditableAttribute() { AttributeName = "ParentAccountId", EnableAudit = true });
+            auditAccount.AuditableAttributes.Add(new AuditableAttribute() { AttributeName = "DrOrCrSide", EnableAudit = true });
+            auditAccount.AuditableAttributes.Add(new AuditableAttribute() { AttributeName = "AccountCode", EnableAudit = true });
+            auditAccount.AuditableAttributes.Add(new AuditableAttribute() { AttributeName = "AccountName", EnableAudit = true });
+            auditAccount.AuditableAttributes.Add(new AuditableAttribute() { AttributeName = "Description", EnableAudit = true });
+            auditAccount.AuditableAttributes.Add(new AuditableAttribute() { AttributeName = "IsCash", EnableAudit = true });
+            auditAccount.AuditableAttributes.Add(new AuditableAttribute() { AttributeName = "IsContraAccount", EnableAudit = true });
+
+            _context.AuditableEntities.Add(auditAccount);
+
+            var auditJE = new AuditableEntity();
+            auditJE.EntityName = "JournalEntryHeader";
+            auditJE.EnableAudit = true;
+
+            auditJE.AuditableAttributes.Add(new AuditableAttribute() { AttributeName = "Posted", EnableAudit = true });
+
+            _context.AuditableEntities.Add(auditJE);
+
+            _context.SaveChanges();
         }
     }
 }

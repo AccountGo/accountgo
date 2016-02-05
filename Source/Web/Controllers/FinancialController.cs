@@ -63,10 +63,6 @@ namespace Web.Controllers
                 AccountClassId = model.AccountClass,
                 ParentAccountId = model.ParentAccountId == -1 ? null : model.ParentAccountId,
                 CompanyId = _administrationService.GetDefaultCompany().Id,
-                CreatedBy = User.Identity.Name,
-                ModifiedBy = User.Identity.Name,
-                CreatedOn = DateTime.Now,
-                ModifiedOn = DateTime.Now
             };
 
             _financialService.AddAccount(account);
@@ -103,8 +99,8 @@ namespace Web.Controllers
             account.IsContraAccount = model.IsContraAccount;
             account.AccountCode = model.AccountCode;
             account.AccountName = model.AccountName;
-            account.ParentAccountId = model.ParentAccountId;
-            
+            account.ParentAccountId = model.ParentAccountId.Value == -1 ? null: model.ParentAccountId;
+
             _financialService.UpdateAccount(account);
 
             return RedirectToAction("Accounts");
@@ -194,6 +190,7 @@ namespace Web.Controllers
             model.ReferenceNo = je.ReferenceNo;
             model.Id = je.Id;
             model.JournalEntryId = je.Id;
+            model.Posted = je.Posted.HasValue ? je.Posted.Value : false;
 
             foreach (var line in je.JournalEntryLines)
             {
@@ -223,8 +220,6 @@ namespace Web.Controllers
             journalEntry.Date = model.Date;
             journalEntry.Memo = model.Memo;
             journalEntry.ReferenceNo = model.ReferenceNo;
-            journalEntry.ModifiedBy = User.Identity.Name;
-            journalEntry.ModifiedOn = DateTime.Now;
 
             foreach (var line in model.AddJournalEntryLines)
             {
@@ -247,7 +242,7 @@ namespace Web.Controllers
                 }
             }
 
-            _financialService.UpdateJournalEntry(journalEntry);
+            _financialService.UpdateJournalEntry(journalEntry, model.Posted);
 
             return RedirectToAction("JournalEntries");
         }
@@ -284,10 +279,6 @@ namespace Web.Controllers
                 Date = model.Date,
                 Memo = model.Memo,
                 ReferenceNo = model.ReferenceNo,
-                CreatedBy = User.Identity.Name,
-                CreatedOn = DateTime.Now,
-                ModifiedBy = User.Identity.Name,
-                ModifiedOn = DateTime.Now,
             };
             foreach(var line in model.AddJournalEntryLines)
             {
@@ -374,10 +365,6 @@ namespace Web.Controllers
             var glSetting = _financialService.GetGeneralLedgerSetting();
             var model = new Models.ViewModels.Financials.GeneralLedgerSettingViewModel();
             model.Id = glSetting.Id;
-            model.CreatedBy = glSetting.CreatedBy;
-            model.CreatedOn = glSetting.CreatedOn;
-            model.ModifiedBy = glSetting.ModifiedBy;
-            model.ModifiedOn = glSetting.ModifiedOn;
             model.CompanyId = glSetting.CompanyId;
             model.PayableAccountId = glSetting.PayableAccountId;
             model.PurchaseDiscountAccountId = glSetting.PurchaseDiscountAccountId;
@@ -392,8 +379,6 @@ namespace Web.Controllers
         public ActionResult GeneralLedgerSetting(Models.ViewModels.Financials.GeneralLedgerSettingViewModel model)
         {
             var glSetting = _financialService.GetGeneralLedgerSetting();
-            glSetting.ModifiedBy = User.Identity.Name;
-            glSetting.ModifiedOn = DateTime.Now;
             glSetting.CompanyId = model.CompanyId;
             glSetting.PayableAccountId = model.PayableAccountId;
             glSetting.PurchaseDiscountAccountId = model.PurchaseDiscountAccountId;

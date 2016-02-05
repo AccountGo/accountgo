@@ -6,11 +6,10 @@
 // </copyright>
 //-----------------------------------------------------------------------
 
-using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations.Schema;
 
-namespace Core.Domain
+namespace Core.Domain.TaxSystem
 {
     [Table("TaxGroup")]
     public partial class TaxGroup : BaseEntity
@@ -22,12 +21,6 @@ namespace Core.Domain
         public string Description { get; set; }
         public bool TaxAppliedToShipping { get; set; }
         public bool IsActive { get; set; }
-
-        public string CreatedBy { get; set; }
-        public DateTime CreatedOn { get; set; }
-        public string ModifiedBy { get; set; }
-        public DateTime ModifiedOn { get; set; }
-
         public virtual ICollection<TaxGroupTax> TaxGroupTax { get; set; }
     }
 
@@ -36,12 +29,6 @@ namespace Core.Domain
     {
         public int TaxId { get; set; }
         public int TaxGroupId { get; set; }
-
-        public string CreatedBy { get; set; }
-        public DateTime CreatedOn { get; set; }
-        public string ModifiedBy { get; set; }
-        public DateTime ModifiedOn { get; set; }
-
         public virtual Tax Tax { get; set; }
         public virtual TaxGroup TaxGroup { get; set; }
     }

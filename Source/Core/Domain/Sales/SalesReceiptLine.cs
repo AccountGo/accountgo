@@ -30,12 +30,6 @@ namespace Core.Domain.Sales
         public decimal? Discount { get; set; }
         public decimal? Amount { get; set; }
         public decimal AmountPaid { get; set; }
-
-        public string CreatedBy { get; set; }
-        public DateTime CreatedOn { get; set; }
-        public string ModifiedBy { get; set; }
-        public DateTime ModifiedOn { get; set; }
-
         public virtual SalesReceiptHeader SalesReceiptHeader { get; set; }
         public virtual SalesInvoiceLine SalesInvoiceLine { get; set; }
         public virtual Account AccountToCredit { get; set; }

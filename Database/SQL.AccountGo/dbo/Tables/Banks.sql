@@ -8,10 +8,6 @@
     [Address]    NVARCHAR (MAX) NULL,
     [IsDefault]  BIT            NOT NULL,
     [IsActive]   BIT            NOT NULL,
-    [CreatedBy]  NVARCHAR (MAX) NULL,
-    [CreatedOn]  DATETIME       NOT NULL,
-    [ModifiedBy] NVARCHAR (MAX) NULL,
-    [ModifiedOn] DATETIME       NOT NULL,
     CONSTRAINT [PK_dbo.Banks] PRIMARY KEY CLUSTERED ([Id] ASC),
     CONSTRAINT [FK_dbo.Banks_dbo.Account_AccountId] FOREIGN KEY ([AccountId]) REFERENCES [dbo].[Account] ([Id])
 );
