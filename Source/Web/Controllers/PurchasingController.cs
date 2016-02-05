@@ -10,6 +10,7 @@ using Core.Domain.Purchases;
 using Services.Financial;
 using Services.Inventory;
 using Services.Purchasing;
+using Services.TaxSystem;
 using System;
 using System.Linq;
 using System.Web.Mvc;
@@ -22,14 +23,17 @@ namespace Web.Controllers
         private readonly IInventoryService _inventoryService;
         private readonly IFinancialService _financialService;
         private readonly IPurchasingService _purchasingService;
+        private readonly ITaxService _taxService;
 
         public PurchasingController(IInventoryService inventoryService,
             IFinancialService financialService,
-            IPurchasingService purchasingService)
+            IPurchasingService purchasingService,
+            ITaxService taxService)
         {
             _inventoryService = inventoryService;
             _financialService = financialService;
             _purchasingService = purchasingService;
+            _taxService = taxService;
         }
 
         public ActionResult PurchaseOrders()
@@ -377,20 +381,23 @@ namespace Web.Controllers
 
         public ActionResult PurchaseInvoices()
         {
-            var model = new Models.ViewModels.Purchases.PurchaseInvoices();
             var invoices = _purchasingService.GetPurchaseInvoices();
+            var model = new Models.ViewModels.Purchases.PurchaseInvoices();
+                        
             foreach(var invoice in invoices)
             {
-                model.PurchaseInvoiceListLines.Add(new Models.ViewModels.Purchases.PurchaseInvoiceListLine()
+                var invoiceModel = new Models.ViewModels.Purchases.PurchaseInvoiceListLine()
                 {
                     Id = invoice.Id,
                     No = invoice.No,
                     Date = invoice.Date,
                     Vendor = invoice.Vendor.Name,
                     TotalAmount = invoice.PurchaseInvoiceLines.Sum(a => a.Amount),
-                    TotalTax = invoice.GetTotalTax(),
-                    IsPaid = invoice.IsPaid()
-                });
+                    IsPaid = invoice.IsPaid(),
+                    TotalTax = _taxService.GetPurchaseTaxes(invoice.VendorId.Value, invoice.PurchaseInvoiceLines.AsEnumerable()).Sum(t => t.Value)
+                };
+
+                model.PurchaseInvoiceListLines.Add(invoiceModel);
             }
             return View(model);
         }

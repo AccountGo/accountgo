@@ -1,10 +1,14 @@
-﻿using System.Collections.Generic;
+﻿using Core.Domain.Purchases;
+using Core.Domain.Sales;
+using System.Collections.Generic;
 
 namespace Services.TaxSystem
 {
     public interface ITaxService
     {
+        List<KeyValuePair<int, decimal>> GetPurchaseTaxes(int vendorId, IEnumerable<PurchaseInvoiceLine> purchaseInvoiceLines);
         List<KeyValuePair<int, decimal>> GetPurchaseTaxes(int vendorId, int itemId, decimal quantity, decimal amount, decimal discount);
+        List<KeyValuePair<int, decimal>> GetSalesTaxes(int customerId, IEnumerable<SalesInvoiceLine> salesInvoiceLines);
         List<KeyValuePair<int, decimal>> GetSalesTaxes(int customerId, int itemId, decimal quantity, decimal amount, decimal discount);
         decimal GetItemPrice(int itemId);
         decimal GetItemCost(int itemId);
