@@ -278,6 +278,12 @@ namespace Services.Purchasing
 
         public void AddVendor(Vendor vendor)
         {
+            vendor.AccountsPayableAccountId = _accountRepo.Table.Where(a => a.AccountCode == "20110").FirstOrDefault().Id;
+            vendor.PurchaseAccountId = _accountRepo.Table.Where(a => a.AccountCode == "50200").FirstOrDefault().Id;
+            vendor.PurchaseDiscountAccountId = _accountRepo.Table.Where(a => a.AccountCode == "50400").FirstOrDefault().Id;
+
+            vendor.IsActive = true;
+
             _vendorRepo.Insert(vendor);
         }
 

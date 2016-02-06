@@ -14,6 +14,7 @@ using System.Linq;
 using System.Threading;
 using System.Collections.Generic;
 using Core.Domain.Financials;
+using Core.Domain.TaxSystem;
 
 namespace Services.Inventory
 {
@@ -25,13 +26,17 @@ namespace Services.Inventory
         private readonly IRepository<ItemCategory> _itemCategoryRepo;
         private readonly IRepository<SequenceNumber> _sequenceNumberRepo;
         private readonly IRepository<Bank> _bankRepo;
+        private readonly IRepository<Account> _accountRepo;
+        private readonly IRepository<ItemTaxGroup> _itemTaxGroup;
 
         public InventoryService(IRepository<Item> itemRepo, 
             IRepository<Measurement> measurementRepo, 
             IRepository<InventoryControlJournal> icjRepo,
             IRepository<ItemCategory> itemCategoryRepo,
             IRepository<SequenceNumber> sequenceNumberRepo,
-            IRepository<Bank> bankRepo
+            IRepository<Bank> bankRepo,
+            IRepository<Account> accountRepo,
+            IRepository<ItemTaxGroup> itemTaxGroup
             )
             : base(sequenceNumberRepo, null, null, bankRepo)
         {
@@ -41,6 +46,8 @@ namespace Services.Inventory
             _itemCategoryRepo = itemCategoryRepo;
             _sequenceNumberRepo = sequenceNumberRepo;
             _bankRepo = bankRepo;
+            _accountRepo = accountRepo;
+            _itemTaxGroup = itemTaxGroup;
         }
 
         public InventoryControlJournal CreateInventoryControlJournal(int itemId, int measurementId, DocumentTypes documentType, decimal? inQty, decimal? outQty, decimal? totalCost, decimal? totalAmount)
@@ -65,6 +72,20 @@ namespace Services.Inventory
         public void AddItem(Item item)
         {
             item.No = GetNextNumber(SequenceNumberTypes.Item).ToString();
+
+            var sales = _accountRepo.Table.Where(a => a.AccountCode == "40100").FirstOrDefault();
+            var inventory = _accountRepo.Table.Where(a => a.AccountCode == "10800").FirstOrDefault();
+            var invAdjusment = _accountRepo.Table.Where(a => a.AccountCode == "50500").FirstOrDefault();
+            var cogs = _accountRepo.Table.Where(a => a.AccountCode == "50300").FirstOrDefault();
+            var assemblyCost = _accountRepo.Table.Where(a => a.AccountCode == "10900").FirstOrDefault();
+
+            item.SalesAccount = sales;
+            item.InventoryAccount = inventory;
+            item.CostOfGoodsSoldAccount = cogs;
+            item.InventoryAdjustmentAccount = invAdjusment;
+
+            item.ItemTaxGroup = _itemTaxGroup.Table.Where(m => m.Name == "Regular").FirstOrDefault();
+            
             _itemRepo.Insert(item);
         }
 

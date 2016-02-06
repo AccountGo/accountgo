@@ -16,6 +16,7 @@ using Services.Inventory;
 using System.Linq;
 using System;
 using System.Collections.Generic;
+using Core.Domain.TaxSystem;
 
 namespace Services.Sales
 {
@@ -37,6 +38,7 @@ namespace Services.Sales
         private readonly IRepository<Bank> _bankRepo;
         private readonly IRepository<GeneralLedgerSetting> _genetalLedgerSetting;
         private readonly IRepository<Contact> _contactRepo;
+        private readonly IRepository<TaxGroup> _taxGroupRepo;
 
         public SalesService(IFinancialService financialService,
             IInventoryService inventoryService,
@@ -52,7 +54,8 @@ namespace Services.Sales
             IRepository<SalesDeliveryHeader> salesDeliveryRepo,
             IRepository<Bank> bankRepo,
             IRepository<GeneralLedgerSetting> generalLedgerSetting,
-            IRepository<Contact> contactRepo)
+            IRepository<Contact> contactRepo,
+            IRepository<TaxGroup> taxGroupRepo)
             : base(sequenceNumberRepo, generalLedgerSetting, paymentTermRepo, bankRepo)
         {
             _financialService = financialService;
@@ -70,6 +73,7 @@ namespace Services.Sales
             _bankRepo = bankRepo;
             _genetalLedgerSetting = generalLedgerSetting;
             _contactRepo = contactRepo;
+            _taxGroupRepo = taxGroupRepo;
         }
 
         public void AddSalesOrder(SalesOrderHeader salesOrder, bool toSave)
@@ -387,6 +391,19 @@ namespace Services.Sales
 
         public void AddCustomer(Customer customer)
         {
+            var accountAR = _accountRepo.Table.Where(e => e.AccountCode == "10120").FirstOrDefault();
+            var accountSales = _accountRepo.Table.Where(e => e.AccountCode == "40100").FirstOrDefault();
+            var accountAdvances = _accountRepo.Table.Where(e => e.AccountCode == "20120").FirstOrDefault();
+            var accountSalesDiscount = _accountRepo.Table.Where(e => e.AccountCode == "40400").FirstOrDefault();
+
+            customer.AccountsReceivableAccountId = accountAR != null ? (int?)accountAR.Id : null;
+            customer.SalesAccountId = accountSales != null ? (int?)accountSales.Id : null;
+            customer.CustomerAdvancesAccountId = accountAdvances != null ? (int?)accountAdvances.Id : null;
+            customer.SalesDiscountAccountId = accountSalesDiscount != null ? (int?)accountSalesDiscount.Id : null;
+            customer.TaxGroupId = _taxGroupRepo.Table.Where(tg => tg.Description == "VAT").FirstOrDefault().Id;
+
+            customer.IsActive = true;
+
             _customerRepo.Insert(customer);
         }
 
