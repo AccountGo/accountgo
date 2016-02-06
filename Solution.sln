@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 14
-VisualStudioVersion = 14.0.23107.0
+VisualStudioVersion = 14.0.24720.0
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Libraries", "Libraries", "{7AE3FEF7-F87D-48D6-8D20-278881268779}"
 EndProject
@@ -29,6 +29,8 @@ EndProject
 Project("{00D1A9C2-B5F0-4AF3-8072-F6C62B433612}") = "SQL.AccountGo", "Database\SQL.AccountGo\SQL.AccountGo.sqlproj", "{F0360E8D-C07F-4442-BB61-FB7C4C495BDD}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UnitTests", "Test\UnitTests\UnitTests.csproj", "{55E4E735-8F8E-40AC-9D21-A60641A1418C}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Logging", "Source\NLog\Logging.csproj", "{6151D6CF-F2D3-44D4-B1FC-B873ABB87145}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -58,6 +60,10 @@ Global
 		{55E4E735-8F8E-40AC-9D21-A60641A1418C}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{55E4E735-8F8E-40AC-9D21-A60641A1418C}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{55E4E735-8F8E-40AC-9D21-A60641A1418C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6151D6CF-F2D3-44D4-B1FC-B873ABB87145}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6151D6CF-F2D3-44D4-B1FC-B873ABB87145}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6151D6CF-F2D3-44D4-B1FC-B873ABB87145}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6151D6CF-F2D3-44D4-B1FC-B873ABB87145}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -69,5 +75,6 @@ Global
 		{9D9B64A3-FF65-4DA7-A6B9-0AE8091543B3} = {7AEF6695-7297-4F31-8BDB-441F3832600B}
 		{F0360E8D-C07F-4442-BB61-FB7C4C495BDD} = {EDC7E0B8-E71A-444C-ADAD-FEA15E8357B5}
 		{55E4E735-8F8E-40AC-9D21-A60641A1418C} = {2503DF5D-8FEC-439B-A30C-C9AFAC011614}
+		{6151D6CF-F2D3-44D4-B1FC-B873ABB87145} = {7AE3FEF7-F87D-48D6-8D20-278881268779}
 	EndGlobalSection
 EndGlobal

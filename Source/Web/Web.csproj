@@ -248,6 +248,7 @@
     <Compile Include="App_Start\Startup.Auth.cs" />
     <Compile Include="App_Start\WebApiConfig.cs" />
     <Compile Include="Attributes\AuthorizedApiAttribute.cs" />
+    <Compile Include="Attributes\GlobalHandleErrorAttribute.cs" />
     <Compile Include="ControllersApi\Administration\SecurityController.cs" />
     <Compile Include="ControllersApi\BaseApiController.cs" />
     <Compile Include="ControllersApi\CommonController.cs" />
@@ -269,6 +270,7 @@
     <Compile Include="Global.asax.cs">
       <DependentUpon>Global.asax</DependentUpon>
     </Compile>
+    <Compile Include="GlobalExceptionHandler.cs" />
     <Compile Include="Helpers\CollectionHelper.cs" />
     <Compile Include="ModelsApi\ContactDto.cs" />
     <Compile Include="ModelsApi\Financial\AccountDto.cs" />
@@ -318,6 +320,7 @@
     <Compile Include="Models\ViewModels\Sales\SalesOrders.cs" />
     <Compile Include="Models\ViewModels\Sales\SalesReceipts.cs" />
     <Compile Include="Models\ViewModels\Sales\SalesViewModelBuilder.cs" />
+    <Compile Include="NExceptionLogger.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Startup.cs" />
   </ItemGroup>
@@ -373,6 +376,7 @@
     <Content Include="Content\bootstrap.css.map" />
     <Content Include="Content\bootstrap-theme.min.css.map" />
     <Content Include="Content\bootstrap-theme.css.map" />
+    <Content Include="NLog.config" />
     <None Include="Properties\PublishProfiles\Deployable.pubxml" />
     <Content Include="Scripts\bootstrap.js" />
     <Content Include="Scripts\bootstrap.min.js" />
@@ -504,6 +508,10 @@
     <ProjectReference Include="..\Data\Data.csproj">
       <Project>{6cacec21-861e-4d1c-af89-e63cc72360cf}</Project>
       <Name>Data</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\NLog\Logging.csproj">
+      <Project>{6151d6cf-f2d3-44d4-b1fc-b873abb87145}</Project>
+      <Name>Logging</Name>
     </ProjectReference>
     <ProjectReference Include="..\Services\Services.csproj">
       <Project>{c02decc9-2a82-42c0-8f26-d0ae6559ac5e}</Project>

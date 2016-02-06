@@ -11,6 +11,7 @@ using Autofac.Integration.Mvc;
 using Autofac.Integration.WebApi;
 using Core.Data;
 using Data;
+using Logging;
 using Newtonsoft.Json.Serialization;
 using Services.Administration;
 using Services.Financial;
@@ -24,6 +25,7 @@ using System.Linq;
 using System.Net.Http.Formatting;
 using System.Reflection;
 using System.Web.Http;
+using System.Web.Http.ExceptionHandling;
 using System.Web.Mvc;
 using System.Web.Optimization;
 using System.Web.Routing;
@@ -45,6 +47,9 @@ namespace Web
 
             JsonMediaTypeFormatter formatter = GlobalConfiguration.Configuration.Formatters.OfType<JsonMediaTypeFormatter>().FirstOrDefault();
             formatter.SerializerSettings.ContractResolver = new CamelCasePropertyNamesContractResolver();
+
+            GlobalConfiguration.Configuration.Services.Add(typeof(IExceptionLogger), new NLogExceptionLogger());
+            GlobalConfiguration.Configuration.Services.Replace(typeof(IExceptionHandler), new GlobalExceptionHandler());
         }
         protected void Application_BeginRequest(Object sender, EventArgs e)
         {
@@ -88,6 +93,7 @@ namespace Web
             builder.RegisterType<AdministrationService>().As<IAdministrationService>().InstancePerLifetimeScope();
             builder.RegisterType<SecurityService>().As<ISecurityService>().InstancePerLifetimeScope();
             builder.RegisterType<TaxService>().As<ITaxService>().InstancePerLifetimeScope();
+            builder.RegisterType<NLoggingService>().As<ILoggingService>().InstancePerLifetimeScope();
 
             container = builder.Build();
             DependencyResolver.SetResolver(new AutofacDependencyResolver(container));
