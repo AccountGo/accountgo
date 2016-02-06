@@ -13,7 +13,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Core.Domain.Financials
 {
     [Table("FinancialYear")]
-    public partial class FiscalYear : BaseEntity
+    public partial class FinancialYear : BaseEntity
     {
         [Required]
         [StringLength(10)]

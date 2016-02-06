@@ -78,7 +78,7 @@ namespace Web.ControllersApi
         [Route("api/common/paymentterms")]
         public IHttpActionResult PaymentTerms()
         {
-            var paymentterms = _salesService.GetPaymentTerms();
+            var paymentterms = _administrationService.GetPaymentTerms();
             return Ok(paymentterms.AsEnumerable());
         }
 

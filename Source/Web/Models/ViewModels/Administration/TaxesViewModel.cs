@@ -56,4 +56,18 @@ namespace Web.Models.ViewModels.Administration
         public decimal Rate { get; set; }
         public bool IsExempt { get; set; }
     }
+
+    public class TaxGroupModel : EntityModelBase
+    {
+        public string Description { get; set; }
+        public bool TaxAppliedToShipping { get; set; }
+        public bool IsActive { get; set; }
+        public virtual ICollection<TaxGroupTaxModel> TaxGroupTaxModel { get; set; }
+    }
+
+    public class TaxGroupTaxModel : EntityModelBase
+    {
+        public int TaxId { get; set; }
+        public int TaxGroupId { get; set; }
+    }
 }

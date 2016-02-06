@@ -10,29 +10,30 @@
 @using (Html.BeginForm())
 {
     <div class="panel panel-default panel-body">
-        <div>
-            <label class="col-md-8 control-label">Company</label>
-            @Html.DisplayFor(m => m.CompanyId)
+        <div class="row">
+            <div class="col-md-6">Company</div>
+            <div class="col-md-6">@Html.DisplayFor(m => m.CompanyCode)</div>
+            @Html.HiddenFor(m => m.CompanyId)
         </div>
-        <div>
-            <label class="col-md-8 control-label">Payable Account</label>
-            @Html.DropDownListFor(m => m.PayableAccountId, ModelViewHelper.Accounts())
+        <div class="row">
+            <div class="col-md-6">Payable Account</div>
+            <div class="col-md-6">@Html.DropDownListFor(m => m.PayableAccountId, ModelViewHelper.Accounts())</div>
         </div>
-        <div>
-            <label class="col-md-8 control-label">Purchase Discount Account</label>
-            @Html.DropDownListFor(m => m.PurchaseDiscountAccountId, ModelViewHelper.Accounts())
+        <div class="row">
+            <div class="col-md-6">Purchase Discount Account</div>
+            <div class="col-md-6">@Html.DropDownListFor(m => m.PurchaseDiscountAccountId, ModelViewHelper.Accounts())</div>
         </div>
-        <div>
-            <label class="col-md-8 control-label">Goods Receipt Note Clearing Account</label>
-            @Html.DropDownListFor(m => m.GoodsReceiptNoteClearingAccountId, ModelViewHelper.Accounts())
+        <div class="row">
+            <div class="col-md-6">Goods Receipt Note Clearing Account</div>
+            <div class="col-md-6">@Html.DropDownListFor(m => m.GoodsReceiptNoteClearingAccountId, ModelViewHelper.Accounts())</div>
         </div>
-        <div>
-            <label class="col-md-8 control-label">Sales Discount Account</label>
-            @Html.DropDownListFor(m => m.SalesDiscountAccountId, ModelViewHelper.Accounts())
+        <div class="row">
+            <div class="col-md-6">Sales Discount Account</div>
+            <div class="col-md-6">@Html.DropDownListFor(m => m.SalesDiscountAccountId, ModelViewHelper.Accounts())</div>
         </div>
-        <div>
-            <label class="col-md-8 control-label">Shipping Charge Account</label>
-            @Html.DropDownListFor(m => m.ShippingChargeAccountId, ModelViewHelper.Accounts())
+        <div class="row">
+            <div class="col-md-6">Shipping Charge Account</div>
+            <div class="col-md-6">@Html.DropDownListFor(m => m.ShippingChargeAccountId, ModelViewHelper.Accounts())</div>
         </div>
     </div>
     <div>

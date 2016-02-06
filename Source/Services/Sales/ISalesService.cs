@@ -33,7 +33,6 @@ namespace Services.Sales
         void AddCustomer(Customer customer);
         ICollection<SalesReceiptHeader> GetCustomerReceiptsForAllocation(int customerId);
         void SaveCustomerAllocation(CustomerAllocation allocation);
-        IEnumerable<PaymentTerm> GetPaymentTerms();
         IEnumerable<SalesDeliveryHeader> GetSalesDeliveries();
         IEnumerable<SalesOrderHeader> GetSalesOrders();
         SalesOrderHeader GetSalesOrderById(int id);

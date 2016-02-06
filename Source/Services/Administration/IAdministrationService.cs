@@ -9,6 +9,7 @@
 using System.Collections.Generic;
 using Core.Domain;
 using Core.Domain.TaxSystem;
+using Core.Domain.Financials;
 
 namespace Services.Administration
 {
@@ -22,5 +23,7 @@ namespace Services.Administration
         void DeleteTax(int id);
         void InitializeCompany();
         Company GetDefaultCompany();
+        ICollection<PaymentTerm> GetPaymentTerms();
+        ICollection<FinancialYear> GetFinancialYears();
     }
 }

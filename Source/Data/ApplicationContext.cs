@@ -75,7 +75,7 @@ namespace Data
         public DbSet<Company> Companies { get; set; }
         public DbSet<CompanySetting> CompanySettings { get; set; }
         public DbSet<Address> Addresses { get; set; }
-        public DbSet<FiscalYear> FiscalYears { get; set; }
+        public DbSet<FinancialYear> FiscalYears { get; set; }
         public DbSet<Tax> Taxes { get; set; }
         public DbSet<TaxGroup> TaxGroups { get; set; }
         public DbSet<ItemTaxGroup> ItemTaxGroups { get; set; }

@@ -29,7 +29,7 @@ namespace Services.Financial
         private readonly IRepository<Tax> _taxRepo;
         private readonly IRepository<JournalEntryHeader> _journalEntryRepo;
         private readonly IRepository<GeneralLedgerLine> _generalLedgerLineRepository;
-        private readonly IRepository<FiscalYear> _fiscalYearRepo;
+        private readonly IRepository<FinancialYear> _fiscalYearRepo;
         private readonly IRepository<TaxGroup> _taxGroupRepo;
         private readonly IRepository<ItemTaxGroup> _itemTaxGroupRepo;
         private readonly IRepository<PaymentTerm> _paymentTermRepo;
@@ -46,7 +46,7 @@ namespace Services.Financial
             IRepository<Account> accountRepo,
             IRepository<Tax> taxRepo,
             IRepository<JournalEntryHeader> journalEntryRepo,
-            IRepository<FiscalYear> fiscalYearRepo,
+            IRepository<FinancialYear> fiscalYearRepo,
             IRepository<TaxGroup> taxGroupRepo,
             IRepository<ItemTaxGroup> itemTaxGroupRepo,
             IRepository<PaymentTerm> paymentTermRepo,
@@ -77,7 +77,7 @@ namespace Services.Financial
             _vendorRepo = vendorRepo;
         }
 
-        public FiscalYear CurrentFiscalYear()
+        public FinancialYear CurrentFiscalYear()
         {
             var query = (from fy in _fiscalYearRepo.Table
                         where fy.IsActive == true

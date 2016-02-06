@@ -407,11 +407,6 @@ namespace Services.Sales
             _customerRepo.Insert(customer);
         }
 
-        public new IEnumerable<PaymentTerm> GetPaymentTerms()
-        {
-            return base.GetPaymentTerms();
-        }
-
         public IEnumerable<SalesDeliveryHeader> GetSalesDeliveries()
         {
             var query = from f in _salesDeliveryRepo.Table

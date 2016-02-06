@@ -281,13 +281,17 @@
     <Compile Include="ModelsApi\Purchasing\VendorDto.cs" />
     <Compile Include="ModelsApi\Sales\CustomerDto.cs" />
     <Compile Include="Models\AccountViewModels.cs" />
+    <Compile Include="Models\ModelBase.cs" />
     <Compile Include="Models\ErrorMessageViewModel.cs" />
     <Compile Include="Models\IdentityModels.cs" />
     <Compile Include="Models\ManageViewModels.cs" />
     <Compile Include="Models\ModelViewHelper.cs" />
     <Compile Include="Models\Singleton.cs" />
     <Compile Include="Models\ViewModels\ActionResponse.cs" />
+    <Compile Include="Models\ViewModels\Administration\CompanyModel.cs" />
     <Compile Include="Models\ViewModels\Administration\CreateBulkInvoice.cs" />
+    <Compile Include="Models\ViewModels\Administration\FinancialYearModel.cs" />
+    <Compile Include="Models\ViewModels\Administration\PaymentTermModel.cs" />
     <Compile Include="Models\ViewModels\Administration\Security\SecurityGroupModel.cs" />
     <Compile Include="Models\ViewModels\Administration\Security\SecurityPermissionModel.cs" />
     <Compile Include="Models\ViewModels\Administration\Security\SecurityRoleModel.cs" />
@@ -495,6 +499,10 @@
     <Content Include="Views\Financial\EditAccount.cshtml" />
     <Content Include="Views\Financial\EditJournalEntry.cshtml" />
     <Content Include="Views\Financial\AddAccount.cshtml" />
+    <Content Include="Views\Administration\PaymentTerms.cshtml" />
+    <Content Include="Views\Administration\FinancialYears.cshtml" />
+    <Content Include="Views\Financial\TaxGroups.cshtml" />
+    <Content Include="Views\Administration\Company.cshtml" />
   </ItemGroup>
   <ItemGroup />
   <ItemGroup>

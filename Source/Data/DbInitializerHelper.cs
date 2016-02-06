@@ -43,7 +43,7 @@ namespace Data
                 else
                     company = _context.Companies.FirstOrDefault();
 
-                FiscalYear fy = null;
+                FinancialYear fy = null;
                 if (_context.FiscalYears.Count() == 0)
                     fy = InitFiscalYear();
 
@@ -142,9 +142,9 @@ namespace Data
             return company;
         }
 
-        public static FiscalYear InitFiscalYear()
+        public static FinancialYear InitFiscalYear()
         {
-            _context.FiscalYears.Add(new FiscalYear() { FiscalYearCode = "FY1516", FiscalYearName = "FY 2016/2017", StartDate = new DateTime(2016, 01, 01), EndDate = new DateTime(2016, 12, 31), IsActive = true });
+            _context.FiscalYears.Add(new FinancialYear() { FiscalYearCode = "FY1516", FiscalYearName = "FY 2016/2017", StartDate = new DateTime(2016, 01, 01), EndDate = new DateTime(2016, 12, 31), IsActive = true });
             _context.SaveChanges();
 
             return _context.FiscalYears.FirstOrDefault();

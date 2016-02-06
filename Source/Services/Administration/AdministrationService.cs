@@ -18,7 +18,7 @@ namespace Services.Administration
 {
     public class AdministrationService : BaseService, IAdministrationService
     {
-        private readonly IRepository<FiscalYear> _fiscalYearRepo;
+        private readonly IRepository<FinancialYear> _fiscalYearRepo;
         private readonly IRepository<TaxGroup> _taxGroupRepo;
         private readonly IRepository<ItemTaxGroup> _itemTaxGroupRepo;
         private readonly IRepository<PaymentTerm> _paymentTermRepo;
@@ -27,7 +27,7 @@ namespace Services.Administration
         private readonly IRepository<Tax> _taxRepo;
         private readonly IRepository<Company> _company;
 
-        public AdministrationService(IRepository<FiscalYear> fiscalYearRepo,
+        public AdministrationService(IRepository<FinancialYear> fiscalYearRepo,
             IRepository<TaxGroup> taxGroupRepo,
             IRepository<ItemTaxGroup> itemTaxGroupRepo,
             IRepository<PaymentTerm> paymentTermRepo,
@@ -94,6 +94,20 @@ namespace Services.Administration
         public Company GetDefaultCompany()
         {
             return _company.Table.ToList().FirstOrDefault();
+        }
+
+        public ICollection<PaymentTerm> GetPaymentTerms()
+        {
+            var query = from f in _paymentTermRepo.Table
+                        select f;
+            return query.ToList();
+        }
+
+        public ICollection<FinancialYear> GetFinancialYears()
+        {
+            var query = from f in _fiscalYearRepo.Table
+                        select f;
+            return query.ToList();
         }
     }
 }

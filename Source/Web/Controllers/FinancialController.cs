@@ -13,6 +13,8 @@ using System.Linq;
 using Core.Domain.Financials;
 using Web.Models.ViewModels.Financials;
 using Services.Administration;
+using System.Collections.Generic;
+using Web.Models.ViewModels.Administration;
 
 namespace Web.Controllers
 {
@@ -366,6 +368,7 @@ namespace Web.Controllers
             var model = new Models.ViewModels.Financials.GeneralLedgerSettingViewModel();
             model.Id = glSetting.Id;
             model.CompanyId = glSetting.CompanyId;
+            model.CompanyCode = _administrationService.GetDefaultCompany().CompanyCode;
             model.PayableAccountId = glSetting.PayableAccountId;
             model.PurchaseDiscountAccountId = glSetting.PurchaseDiscountAccountId;
             model.SalesDiscountAccountId = glSetting.SalesDiscountAccountId;
@@ -397,6 +400,38 @@ namespace Web.Controllers
                 return RedirectToAction("EditJournalEntry", new { id = id, fromGL = true });
 
             return View();
+        }
+
+        public ActionResult TaxGroups()
+        {
+            var taxGroups = _financialService.GetTaxGroups();
+            var model = new List<TaxGroupModel>();
+
+            foreach(var group in taxGroups)
+            {
+                var groupTaxes = new List<TaxGroupTaxModel>();
+
+                foreach (var groupTax in group.TaxGroupTax)
+                {
+                    groupTaxes.Add(new TaxGroupTaxModel()
+                    {
+                        Id = groupTax.Id,
+                        TaxId = groupTax.TaxId,
+                        TaxGroupId = groupTax.TaxGroupId
+                    });
+                }
+
+                model.Add(new TaxGroupModel()
+                {
+                    Id = group.Id,
+                    Description = group.Description,
+                    TaxAppliedToShipping = group.TaxAppliedToShipping,
+                    IsActive = group.IsActive,      
+                    TaxGroupTaxModel = groupTaxes
+                });
+            }
+
+            return View(model);
         }
     }
 }

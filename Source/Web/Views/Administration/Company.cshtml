@@ -1,0 +1,43 @@
+﻿@model Web.Models.ViewModels.Administration.CompanyModel
+
+@{
+    ViewBag.Title = "Company";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<h2>Company</h2>
+
+<div>
+    <h4>CompanyModel</h4>
+    <hr />
+    <dl class="dl-horizontal">
+        <dt>
+            @Html.DisplayNameFor(model => model.Name)
+        </dt>
+
+        <dd>
+            @Html.DisplayFor(model => model.Name)
+        </dd>
+
+        <dt>
+            @Html.DisplayNameFor(model => model.ShortName)
+        </dt>
+
+        <dd>
+            @Html.DisplayFor(model => model.ShortName)
+        </dd>
+
+        <dt>
+            @Html.DisplayNameFor(model => model.CompanyCode)
+        </dt>
+
+        <dd>
+            @Html.DisplayFor(model => model.CompanyCode)
+        </dd>
+
+    </dl>
+</div>
+<p>
+    @Html.ActionLink("Edit", "Edit", new { id = Model.Id }) |
+    @Html.ActionLink("Back to List", "Index")
+</p>

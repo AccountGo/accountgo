@@ -6,17 +6,16 @@
 // </copyright>
 //-----------------------------------------------------------------------
 
-using Services.Inventory;
-using System.Web.Mvc;
-using System.Linq;
-using System;
-using Services.Sales;
-using System.Collections.Generic;
 using Core.Domain.Sales;
-using Services.Administration;
-using Web.Models.ViewModels.Administration;
 using Data;
-using Web.Attributes;
+using Services.Administration;
+using Services.Inventory;
+using Services.Sales;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Web.Mvc;
+using Web.Models.ViewModels.Administration;
 
 namespace Web.Controllers
 {
@@ -171,6 +170,61 @@ namespace Web.Controllers
         {
             var taxGroups = _administrationService.GetTaxGroups(false);
             return View();
+        }
+
+        public ActionResult FinancialYears()
+        {
+            var financialYears = _administrationService.GetFinancialYears();
+            var model = new List<FinancialYearModel>();
+
+            foreach (var year in financialYears)
+            {
+                model.Add(new FinancialYearModel()
+                {
+                    Id = year.Id,
+                    FiscalYearCode = year.FiscalYearCode,
+                    FiscalYearName = year.FiscalYearName,
+                    StartDate = year.StartDate,
+                    EndDate = year.EndDate,
+                    IsActive = year.IsActive
+                });
+            }
+
+            return View(model);
+        }
+
+        public ActionResult PaymentTerms()
+        {
+            var paymentTerms = _administrationService.GetPaymentTerms();
+            var model = new HashSet<PaymentTermModel>();
+            
+            foreach(var term in paymentTerms)
+            {
+                model.Add(new PaymentTermModel()
+                {
+                    Id = term.Id,
+                    Description = term.Description,
+                    DueAfterDays = term.DueAfterDays,
+                    IsActive = term.IsActive,
+                    PaymentType = (int)term.PaymentType
+                });
+            }
+
+            return View(model);
+        }
+
+        public ActionResult Company()
+        {
+            var company = _administrationService.GetDefaultCompany();
+            var model = new CompanyModel()
+            {
+                Id = company.Id,
+                ShortName = company.ShortName,
+                Name = company.Name,
+                CompanyCode = company.CompanyCode
+            };
+
+            return View(model);
         }
 
         [HttpPost]

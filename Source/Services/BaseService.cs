@@ -64,12 +64,12 @@ namespace Services
             return query.FirstOrDefault();
         }
 
-        protected IEnumerable<PaymentTerm> GetPaymentTerms()
-        {
-            var query = from f in _paymentTermRepo.Table
-                        select f;
-            return query;
-        }
+        //protected IEnumerable<PaymentTerm> GetPaymentTerms()
+        //{
+        //    var query = from f in _paymentTermRepo.Table
+        //                select f;
+        //    return query;
+        //}
 
         protected IEnumerable<Bank> GetCashAndBanks()
         {

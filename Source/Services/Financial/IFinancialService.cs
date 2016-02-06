@@ -27,7 +27,7 @@ namespace Services.Financial
         ICollection<BalanceSheet> BalanceSheet(DateTime? from = null, DateTime? to = null);
         ICollection<IncomeStatement> IncomeStatement(DateTime? from = null, DateTime? to = null);
         ICollection<MasterGeneralLedger> MasterGeneralLedger(DateTime? from = null, DateTime? to = null, string accountCode = null, int? transactionNo = null);
-        FiscalYear CurrentFiscalYear();
+        FinancialYear CurrentFiscalYear();
         IEnumerable<Tax> GetTaxes();
         IEnumerable<ItemTaxGroup> GetItemTaxGroups();
         IEnumerable<TaxGroup> GetTaxGroups();
