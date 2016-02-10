@@ -34,4 +34,4 @@ Feel free to email mvpsolution@gmail.com of any questions.
 
 Don't miss regular source code updates, join http://accountgo.googlegroups.com
 
-Also, you can view demo site here (http://accountgo.apphb.com)
+Also, you can view demo site here (http://accountgo.azurewebsites.net)
