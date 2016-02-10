@@ -319,6 +319,7 @@
     <Compile Include="Models\ViewModels\Sales\SalesDeliveries.cs" />
     <Compile Include="Models\ViewModels\Sales\SalesHeaderViewModel.cs" />
     <Compile Include="Models\ViewModels\Sales\SalesInvoiceHeaderViewModel.cs" />
+    <Compile Include="Models\ViewModels\Sales\SalesInvoiceModel.cs" />
     <Compile Include="Models\ViewModels\Sales\SalesInvoices.cs" />
     <Compile Include="Models\ViewModels\Sales\SalesLineItemsViewModel.cs" />
     <Compile Include="Models\ViewModels\Sales\SalesOrders.cs" />

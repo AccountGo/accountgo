@@ -281,6 +281,7 @@ namespace Web.Controllers
                 Date = model.Date,
                 Memo = model.Memo,
                 ReferenceNo = model.ReferenceNo,
+                VoucherType = model.JournalVoucherType
             };
             foreach(var line in model.AddJournalEntryLines)
             {

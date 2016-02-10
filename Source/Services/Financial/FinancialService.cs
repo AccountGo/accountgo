@@ -1,4 +1,4 @@
-//-----------------------------------------------------------------------
+﻿//-----------------------------------------------------------------------
 // <copyright file="FinancialService.cs" company="AccountGo">
 // Copyright (c) AccountGo. All rights reserved.
 // <author>Marvin Perez</author>
@@ -39,6 +39,7 @@ namespace Services.Financial
         private readonly IRepository<MainContraAccount> _maincontraAccount;
         private readonly IRepository<Customer> _customerRepo;
         private readonly IRepository<Vendor> _vendorRepo;
+        private readonly IRepository<GeneralLedgerSetting> _generalLedgerSettingRepo;
 
         public FinancialService(IInventoryService inventoryService, 
             IRepository<GeneralLedgerHeader> generalLedgerRepository,
@@ -55,7 +56,8 @@ namespace Services.Financial
             IRepository<GeneralLedgerSetting> glSettingRepo,
             IRepository<MainContraAccount> maincontraAccount = null,
             IRepository<Customer> customerRepo = null,
-            IRepository<Vendor> vendorRepo = null
+            IRepository<Vendor> vendorRepo = null, 
+            IRepository<GeneralLedgerSetting> generalLedgerSettingRepo = null
             )
             :base(null, null, paymentTermRepo, bankRepo)
         {
@@ -75,6 +77,7 @@ namespace Services.Financial
             _maincontraAccount = maincontraAccount;
             _customerRepo = customerRepo;
             _vendorRepo = vendorRepo;
+            _generalLedgerSettingRepo = generalLedgerSettingRepo;
         }
 
         public FinancialYear CurrentFiscalYear()
@@ -675,9 +678,49 @@ namespace Services.Financial
             return _generalLedgerRepository.Table.Where(gl => gl.Id == id).FirstOrDefault();
         }
 
-        public void ClosedAccountingPeriod()
+        public JournalEntryHeader CloseAccountingPeriod()
         {
+            /*
+            Example:
 
+            The following example shows the closing entries based on the adjusted trial balance of Company A.
+
+            Note	
+            
+            Date	        Account	                Debit	        Credit
+            1	Jan 31	    Service Revenue	        85,600	
+                            Income Summary		                    85,600
+            2	Jan 31	    Income Summary	        77,364	
+                            Wages Expense		                    38,200
+                            Supplies Expense	                    18,480
+                            Rent Expense		                    12,000
+                            Miscellaneous Expense	                3,470
+                            Electricity Expense		                2,470
+                            Telephone Expense		                1,494
+                            Depreciation Expense	                1,100
+                            Interest Expense		                150
+            3	Jan 31	    Income Summary	        8,236	
+                            Retained Earnings		                8,236
+            4	Jan 31	    Retained Earnings	    5,000	
+                            Dividend		                        5,000
+            
+            Notes
+
+            1. Service revenue account is debited and its balance it credited to income summary account. If a business has other income accounts, for example gain on sale account, then the debit side of the first closing entry will also include the gain on sale account and the income summary account will be credited for the sum of all income accounts.
+            2. Each expense account is credited and the income summary is debited for the sum of the balances of expense accounts. This will reduce the balance in income summary account.
+            3. Income summary account is debited and retained earnings account is credited for the an amount equal to the excess of service revenue over total expenses i.e. the net balance in income summary account after posting the first two closing entries. In this case $85,600 − $77,364 = $8,236. Please note that, if the balance in income summary account is negative at this stage, this closing entry will be opposite i.e. debit to retained earnings and credit to income summary.
+            4. The last closing entry transfers the dividend or withdrawal account balance to the retained earnings account. Since dividend and withdrawal accounts are contra to the retained earnings account, they reduce the balance in the retained earnings.
+            */
+
+            var glSetting = _generalLedgerSettingRepo.Table.FirstOrDefault();
+
+            var journalEntry = new JournalEntryHeader();
+            journalEntry.Memo = "Closing entries";
+            journalEntry.Date = DateTime.Now;
+            journalEntry.Posted = false;
+            journalEntry.VoucherType = JournalVoucherTypes.ClosingEntries;
+
+            return journalEntry;
         }
     }
 }

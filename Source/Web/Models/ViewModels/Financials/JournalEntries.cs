@@ -55,6 +55,7 @@ namespace Web.Models.ViewModels.Financials
         public int Id { get; set; }
         public int JournalEntryId { get; set; }
         public bool Posted { get; set; }
+        public JournalVoucherTypes JournalVoucherType { get; set; }
 
         public ICollection<SelectListItem> Accounts { get; set; }
         public IList<AddJournalEntryLine> AddJournalEntryLines { get; set; }

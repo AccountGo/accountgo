@@ -25,11 +25,15 @@ namespace Core.Domain.Financials
         public int? GoodsReceiptNoteClearingAccountId { get; set; }
         public int? SalesDiscountAccountId { get; set; }
         public int? ShippingChargeAccountId { get; set; }
+        public int? PermanentAccountId { get; set; }
+        public int? IncomeSummaryAccountId { get; set; }
 
         public virtual Account PayableAccount { get; set; }
         public virtual Account PurchaseDiscountAccount { get; set; }
         public virtual Account GoodsReceiptNoteClearingAccount { get; set; }
         public virtual Account SalesDiscountAccount { get; set; }
-        public virtual Account ShippingChargeAccount { get; set; } 
+        public virtual Account ShippingChargeAccount { get; set; }
+        public virtual Account PermanentAccount { get; set; }
+        public virtual Account IncomeSummaryAccount { get; set; }
     }
 }

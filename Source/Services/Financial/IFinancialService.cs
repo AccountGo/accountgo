@@ -44,6 +44,6 @@ namespace Services.Financial
         Account GetAccountByAccountCode(string accountcode);
         Account GetAccount(int id);
         void AddAccount(Account account);
-        void ClosedAccountingPeriod();
+        JournalEntryHeader CloseAccountingPeriod();
     }
 }

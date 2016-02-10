@@ -22,6 +22,10 @@
             <label class="col-md-2 control-label">Memo</label>
             @Html.TextBoxFor(m => m.Memo)
         </div>
+        <div class="form-group">
+            <label class="col-md-2 control-label">Voucher Type</label>
+            @Html.EnumDropDownListFor(m => m.JournalVoucherType)
+        </div>
     </div>
     <div class="panel panel-default panel-body">
         <table class="table">

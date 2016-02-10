@@ -60,9 +60,16 @@ namespace Core.Domain
         Contact = 3
     }
 
+    /// <summary>
+    /// Journal voucher is prepared for the transactions which does not relate to sales, purchases, cash, bank, material returns
+    /// </summary>
     public enum JournalVoucherTypes
     {
-        CashDisbursement = 1
+        OpeningBalances = 1,
+        ClosingEntries = 2,
+        AdjustmentEntries = 3,
+        CorrectionEntries = 4,
+        TransferEntries = 5,
     }
 
     public enum PurchaseStatuses

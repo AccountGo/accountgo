@@ -6,6 +6,8 @@
     [GoodsReceiptNoteClearingAccountId] INT            NULL,
     [SalesDiscountAccountId]            INT            NULL,
     [ShippingChargeAccountId]           INT            NULL,
+	[PermanentAccountId]				INT			   NULL,
+	[IncomeSummaryAccountId]			INT			   NULL,
     CONSTRAINT [PK_dbo.GeneralLedgerSetting] PRIMARY KEY CLUSTERED ([Id] ASC),
     CONSTRAINT [FK_dbo.GeneralLedgerSetting_dbo.Account_GoodsReceiptNoteClearingAccountId] FOREIGN KEY ([GoodsReceiptNoteClearingAccountId]) REFERENCES [dbo].[Account] ([Id]),
     CONSTRAINT [FK_dbo.GeneralLedgerSetting_dbo.Account_PayableAccountId] FOREIGN KEY ([PayableAccountId]) REFERENCES [dbo].[Account] ([Id]),
