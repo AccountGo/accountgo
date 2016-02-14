@@ -30,8 +30,8 @@ If you are a developer and wanted to take part as contributor/collaborator we ar
 So go ahead, add your code. Looking forward to your first pull request.
 
 # Contact Support
-Feel free to email mvpsolution@gmail.com of any questions.
+Feel free to email solutions@accountgo.ph of any questions.
 
 Don't miss regular source code updates, join http://accountgo.googlegroups.com
 
-Also, you can view demo site here (http://accountgo.azurewebsites.net)
+Also, you can view demo site here (http://www.accountgo.ph/)
