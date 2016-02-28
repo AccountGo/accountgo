@@ -1,0 +1,174 @@
+﻿<error errorId="fdc8b408-8ad1-43a3-9652-c689eccc1678" application="/LM/W3SVC/2/ROOT" host="42MGXY1" type="System.Web.HttpException" message="A public action method 'Edit' was not found on controller 'Web.Controllers.AdministrationController'." source="System.Web.Mvc" detail="System.Web.HttpException (0x80004005): A public action method 'Edit' was not found on controller 'Web.Controllers.AdministrationController'.&#xD;&#xA;   at System.Web.Mvc.Controller.HandleUnknownAction(String actionName)&#xD;&#xA;   at System.Web.Mvc.Controller.&lt;BeginExecuteCore&gt;b__1d(IAsyncResult asyncResult, ExecuteCoreState innerState)&#xD;&#xA;   at System.Web.Mvc.Async.AsyncResultWrapper.WrappedAsyncVoid`1.CallEndDelegate(IAsyncResult asyncResult)&#xD;&#xA;   at System.Web.Mvc.Async.AsyncResultWrapper.WrappedAsyncResultBase`1.End()&#xD;&#xA;   at System.Web.Mvc.Async.AsyncResultWrapper.End[TResult](IAsyncResult asyncResult, Object tag)&#xD;&#xA;   at System.Web.Mvc.Async.AsyncResultWrapper.End(IAsyncResult asyncResult, Object tag)&#xD;&#xA;   at System.Web.Mvc.Controller.EndExecuteCore(IAsyncResult asyncResult)&#xD;&#xA;   at System.Web.Mvc.Controller.&lt;BeginExecute&gt;b__15(IAsyncResult asyncResult, Controller controller)&#xD;&#xA;   at System.Web.Mvc.Async.AsyncResultWrapper.WrappedAsyncVoid`1.CallEndDelegate(IAsyncResult asyncResult)&#xD;&#xA;   at System.Web.Mvc.Async.AsyncResultWrapper.WrappedAsyncResultBase`1.End()&#xD;&#xA;   at System.Web.Mvc.Async.AsyncResultWrapper.End[TResult](IAsyncResult asyncResult, Object tag)&#xD;&#xA;   at System.Web.Mvc.Async.AsyncResultWrapper.End(IAsyncResult asyncResult, Object tag)&#xD;&#xA;   at System.Web.Mvc.Controller.EndExecute(IAsyncResult asyncResult)&#xD;&#xA;   at System.Web.Mvc.Controller.System.Web.Mvc.Async.IAsyncController.EndExecute(IAsyncResult asyncResult)&#xD;&#xA;   at System.Web.Mvc.MvcHandler.&lt;BeginProcessRequest&gt;b__5(IAsyncResult asyncResult, ProcessRequestState innerState)&#xD;&#xA;   at System.Web.Mvc.Async.AsyncResultWrapper.WrappedAsyncVoid`1.CallEndDelegate(IAsyncResult asyncResult)&#xD;&#xA;   at System.Web.Mvc.Async.AsyncResultWrapper.WrappedAsyncResultBase`1.End()&#xD;&#xA;   at System.Web.Mvc.Async.AsyncResultWrapper.End[TResult](IAsyncResult asyncResult, Object tag)&#xD;&#xA;   at System.Web.Mvc.Async.AsyncResultWrapper.End(IAsyncResult asyncResult, Object tag)&#xD;&#xA;   at System.Web.Mvc.MvcHandler.EndProcessRequest(IAsyncResult asyncResult)&#xD;&#xA;   at System.Web.Mvc.MvcHandler.System.Web.IHttpAsyncHandler.EndProcessRequest(IAsyncResult result)&#xD;&#xA;   at System.Web.HttpApplication.CallHandlerExecutionStep.System.Web.HttpApplication.IExecutionStep.Execute()&#xD;&#xA;   at System.Web.HttpApplication.ExecuteStep(IExecutionStep step, Boolean&amp; completedSynchronously)" user="admin" time="2016-02-06T09:21:16.1271346Z" statusCode="404">
+  <serverVariables>
+    <item name="ALL_HTTP">
+      <value string="HTTP_CONNECTION:Keep-Alive&#xD;&#xA;HTTP_ACCEPT:text/html, application/xhtml+xml, */*&#xD;&#xA;HTTP_ACCEPT_ENCODING:gzip, deflate, peerdist&#xD;&#xA;HTTP_ACCEPT_LANGUAGE:en-AU&#xD;&#xA;HTTP_COOKIE:__RequestVerificationToken=naLx9ETAYCu5BddyoqyHydmoxz4Z38TGITZh3_pGS86ViZ0JAtpBq5E_Zd4ES4ipI13hkR_tPVEAQVy2uR6g2fd6FdOYNdUT8R7NfeXT-Bo1; .AspNet.ApplicationCookie=xBG8zTiP4Nj6RLIe4VxqllbP8IMasAkCbzhDzbdyNHJolgJhtVmbpS1y0MRApIEfkGi-MwW2lO9wRtFt-WCJmWmftkZu_LhBAv3cycQpNlJbHBCHkAglhImg9aVCqzoCcw-Sj29DxtkIJxag8uHxlSPEQwacRCFW9TUhm6V34AuMLXBsaeoBQNAMWUA81giuGfqEj4A7qRHXNuT5Kluc2ZKcthr6ekoLWN6-6K9U2YDLXcTpzztCWxsRM9nTgMPCjk1_2iG3UW71C2GmZRvyt4R5GjhQeLFWQuxwhrK0pj44yLLVerxd4zG88MalbGlzFUFR9x14GmBxbh7EXEeKEmzwI2134WpZrfv_rF8UcbMhaHY56VH582dWr7RiAeRkUXX6UMZ-prQF-ziJkh1ZaPfQztCw3_2im7ZwFzwp23YNQYuoWQWs4SC_VC6lJgSr2Ujd8i9794w5va9xBsPSgrHdNpKFBu6t_dazlaUBjVc&#xD;&#xA;HTTP_HOST:localhost:25710&#xD;&#xA;HTTP_REFERER:http://localhost:25710/Administration/Company&#xD;&#xA;HTTP_USER_AGENT:Mozilla/5.0 (Windows NT 6.3; WOW64; Trident/7.0; rv:11.0) like Gecko&#xD;&#xA;HTTP_DNT:1&#xD;&#xA;HTTP_X_P2P_PEERDIST:Version=1.1&#xD;&#xA;HTTP_X_P2P_PEERDISTEX:MinContentInformation=1.0, MaxContentInformation=2.0&#xD;&#xA;" />
+    </item>
+    <item name="ALL_RAW">
+      <value string="Connection: Keep-Alive&#xD;&#xA;Accept: text/html, application/xhtml+xml, */*&#xD;&#xA;Accept-Encoding: gzip, deflate, peerdist&#xD;&#xA;Accept-Language: en-AU&#xD;&#xA;Cookie: __RequestVerificationToken=naLx9ETAYCu5BddyoqyHydmoxz4Z38TGITZh3_pGS86ViZ0JAtpBq5E_Zd4ES4ipI13hkR_tPVEAQVy2uR6g2fd6FdOYNdUT8R7NfeXT-Bo1; .AspNet.ApplicationCookie=xBG8zTiP4Nj6RLIe4VxqllbP8IMasAkCbzhDzbdyNHJolgJhtVmbpS1y0MRApIEfkGi-MwW2lO9wRtFt-WCJmWmftkZu_LhBAv3cycQpNlJbHBCHkAglhImg9aVCqzoCcw-Sj29DxtkIJxag8uHxlSPEQwacRCFW9TUhm6V34AuMLXBsaeoBQNAMWUA81giuGfqEj4A7qRHXNuT5Kluc2ZKcthr6ekoLWN6-6K9U2YDLXcTpzztCWxsRM9nTgMPCjk1_2iG3UW71C2GmZRvyt4R5GjhQeLFWQuxwhrK0pj44yLLVerxd4zG88MalbGlzFUFR9x14GmBxbh7EXEeKEmzwI2134WpZrfv_rF8UcbMhaHY56VH582dWr7RiAeRkUXX6UMZ-prQF-ziJkh1ZaPfQztCw3_2im7ZwFzwp23YNQYuoWQWs4SC_VC6lJgSr2Ujd8i9794w5va9xBsPSgrHdNpKFBu6t_dazlaUBjVc&#xD;&#xA;Host: localhost:25710&#xD;&#xA;Referer: http://localhost:25710/Administration/Company&#xD;&#xA;User-Agent: Mozilla/5.0 (Windows NT 6.3; WOW64; Trident/7.0; rv:11.0) like Gecko&#xD;&#xA;DNT: 1&#xD;&#xA;X-P2P-PeerDist: Version=1.1&#xD;&#xA;X-P2P-PeerDistEx: MinContentInformation=1.0, MaxContentInformation=2.0&#xD;&#xA;" />
+    </item>
+    <item name="APPL_MD_PATH">
+      <value string="/LM/W3SVC/2/ROOT" />
+    </item>
+    <item name="APPL_PHYSICAL_PATH">
+      <value string="C:\Development\accountgo\github\Source\Web\" />
+    </item>
+    <item name="AUTH_TYPE">
+      <value string="ApplicationCookie" />
+    </item>
+    <item name="AUTH_USER">
+      <value string="admin" />
+    </item>
+    <item name="AUTH_PASSWORD">
+      <value string="*****" />
+    </item>
+    <item name="LOGON_USER">
+      <value string="" />
+    </item>
+    <item name="REMOTE_USER">
+      <value string="admin" />
+    </item>
+    <item name="CERT_COOKIE">
+      <value string="" />
+    </item>
+    <item name="CERT_FLAGS">
+      <value string="" />
+    </item>
+    <item name="CERT_ISSUER">
+      <value string="" />
+    </item>
+    <item name="CERT_KEYSIZE">
+      <value string="" />
+    </item>
+    <item name="CERT_SECRETKEYSIZE">
+      <value string="" />
+    </item>
+    <item name="CERT_SERIALNUMBER">
+      <value string="" />
+    </item>
+    <item name="CERT_SERVER_ISSUER">
+      <value string="" />
+    </item>
+    <item name="CERT_SERVER_SUBJECT">
+      <value string="" />
+    </item>
+    <item name="CERT_SUBJECT">
+      <value string="" />
+    </item>
+    <item name="CONTENT_LENGTH">
+      <value string="0" />
+    </item>
+    <item name="CONTENT_TYPE">
+      <value string="" />
+    </item>
+    <item name="GATEWAY_INTERFACE">
+      <value string="CGI/1.1" />
+    </item>
+    <item name="HTTPS">
+      <value string="off" />
+    </item>
+    <item name="HTTPS_KEYSIZE">
+      <value string="" />
+    </item>
+    <item name="HTTPS_SECRETKEYSIZE">
+      <value string="" />
+    </item>
+    <item name="HTTPS_SERVER_ISSUER">
+      <value string="" />
+    </item>
+    <item name="HTTPS_SERVER_SUBJECT">
+      <value string="" />
+    </item>
+    <item name="INSTANCE_ID">
+      <value string="2" />
+    </item>
+    <item name="INSTANCE_META_PATH">
+      <value string="/LM/W3SVC/2" />
+    </item>
+    <item name="LOCAL_ADDR">
+      <value string="::1" />
+    </item>
+    <item name="PATH_INFO">
+      <value string="/Administration/Edit/1" />
+    </item>
+    <item name="PATH_TRANSLATED">
+      <value string="C:\Development\accountgo\github\Source\Web\Administration\Edit\1" />
+    </item>
+    <item name="QUERY_STRING">
+      <value string="" />
+    </item>
+    <item name="REMOTE_ADDR">
+      <value string="::1" />
+    </item>
+    <item name="REMOTE_HOST">
+      <value string="::1" />
+    </item>
+    <item name="REMOTE_PORT">
+      <value string="38450" />
+    </item>
+    <item name="REQUEST_METHOD">
+      <value string="GET" />
+    </item>
+    <item name="SCRIPT_NAME">
+      <value string="/Administration/Edit/1" />
+    </item>
+    <item name="SERVER_NAME">
+      <value string="localhost" />
+    </item>
+    <item name="SERVER_PORT">
+      <value string="25710" />
+    </item>
+    <item name="SERVER_PORT_SECURE">
+      <value string="0" />
+    </item>
+    <item name="SERVER_PROTOCOL">
+      <value string="HTTP/1.1" />
+    </item>
+    <item name="SERVER_SOFTWARE">
+      <value string="Microsoft-IIS/10.0" />
+    </item>
+    <item name="URL">
+      <value string="/Administration/Edit/1" />
+    </item>
+    <item name="HTTP_CONNECTION">
+      <value string="Keep-Alive" />
+    </item>
+    <item name="HTTP_ACCEPT">
+      <value string="text/html, application/xhtml+xml, */*" />
+    </item>
+    <item name="HTTP_ACCEPT_ENCODING">
+      <value string="gzip, deflate, peerdist" />
+    </item>
+    <item name="HTTP_ACCEPT_LANGUAGE">
+      <value string="en-AU" />
+    </item>
+    <item name="HTTP_COOKIE">
+      <value string="__RequestVerificationToken=naLx9ETAYCu5BddyoqyHydmoxz4Z38TGITZh3_pGS86ViZ0JAtpBq5E_Zd4ES4ipI13hkR_tPVEAQVy2uR6g2fd6FdOYNdUT8R7NfeXT-Bo1; .AspNet.ApplicationCookie=xBG8zTiP4Nj6RLIe4VxqllbP8IMasAkCbzhDzbdyNHJolgJhtVmbpS1y0MRApIEfkGi-MwW2lO9wRtFt-WCJmWmftkZu_LhBAv3cycQpNlJbHBCHkAglhImg9aVCqzoCcw-Sj29DxtkIJxag8uHxlSPEQwacRCFW9TUhm6V34AuMLXBsaeoBQNAMWUA81giuGfqEj4A7qRHXNuT5Kluc2ZKcthr6ekoLWN6-6K9U2YDLXcTpzztCWxsRM9nTgMPCjk1_2iG3UW71C2GmZRvyt4R5GjhQeLFWQuxwhrK0pj44yLLVerxd4zG88MalbGlzFUFR9x14GmBxbh7EXEeKEmzwI2134WpZrfv_rF8UcbMhaHY56VH582dWr7RiAeRkUXX6UMZ-prQF-ziJkh1ZaPfQztCw3_2im7ZwFzwp23YNQYuoWQWs4SC_VC6lJgSr2Ujd8i9794w5va9xBsPSgrHdNpKFBu6t_dazlaUBjVc" />
+    </item>
+    <item name="HTTP_HOST">
+      <value string="localhost:25710" />
+    </item>
+    <item name="HTTP_REFERER">
+      <value string="http://localhost:25710/Administration/Company" />
+    </item>
+    <item name="HTTP_USER_AGENT">
+      <value string="Mozilla/5.0 (Windows NT 6.3; WOW64; Trident/7.0; rv:11.0) like Gecko" />
+    </item>
+    <item name="HTTP_DNT">
+      <value string="1" />
+    </item>
+    <item name="HTTP_X_P2P_PEERDIST">
+      <value string="Version=1.1" />
+    </item>
+    <item name="HTTP_X_P2P_PEERDISTEX">
+      <value string="MinContentInformation=1.0, MaxContentInformation=2.0" />
+    </item>
+  </serverVariables>
+  <cookies>
+    <item name="__RequestVerificationToken">
+      <value string="naLx9ETAYCu5BddyoqyHydmoxz4Z38TGITZh3_pGS86ViZ0JAtpBq5E_Zd4ES4ipI13hkR_tPVEAQVy2uR6g2fd6FdOYNdUT8R7NfeXT-Bo1" />
+    </item>
+    <item name=".AspNet.ApplicationCookie">
+      <value string="xBG8zTiP4Nj6RLIe4VxqllbP8IMasAkCbzhDzbdyNHJolgJhtVmbpS1y0MRApIEfkGi-MwW2lO9wRtFt-WCJmWmftkZu_LhBAv3cycQpNlJbHBCHkAglhImg9aVCqzoCcw-Sj29DxtkIJxag8uHxlSPEQwacRCFW9TUhm6V34AuMLXBsaeoBQNAMWUA81giuGfqEj4A7qRHXNuT5Kluc2ZKcthr6ekoLWN6-6K9U2YDLXcTpzztCWxsRM9nTgMPCjk1_2iG3UW71C2GmZRvyt4R5GjhQeLFWQuxwhrK0pj44yLLVerxd4zG88MalbGlzFUFR9x14GmBxbh7EXEeKEmzwI2134WpZrfv_rF8UcbMhaHY56VH582dWr7RiAeRkUXX6UMZ-prQF-ziJkh1ZaPfQztCw3_2im7ZwFzwp23YNQYuoWQWs4SC_VC6lJgSr2Ujd8i9794w5va9xBsPSgrHdNpKFBu6t_dazlaUBjVc" />
+    </item>
+  </cookies>
+</error>

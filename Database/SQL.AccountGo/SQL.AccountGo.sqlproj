@@ -27,6 +27,7 @@
     <DefaultFilegroup>PRIMARY</DefaultFilegroup>
     <TargetFrameworkProfile />
     <GenerateCreateScript>True</GenerateCreateScript>
+    <DacApplicationName>AccountGo</DacApplicationName>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <OutputPath>bin\Release\</OutputPath>
@@ -63,6 +64,7 @@
     <Folder Include="Properties" />
     <Folder Include="dbo\" />
     <Folder Include="dbo\Tables\" />
+    <Folder Include="Snapshots" />
   </ItemGroup>
   <ItemGroup>
     <Build Include="dbo\Tables\ItemTaxGroup.sql" />
@@ -85,7 +87,7 @@
     <Build Include="dbo\Tables\Contact.sql" />
     <Build Include="dbo\Tables\CompanySetting.sql" />
     <Build Include="dbo\Tables\Customer.sql" />
-    <Build Include="dbo\Tables\Banks.sql" />
+    <Build Include="dbo\Tables\Bank.sql" />
     <Build Include="dbo\Tables\JournalEntryLine.sql" />
     <Build Include="dbo\Tables\ItemCategory.sql" />
     <Build Include="dbo\Tables\Vendor.sql" />
@@ -126,5 +128,8 @@
     <Build Include="dbo\Tables\User.sql" />
     <Build Include="dbo\Tables\MainContraAccount.sql" />
     <Build Include="dbo\Tables\Log.sql" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="SQL.AccountGo.publish.xml" />
   </ItemGroup>
 </Project>

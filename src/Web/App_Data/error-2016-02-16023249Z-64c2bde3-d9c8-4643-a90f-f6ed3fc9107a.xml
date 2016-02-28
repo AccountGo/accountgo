@@ -1,0 +1,191 @@
+﻿<error errorId="64c2bde3-d9c8-4643-a90f-f6ed3fc9107a" application="/LM/W3SVC/7/ROOT" host="42MGXY1" type="System.ComponentModel.Win32Exception" message="The wait operation timed out" detail="System.Data.Entity.Core.EntityException: The underlying provider failed on Open. ---&gt; System.Data.SqlClient.SqlException: A network-related or instance-specific error occurred while establishing a connection to SQL Server. The server was not found or was not accessible. Verify that the instance name is correct and that SQL Server is configured to allow remote connections. (provider: TCP Provider, error: 0 - The wait operation timed out.) ---&gt; System.ComponentModel.Win32Exception: The wait operation timed out&#xD;&#xA;   --- End of inner exception stack trace ---&#xD;&#xA;   at System.Data.SqlClient.SqlInternalConnectionTds..ctor(DbConnectionPoolIdentity identity, SqlConnectionString connectionOptions, SqlCredential credential, Object providerInfo, String newPassword, SecureString newSecurePassword, Boolean redirectedUserInstance, SqlConnectionString userConnectionOptions, SessionData reconnectSessionData, DbConnectionPool pool, String accessToken, Boolean applyTransientFaultHandling)&#xD;&#xA;   at System.Data.SqlClient.SqlConnectionFactory.CreateConnection(DbConnectionOptions options, DbConnectionPoolKey poolKey, Object poolGroupProviderInfo, DbConnectionPool pool, DbConnection owningConnection, DbConnectionOptions userOptions)&#xD;&#xA;   at System.Data.ProviderBase.DbConnectionFactory.CreatePooledConnection(DbConnectionPool pool, DbConnection owningObject, DbConnectionOptions options, DbConnectionPoolKey poolKey, DbConnectionOptions userOptions)&#xD;&#xA;   at System.Data.ProviderBase.DbConnectionPool.CreateObject(DbConnection owningObject, DbConnectionOptions userOptions, DbConnectionInternal oldConnection)&#xD;&#xA;   at System.Data.ProviderBase.DbConnectionPool.UserCreateRequest(DbConnection owningObject, DbConnectionOptions userOptions, DbConnectionInternal oldConnection)&#xD;&#xA;   at System.Data.ProviderBase.DbConnectionPool.TryGetConnection(DbConnection owningObject, UInt32 waitForMultipleObjectsTimeout, Boolean allowCreate, Boolean onlyOneCheckConnection, DbConnectionOptions userOptions, DbConnectionInternal&amp; connection)&#xD;&#xA;   at System.Data.ProviderBase.DbConnectionPool.TryGetConnection(DbConnection owningObject, TaskCompletionSource`1 retry, DbConnectionOptions userOptions, DbConnectionInternal&amp; connection)&#xD;&#xA;   at System.Data.ProviderBase.DbConnectionFactory.TryGetConnection(DbConnection owningConnection, TaskCompletionSource`1 retry, DbConnectionOptions userOptions, DbConnectionInternal oldConnection, DbConnectionInternal&amp; connection)&#xD;&#xA;   at System.Data.ProviderBase.DbConnectionInternal.TryOpenConnectionInternal(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource`1 retry, DbConnectionOptions userOptions)&#xD;&#xA;   at System.Data.ProviderBase.DbConnectionClosed.TryOpenConnection(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource`1 retry, DbConnectionOptions userOptions)&#xD;&#xA;   at System.Data.SqlClient.SqlConnection.TryOpenInner(TaskCompletionSource`1 retry)&#xD;&#xA;   at System.Data.SqlClient.SqlConnection.TryOpen(TaskCompletionSource`1 retry)&#xD;&#xA;   at System.Data.SqlClient.SqlConnection.Open()&#xD;&#xA;   at Glimpse.Ado.AlternateType.GlimpseDbConnection.Open()&#xD;&#xA;   at System.Data.Common.DbConnection.OpenAsync(CancellationToken cancellationToken)&#xD;&#xA;--- End of stack trace from previous location where exception was thrown ---&#xD;&#xA;   at System.Runtime.CompilerServices.TaskAwaiter.ThrowForNonSuccess(Task task)&#xD;&#xA;   at System.Runtime.CompilerServices.TaskAwaiter.HandleNonSuccessAndDebuggerNotification(Task task)&#xD;&#xA;   at System.Runtime.CompilerServices.ConfiguredTaskAwaitable.ConfiguredTaskAwaiter.GetResult()&#xD;&#xA;   at System.Data.Entity.SqlServer.DefaultSqlExecutionStrategy.&lt;&gt;c__DisplayClass4.&lt;&lt;ExecuteAsync&gt;b__3&gt;d__6.MoveNext()&#xD;&#xA;--- End of stack trace from previous location where exception was thrown ---&#xD;&#xA;   at System.Runtime.CompilerServices.TaskAwaiter.ThrowForNonSuccess(Task task)&#xD;&#xA;   at System.Runtime.CompilerServices.TaskAwaiter.HandleNonSuccessAndDebuggerNotification(Task task)&#xD;&#xA;   at System.Runtime.CompilerServices.ConfiguredTaskAwaitable`1.ConfiguredTaskAwaiter.GetResult()&#xD;&#xA;   at System.Data.Entity.SqlServer.DefaultSqlExecutionStrategy.&lt;ExecuteAsyncImplementation&gt;d__9`1.MoveNext()&#xD;&#xA;--- End of stack trace from previous location where exception was thrown ---&#xD;&#xA;   at System.Runtime.CompilerServices.TaskAwaiter.ThrowForNonSuccess(Task task)&#xD;&#xA;   at System.Runtime.CompilerServices.TaskAwaiter.HandleNonSuccessAndDebuggerNotification(Task task)&#xD;&#xA;   at System.Runtime.CompilerServices.TaskAwaiter.GetResult()&#xD;&#xA;   at System.Data.Entity.Utilities.TaskExtensions.CultureAwaiter.GetResult()&#xD;&#xA;   at System.Data.Entity.Core.EntityClient.EntityConnection.&lt;OpenAsync&gt;d__8.MoveNext()&#xD;&#xA;   --- End of inner exception stack trace ---&#xD;&#xA;   at System.Data.Entity.Core.EntityClient.EntityConnection.&lt;OpenAsync&gt;d__8.MoveNext()&#xD;&#xA;--- End of stack trace from previous location where exception was thrown ---&#xD;&#xA;   at System.Runtime.CompilerServices.TaskAwaiter.ThrowForNonSuccess(Task task)&#xD;&#xA;   at System.Runtime.CompilerServices.TaskAwaiter.HandleNonSuccessAndDebuggerNotification(Task task)&#xD;&#xA;   at System.Runtime.CompilerServices.TaskAwaiter.GetResult()&#xD;&#xA;   at System.Data.Entity.Utilities.TaskExtensions.CultureAwaiter.GetResult()&#xD;&#xA;   at System.Data.Entity.Core.Objects.ObjectContext.&lt;EnsureConnectionAsync&gt;d__9.MoveNext()&#xD;&#xA;--- End of stack trace from previous location where exception was thrown ---&#xD;&#xA;   at System.Runtime.CompilerServices.TaskAwaiter.ThrowForNonSuccess(Task task)&#xD;&#xA;   at System.Runtime.CompilerServices.TaskAwaiter.HandleNonSuccessAndDebuggerNotification(Task task)&#xD;&#xA;   at System.Runtime.CompilerServices.TaskAwaiter.GetResult()&#xD;&#xA;   at System.Data.Entity.Utilities.TaskExtensions.CultureAwaiter.GetResult()&#xD;&#xA;   at System.Data.Entity.Core.Objects.ObjectContext.&lt;ExecuteInTransactionAsync&gt;d__3d`1.MoveNext()&#xD;&#xA;--- End of stack trace from previous location where exception was thrown ---&#xD;&#xA;   at System.Runtime.CompilerServices.TaskAwaiter.ThrowForNonSuccess(Task task)&#xD;&#xA;   at System.Runtime.CompilerServices.TaskAwaiter.HandleNonSuccessAndDebuggerNotification(Task task)&#xD;&#xA;   at System.Runtime.CompilerServices.ConfiguredTaskAwaitable`1.ConfiguredTaskAwaiter.GetResult()&#xD;&#xA;   at System.Data.Entity.SqlServer.DefaultSqlExecutionStrategy.&lt;ExecuteAsyncImplementation&gt;d__9`1.MoveNext()&#xD;&#xA;--- End of stack trace from previous location where exception was thrown ---&#xD;&#xA;   at System.Runtime.CompilerServices.TaskAwaiter.ThrowForNonSuccess(Task task)&#xD;&#xA;   at System.Runtime.CompilerServices.TaskAwaiter.HandleNonSuccessAndDebuggerNotification(Task task)&#xD;&#xA;   at System.Runtime.CompilerServices.TaskAwaiter`1.GetResult()&#xD;&#xA;   at System.Data.Entity.Utilities.TaskExtensions.CultureAwaiter`1.GetResult()&#xD;&#xA;   at System.Data.Entity.Core.Objects.ObjectQuery`1.&lt;GetResultsAsync&gt;d__e.MoveNext()&#xD;&#xA;--- End of stack trace from previous location where exception was thrown ---&#xD;&#xA;   at System.Runtime.CompilerServices.TaskAwaiter.ThrowForNonSuccess(Task task)&#xD;&#xA;   at System.Runtime.CompilerServices.TaskAwaiter.HandleNonSuccessAndDebuggerNotification(Task task)&#xD;&#xA;   at System.Runtime.CompilerServices.TaskAwaiter`1.GetResult()&#xD;&#xA;   at System.Data.Entity.Utilities.TaskExtensions.CultureAwaiter`1.GetResult()&#xD;&#xA;   at System.Data.Entity.Internal.LazyAsyncEnumerator`1.&lt;FirstMoveNextAsync&gt;d__0.MoveNext()&#xD;&#xA;--- End of stack trace from previous location where exception was thrown ---&#xD;&#xA;   at System.Runtime.CompilerServices.TaskAwaiter.ThrowForNonSuccess(Task task)&#xD;&#xA;   at System.Runtime.CompilerServices.TaskAwaiter.HandleNonSuccessAndDebuggerNotification(Task task)&#xD;&#xA;   at System.Runtime.CompilerServices.TaskAwaiter`1.GetResult()&#xD;&#xA;   at System.Data.Entity.Utilities.TaskExtensions.CultureAwaiter`1.GetResult()&#xD;&#xA;   at System.Data.Entity.Infrastructure.IDbAsyncEnumerableExtensions.&lt;FirstOrDefaultAsync&gt;d__25`1.MoveNext()&#xD;&#xA;--- End of stack trace from previous location where exception was thrown ---&#xD;&#xA;   at System.Runtime.CompilerServices.TaskAwaiter.ThrowForNonSuccess(Task task)&#xD;&#xA;   at System.Runtime.CompilerServices.TaskAwaiter.HandleNonSuccessAndDebuggerNotification(Task task)&#xD;&#xA;   at System.Runtime.CompilerServices.TaskAwaiter`1.GetResult()&#xD;&#xA;   at Microsoft.AspNet.Identity.TaskExtensions.CultureAwaiter`1.GetResult()&#xD;&#xA;   at Microsoft.AspNet.Identity.EntityFramework.UserStore`6.&lt;GetUserAggregateAsync&gt;d__6c.MoveNext()&#xD;&#xA;--- End of stack trace from previous location where exception was thrown ---&#xD;&#xA;   at System.Runtime.CompilerServices.TaskAwaiter.ThrowForNonSuccess(Task task)&#xD;&#xA;   at System.Runtime.CompilerServices.TaskAwaiter.HandleNonSuccessAndDebuggerNotification(Task task)&#xD;&#xA;   at System.Runtime.CompilerServices.TaskAwaiter`1.GetResult()&#xD;&#xA;   at Microsoft.AspNet.Identity.TaskExtensions.CultureAwaiter`1.GetResult()&#xD;&#xA;   at Microsoft.AspNet.Identity.Owin.SignInManager`2.&lt;PasswordSignInAsync&gt;d__29.MoveNext()&#xD;&#xA;--- End of stack trace from previous location where exception was thrown ---&#xD;&#xA;   at System.Runtime.CompilerServices.TaskAwaiter.ThrowForNonSuccess(Task task)&#xD;&#xA;   at System.Runtime.CompilerServices.TaskAwaiter.HandleNonSuccessAndDebuggerNotification(Task task)&#xD;&#xA;   at System.Runtime.CompilerServices.TaskAwaiter`1.GetResult()&#xD;&#xA;   at Web.Controllers.AccountController.&lt;Login&gt;d__12.MoveNext() in C:\Development\accountgo\accountgo\src\Web\Controllers\AccountController.cs:line 85&#xD;&#xA;--- End of stack trace from previous location where exception was thrown ---&#xD;&#xA;   at System.Runtime.CompilerServices.TaskAwaiter.ThrowForNonSuccess(Task task)&#xD;&#xA;   at System.Runtime.CompilerServices.TaskAwaiter.HandleNonSuccessAndDebuggerNotification(Task task)&#xD;&#xA;   at System.Runtime.CompilerServices.TaskAwaiter.GetResult()&#xD;&#xA;   at System.Threading.Tasks.TaskHelpersExtensions.ThrowIfFaulted(Task task)&#xD;&#xA;   at System.Web.Mvc.Async.TaskAsyncActionDescriptor.EndExecute(IAsyncResult asyncResult)&#xD;&#xA;   at System.Web.Mvc.Async.AsyncControllerActionInvoker.&lt;&gt;c__DisplayClass37.&lt;BeginInvokeAsynchronousActionMethod&gt;b__36(IAsyncResult asyncResult)&#xD;&#xA;   at System.Web.Mvc.Async.AsyncResultWrapper.WrappedAsyncResult`1.CallEndDelegate(IAsyncResult asyncResult)&#xD;&#xA;   at System.Web.Mvc.Async.AsyncResultWrapper.WrappedAsyncResultBase`1.End()&#xD;&#xA;   at Castle.Proxies.AsyncControllerActionInvokerProxy.EndInvokeActionMethod_callback(IAsyncResult asyncResult)&#xD;&#xA;   at Castle.Proxies.Invocations.AsyncControllerActionInvoker_EndInvokeActionMethod.InvokeMethodOnTarget()&#xD;&#xA;   at Castle.DynamicProxy.AbstractInvocation.Proceed()&#xD;&#xA;   at Glimpse.Core.Extensibility.CastleInvocationToAlternateMethodContextAdapter.Proceed()&#xD;&#xA;   at Glimpse.Mvc.AlternateType.AsyncActionInvoker.EndInvokeActionMethod.NewImplementation(IAlternateMethodContext context)&#xD;&#xA;   at Glimpse.Core.Extensibility.AlternateTypeToCastleInterceptorAdapter.Intercept(IInvocation invocation)&#xD;&#xA;   at Castle.DynamicProxy.AbstractInvocation.Proceed()&#xD;&#xA;   at Castle.Proxies.AsyncControllerActionInvokerProxy.EndInvokeActionMethod(IAsyncResult asyncResult)&#xD;&#xA;   at System.Web.Mvc.Async.AsyncControllerActionInvoker.AsyncInvocationWithFilters.&lt;InvokeActionMethodFilterAsynchronouslyRecursive&gt;b__3d()&#xD;&#xA;   at System.Web.Mvc.Async.AsyncControllerActionInvoker.AsyncInvocationWithFilters.&lt;&gt;c__DisplayClass46.&lt;InvokeActionMethodFilterAsynchronouslyRecursive&gt;b__3f()&#xD;&#xA;   at System.Web.Mvc.Async.AsyncControllerActionInvoker.&lt;&gt;c__DisplayClass33.&lt;BeginInvokeActionMethodWithFilters&gt;b__32(IAsyncResult asyncResult)&#xD;&#xA;   at System.Web.Mvc.Async.AsyncResultWrapper.WrappedAsyncResult`1.CallEndDelegate(IAsyncResult asyncResult)&#xD;&#xA;   at System.Web.Mvc.Async.AsyncResultWrapper.WrappedAsyncResultBase`1.End()&#xD;&#xA;   at System.Web.Mvc.Async.AsyncResultWrapper.End[TResult](IAsyncResult asyncResult, Object tag)&#xD;&#xA;   at System.Web.Mvc.Async.AsyncControllerActionInvoker.EndInvokeActionMethodWithFilters(IAsyncResult asyncResult)&#xD;&#xA;   at System.Web.Mvc.Async.AsyncControllerActionInvoker.&lt;&gt;c__DisplayClass21.&lt;&gt;c__DisplayClass2b.&lt;BeginInvokeAction&gt;b__1c()&#xD;&#xA;   at System.Web.Mvc.Async.AsyncControllerActionInvoker.&lt;&gt;c__DisplayClass21.&lt;BeginInvokeAction&gt;b__1e(IAsyncResult asyncResult)&#xD;&#xA;   at System.Web.Mvc.Async.AsyncResultWrapper.WrappedAsyncResult`1.CallEndDelegate(IAsyncResult asyncResult)&#xD;&#xA;   at System.Web.Mvc.Async.AsyncResultWrapper.WrappedAsyncResultBase`1.End()&#xD;&#xA;   at System.Web.Mvc.Async.AsyncResultWrapper.End[TResult](IAsyncResult asyncResult, Object tag)&#xD;&#xA;   at System.Web.Mvc.Async.AsyncControllerActionInvoker.EndInvokeAction(IAsyncResult asyncResult)&#xD;&#xA;   at System.Web.Mvc.Controller.&lt;BeginExecuteCore&gt;b__1d(IAsyncResult asyncResult, ExecuteCoreState innerState)&#xD;&#xA;   at System.Web.Mvc.Async.AsyncResultWrapper.WrappedAsyncVoid`1.CallEndDelegate(IAsyncResult asyncResult)&#xD;&#xA;   at System.Web.Mvc.Async.AsyncResultWrapper.WrappedAsyncResultBase`1.End()&#xD;&#xA;   at System.Web.Mvc.Async.AsyncResultWrapper.End[TResult](IAsyncResult asyncResult, Object tag)&#xD;&#xA;   at System.Web.Mvc.Async.AsyncResultWrapper.End(IAsyncResult asyncResult, Object tag)&#xD;&#xA;   at System.Web.Mvc.Controller.EndExecuteCore(IAsyncResult asyncResult)&#xD;&#xA;   at System.Web.Mvc.Controller.&lt;BeginExecute&gt;b__15(IAsyncResult asyncResult, Controller controller)&#xD;&#xA;   at System.Web.Mvc.Async.AsyncResultWrapper.WrappedAsyncVoid`1.CallEndDelegate(IAsyncResult asyncResult)&#xD;&#xA;   at System.Web.Mvc.Async.AsyncResultWrapper.WrappedAsyncResultBase`1.End()&#xD;&#xA;   at System.Web.Mvc.Async.AsyncResultWrapper.End[TResult](IAsyncResult asyncResult, Object tag)&#xD;&#xA;   at System.Web.Mvc.Async.AsyncResultWrapper.End(IAsyncResult asyncResult, Object tag)&#xD;&#xA;   at System.Web.Mvc.Controller.EndExecute(IAsyncResult asyncResult)&#xD;&#xA;   at System.Web.Mvc.Controller.System.Web.Mvc.Async.IAsyncController.EndExecute(IAsyncResult asyncResult)&#xD;&#xA;   at System.Web.Mvc.MvcHandler.&lt;BeginProcessRequest&gt;b__5(IAsyncResult asyncResult, ProcessRequestState innerState)&#xD;&#xA;   at System.Web.Mvc.Async.AsyncResultWrapper.WrappedAsyncVoid`1.CallEndDelegate(IAsyncResult asyncResult)&#xD;&#xA;   at System.Web.Mvc.Async.AsyncResultWrapper.WrappedAsyncResultBase`1.End()&#xD;&#xA;   at System.Web.Mvc.Async.AsyncResultWrapper.End[TResult](IAsyncResult asyncResult, Object tag)&#xD;&#xA;   at System.Web.Mvc.Async.AsyncResultWrapper.End(IAsyncResult asyncResult, Object tag)&#xD;&#xA;   at System.Web.Mvc.MvcHandler.EndProcessRequest(IAsyncResult asyncResult)&#xD;&#xA;   at System.Web.Mvc.MvcHandler.System.Web.IHttpAsyncHandler.EndProcessRequest(IAsyncResult result)&#xD;&#xA;   at System.Web.HttpApplication.CallHandlerExecutionStep.System.Web.HttpApplication.IExecutionStep.Execute()&#xD;&#xA;   at System.Web.HttpApplication.ExecuteStep(IExecutionStep step, Boolean&amp; completedSynchronously)" time="2016-02-16T02:32:49.3370094Z">
+  <serverVariables>
+    <item name="ALL_HTTP">
+      <value string="HTTP_CACHE_CONTROL:no-cache&#xD;&#xA;HTTP_CONNECTION:Keep-Alive&#xD;&#xA;HTTP_CONTENT_LENGTH:186&#xD;&#xA;HTTP_CONTENT_TYPE:application/x-www-form-urlencoded&#xD;&#xA;HTTP_ACCEPT:text/html, application/xhtml+xml, */*&#xD;&#xA;HTTP_ACCEPT_ENCODING:gzip, deflate&#xD;&#xA;HTTP_ACCEPT_LANGUAGE:en-AU&#xD;&#xA;HTTP_COOKIE:glimpsePolicy=On; glimpseId=InternetExplorer 11.0; __RequestVerificationToken=apO5zgj-tVc6gPUeqRsDd0XsARPs-egEKQE7phv75ZzqxloqNPjkx6RezBTSuxwym7A8deDu8a1urnxTSPkLYvPIQEMm5pRUZGmt0R8jxcc1&#xD;&#xA;HTTP_HOST:localhost:25710&#xD;&#xA;HTTP_REFERER:http://localhost:25710/Account/Login&#xD;&#xA;HTTP_USER_AGENT:Mozilla/5.0 (Windows NT 6.3; WOW64; Trident/7.0; rv:11.0) like Gecko&#xD;&#xA;" />
+    </item>
+    <item name="ALL_RAW">
+      <value string="Cache-Control: no-cache&#xD;&#xA;Connection: Keep-Alive&#xD;&#xA;Content-Length: 186&#xD;&#xA;Content-Type: application/x-www-form-urlencoded&#xD;&#xA;Accept: text/html, application/xhtml+xml, */*&#xD;&#xA;Accept-Encoding: gzip, deflate&#xD;&#xA;Accept-Language: en-AU&#xD;&#xA;Cookie: glimpsePolicy=On; glimpseId=InternetExplorer 11.0; __RequestVerificationToken=apO5zgj-tVc6gPUeqRsDd0XsARPs-egEKQE7phv75ZzqxloqNPjkx6RezBTSuxwym7A8deDu8a1urnxTSPkLYvPIQEMm5pRUZGmt0R8jxcc1&#xD;&#xA;Host: localhost:25710&#xD;&#xA;Referer: http://localhost:25710/Account/Login&#xD;&#xA;User-Agent: Mozilla/5.0 (Windows NT 6.3; WOW64; Trident/7.0; rv:11.0) like Gecko&#xD;&#xA;" />
+    </item>
+    <item name="APPL_MD_PATH">
+      <value string="/LM/W3SVC/7/ROOT" />
+    </item>
+    <item name="APPL_PHYSICAL_PATH">
+      <value string="C:\Development\accountgo\accountgo\src\Web\" />
+    </item>
+    <item name="AUTH_TYPE">
+      <value string="" />
+    </item>
+    <item name="AUTH_USER">
+      <value string="" />
+    </item>
+    <item name="AUTH_PASSWORD">
+      <value string="*****" />
+    </item>
+    <item name="LOGON_USER">
+      <value string="" />
+    </item>
+    <item name="REMOTE_USER">
+      <value string="" />
+    </item>
+    <item name="CERT_COOKIE">
+      <value string="" />
+    </item>
+    <item name="CERT_FLAGS">
+      <value string="" />
+    </item>
+    <item name="CERT_ISSUER">
+      <value string="" />
+    </item>
+    <item name="CERT_KEYSIZE">
+      <value string="" />
+    </item>
+    <item name="CERT_SECRETKEYSIZE">
+      <value string="" />
+    </item>
+    <item name="CERT_SERIALNUMBER">
+      <value string="" />
+    </item>
+    <item name="CERT_SERVER_ISSUER">
+      <value string="" />
+    </item>
+    <item name="CERT_SERVER_SUBJECT">
+      <value string="" />
+    </item>
+    <item name="CERT_SUBJECT">
+      <value string="" />
+    </item>
+    <item name="CONTENT_LENGTH">
+      <value string="186" />
+    </item>
+    <item name="CONTENT_TYPE">
+      <value string="application/x-www-form-urlencoded" />
+    </item>
+    <item name="GATEWAY_INTERFACE">
+      <value string="CGI/1.1" />
+    </item>
+    <item name="HTTPS">
+      <value string="off" />
+    </item>
+    <item name="HTTPS_KEYSIZE">
+      <value string="" />
+    </item>
+    <item name="HTTPS_SECRETKEYSIZE">
+      <value string="" />
+    </item>
+    <item name="HTTPS_SERVER_ISSUER">
+      <value string="" />
+    </item>
+    <item name="HTTPS_SERVER_SUBJECT">
+      <value string="" />
+    </item>
+    <item name="INSTANCE_ID">
+      <value string="7" />
+    </item>
+    <item name="INSTANCE_META_PATH">
+      <value string="/LM/W3SVC/7" />
+    </item>
+    <item name="LOCAL_ADDR">
+      <value string="::1" />
+    </item>
+    <item name="PATH_INFO">
+      <value string="/Account/Login" />
+    </item>
+    <item name="PATH_TRANSLATED">
+      <value string="C:\Development\accountgo\accountgo\src\Web\Account\Login" />
+    </item>
+    <item name="QUERY_STRING">
+      <value string="" />
+    </item>
+    <item name="REMOTE_ADDR">
+      <value string="::1" />
+    </item>
+    <item name="REMOTE_HOST">
+      <value string="::1" />
+    </item>
+    <item name="REMOTE_PORT">
+      <value string="13346" />
+    </item>
+    <item name="REQUEST_METHOD">
+      <value string="POST" />
+    </item>
+    <item name="SCRIPT_NAME">
+      <value string="/Account/Login" />
+    </item>
+    <item name="SERVER_NAME">
+      <value string="localhost" />
+    </item>
+    <item name="SERVER_PORT">
+      <value string="25710" />
+    </item>
+    <item name="SERVER_PORT_SECURE">
+      <value string="0" />
+    </item>
+    <item name="SERVER_PROTOCOL">
+      <value string="HTTP/1.1" />
+    </item>
+    <item name="SERVER_SOFTWARE">
+      <value string="Microsoft-IIS/10.0" />
+    </item>
+    <item name="URL">
+      <value string="/Account/Login" />
+    </item>
+    <item name="HTTP_CACHE_CONTROL">
+      <value string="no-cache" />
+    </item>
+    <item name="HTTP_CONNECTION">
+      <value string="Keep-Alive" />
+    </item>
+    <item name="HTTP_CONTENT_LENGTH">
+      <value string="186" />
+    </item>
+    <item name="HTTP_CONTENT_TYPE">
+      <value string="application/x-www-form-urlencoded" />
+    </item>
+    <item name="HTTP_ACCEPT">
+      <value string="text/html, application/xhtml+xml, */*" />
+    </item>
+    <item name="HTTP_ACCEPT_ENCODING">
+      <value string="gzip, deflate" />
+    </item>
+    <item name="HTTP_ACCEPT_LANGUAGE">
+      <value string="en-AU" />
+    </item>
+    <item name="HTTP_COOKIE">
+      <value string="glimpsePolicy=On; glimpseId=InternetExplorer 11.0; __RequestVerificationToken=apO5zgj-tVc6gPUeqRsDd0XsARPs-egEKQE7phv75ZzqxloqNPjkx6RezBTSuxwym7A8deDu8a1urnxTSPkLYvPIQEMm5pRUZGmt0R8jxcc1" />
+    </item>
+    <item name="HTTP_HOST">
+      <value string="localhost:25710" />
+    </item>
+    <item name="HTTP_REFERER">
+      <value string="http://localhost:25710/Account/Login" />
+    </item>
+    <item name="HTTP_USER_AGENT">
+      <value string="Mozilla/5.0 (Windows NT 6.3; WOW64; Trident/7.0; rv:11.0) like Gecko" />
+    </item>
+  </serverVariables>
+  <form>
+    <item name="__RequestVerificationToken">
+      <value string="2Gemeu0I0ylA1za4aSrtDPiGe_c_Y-vDULFM3xfVOH0NySYdvZ4ImJelgOHx_xg1XIChzu1NbRencRzUVSJXk0SFdeRBz2EBaYXaa3AtTmQ1" />
+    </item>
+    <item name="Username">
+      <value string="admin" />
+    </item>
+    <item name="Password">
+      <value string="P@ssw0rd1" />
+    </item>
+    <item name="RememberMe">
+      <value string="false" />
+    </item>
+  </form>
+  <cookies>
+    <item name="glimpsePolicy">
+      <value string="On" />
+    </item>
+    <item name="glimpseId">
+      <value string="InternetExplorer 11.0" />
+    </item>
+    <item name="__RequestVerificationToken">
+      <value string="apO5zgj-tVc6gPUeqRsDd0XsARPs-egEKQE7phv75ZzqxloqNPjkx6RezBTSuxwym7A8deDu8a1urnxTSPkLYvPIQEMm5pRUZGmt0R8jxcc1" />
+    </item>
+  </cookies>
+</error>

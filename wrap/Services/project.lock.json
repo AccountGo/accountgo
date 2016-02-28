@@ -1,0 +1,30 @@
+{
+  "locked": false,
+  "version": 2,
+  "targets": {
+    ".NETFramework,Version=v4.6": {
+      "Core/1.0.0": {
+        "type": "project",
+        "framework": ".NETFramework,Version=v4.6"
+      }
+    },
+    ".NETFramework,Version=v4.6/win7-x86": {
+      "Core/1.0.0": {
+        "type": "project",
+        "framework": ".NETFramework,Version=v4.6"
+      }
+    }
+  },
+  "libraries": {
+    "Core/1.0.0": {
+      "type": "project",
+      "path": "../Core/project.json"
+    }
+  },
+  "projectFileDependencyGroups": {
+    "": [],
+    ".NETFramework,Version=v4.6": [
+      "Core >= 1.0.0-*"
+    ]
+  }
+}

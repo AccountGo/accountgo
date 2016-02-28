@@ -1,0 +1,15 @@
+{
+  "version": "1.0.0-*",
+  "frameworks": {
+    "net46": {
+      "wrappedProject": "../../src/Services/Services.csproj",
+      "bin": {
+        "assembly": "../../src/Services/obj/{configuration}/Services.dll",
+        "pdb": "../../src/Services/obj/{configuration}/Services.pdb"
+      },
+      "dependencies": {
+        "Core": "1.0.0-*"
+      }
+    }
+  }
+}

@@ -1,0 +1,180 @@
+﻿<error errorId="4a7b98ca-5bc4-4797-bef5-81d3a3676cf0" application="/LM/W3SVC/7/ROOT" host="42MGXY1" type="System.Data.SqlClient.SqlException" message="Cannot insert the value NULL into column 'Id', table 'db2a7cd04ec8d445cf9e2ca4e80025f299.dbo.Contact'; column does not allow nulls. INSERT fails.&#xD;&#xA;The statement has been terminated." source=".Net SqlClient Data Provider" detail="System.Data.Entity.Infrastructure.DbUpdateException: An error occurred while updating the entries. See the inner exception for details. ---&gt; System.Data.Entity.Core.UpdateException: An error occurred while updating the entries. See the inner exception for details. ---&gt; System.Data.SqlClient.SqlException: Cannot insert the value NULL into column 'Id', table 'db2a7cd04ec8d445cf9e2ca4e80025f299.dbo.Contact'; column does not allow nulls. INSERT fails.&#xD;&#xA;The statement has been terminated.&#xD;&#xA;   at System.Data.SqlClient.SqlConnection.OnError(SqlException exception, Boolean breakConnection, Action`1 wrapCloseInAction)&#xD;&#xA;   at System.Data.SqlClient.SqlInternalConnection.OnError(SqlException exception, Boolean breakConnection, Action`1 wrapCloseInAction)&#xD;&#xA;   at System.Data.SqlClient.TdsParser.ThrowExceptionAndWarning(TdsParserStateObject stateObj, Boolean callerHasConnectionLock, Boolean asyncClose)&#xD;&#xA;   at System.Data.SqlClient.TdsParser.TryRun(RunBehavior runBehavior, SqlCommand cmdHandler, SqlDataReader dataStream, BulkCopySimpleResultSet bulkCopyHandler, TdsParserStateObject stateObj, Boolean&amp; dataReady)&#xD;&#xA;   at System.Data.SqlClient.SqlDataReader.TryConsumeMetaData()&#xD;&#xA;   at System.Data.SqlClient.SqlDataReader.get_MetaData()&#xD;&#xA;   at System.Data.SqlClient.SqlCommand.FinishExecuteReader(SqlDataReader ds, RunBehavior runBehavior, String resetOptionsString)&#xD;&#xA;   at System.Data.SqlClient.SqlCommand.RunExecuteReaderTds(CommandBehavior cmdBehavior, RunBehavior runBehavior, Boolean returnStream, Boolean async, Int32 timeout, Task&amp; task, Boolean asyncWrite, SqlDataReader ds, Boolean describeParameterEncryptionRequest)&#xD;&#xA;   at System.Data.SqlClient.SqlCommand.RunExecuteReader(CommandBehavior cmdBehavior, RunBehavior runBehavior, Boolean returnStream, String method, TaskCompletionSource`1 completion, Int32 timeout, Task&amp; task, Boolean asyncWrite)&#xD;&#xA;   at System.Data.SqlClient.SqlCommand.RunExecuteReader(CommandBehavior cmdBehavior, RunBehavior runBehavior, Boolean returnStream, String method)&#xD;&#xA;   at System.Data.SqlClient.SqlCommand.ExecuteReader(CommandBehavior behavior, String method)&#xD;&#xA;   at System.Data.SqlClient.SqlCommand.ExecuteDbDataReader(CommandBehavior behavior)&#xD;&#xA;   at System.Data.Common.DbCommand.ExecuteReader(CommandBehavior behavior)&#xD;&#xA;   at Glimpse.Ado.AlternateType.GlimpseDbCommand.ExecuteDbDataReader(CommandBehavior behavior)&#xD;&#xA;   at System.Data.Common.DbCommand.ExecuteReader(CommandBehavior behavior)&#xD;&#xA;   at System.Data.Entity.Infrastructure.Interception.DbCommandDispatcher.&lt;Reader&gt;b__c(DbCommand t, DbCommandInterceptionContext`1 c)&#xD;&#xA;   at System.Data.Entity.Infrastructure.Interception.InternalDispatcher`1.Dispatch[TTarget,TInterceptionContext,TResult](TTarget target, Func`3 operation, TInterceptionContext interceptionContext, Action`3 executing, Action`3 executed)&#xD;&#xA;   at System.Data.Entity.Infrastructure.Interception.DbCommandDispatcher.Reader(DbCommand command, DbCommandInterceptionContext interceptionContext)&#xD;&#xA;   at System.Data.Entity.Internal.InterceptableDbCommand.ExecuteDbDataReader(CommandBehavior behavior)&#xD;&#xA;   at System.Data.Common.DbCommand.ExecuteReader(CommandBehavior behavior)&#xD;&#xA;   at System.Data.Entity.Core.Mapping.Update.Internal.DynamicUpdateCommand.Execute(Dictionary`2 identifierValues, List`1 generatedValues)&#xD;&#xA;   at System.Data.Entity.Core.Mapping.Update.Internal.UpdateTranslator.Update()&#xD;&#xA;   --- End of inner exception stack trace ---&#xD;&#xA;   at System.Data.Entity.Core.Mapping.Update.Internal.UpdateTranslator.Update()&#xD;&#xA;   at System.Data.Entity.Core.EntityClient.Internal.EntityAdapter.&lt;Update&gt;b__2(UpdateTranslator ut)&#xD;&#xA;   at System.Data.Entity.Core.EntityClient.Internal.EntityAdapter.Update[T](T noChangesResult, Func`2 updateFunction)&#xD;&#xA;   at System.Data.Entity.Core.EntityClient.Internal.EntityAdapter.Update()&#xD;&#xA;   at System.Data.Entity.Core.Objects.ObjectContext.&lt;SaveChangesToStore&gt;b__35()&#xD;&#xA;   at System.Data.Entity.Core.Objects.ObjectContext.ExecuteInTransaction[T](Func`1 func, IDbExecutionStrategy executionStrategy, Boolean startLocalTransaction, Boolean releaseConnectionOnSuccess)&#xD;&#xA;   at System.Data.Entity.Core.Objects.ObjectContext.SaveChangesToStore(SaveOptions options, IDbExecutionStrategy executionStrategy, Boolean startLocalTransaction)&#xD;&#xA;   at System.Data.Entity.Core.Objects.ObjectContext.&lt;&gt;c__DisplayClass2a.&lt;SaveChangesInternal&gt;b__27()&#xD;&#xA;   at System.Data.Entity.SqlServer.DefaultSqlExecutionStrategy.Execute[TResult](Func`1 operation)&#xD;&#xA;   at System.Data.Entity.Core.Objects.ObjectContext.SaveChangesInternal(SaveOptions options, Boolean executeInExistingTransaction)&#xD;&#xA;   at System.Data.Entity.Core.Objects.ObjectContext.SaveChanges(SaveOptions options)&#xD;&#xA;   at System.Data.Entity.Internal.InternalContext.SaveChanges()&#xD;&#xA;   --- End of inner exception stack trace ---&#xD;&#xA;   at Data.DbInitializerHelper.Initialize() in C:\Development\accountgo\accountgo\src\Web\Data\DbInitializerHelper.cs:line 88&#xD;&#xA;   at Web.Controllers.HomeController.Index() in C:\Development\accountgo\accountgo\src\Web\Controllers\HomeController.cs:line 28&#xD;&#xA;   at lambda_method(Closure , ControllerBase , Object[] )&#xD;&#xA;   at System.Web.Mvc.ActionMethodDispatcher.Execute(ControllerBase controller, Object[] parameters)&#xD;&#xA;   at System.Web.Mvc.ReflectedActionDescriptor.Execute(ControllerContext controllerContext, IDictionary`2 parameters)&#xD;&#xA;   at System.Web.Mvc.ControllerActionInvoker.InvokeActionMethod(ControllerContext controllerContext, ActionDescriptor actionDescriptor, IDictionary`2 parameters)&#xD;&#xA;   at System.Web.Mvc.Async.AsyncControllerActionInvoker.ActionInvocation.InvokeSynchronousActionMethod()&#xD;&#xA;   at System.Web.Mvc.Async.AsyncControllerActionInvoker.&lt;BeginInvokeSynchronousActionMethod&gt;b__39(IAsyncResult asyncResult, ActionInvocation innerInvokeState)&#xD;&#xA;   at System.Web.Mvc.Async.AsyncResultWrapper.WrappedAsyncResult`2.CallEndDelegate(IAsyncResult asyncResult)&#xD;&#xA;   at System.Web.Mvc.Async.AsyncResultWrapper.WrappedAsyncResultBase`1.End()&#xD;&#xA;   at Castle.Proxies.AsyncControllerActionInvokerProxy.EndInvokeActionMethod_callback(IAsyncResult asyncResult)&#xD;&#xA;   at Castle.Proxies.Invocations.AsyncControllerActionInvoker_EndInvokeActionMethod.InvokeMethodOnTarget()&#xD;&#xA;   at Castle.DynamicProxy.AbstractInvocation.Proceed()&#xD;&#xA;   at Glimpse.Core.Extensibility.CastleInvocationToAlternateMethodContextAdapter.Proceed()&#xD;&#xA;   at Glimpse.Mvc.AlternateType.AsyncActionInvoker.EndInvokeActionMethod.NewImplementation(IAlternateMethodContext context)&#xD;&#xA;   at Glimpse.Core.Extensibility.AlternateTypeToCastleInterceptorAdapter.Intercept(IInvocation invocation)&#xD;&#xA;   at Castle.DynamicProxy.AbstractInvocation.Proceed()&#xD;&#xA;   at Castle.Proxies.AsyncControllerActionInvokerProxy.EndInvokeActionMethod(IAsyncResult asyncResult)&#xD;&#xA;   at System.Web.Mvc.Async.AsyncControllerActionInvoker.AsyncInvocationWithFilters.&lt;InvokeActionMethodFilterAsynchronouslyRecursive&gt;b__3d()&#xD;&#xA;   at System.Web.Mvc.Async.AsyncControllerActionInvoker.AsyncInvocationWithFilters.&lt;&gt;c__DisplayClass46.&lt;InvokeActionMethodFilterAsynchronouslyRecursive&gt;b__3f()&#xD;&#xA;   at System.Web.Mvc.Async.AsyncControllerActionInvoker.&lt;&gt;c__DisplayClass33.&lt;BeginInvokeActionMethodWithFilters&gt;b__32(IAsyncResult asyncResult)&#xD;&#xA;   at System.Web.Mvc.Async.AsyncResultWrapper.WrappedAsyncResult`1.CallEndDelegate(IAsyncResult asyncResult)&#xD;&#xA;   at System.Web.Mvc.Async.AsyncResultWrapper.WrappedAsyncResultBase`1.End()&#xD;&#xA;   at System.Web.Mvc.Async.AsyncResultWrapper.End[TResult](IAsyncResult asyncResult, Object tag)&#xD;&#xA;   at System.Web.Mvc.Async.AsyncControllerActionInvoker.EndInvokeActionMethodWithFilters(IAsyncResult asyncResult)&#xD;&#xA;   at System.Web.Mvc.Async.AsyncControllerActionInvoker.&lt;&gt;c__DisplayClass21.&lt;&gt;c__DisplayClass2b.&lt;BeginInvokeAction&gt;b__1c()&#xD;&#xA;   at System.Web.Mvc.Async.AsyncControllerActionInvoker.&lt;&gt;c__DisplayClass21.&lt;BeginInvokeAction&gt;b__1e(IAsyncResult asyncResult)&#xD;&#xA;   at System.Web.Mvc.Async.AsyncResultWrapper.WrappedAsyncResult`1.CallEndDelegate(IAsyncResult asyncResult)&#xD;&#xA;   at System.Web.Mvc.Async.AsyncResultWrapper.WrappedAsyncResultBase`1.End()&#xD;&#xA;   at System.Web.Mvc.Async.AsyncResultWrapper.End[TResult](IAsyncResult asyncResult, Object tag)&#xD;&#xA;   at System.Web.Mvc.Async.AsyncControllerActionInvoker.EndInvokeAction(IAsyncResult asyncResult)&#xD;&#xA;   at System.Web.Mvc.Controller.&lt;BeginExecuteCore&gt;b__1d(IAsyncResult asyncResult, ExecuteCoreState innerState)&#xD;&#xA;   at System.Web.Mvc.Async.AsyncResultWrapper.WrappedAsyncVoid`1.CallEndDelegate(IAsyncResult asyncResult)&#xD;&#xA;   at System.Web.Mvc.Async.AsyncResultWrapper.WrappedAsyncResultBase`1.End()&#xD;&#xA;   at System.Web.Mvc.Async.AsyncResultWrapper.End[TResult](IAsyncResult asyncResult, Object tag)&#xD;&#xA;   at System.Web.Mvc.Async.AsyncResultWrapper.End(IAsyncResult asyncResult, Object tag)&#xD;&#xA;   at System.Web.Mvc.Controller.EndExecuteCore(IAsyncResult asyncResult)&#xD;&#xA;   at System.Web.Mvc.Controller.&lt;BeginExecute&gt;b__15(IAsyncResult asyncResult, Controller controller)&#xD;&#xA;   at System.Web.Mvc.Async.AsyncResultWrapper.WrappedAsyncVoid`1.CallEndDelegate(IAsyncResult asyncResult)&#xD;&#xA;   at System.Web.Mvc.Async.AsyncResultWrapper.WrappedAsyncResultBase`1.End()&#xD;&#xA;   at System.Web.Mvc.Async.AsyncResultWrapper.End[TResult](IAsyncResult asyncResult, Object tag)&#xD;&#xA;   at System.Web.Mvc.Async.AsyncResultWrapper.End(IAsyncResult asyncResult, Object tag)&#xD;&#xA;   at System.Web.Mvc.Controller.EndExecute(IAsyncResult asyncResult)&#xD;&#xA;   at System.Web.Mvc.Controller.System.Web.Mvc.Async.IAsyncController.EndExecute(IAsyncResult asyncResult)&#xD;&#xA;   at System.Web.Mvc.MvcHandler.&lt;BeginProcessRequest&gt;b__5(IAsyncResult asyncResult, ProcessRequestState innerState)&#xD;&#xA;   at System.Web.Mvc.Async.AsyncResultWrapper.WrappedAsyncVoid`1.CallEndDelegate(IAsyncResult asyncResult)&#xD;&#xA;   at System.Web.Mvc.Async.AsyncResultWrapper.WrappedAsyncResultBase`1.End()&#xD;&#xA;   at System.Web.Mvc.Async.AsyncResultWrapper.End[TResult](IAsyncResult asyncResult, Object tag)&#xD;&#xA;   at System.Web.Mvc.Async.AsyncResultWrapper.End(IAsyncResult asyncResult, Object tag)&#xD;&#xA;   at System.Web.Mvc.MvcHandler.EndProcessRequest(IAsyncResult asyncResult)&#xD;&#xA;   at System.Web.Mvc.MvcHandler.System.Web.IHttpAsyncHandler.EndProcessRequest(IAsyncResult result)&#xD;&#xA;   at System.Web.HttpApplication.CallHandlerExecutionStep.System.Web.HttpApplication.IExecutionStep.Execute()&#xD;&#xA;   at System.Web.HttpApplication.ExecuteStep(IExecutionStep step, Boolean&amp; completedSynchronously)" user="admin" time="2016-02-16T03:35:17.8884181Z">
+  <serverVariables>
+    <item name="ALL_HTTP">
+      <value string="HTTP_CACHE_CONTROL:no-cache&#xD;&#xA;HTTP_CONNECTION:Keep-Alive&#xD;&#xA;HTTP_ACCEPT:text/html, application/xhtml+xml, */*&#xD;&#xA;HTTP_ACCEPT_ENCODING:gzip, deflate, peerdist&#xD;&#xA;HTTP_ACCEPT_LANGUAGE:en-AU&#xD;&#xA;HTTP_COOKIE:glimpsePolicy=On; glimpseId=InternetExplorer 11.0; __RequestVerificationToken=gzlBmQWH1qjc7GIT0ZFlydkM5dPMShDnYyF5S6zwDpeKwyaUzruU-LbYatYNemx8qsC3YC9hCSDRvNTrdVYN3gicLIkzJ0h-JtflLjciLL01; .AspNet.ApplicationCookie=btlZVpToJO3kbd0YdsYgmp8weA05jGcljGqP3tyhgGB9CLL9XtLP1CLheGiFzhFTCyEUXIvd9HDI3mM01F-pE90EMuZqjXhnaCoiahiCiA4kXmTWzslfP4kxq_ORjnaejWA-ArKypPa_46NI_dhypBGBAQydWvG1j2lfNOJyFx8xapODTvEaA5d9ryLKVuEF8FkQDFLMmI0BStU6lnUEoLUyef7-UBTHOGtO2XOdYNnArS92DtSCuhBb267C9ErOdj7sgb2_R3xjn_T3dMrBJ251IkShrs2a3jSC2K5K_sM48N2OHCnxhdtWHkGWoXNQYPPErvusERWY8MQvqL4_iFBsIOKBFwqNAdn5dVlPeTRobgy2xPWCpke2n5QwWikLdkXssImKM3pUnc_7M3DbQdKRaGgfUFVYoJuTNdIPRQ5wDSzqEIkcJX1Fl1QchFPqOnMsjS6am-T1-8SF-Jw4ih7crvgko-ai_UiWL01s3e8&#xD;&#xA;HTTP_HOST:localhost:25710&#xD;&#xA;HTTP_REFERER:http://localhost:25710/Account/Login&#xD;&#xA;HTTP_USER_AGENT:Mozilla/5.0 (Windows NT 6.3; WOW64; Trident/7.0; rv:11.0) like Gecko&#xD;&#xA;HTTP_X_P2P_PEERDIST:Version=1.1&#xD;&#xA;HTTP_X_P2P_PEERDISTEX:MinContentInformation=1.0, MaxContentInformation=2.0&#xD;&#xA;" />
+    </item>
+    <item name="ALL_RAW">
+      <value string="Cache-Control: no-cache&#xD;&#xA;Connection: Keep-Alive&#xD;&#xA;Accept: text/html, application/xhtml+xml, */*&#xD;&#xA;Accept-Encoding: gzip, deflate, peerdist&#xD;&#xA;Accept-Language: en-AU&#xD;&#xA;Cookie: glimpsePolicy=On; glimpseId=InternetExplorer 11.0; __RequestVerificationToken=gzlBmQWH1qjc7GIT0ZFlydkM5dPMShDnYyF5S6zwDpeKwyaUzruU-LbYatYNemx8qsC3YC9hCSDRvNTrdVYN3gicLIkzJ0h-JtflLjciLL01; .AspNet.ApplicationCookie=btlZVpToJO3kbd0YdsYgmp8weA05jGcljGqP3tyhgGB9CLL9XtLP1CLheGiFzhFTCyEUXIvd9HDI3mM01F-pE90EMuZqjXhnaCoiahiCiA4kXmTWzslfP4kxq_ORjnaejWA-ArKypPa_46NI_dhypBGBAQydWvG1j2lfNOJyFx8xapODTvEaA5d9ryLKVuEF8FkQDFLMmI0BStU6lnUEoLUyef7-UBTHOGtO2XOdYNnArS92DtSCuhBb267C9ErOdj7sgb2_R3xjn_T3dMrBJ251IkShrs2a3jSC2K5K_sM48N2OHCnxhdtWHkGWoXNQYPPErvusERWY8MQvqL4_iFBsIOKBFwqNAdn5dVlPeTRobgy2xPWCpke2n5QwWikLdkXssImKM3pUnc_7M3DbQdKRaGgfUFVYoJuTNdIPRQ5wDSzqEIkcJX1Fl1QchFPqOnMsjS6am-T1-8SF-Jw4ih7crvgko-ai_UiWL01s3e8&#xD;&#xA;Host: localhost:25710&#xD;&#xA;Referer: http://localhost:25710/Account/Login&#xD;&#xA;User-Agent: Mozilla/5.0 (Windows NT 6.3; WOW64; Trident/7.0; rv:11.0) like Gecko&#xD;&#xA;X-P2P-PeerDist: Version=1.1&#xD;&#xA;X-P2P-PeerDistEx: MinContentInformation=1.0, MaxContentInformation=2.0&#xD;&#xA;" />
+    </item>
+    <item name="APPL_MD_PATH">
+      <value string="/LM/W3SVC/7/ROOT" />
+    </item>
+    <item name="APPL_PHYSICAL_PATH">
+      <value string="C:\Development\accountgo\accountgo\src\Web\" />
+    </item>
+    <item name="AUTH_TYPE">
+      <value string="ApplicationCookie" />
+    </item>
+    <item name="AUTH_USER">
+      <value string="admin" />
+    </item>
+    <item name="AUTH_PASSWORD">
+      <value string="*****" />
+    </item>
+    <item name="LOGON_USER">
+      <value string="" />
+    </item>
+    <item name="REMOTE_USER">
+      <value string="admin" />
+    </item>
+    <item name="CERT_COOKIE">
+      <value string="" />
+    </item>
+    <item name="CERT_FLAGS">
+      <value string="" />
+    </item>
+    <item name="CERT_ISSUER">
+      <value string="" />
+    </item>
+    <item name="CERT_KEYSIZE">
+      <value string="" />
+    </item>
+    <item name="CERT_SECRETKEYSIZE">
+      <value string="" />
+    </item>
+    <item name="CERT_SERIALNUMBER">
+      <value string="" />
+    </item>
+    <item name="CERT_SERVER_ISSUER">
+      <value string="" />
+    </item>
+    <item name="CERT_SERVER_SUBJECT">
+      <value string="" />
+    </item>
+    <item name="CERT_SUBJECT">
+      <value string="" />
+    </item>
+    <item name="CONTENT_LENGTH">
+      <value string="0" />
+    </item>
+    <item name="CONTENT_TYPE">
+      <value string="" />
+    </item>
+    <item name="GATEWAY_INTERFACE">
+      <value string="CGI/1.1" />
+    </item>
+    <item name="HTTPS">
+      <value string="off" />
+    </item>
+    <item name="HTTPS_KEYSIZE">
+      <value string="" />
+    </item>
+    <item name="HTTPS_SECRETKEYSIZE">
+      <value string="" />
+    </item>
+    <item name="HTTPS_SERVER_ISSUER">
+      <value string="" />
+    </item>
+    <item name="HTTPS_SERVER_SUBJECT">
+      <value string="" />
+    </item>
+    <item name="INSTANCE_ID">
+      <value string="7" />
+    </item>
+    <item name="INSTANCE_META_PATH">
+      <value string="/LM/W3SVC/7" />
+    </item>
+    <item name="LOCAL_ADDR">
+      <value string="::1" />
+    </item>
+    <item name="PATH_INFO">
+      <value string="/" />
+    </item>
+    <item name="PATH_TRANSLATED">
+      <value string="C:\Development\accountgo\accountgo\src\Web" />
+    </item>
+    <item name="QUERY_STRING">
+      <value string="" />
+    </item>
+    <item name="REMOTE_ADDR">
+      <value string="::1" />
+    </item>
+    <item name="REMOTE_HOST">
+      <value string="::1" />
+    </item>
+    <item name="REMOTE_PORT">
+      <value string="12891" />
+    </item>
+    <item name="REQUEST_METHOD">
+      <value string="GET" />
+    </item>
+    <item name="SCRIPT_NAME">
+      <value string="/" />
+    </item>
+    <item name="SERVER_NAME">
+      <value string="localhost" />
+    </item>
+    <item name="SERVER_PORT">
+      <value string="25710" />
+    </item>
+    <item name="SERVER_PORT_SECURE">
+      <value string="0" />
+    </item>
+    <item name="SERVER_PROTOCOL">
+      <value string="HTTP/1.1" />
+    </item>
+    <item name="SERVER_SOFTWARE">
+      <value string="Microsoft-IIS/10.0" />
+    </item>
+    <item name="URL">
+      <value string="/" />
+    </item>
+    <item name="HTTP_CACHE_CONTROL">
+      <value string="no-cache" />
+    </item>
+    <item name="HTTP_CONNECTION">
+      <value string="Keep-Alive" />
+    </item>
+    <item name="HTTP_ACCEPT">
+      <value string="text/html, application/xhtml+xml, */*" />
+    </item>
+    <item name="HTTP_ACCEPT_ENCODING">
+      <value string="gzip, deflate, peerdist" />
+    </item>
+    <item name="HTTP_ACCEPT_LANGUAGE">
+      <value string="en-AU" />
+    </item>
+    <item name="HTTP_COOKIE">
+      <value string="glimpsePolicy=On; glimpseId=InternetExplorer 11.0; __RequestVerificationToken=gzlBmQWH1qjc7GIT0ZFlydkM5dPMShDnYyF5S6zwDpeKwyaUzruU-LbYatYNemx8qsC3YC9hCSDRvNTrdVYN3gicLIkzJ0h-JtflLjciLL01; .AspNet.ApplicationCookie=btlZVpToJO3kbd0YdsYgmp8weA05jGcljGqP3tyhgGB9CLL9XtLP1CLheGiFzhFTCyEUXIvd9HDI3mM01F-pE90EMuZqjXhnaCoiahiCiA4kXmTWzslfP4kxq_ORjnaejWA-ArKypPa_46NI_dhypBGBAQydWvG1j2lfNOJyFx8xapODTvEaA5d9ryLKVuEF8FkQDFLMmI0BStU6lnUEoLUyef7-UBTHOGtO2XOdYNnArS92DtSCuhBb267C9ErOdj7sgb2_R3xjn_T3dMrBJ251IkShrs2a3jSC2K5K_sM48N2OHCnxhdtWHkGWoXNQYPPErvusERWY8MQvqL4_iFBsIOKBFwqNAdn5dVlPeTRobgy2xPWCpke2n5QwWikLdkXssImKM3pUnc_7M3DbQdKRaGgfUFVYoJuTNdIPRQ5wDSzqEIkcJX1Fl1QchFPqOnMsjS6am-T1-8SF-Jw4ih7crvgko-ai_UiWL01s3e8" />
+    </item>
+    <item name="HTTP_HOST">
+      <value string="localhost:25710" />
+    </item>
+    <item name="HTTP_REFERER">
+      <value string="http://localhost:25710/Account/Login" />
+    </item>
+    <item name="HTTP_USER_AGENT">
+      <value string="Mozilla/5.0 (Windows NT 6.3; WOW64; Trident/7.0; rv:11.0) like Gecko" />
+    </item>
+    <item name="HTTP_X_P2P_PEERDIST">
+      <value string="Version=1.1" />
+    </item>
+    <item name="HTTP_X_P2P_PEERDISTEX">
+      <value string="MinContentInformation=1.0, MaxContentInformation=2.0" />
+    </item>
+  </serverVariables>
+  <cookies>
+    <item name="glimpsePolicy">
+      <value string="On" />
+    </item>
+    <item name="glimpseId">
+      <value string="InternetExplorer 11.0" />
+    </item>
+    <item name="__RequestVerificationToken">
+      <value string="gzlBmQWH1qjc7GIT0ZFlydkM5dPMShDnYyF5S6zwDpeKwyaUzruU-LbYatYNemx8qsC3YC9hCSDRvNTrdVYN3gicLIkzJ0h-JtflLjciLL01" />
+    </item>
+    <item name=".AspNet.ApplicationCookie">
+      <value string="btlZVpToJO3kbd0YdsYgmp8weA05jGcljGqP3tyhgGB9CLL9XtLP1CLheGiFzhFTCyEUXIvd9HDI3mM01F-pE90EMuZqjXhnaCoiahiCiA4kXmTWzslfP4kxq_ORjnaejWA-ArKypPa_46NI_dhypBGBAQydWvG1j2lfNOJyFx8xapODTvEaA5d9ryLKVuEF8FkQDFLMmI0BStU6lnUEoLUyef7-UBTHOGtO2XOdYNnArS92DtSCuhBb267C9ErOdj7sgb2_R3xjn_T3dMrBJ251IkShrs2a3jSC2K5K_sM48N2OHCnxhdtWHkGWoXNQYPPErvusERWY8MQvqL4_iFBsIOKBFwqNAdn5dVlPeTRobgy2xPWCpke2n5QwWikLdkXssImKM3pUnc_7M3DbQdKRaGgfUFVYoJuTNdIPRQ5wDSzqEIkcJX1Fl1QchFPqOnMsjS6am-T1-8SF-Jw4ih7crvgko-ai_UiWL01s3e8" />
+    </item>
+  </cookies>
+</error>
