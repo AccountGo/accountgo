@@ -8,9 +8,9 @@ It is initially designed for a small size businesses and the idea is to help the
 # Manual Installation for development
 
 1. Clone or download copy of AccountGo solution
-2. Open the solution file in Visual Studio 2012 or later
+2. Open the solution file in Visual Studio 2015. Download community edition.
 3. Build the solution
-4. Publish database to your local (SQL.AccountGo project). This include a post deployment script to load initial data.
+4. Publish database to your local (SQL.AccountGo project).
 
 # Features
 
@@ -30,8 +30,6 @@ If you are a developer and wanted to take part as contributor/collaborator we ar
 So go ahead, add your code. Looking forward to your first pull request.
 
 # Contact Support
-Feel free to email mvpsolution@gmail.com of any questions.
+Feel free to email solutions@accountgo.ph of any questions.
 
-Don't miss regular source code updates, join http://accountgo.googlegroups.com
-
-Also, you can view demo site here (http://accountgo.apphb.com)
+View demo site here (http://www.accountgo.ph)

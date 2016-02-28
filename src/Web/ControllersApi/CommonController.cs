@@ -53,9 +53,14 @@ namespace Web.ControllersApi
         {
             var customers = _salesService.GetCustomers();
             ICollection<CustomerDto> customersDto = new HashSet<CustomerDto>();
-            
+
             foreach (var customer in customers)
+            {
+                if (customer.Party == null)
+                    continue;
+
                 customersDto.Add(new CustomerDto() { Id = customer.Id, Name = customer.Party.Name });
+            }
 
             return Ok(customersDto.AsEnumerable());
         }

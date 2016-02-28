@@ -8,7 +8,7 @@
     <SchemaVersion>2.0</SchemaVersion>
     <ProjectVersion>4.1</ProjectVersion>
     <ProjectGuid>{f0360e8d-c07f-4442-bb61-fb7c4c495bdd}</ProjectGuid>
-    <DSP>Microsoft.Data.Tools.Schema.Sql.Sql100DatabaseSchemaProvider</DSP>
+    <DSP>Microsoft.Data.Tools.Schema.Sql.SqlAzureV12DatabaseSchemaProvider</DSP>
     <OutputType>Database</OutputType>
     <RootPath>
     </RootPath>
@@ -130,6 +130,7 @@
     <Build Include="dbo\Tables\Log.sql" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="SQL.AccountGo.publish.xml" />
+    <None Include="SQL.AccountGo.Azure.publish.xml" />
+    <None Include="SQL.AccountGo.LocalDB.publish.xml" />
   </ItemGroup>
 </Project>
