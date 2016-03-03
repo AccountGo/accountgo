@@ -12,5 +12,10 @@ namespace WebAngular.Controllers
         {
             return View();
         }
+
+        public IActionResult Error()
+        {
+            return View();
+        }
     }
 }
