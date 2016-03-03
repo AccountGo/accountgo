@@ -12,7 +12,6 @@
   },
   "exclude": [
     "node_modules",
-    "wwwroot",
-    "wwwroot/lib"
+    "wwwroot"
   ]
 }
