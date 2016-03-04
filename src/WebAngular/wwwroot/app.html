@@ -1,0 +1,35 @@
+﻿<div class="col-md-12" style="position: fixed; height: 35px; line-height: 35px; background:#202428; z-index: 99999;">
+    <a class="lead" style="color: #0B87AC; cursor: pointer; font-size: 1.2em; font-weight: bold;" (click)="goTo('Dashboard')">ACCOUNTGO</a> <span class="glyphicon glyphicon-menu-down"></span>
+
+    <div class="pull-right" style="color: white;">
+        <input type="text" placeholder="Search Resources.." style="width: 170px; background: #33383C; border: none; padding: 0 5px; outline: none; color: white;" />
+
+        <span class="glyphicon glyphicon-warning-sign text-center" style="width: 35px; "></span>
+        <span class="glyphicon glyphicon-question-sign text-center" style="width: 35px; border-left: 1px solid white; border-right: 1px solid white;"></span>
+
+        <pr-profile class="pull-right"></pr-profile>
+    </div>
+</div>
+
+
+<si-sidebar class="col-sm-2 col-md-2 panel-sidebar" style="z-index: 99999"></si-sidebar>
+
+
+<div class="col-sm-offset-2 col-md-offset-2 col-sm-10 col-md-10" style="z-index: 1; position: fixed; top: 35px; height: 35px; background: #282D32; border-left: 1px solid white; color : white; line-height: 35px;">
+    Dashoard
+</div>
+
+<div class="col-sm-offset-2 col-md-offset-2 col-sm-10 col-md-10" style="position: absolute; top: 70px; bottom: 0; background: #2E80AB;">
+    <router-outlet></router-outlet>
+</div>
+
+<style>
+    .panel-sidebar {
+        position: fixed;
+        top: 35px;
+        bottom: 0;
+        background: #282D32;
+        color: white;
+        padding: 0;
+    }
+</style>

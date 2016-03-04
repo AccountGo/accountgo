@@ -20,6 +20,7 @@
     <DnxInvisibleContent Include="package.json" />
   </ItemGroup>
   <ItemGroup>
+    <DnxInvisibleFolder Include="Properties\PublishProfiles\" />
     <DnxInvisibleFolder Include="wwwroot\app\profile\" />
     <DnxInvisibleFolder Include="wwwroot\lib\" />
   </ItemGroup>

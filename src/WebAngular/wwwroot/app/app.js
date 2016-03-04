@@ -8,13 +8,13 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 var core_1 = require('angular2/core');
-let AppComponent = class {
+let App = class {
 };
-AppComponent = __decorate([
+App = __decorate([
     core_1.Component({
-        selector: 'my-app',
-        template: '<h1>My First Angular 2 App</h1>'
+        selector: 'app',
+        templateUrl: 'app.html'
     }), 
     __metadata('design:paramtypes', [])
-], AppComponent);
-exports.AppComponent = AppComponent;
+], App);
+exports.App = App;
