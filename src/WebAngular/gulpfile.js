@@ -4,8 +4,8 @@
 var gulp = require("gulp");
 var rimraf = require("rimraf");
 var concat = require("gulp-concat");
-//var cssmin = require("gulp-cssmin");
-//var uglify = require("gulp-uglify");
+var cssmin = require("gulp-cssmin");
+var uglify = require("gulp-uglify");
 
 var paths = {
     npm: './node_modules/',
@@ -46,14 +46,14 @@ gulp.task("clean", ["clean:angular2", "clean:js", "clean:css"]);
 gulp.task("min:js", function () {
     return gulp.src([paths.js, "!" + paths.minJs], { base: "." })
         .pipe(concat(paths.concatJsDest))
-        //.pipe(uglify())
+        .pipe(uglify())
         .pipe(gulp.dest("."));
 });
 
 gulp.task("min:css", function () {
     return gulp.src([paths.css, "!" + paths.minCss])
         .pipe(concat(paths.concatCssDest))
-        //.pipe(cssmin())
+        .pipe(cssmin())
         .pipe(gulp.dest("."));
 });
 
