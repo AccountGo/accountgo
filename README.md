@@ -8,9 +8,13 @@ It is initially designed for a small size businesses and the idea is to help the
 # Manual Installation for development
 
 1. Clone or download copy of AccountGo solution
-2. Open the solution file in Visual Studio 2015. Download community edition.
+2. Open the solution file in Visual Studio 2015. Download community edition. .NET 4.6 is required.
 3. Build the solution
 4. Publish database to your local (SQL.AccountGo project).
+
+Notes: 
+1. WebAngular - This will be the main front-end that uses ASP.NET 5 and AngularJS version 2.
+2. Api - All apis' will be develop here. Built with MVC 6 and referecing standard class libraries.
 
 # Features
 
