@@ -5,7 +5,7 @@ using Microsoft.AspNet.Mvc;
 
 namespace WebAngular.Controllers
 {
-    [Authorize]
+    //[Authorize]
     public class HomeController : Controller
     {
         public IActionResult Index()

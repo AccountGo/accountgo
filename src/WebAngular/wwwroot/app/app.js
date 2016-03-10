@@ -13,7 +13,7 @@ let App = class {
 App = __decorate([
     core_1.Component({
         selector: 'app',
-        templateUrl: 'app.html'
+        template: '<h2>My First Angular</h2>'
     }), 
     __metadata('design:paramtypes', [])
 ], App);
