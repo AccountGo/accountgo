@@ -29,7 +29,7 @@ namespace WebAngular
         public void Configure(IApplicationBuilder app)
         {
             app.UseIISPlatformHandler();
-
+            app.UseDefaultFiles();
             app.UseStaticFiles();
 
             //app.UseMvc(routes =>

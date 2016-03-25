@@ -1,8 +1,22 @@
 ﻿<!DOCTYPE html>
 <html>
 <head>
-    <title>Angular 2 QuickStart</title>
+    <title>AccountGo</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <base href="/" />
+    <link href="/lib/bootstrap/dist/css/bootstrap.css" rel="stylesheet" />
+    <link href="/lib/bootstrap-theme-cosmo/cosmo.min.css" rel="stylesheet" />
+    <link href="/css/site.css" rel="stylesheet" />
+</head>
+
+<!-- 3. Display the application -->
+<body>
+    <app>Loading...</app>
+
+    <script src="lib/jquery/dist/jquery.min.js"></script>
+    <script src="lib/bootstrap/dist/js/bootstrap.min.js"></script>
+    <script src="lib/respond/src/respond.js"></script>
+
     <!-- IE required polyfills, in this exact order -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/es6-shim/0.34.1/es6-shim.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/systemjs/0.19.20/system-polyfills.js"></script>
@@ -19,15 +33,15 @@
     <script src="https://code.angularjs.org/2.0.0-beta.9/http.dev.js"></script>
 
     <script>
+        //System.config({
+        //    packages: {'app': {defaultExtension: 'js'}}
+        //});
         System.config({
-            packages: {'app': {defaultExtension: 'js'}}
+            transpiler: 'typescript',
+            typescriptOptions: { emitDecoratorMetadata: true },
+            packages: { 'app': { defaultExtension: 'ts' } }
         });
         System.import('./app/boot').catch(console.log.bind(console));
     </script>
-</head>
-
-<!-- 3. Display the application -->
-<body>
-    <app>Loading...</app>
 </body>
 </html>

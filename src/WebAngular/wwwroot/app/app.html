@@ -1,0 +1,59 @@
+﻿<div class="col-md-2" style="position: fixed; height: 50px; line-height: 50px; background: #303946; color: white; padding: 0 10px; box-shadow: 0px 1px 1px 0px rgba(0,0,0,0.15);">
+    ACCOUNTGO
+</div>
+
+<div class="col-md-2" style="position: fixed; left: 0; top: 50px; bottom: 0; background: #303946; color: white; padding: 0;">
+    <!--<div style="background: #455264">
+        Profile
+    </div>
+
+    <div class="col-md-12">
+        <div class="pull-left" style="width: 50px; height: 50px; background: green;">
+
+        </div>
+
+        <div class="pull-left">
+            <div>SuggeElson</div>
+            <div><select></select></div>
+        </div>
+    </div>
+
+    <div class="col-md-12" style="background: #455264">
+        Navigation
+    </div>-->
+
+    <h6 style="background:#455264; margin: 0; height: 25px; line-height: 25px; padding: 0 10px;">Profile</h6>
+    <div style="height: 80px; padding: 10px;">
+        <div style="border: 1px solid green; width: 50px; height: 50px;"></div>
+    </div>
+    <h6 style="background:#455264; margin: 0; height: 25px; line-height: 25px; padding: 0 10px;">Navigation</h6>
+    <navigation></navigation>
+</div>
+
+<div class="col-md-offset-2 col-md-10" style="height: 50px; line-height: 50px; box-shadow: 0px 1px 1px 0px rgba(0,0,0,0.15)">
+    <ul class="pull-right">
+        <li class="text-center"><span class="glyphicon glyphicon-wrench"></span></li>
+        <li class="text-center"><span class="glyphicon glyphicon-log-out"></span></li>
+    </ul>
+
+    <style>
+        ul {
+            list-style: none;
+        }
+
+            ul li {
+                display: inline-block;
+                width: 50px;
+                height: 50px;
+                cursor: pointer;
+            }
+
+                ul li:hover {
+                    background: #F7F9FE;
+                }
+    </style>
+</div>
+
+<div class="col-md-offset-2 col-md-10" style="position: absolute; top: 50px;">
+    <router-outlet></router-outlet>
+</div>

@@ -1,0 +1,1 @@
+{"version":3,"file":"inventory.js","sourceRoot":"","sources":["inventory.ts"],"names":["InventoryComponent","InventoryComponent.constructor"],"mappings":";;;;;;;;;;;;;;;;;;YAEA;gBAAAA;gBAMAC,CAACA;gBANDD;oBAACA,gBAASA,CAACA;wBACPA,QAAQA,EAAEA,WAAWA;wBACrBA,WAAWA,EAAEA,0CAA0CA;qBAC1DA,CAACA;;uCAGDA;gBAADA,yBAACA;YAADA,CAACA,AAND,IAMC;YAND,mDAMC,CAAA"}
