@@ -7,6 +7,7 @@
 //-----------------------------------------------------------------------
 
 using System;
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Core.Domain.Sales
@@ -17,5 +18,10 @@ namespace Core.Domain.Sales
         public int CustomerId { get; set; }
         public DateTime Date { get; set; }
         public virtual Customer Customer { get; set; }
+        public virtual ICollection<SalesQuoteLine> SalesQuoteLines { get; set; }
+        public SalesQuoteHeader()
+        {
+            SalesQuoteLines = new HashSet<SalesQuoteLine>();
+        }
     }
 }

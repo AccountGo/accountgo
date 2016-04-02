@@ -63,6 +63,7 @@ namespace Core.Domain.Items
         public virtual ICollection<InventoryControlJournal> InventoryControlJournals { get; set; }
 
         #region Not Mapped
+        [NotMapped]
         public decimal ItemTaxAmountOutput { get { return ComputeItemTaxAmountOutput(); } }
         private decimal ComputeItemTaxAmountOutput()
         {
@@ -76,6 +77,7 @@ namespace Core.Domain.Items
             return totalItemTaxAmount;
         }
 
+        [NotMapped]
         public decimal ItemTaxAmountInput { get { return ComputeItemTaxAmountInput(); } }
         private decimal ComputeItemTaxAmountInput()
         {

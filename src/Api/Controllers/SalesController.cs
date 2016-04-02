@@ -3,6 +3,7 @@ using Services.Administration;
 using Services.Sales;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 // For more information on enabling Web API for empty projects, visit http://go.microsoft.com/fwlink/?LinkID=397860
 
@@ -94,7 +95,7 @@ namespace Api.Controllers
             try
             {
                 var customers = _salesService.GetCustomers();
-                foreach(var customer in customers)
+                foreach (var customer in customers)
                 {
                     var customerModel = new Model.Sales.Customer()
                     {
@@ -112,7 +113,120 @@ namespace Api.Controllers
 
                 return new ObjectResult(model);
             }
+            catch (Exception ex)
+            {
+                return new ObjectResult(ex);
+            }
+        }
+
+        [HttpGet]
+        [Route("[action]")]
+        public IActionResult GetSalesOrders()
+        {            
+            IList<Model.Sales.SalesOrder> model = new List<Model.Sales.SalesOrder>();
+
+            try
+            {
+                var salesOrders = _salesService.GetSalesOrders();
+
+                foreach (var salesOrder in salesOrders)
+                {
+                    var salesOrderModel = new Model.Sales.SalesOrder()
+                    {
+                        Id = salesOrder.Id,
+                        CustomerId = salesOrder.CustomerId.Value,
+                        CustomerNo = salesOrder.Customer.No,
+                        CustomerName = _salesService.GetCustomerById(salesOrder.CustomerId.Value).Party.Name,
+                        OrderDate = salesOrder.Date,
+                        TotalAmount = salesOrder.SalesOrderLines.Sum(l => l.Amount)
+                    };
+
+                    model.Add(salesOrderModel);
+                }
+
+                return new ObjectResult(model);
+            }
             catch(Exception ex)
+            {
+                return new ObjectResult(ex);
+            }
+        }
+
+        [HttpGet]
+        [Route("[action]/{id:int}")]
+        public IActionResult GetSalesOrderById(int id)
+        {
+            IList<Model.Sales.SalesOrder> model = new List<Model.Sales.SalesOrder>();
+
+            try
+            {
+                var salesOrder = _salesService.GetSalesOrderById(id);
+
+                var salesOrderModel = new Model.Sales.SalesOrder()
+                {
+                    Id = salesOrder.Id,
+                    CustomerId = salesOrder.CustomerId.Value,
+                    CustomerNo = salesOrder.Customer.No,
+                    CustomerName = _salesService.GetCustomerById(salesOrder.CustomerId.Value).Party.Name,
+                    OrderDate = salesOrder.Date,
+                    TotalAmount = salesOrder.SalesOrderLines.Sum(l => l.Amount),
+                    SalesOrderLines = new List<Model.Sales.SalesOrderLine>()
+                };
+
+                foreach(var line in salesOrder.SalesOrderLines)
+                {
+                    var lineModel = new Model.Sales.SalesOrderLine();
+                    lineModel.Id = line.Id;
+                    lineModel.Amount = line.Amount;
+                    lineModel.Discount = line.Discount;
+                    lineModel.Quantity = line.Quantity;
+                    lineModel.ItemId = line.ItemId;
+                    lineModel.ItemDescription = line.Item.Description;
+                    lineModel.MeasurementId = line.MeasurementId;
+                    lineModel.MeasurementDescription = line.Measurement.Description;
+
+                    salesOrderModel.SalesOrderLines.Add(lineModel);
+                }
+
+                return new ObjectResult(salesOrderModel);
+            }
+            catch (Exception ex)
+            {
+                return new ObjectResult(ex);
+            }
+        }
+
+        [HttpPost]
+        [Route("[action]")]
+        public IActionResult CreateSalesOrder([FromBody]Model.Sales.SalesOrder model)
+        {
+            try
+            {
+                var salesOrder = new Core.Domain.Sales.SalesOrderHeader()
+                {
+                    CustomerId = model.CustomerId,
+                    Date = model.OrderDate,
+                };
+
+                foreach(var line in model.SalesOrderLines)
+                {
+                    var salesOrderLine = new Core.Domain.Sales.SalesOrderLine();
+                    salesOrderLine.Amount = line.Amount;
+                    salesOrderLine.Discount = line.Discount;
+                    salesOrderLine.Quantity = line.Quantity;
+                    salesOrderLine.ItemId = line.ItemId;
+                    salesOrderLine.MeasurementId = line.MeasurementId;
+
+                    salesOrder.SalesOrderLines.Add(salesOrderLine);
+                }
+
+                _salesService.AddSalesOrder(salesOrder, true);
+
+                model.Id = salesOrder.Id;
+
+                return new ObjectResult(model);
+            }
+            catch (Exception ex)
             {
                 return new ObjectResult(ex);
             }

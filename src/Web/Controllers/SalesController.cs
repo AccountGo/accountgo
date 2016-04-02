@@ -296,9 +296,6 @@ namespace Web.Controllers
             var model = new Models.ViewModels.Sales.Customers();
             foreach(var customer in customers)
             {
-                if (customer.Party == null)
-                    continue;
-
                 model.CustomerListLines.Add(new Models.ViewModels.Sales.CustomerListLine()
                 {
                     Id = customer.Id,

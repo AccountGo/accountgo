@@ -483,14 +483,33 @@ namespace Services.Sales
 
         public IEnumerable<SalesOrderHeader> GetSalesOrders()
         {
-            var query = from f in _salesOrderRepo.Table
-                        select f;
-            return query;
+            var salesOrders = _salesOrderRepo.GetAllIncluding(c => c.Customer,
+                pt => pt.PaymentTerm,
+                lines => lines.SalesOrderLines);
+
+            foreach(var salesOrder in salesOrders)
+            {
+                salesOrder.Customer.Party = GetCustomerById(salesOrder.CustomerId.Value).Party;
+            }
+
+            return salesOrders;
         }
 
         public SalesOrderHeader GetSalesOrderById(int id)
         {
-            return _salesOrderRepo.GetById(id);
+            var salesOrder = _salesOrderRepo.GetAllIncluding(lines => lines.SalesOrderLines,
+                c => c.Customer,
+                p => p.PaymentTerm)
+                .Where(o => o.Id == id).FirstOrDefault()
+                ;
+
+            foreach(var line in salesOrder.SalesOrderLines)
+            {
+                line.Item = _itemRepo.GetById(line.ItemId);
+                line.Measurement = _measurementRepo.GetById(line.MeasurementId);
+            }
+
+            return salesOrder;
         }
 
         public SalesDeliveryHeader GetSalesDeliveryById(int id)

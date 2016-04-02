@@ -31,11 +31,11 @@ namespace Api
         public void ConfigureServices(IServiceCollection services)
         {
             string connectionString = "";
-
-            if (_hostingEnv.IsDevelopment())
-                connectionString = Configuration["Data:LocalConnection:ConnectionString"];
-            else
-                connectionString = Configuration["Data:DefaultConnection:ConnectionString"];
+            connectionString = Configuration["Data:DefaultConnection:ConnectionString"];
+            //if (_hostingEnv.IsDevelopment())
+            //    connectionString = Configuration["Data:LocalConnection:ConnectionString"];
+            //else
+            //    connectionString = Configuration["Data:DefaultConnection:ConnectionString"];
 
             services.AddEntityFramework()
                 .AddSqlServer()
