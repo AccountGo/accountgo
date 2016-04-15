@@ -1,4 +1,6 @@
-System.register(['angular2/core', 'angular2/router', './dashboard/dashboard', './navigation/navigation', './accounts-receivable/sales-quotations', './accounts-receivable/sales-orders', './accounts-receivable/sales-receipts', './accounts-receivable/sales-invoices', './accounts-receivable/sales-order-form', './accounts-payable/purchase-orders', './accounts-payable/purchase-invoices', './inventory-and-control/items', './inventory-and-control/inventory', './financials/general-ledgers', './financials/journal-entries', './financials/taxes', './administration/setup', './administration/company'], function(exports_1) {
+System.register(['angular2/core', 'angular2/router', './dashboard/dashboard', './navigation/navigation', './accounts-receivable/sales-quotations', './accounts-receivable/sales-orders', './accounts-receivable/sales-receipts', './accounts-receivable/sales-invoices', './accounts-receivable/sales-order-form', './accounts-payable/purchase-orders', './accounts-payable/purchase-invoices', './inventory-and-control/items', './inventory-and-control/inventory', './financials/general-ledgers', './financials/journal-entries', './financials/taxes', './administration/setup', './administration/company'], function(exports_1, context_1) {
+    "use strict";
+    var __moduleName = context_1 && context_1.id;
     var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
         var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
         if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
@@ -67,36 +69,33 @@ System.register(['angular2/core', 'angular2/router', './dashboard/dashboard', '.
                 company_1 = company_1_1;
             }],
         execute: function() {
-            App = (function () {
-                function App() {
-                }
-                App = __decorate([
-                    core_1.Component({
-                        selector: 'app',
-                        templateUrl: 'app/app.html',
-                        directives: [navigation_1.NavigationComponent, router_1.RouterOutlet]
-                    }),
-                    router_1.RouteConfig([
-                        { path: '/dashboard', component: dashboard_1.DashboardComponent, useAsDefault: true, name: 'Dashboard' },
-                        { path: '/accountsreceivable/salesquotations', component: sales_quotations_1.SalesQuotationsComponent, name: 'Sales Quotations' },
-                        { path: '/accountsreceivable/salesorders', component: sales_orders_1.SalesOrdersComponent, name: 'Sales Orders' },
-                        { path: '/accountsreceivable/salesorders/form', component: sales_order_form_1.SalesOrderFormComponent, name: 'Sales Order Form' },
-                        { path: '/accountsreceivable/salesreceipts', component: sales_receipts_1.SalesReceiptsComponent, name: 'Sales Receipts' },
-                        { path: '/accountsreceivable/salesinvoices', component: sales_invoices_1.SalesInvoicesComponent, name: 'Sales Invoices' },
-                        { path: '/accountspayable/purchaseorders', component: purchase_orders_1.PurchaseOrdersComponent, name: 'Purchase Orders' },
-                        { path: '/accountspayable/purchaseinvoices', component: purchase_invoices_1.PurchaseInvoicesComponent, name: 'Purchase Invoices' },
-                        { path: '/inventoryanditems/items', component: items_1.ItemsComponent, name: 'Items' },
-                        { path: '/inventoryanditems/inventory', component: inventory_1.InventoryComponent, name: 'Inventory' },
-                        { path: '/financials/generalledgers', component: general_ledgers_1.GeneralLedgersComponent, name: 'General Ledgers' },
-                        { path: '/financials/journalentries', component: journal_entries_1.JournalEntriesComponent, name: 'Journal Entries' },
-                        { path: '/financials/taxes', component: taxes_1.TaxesComponent, name: 'Taxes' },
-                        { path: '/administration/setup', component: setup_1.SetupComponent, name: 'Company' },
-                        { path: '/administration/company', component: company_1.CompanyComponent, name: 'Setup' },
-                    ]), 
-                    __metadata('design:paramtypes', [])
-                ], App);
-                return App;
-            })();
+            let App = class App {
+            };
+            App = __decorate([
+                core_1.Component({
+                    selector: 'app',
+                    templateUrl: 'app/app.html',
+                    directives: [navigation_1.NavigationComponent, router_1.RouterOutlet]
+                }),
+                router_1.RouteConfig([
+                    { path: '/dashboard', component: dashboard_1.DashboardComponent, useAsDefault: true, name: 'Dashboard' },
+                    { path: '/accountsreceivable/salesquotations', component: sales_quotations_1.SalesQuotationsComponent, name: 'Sales Quotations' },
+                    { path: '/accountsreceivable/salesorders', component: sales_orders_1.SalesOrdersComponent, name: 'Sales Orders' },
+                    { path: '/accountsreceivable/salesorders/form', component: sales_order_form_1.SalesOrderFormComponent, name: 'Sales Order Form' },
+                    { path: '/accountsreceivable/salesreceipts', component: sales_receipts_1.SalesReceiptsComponent, name: 'Sales Receipts' },
+                    { path: '/accountsreceivable/salesinvoices', component: sales_invoices_1.SalesInvoicesComponent, name: 'Sales Invoices' },
+                    { path: '/accountspayable/purchaseorders', component: purchase_orders_1.PurchaseOrdersComponent, name: 'Purchase Orders' },
+                    { path: '/accountspayable/purchaseinvoices', component: purchase_invoices_1.PurchaseInvoicesComponent, name: 'Purchase Invoices' },
+                    { path: '/inventoryanditems/items', component: items_1.ItemsComponent, name: 'Items' },
+                    { path: '/inventoryanditems/inventory', component: inventory_1.InventoryComponent, name: 'Inventory' },
+                    { path: '/financials/generalledgers', component: general_ledgers_1.GeneralLedgersComponent, name: 'General Ledgers' },
+                    { path: '/financials/journalentries', component: journal_entries_1.JournalEntriesComponent, name: 'Journal Entries' },
+                    { path: '/financials/taxes', component: taxes_1.TaxesComponent, name: 'Taxes' },
+                    { path: '/administration/setup', component: setup_1.SetupComponent, name: 'Company' },
+                    { path: '/administration/company', component: company_1.CompanyComponent, name: 'Setup' },
+                ]), 
+                __metadata('design:paramtypes', [])
+            ], App);
             exports_1("App", App);
         }
     }
