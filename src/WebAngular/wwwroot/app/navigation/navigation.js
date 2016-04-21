@@ -1,4 +1,6 @@
-System.register(['angular2/core', 'angular2/router'], function(exports_1) {
+System.register(['angular2/core', 'angular2/router'], function(exports_1, context_1) {
+    "use strict";
+    var __moduleName = context_1 && context_1.id;
     var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
         var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
         if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
@@ -19,8 +21,8 @@ System.register(['angular2/core', 'angular2/router'], function(exports_1) {
                 router_1 = router_1_1;
             }],
         execute: function() {
-            NavigationComponent = (function () {
-                function NavigationComponent(router) {
+            let NavigationComponent = class NavigationComponent {
+                constructor(router) {
                     this.router = router;
                     this.activeMenu = 'Dashboard';
                     this.activeView = 'Dashboard';
@@ -49,32 +51,29 @@ System.register(['angular2/core', 'angular2/router'], function(exports_1) {
                     this.menus.push(financials);
                     this.menus.push(administration);
                 }
-                NavigationComponent.prototype.setActiveMenu = function (displayText) {
+                setActiveMenu(displayText) {
                     this.activeMenu = displayText;
-                };
-                NavigationComponent.prototype.setActiveView = function (displayText) {
+                }
+                setActiveView(displayText) {
                     this.activeView = displayText;
                     this.router.navigate([displayText]);
-                };
-                NavigationComponent = __decorate([
-                    core_1.Component({
-                        selector: 'navigation',
-                        templateUrl: 'app/navigation/navigation.html'
-                    }), 
-                    __metadata('design:paramtypes', [router_1.Router])
-                ], NavigationComponent);
-                return NavigationComponent;
-            })();
+                }
+            };
+            NavigationComponent = __decorate([
+                core_1.Component({
+                    selector: 'navigation',
+                    templateUrl: 'app/navigation/navigation.html'
+                }), 
+                __metadata('design:paramtypes', [router_1.Router])
+            ], NavigationComponent);
             exports_1("NavigationComponent", NavigationComponent);
-            NavigationMenu = (function () {
-                function NavigationMenu(displayText, path) {
-                    if (path === void 0) { path = null; }
+            class NavigationMenu {
+                constructor(displayText, path = null) {
                     this.displayText = displayText;
                     this.path = path;
                     this.items = new Array();
                 }
-                return NavigationMenu;
-            })();
+            }
             exports_1("NavigationMenu", NavigationMenu);
         }
     }

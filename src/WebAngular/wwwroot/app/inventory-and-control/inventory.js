@@ -1,4 +1,6 @@
-System.register(['angular2/core'], function(exports_1) {
+System.register(['angular2/core'], function(exports_1, context_1) {
+    "use strict";
+    var __moduleName = context_1 && context_1.id;
     var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
         var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
         if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
@@ -16,18 +18,15 @@ System.register(['angular2/core'], function(exports_1) {
                 core_1 = core_1_1;
             }],
         execute: function() {
-            InventoryComponent = (function () {
-                function InventoryComponent() {
-                }
-                InventoryComponent = __decorate([
-                    core_1.Component({
-                        selector: 'inventory',
-                        templateUrl: 'app/inventory-and-control/inventory.html'
-                    }), 
-                    __metadata('design:paramtypes', [])
-                ], InventoryComponent);
-                return InventoryComponent;
-            })();
+            let InventoryComponent = class InventoryComponent {
+            };
+            InventoryComponent = __decorate([
+                core_1.Component({
+                    selector: 'inventory',
+                    templateUrl: 'app/inventory-and-control/inventory.html'
+                }), 
+                __metadata('design:paramtypes', [])
+            ], InventoryComponent);
             exports_1("InventoryComponent", InventoryComponent);
         }
     }
