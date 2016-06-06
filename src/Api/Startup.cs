@@ -47,21 +47,17 @@ namespace Api
             services.AddSwaggerGen();
 
             // Add cors
-            services.AddCors(options =>
+            services.AddCors(o => o.AddPolicy("AllowAll", builder =>
             {
-                options.AddPolicy("AllowAllOrigins",
-                    builder =>
-                    {
-                        builder
-                        .AllowAnyOrigin()
-                        .AllowAnyHeader()
-                        .AllowAnyMethod();
-                    });
-            });
+                builder
+                .AllowAnyOrigin()
+                .AllowAnyMethod()
+                .AllowAnyHeader();
+            }));
 
             // generic repository
             services.AddScoped(typeof(Core.Data.IRepository<>), typeof(Data.EfRepository<>));
-            
+
             // domain services
             services.AddScoped(typeof(Services.Sales.ISalesService), typeof(Services.Sales.SalesService));
             services.AddScoped(typeof(Services.Financial.IFinancialService), typeof(Services.Financial.FinancialService));
@@ -78,16 +74,12 @@ namespace Api
             loggerFactory.AddConsole(Configuration.GetSection("Logging"));
             loggerFactory.AddDebug();
 
+            app.UseCors("AllowAll");
             app.UseIISPlatformHandler();
-
             app.UseStaticFiles();
-
             app.UseMvc();
-
             app.UseSwaggerGen();
             app.UseSwaggerUi();
-
-            app.UseCors("AllowAllOrigins");
         }
 
         // Entry point for the application.

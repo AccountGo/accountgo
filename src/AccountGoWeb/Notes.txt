@@ -1,0 +1,9 @@
+﻿Use webpack to bundle react components. Check the weback.config.js
+
+run cmd webpack install
+
+Typings note here:
+
+Typescript note here:
+
+Ts-loader note here:

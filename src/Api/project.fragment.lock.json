@@ -1,0 +1,35 @@
+{
+  "version": 2,
+  "exports": {
+    "Core/1.0.0": {
+      "type": "project",
+      "framework": ".NETFramework,Version=v4.6",
+      "compile": {
+        "bin/Debug/Core.dll": {}
+      },
+      "runtime": {
+        "bin/Debug/Core.dll": {}
+      }
+    },
+    "Model/1.0.0": {
+      "type": "project",
+      "framework": ".NETFramework,Version=v4.6",
+      "compile": {
+        "bin/Debug/Model.dll": {}
+      },
+      "runtime": {
+        "bin/Debug/Model.dll": {}
+      }
+    },
+    "Services/1.0.0": {
+      "type": "project",
+      "framework": ".NETFramework,Version=v4.6",
+      "compile": {
+        "bin/Debug/Services.dll": {}
+      },
+      "runtime": {
+        "bin/Debug/Services.dll": {}
+      }
+    }
+  }
+}

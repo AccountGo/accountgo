@@ -89,7 +89,7 @@ namespace Api.Controllers
 
         [HttpGet]
         [Route("[action]")]
-        public IActionResult GetCustomers()
+        public IActionResult Customers()
         {
             IList<Model.Sales.Customer> model = new List<Model.Sales.Customer>();
             try
