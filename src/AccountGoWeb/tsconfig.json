@@ -7,7 +7,7 @@
     "noImplicitAny": false,
     "removeComments": true,
     "sourceMap": true,
-    "outDir": "./wwwroot/libs/tsxout",
+    "outDir": "./wwwroot/libs/tsxbuild",
     "rootDir": "./Scripts"
   },
   "compileOnSave": true,
