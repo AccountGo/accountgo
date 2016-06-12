@@ -7,7 +7,7 @@ var scriptsDir = path.resolve(__dirname, './wwwroot/libs/tsxbuild');
 var config = {
     entry: {
         home: scriptsDir + '/home' + '/home.js',
-        addSalesOrder: scriptsDir + '/sales/addsalesorder.js',
+        sales: scriptsDir + '/sales/index.js',
         vendor: ['react', 'react-dom']
     },
     output: {
@@ -26,7 +26,7 @@ var config = {
     //    ]
     //},
     plugins: [
-    new webpack.optimize.CommonsChunkPlugin("vendor", "vendor.bundle.js")
+        new webpack.optimize.CommonsChunkPlugin("vendor", "vendor.bundle.js")
     ],
 };
 
