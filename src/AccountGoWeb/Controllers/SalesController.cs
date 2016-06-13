@@ -18,7 +18,7 @@ namespace AccountGoWeb.Controllers
         {
             ViewBag.PageContentHeader = "Sales Orders";
 
-            return View("Index");
+            return View();
         }
 
         public IActionResult AddSalesOrder()

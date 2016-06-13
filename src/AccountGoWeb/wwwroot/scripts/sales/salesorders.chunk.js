@@ -1,18 +1,5 @@
-webpackJsonp([1],{
-
-/***/ 0:
-/***/ function(module, exports, __webpack_require__) {
-
-	"use strict";
-	var React = __webpack_require__(1);
-	var ReactDOM = __webpack_require__(38);
-	var SalesOrders_1 = __webpack_require__(168);
-	ReactDOM.render(React.createElement(SalesOrders_1.default, null), document.getElementById("salesorders"));
-	//# sourceMappingURL=index.js.map
-
-/***/ },
-
-/***/ 168:
+webpackJsonp([1],[
+/* 0 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -22,6 +9,7 @@ webpackJsonp([1],{
 	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 	};
 	var React = __webpack_require__(1);
+	var ReactDOM = __webpack_require__(38);
 	var SalesOrders = (function (_super) {
 	    __extends(SalesOrders, _super);
 	    function SalesOrders() {
@@ -34,9 +22,9 @@ webpackJsonp([1],{
 	}(React.Component));
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.default = SalesOrders;
-	//# sourceMappingURL=SalesOrders.js.map
+	ReactDOM.render(React.createElement(SalesOrders, null), document.getElementById("salesorders"));
+
 
 /***/ }
-
-});
-//# sourceMappingURL=sales.chunk.js.map
+]);
+//# sourceMappingURL=salesorders.chunk.js.map
