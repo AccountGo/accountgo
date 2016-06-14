@@ -1,7 +1,7 @@
 ﻿import * as React from "react";
 import * as ReactDOM from "react-dom";
 
-import Terms from '../Sales/Terms';
+import Terms from "../Sales/Terms";
 
 class AddSalesOrder extends React.Component<{}, {}> {
     render() {

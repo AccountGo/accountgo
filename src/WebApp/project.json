@@ -1,6 +1,6 @@
 {
   "version": "1.0.0-*",
-  "compilationOptions": {
+  "buildOptions": {
     "emitEntryPoint": true
   },
 
@@ -20,15 +20,5 @@
 
   "frameworks": {
     "dnx46": { }
-  },
-
-  "exclude": [
-    "wwwroot",
-    "node_modules"
-  ],
-
-  "publishExclude": [
-    "**.user",
-    "**.vspscc"
-  ]
+  }
 }

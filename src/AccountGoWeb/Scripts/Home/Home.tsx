@@ -1,11 +1,11 @@
 ﻿import * as React from "react";
 import * as ReactDOM from "react-dom";
 
-interface HomeProps {
+interface IHomeProps {
     pageTitle: string;
 }
 
-class Home extends React.Component<HomeProps, {}> {
+class Home extends React.Component<IHomeProps, {}> {
     render() {
         return <div>{this.props.pageTitle}.If you can see this message means you have successfully configured reactjs+typescript+webpack+babel-loader.</div>;
     }

@@ -23,7 +23,7 @@ webpackJsonp([0],[
 	ReactDOM.render(React.createElement(Home, {pageTitle: "Dashboard"}), document.getElementById("home"));
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.default = Home;
-
+	//# sourceMappingURL=Home.js.map
 
 /***/ }
 ]);
