@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNet.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using Model.Inventory;
 using Services.Administration;
 using Services.Inventory;

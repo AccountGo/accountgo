@@ -1,28 +1,28 @@
-﻿using Microsoft.AspNet.Builder;
-using Microsoft.AspNet.Hosting;
-using Microsoft.Data.Entity;
+﻿using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.PlatformAbstractions;
 
 namespace Api
 {
     public class Startup
     {
-        private readonly IApplicationEnvironment _appEnv;
         private readonly IHostingEnvironment _hostingEnv;
 
-        public Startup(IHostingEnvironment hostingEnv, IApplicationEnvironment appEnv)
+        public Startup(IHostingEnvironment env)
         {
             // Set up configuration sources.
             var builder = new ConfigurationBuilder()
-                .AddJsonFile("appsettings.json")
+                .SetBasePath(env.ContentRootPath)
+                .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
+                .AddJsonFile($"appsettings.{env.EnvironmentName}.json", optional: true)
                 .AddEnvironmentVariables();
             Configuration = builder.Build();
 
-            _hostingEnv = hostingEnv;
-            _appEnv = appEnv;
+            _hostingEnv = env;
         }
 
         public IConfigurationRoot Configuration { get; set; }
@@ -37,14 +37,15 @@ namespace Api
             //else
             //    connectionString = Configuration["Data:DefaultConnection:ConnectionString"];
 
-            services.AddEntityFramework()
-                .AddSqlServer()
+            services
+                //.AddSqlServer()
+                .AddEntityFrameworkSqlServer()
                 .AddDbContext<Data.ApiDbContext>(options => options.UseSqlServer(connectionString));
 
             // Add framework services.
             services.AddMvc();
 
-            services.AddSwaggerGen();
+            //services.AddSwaggerGen();
 
             // Add cors
             services.AddCors(o => o.AddPolicy("AllowAll", builder =>
@@ -74,15 +75,11 @@ namespace Api
             loggerFactory.AddConsole(Configuration.GetSection("Logging"));
             loggerFactory.AddDebug();
 
-            app.UseCors("AllowAll");
-            app.UseIISPlatformHandler();
+            app.UseCors("AllowAll");            
             app.UseStaticFiles();
             app.UseMvc();
-            app.UseSwaggerGen();
-            app.UseSwaggerUi();
-        }
-
-        // Entry point for the application.
-        public static void Main(string[] args) => WebApplication.Run<Startup>(args);
+            //app.UseSwaggerGen();
+            //app.UseSwaggerUi();
+        }        
     }
 }

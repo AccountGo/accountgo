@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNet.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using Services.Administration;
 using Services.Sales;
 using System;
@@ -33,7 +33,7 @@ namespace Api.Controllers
 
                 if (customer == null)
                 {
-                    return HttpNotFound();
+                    return Ok();
                 }
 
                 var customerModel = new Model.Sales.Customer()
