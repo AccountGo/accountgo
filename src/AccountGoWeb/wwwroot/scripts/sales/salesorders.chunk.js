@@ -4,32 +4,33 @@ webpackJsonp([1],{
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
-	var __extends = (this && this.__extends) || function (d, b) {
-	    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
-	    function __() { this.constructor = d; }
-	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-	};
 	var React = __webpack_require__(1);
 	var ReactDOM = __webpack_require__(38);
 	var axios = __webpack_require__(168);
-	var SalesOrders = (function (_super) {
-	    __extends(SalesOrders, _super);
-	    function SalesOrders() {
-	        _super.apply(this, arguments);
-	    }
-	    SalesOrders.prototype.componentDidMount = function () {
+	var SalesOrders = React.createClass({
+	    getInitialState: function () {
+	        return {
+	            salesorders: {
+	                data: []
+	            }
+	        };
+	    },
+	    componentDidMount: function () {
 	        var component = this;
 	        axios.get('http://localhost:5000/api/sales/getsalesorders').then(function (data) {
-	            component.setState({ name: data });
+	            component.setState({
+	                salesorders: data
+	            });
 	        });
-	    };
-	    SalesOrders.prototype.render = function () {
-	        return (React.createElement("h1", null, "Sales Orders"));
-	    };
-	    return SalesOrders;
-	}(React.Component));
-	Object.defineProperty(exports, "__esModule", { value: true });
-	exports.default = SalesOrders;
+	    },
+	    render: function () {
+	        var component = this;
+	        var rows = component.state.salesorders.data.map(function (so) {
+	            return (React.createElement("tr", null, React.createElement("td", null, so.CustomerName), React.createElement("td", null, so.OrderDate), React.createElement("td", null, so.TotalAmount)));
+	        });
+	        return (React.createElement("div", {class: "table-responsive"}, React.createElement("table", {class: "table table-bordered", id: "tblSalesOrder"}, React.createElement("thead", null, React.createElement("tr", {class: "success"}, React.createElement("td", null, "Customer Name"), React.createElement("td", null, "Order Date"), React.createElement("td", null, "Amount"))), React.createElement("tbody", null, rows))));
+	    }
+	});
 	ReactDOM.render(React.createElement(SalesOrders, null), document.getElementById("salesorders"));
 	//# sourceMappingURL=SalesOrders.js.map
 
