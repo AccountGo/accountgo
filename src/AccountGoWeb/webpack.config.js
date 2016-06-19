@@ -32,6 +32,13 @@ var config = {
     plugins: [
         new webpack.optimize.CommonsChunkPlugin("vendor", "vendor.bundle.js")
     ],
+    externals: {
+        'Config': JSON.stringify(process.env.ENV === 'production' ? {
+            apiUrl: ""
+        } : {
+            apiUrl: "http://localhost:5000"
+        })
+    }
 };
 
 module.exports = config;

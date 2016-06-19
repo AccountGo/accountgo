@@ -7,6 +7,7 @@ webpackJsonp([1],{
 	var React = __webpack_require__(1);
 	var ReactDOM = __webpack_require__(38);
 	var axios = __webpack_require__(168);
+	var Config = __webpack_require__(187);
 	var SalesOrders = React.createClass({
 	    getInitialState: function () {
 	        return {
@@ -17,7 +18,7 @@ webpackJsonp([1],{
 	    },
 	    componentDidMount: function () {
 	        var component = this;
-	        axios.get('http://localhost:5000/api/sales/getsalesorders').then(function (data) {
+	        axios.get(Config.apiUrl + '/api/sales/getsalesorders').then(function (data) {
 	            component.setState({
 	                salesorders: data
 	            });
@@ -1264,6 +1265,13 @@ webpackJsonp([1],{
 	  };
 	};
 
+
+/***/ },
+
+/***/ 187:
+/***/ function(module, exports) {
+
+	module.exports = {"apiUrl":"http://localhost:5000"};
 
 /***/ }
 

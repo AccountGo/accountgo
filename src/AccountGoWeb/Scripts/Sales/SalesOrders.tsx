@@ -1,6 +1,7 @@
 ﻿import * as React from "react";
 import * as ReactDOM from "react-dom";
 import * as axios from "axios";
+import Config = require("Config");
 
 const SalesOrders = React.createClass({
     getInitialState: function () {
@@ -12,7 +13,7 @@ const SalesOrders = React.createClass({
     },
     componentDidMount: function () {
         let component = this;
-        axios.get('http://localhost:5000/api/sales/getsalesorders').then(function (data) {
+        axios.get(Config.apiUrl + '/api/sales/getsalesorders').then(function (data) {
             component.setState({
                 salesorders: data
             });
