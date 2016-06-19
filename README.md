@@ -34,4 +34,9 @@ Feel free to email mvpsolution@gmail.com of any questions.
 
 Don't miss regular source code updates, join http://accountgo.googlegroups.com
 
-Also, you can view demo site here (http://accountgo.apphb.com)
+Also, you can view demo site here (http://www.accountgo.ph)
+
+#THE FUTURE OF THE FRONT-END
+The screenshot below will be the future front-end. It is heavily under-development and you could be part of it. The project is "AccountGoWeb" and consuming the "Api" project.
+
+
