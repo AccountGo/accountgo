@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNet.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using Services.Administration;
 using Services.Sales;
 using System;
@@ -33,7 +33,7 @@ namespace Api.Controllers
 
                 if (customer == null)
                 {
-                    return HttpNotFound();
+                    return Ok();
                 }
 
                 var customerModel = new Model.Sales.Customer()
@@ -89,7 +89,7 @@ namespace Api.Controllers
 
         [HttpGet]
         [Route("[action]")]
-        public IActionResult GetCustomers()
+        public IActionResult Customers()
         {
             IList<Model.Sales.Customer> model = new List<Model.Sales.Customer>();
             try
@@ -125,31 +125,54 @@ namespace Api.Controllers
         {            
             IList<Model.Sales.SalesOrder> model = new List<Model.Sales.SalesOrder>();
 
-            try
+            var salesOrderModel1 = new Model.Sales.SalesOrder()
             {
-                var salesOrders = _salesService.GetSalesOrders();
+                Id = 1,
+                CustomerId = 1,
+                CustomerNo = "001",
+                CustomerName = "John Doe",
+                OrderDate = DateTime.Now,
+                TotalAmount = 2500
+            };
+            model.Add(salesOrderModel1);
 
-                foreach (var salesOrder in salesOrders)
-                {
-                    var salesOrderModel = new Model.Sales.SalesOrder()
-                    {
-                        Id = salesOrder.Id,
-                        CustomerId = salesOrder.CustomerId.Value,
-                        CustomerNo = salesOrder.Customer.No,
-                        CustomerName = _salesService.GetCustomerById(salesOrder.CustomerId.Value).Party.Name,
-                        OrderDate = salesOrder.Date,
-                        TotalAmount = salesOrder.SalesOrderLines.Sum(l => l.Amount)
-                    };
-
-                    model.Add(salesOrderModel);
-                }
-
-                return new ObjectResult(model);
-            }
-            catch(Exception ex)
+            var salesOrderModel2 = new Model.Sales.SalesOrder()
             {
-                return new ObjectResult(ex);
-            }
+                Id = 2,
+                CustomerId = 2,
+                CustomerNo = "002",
+                CustomerName = "Joe Bloggs",
+                OrderDate = DateTime.Now,
+                TotalAmount = 3500
+            };
+            model.Add(salesOrderModel2);
+
+            return new ObjectResult(model);
+            //try
+            //{
+            //    var salesOrders = _salesService.GetSalesOrders();
+
+            //    foreach (var salesOrder in salesOrders)
+            //    {
+            //        var salesOrderModel = new Model.Sales.SalesOrder()
+            //        {
+            //            Id = salesOrder.Id,
+            //            CustomerId = salesOrder.CustomerId.Value,
+            //            CustomerNo = salesOrder.Customer.No,
+            //            CustomerName = _salesService.GetCustomerById(salesOrder.CustomerId.Value).Party.Name,
+            //            OrderDate = salesOrder.Date,
+            //            TotalAmount = salesOrder.SalesOrderLines.Sum(l => l.Amount)
+            //        };
+
+            //        model.Add(salesOrderModel);
+            //    }
+
+            //    return new ObjectResult(model);
+            //}
+            //catch(Exception ex)
+            //{
+            //    return new ObjectResult(ex);
+            //}
         }
 
         [HttpGet]

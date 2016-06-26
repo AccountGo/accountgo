@@ -6,7 +6,7 @@ using Core.Domain.Purchases;
 using Core.Domain.Sales;
 using Core.Domain.Security;
 using Core.Domain.TaxSystem;
-using Microsoft.Data.Entity;
+using Microsoft.EntityFrameworkCore;
 
 namespace Api.Data
 {
@@ -18,7 +18,7 @@ namespace Api.Data
         }
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
-            
+            optionsBuilder.UseSqlServer(@"Server=tcp:accountgo.database.windows.net,1433;Database=accountgo;User ID=accountgo;Password=TBJX3BpxCsW782GLETPnFmeSRNoSN3sggjjppNgSPg4BUyaNq4i8K5TGwZfnnDRJ;Trusted_Connection=False;Encrypt=True;Connection Timeout=30;MultipleActiveResultSets=True;");
         }
 
         protected override void OnModelCreating(ModelBuilder builder)

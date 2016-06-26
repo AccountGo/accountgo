@@ -1,0 +1,24 @@
+{
+  "version": "1.0.0-*",
+  "buildOptions": {
+    "emitEntryPoint": true
+  },
+
+  "dependencies": {
+    "Microsoft.AspNet.IISPlatformHandler": "1.0.0-rc1-final",
+    "Microsoft.AspNet.Mvc": "6.0.0-rc1-final",
+    "Microsoft.AspNet.Mvc.Core": "6.0.0-rc1-final",
+    "Microsoft.AspNet.Server.Kestrel": "1.0.0-rc1-final",
+    "Microsoft.AspNet.StaticFiles": "1.0.0-rc1-final",
+    "Microsoft.AspNet.Mvc.TagHelpers": "6.0.0-rc1-final",
+    "Microsoft.Net.Http": "2.2.22"
+  },
+
+  "commands": {
+    "web": "Microsoft.AspNet.Server.Kestrel --server.urls http://localhost:44330/"
+  },
+
+  "frameworks": {
+    "dnx46": { }
+  }
+}
