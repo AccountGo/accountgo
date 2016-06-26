@@ -1,0 +1,21 @@
+{
+  "version": "1.0.0",
+  "name": "accountgoweb",
+  "private": true,
+  "devDependencies": {
+    "gulp": "latest",
+    "ts-loader": "latest",
+    "tsd": "latest",
+    "typescript": "latest",
+    "mobx-react-devtools": "^4.2.0"
+  },
+  "dependencies": {
+    "axios": "latest",
+    "bootstrap": "latest",
+    "jquery": "2.2.4",
+    "mobx": "latest",
+    "mobx-react": "latest",
+    "react": "latest",
+    "react-dom": "latest"
+  }
+}

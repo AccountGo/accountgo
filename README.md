@@ -34,4 +34,18 @@ Feel free to email mvpsolution@gmail.com of any questions.
 
 Don't miss regular source code updates, join http://accountgo.googlegroups.com
 
-Also, you can view demo site here (http://accountgo.apphb.com)
+Also, you can view demo site here (http://www.accountgo.ph)
+
+#THE FUTURE OF THE FRONT-END
+The screenshot below will be the future front-end. It is heavily under-development and you could be part of it. The project is "AccountGoWeb" and consuming the "Api" project.
+
+Technology Stack:
+- ASP.NET Core
+- ReactJS
+- MobX
+- Axios
+- Bootstrap
+- D3
+- React-router (on some pages)
+
+![accountgoweb](https://cloud.githubusercontent.com/assets/17961526/16177121/f41e2c10-3656-11e6-885f-fb2325b09066.PNG)

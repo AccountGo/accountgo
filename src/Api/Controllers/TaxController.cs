@@ -1,5 +1,7 @@
-﻿using Microsoft.AspNet.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
+using Model.TaxSystem;
 using Services.TaxSystem;
+using System.Collections.Generic;
 
 namespace Api.Controllers
 {
@@ -17,7 +19,27 @@ namespace Api.Controllers
         [Route("[action]")]
         public IActionResult Taxes()
         {
-            return new ObjectResult(null);
+            var taxes = new List<Tax>();
+
+            taxes.Add(new Tax()
+            {
+                Id = 1,
+                IsActive = true,
+                Rate = 12,
+                TaxCode = "12",
+                TaxName = "12%"
+            });
+
+            taxes.Add(new Tax()
+            {
+                Id = 2,
+                IsActive = true,
+                Rate = 10,
+                TaxCode = "10",
+                TaxName = "10%"
+            });
+
+            return new ObjectResult(taxes);
         }
     }
 }

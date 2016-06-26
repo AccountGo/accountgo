@@ -2,8 +2,8 @@
 using System.Linq;
 using Core.Data;
 using Core.Domain;
-using Microsoft.Data.Entity;
 using System.Collections.Generic;
+using Microsoft.EntityFrameworkCore;
 
 namespace Api.Data
 {

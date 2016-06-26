@@ -1,0 +1,30 @@
+webpackJsonp([0],[
+/* 0 */
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	var __extends = (this && this.__extends) || function (d, b) {
+	    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
+	    function __() { this.constructor = d; }
+	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+	};
+	var React = __webpack_require__(1);
+	var ReactDOM = __webpack_require__(38);
+	var Home = (function (_super) {
+	    __extends(Home, _super);
+	    function Home() {
+	        _super.apply(this, arguments);
+	    }
+	    Home.prototype.render = function () {
+	        return React.createElement("div", null, this.props.pageTitle, ".If you can see this message means you have successfully configured reactjs+typescript+webpack+babel-loader.");
+	    };
+	    return Home;
+	}(React.Component));
+	ReactDOM.render(React.createElement(Home, {pageTitle: "Dashboard"}), document.getElementById("home"));
+	Object.defineProperty(exports, "__esModule", { value: true });
+	exports.default = Home;
+	//# sourceMappingURL=Home.js.map
+
+/***/ }
+]);
+//# sourceMappingURL=home.chunk.js.map
