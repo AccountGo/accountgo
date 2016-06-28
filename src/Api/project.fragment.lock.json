@@ -9,6 +9,13 @@
       },
       "runtime": {
         "bin/Debug/Core.dll": {}
+      },
+      "contentFiles": {
+        "bin/Debug/Core.pdb": {
+          "buildAction": "None",
+          "codeLanguage": "any",
+          "copyToOutput": true
+        }
       }
     },
     "Model/1.0.0": {
@@ -19,6 +26,13 @@
       },
       "runtime": {
         "bin/Debug/Model.dll": {}
+      },
+      "contentFiles": {
+        "bin/Debug/Model.pdb": {
+          "buildAction": "None",
+          "codeLanguage": "any",
+          "copyToOutput": true
+        }
       }
     },
     "Services/1.0.0": {
@@ -29,6 +43,13 @@
       },
       "runtime": {
         "bin/Debug/Services.dll": {}
+      },
+      "contentFiles": {
+        "bin/Debug/Services.pdb": {
+          "buildAction": "None",
+          "codeLanguage": "any",
+          "copyToOutput": true
+        }
       }
     }
   }
