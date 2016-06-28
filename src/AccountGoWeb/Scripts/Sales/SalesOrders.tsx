@@ -21,12 +21,12 @@ const SalesOrders = React.createClass({
     },
     render: function () {
         let component = this;
-        var rows = component.state.salesorders.data.map(function (so) {
+        var rows = component.state.salesorders.data.map(function (so, i) {
             return (
-                <tr>
-                    <td>{so.CustomerName}</td>
-                    <td>{so.OrderDate}</td>
-                    <td>{so.TotalAmount}</td>
+                <tr key={i}>
+                    <td>{so.customerName}</td>
+                    <td>{so.orderDate}</td>
+                    <td>{so.totalAmount}</td>
                 </tr>
             )
         });

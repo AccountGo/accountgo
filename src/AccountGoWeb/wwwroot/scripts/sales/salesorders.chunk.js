@@ -26,8 +26,8 @@ webpackJsonp([1],{
 	    },
 	    render: function () {
 	        var component = this;
-	        var rows = component.state.salesorders.data.map(function (so) {
-	            return (React.createElement("tr", null, React.createElement("td", null, so.CustomerName), React.createElement("td", null, so.OrderDate), React.createElement("td", null, so.TotalAmount)));
+	        var rows = component.state.salesorders.data.map(function (so, i) {
+	            return (React.createElement("tr", {key: i}, React.createElement("td", null, so.customerName), React.createElement("td", null, so.orderDate), React.createElement("td", null, so.totalAmount)));
 	        });
 	        return (React.createElement("div", {class: "table-responsive"}, React.createElement("table", {class: "table table-bordered", id: "tblSalesOrder"}, React.createElement("thead", null, React.createElement("tr", {class: "success"}, React.createElement("td", null, "Customer Name"), React.createElement("td", null, "Order Date"), React.createElement("td", null, "Amount"))), React.createElement("tbody", null, rows))));
 	    }
