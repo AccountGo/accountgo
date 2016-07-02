@@ -1,32 +1,25 @@
 ﻿import * as React from "react";
 import * as ReactDOM from "react-dom";
 import * as axios from "axios";
+import {observer} from "mobx-react";
 import Config = require("Config");
+import SalesStore from "../Shared/Stores/Sales/SalesStore";
 
-const SalesOrders = React.createClass({
-    getInitialState: function () {
-        return {
-            salesorders: {
-                data : []
-            }
-        }
-    },
+let store = new SalesStore();
+
+const SalesOrders = observer(React.createClass({
     componentDidMount: function () {
-        let component = this;
-        axios.get(Config.apiUrl + '/api/sales/getsalesorders').then(function (data) {
-            component.setState({
-                salesorders: data
-            });
+        axios.get(Config.apiUrl + '/api/sales/getsalesorders').then(function (result) {
+            store.fillSalesOrders(result.data);
         });
     },
     render: function () {
-        let component = this;
-        var rows = component.state.salesorders.data.map(function (so, i) {
+        var rows = store.salesOrders.map(function (so : any, i) {
             return (
                 <tr key={i}>
-                    <td>{so.customerName}</td>
-                    <td>{so.orderDate}</td>
-                    <td>{so.totalAmount}</td>
+                     <td>{so.customerName}</td>
+                     <td>{so.orderDate}</td>
+                     <td>{so.totalAmount}</td>
                 </tr>
             )
         });
@@ -47,7 +40,7 @@ const SalesOrders = React.createClass({
             </div>
         )
     }
-});
+}));
 
 ReactDOM.render(
     <SalesOrders />,
