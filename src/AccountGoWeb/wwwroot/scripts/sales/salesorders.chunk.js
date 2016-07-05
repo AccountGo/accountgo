@@ -5,11 +5,11 @@ webpackJsonp([1],{
 
 	"use strict";
 	var React = __webpack_require__(1);
-	var ReactDOM = __webpack_require__(38);
-	var axios = __webpack_require__(168);
-	var mobx_react_1 = __webpack_require__(187);
-	var Config = __webpack_require__(189);
-	var SalesStore_1 = __webpack_require__(190);
+	var ReactDOM = __webpack_require__(33);
+	var axios = __webpack_require__(170);
+	var mobx_react_1 = __webpack_require__(189);
+	var Config = __webpack_require__(191);
+	var SalesStore_1 = __webpack_require__(192);
 	var store = new SalesStore_1.default();
 	var SalesOrders = mobx_react_1.observer(React.createClass({
 	    componentDidMount: function () {
@@ -29,26 +29,26 @@ webpackJsonp([1],{
 
 /***/ },
 
-/***/ 168:
+/***/ 170:
 /***/ function(module, exports, __webpack_require__) {
 
-	module.exports = __webpack_require__(169);
+	module.exports = __webpack_require__(171);
 
 /***/ },
 
-/***/ 169:
+/***/ 171:
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 	
-	var defaults = __webpack_require__(170);
-	var utils = __webpack_require__(171);
-	var dispatchRequest = __webpack_require__(173);
-	var InterceptorManager = __webpack_require__(182);
-	var isAbsoluteURL = __webpack_require__(183);
-	var combineURLs = __webpack_require__(184);
-	var bind = __webpack_require__(185);
-	var transformData = __webpack_require__(177);
+	var defaults = __webpack_require__(172);
+	var utils = __webpack_require__(173);
+	var dispatchRequest = __webpack_require__(175);
+	var InterceptorManager = __webpack_require__(184);
+	var isAbsoluteURL = __webpack_require__(185);
+	var combineURLs = __webpack_require__(186);
+	var bind = __webpack_require__(187);
+	var transformData = __webpack_require__(179);
 	
 	function Axios(defaultConfig) {
 	  this.defaults = utils.merge({}, defaultConfig);
@@ -137,7 +137,7 @@ webpackJsonp([1],{
 	axios.all = function all(promises) {
 	  return Promise.all(promises);
 	};
-	axios.spread = __webpack_require__(186);
+	axios.spread = __webpack_require__(188);
 	
 	// Provide aliases for supported request methods
 	utils.forEach(['delete', 'get', 'head'], function forEachMethodNoData(method) {
@@ -166,13 +166,13 @@ webpackJsonp([1],{
 
 /***/ },
 
-/***/ 170:
+/***/ 172:
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 	
-	var utils = __webpack_require__(171);
-	var normalizeHeaderName = __webpack_require__(172);
+	var utils = __webpack_require__(173);
+	var normalizeHeaderName = __webpack_require__(174);
 	
 	var PROTECTION_PREFIX = /^\)\]\}',?\n/;
 	var DEFAULT_CONTENT_TYPE = {
@@ -245,7 +245,7 @@ webpackJsonp([1],{
 
 /***/ },
 
-/***/ 171:
+/***/ 173:
 /***/ function(module, exports) {
 
 	'use strict';
@@ -529,12 +529,12 @@ webpackJsonp([1],{
 
 /***/ },
 
-/***/ 172:
+/***/ 174:
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 	
-	var utils = __webpack_require__(171);
+	var utils = __webpack_require__(173);
 	
 	module.exports = function normalizeHeaderName(headers, normalizedName) {
 	  utils.forEach(headers, function processHeader(value, name) {
@@ -548,7 +548,7 @@ webpackJsonp([1],{
 
 /***/ },
 
-/***/ 173:
+/***/ 175:
 /***/ function(module, exports, __webpack_require__) {
 
 	/* WEBPACK VAR INJECTION */(function(process) {'use strict';
@@ -570,10 +570,10 @@ webpackJsonp([1],{
 	        adapter = config.adapter;
 	      } else if (typeof XMLHttpRequest !== 'undefined') {
 	        // For browsers use XHR adapter
-	        adapter = __webpack_require__(174);
+	        adapter = __webpack_require__(176);
 	      } else if (typeof process !== 'undefined') {
 	        // For node use HTTP adapter
-	        adapter = __webpack_require__(174);
+	        adapter = __webpack_require__(176);
 	      }
 	
 	      if (typeof adapter === 'function') {
@@ -590,18 +590,18 @@ webpackJsonp([1],{
 
 /***/ },
 
-/***/ 174:
+/***/ 176:
 /***/ function(module, exports, __webpack_require__) {
 
 	/* WEBPACK VAR INJECTION */(function(process) {'use strict';
 	
-	var utils = __webpack_require__(171);
-	var buildURL = __webpack_require__(175);
-	var parseHeaders = __webpack_require__(176);
-	var transformData = __webpack_require__(177);
-	var isURLSameOrigin = __webpack_require__(178);
-	var btoa = (typeof window !== 'undefined' && window.btoa) || __webpack_require__(179);
-	var settle = __webpack_require__(180);
+	var utils = __webpack_require__(173);
+	var buildURL = __webpack_require__(177);
+	var parseHeaders = __webpack_require__(178);
+	var transformData = __webpack_require__(179);
+	var isURLSameOrigin = __webpack_require__(180);
+	var btoa = (typeof window !== 'undefined' && window.btoa) || __webpack_require__(181);
+	var settle = __webpack_require__(182);
 	
 	module.exports = function xhrAdapter(resolve, reject, config) {
 	  var requestData = config.data;
@@ -698,7 +698,7 @@ webpackJsonp([1],{
 	  // This is only done if running in a standard browser environment.
 	  // Specifically not if we're in a web worker, or react-native.
 	  if (utils.isStandardBrowserEnv()) {
-	    var cookies = __webpack_require__(181);
+	    var cookies = __webpack_require__(183);
 	
 	    // Add xsrf header
 	    var xsrfValue = config.withCredentials || isURLSameOrigin(config.url) ?
@@ -760,12 +760,12 @@ webpackJsonp([1],{
 
 /***/ },
 
-/***/ 175:
+/***/ 177:
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 	
-	var utils = __webpack_require__(171);
+	var utils = __webpack_require__(173);
 	
 	function encode(val) {
 	  return encodeURIComponent(val).
@@ -835,12 +835,12 @@ webpackJsonp([1],{
 
 /***/ },
 
-/***/ 176:
+/***/ 178:
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 	
-	var utils = __webpack_require__(171);
+	var utils = __webpack_require__(173);
 	
 	/**
 	 * Parse headers into an object
@@ -879,12 +879,12 @@ webpackJsonp([1],{
 
 /***/ },
 
-/***/ 177:
+/***/ 179:
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 	
-	var utils = __webpack_require__(171);
+	var utils = __webpack_require__(173);
 	
 	/**
 	 * Transform the data for a request or a response
@@ -906,12 +906,12 @@ webpackJsonp([1],{
 
 /***/ },
 
-/***/ 178:
+/***/ 180:
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 	
-	var utils = __webpack_require__(171);
+	var utils = __webpack_require__(173);
 	
 	module.exports = (
 	  utils.isStandardBrowserEnv() ?
@@ -981,7 +981,7 @@ webpackJsonp([1],{
 
 /***/ },
 
-/***/ 179:
+/***/ 181:
 /***/ function(module, exports) {
 
 	'use strict';
@@ -1024,7 +1024,7 @@ webpackJsonp([1],{
 
 /***/ },
 
-/***/ 180:
+/***/ 182:
 /***/ function(module, exports) {
 
 	'use strict';
@@ -1049,12 +1049,12 @@ webpackJsonp([1],{
 
 /***/ },
 
-/***/ 181:
+/***/ 183:
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 	
-	var utils = __webpack_require__(171);
+	var utils = __webpack_require__(173);
 	
 	module.exports = (
 	  utils.isStandardBrowserEnv() ?
@@ -1109,12 +1109,12 @@ webpackJsonp([1],{
 
 /***/ },
 
-/***/ 182:
+/***/ 184:
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
 	
-	var utils = __webpack_require__(171);
+	var utils = __webpack_require__(173);
 	
 	function InterceptorManager() {
 	  this.handlers = [];
@@ -1168,7 +1168,7 @@ webpackJsonp([1],{
 
 /***/ },
 
-/***/ 183:
+/***/ 185:
 /***/ function(module, exports) {
 
 	'use strict';
@@ -1189,7 +1189,7 @@ webpackJsonp([1],{
 
 /***/ },
 
-/***/ 184:
+/***/ 186:
 /***/ function(module, exports) {
 
 	'use strict';
@@ -1208,7 +1208,7 @@ webpackJsonp([1],{
 
 /***/ },
 
-/***/ 185:
+/***/ 187:
 /***/ function(module, exports) {
 
 	'use strict';
@@ -1226,7 +1226,7 @@ webpackJsonp([1],{
 
 /***/ },
 
-/***/ 186:
+/***/ 188:
 /***/ function(module, exports) {
 
 	'use strict';
@@ -1260,7 +1260,7 @@ webpackJsonp([1],{
 
 /***/ },
 
-/***/ 187:
+/***/ 189:
 /***/ function(module, exports, __webpack_require__) {
 
 	(function() {
@@ -1270,11 +1270,15 @@ webpackJsonp([1],{
 	        if (!React)
 	            throw new Error("mobx-react requires React to be available");
 	
+	        /**
+	         * dev tool support
+	         */
 	        var isDevtoolsEnabled = false;
 	
 	        // WeakMap<Node, Object>;
 	        var componentByNodeRegistery = typeof WeakMap !== "undefined" ? new WeakMap() : undefined;
 	        var renderReporter = new EventEmitter();
+	
 	        function findDOMNode(component) {
 	            if (ReactDOM)
 	                return ReactDOM.findDOMNode(component);
@@ -1283,7 +1287,7 @@ webpackJsonp([1],{
 	
 	        function reportRendering(component) {
 	            var node = findDOMNode(component);
-	            if (node)
+	            if (node && componentByNodeRegistery)
 	                componentByNodeRegistery.set(node, component);
 	
 	            renderReporter.emit({
@@ -1295,6 +1299,52 @@ webpackJsonp([1],{
 	            });
 	        }
 	
+	        function trackComponents() {
+	            if (typeof WeakMap === "undefined")
+	                throw new Error("[mobx-react] tracking components is not supported in this browser.");
+	            if (!isDevtoolsEnabled)
+	                isDevtoolsEnabled = true;
+	        }
+	
+	        function EventEmitter() {
+	            this.listeners = [];
+	        };
+	        EventEmitter.prototype.on = function (cb) {
+	            this.listeners.push(cb);
+	            var self = this;
+	            return function() {
+	                var idx = self.listeners.indexOf(cb);
+	                if (idx !== -1)
+	                    self.listeners.splice(idx, 1);
+	            };
+	        };
+	        EventEmitter.prototype.emit = function(data) {
+	            this.listeners.forEach(function (fn) {
+	                fn(data);
+	            });
+	        };
+	
+	        /**
+	         * Utilities
+	         */
+	        var specialReactKeys = { children: true, key: true, ref: true };
+	
+	        function patch(target, funcName) {
+	            var base = target[funcName];
+	            var mixinFunc = reactiveMixin[funcName];
+	            if (!base) {
+	                target[funcName] = mixinFunc;
+	            } else {
+	                target[funcName] = function() {
+	                    base.apply(this, arguments);
+	                    mixinFunc.apply(this, arguments);
+	                }
+	            }
+	        }
+	
+	        /**
+	         * ReactiveMixin
+	         */
 	        var reactiveMixin = {
 	            componentWillMount: function() {
 	                // Generate friendly name for debugging
@@ -1342,7 +1392,7 @@ webpackJsonp([1],{
 	                this.render.$mobx && this.render.$mobx.dispose();
 	                if (isDevtoolsEnabled) {
 	                    var node = findDOMNode(this);
-	                    if (node) {
+	                    if (node && componentByNodeRegistery) {
 	                        componentByNodeRegistery.delete(node);
 	                    }
 	                    renderReporter.emit({
@@ -1364,8 +1414,6 @@ webpackJsonp([1],{
 	            },
 	
 	            shouldComponentUpdate: function(nextProps, nextState) {
-	                // TODO: if context changed, return true.., see #18
-	                
 	                // if props or state did change, but a render was scheduled already, no additional render needs to be scheduled
 	                if (this.render.$mobx && this.render.$mobx.isScheduled() === true)
 	                    return false;
@@ -1397,20 +1445,26 @@ webpackJsonp([1],{
 	            }
 	        }
 	
-	        function patch(target, funcName) {
-	            var base = target[funcName];
-	            var mixinFunc = reactiveMixin[funcName];
-	            if (!base) {
-	                target[funcName] = mixinFunc;
-	            } else {
-	                target[funcName] = function() {
-	                    base.apply(this, arguments);
-	                    mixinFunc.apply(this, arguments);
-	                }
+	        /**
+	         * Observer function / decorator
+	         */
+	        function observer(arg1, arg2) {
+	            if (typeof arg1 === "string")
+	                throw new Error("Store names should be provided as array");
+	            if (Array.isArray(arg1)) {
+	                // component needs stores
+	                if (!arg2) {
+	                    // invoked as decorator
+	                    return function(componentClass) {
+	                        return observer(arg1, componentClass);
+	                    }
+	                } else {
+	                    return createStoreInjector(arg1, observer(arg2));
+	                }   
 	            }
-	        }
+	            var componentClass = arg1;
 	
-	        function observer(componentClass) {
+	            // Stateless function component:
 	            // If it is function but doesn't seem to be a react class constructor,
 	            // wrap it to a react class automatically
 	            if (
@@ -1431,7 +1485,6 @@ webpackJsonp([1],{
 	            if (!componentClass)
 	                throw new Error("Please pass a valid component to 'observer'");
 	            var target = componentClass.prototype || componentClass;
-	
 	            [
 	                "componentWillMount",
 	                "componentWillUnmount",
@@ -1440,40 +1493,83 @@ webpackJsonp([1],{
 	            ].forEach(function(funcName) {
 	                patch(target, funcName)
 	            });
-	
 	            if (!target.shouldComponentUpdate)
 	                target.shouldComponentUpdate = reactiveMixin.shouldComponentUpdate;
 	            componentClass.isMobXReactObserver = true;
 	            return componentClass;
 	        }
 	
-	        function trackComponents() {
-	            if (typeof WeakMap === "undefined")
-	                throw new Error("[mobx-react] tracking components is not supported in this browser.");
-	            if (!isDevtoolsEnabled)
-	                isDevtoolsEnabled = true;
+	        /**
+	         * Store provider
+	         */
+	        var Provider = React.createClass({
+	            displayName: "Provider",
+	
+	            render: function() {
+	                return React.Children.only(this.props.children);
+	            },
+	
+	            getChildContext: function () {
+	                var stores = {};
+	                // inherit stores
+	                var baseStores = this.context.mobxStores;
+	                if (baseStores) for (var key in baseStores) {
+	                    stores[key] = baseStores[key];
+	                }
+	                // add own stores
+	                for (var key in this.props)
+	                    if (!specialReactKeys[key])
+	                        stores[key] = this.props[key];
+	                return {
+	                    mobxStores: stores
+	                };
+	            },
+	
+	            componentWillReceiveProps: function(nextProps) {
+	                // Maybe this warning is to aggressive?
+	                if (Object.keys(nextProps).length !== Object.keys(this.props).length)
+	                    console.warn("MobX Provider: The set of provided stores has changed. Please avoid changing stores as the change might not propagate to all children");
+	                for (var key in nextProps)
+	                    if (!specialReactKeys[key] && this.props[key] !== nextProps[key])
+	                        console.warn("MobX Provider: Provided store '" + key + "' has changed. Please avoid replacing stores as the change might not propagate to all children");
+	            }
+	        });
+	
+	        var PropTypes = React.PropTypes;
+	        Provider.contextTypes = { mobxStores: PropTypes.object };
+	        Provider.childContextTypes = { mobxStores: PropTypes.object.isRequired };
+	
+	        /**
+	         * Store Injection
+	         */
+	        function createStoreInjector(stores, component) {
+	            var Injector = React.createClass({
+	                displayName: "MobXStoreInjector",
+	                render: function() {
+	                    var newProps = {};
+	                    for (var key in this.props)
+	                        newProps[key] = this.props[key];
+	                    var baseStores = this.context.mobxStores;
+	                    stores.forEach(function(storeName) {
+	                        if (storeName in newProps) // prefer props over stores
+	                            return;
+	                        if (!(storeName in baseStores))
+	                            throw new Error("MobX observer: Store '" + storeName + "' is not available! Make sure it is provided by some Provider");
+	                        newProps[storeName] = baseStores[storeName];
+	                    }, this);
+	                    return React.createElement(component, newProps);
+	                }
+	            });
+	            Injector.contextTypes = { mobxStores: PropTypes.object };
+	            return Injector;
 	        }
 	
-	        function EventEmitter() {
-	            this.listeners = [];
-	        };
-	        EventEmitter.prototype.on = function (cb) {
-	            this.listeners.push(cb);
-	            var self = this;
-	            return function() {
-	                var idx = self.listeners.indexOf(cb);
-	                if (idx !== -1)
-	                    self.listeners.splice(idx, 1);
-	            };
-	        };
-	        EventEmitter.prototype.emit = function(data) {
-	            this.listeners.forEach(function (fn) {
-	                fn(data);
-	            });
-	        };
-	
+	        /**
+	         * Export
+	         */
 	        return ({
 	            observer: observer,
+	            Provider: Provider,
 	            reactiveComponent: function() {
 	                console.warn("[mobx-react] `reactiveComponent` has been renamed to `observer` and will be removed in 1.1.");
 	                return observer.apply(null, arguments);
@@ -1484,9 +1580,11 @@ webpackJsonp([1],{
 	        });
 	    }
 	
-	    // UMD
+	    /**
+	     * UMD
+	     */
 	    if (true) {
-	        module.exports = mrFactory(__webpack_require__(188), __webpack_require__(1), __webpack_require__(38));
+	        module.exports = mrFactory(__webpack_require__(190), __webpack_require__(1), __webpack_require__(33));
 	    } else if (typeof define === 'function' && define.amd) {
 	        define('mobx-react', ['mobx', 'react', 'react-dom'], mrFactory);
 	    } else {
@@ -1497,7 +1595,7 @@ webpackJsonp([1],{
 
 /***/ },
 
-/***/ 188:
+/***/ 190:
 /***/ function(module, exports) {
 
 	/* WEBPACK VAR INJECTION */(function(global) {"use strict";
@@ -1853,7 +1951,7 @@ webpackJsonp([1],{
 	    if (typeof baseValue === "function")
 	        baseValue = asReference(baseValue);
 	    var adm = asObservableObject(target, undefined, ValueMode.Recursive);
-	    defineObservableProperty(adm, name, baseValue, false);
+	    defineObservableProperty(adm, name, baseValue, true);
 	    allowStateChangesEnd(prevA);
 	}, function (name) {
 	    return this.$mobx.values[name].get();
@@ -1943,6 +2041,8 @@ webpackJsonp([1],{
 	            __alreadySeen.push([source, value]);
 	        return value;
 	    }
+	    if (source instanceof Date || source instanceof RegExp)
+	        return source;
 	    if (detectCycles && __alreadySeen === null)
 	        __alreadySeen = [];
 	    if (detectCycles && source !== null && typeof source === "object") {
@@ -2009,21 +2109,13 @@ webpackJsonp([1],{
 	        invariant(false, "whyRun can only be used on reactions and computed values");
 	}
 	exports.whyRun = whyRun;
-	var actionDecorator = createClassPropertyDecorator(function (target, key, value, args, originalDescriptor) {
+	var actionFieldDecorator = createClassPropertyDecorator(function (target, key, value, args, originalDescriptor) {
 	    var actionName = (args && args.length === 1) ? args[0] : (value.name || key || "<unnamed action>");
 	    var wrappedAction = action(actionName, value);
-	    if (originalDescriptor && originalDescriptor.value && target.constructor && target.constructor.prototype) {
-	        Object.defineProperty(target.constructor.prototype, key, {
-	            configurable: true, enumerable: false, writable: false,
-	            value: wrappedAction
-	        });
-	    }
-	    else {
-	        Object.defineProperty(target, key, {
-	            configurable: true, enumerable: false, writable: false,
-	            value: wrappedAction
-	        });
-	    }
+	    Object.defineProperty(target, key, {
+	        configurable: true, enumerable: false, writable: false,
+	        value: wrappedAction
+	    });
 	}, function (key) {
 	    return this[key];
 	}, function () {
@@ -2034,9 +2126,21 @@ webpackJsonp([1],{
 	        return actionImplementation(arg1.name || "<unnamed action>", arg1);
 	    if (arguments.length === 2 && typeof arg2 === "function")
 	        return actionImplementation(arg1, arg2);
-	    return actionDecorator.apply(null, arguments);
+	    if (arguments.length === 1 && typeof arg1 === "string")
+	        return namedActionDecorator(arg1);
+	    return namedActionDecorator(arg2).apply(null, arguments);
 	}
 	exports.action = action;
+	function namedActionDecorator(name) {
+	    return function (target, prop, descriptor) {
+	        if (descriptor && typeof descriptor.value === "function") {
+	            descriptor.value = actionImplementation(name, descriptor.value);
+	            descriptor.enumerable = false;
+	            return descriptor;
+	        }
+	        return actionFieldDecorator(name).apply(this, arguments);
+	    };
+	}
 	function isAction(thing) {
 	    return typeof thing === "function" && thing.isMobxAction === true;
 	}
@@ -2068,8 +2172,9 @@ webpackJsonp([1],{
 	    if (notifySpy) {
 	        startTime = Date.now();
 	        var flattendArgs = [];
-	        for (var i = 0, l = args.length; i < l; i++)
-	            flattendArgs.push(args[i]);
+	        if (args)
+	            for (var i = 0, l = args.length; i < l; i++)
+	                flattendArgs.push(args[i]);
 	        spyReportStart({
 	            type: "action",
 	            name: actionName,
@@ -2197,7 +2302,7 @@ webpackJsonp([1],{
 	        return changed;
 	    };
 	    ComputedValue.prototype.get = function () {
-	        invariant(!this.isComputing, "Cycle detected", this.derivation);
+	        invariant(!this.isComputing, "Cycle detected in computation " + this.name, this.derivation);
 	        reportObserved(this);
 	        if (this.dependencyStaleCount > 0) {
 	            return this.peek();
@@ -2329,15 +2434,15 @@ webpackJsonp([1],{
 	    try {
 	        var result = f.call(derivation);
 	        hasException = false;
-	        bindDependencies(derivation, prevObserving);
 	        globalState.isTracking = prevTracking;
+	        bindDependencies(derivation, prevObserving);
 	        return result;
 	    }
 	    finally {
 	        if (hasException) {
 	            var message = ("[mobx] An uncaught exception occurred while calculating your computed value, autorun or transformer. Or inside the render() method of an observer based React component. " +
-	                "These methods should never throw exceptions as MobX will usually not be able to recover from them. " +
-	                ("Please enable 'Pause on (caught) exceptions' in your debugger to find the root cause. In: '" + derivation.name + "'"));
+	                "These functions should never throw exceptions as MobX will not always be able to recover from them. " +
+	                ("Please fix the error reported after this message or enable 'Pause on (caught) exceptions' in your debugger to find the root cause. In: '" + derivation.name + "'"));
 	            if (isSpyEnabled()) {
 	                spyReport({
 	                    type: "error",
@@ -2345,7 +2450,7 @@ webpackJsonp([1],{
 	                    message: message
 	                });
 	            }
-	            console.error(message);
+	            console.warn(message);
 	            resetGlobalState();
 	        }
 	    }
@@ -2355,22 +2460,10 @@ webpackJsonp([1],{
 	    var _a = quickDiff(derivation.observing, prevObserving), added = _a[0], removed = _a[1];
 	    for (var i = 0, l = added.length; i < l; i++) {
 	        var dependency = added[i];
-	        invariant(!findCycle(derivation, dependency), "Cycle detected", derivation);
 	        addObserver(added[i], derivation);
 	    }
 	    for (var i = 0, l = removed.length; i < l; i++)
 	        removeObserver(removed[i], derivation);
-	}
-	function findCycle(needle, node) {
-	    if (needle === node)
-	        return true;
-	    var obs = node.observing;
-	    if (obs === undefined)
-	        return false;
-	    for (var l = obs.length, i = 0; i < l; i++)
-	        if (findCycle(needle, obs[i]))
-	            return true;
-	    return false;
 	}
 	function untracked(action) {
 	    var prev = untrackedStart();
@@ -2680,13 +2773,13 @@ webpackJsonp([1],{
 	    if (!listeners)
 	        return;
 	    listeners = listeners.slice();
-	    if (Array.isArray(change)) {
-	        for (var i = 0, l = listeners.length; i < l; i++)
+	    for (var i = 0, l = listeners.length; i < l; i++) {
+	        if (Array.isArray(change)) {
 	            listeners[i].apply(null, change);
-	    }
-	    else {
-	        for (var i = 0, l = listeners.length; i < l; i++)
+	        }
+	        else {
 	            listeners[i](change);
+	        }
 	    }
 	    untrackedEnd(prevU);
 	}
@@ -2973,7 +3066,7 @@ webpackJsonp([1],{
 	        for (var i = fromIndex; i < l; i++)
 	            if (predicate.call(thisArg, items[i], i, this))
 	                return items[i];
-	        return null;
+	        return undefined;
 	    };
 	    ObservableArray.prototype.splice = function (index, deleteCount) {
 	        var newItems = [];
@@ -3470,25 +3563,44 @@ webpackJsonp([1],{
 	    }
 	    adm.values[propName] = observable;
 	    if (asInstanceProperty) {
-	        Object.defineProperty(adm.target, propName, {
-	            configurable: true,
-	            enumerable: !isComputed,
-	            get: function () {
-	                return observable.get();
-	            },
-	            set: isComputed
-	                ? throwingComputedValueSetter
-	                : function (v) {
-	                    setPropertyValue(this, propName, v);
-	                }
-	        });
+	        Object.defineProperty(adm.target, propName, isComputed ? generateComputedPropConfig(propName) : generateObservablePropConfig(propName));
 	    }
 	    if (!isComputed)
 	        notifyPropertyAddition(adm, adm.target, propName, newValue);
 	}
+	var observablePropertyConfigs = {};
+	var computedPropertyConfigs = {};
+	function generateObservablePropConfig(propName) {
+	    var config = observablePropertyConfigs[propName];
+	    if (config)
+	        return config;
+	    return observablePropertyConfigs[propName] = {
+	        configurable: true,
+	        enumerable: true,
+	        get: function () {
+	            return this.$mobx.values[propName].get();
+	        },
+	        set: function (v) {
+	            setPropertyValue(this, propName, v);
+	        }
+	    };
+	}
+	function generateComputedPropConfig(propName) {
+	    var config = computedPropertyConfigs[propName];
+	    if (config)
+	        return config;
+	    return computedPropertyConfigs[propName] = {
+	        configurable: true,
+	        enumerable: false,
+	        get: function () {
+	            return this.$mobx.values[propName].get();
+	        },
+	        set: throwingComputedValueSetter
+	    };
+	}
 	function setPropertyValue(instance, name, newValue) {
 	    var adm = instance.$mobx;
-	    var observable = instance.$mobx.values[name];
+	    var observable = adm.values[name];
 	    if (hasInterceptors(adm)) {
 	        var change = interceptChange(adm, {
 	            type: "update",
@@ -3674,23 +3786,27 @@ webpackJsonp([1],{
 	    function classPropertyDecorator(target, key, descriptor, customArgs) {
 	        invariant(allowCustomArguments || quacksLikeADecorator(arguments), "This function is a decorator, but it wasn't invoked like a decorator");
 	        if (!descriptor) {
-	            return {
+	            var descriptor_1 = {
 	                enumerable: enumerable,
 	                configurable: true,
 	                get: function () {
 	                    if (!this.__mobxInitializedProps || this.__mobxInitializedProps[key] !== true)
-	                        typescriptInitializeProperty(this, key, undefined, onInitialize, customArgs, descriptor);
+	                        typescriptInitializeProperty(this, key, undefined, onInitialize, customArgs, descriptor_1);
 	                    return get.call(this, key);
 	                },
 	                set: function (v) {
 	                    if (!this.__mobxInitializedProps || this.__mobxInitializedProps[key] !== true) {
-	                        typescriptInitializeProperty(this, key, v, onInitialize, customArgs, descriptor);
+	                        typescriptInitializeProperty(this, key, v, onInitialize, customArgs, descriptor_1);
 	                    }
 	                    else {
 	                        set.call(this, key, v);
 	                    }
 	                }
 	            };
+	            if (arguments.length < 3) {
+	                Object.defineProperty(target, key, descriptor_1);
+	            }
+	            return descriptor_1;
 	        }
 	        else {
 	            if (!target.hasOwnProperty("__mobxLazyInitializers")) {
@@ -3950,14 +4066,14 @@ webpackJsonp([1],{
 
 /***/ },
 
-/***/ 189:
+/***/ 191:
 /***/ function(module, exports) {
 
 	module.exports = {"apiUrl":"http://localhost:5000"};
 
 /***/ },
 
-/***/ 190:
+/***/ 192:
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -3967,7 +4083,7 @@ webpackJsonp([1],{
 	    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
 	    return c > 3 && r && Object.defineProperty(target, key, r), r;
 	};
-	var mobx_1 = __webpack_require__(188);
+	var mobx_1 = __webpack_require__(190);
 	var SalesStore = (function () {
 	    function SalesStore() {
 	        this.salesOrders = [];
