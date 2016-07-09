@@ -8,7 +8,7 @@ It is initially designed for a small size businesses and the idea is to help the
 # Manual Installation for development
 
 1. Clone or download copy of AccountGo solution
-2. Open the solution file in Visual Studio 2012 or later
+2. Open the solution file in Visual Studio 2015 with Update 3 and latest update on "Microsoft ASP.NET and Web Tools"
 3. Build the solution
 4. Publish database to your local (SQL.AccountGo project). This include a post deployment script to load initial data.
 
@@ -49,3 +49,22 @@ Technology Stack:
 - React-router (on some pages)
 
 ![accountgoweb](https://cloud.githubusercontent.com/assets/17961526/16177121/f41e2c10-3656-11e6-885f-fb2325b09066.PNG)
+
+# Setup Develoment Environment
+Under “Presentation” folder, you will see three web projects. 
+•	“Web” – this is the web project you will also see in demo at http://www.accountgo.ph
+•	“AccountGoWeb” – this is the future. Development under ASP.NET Core 1.0, ReactJS and MobX.
+•	“Api” – REST API project to be consumed by “AccountGoWeb”.
+
+AccountGoWeb/Api are development under ASP.NET Core 1.0, meaning VS 2015 with Update 3 and the latest update of “Microsoft ASP.NET and Web Tools” extension.
+
+Additionally, “AccountGoWeb” use webpack so you also need to install webpack to the project.
+
+Here are things you would like to check first.
+
+1.	Install Visual 2015 with Update 3 – I believe you already have this.
+2.	Update “Microsoft ASP.NET and Web Tools”
+3.	Install “Webpack”, open command prompt and go to “AccountGoWeb” folder. Type “npm install webpack”. Because webpack is configured to run on precompile (project.json), you also need to make sure that path to webpack is set on system environment variable. The way I do this is to also install webpack globally. “npm install webpack” then add “C:\Users\marvin\AppData\Roaming\npm;” to PATH environment variable.
+4.	Clone the latest repo here https://github.com/AccountGo/accountgo
+5.	Open the solution file and restore all packages.
+
