@@ -16,6 +16,8 @@
     "mobx": "latest",
     "mobx-react": "latest",
     "react": "latest",
-    "react-dom": "latest"
+    "react-dom": "latest",
+    "d3": "latest",
+    "react-router": "latest"
   }
 }

@@ -8,7 +8,7 @@ var scriptsDir = path.resolve(__dirname, './wwwroot/libs/tsxbuild');
 var config = {
     entry: {
         home: scriptsDir + '/home' + '/home',
-        "sales/salesorders": scriptsDir + '/sales/salesorders',
+        "sales/addsalesorder": scriptsDir + '/sales/addsalesorder',
         vendor: ['react', 'react-dom']
     },
     output: {
