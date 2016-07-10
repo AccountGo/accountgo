@@ -11,6 +11,7 @@ var config = {
         home: scriptsDir + '/home' + '/home',
         "sales/addsalesorder": scriptsDir + '/sales/addsalesorder',
         "quotations/addsalesquotation": scriptsDir + '/quotations/addsalesquotation',
+        "sales/addsalesinvoice": scriptsDir + '/sales/addsalesinvoice',
         vendor: ['react', 'react-dom']
     },
     output: {

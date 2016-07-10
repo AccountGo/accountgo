@@ -12,7 +12,7 @@ webpackJsonp([0],[
 	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 	};
 	var React = __webpack_require__(/*! react */ 1);
-	var ReactDOM = __webpack_require__(/*! react-dom */ 33);
+	var ReactDOM = __webpack_require__(/*! react-dom */ 38);
 	var Home = (function (_super) {
 	    __extends(Home, _super);
 	    function Home() {

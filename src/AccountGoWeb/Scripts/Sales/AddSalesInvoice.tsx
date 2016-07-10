@@ -9,23 +9,23 @@ import SelectPaymentTerm from "../Shared/Components/SelectPaymentTerm";
 import SelectLineItem from "../Shared/Components/SelectLineItem";
 import SelectLineMeasurement from "../Shared/Components/SelectLineMeasurement";
 
-import SalesOrderStore from "../Shared/Stores/Sales/SalesOrderStore";
+import SalesInvoiceStore from "../Shared/Stores/Sales/SalesInvoiceStore";
 
-let store = new SalesOrderStore();
+let store = new SalesInvoiceStore();
 
-class SaveOrderButton extends React.Component<any, {}>{
-    saveNewSalesOrder(e) {
+class SaveInvoiceButton extends React.Component<any, {}>{
+    saveNewSalesInvoice(e) {
 
     }
 
     render() {
         return (
-            <input type="button" value="Save" onClick={this.saveNewSalesOrder.bind(this)} />
+            <input type="button" value="Save" onClick={this.saveNewSalesInvoice.bind(this)} />
             );
     }
 }
 
-class CancelOrderButton extends React.Component<any, {}>{
+class CancelInvoiceButton extends React.Component<any, {}>{
     render() {
         return (
             <input type="button" value="Cancel" />
@@ -34,16 +34,16 @@ class CancelOrderButton extends React.Component<any, {}>{
 }
 
 @observer
-class SalesOrderHeader extends React.Component<any, {}>{
+class SalesInvoiceHeader extends React.Component<any, {}>{
     render() {        
         return (
             <div>
                 <div>
                     <label>Customer: </label>
-                    <SelectCustomer store={store} />{ store.salesOrder.customerId }
+                    <SelectCustomer store={store} />{ store.salesInvoice.customerId }
                 </div>
                 <div>
-                    <label>Order Date: </label>
+                    <label>Invoice Date: </label>
                 </div>
                 <div>
                     <label>Payment Term: </label>
@@ -59,7 +59,7 @@ class SalesOrderHeader extends React.Component<any, {}>{
 }
 
 @observer
-class SalesOrderLines extends React.Component<any, {}>{
+class SalesInvoiceLines extends React.Component<any, {}>{
     addLineItem() {
         var itemId, measurementId, quantity, amount, discount;
         itemId = (document.getElementById("optNewItemId") as HTMLInputElement).value;
@@ -94,15 +94,15 @@ class SalesOrderLines extends React.Component<any, {}>{
 
     render() {        
         var lineItems = [];
-        for (var i = 0; i < store.salesOrder.salesOrderLines.length; i++) {
+        for (var i = 0; i < store.salesInvoice.salesInvoiceLines.length; i++) {
             lineItems.push(
                 <tr key={i}>
-                    <td><SelectLineItem store={store} row={i} selected={store.salesOrder.salesOrderLines[i].itemId} /></td>
-                    <td>{store.salesOrder.salesOrderLines[i].itemId}</td>
-                    <td><SelectLineMeasurement row={i} store={store} selected={store.salesOrder.salesOrderLines[i].measurementId} />{store.salesOrder.salesOrderLines[i].measurementId}</td>
-                    <td><input type="text" name={i} value={store.salesOrder.salesOrderLines[i].quantity} onChange={this.onChangeQuantity.bind(this)} /></td>
-                    <td><input type="text" name={i} value={store.salesOrder.salesOrderLines[i].amount} onChange={this.onChangeAmount.bind(this) } /></td>
-                    <td><input type="text" name={i} value={store.salesOrder.salesOrderLines[i].discount} onChange={this.onChangeDiscount.bind(this) } /></td>
+                    <td><SelectLineItem store={store} row={i} selected={store.salesInvoice.salesInvoiceLines[i].itemId} /></td>
+                    <td>{store.salesInvoice.salesInvoiceLines[i].itemId}</td>
+                    <td><SelectLineMeasurement row={i} store={store} selected={store.salesInvoice.salesInvoiceLines[i].measurementId} />{store.salesInvoice.salesInvoiceLines[i].measurementId}</td>
+                    <td><input type="text" name={i} value={store.salesInvoice.salesInvoiceLines[i].quantity} onChange={this.onChangeQuantity.bind(this)} /></td>
+                    <td><input type="text" name={i} value={store.salesInvoice.salesInvoiceLines[i].amount} onChange={this.onChangeAmount.bind(this) } /></td>
+                    <td><input type="text" name={i} value={store.salesInvoice.salesInvoiceLines[i].discount} onChange={this.onChangeDiscount.bind(this) } /></td>
                     <td>{store.lineTotal(i)}</td>
                     <td><input type="button" name={i} value="Remove" onClick={this.onClickRemoveLineItem.bind(this) } /></td>
                 </tr>
@@ -138,7 +138,7 @@ class SalesOrderLines extends React.Component<any, {}>{
                     </tbody>
                     <tfoot>
                         <tr>
-                            <td colSpan="8">Count: {store.salesOrder.salesOrderLines.length}</td>
+                            <td colSpan="8">Count: {store.salesInvoice.salesInvoiceLines.length}</td>
                         </tr>
                     </tfoot>
                 </table>
@@ -148,7 +148,7 @@ class SalesOrderLines extends React.Component<any, {}>{
 }
 
 @observer
-class SalesOrderTotals extends React.Component<any, {}>{
+class SalesInvoiceTotals extends React.Component<any, {}>{
     render() {
         return (
             <div>
@@ -160,29 +160,29 @@ class SalesOrderTotals extends React.Component<any, {}>{
     }
 }
 
-export default class AddSalesOrder extends React.Component<any, {}> {
+export default class AddSalesInvoice extends React.Component<any, {}> {
     render() {
         return (
             <div>
                 <div>
-                    <SalesOrderHeader />
+                    <SalesInvoiceHeader />
                 </div>
                 <hr />
                 <div>
-                    <SalesOrderLines />
+                    <SalesInvoiceLines />
                 </div>
                 <hr />
                 <div>
-                    <SalesOrderTotals />
+                    <SalesInvoiceTotals />
                 </div>
                 <hr />
                 <div>
-                    <SaveOrderButton />
-                    <CancelOrderButton />
+                    <SaveInvoiceButton />
+                    <CancelInvoiceButton />
                 </div>
             </div>
             );
     }
 }
 
-ReactDOM.render(<AddSalesOrder />, document.getElementById("divAddSalesOrder"));
+ReactDOM.render(<AddSalesInvoice />, document.getElementById("divAddSalesInvoice"));

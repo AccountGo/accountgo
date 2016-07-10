@@ -2,7 +2,7 @@
 import SalesOrder from './SalesOrder';
 import SalesOrderLine from './SalesOrderLine';
 
-export default class SalesStore {
+export default class SalesOrderStore {
     salesOrder;
     constructor() {
         this.salesOrder = new SalesOrder();

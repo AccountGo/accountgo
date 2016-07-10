@@ -48,5 +48,33 @@ namespace AccountGoWeb.Controllers
 
             return new ObjectResult(model);
         }
+
+        public IActionResult SalesInvoices()
+        {
+            ViewBag.PageContentHeader = "Sales Invoices";
+
+            return View();
+        }
+
+        public IActionResult AddSalesInvoice()
+        {
+            ViewBag.PageContentHeader = "Add Sales Invoice";
+
+            return View();
+        }
+
+        public IActionResult SalesReceipts()
+        {
+            ViewBag.PageContentHeader = "Sales Receipts";
+
+            return View();
+        }
+
+        public IActionResult AddSalesReceipt()
+        {
+            ViewBag.PageContentHeader = "Add Sales Receipt";
+
+            return View();
+        }
     }
 }

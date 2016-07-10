@@ -3,9 +3,9 @@ import * as ReactDOM from "react-dom";
 import * as axios from "axios";
 import {observer} from "mobx-react";
 import Config = require("Config");
-import SalesStore from "../Shared/Stores/Sales/SalesStore";
+import SalesOrderStore from "../Shared/Stores/Sales/SalesOrderStore";
 
-let store = new SalesStore();
+let store = new SalesOrderStore();
 
 const SalesOrders = observer(React.createClass({
     componentDidMount: function () {
