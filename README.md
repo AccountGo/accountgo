@@ -42,7 +42,7 @@ The screenshot below will be the future front-end. It is heavily under-developme
 Technology Stack:
 - ASP.NET Core
 - ReactJS
-- MobX
+- MobX, React-MobX
 - Axios
 - Bootstrap
 - D3
@@ -51,20 +51,19 @@ Technology Stack:
 ![accountgoweb](https://cloud.githubusercontent.com/assets/17961526/16177121/f41e2c10-3656-11e6-885f-fb2325b09066.PNG)
 
 # Setup Develoment Environment
-Under “Presentation” folder, you will see three web projects. 
-•	“Web” – this is the web project you will also see in demo at http://www.accountgo.ph
-•	“AccountGoWeb” – this is the future. Development under ASP.NET Core 1.0, ReactJS and MobX.
-•	“Api” – REST API project to be consumed by “AccountGoWeb”.
+In “Presentation” folder, there are three web projects. 
+-	“Web” – an old web front-end. Currently the demo site is http://www.accountgo.ph
+-	“AccountGoWeb” – this is the future. Functionalities from the old "Web" front-end are soon transported to this project. Development under ASP.NET Core 1.0, ReactJS and MobX.
+-	“Api” – ASP.NET REST API project to be consumed by “AccountGoWeb”.
 
-AccountGoWeb/Api are development under ASP.NET Core 1.0, meaning VS 2015 with Update 3 and the latest update of “Microsoft ASP.NET and Web Tools” extension.
+AccountGoWeb/Api are development under ASP.NET Core 1.0, and requires you to install VS 2015 (Community is Ok) with Update 3 and the latest update of “Microsoft ASP.NET and Web Tools” extension.
 
-Additionally, “AccountGoWeb” use webpack so you also need to install webpack to the project.
+“AccountGoWeb” use webpack so you also need to install webpack to the project. For some reason, Visual Studio 2015 "dependencies" is showing warning "Dependencies - not installed" when adding webpack to project.json. So for the time being, you need to install webpack manually. See instructions below.
 
-Here are things you would like to check first.
-
-1.	Install Visual 2015 with Update 3 – I believe you already have this.
-2.	Update “Microsoft ASP.NET and Web Tools”
-3.	Install “Webpack”, open command prompt and go to “AccountGoWeb” folder. Type “npm install webpack”. Because webpack is configured to run on precompile (project.json), you also need to make sure that path to webpack is set on system environment variable. The way I do this is to also install webpack globally. “npm install webpack” then add “C:\Users\marvin\AppData\Roaming\npm;” to PATH environment variable.
-4.	Clone the latest repo here https://github.com/AccountGo/accountgo
+1.	Install Visual 2015 (i.e. Community edition) with Update 3.
+2.	Update “Microsoft ASP.NET and Web Tools” external tools. After you install VS 2015, go to "Tools->Extensions and updates" and search for “Microsoft ASP.NET and Web Tools”.
+3.	Install “Webpack”. open command prompt and go to “AccountGoWeb” folder. Type “npm install webpack”. You also need to install "webpack" globally, Type “npm install -g webpack”. Because webpack is configured to run on precompile (project.json), you also need to make sure that path to webpack cmd path is set on system environment variable. Add “C:\Users\{user}\AppData\Roaming\npm;” to PATH environment variable.
+4.	Clone/Fork the latest repo here https://github.com/AccountGo/accountgo
 5.	Open the solution file and restore all packages.
 
+Note: Step #3 can be improve. Suggestions are welcome.
