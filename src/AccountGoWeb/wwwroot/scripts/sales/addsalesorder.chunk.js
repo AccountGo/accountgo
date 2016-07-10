@@ -23,8 +23,8 @@ webpackJsonp([1],{
 	var mobx_react_1 = __webpack_require__(/*! mobx-react */ 168);
 	var SelectCustomer_1 = __webpack_require__(/*! ../Shared/Components/SelectCustomer */ 170);
 	var SelectPaymentTerm_1 = __webpack_require__(/*! ../Shared/Components/SelectPaymentTerm */ 171);
-	var SelectItem_1 = __webpack_require__(/*! ../Shared/Components/SelectItem */ 172);
-	var SelectMeasurement_1 = __webpack_require__(/*! ../Shared/Components/SelectMeasurement */ 173);
+	var SelectLineItem_1 = __webpack_require__(/*! ../Shared/Components/SelectLineItem */ 172);
+	var SelectLineMeasurement_1 = __webpack_require__(/*! ../Shared/Components/SelectLineMeasurement */ 173);
 	var SalesStore_1 = __webpack_require__(/*! ../Shared/Stores/Sales/SalesStore */ 174);
 	var store = new SalesStore_1.default();
 	var SaveOrderButton = (function (_super) {
@@ -32,8 +32,10 @@ webpackJsonp([1],{
 	    function SaveOrderButton() {
 	        _super.apply(this, arguments);
 	    }
+	    SaveOrderButton.prototype.saveNewSalesOrder = function (e) {
+	    };
 	    SaveOrderButton.prototype.render = function () {
-	        return (React.createElement("input", {type: "button", value: "Save"}));
+	        return (React.createElement("input", {type: "button", value: "Save", onClick: this.saveNewSalesOrder.bind(this)}));
 	    };
 	    return SaveOrderButton;
 	}(React.Component));
@@ -66,7 +68,17 @@ webpackJsonp([1],{
 	        _super.apply(this, arguments);
 	    }
 	    SalesOrderLines.prototype.addLineItem = function () {
-	        store.addLineItem(1, 1, 1, 0, 0);
+	        var itemId, measurementId, quantity, amount, discount;
+	        itemId = document.getElementById("optNewItemId").value;
+	        measurementId = document.getElementById("optNewMeasurementId").value;
+	        quantity = document.getElementById("txtNewQuantity").value;
+	        amount = document.getElementById("txtNewAmount").value;
+	        discount = document.getElementById("txtNewDiscount").value;
+	        console.log("itemId: " + itemId + " | measurementId: " + measurementId + " | quantity: " + quantity + " | amount: " + amount + " | discount: " + discount);
+	        store.addLineItem(itemId, measurementId, quantity, amount, discount);
+	        document.getElementById("txtNewQuantity").value = "1";
+	        document.getElementById("txtNewAmount").value = "0";
+	        document.getElementById("txtNewDiscount").value = "0";
 	    };
 	    SalesOrderLines.prototype.onClickRemoveLineItem = function (e) {
 	        store.removeLineItem(e.target.name);
@@ -83,27 +95,27 @@ webpackJsonp([1],{
 	    SalesOrderLines.prototype.render = function () {
 	        var lineItems = [];
 	        for (var i = 0; i < store.salesOrder.salesOrderLines.length; i++) {
-	            lineItems.push(React.createElement("tr", {key: i}, React.createElement("td", null, React.createElement(SelectItem_1.default, {store: store, row: i, selected: store.salesOrder.salesOrderLines[i].itemId})), React.createElement("td", null, store.salesOrder.salesOrderLines[i].itemId), React.createElement("td", null, React.createElement(SelectMeasurement_1.default, {row: i, store: store, selected: store.salesOrder.salesOrderLines[i].measurementId}), store.salesOrder.salesOrderLines[i].measurementId), React.createElement("td", null, React.createElement("input", {type: "text", name: i, value: store.salesOrder.salesOrderLines[i].quantity, onChange: this.onChangeQuantity.bind(this)})), React.createElement("td", null, React.createElement("input", {type: "text", name: i, value: store.salesOrder.salesOrderLines[i].amount, onChange: this.onChangeAmount.bind(this)})), React.createElement("td", null, React.createElement("input", {type: "text", name: i, value: store.salesOrder.salesOrderLines[i].discount, onChange: this.onChangeDiscount.bind(this)})), React.createElement("td", null, React.createElement("input", {type: "button", name: i, value: "Remove", onClick: this.onClickRemoveLineItem.bind(this)}))));
+	            lineItems.push(React.createElement("tr", {key: i}, React.createElement("td", null, React.createElement(SelectLineItem_1.default, {store: store, row: i, selected: store.salesOrder.salesOrderLines[i].itemId})), React.createElement("td", null, store.salesOrder.salesOrderLines[i].itemId), React.createElement("td", null, React.createElement(SelectLineMeasurement_1.default, {row: i, store: store, selected: store.salesOrder.salesOrderLines[i].measurementId}), store.salesOrder.salesOrderLines[i].measurementId), React.createElement("td", null, React.createElement("input", {type: "text", name: i, value: store.salesOrder.salesOrderLines[i].quantity, onChange: this.onChangeQuantity.bind(this)})), React.createElement("td", null, React.createElement("input", {type: "text", name: i, value: store.salesOrder.salesOrderLines[i].amount, onChange: this.onChangeAmount.bind(this)})), React.createElement("td", null, React.createElement("input", {type: "text", name: i, value: store.salesOrder.salesOrderLines[i].discount, onChange: this.onChangeDiscount.bind(this)})), React.createElement("td", null, store.lineTotal(i)), React.createElement("td", null, React.createElement("input", {type: "button", name: i, value: "Remove", onClick: this.onClickRemoveLineItem.bind(this)}))));
 	        }
-	        return (React.createElement("div", null, React.createElement("table", null, React.createElement("thead", null, React.createElement("tr", null, React.createElement("td", null, "Item Id"), React.createElement("td", null, "Item Name"), React.createElement("td", null, "Measurement"), React.createElement("td", null, "Quantity"), React.createElement("td", null, "Amount"), React.createElement("td", null, "Discount"), React.createElement("td", null))), React.createElement("tbody", null, lineItems, React.createElement("tr", null, React.createElement("td", null, React.createElement(SelectItem_1.default, null)), React.createElement("td", null, "Item Name"), React.createElement("td", null, React.createElement(SelectMeasurement_1.default, null)), React.createElement("td", null, React.createElement("input", {type: "text"})), React.createElement("td", null, React.createElement("input", {type: "text"})), React.createElement("td", null, React.createElement("input", {type: "text"})), React.createElement("td", null, React.createElement("input", {type: "button", value: "Add", onClick: this.addLineItem})))), React.createElement("tfoot", null, React.createElement("tr", null, React.createElement("td", {colSpan: "7"}, "Coun: ", store.salesOrder.salesOrderLines.length))))));
+	        return (React.createElement("div", null, React.createElement("table", null, React.createElement("thead", null, React.createElement("tr", null, React.createElement("td", null, "Item Id"), React.createElement("td", null, "Item Name"), React.createElement("td", null, "Measurement"), React.createElement("td", null, "Quantity"), React.createElement("td", null, "Amount"), React.createElement("td", null, "Discount"), React.createElement("td", null, "Line Total"), React.createElement("td", null))), React.createElement("tbody", null, lineItems, React.createElement("tr", null, React.createElement("td", null, React.createElement(SelectLineItem_1.default, {store: store, controlId: "optNewItemId"})), React.createElement("td", null, "Item Name"), React.createElement("td", null, React.createElement(SelectLineMeasurement_1.default, {store: store, controlId: "optNewMeasurementId"})), React.createElement("td", null, React.createElement("input", {type: "text", id: "txtNewQuantity"})), React.createElement("td", null, React.createElement("input", {type: "text", id: "txtNewAmount"})), React.createElement("td", null, React.createElement("input", {type: "text", id: "txtNewDiscount"})), React.createElement("td", null), React.createElement("td", null, React.createElement("input", {type: "button", value: "Add", onClick: this.addLineItem})))), React.createElement("tfoot", null, React.createElement("tr", null, React.createElement("td", {colSpan: "8"}, "Count: ", store.salesOrder.salesOrderLines.length))))));
 	    };
 	    SalesOrderLines = __decorate([
 	        mobx_react_1.observer
 	    ], SalesOrderLines);
 	    return SalesOrderLines;
 	}(React.Component));
-	var SalesOrderTotal = (function (_super) {
-	    __extends(SalesOrderTotal, _super);
-	    function SalesOrderTotal() {
+	var SalesOrderTotals = (function (_super) {
+	    __extends(SalesOrderTotals, _super);
+	    function SalesOrderTotals() {
 	        _super.apply(this, arguments);
 	    }
-	    SalesOrderTotal.prototype.render = function () {
-	        return (React.createElement("div", null, React.createElement("label", null, "Running Total: "), React.createElement("label", null, "Tax Total: "), React.createElement("label", null, "Grand Total: "), " ", store.grandTotal()));
+	    SalesOrderTotals.prototype.render = function () {
+	        return (React.createElement("div", null, React.createElement("div", null, React.createElement("label", null, "Running Total: ")), React.createElement("div", null, React.createElement("label", null, "Tax Total: ")), React.createElement("div", null, React.createElement("label", null, "Grand Total: "), " ", store.grandTotal())));
 	    };
-	    SalesOrderTotal = __decorate([
+	    SalesOrderTotals = __decorate([
 	        mobx_react_1.observer
-	    ], SalesOrderTotal);
-	    return SalesOrderTotal;
+	    ], SalesOrderTotals);
+	    return SalesOrderTotals;
 	}(React.Component));
 	var AddSalesOrder = (function (_super) {
 	    __extends(AddSalesOrder, _super);
@@ -111,7 +123,7 @@ webpackJsonp([1],{
 	        _super.apply(this, arguments);
 	    }
 	    AddSalesOrder.prototype.render = function () {
-	        return (React.createElement("div", null, React.createElement("div", null, React.createElement(SalesOrderHeader, null)), React.createElement("hr", null), React.createElement("div", null, React.createElement(SalesOrderLines, null)), React.createElement("hr", null), React.createElement("div", null, React.createElement(SalesOrderTotal, null)), React.createElement("hr", null), React.createElement("div", null, React.createElement(SaveOrderButton, null), React.createElement(CancelOrderButton, null))));
+	        return (React.createElement("div", null, React.createElement("div", null, React.createElement(SalesOrderHeader, null)), React.createElement("hr", null), React.createElement("div", null, React.createElement(SalesOrderLines, null)), React.createElement("hr", null), React.createElement("div", null, React.createElement(SalesOrderTotals, null)), React.createElement("hr", null), React.createElement("div", null, React.createElement(SaveOrderButton, null), React.createElement(CancelOrderButton, null))));
 	    };
 	    return AddSalesOrder;
 	}(React.Component));
@@ -2889,9 +2901,9 @@ webpackJsonp([1],{
 /***/ },
 
 /***/ 172:
-/*!***************************************************************!*\
-  !*** ./wwwroot/libs/tsxbuild/Shared/Components/SelectItem.js ***!
-  \***************************************************************/
+/*!*******************************************************************!*\
+  !*** ./wwwroot/libs/tsxbuild/Shared/Components/SelectLineItem.js ***!
+  \*******************************************************************/
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -2901,33 +2913,33 @@ webpackJsonp([1],{
 	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 	};
 	var React = __webpack_require__(/*! react */ 1);
-	var SelectItem = (function (_super) {
-	    __extends(SelectItem, _super);
-	    function SelectItem() {
+	var SelectLineItem = (function (_super) {
+	    __extends(SelectLineItem, _super);
+	    function SelectLineItem() {
 	        _super.apply(this, arguments);
 	    }
-	    SelectItem.prototype.onChangeItem = function (e) {
+	    SelectLineItem.prototype.onChangeItem = function (e) {
 	        this.props.store.updateLineItem(this.props.row, "itemId", e.target.value);
 	    };
-	    SelectItem.prototype.render = function () {
+	    SelectLineItem.prototype.render = function () {
 	        var options = [];
 	        options.push(React.createElement("option", {key: "1", value: "1"}, " Item #1 "));
 	        options.push(React.createElement("option", {key: "2", value: "2"}, " Item #2 "));
 	        options.push(React.createElement("option", {key: "3", value: "3"}, " Item #3 "));
-	        return (React.createElement("select", {onChange: this.onChangeItem.bind(this)}, options));
+	        return (React.createElement("select", {defaultValue: this.props.selected, id: this.props.controlId, onChange: this.onChangeItem.bind(this)}, options));
 	    };
-	    return SelectItem;
+	    return SelectLineItem;
 	}(React.Component));
 	Object.defineProperty(exports, "__esModule", { value: true });
-	exports.default = SelectItem;
-	//# sourceMappingURL=SelectItem.js.map
+	exports.default = SelectLineItem;
+	//# sourceMappingURL=SelectLineItem.js.map
 
 /***/ },
 
 /***/ 173:
-/*!**********************************************************************!*\
-  !*** ./wwwroot/libs/tsxbuild/Shared/Components/SelectMeasurement.js ***!
-  \**********************************************************************/
+/*!**************************************************************************!*\
+  !*** ./wwwroot/libs/tsxbuild/Shared/Components/SelectLineMeasurement.js ***!
+  \**************************************************************************/
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -2937,26 +2949,26 @@ webpackJsonp([1],{
 	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 	};
 	var React = __webpack_require__(/*! react */ 1);
-	var SelectMeasurement = (function (_super) {
-	    __extends(SelectMeasurement, _super);
-	    function SelectMeasurement() {
+	var SelectLineMeasurement = (function (_super) {
+	    __extends(SelectLineMeasurement, _super);
+	    function SelectLineMeasurement() {
 	        _super.apply(this, arguments);
 	    }
-	    SelectMeasurement.prototype.onChangeMeasurement = function (e) {
+	    SelectLineMeasurement.prototype.onChangeMeasurement = function (e) {
 	        this.props.store.updateLineItem(this.props.row, "measurementId", e.target.value);
 	    };
-	    SelectMeasurement.prototype.render = function () {
+	    SelectLineMeasurement.prototype.render = function () {
 	        var options = [];
 	        options.push(React.createElement("option", {key: "1", value: "1"}, " Measurement #1 "));
 	        options.push(React.createElement("option", {key: "2", value: "2"}, " Measurement #2 "));
 	        options.push(React.createElement("option", {key: "3", value: "3"}, " Measurement #3 "));
-	        return (React.createElement("select", {onChange: this.onChangeMeasurement.bind(this)}, options));
+	        return (React.createElement("select", {defaultValue: this.props.selected, id: this.props.controlId, onChange: this.onChangeMeasurement.bind(this)}, options));
 	    };
-	    return SelectMeasurement;
+	    return SelectLineMeasurement;
 	}(React.Component));
 	Object.defineProperty(exports, "__esModule", { value: true });
-	exports.default = SelectMeasurement;
-	//# sourceMappingURL=SelectMeasurement.js.map
+	exports.default = SelectLineMeasurement;
+	//# sourceMappingURL=SelectLineMeasurement.js.map
 
 /***/ },
 
@@ -2992,7 +3004,8 @@ webpackJsonp([1],{
 	        this.salesOrder.salesOrderLines.splice(row, 1);
 	    };
 	    SalesStore.prototype.updateLineItem = function (row, targetProperty, value) {
-	        this.salesOrder.salesOrderLines[row][targetProperty] = value;
+	        if (this.salesOrder.salesOrderLines.length > 0)
+	            this.salesOrder.salesOrderLines[row][targetProperty] = value;
 	    };
 	    SalesStore.prototype.grandTotal = function () {
 	        var sum = 0;
@@ -3001,6 +3014,11 @@ webpackJsonp([1],{
 	            sum = sum + lineSum;
 	        }
 	        return sum;
+	    };
+	    SalesStore.prototype.lineTotal = function (row) {
+	        var lineSum = this.salesOrder.salesOrderLines[row].quantity * this.salesOrder.salesOrderLines[row].amount;
+	        ;
+	        return lineSum;
 	    };
 	    return SalesStore;
 	}());

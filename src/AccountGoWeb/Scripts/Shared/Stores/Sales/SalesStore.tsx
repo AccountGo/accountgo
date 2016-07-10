@@ -29,7 +29,8 @@ export default class SalesStore {
     }
 
     updateLineItem(row, targetProperty, value) {
-        this.salesOrder.salesOrderLines[row][targetProperty] = value;
+        if (this.salesOrder.salesOrderLines.length > 0)
+            this.salesOrder.salesOrderLines[row][targetProperty] = value;
     }
 
     grandTotal() {
@@ -39,5 +40,10 @@ export default class SalesStore {
             sum = sum + lineSum;
         }
         return sum;
+    }
+
+    lineTotal(row) {
+        var lineSum = this.salesOrder.salesOrderLines[row].quantity * this.salesOrder.salesOrderLines[row].amount;;
+        return lineSum;
     }
 }
