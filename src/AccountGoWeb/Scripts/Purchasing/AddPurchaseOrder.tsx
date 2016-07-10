@@ -35,6 +35,9 @@ class CancelPurchaseOrderButton extends React.Component<any, {}>{
 
 @observer
 class PurchaseOrderHeader extends React.Component<any, {}>{
+    onChangeOrderDate(e) {
+        store.changedOrderDate(e.target.value);
+    }
     render() {        
         return (
             <div>
@@ -44,6 +47,7 @@ class PurchaseOrderHeader extends React.Component<any, {}>{
                 </div>
                 <div>
                     <label>PurchaseOrder Date: </label>
+                    <input type="date" onChange={this.onChangeOrderDate.bind(this) } defaultValue={store.purchaseOrder.orderDate} />
                 </div>
                 <div>
                     <label>Payment Term: </label>

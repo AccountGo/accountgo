@@ -2,7 +2,7 @@
 
 export default class PurchaseInvoice {
     vendorId: number;
-    orderDate: Date;
+    invoiceDate: Date;
     paymentTermId: number;
     referenceNo: string;
     purchaseInvoiceLines: PurchaseInvoiceLine[] = [];

@@ -8,7 +8,7 @@ export default class SalesQuotationStore {
         this.salesQuotation = new SalesQuotation();
         extendObservable(this.salesQuotation, {
             customerId: this.salesQuotation.customerId,
-            orderDate: this.salesQuotation.orderDate,
+            quotationDate: this.salesQuotation.quotationDate,
             paymentTermId: this.salesQuotation.paymentTermId,
             referenceNo: this.salesQuotation.referenceNo,
             salesQuotationLines: []
@@ -17,6 +17,10 @@ export default class SalesQuotationStore {
     
     changedCustomer(custId) {
         this.salesQuotation.customerId = custId;
+    }
+
+    changedQuotationDate(date) {
+        this.salesQuotation.quotationDate = date;
     }
 
     addLineItem(itemId, measurementId, quantity, amount, discount) {

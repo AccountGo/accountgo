@@ -35,6 +35,9 @@ class CancelQuotationButton extends React.Component<any, {}>{
 
 @observer
 class SalesQuotationHeader extends React.Component<any, {}>{
+    onChangeQuotationDate(e) {
+        store.changedQuotationDate(e.target.value);
+    }
     render() {        
         return (
             <div>
@@ -44,6 +47,7 @@ class SalesQuotationHeader extends React.Component<any, {}>{
                 </div>
                 <div>
                     <label>Quotation Date: </label>
+                    <input type="date" onChange={this.onChangeQuotationDate.bind(this) } defaultValue={store.salesQuotation.quotationDate} />
                 </div>
                 <div>
                     <label>Payment Term: </label>

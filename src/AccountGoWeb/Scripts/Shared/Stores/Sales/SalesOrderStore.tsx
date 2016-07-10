@@ -19,6 +19,10 @@ export default class SalesOrderStore {
         this.salesOrder.customerId = custId;
     }
 
+    changedOrderDate(date) {
+        this.salesOrder.orderDate = date;
+    }
+
     addLineItem(itemId, measurementId, quantity, amount, discount) {
         var newLineItem = new SalesOrderLine(itemId, measurementId, quantity, amount, discount);
         this.salesOrder.salesOrderLines.push(extendObservable(newLineItem, newLineItem));        

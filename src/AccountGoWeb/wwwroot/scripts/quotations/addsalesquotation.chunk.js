@@ -54,8 +54,11 @@ webpackJsonp([3],{
 	    function SalesQuotationHeader() {
 	        _super.apply(this, arguments);
 	    }
+	    SalesQuotationHeader.prototype.onChangeQuotationDate = function (e) {
+	        store.changedQuotationDate(e.target.value);
+	    };
 	    SalesQuotationHeader.prototype.render = function () {
-	        return (React.createElement("div", null, React.createElement("div", null, React.createElement("label", null, "Customer: "), React.createElement(SelectCustomer_1.default, {store: store}), store.salesQuotation.customerId), React.createElement("div", null, React.createElement("label", null, "Quotation Date: ")), React.createElement("div", null, React.createElement("label", null, "Payment Term: "), React.createElement(SelectPaymentTerm_1.default, null)), React.createElement("div", null, React.createElement("label", null, "Reference No: "), React.createElement("input", {type: "text"}))));
+	        return (React.createElement("div", null, React.createElement("div", null, React.createElement("label", null, "Customer: "), React.createElement(SelectCustomer_1.default, {store: store}), store.salesQuotation.customerId), React.createElement("div", null, React.createElement("label", null, "Quotation Date: "), React.createElement("input", {type: "date", onChange: this.onChangeQuotationDate.bind(this), defaultValue: store.salesQuotation.quotationDate})), React.createElement("div", null, React.createElement("label", null, "Payment Term: "), React.createElement(SelectPaymentTerm_1.default, null)), React.createElement("div", null, React.createElement("label", null, "Reference No: "), React.createElement("input", {type: "text"}))));
 	    };
 	    SalesQuotationHeader = __decorate([
 	        mobx_react_1.observer
@@ -2987,7 +2990,7 @@ webpackJsonp([3],{
 	        this.salesQuotation = new SalesQuotation_1.default();
 	        mobx_1.extendObservable(this.salesQuotation, {
 	            customerId: this.salesQuotation.customerId,
-	            orderDate: this.salesQuotation.orderDate,
+	            quotationDate: this.salesQuotation.quotationDate,
 	            paymentTermId: this.salesQuotation.paymentTermId,
 	            referenceNo: this.salesQuotation.referenceNo,
 	            salesQuotationLines: []
@@ -2995,6 +2998,9 @@ webpackJsonp([3],{
 	    }
 	    SalesQuotationStore.prototype.changedCustomer = function (custId) {
 	        this.salesQuotation.customerId = custId;
+	    };
+	    SalesQuotationStore.prototype.changedQuotationDate = function (date) {
+	        this.salesQuotation.quotationDate = date;
 	    };
 	    SalesQuotationStore.prototype.addLineItem = function (itemId, measurementId, quantity, amount, discount) {
 	        var newLineItem = new SalesQuotationLine_1.default(itemId, measurementId, quantity, amount, discount);

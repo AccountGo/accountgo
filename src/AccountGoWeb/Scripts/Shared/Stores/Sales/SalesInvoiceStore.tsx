@@ -8,7 +8,7 @@ export default class SalesStore {
         this.salesInvoice = new SalesInvoice();
         extendObservable(this.salesInvoice, {
             customerId: this.salesInvoice.customerId,
-            orderDate: this.salesInvoice.orderDate,
+            invoiceDate: this.salesInvoice.invoiceDate,
             paymentTermId: this.salesInvoice.paymentTermId,
             referenceNo: this.salesInvoice.referenceNo,
             salesInvoiceLines: []
@@ -17,6 +17,10 @@ export default class SalesStore {
     
     changedCustomer(custId) {
         this.salesInvoice.customerId = custId;
+    }
+
+    changedInvoiceDate(date) {
+        this.salesInvoice.invoiceDate = date;
     }
 
     addLineItem(itemId, measurementId, quantity, amount, discount) {

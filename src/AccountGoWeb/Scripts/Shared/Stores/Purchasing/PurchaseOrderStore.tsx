@@ -19,6 +19,10 @@ export default class PurchaseOrderStore {
         this.purchaseOrder.vendorId = vendorId;
     }
 
+    changedOrderDate(date) {
+        this.purchaseOrder.orderDate = date;
+    }
+
     addLineItem(itemId, measurementId, quantity, amount, discount) {
         var newLineItem = new PurchaseOrderLine(itemId, measurementId, quantity, amount, discount);
         this.purchaseOrder.purchaseOrderLines.push(extendObservable(newLineItem, newLineItem));        

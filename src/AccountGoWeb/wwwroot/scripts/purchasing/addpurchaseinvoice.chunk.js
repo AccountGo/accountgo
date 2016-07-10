@@ -54,8 +54,11 @@ webpackJsonp([1],{
 	    function PurchaseInvoiceHeader() {
 	        _super.apply(this, arguments);
 	    }
+	    PurchaseInvoiceHeader.prototype.onChangeInvoiceDate = function (e) {
+	        store.changedInvoiceDate(e.target.value);
+	    };
 	    PurchaseInvoiceHeader.prototype.render = function () {
-	        return (React.createElement("div", null, React.createElement("div", null, React.createElement("label", null, "Vendor: "), React.createElement(SelectVendor_1.default, {store: store}), store.purchaseInvoice.vendorId), React.createElement("div", null, React.createElement("label", null, "PurchaseInvoice Date: ")), React.createElement("div", null, React.createElement("label", null, "Payment Term: "), React.createElement(SelectPaymentTerm_1.default, null)), React.createElement("div", null, React.createElement("label", null, "Reference No: "), React.createElement("input", {type: "text"}))));
+	        return (React.createElement("div", null, React.createElement("div", null, React.createElement("label", null, "Vendor: "), React.createElement(SelectVendor_1.default, {store: store}), store.purchaseInvoice.vendorId), React.createElement("div", null, React.createElement("label", null, "Invoice Date: "), React.createElement("input", {type: "date", onChange: this.onChangeInvoiceDate.bind(this), defaultValue: store.purchaseInvoice.invoiceDate})), React.createElement("div", null, React.createElement("label", null, "Payment Term: "), React.createElement(SelectPaymentTerm_1.default, null)), React.createElement("div", null, React.createElement("label", null, "Reference No: "), React.createElement("input", {type: "text"}))));
 	    };
 	    PurchaseInvoiceHeader = __decorate([
 	        mobx_react_1.observer
@@ -2995,6 +2998,9 @@ webpackJsonp([1],{
 	    }
 	    PurchaseOrderStore.prototype.changedVendor = function (vendorId) {
 	        this.purchaseInvoice.vendorId = vendorId;
+	    };
+	    PurchaseOrderStore.prototype.changedInvoiceDate = function (date) {
+	        this.purchaseInvoice.invoiceDate = date;
 	    };
 	    PurchaseOrderStore.prototype.addLineItem = function (itemId, measurementId, quantity, amount, discount) {
 	        var newLineItem = new PurchaseInvoiceLine_1.default(itemId, measurementId, quantity, amount, discount);

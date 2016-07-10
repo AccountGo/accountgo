@@ -35,6 +35,9 @@ class CancelPurchaseInvoiceButton extends React.Component<any, {}>{
 
 @observer
 class PurchaseInvoiceHeader extends React.Component<any, {}>{
+    onChangeInvoiceDate(e) {
+        store.changedInvoiceDate(e.target.value);
+    }
     render() {        
         return (
             <div>
@@ -43,7 +46,8 @@ class PurchaseInvoiceHeader extends React.Component<any, {}>{
                     <SelectVendor store={store} />{ store.purchaseInvoice.vendorId }
                 </div>
                 <div>
-                    <label>PurchaseInvoice Date: </label>
+                    <label>Invoice Date: </label>
+                    <input type="date" onChange={this.onChangeInvoiceDate.bind(this) } defaultValue={store.purchaseInvoice.invoiceDate} />
                 </div>
                 <div>
                     <label>Payment Term: </label>

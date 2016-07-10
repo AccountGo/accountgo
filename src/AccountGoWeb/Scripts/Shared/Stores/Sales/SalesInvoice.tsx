@@ -2,7 +2,7 @@
 
 interface ISalesInvoice {
     customerId;
-    orderDate;
+    invoiceDate;
     paymentTermid;
     referenceNo;
     salesInvoiceLines: SalesInvoiceLine[];
@@ -10,7 +10,7 @@ interface ISalesInvoice {
 
 export default class SalesInvoice implements ISalesInvoice {
     customerId: number;
-    orderDate: Date;
+    invoiceDate: Date;
     paymentTermid: number;
     referenceNo: string;
     salesInvoiceLines: SalesInvoiceLine[] = [];

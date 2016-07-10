@@ -54,8 +54,11 @@ webpackJsonp([4],{
 	    function SalesInvoiceHeader() {
 	        _super.apply(this, arguments);
 	    }
+	    SalesInvoiceHeader.prototype.onChangeInvoiceDate = function (e) {
+	        store.changedInvoiceDate(e.target.value);
+	    };
 	    SalesInvoiceHeader.prototype.render = function () {
-	        return (React.createElement("div", null, React.createElement("div", null, React.createElement("label", null, "Customer: "), React.createElement(SelectCustomer_1.default, {store: store}), store.salesInvoice.customerId), React.createElement("div", null, React.createElement("label", null, "Invoice Date: ")), React.createElement("div", null, React.createElement("label", null, "Payment Term: "), React.createElement(SelectPaymentTerm_1.default, null)), React.createElement("div", null, React.createElement("label", null, "Reference No: "), React.createElement("input", {type: "text"}))));
+	        return (React.createElement("div", null, React.createElement("div", null, React.createElement("label", null, "Customer: "), React.createElement(SelectCustomer_1.default, {store: store}), store.salesInvoice.customerId), React.createElement("div", null, React.createElement("label", null, "Invoice Date: "), React.createElement("input", {type: "date", onChange: this.onChangeInvoiceDate.bind(this), defaultValue: store.salesInvoice.invoiceDate})), React.createElement("div", null, React.createElement("label", null, "Payment Term: "), React.createElement(SelectPaymentTerm_1.default, null)), React.createElement("div", null, React.createElement("label", null, "Reference No: "), React.createElement("input", {type: "text"}))));
 	    };
 	    SalesInvoiceHeader = __decorate([
 	        mobx_react_1.observer
@@ -2987,7 +2990,7 @@ webpackJsonp([4],{
 	        this.salesInvoice = new SalesInvoice_1.default();
 	        mobx_1.extendObservable(this.salesInvoice, {
 	            customerId: this.salesInvoice.customerId,
-	            orderDate: this.salesInvoice.orderDate,
+	            invoiceDate: this.salesInvoice.invoiceDate,
 	            paymentTermId: this.salesInvoice.paymentTermId,
 	            referenceNo: this.salesInvoice.referenceNo,
 	            salesInvoiceLines: []
@@ -2995,6 +2998,9 @@ webpackJsonp([4],{
 	    }
 	    SalesStore.prototype.changedCustomer = function (custId) {
 	        this.salesInvoice.customerId = custId;
+	    };
+	    SalesStore.prototype.changedInvoiceDate = function (date) {
+	        this.salesInvoice.invoiceDate = date;
 	    };
 	    SalesStore.prototype.addLineItem = function (itemId, measurementId, quantity, amount, discount) {
 	        var newLineItem = new SalesInvoiceLine_1.default(itemId, measurementId, quantity, amount, discount);

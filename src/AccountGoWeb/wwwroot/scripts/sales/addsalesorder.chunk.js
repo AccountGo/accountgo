@@ -54,8 +54,11 @@ webpackJsonp([5],{
 	    function SalesOrderHeader() {
 	        _super.apply(this, arguments);
 	    }
+	    SalesOrderHeader.prototype.onChangeOrderDate = function (e) {
+	        store.changedOrderDate(e.target.value);
+	    };
 	    SalesOrderHeader.prototype.render = function () {
-	        return (React.createElement("div", null, React.createElement("div", null, React.createElement("label", null, "Customer: "), React.createElement(SelectCustomer_1.default, {store: store}), store.salesOrder.customerId), React.createElement("div", null, React.createElement("label", null, "Order Date: ")), React.createElement("div", null, React.createElement("label", null, "Payment Term: "), React.createElement(SelectPaymentTerm_1.default, null)), React.createElement("div", null, React.createElement("label", null, "Reference No: "), React.createElement("input", {type: "text"}))));
+	        return (React.createElement("div", null, React.createElement("div", null, React.createElement("label", null, "Customer: "), React.createElement(SelectCustomer_1.default, {store: store}), store.salesOrder.customerId), React.createElement("div", null, React.createElement("label", null, "Order Date: "), React.createElement("input", {type: "date", onChange: this.onChangeOrderDate.bind(this), defaultValue: store.salesOrder.orderDate})), React.createElement("div", null, React.createElement("label", null, "Payment Term: "), React.createElement(SelectPaymentTerm_1.default, null)), React.createElement("div", null, React.createElement("label", null, "Reference No: "), React.createElement("input", {type: "text"}))));
 	    };
 	    SalesOrderHeader = __decorate([
 	        mobx_react_1.observer
@@ -2995,6 +2998,9 @@ webpackJsonp([5],{
 	    }
 	    SalesOrderStore.prototype.changedCustomer = function (custId) {
 	        this.salesOrder.customerId = custId;
+	    };
+	    SalesOrderStore.prototype.changedOrderDate = function (date) {
+	        this.salesOrder.orderDate = date;
 	    };
 	    SalesOrderStore.prototype.addLineItem = function (itemId, measurementId, quantity, amount, discount) {
 	        var newLineItem = new SalesOrderLine_1.default(itemId, measurementId, quantity, amount, discount);

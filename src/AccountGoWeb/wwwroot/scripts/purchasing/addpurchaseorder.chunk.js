@@ -54,8 +54,11 @@ webpackJsonp([2],{
 	    function PurchaseOrderHeader() {
 	        _super.apply(this, arguments);
 	    }
+	    PurchaseOrderHeader.prototype.onChangeOrderDate = function (e) {
+	        store.changedOrderDate(e.target.value);
+	    };
 	    PurchaseOrderHeader.prototype.render = function () {
-	        return (React.createElement("div", null, React.createElement("div", null, React.createElement("label", null, "Vendor: "), React.createElement(SelectVendor_1.default, {store: store}), store.purchaseOrder.vendorId), React.createElement("div", null, React.createElement("label", null, "PurchaseOrder Date: ")), React.createElement("div", null, React.createElement("label", null, "Payment Term: "), React.createElement(SelectPaymentTerm_1.default, null)), React.createElement("div", null, React.createElement("label", null, "Reference No: "), React.createElement("input", {type: "text"}))));
+	        return (React.createElement("div", null, React.createElement("div", null, React.createElement("label", null, "Vendor: "), React.createElement(SelectVendor_1.default, {store: store}), store.purchaseOrder.vendorId), React.createElement("div", null, React.createElement("label", null, "PurchaseOrder Date: "), React.createElement("input", {type: "date", onChange: this.onChangeOrderDate.bind(this), defaultValue: store.purchaseOrder.orderDate})), React.createElement("div", null, React.createElement("label", null, "Payment Term: "), React.createElement(SelectPaymentTerm_1.default, null)), React.createElement("div", null, React.createElement("label", null, "Reference No: "), React.createElement("input", {type: "text"}))));
 	    };
 	    PurchaseOrderHeader = __decorate([
 	        mobx_react_1.observer
@@ -2995,6 +2998,9 @@ webpackJsonp([2],{
 	    }
 	    PurchaseOrderStore.prototype.changedVendor = function (vendorId) {
 	        this.purchaseOrder.vendorId = vendorId;
+	    };
+	    PurchaseOrderStore.prototype.changedOrderDate = function (date) {
+	        this.purchaseOrder.orderDate = date;
 	    };
 	    PurchaseOrderStore.prototype.addLineItem = function (itemId, measurementId, quantity, amount, discount) {
 	        var newLineItem = new PurchaseOrderLine_1.default(itemId, measurementId, quantity, amount, discount);
