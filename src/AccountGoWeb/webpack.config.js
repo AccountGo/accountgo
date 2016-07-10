@@ -10,6 +10,7 @@ var config = {
     entry: {
         home: scriptsDir + '/home' + '/home',
         "sales/addsalesorder": scriptsDir + '/sales/addsalesorder',
+        "quotations/addsalesquotation": scriptsDir + '/quotations/addsalesquotation',
         vendor: ['react', 'react-dom']
     },
     output: {

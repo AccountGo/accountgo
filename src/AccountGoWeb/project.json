@@ -11,7 +11,10 @@
     "Microsoft.AspNetCore.Mvc": "1.0.0",
     "Microsoft.Extensions.Configuration.FileExtensions": "1.0.0",
     "Microsoft.Extensions.Configuration.Json": "1.0.0",
-    "Microsoft.Extensions.Configuration.EnvironmentVariables": "1.0.0"
+    "Microsoft.Extensions.Configuration.EnvironmentVariables": "1.0.0",
+    "Microsoft.Extensions.Logging": "1.0.0",
+    "Microsoft.Extensions.Logging.Console": "1.0.0",
+    "Microsoft.Extensions.Logging.Debug": "1.0.0"
   },
 
   "tools": {
@@ -28,31 +31,30 @@
     //    "portable-net45+win8"
     //  ]
     //}
-    },
+  },
 
-    "buildOptions": {
-      "emitEntryPoint": true,
-      "preserveCompilationContext": true
-    },
+  "buildOptions": {
+    "emitEntryPoint": true,
+    "preserveCompilationContext": true
+  },
 
-    "runtimeOptions": {
-      "configProperties": {
-        "System.GC.Server": true
-      }
-    },
-
-    "publishOptions": {
-      "include": [
-        "wwwroot",
-        "Views",
-        "Areas/**/Views",
-        "appsettings.json",
-        "web.config"
-      ]
-    },
-
-    "scripts": {
-      "precompile": "webpack",
-      "postpublish": [ "dotnet publish-iis --publish-folder %publish:OutputPath% --framework %publish:FullTargetFramework%" ]
+  "runtimeOptions": {
+    "configProperties": {
+      "System.GC.Server": true
     }
+  },
+
+  "publishOptions": {
+    "include": [
+      "wwwroot",
+      "Views",
+      "Areas/**/Views",
+      "appsettings.json",
+      "web.config"
+    ]
+  },
+
+  "scripts": {
+    "postpublish": [ "dotnet publish-iis --publish-folder %publish:OutputPath% --framework %publish:FullTargetFramework%" ]
   }
+}

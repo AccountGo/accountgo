@@ -6,6 +6,11 @@ namespace AccountGoWeb.Controllers
     {
         public IActionResult Index()
         {
+            return RedirectToAction("Quotations");
+        }
+
+        public IActionResult Quotations()
+        {
             return View();
         }
     }

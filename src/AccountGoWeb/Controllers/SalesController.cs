@@ -10,10 +10,6 @@ namespace AccountGoWeb.Controllers
             return RedirectToAction("SalesOrders");
         }
 
-        public IActionResult Quotations()
-        {
-            return View();
-        }
         public IActionResult SalesOrders()
         {
             ViewBag.PageContentHeader = "Sales Orders";
