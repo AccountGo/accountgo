@@ -1,6 +1,9 @@
 webpackJsonp([1],{
 
 /***/ 0:
+/*!******************************************************!*\
+  !*** ./wwwroot/libs/tsxbuild/sales/addsalesorder.js ***!
+  \******************************************************/
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -15,14 +18,14 @@ webpackJsonp([1],{
 	    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
 	    return c > 3 && r && Object.defineProperty(target, key, r), r;
 	};
-	var React = __webpack_require__(1);
-	var ReactDOM = __webpack_require__(38);
-	var mobx_react_1 = __webpack_require__(168);
-	var SelectCustomer_1 = __webpack_require__(170);
-	var SelectPaymentTerm_1 = __webpack_require__(171);
-	var SelectItem_1 = __webpack_require__(172);
-	var SelectMeasurement_1 = __webpack_require__(173);
-	var SalesStore_1 = __webpack_require__(174);
+	var React = __webpack_require__(/*! react */ 1);
+	var ReactDOM = __webpack_require__(/*! react-dom */ 38);
+	var mobx_react_1 = __webpack_require__(/*! mobx-react */ 168);
+	var SelectCustomer_1 = __webpack_require__(/*! ../Shared/Components/SelectCustomer */ 170);
+	var SelectPaymentTerm_1 = __webpack_require__(/*! ../Shared/Components/SelectPaymentTerm */ 171);
+	var SelectItem_1 = __webpack_require__(/*! ../Shared/Components/SelectItem */ 172);
+	var SelectMeasurement_1 = __webpack_require__(/*! ../Shared/Components/SelectMeasurement */ 173);
+	var SalesStore_1 = __webpack_require__(/*! ../Shared/Stores/Sales/SalesStore */ 174);
 	var store = new SalesStore_1.default();
 	var SaveOrderButton = (function (_super) {
 	    __extends(SaveOrderButton, _super);
@@ -120,6 +123,9 @@ webpackJsonp([1],{
 /***/ },
 
 /***/ 168:
+/*!*******************************!*\
+  !*** ./~/mobx-react/index.js ***!
+  \*******************************/
 /***/ function(module, exports, __webpack_require__) {
 
 	(function() {
@@ -345,7 +351,7 @@ webpackJsonp([1],{
 	
 	    // UMD
 	    if (true) {
-	        module.exports = mrFactory(__webpack_require__(169), __webpack_require__(1), __webpack_require__(38));
+	        module.exports = mrFactory(__webpack_require__(/*! mobx */ 169), __webpack_require__(/*! react */ 1), __webpack_require__(/*! react-dom */ 38));
 	    } else if (typeof define === 'function' && define.amd) {
 	        define('mobx-react', ['mobx', 'react', 'react-dom'], mrFactory);
 	    } else {
@@ -357,6 +363,9 @@ webpackJsonp([1],{
 /***/ },
 
 /***/ 169:
+/*!****************************!*\
+  !*** ./~/mobx/lib/mobx.js ***!
+  \****************************/
 /***/ function(module, exports) {
 
 	/* WEBPACK VAR INJECTION */(function(global) {"use strict";
@@ -2810,6 +2819,9 @@ webpackJsonp([1],{
 /***/ },
 
 /***/ 170:
+/*!*******************************************************************!*\
+  !*** ./wwwroot/libs/tsxbuild/Shared/Components/SelectCustomer.js ***!
+  \*******************************************************************/
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -2818,7 +2830,7 @@ webpackJsonp([1],{
 	    function __() { this.constructor = d; }
 	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 	};
-	var React = __webpack_require__(1);
+	var React = __webpack_require__(/*! react */ 1);
 	var SelectCustomer = (function (_super) {
 	    __extends(SelectCustomer, _super);
 	    function SelectCustomer() {
@@ -2843,6 +2855,9 @@ webpackJsonp([1],{
 /***/ },
 
 /***/ 171:
+/*!**********************************************************************!*\
+  !*** ./wwwroot/libs/tsxbuild/Shared/Components/SelectPaymentTerm.js ***!
+  \**********************************************************************/
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -2851,7 +2866,7 @@ webpackJsonp([1],{
 	    function __() { this.constructor = d; }
 	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 	};
-	var React = __webpack_require__(1);
+	var React = __webpack_require__(/*! react */ 1);
 	var SelectPaymentTerm = (function (_super) {
 	    __extends(SelectPaymentTerm, _super);
 	    function SelectPaymentTerm() {
@@ -2874,6 +2889,9 @@ webpackJsonp([1],{
 /***/ },
 
 /***/ 172:
+/*!***************************************************************!*\
+  !*** ./wwwroot/libs/tsxbuild/Shared/Components/SelectItem.js ***!
+  \***************************************************************/
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -2882,7 +2900,7 @@ webpackJsonp([1],{
 	    function __() { this.constructor = d; }
 	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 	};
-	var React = __webpack_require__(1);
+	var React = __webpack_require__(/*! react */ 1);
 	var SelectItem = (function (_super) {
 	    __extends(SelectItem, _super);
 	    function SelectItem() {
@@ -2907,6 +2925,9 @@ webpackJsonp([1],{
 /***/ },
 
 /***/ 173:
+/*!**********************************************************************!*\
+  !*** ./wwwroot/libs/tsxbuild/Shared/Components/SelectMeasurement.js ***!
+  \**********************************************************************/
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -2915,7 +2936,7 @@ webpackJsonp([1],{
 	    function __() { this.constructor = d; }
 	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 	};
-	var React = __webpack_require__(1);
+	var React = __webpack_require__(/*! react */ 1);
 	var SelectMeasurement = (function (_super) {
 	    __extends(SelectMeasurement, _super);
 	    function SelectMeasurement() {
@@ -2940,12 +2961,15 @@ webpackJsonp([1],{
 /***/ },
 
 /***/ 174:
+/*!*****************************************************************!*\
+  !*** ./wwwroot/libs/tsxbuild/Shared/Stores/Sales/SalesStore.js ***!
+  \*****************************************************************/
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
-	var mobx_1 = __webpack_require__(169);
-	var SalesOrder_1 = __webpack_require__(175);
-	var SalesOrderLine_1 = __webpack_require__(176);
+	var mobx_1 = __webpack_require__(/*! mobx */ 169);
+	var SalesOrder_1 = __webpack_require__(/*! ./SalesOrder */ 175);
+	var SalesOrderLine_1 = __webpack_require__(/*! ./SalesOrderLine */ 176);
 	var SalesStore = (function () {
 	    function SalesStore() {
 	        this.salesOrder = new SalesOrder_1.default();
@@ -2987,6 +3011,9 @@ webpackJsonp([1],{
 /***/ },
 
 /***/ 175:
+/*!*****************************************************************!*\
+  !*** ./wwwroot/libs/tsxbuild/Shared/Stores/Sales/SalesOrder.js ***!
+  \*****************************************************************/
 /***/ function(module, exports) {
 
 	"use strict";
@@ -3003,6 +3030,9 @@ webpackJsonp([1],{
 /***/ },
 
 /***/ 176:
+/*!*********************************************************************!*\
+  !*** ./wwwroot/libs/tsxbuild/Shared/Stores/Sales/SalesOrderLine.js ***!
+  \*********************************************************************/
 /***/ function(module, exports) {
 
 	"use strict";

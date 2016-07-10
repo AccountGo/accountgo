@@ -1,4 +1,5 @@
-﻿var webpack = require('webpack');
+﻿/// <binding BeforeBuild='Run - Development' />
+var webpack = require('webpack');
 var path = require('path');
 
 var buildDir = path.resolve(__dirname, './wwwroot/scripts');

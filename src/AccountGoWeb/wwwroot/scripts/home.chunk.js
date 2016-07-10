@@ -1,5 +1,8 @@
 webpackJsonp([0],[
 /* 0 */
+/*!********************************************!*\
+  !*** ./wwwroot/libs/tsxbuild/home/home.js ***!
+  \********************************************/
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -8,8 +11,8 @@ webpackJsonp([0],[
 	    function __() { this.constructor = d; }
 	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 	};
-	var React = __webpack_require__(1);
-	var ReactDOM = __webpack_require__(38);
+	var React = __webpack_require__(/*! react */ 1);
+	var ReactDOM = __webpack_require__(/*! react-dom */ 38);
 	var Home = (function (_super) {
 	    __extends(Home, _super);
 	    function Home() {

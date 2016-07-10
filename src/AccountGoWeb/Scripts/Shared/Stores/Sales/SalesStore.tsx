@@ -4,7 +4,6 @@ import SalesOrderLine from './SalesOrderLine';
 
 export default class SalesStore {
     salesOrder;
-
     constructor() {
         this.salesOrder = new SalesOrder();
         extendObservable(this.salesOrder, {
