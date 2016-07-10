@@ -11,7 +11,7 @@ export default class SalesQuotationStore {
             orderDate: this.salesQuotation.orderDate,
             paymentTermId: this.salesQuotation.paymentTermId,
             referenceNo: this.salesQuotation.referenceNo,
-            salesOrderLines: []
+            salesQuotationLines: []
         });
     }
     
@@ -21,29 +21,29 @@ export default class SalesQuotationStore {
 
     addLineItem(itemId, measurementId, quantity, amount, discount) {
         var newLineItem = new SalesQuotationLine(itemId, measurementId, quantity, amount, discount);
-        this.salesQuotation.salesOrderLines.push(extendObservable(newLineItem, newLineItem));        
+        this.salesQuotation.salesQuotationLines.push(extendObservable(newLineItem, newLineItem));        
     }
 
     removeLineItem(row) {
-        this.salesQuotation.salesOrderLines.splice(row, 1);
+        this.salesQuotation.salesQuotationLines.splice(row, 1);
     }
 
     updateLineItem(row, targetProperty, value) {
-        if (this.salesQuotation.salesOrderLines.length > 0)
-            this.salesQuotation.salesOrderLines[row][targetProperty] = value;
+        if (this.salesQuotation.salesQuotationLines.length > 0)
+            this.salesQuotation.salesQuotationLines[row][targetProperty] = value;
     }
 
     grandTotal() {
         var sum = 0;
-        for (var i = 0; i < this.salesQuotation.salesOrderLines.length; i++) {
-            var lineSum = this.salesQuotation.salesOrderLines[i].quantity * this.salesQuotation.salesOrderLines[i].amount;
+        for (var i = 0; i < this.salesQuotation.salesQuotationLines.length; i++) {
+            var lineSum = this.salesQuotation.salesQuotationLines[i].quantity * this.salesQuotation.salesQuotationLines[i].amount;
             sum = sum + lineSum;
         }
         return sum;
     }
 
     lineTotal(row) {
-        var lineSum = this.salesQuotation.salesOrderLines[row].quantity * this.salesQuotation.salesOrderLines[row].amount;;
+        var lineSum = this.salesQuotation.salesQuotationLines[row].quantity * this.salesQuotation.salesQuotationLines[row].amount;;
         return lineSum;
     }
 }

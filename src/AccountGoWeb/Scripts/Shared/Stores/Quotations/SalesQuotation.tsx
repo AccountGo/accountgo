@@ -5,5 +5,5 @@ export default class SalesQuotation {
     orderDate: Date;
     paymentTermid: number;
     referenceNo: string;
-    salesOrderLines: SalesQuotationLine[] = [];
+    salesQuotationLines: SalesQuotationLine[] = [];
 }

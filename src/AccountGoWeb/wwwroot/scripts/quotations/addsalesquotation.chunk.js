@@ -19,13 +19,13 @@ webpackJsonp([1],{
 	    return c > 3 && r && Object.defineProperty(target, key, r), r;
 	};
 	var React = __webpack_require__(/*! react */ 1);
-	var ReactDOM = __webpack_require__(/*! react-dom */ 38);
-	var mobx_react_1 = __webpack_require__(/*! mobx-react */ 168);
-	var SelectCustomer_1 = __webpack_require__(/*! ../Shared/Components/SelectCustomer */ 170);
-	var SelectPaymentTerm_1 = __webpack_require__(/*! ../Shared/Components/SelectPaymentTerm */ 171);
-	var SelectLineItem_1 = __webpack_require__(/*! ../Shared/Components/SelectLineItem */ 172);
-	var SelectLineMeasurement_1 = __webpack_require__(/*! ../Shared/Components/SelectLineMeasurement */ 173);
-	var SalesQuotationStore_1 = __webpack_require__(/*! ../Shared/Stores/Quotations/SalesQuotationStore */ 174);
+	var ReactDOM = __webpack_require__(/*! react-dom */ 33);
+	var mobx_react_1 = __webpack_require__(/*! mobx-react */ 170);
+	var SelectCustomer_1 = __webpack_require__(/*! ../Shared/Components/SelectCustomer */ 172);
+	var SelectPaymentTerm_1 = __webpack_require__(/*! ../Shared/Components/SelectPaymentTerm */ 173);
+	var SelectLineItem_1 = __webpack_require__(/*! ../Shared/Components/SelectLineItem */ 174);
+	var SelectLineMeasurement_1 = __webpack_require__(/*! ../Shared/Components/SelectLineMeasurement */ 175);
+	var SalesQuotationStore_1 = __webpack_require__(/*! ../Shared/Stores/Quotations/SalesQuotationStore */ 176);
 	var store = new SalesQuotationStore_1.default();
 	var SaveQuotationButton = (function (_super) {
 	    __extends(SaveQuotationButton, _super);
@@ -134,7 +134,7 @@ webpackJsonp([1],{
 
 /***/ },
 
-/***/ 168:
+/***/ 170:
 /*!*******************************!*\
   !*** ./~/mobx-react/index.js ***!
   \*******************************/
@@ -147,11 +147,15 @@ webpackJsonp([1],{
 	        if (!React)
 	            throw new Error("mobx-react requires React to be available");
 	
+	        /**
+	         * dev tool support
+	         */
 	        var isDevtoolsEnabled = false;
 	
 	        // WeakMap<Node, Object>;
 	        var componentByNodeRegistery = typeof WeakMap !== "undefined" ? new WeakMap() : undefined;
 	        var renderReporter = new EventEmitter();
+	
 	        function findDOMNode(component) {
 	            if (ReactDOM)
 	                return ReactDOM.findDOMNode(component);
@@ -160,7 +164,7 @@ webpackJsonp([1],{
 	
 	        function reportRendering(component) {
 	            var node = findDOMNode(component);
-	            if (node)
+	            if (node && componentByNodeRegistery)
 	                componentByNodeRegistery.set(node, component);
 	
 	            renderReporter.emit({
@@ -172,6 +176,52 @@ webpackJsonp([1],{
 	            });
 	        }
 	
+	        function trackComponents() {
+	            if (typeof WeakMap === "undefined")
+	                throw new Error("[mobx-react] tracking components is not supported in this browser.");
+	            if (!isDevtoolsEnabled)
+	                isDevtoolsEnabled = true;
+	        }
+	
+	        function EventEmitter() {
+	            this.listeners = [];
+	        };
+	        EventEmitter.prototype.on = function (cb) {
+	            this.listeners.push(cb);
+	            var self = this;
+	            return function() {
+	                var idx = self.listeners.indexOf(cb);
+	                if (idx !== -1)
+	                    self.listeners.splice(idx, 1);
+	            };
+	        };
+	        EventEmitter.prototype.emit = function(data) {
+	            this.listeners.forEach(function (fn) {
+	                fn(data);
+	            });
+	        };
+	
+	        /**
+	         * Utilities
+	         */
+	        var specialReactKeys = { children: true, key: true, ref: true };
+	
+	        function patch(target, funcName) {
+	            var base = target[funcName];
+	            var mixinFunc = reactiveMixin[funcName];
+	            if (!base) {
+	                target[funcName] = mixinFunc;
+	            } else {
+	                target[funcName] = function() {
+	                    base.apply(this, arguments);
+	                    mixinFunc.apply(this, arguments);
+	                }
+	            }
+	        }
+	
+	        /**
+	         * ReactiveMixin
+	         */
 	        var reactiveMixin = {
 	            componentWillMount: function() {
 	                // Generate friendly name for debugging
@@ -219,7 +269,7 @@ webpackJsonp([1],{
 	                this.render.$mobx && this.render.$mobx.dispose();
 	                if (isDevtoolsEnabled) {
 	                    var node = findDOMNode(this);
-	                    if (node) {
+	                    if (node && componentByNodeRegistery) {
 	                        componentByNodeRegistery.delete(node);
 	                    }
 	                    renderReporter.emit({
@@ -241,8 +291,6 @@ webpackJsonp([1],{
 	            },
 	
 	            shouldComponentUpdate: function(nextProps, nextState) {
-	                // TODO: if context changed, return true.., see #18
-	                
 	                // if props or state did change, but a render was scheduled already, no additional render needs to be scheduled
 	                if (this.render.$mobx && this.render.$mobx.isScheduled() === true)
 	                    return false;
@@ -274,20 +322,26 @@ webpackJsonp([1],{
 	            }
 	        }
 	
-	        function patch(target, funcName) {
-	            var base = target[funcName];
-	            var mixinFunc = reactiveMixin[funcName];
-	            if (!base) {
-	                target[funcName] = mixinFunc;
-	            } else {
-	                target[funcName] = function() {
-	                    base.apply(this, arguments);
-	                    mixinFunc.apply(this, arguments);
-	                }
+	        /**
+	         * Observer function / decorator
+	         */
+	        function observer(arg1, arg2) {
+	            if (typeof arg1 === "string")
+	                throw new Error("Store names should be provided as array");
+	            if (Array.isArray(arg1)) {
+	                // component needs stores
+	                if (!arg2) {
+	                    // invoked as decorator
+	                    return function(componentClass) {
+	                        return observer(arg1, componentClass);
+	                    }
+	                } else {
+	                    return createStoreInjector(arg1, observer(arg2));
+	                }   
 	            }
-	        }
+	            var componentClass = arg1;
 	
-	        function observer(componentClass) {
+	            // Stateless function component:
 	            // If it is function but doesn't seem to be a react class constructor,
 	            // wrap it to a react class automatically
 	            if (
@@ -308,7 +362,6 @@ webpackJsonp([1],{
 	            if (!componentClass)
 	                throw new Error("Please pass a valid component to 'observer'");
 	            var target = componentClass.prototype || componentClass;
-	
 	            [
 	                "componentWillMount",
 	                "componentWillUnmount",
@@ -317,40 +370,83 @@ webpackJsonp([1],{
 	            ].forEach(function(funcName) {
 	                patch(target, funcName)
 	            });
-	
 	            if (!target.shouldComponentUpdate)
 	                target.shouldComponentUpdate = reactiveMixin.shouldComponentUpdate;
 	            componentClass.isMobXReactObserver = true;
 	            return componentClass;
 	        }
 	
-	        function trackComponents() {
-	            if (typeof WeakMap === "undefined")
-	                throw new Error("[mobx-react] tracking components is not supported in this browser.");
-	            if (!isDevtoolsEnabled)
-	                isDevtoolsEnabled = true;
+	        /**
+	         * Store provider
+	         */
+	        var Provider = React.createClass({
+	            displayName: "Provider",
+	
+	            render: function() {
+	                return React.Children.only(this.props.children);
+	            },
+	
+	            getChildContext: function () {
+	                var stores = {};
+	                // inherit stores
+	                var baseStores = this.context.mobxStores;
+	                if (baseStores) for (var key in baseStores) {
+	                    stores[key] = baseStores[key];
+	                }
+	                // add own stores
+	                for (var key in this.props)
+	                    if (!specialReactKeys[key])
+	                        stores[key] = this.props[key];
+	                return {
+	                    mobxStores: stores
+	                };
+	            },
+	
+	            componentWillReceiveProps: function(nextProps) {
+	                // Maybe this warning is to aggressive?
+	                if (Object.keys(nextProps).length !== Object.keys(this.props).length)
+	                    console.warn("MobX Provider: The set of provided stores has changed. Please avoid changing stores as the change might not propagate to all children");
+	                for (var key in nextProps)
+	                    if (!specialReactKeys[key] && this.props[key] !== nextProps[key])
+	                        console.warn("MobX Provider: Provided store '" + key + "' has changed. Please avoid replacing stores as the change might not propagate to all children");
+	            }
+	        });
+	
+	        var PropTypes = React.PropTypes;
+	        Provider.contextTypes = { mobxStores: PropTypes.object };
+	        Provider.childContextTypes = { mobxStores: PropTypes.object.isRequired };
+	
+	        /**
+	         * Store Injection
+	         */
+	        function createStoreInjector(stores, component) {
+	            var Injector = React.createClass({
+	                displayName: "MobXStoreInjector",
+	                render: function() {
+	                    var newProps = {};
+	                    for (var key in this.props)
+	                        newProps[key] = this.props[key];
+	                    var baseStores = this.context.mobxStores;
+	                    stores.forEach(function(storeName) {
+	                        if (storeName in newProps) // prefer props over stores
+	                            return;
+	                        if (!(storeName in baseStores))
+	                            throw new Error("MobX observer: Store '" + storeName + "' is not available! Make sure it is provided by some Provider");
+	                        newProps[storeName] = baseStores[storeName];
+	                    }, this);
+	                    return React.createElement(component, newProps);
+	                }
+	            });
+	            Injector.contextTypes = { mobxStores: PropTypes.object };
+	            return Injector;
 	        }
 	
-	        function EventEmitter() {
-	            this.listeners = [];
-	        };
-	        EventEmitter.prototype.on = function (cb) {
-	            this.listeners.push(cb);
-	            var self = this;
-	            return function() {
-	                var idx = self.listeners.indexOf(cb);
-	                if (idx !== -1)
-	                    self.listeners.splice(idx, 1);
-	            };
-	        };
-	        EventEmitter.prototype.emit = function(data) {
-	            this.listeners.forEach(function (fn) {
-	                fn(data);
-	            });
-	        };
-	
+	        /**
+	         * Export
+	         */
 	        return ({
 	            observer: observer,
+	            Provider: Provider,
 	            reactiveComponent: function() {
 	                console.warn("[mobx-react] `reactiveComponent` has been renamed to `observer` and will be removed in 1.1.");
 	                return observer.apply(null, arguments);
@@ -361,9 +457,11 @@ webpackJsonp([1],{
 	        });
 	    }
 	
-	    // UMD
+	    /**
+	     * UMD
+	     */
 	    if (true) {
-	        module.exports = mrFactory(__webpack_require__(/*! mobx */ 169), __webpack_require__(/*! react */ 1), __webpack_require__(/*! react-dom */ 38));
+	        module.exports = mrFactory(__webpack_require__(/*! mobx */ 171), __webpack_require__(/*! react */ 1), __webpack_require__(/*! react-dom */ 33));
 	    } else if (typeof define === 'function' && define.amd) {
 	        define('mobx-react', ['mobx', 'react', 'react-dom'], mrFactory);
 	    } else {
@@ -374,7 +472,7 @@ webpackJsonp([1],{
 
 /***/ },
 
-/***/ 169:
+/***/ 171:
 /*!****************************!*\
   !*** ./~/mobx/lib/mobx.js ***!
   \****************************/
@@ -733,7 +831,7 @@ webpackJsonp([1],{
 	    if (typeof baseValue === "function")
 	        baseValue = asReference(baseValue);
 	    var adm = asObservableObject(target, undefined, ValueMode.Recursive);
-	    defineObservableProperty(adm, name, baseValue, false);
+	    defineObservableProperty(adm, name, baseValue, true);
 	    allowStateChangesEnd(prevA);
 	}, function (name) {
 	    return this.$mobx.values[name].get();
@@ -823,6 +921,8 @@ webpackJsonp([1],{
 	            __alreadySeen.push([source, value]);
 	        return value;
 	    }
+	    if (source instanceof Date || source instanceof RegExp)
+	        return source;
 	    if (detectCycles && __alreadySeen === null)
 	        __alreadySeen = [];
 	    if (detectCycles && source !== null && typeof source === "object") {
@@ -889,21 +989,13 @@ webpackJsonp([1],{
 	        invariant(false, "whyRun can only be used on reactions and computed values");
 	}
 	exports.whyRun = whyRun;
-	var actionDecorator = createClassPropertyDecorator(function (target, key, value, args, originalDescriptor) {
+	var actionFieldDecorator = createClassPropertyDecorator(function (target, key, value, args, originalDescriptor) {
 	    var actionName = (args && args.length === 1) ? args[0] : (value.name || key || "<unnamed action>");
 	    var wrappedAction = action(actionName, value);
-	    if (originalDescriptor && originalDescriptor.value && target.constructor && target.constructor.prototype) {
-	        Object.defineProperty(target.constructor.prototype, key, {
-	            configurable: true, enumerable: false, writable: false,
-	            value: wrappedAction
-	        });
-	    }
-	    else {
-	        Object.defineProperty(target, key, {
-	            configurable: true, enumerable: false, writable: false,
-	            value: wrappedAction
-	        });
-	    }
+	    Object.defineProperty(target, key, {
+	        configurable: true, enumerable: false, writable: false,
+	        value: wrappedAction
+	    });
 	}, function (key) {
 	    return this[key];
 	}, function () {
@@ -914,9 +1006,21 @@ webpackJsonp([1],{
 	        return actionImplementation(arg1.name || "<unnamed action>", arg1);
 	    if (arguments.length === 2 && typeof arg2 === "function")
 	        return actionImplementation(arg1, arg2);
-	    return actionDecorator.apply(null, arguments);
+	    if (arguments.length === 1 && typeof arg1 === "string")
+	        return namedActionDecorator(arg1);
+	    return namedActionDecorator(arg2).apply(null, arguments);
 	}
 	exports.action = action;
+	function namedActionDecorator(name) {
+	    return function (target, prop, descriptor) {
+	        if (descriptor && typeof descriptor.value === "function") {
+	            descriptor.value = actionImplementation(name, descriptor.value);
+	            descriptor.enumerable = false;
+	            return descriptor;
+	        }
+	        return actionFieldDecorator(name).apply(this, arguments);
+	    };
+	}
 	function isAction(thing) {
 	    return typeof thing === "function" && thing.isMobxAction === true;
 	}
@@ -948,8 +1052,9 @@ webpackJsonp([1],{
 	    if (notifySpy) {
 	        startTime = Date.now();
 	        var flattendArgs = [];
-	        for (var i = 0, l = args.length; i < l; i++)
-	            flattendArgs.push(args[i]);
+	        if (args)
+	            for (var i = 0, l = args.length; i < l; i++)
+	                flattendArgs.push(args[i]);
 	        spyReportStart({
 	            type: "action",
 	            name: actionName,
@@ -1077,7 +1182,7 @@ webpackJsonp([1],{
 	        return changed;
 	    };
 	    ComputedValue.prototype.get = function () {
-	        invariant(!this.isComputing, "Cycle detected", this.derivation);
+	        invariant(!this.isComputing, "Cycle detected in computation " + this.name, this.derivation);
 	        reportObserved(this);
 	        if (this.dependencyStaleCount > 0) {
 	            return this.peek();
@@ -1209,15 +1314,15 @@ webpackJsonp([1],{
 	    try {
 	        var result = f.call(derivation);
 	        hasException = false;
-	        bindDependencies(derivation, prevObserving);
 	        globalState.isTracking = prevTracking;
+	        bindDependencies(derivation, prevObserving);
 	        return result;
 	    }
 	    finally {
 	        if (hasException) {
 	            var message = ("[mobx] An uncaught exception occurred while calculating your computed value, autorun or transformer. Or inside the render() method of an observer based React component. " +
-	                "These methods should never throw exceptions as MobX will usually not be able to recover from them. " +
-	                ("Please enable 'Pause on (caught) exceptions' in your debugger to find the root cause. In: '" + derivation.name + "'"));
+	                "These functions should never throw exceptions as MobX will not always be able to recover from them. " +
+	                ("Please fix the error reported after this message or enable 'Pause on (caught) exceptions' in your debugger to find the root cause. In: '" + derivation.name + "'"));
 	            if (isSpyEnabled()) {
 	                spyReport({
 	                    type: "error",
@@ -1225,7 +1330,7 @@ webpackJsonp([1],{
 	                    message: message
 	                });
 	            }
-	            console.error(message);
+	            console.warn(message);
 	            resetGlobalState();
 	        }
 	    }
@@ -1235,22 +1340,10 @@ webpackJsonp([1],{
 	    var _a = quickDiff(derivation.observing, prevObserving), added = _a[0], removed = _a[1];
 	    for (var i = 0, l = added.length; i < l; i++) {
 	        var dependency = added[i];
-	        invariant(!findCycle(derivation, dependency), "Cycle detected", derivation);
 	        addObserver(added[i], derivation);
 	    }
 	    for (var i = 0, l = removed.length; i < l; i++)
 	        removeObserver(removed[i], derivation);
-	}
-	function findCycle(needle, node) {
-	    if (needle === node)
-	        return true;
-	    var obs = node.observing;
-	    if (obs === undefined)
-	        return false;
-	    for (var l = obs.length, i = 0; i < l; i++)
-	        if (findCycle(needle, obs[i]))
-	            return true;
-	    return false;
 	}
 	function untracked(action) {
 	    var prev = untrackedStart();
@@ -1560,13 +1653,13 @@ webpackJsonp([1],{
 	    if (!listeners)
 	        return;
 	    listeners = listeners.slice();
-	    if (Array.isArray(change)) {
-	        for (var i = 0, l = listeners.length; i < l; i++)
+	    for (var i = 0, l = listeners.length; i < l; i++) {
+	        if (Array.isArray(change)) {
 	            listeners[i].apply(null, change);
-	    }
-	    else {
-	        for (var i = 0, l = listeners.length; i < l; i++)
+	        }
+	        else {
 	            listeners[i](change);
+	        }
 	    }
 	    untrackedEnd(prevU);
 	}
@@ -1853,7 +1946,7 @@ webpackJsonp([1],{
 	        for (var i = fromIndex; i < l; i++)
 	            if (predicate.call(thisArg, items[i], i, this))
 	                return items[i];
-	        return null;
+	        return undefined;
 	    };
 	    ObservableArray.prototype.splice = function (index, deleteCount) {
 	        var newItems = [];
@@ -2350,25 +2443,44 @@ webpackJsonp([1],{
 	    }
 	    adm.values[propName] = observable;
 	    if (asInstanceProperty) {
-	        Object.defineProperty(adm.target, propName, {
-	            configurable: true,
-	            enumerable: !isComputed,
-	            get: function () {
-	                return observable.get();
-	            },
-	            set: isComputed
-	                ? throwingComputedValueSetter
-	                : function (v) {
-	                    setPropertyValue(this, propName, v);
-	                }
-	        });
+	        Object.defineProperty(adm.target, propName, isComputed ? generateComputedPropConfig(propName) : generateObservablePropConfig(propName));
 	    }
 	    if (!isComputed)
 	        notifyPropertyAddition(adm, adm.target, propName, newValue);
 	}
+	var observablePropertyConfigs = {};
+	var computedPropertyConfigs = {};
+	function generateObservablePropConfig(propName) {
+	    var config = observablePropertyConfigs[propName];
+	    if (config)
+	        return config;
+	    return observablePropertyConfigs[propName] = {
+	        configurable: true,
+	        enumerable: true,
+	        get: function () {
+	            return this.$mobx.values[propName].get();
+	        },
+	        set: function (v) {
+	            setPropertyValue(this, propName, v);
+	        }
+	    };
+	}
+	function generateComputedPropConfig(propName) {
+	    var config = computedPropertyConfigs[propName];
+	    if (config)
+	        return config;
+	    return computedPropertyConfigs[propName] = {
+	        configurable: true,
+	        enumerable: false,
+	        get: function () {
+	            return this.$mobx.values[propName].get();
+	        },
+	        set: throwingComputedValueSetter
+	    };
+	}
 	function setPropertyValue(instance, name, newValue) {
 	    var adm = instance.$mobx;
-	    var observable = instance.$mobx.values[name];
+	    var observable = adm.values[name];
 	    if (hasInterceptors(adm)) {
 	        var change = interceptChange(adm, {
 	            type: "update",
@@ -2554,23 +2666,27 @@ webpackJsonp([1],{
 	    function classPropertyDecorator(target, key, descriptor, customArgs) {
 	        invariant(allowCustomArguments || quacksLikeADecorator(arguments), "This function is a decorator, but it wasn't invoked like a decorator");
 	        if (!descriptor) {
-	            return {
+	            var descriptor_1 = {
 	                enumerable: enumerable,
 	                configurable: true,
 	                get: function () {
 	                    if (!this.__mobxInitializedProps || this.__mobxInitializedProps[key] !== true)
-	                        typescriptInitializeProperty(this, key, undefined, onInitialize, customArgs, descriptor);
+	                        typescriptInitializeProperty(this, key, undefined, onInitialize, customArgs, descriptor_1);
 	                    return get.call(this, key);
 	                },
 	                set: function (v) {
 	                    if (!this.__mobxInitializedProps || this.__mobxInitializedProps[key] !== true) {
-	                        typescriptInitializeProperty(this, key, v, onInitialize, customArgs, descriptor);
+	                        typescriptInitializeProperty(this, key, v, onInitialize, customArgs, descriptor_1);
 	                    }
 	                    else {
 	                        set.call(this, key, v);
 	                    }
 	                }
 	            };
+	            if (arguments.length < 3) {
+	                Object.defineProperty(target, key, descriptor_1);
+	            }
+	            return descriptor_1;
 	        }
 	        else {
 	            if (!target.hasOwnProperty("__mobxLazyInitializers")) {
@@ -2830,7 +2946,7 @@ webpackJsonp([1],{
 
 /***/ },
 
-/***/ 170:
+/***/ 172:
 /*!*******************************************************************!*\
   !*** ./wwwroot/libs/tsxbuild/Shared/Components/SelectCustomer.js ***!
   \*******************************************************************/
@@ -2866,7 +2982,7 @@ webpackJsonp([1],{
 
 /***/ },
 
-/***/ 171:
+/***/ 173:
 /*!**********************************************************************!*\
   !*** ./wwwroot/libs/tsxbuild/Shared/Components/SelectPaymentTerm.js ***!
   \**********************************************************************/
@@ -2900,7 +3016,7 @@ webpackJsonp([1],{
 
 /***/ },
 
-/***/ 172:
+/***/ 174:
 /*!*******************************************************************!*\
   !*** ./wwwroot/libs/tsxbuild/Shared/Components/SelectLineItem.js ***!
   \*******************************************************************/
@@ -2936,7 +3052,7 @@ webpackJsonp([1],{
 
 /***/ },
 
-/***/ 173:
+/***/ 175:
 /*!**************************************************************************!*\
   !*** ./wwwroot/libs/tsxbuild/Shared/Components/SelectLineMeasurement.js ***!
   \**************************************************************************/
@@ -2972,16 +3088,16 @@ webpackJsonp([1],{
 
 /***/ },
 
-/***/ 174:
+/***/ 176:
 /*!*******************************************************************************!*\
   !*** ./wwwroot/libs/tsxbuild/Shared/Stores/Quotations/SalesQuotationStore.js ***!
   \*******************************************************************************/
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
-	var mobx_1 = __webpack_require__(/*! mobx */ 169);
-	var SalesQuotation_1 = __webpack_require__(/*! ./SalesQuotation */ 175);
-	var SalesQuotationLine_1 = __webpack_require__(/*! ./SalesQuotationLine */ 176);
+	var mobx_1 = __webpack_require__(/*! mobx */ 171);
+	var SalesQuotation_1 = __webpack_require__(/*! ./SalesQuotation */ 177);
+	var SalesQuotationLine_1 = __webpack_require__(/*! ./SalesQuotationLine */ 178);
 	var SalesQuotationStore = (function () {
 	    function SalesQuotationStore() {
 	        this.salesQuotation = new SalesQuotation_1.default();
@@ -2990,7 +3106,7 @@ webpackJsonp([1],{
 	            orderDate: this.salesQuotation.orderDate,
 	            paymentTermId: this.salesQuotation.paymentTermId,
 	            referenceNo: this.salesQuotation.referenceNo,
-	            salesOrderLines: []
+	            salesQuotationLines: []
 	        });
 	    }
 	    SalesQuotationStore.prototype.changedCustomer = function (custId) {
@@ -2998,25 +3114,25 @@ webpackJsonp([1],{
 	    };
 	    SalesQuotationStore.prototype.addLineItem = function (itemId, measurementId, quantity, amount, discount) {
 	        var newLineItem = new SalesQuotationLine_1.default(itemId, measurementId, quantity, amount, discount);
-	        this.salesQuotation.salesOrderLines.push(mobx_1.extendObservable(newLineItem, newLineItem));
+	        this.salesQuotation.salesQuotationLines.push(mobx_1.extendObservable(newLineItem, newLineItem));
 	    };
 	    SalesQuotationStore.prototype.removeLineItem = function (row) {
-	        this.salesQuotation.salesOrderLines.splice(row, 1);
+	        this.salesQuotation.salesQuotationLines.splice(row, 1);
 	    };
 	    SalesQuotationStore.prototype.updateLineItem = function (row, targetProperty, value) {
-	        if (this.salesQuotation.salesOrderLines.length > 0)
-	            this.salesQuotation.salesOrderLines[row][targetProperty] = value;
+	        if (this.salesQuotation.salesQuotationLines.length > 0)
+	            this.salesQuotation.salesQuotationLines[row][targetProperty] = value;
 	    };
 	    SalesQuotationStore.prototype.grandTotal = function () {
 	        var sum = 0;
-	        for (var i = 0; i < this.salesQuotation.salesOrderLines.length; i++) {
-	            var lineSum = this.salesQuotation.salesOrderLines[i].quantity * this.salesQuotation.salesOrderLines[i].amount;
+	        for (var i = 0; i < this.salesQuotation.salesQuotationLines.length; i++) {
+	            var lineSum = this.salesQuotation.salesQuotationLines[i].quantity * this.salesQuotation.salesQuotationLines[i].amount;
 	            sum = sum + lineSum;
 	        }
 	        return sum;
 	    };
 	    SalesQuotationStore.prototype.lineTotal = function (row) {
-	        var lineSum = this.salesQuotation.salesOrderLines[row].quantity * this.salesQuotation.salesOrderLines[row].amount;
+	        var lineSum = this.salesQuotation.salesQuotationLines[row].quantity * this.salesQuotation.salesQuotationLines[row].amount;
 	        ;
 	        return lineSum;
 	    };
@@ -3028,7 +3144,7 @@ webpackJsonp([1],{
 
 /***/ },
 
-/***/ 175:
+/***/ 177:
 /*!**************************************************************************!*\
   !*** ./wwwroot/libs/tsxbuild/Shared/Stores/Quotations/SalesQuotation.js ***!
   \**************************************************************************/
@@ -3037,7 +3153,7 @@ webpackJsonp([1],{
 	"use strict";
 	var SalesQuotation = (function () {
 	    function SalesQuotation() {
-	        this.salesOrderLines = [];
+	        this.salesQuotationLines = [];
 	    }
 	    return SalesQuotation;
 	}());
@@ -3047,7 +3163,7 @@ webpackJsonp([1],{
 
 /***/ },
 
-/***/ 176:
+/***/ 178:
 /*!******************************************************************************!*\
   !*** ./wwwroot/libs/tsxbuild/Shared/Stores/Quotations/SalesQuotationLine.js ***!
   \******************************************************************************/

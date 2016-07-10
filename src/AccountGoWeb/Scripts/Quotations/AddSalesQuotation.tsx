@@ -9,9 +9,9 @@ import SelectPaymentTerm from "../Shared/Components/SelectPaymentTerm";
 import SelectLineItem from "../Shared/Components/SelectLineItem";
 import SelectLineMeasurement from "../Shared/Components/SelectLineMeasurement";
 
-import SalesStore from "../Shared/Stores/Quotations/SalesQuotationStore";
+import SalesQuotationStore from "../Shared/Stores/Quotations/SalesQuotationStore";
 
-let store = new SalesStore();
+let store = new SalesQuotationStore();
 
 class SaveQuotationButton extends React.Component<any, {}>{
     saveNewSalesQuotation(e) {

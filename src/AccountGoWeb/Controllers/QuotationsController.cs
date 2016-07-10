@@ -13,5 +13,10 @@ namespace AccountGoWeb.Controllers
         {
             return View();
         }
+
+        public IActionResult AddSalesQuotation()
+        {
+            return View();
+        }
     }
 }
