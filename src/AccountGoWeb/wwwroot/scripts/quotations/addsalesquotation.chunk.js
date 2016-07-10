@@ -1,4 +1,4 @@
-webpackJsonp([1],{
+webpackJsonp([3],{
 
 /***/ 0:
 /*!***************************************************************!*\
@@ -21,11 +21,11 @@ webpackJsonp([1],{
 	var React = __webpack_require__(/*! react */ 1);
 	var ReactDOM = __webpack_require__(/*! react-dom */ 38);
 	var mobx_react_1 = __webpack_require__(/*! mobx-react */ 168);
-	var SelectCustomer_1 = __webpack_require__(/*! ../Shared/Components/SelectCustomer */ 170);
+	var SelectCustomer_1 = __webpack_require__(/*! ../Shared/Components/SelectCustomer */ 180);
 	var SelectPaymentTerm_1 = __webpack_require__(/*! ../Shared/Components/SelectPaymentTerm */ 171);
 	var SelectLineItem_1 = __webpack_require__(/*! ../Shared/Components/SelectLineItem */ 172);
 	var SelectLineMeasurement_1 = __webpack_require__(/*! ../Shared/Components/SelectLineMeasurement */ 173);
-	var SalesQuotationStore_1 = __webpack_require__(/*! ../Shared/Stores/Quotations/SalesQuotationStore */ 174);
+	var SalesQuotationStore_1 = __webpack_require__(/*! ../Shared/Stores/Quotations/SalesQuotationStore */ 181);
 	var store = new SalesQuotationStore_1.default();
 	var SaveQuotationButton = (function (_super) {
 	    __extends(SaveQuotationButton, _super);
@@ -2830,42 +2830,6 @@ webpackJsonp([1],{
 
 /***/ },
 
-/***/ 170:
-/*!*******************************************************************!*\
-  !*** ./wwwroot/libs/tsxbuild/Shared/Components/SelectCustomer.js ***!
-  \*******************************************************************/
-/***/ function(module, exports, __webpack_require__) {
-
-	"use strict";
-	var __extends = (this && this.__extends) || function (d, b) {
-	    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
-	    function __() { this.constructor = d; }
-	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-	};
-	var React = __webpack_require__(/*! react */ 1);
-	var SelectCustomer = (function (_super) {
-	    __extends(SelectCustomer, _super);
-	    function SelectCustomer() {
-	        _super.apply(this, arguments);
-	    }
-	    SelectCustomer.prototype.onChangeCustomer = function (e) {
-	        this.props.store.changedCustomer(e.target.value);
-	    };
-	    SelectCustomer.prototype.render = function () {
-	        var options = [];
-	        options.push(React.createElement("option", {key: "1", value: "1"}, " Customer #1 "));
-	        options.push(React.createElement("option", {key: "2", value: "2"}, " Customer #2 "));
-	        options.push(React.createElement("option", {key: "3", value: "3"}, " Customer #3 "));
-	        return (React.createElement("select", {id: "optCustomer", onChange: this.onChangeCustomer.bind(this)}, options));
-	    };
-	    return SelectCustomer;
-	}(React.Component));
-	Object.defineProperty(exports, "__esModule", { value: true });
-	exports.default = SelectCustomer;
-	//# sourceMappingURL=SelectCustomer.js.map
-
-/***/ },
-
 /***/ 171:
 /*!**********************************************************************!*\
   !*** ./wwwroot/libs/tsxbuild/Shared/Components/SelectPaymentTerm.js ***!
@@ -2972,7 +2936,43 @@ webpackJsonp([1],{
 
 /***/ },
 
-/***/ 174:
+/***/ 180:
+/*!*******************************************************************!*\
+  !*** ./wwwroot/libs/tsxbuild/Shared/Components/SelectCustomer.js ***!
+  \*******************************************************************/
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	var __extends = (this && this.__extends) || function (d, b) {
+	    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
+	    function __() { this.constructor = d; }
+	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+	};
+	var React = __webpack_require__(/*! react */ 1);
+	var SelectCustomer = (function (_super) {
+	    __extends(SelectCustomer, _super);
+	    function SelectCustomer() {
+	        _super.apply(this, arguments);
+	    }
+	    SelectCustomer.prototype.onChangeCustomer = function (e) {
+	        this.props.store.changedCustomer(e.target.value);
+	    };
+	    SelectCustomer.prototype.render = function () {
+	        var options = [];
+	        options.push(React.createElement("option", {key: "1", value: "1"}, " Customer #1 "));
+	        options.push(React.createElement("option", {key: "2", value: "2"}, " Customer #2 "));
+	        options.push(React.createElement("option", {key: "3", value: "3"}, " Customer #3 "));
+	        return (React.createElement("select", {id: "optCustomer", onChange: this.onChangeCustomer.bind(this)}, options));
+	    };
+	    return SelectCustomer;
+	}(React.Component));
+	Object.defineProperty(exports, "__esModule", { value: true });
+	exports.default = SelectCustomer;
+	//# sourceMappingURL=SelectCustomer.js.map
+
+/***/ },
+
+/***/ 181:
 /*!*******************************************************************************!*\
   !*** ./wwwroot/libs/tsxbuild/Shared/Stores/Quotations/SalesQuotationStore.js ***!
   \*******************************************************************************/
@@ -2980,8 +2980,8 @@ webpackJsonp([1],{
 
 	"use strict";
 	var mobx_1 = __webpack_require__(/*! mobx */ 169);
-	var SalesQuotation_1 = __webpack_require__(/*! ./SalesQuotation */ 175);
-	var SalesQuotationLine_1 = __webpack_require__(/*! ./SalesQuotationLine */ 176);
+	var SalesQuotation_1 = __webpack_require__(/*! ./SalesQuotation */ 182);
+	var SalesQuotationLine_1 = __webpack_require__(/*! ./SalesQuotationLine */ 183);
 	var SalesQuotationStore = (function () {
 	    function SalesQuotationStore() {
 	        this.salesQuotation = new SalesQuotation_1.default();
@@ -3028,7 +3028,7 @@ webpackJsonp([1],{
 
 /***/ },
 
-/***/ 175:
+/***/ 182:
 /*!**************************************************************************!*\
   !*** ./wwwroot/libs/tsxbuild/Shared/Stores/Quotations/SalesQuotation.js ***!
   \**************************************************************************/
@@ -3047,7 +3047,7 @@ webpackJsonp([1],{
 
 /***/ },
 
-/***/ 176:
+/***/ 183:
 /*!******************************************************************************!*\
   !*** ./wwwroot/libs/tsxbuild/Shared/Stores/Quotations/SalesQuotationLine.js ***!
   \******************************************************************************/

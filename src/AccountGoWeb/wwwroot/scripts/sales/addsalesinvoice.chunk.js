@@ -1,4 +1,4 @@
-webpackJsonp([2],{
+webpackJsonp([4],{
 
 /***/ 0:
 /*!********************************************************!*\
@@ -21,11 +21,11 @@ webpackJsonp([2],{
 	var React = __webpack_require__(/*! react */ 1);
 	var ReactDOM = __webpack_require__(/*! react-dom */ 38);
 	var mobx_react_1 = __webpack_require__(/*! mobx-react */ 168);
-	var SelectCustomer_1 = __webpack_require__(/*! ../Shared/Components/SelectCustomer */ 170);
+	var SelectCustomer_1 = __webpack_require__(/*! ../Shared/Components/SelectCustomer */ 180);
 	var SelectPaymentTerm_1 = __webpack_require__(/*! ../Shared/Components/SelectPaymentTerm */ 171);
 	var SelectLineItem_1 = __webpack_require__(/*! ../Shared/Components/SelectLineItem */ 172);
 	var SelectLineMeasurement_1 = __webpack_require__(/*! ../Shared/Components/SelectLineMeasurement */ 173);
-	var SalesInvoiceStore_1 = __webpack_require__(/*! ../Shared/Stores/Sales/SalesInvoiceStore */ 177);
+	var SalesInvoiceStore_1 = __webpack_require__(/*! ../Shared/Stores/Sales/SalesInvoiceStore */ 184);
 	var store = new SalesInvoiceStore_1.default();
 	var SaveInvoiceButton = (function (_super) {
 	    __extends(SaveInvoiceButton, _super);
@@ -2830,42 +2830,6 @@ webpackJsonp([2],{
 
 /***/ },
 
-/***/ 170:
-/*!*******************************************************************!*\
-  !*** ./wwwroot/libs/tsxbuild/Shared/Components/SelectCustomer.js ***!
-  \*******************************************************************/
-/***/ function(module, exports, __webpack_require__) {
-
-	"use strict";
-	var __extends = (this && this.__extends) || function (d, b) {
-	    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
-	    function __() { this.constructor = d; }
-	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-	};
-	var React = __webpack_require__(/*! react */ 1);
-	var SelectCustomer = (function (_super) {
-	    __extends(SelectCustomer, _super);
-	    function SelectCustomer() {
-	        _super.apply(this, arguments);
-	    }
-	    SelectCustomer.prototype.onChangeCustomer = function (e) {
-	        this.props.store.changedCustomer(e.target.value);
-	    };
-	    SelectCustomer.prototype.render = function () {
-	        var options = [];
-	        options.push(React.createElement("option", {key: "1", value: "1"}, " Customer #1 "));
-	        options.push(React.createElement("option", {key: "2", value: "2"}, " Customer #2 "));
-	        options.push(React.createElement("option", {key: "3", value: "3"}, " Customer #3 "));
-	        return (React.createElement("select", {id: "optCustomer", onChange: this.onChangeCustomer.bind(this)}, options));
-	    };
-	    return SelectCustomer;
-	}(React.Component));
-	Object.defineProperty(exports, "__esModule", { value: true });
-	exports.default = SelectCustomer;
-	//# sourceMappingURL=SelectCustomer.js.map
-
-/***/ },
-
 /***/ 171:
 /*!**********************************************************************!*\
   !*** ./wwwroot/libs/tsxbuild/Shared/Components/SelectPaymentTerm.js ***!
@@ -2972,7 +2936,43 @@ webpackJsonp([2],{
 
 /***/ },
 
-/***/ 177:
+/***/ 180:
+/*!*******************************************************************!*\
+  !*** ./wwwroot/libs/tsxbuild/Shared/Components/SelectCustomer.js ***!
+  \*******************************************************************/
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	var __extends = (this && this.__extends) || function (d, b) {
+	    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
+	    function __() { this.constructor = d; }
+	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+	};
+	var React = __webpack_require__(/*! react */ 1);
+	var SelectCustomer = (function (_super) {
+	    __extends(SelectCustomer, _super);
+	    function SelectCustomer() {
+	        _super.apply(this, arguments);
+	    }
+	    SelectCustomer.prototype.onChangeCustomer = function (e) {
+	        this.props.store.changedCustomer(e.target.value);
+	    };
+	    SelectCustomer.prototype.render = function () {
+	        var options = [];
+	        options.push(React.createElement("option", {key: "1", value: "1"}, " Customer #1 "));
+	        options.push(React.createElement("option", {key: "2", value: "2"}, " Customer #2 "));
+	        options.push(React.createElement("option", {key: "3", value: "3"}, " Customer #3 "));
+	        return (React.createElement("select", {id: "optCustomer", onChange: this.onChangeCustomer.bind(this)}, options));
+	    };
+	    return SelectCustomer;
+	}(React.Component));
+	Object.defineProperty(exports, "__esModule", { value: true });
+	exports.default = SelectCustomer;
+	//# sourceMappingURL=SelectCustomer.js.map
+
+/***/ },
+
+/***/ 184:
 /*!************************************************************************!*\
   !*** ./wwwroot/libs/tsxbuild/Shared/Stores/Sales/SalesInvoiceStore.js ***!
   \************************************************************************/
@@ -2980,8 +2980,8 @@ webpackJsonp([2],{
 
 	"use strict";
 	var mobx_1 = __webpack_require__(/*! mobx */ 169);
-	var SalesInvoice_1 = __webpack_require__(/*! ./SalesInvoice */ 178);
-	var SalesInvoiceLine_1 = __webpack_require__(/*! ./SalesInvoiceLine */ 179);
+	var SalesInvoice_1 = __webpack_require__(/*! ./SalesInvoice */ 185);
+	var SalesInvoiceLine_1 = __webpack_require__(/*! ./SalesInvoiceLine */ 186);
 	var SalesStore = (function () {
 	    function SalesStore() {
 	        this.salesInvoice = new SalesInvoice_1.default();
@@ -3028,7 +3028,7 @@ webpackJsonp([2],{
 
 /***/ },
 
-/***/ 178:
+/***/ 185:
 /*!*******************************************************************!*\
   !*** ./wwwroot/libs/tsxbuild/Shared/Stores/Sales/SalesInvoice.js ***!
   \*******************************************************************/
@@ -3047,7 +3047,7 @@ webpackJsonp([2],{
 
 /***/ },
 
-/***/ 179:
+/***/ 186:
 /*!***********************************************************************!*\
   !*** ./wwwroot/libs/tsxbuild/Shared/Stores/Sales/SalesInvoiceLine.js ***!
   \***********************************************************************/

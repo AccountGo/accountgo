@@ -30,7 +30,7 @@
 /******/ 	// "0" means "already loaded"
 /******/ 	// Array means "loading", array contains callbacks
 /******/ 	var installedChunks = {
-/******/ 		4:0
+/******/ 		6:0
 /******/ 	};
 /******/
 /******/ 	// The require function
@@ -76,7 +76,7 @@
 /******/ 			script.charset = 'utf-8';
 /******/ 			script.async = true;
 /******/
-/******/ 			script.src = __webpack_require__.p + "" + chunkId + "." + ({"0":"home","1":"quotations/addsalesquotation","2":"sales/addsalesinvoice","3":"sales/addsalesorder"}[chunkId]||chunkId) + ".chunk.js";
+/******/ 			script.src = __webpack_require__.p + "" + chunkId + "." + ({"0":"home","1":"purchasing/addpurchaseinvoice","2":"purchasing/addpurchaseorder","3":"quotations/addsalesquotation","4":"sales/addsalesinvoice","5":"sales/addsalesorder"}[chunkId]||chunkId) + ".chunk.js";
 /******/ 			head.appendChild(script);
 /******/ 		}
 /******/ 	};
