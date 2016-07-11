@@ -61,3 +61,8 @@ AccountGoWeb/Api are development under ASP.NET Core 1.0, and requires you to ins
 5.	Open the solution file and restore all packages.
 
 Note: You can use the database connection from the demo site. Look at the web.config ("Web") or appsettings.json ("Api") projects.
+
+# Run the "Api" project
+1. Right click on the project properties and go to Debug. Select "AccountGoApi" from the profile. This by default will run the api on "http://localhost:5000"
+2. Make sure to update Config.apiUrl in "AccountGoWeb/webpack.config.js".
+3. Set "accountgo" solution to "Multiple Startup Projects". Select "AccountGoWeb" and "Api".
