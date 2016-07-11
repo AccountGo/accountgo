@@ -1,9 +1,16 @@
 ﻿import {observable, extendObservable, action} from 'mobx';
+import * as axios from "axios";
+import * as d3 from "d3";
+
 import SalesQuotation from './SalesQuotation';
 import SalesQuotationLine from './SalesQuotationLine';
 
+import CommonStore from "../Common/CommonStore";
+
 export default class SalesQuotationStore {
     salesQuotation;
+    commonStore;
+
     constructor() {
         this.salesQuotation = new SalesQuotation();
         extendObservable(this.salesQuotation, {
@@ -13,10 +20,16 @@ export default class SalesQuotationStore {
             referenceNo: this.salesQuotation.referenceNo,
             salesQuotationLines: []
         });
+
+        this.commonStore = new CommonStore();
     }
     
     changedCustomer(custId) {
         this.salesQuotation.customerId = custId;
+    }
+
+    changedPaymentTerm(termId) {
+        this.salesQuotation.paymentTermId = termId;
     }
 
     changedQuotationDate(date) {

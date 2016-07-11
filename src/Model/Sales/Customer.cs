@@ -10,6 +10,5 @@
         public string Fax { get; set; }
         public decimal Balance { get; set; }
 
-
     }
 }

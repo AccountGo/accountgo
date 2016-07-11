@@ -1,4 +1,4 @@
-﻿namespace Model.Purchase
+﻿namespace Model.Purchasing
 {
     public class PurchaseOrder
     {

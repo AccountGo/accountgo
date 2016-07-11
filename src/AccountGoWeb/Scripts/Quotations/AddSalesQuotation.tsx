@@ -51,7 +51,7 @@ class SalesQuotationHeader extends React.Component<any, {}>{
                 </div>
                 <div>
                     <label>Payment Term: </label>
-                    <SelectPaymentTerm />
+                    <SelectPaymentTerm store={store} />{ store.commonStore.paymentTerms.length }
                 </div>
                 <div>
                     <label>Reference No: </label>

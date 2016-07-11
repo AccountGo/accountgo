@@ -25,7 +25,7 @@ webpackJsonp([5],{
 	var SelectPaymentTerm_1 = __webpack_require__(/*! ../Shared/Components/SelectPaymentTerm */ 171);
 	var SelectLineItem_1 = __webpack_require__(/*! ../Shared/Components/SelectLineItem */ 172);
 	var SelectLineMeasurement_1 = __webpack_require__(/*! ../Shared/Components/SelectLineMeasurement */ 173);
-	var SalesOrderStore_1 = __webpack_require__(/*! ../Shared/Stores/Sales/SalesOrderStore */ 187);
+	var SalesOrderStore_1 = __webpack_require__(/*! ../Shared/Stores/Sales/SalesOrderStore */ 208);
 	var store = new SalesOrderStore_1.default();
 	var SaveOrderButton = (function (_super) {
 	    __extends(SaveOrderButton, _super);
@@ -2845,20 +2845,32 @@ webpackJsonp([5],{
 	    function __() { this.constructor = d; }
 	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 	};
+	var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+	    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+	    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+	    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+	    return c > 3 && r && Object.defineProperty(target, key, r), r;
+	};
 	var React = __webpack_require__(/*! react */ 1);
+	var mobx_react_1 = __webpack_require__(/*! mobx-react */ 168);
 	var SelectPaymentTerm = (function (_super) {
 	    __extends(SelectPaymentTerm, _super);
 	    function SelectPaymentTerm() {
 	        _super.apply(this, arguments);
 	    }
+	    SelectPaymentTerm.prototype.onChangePaymentTerm = function (e) {
+	        this.props.store.changedPaymentTerm(e.target.value);
+	    };
 	    SelectPaymentTerm.prototype.render = function () {
 	        var options = [];
-	        var options = [];
-	        options.push(React.createElement("option", {key: "1", value: "1"}, " Payment Term #1 "));
-	        options.push(React.createElement("option", {key: "2", value: "2"}, " Payment Term #2 "));
-	        options.push(React.createElement("option", {key: "3", value: "3"}, " Payment Term #3 "));
-	        return (React.createElement("select", null, options));
+	        this.props.store.commonStore.paymentTerms.map(function (term) {
+	            return (options.push(React.createElement("option", {key: term.id, value: term.id}, " ", term.description, " ")));
+	        });
+	        return (React.createElement("select", {id: "optPaymentTerm", onChange: this.onChangePaymentTerm.bind(this)}, options));
 	    };
+	    SelectPaymentTerm = __decorate([
+	        mobx_react_1.observer
+	    ], SelectPaymentTerm);
 	    return SelectPaymentTerm;
 	}(React.Component));
 	Object.defineProperty(exports, "__esModule", { value: true });
@@ -2879,7 +2891,14 @@ webpackJsonp([5],{
 	    function __() { this.constructor = d; }
 	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 	};
+	var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+	    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+	    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+	    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+	    return c > 3 && r && Object.defineProperty(target, key, r), r;
+	};
 	var React = __webpack_require__(/*! react */ 1);
+	var mobx_react_1 = __webpack_require__(/*! mobx-react */ 168);
 	var SelectLineItem = (function (_super) {
 	    __extends(SelectLineItem, _super);
 	    function SelectLineItem() {
@@ -2890,11 +2909,14 @@ webpackJsonp([5],{
 	    };
 	    SelectLineItem.prototype.render = function () {
 	        var options = [];
-	        options.push(React.createElement("option", {key: "1", value: "1"}, " Item #1 "));
-	        options.push(React.createElement("option", {key: "2", value: "2"}, " Item #2 "));
-	        options.push(React.createElement("option", {key: "3", value: "3"}, " Item #3 "));
+	        this.props.store.commonStore.items.map(function (item) {
+	            return (options.push(React.createElement("option", {key: item.id, value: item.id}, " ", item.description, " ")));
+	        });
 	        return (React.createElement("select", {defaultValue: this.props.selected, id: this.props.controlId, onChange: this.onChangeItem.bind(this)}, options));
 	    };
+	    SelectLineItem = __decorate([
+	        mobx_react_1.observer
+	    ], SelectLineItem);
 	    return SelectLineItem;
 	}(React.Component));
 	Object.defineProperty(exports, "__esModule", { value: true });
@@ -2915,7 +2937,14 @@ webpackJsonp([5],{
 	    function __() { this.constructor = d; }
 	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 	};
+	var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+	    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+	    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+	    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+	    return c > 3 && r && Object.defineProperty(target, key, r), r;
+	};
 	var React = __webpack_require__(/*! react */ 1);
+	var mobx_react_1 = __webpack_require__(/*! mobx-react */ 168);
 	var SelectLineMeasurement = (function (_super) {
 	    __extends(SelectLineMeasurement, _super);
 	    function SelectLineMeasurement() {
@@ -2926,11 +2955,14 @@ webpackJsonp([5],{
 	    };
 	    SelectLineMeasurement.prototype.render = function () {
 	        var options = [];
-	        options.push(React.createElement("option", {key: "1", value: "1"}, " Measurement #1 "));
-	        options.push(React.createElement("option", {key: "2", value: "2"}, " Measurement #2 "));
-	        options.push(React.createElement("option", {key: "3", value: "3"}, " Measurement #3 "));
+	        this.props.store.commonStore.measurements.map(function (measurement) {
+	            return (options.push(React.createElement("option", {key: measurement.id, value: measurement.id}, " ", measurement.description, " ")));
+	        });
 	        return (React.createElement("select", {defaultValue: this.props.selected, id: this.props.controlId, onChange: this.onChangeMeasurement.bind(this)}, options));
 	    };
+	    SelectLineMeasurement = __decorate([
+	        mobx_react_1.observer
+	    ], SelectLineMeasurement);
 	    return SelectLineMeasurement;
 	}(React.Component));
 	Object.defineProperty(exports, "__esModule", { value: true });
@@ -2951,7 +2983,14 @@ webpackJsonp([5],{
 	    function __() { this.constructor = d; }
 	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 	};
+	var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+	    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+	    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+	    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+	    return c > 3 && r && Object.defineProperty(target, key, r), r;
+	};
 	var React = __webpack_require__(/*! react */ 1);
+	var mobx_react_1 = __webpack_require__(/*! mobx-react */ 168);
 	var SelectCustomer = (function (_super) {
 	    __extends(SelectCustomer, _super);
 	    function SelectCustomer() {
@@ -2962,11 +3001,14 @@ webpackJsonp([5],{
 	    };
 	    SelectCustomer.prototype.render = function () {
 	        var options = [];
-	        options.push(React.createElement("option", {key: "1", value: "1"}, " Customer #1 "));
-	        options.push(React.createElement("option", {key: "2", value: "2"}, " Customer #2 "));
-	        options.push(React.createElement("option", {key: "3", value: "3"}, " Customer #3 "));
+	        this.props.store.commonStore.customers.map(function (customer) {
+	            return (options.push(React.createElement("option", {key: customer.id, value: customer.id}, " ", customer.name, " ")));
+	        });
 	        return (React.createElement("select", {id: "optCustomer", onChange: this.onChangeCustomer.bind(this)}, options));
 	    };
+	    SelectCustomer = __decorate([
+	        mobx_react_1.observer
+	    ], SelectCustomer);
 	    return SelectCustomer;
 	}(React.Component));
 	Object.defineProperty(exports, "__esModule", { value: true });
@@ -2975,7 +3017,7 @@ webpackJsonp([5],{
 
 /***/ },
 
-/***/ 187:
+/***/ 208:
 /*!**********************************************************************!*\
   !*** ./wwwroot/libs/tsxbuild/Shared/Stores/Sales/SalesOrderStore.js ***!
   \**********************************************************************/
@@ -2983,8 +3025,8 @@ webpackJsonp([5],{
 
 	"use strict";
 	var mobx_1 = __webpack_require__(/*! mobx */ 169);
-	var SalesOrder_1 = __webpack_require__(/*! ./SalesOrder */ 188);
-	var SalesOrderLine_1 = __webpack_require__(/*! ./SalesOrderLine */ 189);
+	var SalesOrder_1 = __webpack_require__(/*! ./SalesOrder */ 209);
+	var SalesOrderLine_1 = __webpack_require__(/*! ./SalesOrderLine */ 210);
 	var SalesOrderStore = (function () {
 	    function SalesOrderStore() {
 	        this.salesOrder = new SalesOrder_1.default();
@@ -3034,7 +3076,7 @@ webpackJsonp([5],{
 
 /***/ },
 
-/***/ 188:
+/***/ 209:
 /*!*****************************************************************!*\
   !*** ./wwwroot/libs/tsxbuild/Shared/Stores/Sales/SalesOrder.js ***!
   \*****************************************************************/
@@ -3053,7 +3095,7 @@ webpackJsonp([5],{
 
 /***/ },
 
-/***/ 189:
+/***/ 210:
 /*!*********************************************************************!*\
   !*** ./wwwroot/libs/tsxbuild/Shared/Stores/Sales/SalesOrderLine.js ***!
   \*********************************************************************/

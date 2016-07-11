@@ -57,9 +57,10 @@
     <Compile Include="Inventory\ItemCategory.cs" />
     <Compile Include="Inventory\Measurement.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="Purchase\PurchaseInvoice.cs" />
-    <Compile Include="Purchase\PurchaseOrder.cs" />
-    <Compile Include="Purchase\PurchaseReceipt.cs" />
+    <Compile Include="Purchasing\PurchaseInvoice.cs" />
+    <Compile Include="Purchasing\PurchaseOrder.cs" />
+    <Compile Include="Purchasing\PurchaseReceipt.cs" />
+    <Compile Include="Purchasing\Vendor.cs" />
     <Compile Include="Sales\CreateCustomer.cs" />
     <Compile Include="Sales\Customer.cs" />
     <Compile Include="Sales\SalesDelivery.cs" />
