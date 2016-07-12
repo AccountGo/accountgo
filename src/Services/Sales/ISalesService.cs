@@ -41,5 +41,6 @@ namespace Services.Sales
         int SaveContact(Contact contact);
         ICollection<SalesInvoiceHeader> GetSalesInvoicesByCustomerId(int customerId, SalesInvoiceStatus status);
         ICollection<CustomerAllocation> GetCustomerAllocations(int customerId);
+        void AddSalesQuote(SalesQuoteHeader salesQuoteHeader);
     }
 }

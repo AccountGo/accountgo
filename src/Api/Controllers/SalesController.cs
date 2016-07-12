@@ -254,5 +254,39 @@ namespace Api.Controllers
                 return new ObjectResult(ex);
             }
         }
+
+        [HttpPost]
+        [Route("[action]")]
+        public IActionResult AddQuotation([FromBody]Model.Sales.SalesQuotation model)
+        {
+            try
+            {
+                var salesQuote = new Core.Domain.Sales.SalesQuoteHeader()
+                {
+                    CustomerId = model.CustomerId,
+                    Date = model.QuotationDate,
+                };
+
+                foreach (var line in model.SalesQuotationLines)
+                {
+                    var salesQuoteLine = new Core.Domain.Sales.SalesQuoteLine();
+                    salesQuoteLine.Amount = line.Amount == null ? 0 : line.Amount.Value;
+                    salesQuoteLine.Discount = line.Discount == null ? 0 : line.Discount.Value;
+                    salesQuoteLine.Quantity = line.Quantity == null ? 0 : line.Quantity.Value;
+                    salesQuoteLine.ItemId = line.ItemId;
+                    salesQuoteLine.MeasurementId = line.MeasurementId;
+
+                    salesQuote.SalesQuoteLines.Add(salesQuoteLine);
+                }
+
+                _salesService.AddSalesQuote(salesQuote);
+
+                return new ObjectResult(model);
+            }
+            catch (Exception ex)
+            {
+                return new ObjectResult(ex);
+            }
+        }
     }
 }

@@ -39,9 +39,9 @@ var config = {
     ],
     externals: {
         'Config': JSON.stringify(process.env.ENV === 'production' ? {
-            apiUrl: ""
+            apiUrl: "http://accountgo-dev-api.azurewebsites.net/"
         } : {
-            apiUrl: "http://localhost:5000"
+            apiUrl: "http://localhost:5000/"
         })
     }
 };

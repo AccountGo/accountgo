@@ -1,7 +1,6 @@
 ﻿using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -31,19 +30,22 @@ namespace Api
         public void ConfigureServices(IServiceCollection services)
         {
             string connectionString = "";
-            connectionString = Configuration["Data:DefaultConnection:ConnectionString"];
+            connectionString = Configuration["Data:LocalConnection:ConnectionString"];
             //if (_hostingEnv.IsDevelopment())
             //    connectionString = Configuration["Data:LocalConnection:ConnectionString"];
             //else
             //    connectionString = Configuration["Data:DefaultConnection:ConnectionString"];
 
             services
-                //.AddSqlServer()
                 .AddEntityFrameworkSqlServer()
                 .AddDbContext<Data.ApiDbContext>(options => options.UseSqlServer(connectionString));
 
             // Add framework services.
-            services.AddMvc();
+            services.AddMvc()
+                .AddJsonOptions(opts =>
+                {
+                    opts.SerializerSettings.ContractResolver = new Newtonsoft.Json.Serialization.CamelCasePropertyNamesContractResolver();
+                });
 
             //services.AddSwaggerGen();
 

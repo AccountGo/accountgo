@@ -2,10 +2,17 @@
 import * as axios from "axios";
 import * as d3 from "d3";
 
+import Config = require("Config");
+
 import SalesQuotation from './SalesQuotation';
 import SalesQuotationLine from './SalesQuotationLine';
 
 import CommonStore from "../Common/CommonStore";
+
+let baseUrl = location.protocol
+    + "//" + location.hostname
+    + (location.port && ":" + location.port)
+    + "/";
 
 export default class SalesQuotationStore {
     salesQuotation;
@@ -23,7 +30,23 @@ export default class SalesQuotationStore {
 
         this.commonStore = new CommonStore();
     }
-    
+
+    saveNewQuotation() {
+        console.log(JSON.stringify(this.salesQuotation));
+        axios.post(Config.apiUrl + "api/sales/addquotation", JSON.stringify(this.salesQuotation),
+            {
+                headers: {
+                    'Content-type': 'application/json'
+                }
+            })
+            .then(function (response) {
+                console.log(response);
+            })
+            .catch(function (error) {
+                console.log(error);
+            })
+    }
+
     changedCustomer(custId) {
         this.salesQuotation.customerId = custId;
     }

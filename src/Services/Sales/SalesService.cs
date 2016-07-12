@@ -39,6 +39,7 @@ namespace Services.Sales
         private readonly IRepository<GeneralLedgerSetting> _genetalLedgerSetting;
         private readonly IRepository<Contact> _contactRepo;
         private readonly IRepository<TaxGroup> _taxGroupRepo;
+        private readonly IRepository<SalesQuoteHeader> _salesQuoteRepo;
 
         public SalesService(IFinancialService financialService,
             IInventoryService inventoryService,
@@ -55,7 +56,8 @@ namespace Services.Sales
             IRepository<Bank> bankRepo,
             IRepository<GeneralLedgerSetting> generalLedgerSetting,
             IRepository<Contact> contactRepo,
-            IRepository<TaxGroup> taxGroupRepo)
+            IRepository<TaxGroup> taxGroupRepo,
+            IRepository<SalesQuoteHeader> salesQuoteRepo)
             : base(sequenceNumberRepo, generalLedgerSetting, paymentTermRepo, bankRepo)
         {
             _financialService = financialService;
@@ -74,6 +76,7 @@ namespace Services.Sales
             _genetalLedgerSetting = generalLedgerSetting;
             _contactRepo = contactRepo;
             _taxGroupRepo = taxGroupRepo;
+            _salesQuoteRepo = salesQuoteRepo;
         }
 
         public void AddSalesOrder(SalesOrderHeader salesOrder, bool toSave)
@@ -541,6 +544,11 @@ namespace Services.Sales
         public ICollection<CustomerAllocation> GetCustomerAllocations(int customerId)
         {
             return null;
+        }
+
+        public void AddSalesQuote(SalesQuoteHeader salesQuoteHeader)
+        {
+            _salesQuoteRepo.Insert(salesQuoteHeader);
         }
     }
 }

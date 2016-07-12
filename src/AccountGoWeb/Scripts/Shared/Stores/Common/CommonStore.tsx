@@ -21,7 +21,7 @@ export default class CommonStore {
 
     loadCustomersLookup() {
         let customers = this.customers;
-        axios.get(Config.apiUrl + "/api/common/customers")
+        axios.get(Config.apiUrl + "api/common/customers")
             .then(function (result) {
                 const data = result.data as [];
                 for (var i = 0; i < data.length; i++) {
@@ -32,7 +32,7 @@ export default class CommonStore {
 
     loadPaymentTermsLookup() {
         let paymentTerms = this.paymentTerms;
-        axios.get(Config.apiUrl + "/api/common/paymentterms")
+        axios.get(Config.apiUrl + "api/common/paymentterms")
             .then(function (result) {
                 const data = result.data as [];
                 for (var i = 0; i < data.length; i++) {
@@ -43,7 +43,7 @@ export default class CommonStore {
 
     loadVendorsLookup() {
         let vendors = this.vendors;
-        axios.get(Config.apiUrl + "/api/common/vendors")
+        axios.get(Config.apiUrl + "api/common/vendors")
             .then(function (result) {
                 const data = result.data as [];
                 for (var i = 0; i < data.length; i++) {
@@ -54,7 +54,7 @@ export default class CommonStore {
 
     loadItemsLookup() {
         let items = this.items;
-        axios.get(Config.apiUrl + "/api/common/items")
+        axios.get(Config.apiUrl + "api/common/items")
             .then(function (result) {
                 const data = result.data as [];
                 for (var i = 0; i < data.length; i++) {
@@ -65,7 +65,7 @@ export default class CommonStore {
 
     loadMeasurementsLookup() {
         let measurements = this.measurements;
-        axios.get(Config.apiUrl + "/api/common/measurements")
+        axios.get(Config.apiUrl + "api/common/measurements")
             .then(function (result) {
                 const data = result.data as [];
                 for (var i = 0; i < data.length; i++) {

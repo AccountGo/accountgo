@@ -15,7 +15,7 @@ let store = new SalesQuotationStore();
 
 class SaveQuotationButton extends React.Component<any, {}>{
     saveNewSalesQuotation(e) {
-
+        store.saveNewQuotation();
     }
 
     render() {
@@ -72,7 +72,7 @@ class SalesQuotationLines extends React.Component<any, {}>{
         amount = (document.getElementById("txtNewAmount") as HTMLInputElement).value;
         discount = (document.getElementById("txtNewDiscount") as HTMLInputElement).value;
 
-        console.log(`itemId: ${itemId} | measurementId: ${measurementId} | quantity: ${quantity} | amount: ${amount} | discount: ${discount}`);
+        //console.log(`itemId: ${itemId} | measurementId: ${measurementId} | quantity: ${quantity} | amount: ${amount} | discount: ${discount}`);
         store.addLineItem(itemId, measurementId, quantity, amount, discount);
 
         (document.getElementById("txtNewQuantity") as HTMLInputElement).value = "1";

@@ -12,13 +12,12 @@ namespace Api.Data
 {
     public class ApiDbContext : DbContext
     {
-        public ApiDbContext()
+        public ApiDbContext(DbContextOptions options)
+            :base(options)
         {
-
         }
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
-            optionsBuilder.UseSqlServer(@"Server=tcp:accountgo.database.windows.net,1433;Database=accountgo;User ID=accountgo;Password=TBJX3BpxCsW782GLETPnFmeSRNoSN3sggjjppNgSPg4BUyaNq4i8K5TGwZfnnDRJ;Trusted_Connection=False;Encrypt=True;Connection Timeout=30;MultipleActiveResultSets=True;");
         }
 
         protected override void OnModelCreating(ModelBuilder builder)

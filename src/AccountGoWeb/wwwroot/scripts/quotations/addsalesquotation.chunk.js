@@ -33,6 +33,7 @@ webpackJsonp([3],{
 	        _super.apply(this, arguments);
 	    }
 	    SaveQuotationButton.prototype.saveNewSalesQuotation = function (e) {
+	        store.saveNewQuotation();
 	    };
 	    SaveQuotationButton.prototype.render = function () {
 	        return (React.createElement("input", {type: "button", value: "Save", onClick: this.saveNewSalesQuotation.bind(this)}));
@@ -77,7 +78,6 @@ webpackJsonp([3],{
 	        quantity = document.getElementById("txtNewQuantity").value;
 	        amount = document.getElementById("txtNewAmount").value;
 	        discount = document.getElementById("txtNewDiscount").value;
-	        console.log("itemId: " + itemId + " | measurementId: " + measurementId + " | quantity: " + quantity + " | amount: " + amount + " | discount: " + discount);
 	        store.addLineItem(itemId, measurementId, quantity, amount, discount);
 	        document.getElementById("txtNewQuantity").value = "1";
 	        document.getElementById("txtNewAmount").value = "0";
@@ -3025,9 +3025,15 @@ webpackJsonp([3],{
 
 	"use strict";
 	var mobx_1 = __webpack_require__(/*! mobx */ 169);
-	var SalesQuotation_1 = __webpack_require__(/*! ./SalesQuotation */ 182);
-	var SalesQuotationLine_1 = __webpack_require__(/*! ./SalesQuotationLine */ 183);
-	var CommonStore_1 = __webpack_require__(/*! ../Common/CommonStore */ 184);
+	var axios = __webpack_require__(/*! axios */ 182);
+	var Config = __webpack_require__(/*! Config */ 201);
+	var SalesQuotation_1 = __webpack_require__(/*! ./SalesQuotation */ 202);
+	var SalesQuotationLine_1 = __webpack_require__(/*! ./SalesQuotationLine */ 203);
+	var CommonStore_1 = __webpack_require__(/*! ../Common/CommonStore */ 204);
+	var baseUrl = location.protocol
+	    + "//" + location.hostname
+	    + (location.port && ":" + location.port)
+	    + "/";
 	var SalesQuotationStore = (function () {
 	    function SalesQuotationStore() {
 	        this.salesQuotation = new SalesQuotation_1.default();
@@ -3040,6 +3046,20 @@ webpackJsonp([3],{
 	        });
 	        this.commonStore = new CommonStore_1.default();
 	    }
+	    SalesQuotationStore.prototype.saveNewQuotation = function () {
+	        console.log(JSON.stringify(this.salesQuotation));
+	        axios.post(Config.apiUrl + "api/sales/addquotation", JSON.stringify(this.salesQuotation), {
+	            headers: {
+	                'Content-type': 'application/json'
+	            }
+	        })
+	            .then(function (response) {
+	            console.log(response);
+	        })
+	            .catch(function (error) {
+	            console.log(error);
+	        });
+	    };
 	    SalesQuotationStore.prototype.changedCustomer = function (custId) {
 	        this.salesQuotation.customerId = custId;
 	    };
@@ -3082,160 +3102,16 @@ webpackJsonp([3],{
 /***/ },
 
 /***/ 182:
-/*!**************************************************************************!*\
-  !*** ./wwwroot/libs/tsxbuild/Shared/Stores/Quotations/SalesQuotation.js ***!
-  \**************************************************************************/
-/***/ function(module, exports) {
-
-	"use strict";
-	var SalesQuotation = (function () {
-	    function SalesQuotation() {
-	        this.salesQuotationLines = [];
-	    }
-	    return SalesQuotation;
-	}());
-	Object.defineProperty(exports, "__esModule", { value: true });
-	exports.default = SalesQuotation;
-	//# sourceMappingURL=SalesQuotation.js.map
-
-/***/ },
-
-/***/ 183:
-/*!******************************************************************************!*\
-  !*** ./wwwroot/libs/tsxbuild/Shared/Stores/Quotations/SalesQuotationLine.js ***!
-  \******************************************************************************/
-/***/ function(module, exports) {
-
-	"use strict";
-	var SalesQuotationLine = (function () {
-	    function SalesQuotationLine(itemId, measurementId, quantity, amount, discount) {
-	        this.itemId = itemId;
-	        this.measurementId = measurementId;
-	        this.quantity = quantity;
-	        this.amount = amount;
-	        this.discount = discount;
-	    }
-	    return SalesQuotationLine;
-	}());
-	Object.defineProperty(exports, "__esModule", { value: true });
-	exports.default = SalesQuotationLine;
-	//# sourceMappingURL=SalesQuotationLine.js.map
-
-/***/ },
-
-/***/ 184:
-/*!*******************************************************************!*\
-  !*** ./wwwroot/libs/tsxbuild/Shared/Stores/Common/CommonStore.js ***!
-  \*******************************************************************/
-/***/ function(module, exports, __webpack_require__) {
-
-	"use strict";
-	var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
-	    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
-	    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
-	    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
-	    return c > 3 && r && Object.defineProperty(target, key, r), r;
-	};
-	var mobx_1 = __webpack_require__(/*! mobx */ 169);
-	var axios = __webpack_require__(/*! axios */ 185);
-	var Config = __webpack_require__(/*! Config */ 204);
-	var CommonStore = (function () {
-	    function CommonStore() {
-	        this.customers = [];
-	        this.paymentTerms = [];
-	        this.items = [];
-	        this.measurements = [];
-	        this.vendors = [];
-	        this.loadCustomersLookup();
-	        this.loadPaymentTermsLookup();
-	        this.loadItemsLookup();
-	        this.loadMeasurementsLookup();
-	        this.loadVendorsLookup();
-	    }
-	    CommonStore.prototype.loadCustomersLookup = function () {
-	        var customers = this.customers;
-	        axios.get(Config.apiUrl + "/api/common/customers")
-	            .then(function (result) {
-	            var data = result.data;
-	            for (var i = 0; i < data.length; i++) {
-	                customers.push(data[i]);
-	            }
-	        });
-	    };
-	    CommonStore.prototype.loadPaymentTermsLookup = function () {
-	        var paymentTerms = this.paymentTerms;
-	        axios.get(Config.apiUrl + "/api/common/paymentterms")
-	            .then(function (result) {
-	            var data = result.data;
-	            for (var i = 0; i < data.length; i++) {
-	                paymentTerms.push(data[i]);
-	            }
-	        });
-	    };
-	    CommonStore.prototype.loadVendorsLookup = function () {
-	        var vendors = this.vendors;
-	        axios.get(Config.apiUrl + "/api/common/vendors")
-	            .then(function (result) {
-	            var data = result.data;
-	            for (var i = 0; i < data.length; i++) {
-	                vendors.push(data[i]);
-	            }
-	        });
-	    };
-	    CommonStore.prototype.loadItemsLookup = function () {
-	        var items = this.items;
-	        axios.get(Config.apiUrl + "/api/common/items")
-	            .then(function (result) {
-	            var data = result.data;
-	            for (var i = 0; i < data.length; i++) {
-	                items.push(data[i]);
-	            }
-	        });
-	    };
-	    CommonStore.prototype.loadMeasurementsLookup = function () {
-	        var measurements = this.measurements;
-	        axios.get(Config.apiUrl + "/api/common/measurements")
-	            .then(function (result) {
-	            var data = result.data;
-	            for (var i = 0; i < data.length; i++) {
-	                measurements.push(data[i]);
-	            }
-	        });
-	    };
-	    __decorate([
-	        mobx_1.observable
-	    ], CommonStore.prototype, "customers", void 0);
-	    __decorate([
-	        mobx_1.observable
-	    ], CommonStore.prototype, "paymentTerms", void 0);
-	    __decorate([
-	        mobx_1.observable
-	    ], CommonStore.prototype, "items", void 0);
-	    __decorate([
-	        mobx_1.observable
-	    ], CommonStore.prototype, "measurements", void 0);
-	    __decorate([
-	        mobx_1.observable
-	    ], CommonStore.prototype, "vendors", void 0);
-	    return CommonStore;
-	}());
-	Object.defineProperty(exports, "__esModule", { value: true });
-	exports.default = CommonStore;
-	//# sourceMappingURL=CommonStore.js.map
-
-/***/ },
-
-/***/ 185:
 /*!**************************!*\
   !*** ./~/axios/index.js ***!
   \**************************/
 /***/ function(module, exports, __webpack_require__) {
 
-	module.exports = __webpack_require__(/*! ./lib/axios */ 186);
+	module.exports = __webpack_require__(/*! ./lib/axios */ 183);
 
 /***/ },
 
-/***/ 186:
+/***/ 183:
 /*!******************************!*\
   !*** ./~/axios/lib/axios.js ***!
   \******************************/
@@ -3243,14 +3119,14 @@ webpackJsonp([3],{
 
 	'use strict';
 	
-	var defaults = __webpack_require__(/*! ./defaults */ 187);
-	var utils = __webpack_require__(/*! ./utils */ 188);
-	var dispatchRequest = __webpack_require__(/*! ./core/dispatchRequest */ 190);
-	var InterceptorManager = __webpack_require__(/*! ./core/InterceptorManager */ 199);
-	var isAbsoluteURL = __webpack_require__(/*! ./helpers/isAbsoluteURL */ 200);
-	var combineURLs = __webpack_require__(/*! ./helpers/combineURLs */ 201);
-	var bind = __webpack_require__(/*! ./helpers/bind */ 202);
-	var transformData = __webpack_require__(/*! ./helpers/transformData */ 194);
+	var defaults = __webpack_require__(/*! ./defaults */ 184);
+	var utils = __webpack_require__(/*! ./utils */ 185);
+	var dispatchRequest = __webpack_require__(/*! ./core/dispatchRequest */ 187);
+	var InterceptorManager = __webpack_require__(/*! ./core/InterceptorManager */ 196);
+	var isAbsoluteURL = __webpack_require__(/*! ./helpers/isAbsoluteURL */ 197);
+	var combineURLs = __webpack_require__(/*! ./helpers/combineURLs */ 198);
+	var bind = __webpack_require__(/*! ./helpers/bind */ 199);
+	var transformData = __webpack_require__(/*! ./helpers/transformData */ 191);
 	
 	function Axios(defaultConfig) {
 	  this.defaults = utils.merge({}, defaultConfig);
@@ -3339,7 +3215,7 @@ webpackJsonp([3],{
 	axios.all = function all(promises) {
 	  return Promise.all(promises);
 	};
-	axios.spread = __webpack_require__(/*! ./helpers/spread */ 203);
+	axios.spread = __webpack_require__(/*! ./helpers/spread */ 200);
 	
 	// Provide aliases for supported request methods
 	utils.forEach(['delete', 'get', 'head'], function forEachMethodNoData(method) {
@@ -3368,7 +3244,7 @@ webpackJsonp([3],{
 
 /***/ },
 
-/***/ 187:
+/***/ 184:
 /*!*********************************!*\
   !*** ./~/axios/lib/defaults.js ***!
   \*********************************/
@@ -3376,8 +3252,8 @@ webpackJsonp([3],{
 
 	'use strict';
 	
-	var utils = __webpack_require__(/*! ./utils */ 188);
-	var normalizeHeaderName = __webpack_require__(/*! ./helpers/normalizeHeaderName */ 189);
+	var utils = __webpack_require__(/*! ./utils */ 185);
+	var normalizeHeaderName = __webpack_require__(/*! ./helpers/normalizeHeaderName */ 186);
 	
 	var PROTECTION_PREFIX = /^\)\]\}',?\n/;
 	var DEFAULT_CONTENT_TYPE = {
@@ -3450,7 +3326,7 @@ webpackJsonp([3],{
 
 /***/ },
 
-/***/ 188:
+/***/ 185:
 /*!******************************!*\
   !*** ./~/axios/lib/utils.js ***!
   \******************************/
@@ -3737,7 +3613,7 @@ webpackJsonp([3],{
 
 /***/ },
 
-/***/ 189:
+/***/ 186:
 /*!****************************************************!*\
   !*** ./~/axios/lib/helpers/normalizeHeaderName.js ***!
   \****************************************************/
@@ -3745,7 +3621,7 @@ webpackJsonp([3],{
 
 	'use strict';
 	
-	var utils = __webpack_require__(/*! ../utils */ 188);
+	var utils = __webpack_require__(/*! ../utils */ 185);
 	
 	module.exports = function normalizeHeaderName(headers, normalizedName) {
 	  utils.forEach(headers, function processHeader(value, name) {
@@ -3759,7 +3635,7 @@ webpackJsonp([3],{
 
 /***/ },
 
-/***/ 190:
+/***/ 187:
 /*!*********************************************!*\
   !*** ./~/axios/lib/core/dispatchRequest.js ***!
   \*********************************************/
@@ -3784,10 +3660,10 @@ webpackJsonp([3],{
 	        adapter = config.adapter;
 	      } else if (typeof XMLHttpRequest !== 'undefined') {
 	        // For browsers use XHR adapter
-	        adapter = __webpack_require__(/*! ../adapters/xhr */ 191);
+	        adapter = __webpack_require__(/*! ../adapters/xhr */ 188);
 	      } else if (typeof process !== 'undefined') {
 	        // For node use HTTP adapter
-	        adapter = __webpack_require__(/*! ../adapters/http */ 191);
+	        adapter = __webpack_require__(/*! ../adapters/http */ 188);
 	      }
 	
 	      if (typeof adapter === 'function') {
@@ -3804,7 +3680,7 @@ webpackJsonp([3],{
 
 /***/ },
 
-/***/ 191:
+/***/ 188:
 /*!*************************************!*\
   !*** ./~/axios/lib/adapters/xhr.js ***!
   \*************************************/
@@ -3812,13 +3688,13 @@ webpackJsonp([3],{
 
 	/* WEBPACK VAR INJECTION */(function(process) {'use strict';
 	
-	var utils = __webpack_require__(/*! ./../utils */ 188);
-	var buildURL = __webpack_require__(/*! ./../helpers/buildURL */ 192);
-	var parseHeaders = __webpack_require__(/*! ./../helpers/parseHeaders */ 193);
-	var transformData = __webpack_require__(/*! ./../helpers/transformData */ 194);
-	var isURLSameOrigin = __webpack_require__(/*! ./../helpers/isURLSameOrigin */ 195);
-	var btoa = (typeof window !== 'undefined' && window.btoa) || __webpack_require__(/*! ./../helpers/btoa */ 196);
-	var settle = __webpack_require__(/*! ../helpers/settle */ 197);
+	var utils = __webpack_require__(/*! ./../utils */ 185);
+	var buildURL = __webpack_require__(/*! ./../helpers/buildURL */ 189);
+	var parseHeaders = __webpack_require__(/*! ./../helpers/parseHeaders */ 190);
+	var transformData = __webpack_require__(/*! ./../helpers/transformData */ 191);
+	var isURLSameOrigin = __webpack_require__(/*! ./../helpers/isURLSameOrigin */ 192);
+	var btoa = (typeof window !== 'undefined' && window.btoa) || __webpack_require__(/*! ./../helpers/btoa */ 193);
+	var settle = __webpack_require__(/*! ../helpers/settle */ 194);
 	
 	module.exports = function xhrAdapter(resolve, reject, config) {
 	  var requestData = config.data;
@@ -3915,7 +3791,7 @@ webpackJsonp([3],{
 	  // This is only done if running in a standard browser environment.
 	  // Specifically not if we're in a web worker, or react-native.
 	  if (utils.isStandardBrowserEnv()) {
-	    var cookies = __webpack_require__(/*! ./../helpers/cookies */ 198);
+	    var cookies = __webpack_require__(/*! ./../helpers/cookies */ 195);
 	
 	    // Add xsrf header
 	    var xsrfValue = config.withCredentials || isURLSameOrigin(config.url) ?
@@ -3977,7 +3853,7 @@ webpackJsonp([3],{
 
 /***/ },
 
-/***/ 192:
+/***/ 189:
 /*!*****************************************!*\
   !*** ./~/axios/lib/helpers/buildURL.js ***!
   \*****************************************/
@@ -3985,7 +3861,7 @@ webpackJsonp([3],{
 
 	'use strict';
 	
-	var utils = __webpack_require__(/*! ./../utils */ 188);
+	var utils = __webpack_require__(/*! ./../utils */ 185);
 	
 	function encode(val) {
 	  return encodeURIComponent(val).
@@ -4055,7 +3931,7 @@ webpackJsonp([3],{
 
 /***/ },
 
-/***/ 193:
+/***/ 190:
 /*!*********************************************!*\
   !*** ./~/axios/lib/helpers/parseHeaders.js ***!
   \*********************************************/
@@ -4063,7 +3939,7 @@ webpackJsonp([3],{
 
 	'use strict';
 	
-	var utils = __webpack_require__(/*! ./../utils */ 188);
+	var utils = __webpack_require__(/*! ./../utils */ 185);
 	
 	/**
 	 * Parse headers into an object
@@ -4102,7 +3978,7 @@ webpackJsonp([3],{
 
 /***/ },
 
-/***/ 194:
+/***/ 191:
 /*!**********************************************!*\
   !*** ./~/axios/lib/helpers/transformData.js ***!
   \**********************************************/
@@ -4110,7 +3986,7 @@ webpackJsonp([3],{
 
 	'use strict';
 	
-	var utils = __webpack_require__(/*! ./../utils */ 188);
+	var utils = __webpack_require__(/*! ./../utils */ 185);
 	
 	/**
 	 * Transform the data for a request or a response
@@ -4132,7 +4008,7 @@ webpackJsonp([3],{
 
 /***/ },
 
-/***/ 195:
+/***/ 192:
 /*!************************************************!*\
   !*** ./~/axios/lib/helpers/isURLSameOrigin.js ***!
   \************************************************/
@@ -4140,7 +4016,7 @@ webpackJsonp([3],{
 
 	'use strict';
 	
-	var utils = __webpack_require__(/*! ./../utils */ 188);
+	var utils = __webpack_require__(/*! ./../utils */ 185);
 	
 	module.exports = (
 	  utils.isStandardBrowserEnv() ?
@@ -4210,7 +4086,7 @@ webpackJsonp([3],{
 
 /***/ },
 
-/***/ 196:
+/***/ 193:
 /*!*************************************!*\
   !*** ./~/axios/lib/helpers/btoa.js ***!
   \*************************************/
@@ -4256,7 +4132,7 @@ webpackJsonp([3],{
 
 /***/ },
 
-/***/ 197:
+/***/ 194:
 /*!***************************************!*\
   !*** ./~/axios/lib/helpers/settle.js ***!
   \***************************************/
@@ -4284,7 +4160,7 @@ webpackJsonp([3],{
 
 /***/ },
 
-/***/ 198:
+/***/ 195:
 /*!****************************************!*\
   !*** ./~/axios/lib/helpers/cookies.js ***!
   \****************************************/
@@ -4292,7 +4168,7 @@ webpackJsonp([3],{
 
 	'use strict';
 	
-	var utils = __webpack_require__(/*! ./../utils */ 188);
+	var utils = __webpack_require__(/*! ./../utils */ 185);
 	
 	module.exports = (
 	  utils.isStandardBrowserEnv() ?
@@ -4347,7 +4223,7 @@ webpackJsonp([3],{
 
 /***/ },
 
-/***/ 199:
+/***/ 196:
 /*!************************************************!*\
   !*** ./~/axios/lib/core/InterceptorManager.js ***!
   \************************************************/
@@ -4355,7 +4231,7 @@ webpackJsonp([3],{
 
 	'use strict';
 	
-	var utils = __webpack_require__(/*! ./../utils */ 188);
+	var utils = __webpack_require__(/*! ./../utils */ 185);
 	
 	function InterceptorManager() {
 	  this.handlers = [];
@@ -4409,7 +4285,7 @@ webpackJsonp([3],{
 
 /***/ },
 
-/***/ 200:
+/***/ 197:
 /*!**********************************************!*\
   !*** ./~/axios/lib/helpers/isAbsoluteURL.js ***!
   \**********************************************/
@@ -4433,7 +4309,7 @@ webpackJsonp([3],{
 
 /***/ },
 
-/***/ 201:
+/***/ 198:
 /*!********************************************!*\
   !*** ./~/axios/lib/helpers/combineURLs.js ***!
   \********************************************/
@@ -4455,7 +4331,7 @@ webpackJsonp([3],{
 
 /***/ },
 
-/***/ 202:
+/***/ 199:
 /*!*************************************!*\
   !*** ./~/axios/lib/helpers/bind.js ***!
   \*************************************/
@@ -4476,7 +4352,7 @@ webpackJsonp([3],{
 
 /***/ },
 
-/***/ 203:
+/***/ 200:
 /*!***************************************!*\
   !*** ./~/axios/lib/helpers/spread.js ***!
   \***************************************/
@@ -4513,13 +4389,157 @@ webpackJsonp([3],{
 
 /***/ },
 
-/***/ 204:
-/*!*********************************************************!*\
-  !*** external "{\"apiUrl\":\"http://localhost:5000\"}" ***!
-  \*********************************************************/
+/***/ 201:
+/*!**********************************************************!*\
+  !*** external "{\"apiUrl\":\"http://localhost:5000/\"}" ***!
+  \**********************************************************/
 /***/ function(module, exports) {
 
-	module.exports = {"apiUrl":"http://localhost:5000"};
+	module.exports = {"apiUrl":"http://localhost:5000/"};
+
+/***/ },
+
+/***/ 202:
+/*!**************************************************************************!*\
+  !*** ./wwwroot/libs/tsxbuild/Shared/Stores/Quotations/SalesQuotation.js ***!
+  \**************************************************************************/
+/***/ function(module, exports) {
+
+	"use strict";
+	var SalesQuotation = (function () {
+	    function SalesQuotation() {
+	        this.salesQuotationLines = [];
+	    }
+	    return SalesQuotation;
+	}());
+	Object.defineProperty(exports, "__esModule", { value: true });
+	exports.default = SalesQuotation;
+	//# sourceMappingURL=SalesQuotation.js.map
+
+/***/ },
+
+/***/ 203:
+/*!******************************************************************************!*\
+  !*** ./wwwroot/libs/tsxbuild/Shared/Stores/Quotations/SalesQuotationLine.js ***!
+  \******************************************************************************/
+/***/ function(module, exports) {
+
+	"use strict";
+	var SalesQuotationLine = (function () {
+	    function SalesQuotationLine(itemId, measurementId, quantity, amount, discount) {
+	        this.itemId = itemId;
+	        this.measurementId = measurementId;
+	        this.quantity = quantity;
+	        this.amount = amount;
+	        this.discount = discount;
+	    }
+	    return SalesQuotationLine;
+	}());
+	Object.defineProperty(exports, "__esModule", { value: true });
+	exports.default = SalesQuotationLine;
+	//# sourceMappingURL=SalesQuotationLine.js.map
+
+/***/ },
+
+/***/ 204:
+/*!*******************************************************************!*\
+  !*** ./wwwroot/libs/tsxbuild/Shared/Stores/Common/CommonStore.js ***!
+  \*******************************************************************/
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+	    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+	    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+	    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+	    return c > 3 && r && Object.defineProperty(target, key, r), r;
+	};
+	var mobx_1 = __webpack_require__(/*! mobx */ 169);
+	var axios = __webpack_require__(/*! axios */ 182);
+	var Config = __webpack_require__(/*! Config */ 201);
+	var CommonStore = (function () {
+	    function CommonStore() {
+	        this.customers = [];
+	        this.paymentTerms = [];
+	        this.items = [];
+	        this.measurements = [];
+	        this.vendors = [];
+	        this.loadCustomersLookup();
+	        this.loadPaymentTermsLookup();
+	        this.loadItemsLookup();
+	        this.loadMeasurementsLookup();
+	        this.loadVendorsLookup();
+	    }
+	    CommonStore.prototype.loadCustomersLookup = function () {
+	        var customers = this.customers;
+	        axios.get(Config.apiUrl + "api/common/customers")
+	            .then(function (result) {
+	            var data = result.data;
+	            for (var i = 0; i < data.length; i++) {
+	                customers.push(data[i]);
+	            }
+	        });
+	    };
+	    CommonStore.prototype.loadPaymentTermsLookup = function () {
+	        var paymentTerms = this.paymentTerms;
+	        axios.get(Config.apiUrl + "api/common/paymentterms")
+	            .then(function (result) {
+	            var data = result.data;
+	            for (var i = 0; i < data.length; i++) {
+	                paymentTerms.push(data[i]);
+	            }
+	        });
+	    };
+	    CommonStore.prototype.loadVendorsLookup = function () {
+	        var vendors = this.vendors;
+	        axios.get(Config.apiUrl + "api/common/vendors")
+	            .then(function (result) {
+	            var data = result.data;
+	            for (var i = 0; i < data.length; i++) {
+	                vendors.push(data[i]);
+	            }
+	        });
+	    };
+	    CommonStore.prototype.loadItemsLookup = function () {
+	        var items = this.items;
+	        axios.get(Config.apiUrl + "api/common/items")
+	            .then(function (result) {
+	            var data = result.data;
+	            for (var i = 0; i < data.length; i++) {
+	                items.push(data[i]);
+	            }
+	        });
+	    };
+	    CommonStore.prototype.loadMeasurementsLookup = function () {
+	        var measurements = this.measurements;
+	        axios.get(Config.apiUrl + "api/common/measurements")
+	            .then(function (result) {
+	            var data = result.data;
+	            for (var i = 0; i < data.length; i++) {
+	                measurements.push(data[i]);
+	            }
+	        });
+	    };
+	    __decorate([
+	        mobx_1.observable
+	    ], CommonStore.prototype, "customers", void 0);
+	    __decorate([
+	        mobx_1.observable
+	    ], CommonStore.prototype, "paymentTerms", void 0);
+	    __decorate([
+	        mobx_1.observable
+	    ], CommonStore.prototype, "items", void 0);
+	    __decorate([
+	        mobx_1.observable
+	    ], CommonStore.prototype, "measurements", void 0);
+	    __decorate([
+	        mobx_1.observable
+	    ], CommonStore.prototype, "vendors", void 0);
+	    return CommonStore;
+	}());
+	Object.defineProperty(exports, "__esModule", { value: true });
+	exports.default = CommonStore;
+	//# sourceMappingURL=CommonStore.js.map
 
 /***/ }
 
