@@ -10,6 +10,11 @@ namespace Model.Sales
         public int PaymentTermId { get; set; }
         public string ReferenceNo { get; set; }
         public virtual IList<SalesQuotationLine> SalesQuotationLines { get; set; }
+
+        public SalesQuotation()
+        {
+            SalesQuotationLines = new List<SalesQuotationLine>();
+        }
     }
 
     public class SalesQuotationLine

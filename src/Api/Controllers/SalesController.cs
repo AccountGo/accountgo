@@ -122,7 +122,7 @@ namespace Api.Controllers
         [HttpGet]
         [Route("[action]")]
         public IActionResult GetSalesOrders()
-        {            
+        {
             IList<Model.Sales.SalesOrder> model = new List<Model.Sales.SalesOrder>();
 
             var salesOrderModel1 = new Model.Sales.SalesOrder()
@@ -196,7 +196,7 @@ namespace Api.Controllers
                     SalesOrderLines = new List<Model.Sales.SalesOrderLine>()
                 };
 
-                foreach(var line in salesOrder.SalesOrderLines)
+                foreach (var line in salesOrder.SalesOrderLines)
                 {
                     var lineModel = new Model.Sales.SalesOrderLine();
                     lineModel.Id = line.Id;
@@ -231,7 +231,7 @@ namespace Api.Controllers
                     Date = model.OrderDate,
                 };
 
-                foreach(var line in model.SalesOrderLines)
+                foreach (var line in model.SalesOrderLines)
                 {
                     var salesOrderLine = new Core.Domain.Sales.SalesOrderLine();
                     salesOrderLine.Amount = line.Amount;
@@ -287,6 +287,40 @@ namespace Api.Controllers
             {
                 return new ObjectResult(ex);
             }
+        }
+
+        [HttpGet]
+        [Route("[action]")]
+        public IActionResult Quotations()
+        {
+            var quotes = _salesService.GetSalesQuotes();
+
+            var quoteDtos = new List<Model.Sales.SalesQuotation>();
+
+            foreach (var quote in quotes) {
+                var quoteDto = new Model.Sales.SalesQuotation()
+                {
+                    CustomerId = quote.CustomerId,
+                    PaymentTermId = quote.CustomerId,
+                    QuotationDate = quote.Date,                    
+                };
+
+                foreach (var line in quote.SalesQuoteLines) {
+                    var lineDto = new Model.Sales.SalesQuotationLine()
+                    {
+                        ItemId = line.ItemId,
+                        MeasurementId = line.MeasurementId,
+                        Quantity = line.Quantity,
+                        Amount = line.Amount,
+                        Discount = line.Discount
+                    };
+                    quoteDto.SalesQuotationLines.Add(lineDto);
+                }
+
+                quoteDtos.Add(quoteDto);
+            }
+
+            return new ObjectResult(quoteDtos);
         }
     }
 }

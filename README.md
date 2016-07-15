@@ -55,10 +55,10 @@ AccountGoWeb/Api are development under ASP.NET Core 1.0, and requires you to ins
 
 1.	Install Visual 2015 (i.e. Community edition) with Update 3.
 2.	Update “Microsoft ASP.NET and Web Tools” external tools. After you install VS 2015, go to "Tools->Extensions and updates" and search for “Microsoft ASP.NET and Web Tools”.
-3.	Install “Webpack”. open command prompt and go to “AccountGoWeb” folder. Type “npm install webpack”.
-4.	Install "Webpack Task Runner" Visual Studio 2015 extension. Go to "Tools->Extensions and updates" and search for “Webpack Task Runner”.
-4.	Clone/Fork the latest repo here https://github.com/AccountGo/accountgo
-5.	Open the solution file and restore all packages.
+3.	Clone/Fork the latest repo here https://github.com/AccountGo/accountgo
+4.	Install “Webpack”. open command prompt and go to “AccountGoWeb” folder. Type “npm install webpack”.
+5.	Install "Webpack Task Runner" Visual Studio 2015 extension. Go to "Tools->Extensions and updates" and search for “Webpack Task Runner”.
+6.	Open the solution file and restore all packages.
 
 Note: You can use the database connection from the demo site. Look at the web.config ("Web") or appsettings.json ("Api") projects.
 

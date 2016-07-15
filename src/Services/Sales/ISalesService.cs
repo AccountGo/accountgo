@@ -42,5 +42,6 @@ namespace Services.Sales
         ICollection<SalesInvoiceHeader> GetSalesInvoicesByCustomerId(int customerId, SalesInvoiceStatus status);
         ICollection<CustomerAllocation> GetCustomerAllocations(int customerId);
         void AddSalesQuote(SalesQuoteHeader salesQuoteHeader);
+        IEnumerable<SalesQuoteHeader> GetSalesQuotes();
     }
 }

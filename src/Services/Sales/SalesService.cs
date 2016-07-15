@@ -550,5 +550,11 @@ namespace Services.Sales
         {
             _salesQuoteRepo.Insert(salesQuoteHeader);
         }
+
+        public IEnumerable<SalesQuoteHeader> GetSalesQuotes()
+        {
+            var quotes = _salesQuoteRepo.GetAllIncluding(line => line.SalesQuoteLines).AsEnumerable();
+            return quotes;
+        }
     }
 }
