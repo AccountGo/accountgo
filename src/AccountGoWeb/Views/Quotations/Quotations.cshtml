@@ -1,7 +1,30 @@
 ﻿@model string
+
 <div>
     <a href="~/Quotations/AddSalesQuotation">Add</a>
 </div>
 <div>
-    @Model.ToString()
+    <div id="myGrid" class="ag-fresh"></div>
 </div>
+<script>
+    console.log(@Html.Raw(Model));
+
+    var columnDefs = [
+    {headerName: "Customer", field: "customerId"},
+    {headerName: "Date", field: "quotationDate"},
+    {headerName: "Payment term", field: "paymentTerm"}
+    ];
+
+    var gridOptions = {
+        columnDefs: columnDefs,
+        rowData: @Html.Raw(Model),
+     };
+
+    // wait for the document to be loaded, otherwise
+    // ag-Grid will not find the div in the document.
+    document.addEventListener("DOMContentLoaded", function() {
+        var eGridDiv = document.querySelector('#myGrid');
+        new agGrid.Grid(eGridDiv, gridOptions);
+    });
+</script>
+<script src="~/plugins/ag-grid/dist/ag-grid.js?ignore=notused24"></script>

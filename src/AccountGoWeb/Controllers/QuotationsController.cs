@@ -28,7 +28,15 @@ namespace AccountGoWeb.Controllers
                 var response = await client.GetAsync(baseUri + "sales/quotations");
                 if (response.IsSuccessStatusCode)
                 {
-                    var responseJson = await response.Content.ReadAsStringAsync();                    
+                    var responseJson = await response.Content.ReadAsStringAsync();
+                    try {
+                        var quotes = Newtonsoft.Json.JsonConvert.DeserializeObject<System.Collections.Generic.List<Model.Sales.SalesQuotation>>(responseJson);
+                        return View(model: responseJson);
+                    }
+                    catch(System.Exception ex)
+                    {
+                        System.Diagnostics.Debug.Write(ex.Message);
+                    }                    
                 }
             }
 

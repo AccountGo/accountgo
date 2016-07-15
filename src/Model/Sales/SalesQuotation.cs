@@ -9,7 +9,7 @@ namespace Model.Sales
         public DateTime QuotationDate { get; set; }
         public int PaymentTermId { get; set; }
         public string ReferenceNo { get; set; }
-        public virtual IList<SalesQuotationLine> SalesQuotationLines { get; set; }
+        public virtual List<SalesQuotationLine> SalesQuotationLines { get; set; }
 
         public SalesQuotation()
         {

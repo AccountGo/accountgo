@@ -25,7 +25,13 @@
   },
 
   "frameworks": {
-    "net461": {}
+    "net461": {
+      "dependencies": {
+        "Model": {
+          "target": "project"
+        }
+      }
+    }
     //"netcoreapp1.0": {
     //  "imports": [
     //    "dotnet5.6",
