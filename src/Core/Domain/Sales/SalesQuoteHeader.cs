@@ -19,6 +19,7 @@ namespace Core.Domain.Sales
         public DateTime Date { get; set; }
         public virtual Customer Customer { get; set; }
         public virtual ICollection<SalesQuoteLine> SalesQuoteLines { get; set; }
+
         public SalesQuoteHeader()
         {
             SalesQuoteLines = new HashSet<SalesQuoteLine>();

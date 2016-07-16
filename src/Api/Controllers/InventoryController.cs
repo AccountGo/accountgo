@@ -29,8 +29,17 @@ namespace Api.Controllers
             var items = _inventoryService.GetAllItems();
             ICollection<Item> itemsDto = new HashSet<Item>();
 
-            foreach (var item in items)
-                itemsDto.Add(new Item() { No = item.No, Description = item.Description });
+            foreach (var item in items) {
+                itemsDto.Add(new Item()
+                {
+                    Id = item.Id,
+                    Code = item.Code,
+                    Description = item.Description,
+                    Cost = item.Cost,
+                    Price = item.Price,
+                    QuantityOnHand = item.ComputeQuantityOnHand()
+                });
+            }
 
             return new ObjectResult(itemsDto.AsEnumerable());
         }

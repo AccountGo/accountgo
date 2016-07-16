@@ -7,18 +7,19 @@ namespace AccountGoWeb.Controllers
     public class QuotationsController : Controller
     {
         private readonly IConfiguration _config;
+
         public QuotationsController(IConfiguration config) {
             _config = config;
         }
 
         public IActionResult Index()
         {
-            return RedirectToAction("Quotations");
+            return RedirectToAction("quotations");
         }
 
         public async System.Threading.Tasks.Task<IActionResult> Quotations()
         {
-            ViewBag.PageContentHeader = "Sales Quotations";
+            ViewBag.PageContentHeader = "Quotations";
 
             using (var client = new HttpClient())
             {

@@ -4,42 +4,31 @@ namespace AccountGoWeb.Controllers
 {
     public class FinancialsController : Controller
     {
-        public JsonResult Taxes()
+        private readonly Microsoft.Extensions.Configuration.IConfiguration _config;
+
+        public FinancialsController(Microsoft.Extensions.Configuration.IConfiguration config)
         {
-            var taxes = new System.Collections.Generic.List<Tax>();
-
-            taxes.Add(new Tax()
-            {
-                Id = 1,
-                IsActive = true,
-                Rate = 12,
-                TaxCode = "12",
-                TaxName = "12%"
-            });
-
-            taxes.Add(new Tax()
-            {
-                Id = 2,
-                IsActive = true,
-                Rate = 10,
-                TaxCode = "10",
-                TaxName = "10%"
-            });
-            return new JsonResult(taxes);
-            //return new ObjectResult(taxes);
-        }
-    }
-
-    internal class Tax
-    {
-        public Tax()
-        {
+            _config = config;
         }
 
-        public int Id { get; set; }
-        public bool IsActive { get; set; }
-        public int Rate { get; set; }
-        public string TaxCode { get; set; }
-        public string TaxName { get; set; }
+        public async System.Threading.Tasks.Task<IActionResult> Accounts()
+        {
+            ViewBag.PageContentHeader = "Accounts";
+
+            using (var client = new System.Net.Http.HttpClient())
+            {
+                var baseUri = _config["ApiUrl"];
+                client.BaseAddress = new System.Uri(baseUri);
+                client.DefaultRequestHeaders.Accept.Clear();
+                var response = await client.GetAsync(baseUri + "financials/accounts");
+                if (response.IsSuccessStatusCode)
+                {
+                    var responseJson = await response.Content.ReadAsStringAsync();
+                    return View(model: responseJson);
+                }
+            }
+
+            return View();
+        }
     }
 }

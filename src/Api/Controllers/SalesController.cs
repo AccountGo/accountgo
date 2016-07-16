@@ -301,8 +301,9 @@ namespace Api.Controllers
                 var quoteDto = new Model.Sales.SalesQuotation()
                 {
                     CustomerId = quote.CustomerId,
+                    CustomerName = quote.Customer.Party.Name,
                     PaymentTermId = quote.CustomerId,
-                    QuotationDate = quote.Date,                    
+                    QuotationDate = quote.Date,                 
                 };
 
                 foreach (var line in quote.SalesQuoteLines) {

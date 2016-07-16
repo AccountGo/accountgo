@@ -117,9 +117,14 @@ namespace Services.Financial
 
         public IEnumerable<Account> GetAccounts()
         {
-            var query = from f in _accountRepo.Table
-                        select f;
-            return query.AsEnumerable();
+            var accounts = _accountRepo.GetAllIncluding(c => c.Company, 
+                a => a.AccountClass,
+                c => c.ChildAccounts,
+                g => g.GeneralLedgerLines,
+                p => p.ParentAccount)
+                .AsEnumerable();
+
+            return accounts;
         }
 
         public Account GetAccount(int id)

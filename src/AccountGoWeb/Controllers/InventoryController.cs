@@ -2,29 +2,25 @@
 
 namespace AccountGoWeb.Controllers
 {
-    public class TaxController : Controller
+    public class InventoryController : Controller
     {
         private readonly Microsoft.Extensions.Configuration.IConfiguration _config;
 
-        public TaxController(Microsoft.Extensions.Configuration.IConfiguration config)
+        public InventoryController(Microsoft.Extensions.Configuration.IConfiguration config)
         {
             _config = config;
         }
 
-        public IActionResult Index() {
-            return RedirectToAction("taxes");
-        }
-
-        public async System.Threading.Tasks.Task<IActionResult> Taxes()
+        public async System.Threading.Tasks.Task<IActionResult> Items()
         {
-            ViewBag.PageContentHeader = "Taxes";            
+            ViewBag.PageContentHeader = "Items";
 
             using (var client = new System.Net.Http.HttpClient())
             {
                 var baseUri = _config["ApiUrl"];
                 client.BaseAddress = new System.Uri(baseUri);
                 client.DefaultRequestHeaders.Accept.Clear();
-                var response = await client.GetAsync(baseUri + "tax/taxes");
+                var response = await client.GetAsync(baseUri + "inventory/items");
                 if (response.IsSuccessStatusCode)
                 {
                     var responseJson = await response.Content.ReadAsStringAsync();

@@ -1,0 +1,33 @@
+﻿@model string
+
+<div>
+</div>
+<div>
+    <div id="accounts" class="ag-fresh" style="height: 400px;"></div>
+</div>
+<script>
+    var columnDefs = [
+    {headerName: "Account", field: "id", width: 50},
+    {headerName: "Code", field: "accountCode", width: 100},
+    {headerName: "Name", field: "accountName", width: 350},
+    {headerName: "Description", field: "description", width: 250},
+    {headerName: "Cash", field: "isCash", width: 100},
+    {headerName: "Balance", field: "balance", width: 100},
+    {headerName: "Debit", field: "debitBalance", width: 100},
+    {headerName: "Credit", field: "creditBalance", width: 100}
+    ];
+
+    var gridOptions = {
+        columnDefs: columnDefs,
+        rowData: @Html.Raw(Model),
+        // PROPERTIES
+        rowSelection: 'multiple',
+    };
+
+    // wait for the document to be loaded, otherwise
+    // ag-Grid will not find the div in the document.
+    document.addEventListener("DOMContentLoaded", function() {
+        var eGridDiv = document.querySelector('#accounts');
+        new agGrid.Grid(eGridDiv, gridOptions);
+    });
+</script>

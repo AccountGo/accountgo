@@ -2,6 +2,7 @@
 using Model.TaxSystem;
 using Services.TaxSystem;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Api.Controllers
 {
@@ -19,27 +20,59 @@ namespace Api.Controllers
         [Route("[action]")]
         public IActionResult Taxes()
         {
-            var taxes = new List<Tax>();
+            var taxes = _taxService.GetTaxes(true);
 
-            taxes.Add(new Tax()
+            var taxSystemModelDto = new TaxSystemModel();
+
+            var taxesDto = new List<Tax>();
+
+            foreach (var tax in taxes) {
+                taxesDto.Add(new Tax() {
+                    Id = tax.Id,
+                    TaxCode = tax.TaxCode,
+                    TaxName = tax.TaxName,
+                    Rate = tax.Rate,
+                    IsActive = tax.IsActive
+                });                
+            }
+
+            taxSystemModelDto.Taxes = taxesDto.AsEnumerable();
+
+            var taxGroupsDto = new List<TaxGroup>();
+            var taxGroups = _taxService.GetTaxGroups();
+
+            foreach (var group in taxGroups) {
+                var groupDto = new TaxGroup()
+                {
+                    Id = group.Id,
+                    Description = group.Description,
+                    IsActive = group.IsActive,
+                    TaxAppliedToShipping = group.TaxAppliedToShipping
+                };
+                                
+                taxGroupsDto.Add(groupDto);
+            }
+
+            taxSystemModelDto.TaxGroups = taxGroupsDto.AsEnumerable();
+            
+            var itemTaxGroupsDto = new List<ItemTaxGroup>();
+            var itemTaxGroups = _taxService.GetItemTaxGroups();
+
+            foreach (var group in itemTaxGroups)
             {
-                Id = 1,
-                IsActive = true,
-                Rate = 12,
-                TaxCode = "12",
-                TaxName = "12%"
-            });
+                var groupDto = new ItemTaxGroup()
+                {
+                    Id = group.Id,
+                    Name = group.Name,
+                    IsFullyExempt = group.IsFullyExempt
+                };
 
-            taxes.Add(new Tax()
-            {
-                Id = 2,
-                IsActive = true,
-                Rate = 10,
-                TaxCode = "10",
-                TaxName = "10%"
-            });
+                itemTaxGroupsDto.Add(groupDto);
+            }
 
-            return new ObjectResult(taxes);
+            taxSystemModelDto.ItemTaxGroups = itemTaxGroupsDto.AsEnumerable();
+
+            return new ObjectResult(taxSystemModelDto);
         }
     }
 }
