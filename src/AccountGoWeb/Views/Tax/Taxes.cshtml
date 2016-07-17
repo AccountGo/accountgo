@@ -14,7 +14,7 @@
     <div id="itemTaxGroups" class="ag-fresh" style="height: 200px;"></div>
 </div>
 <script>
-    var model = @Html.Raw(Model);
+    var Dto = @Html.Raw(Model);
 
     var columnDefsTaxes = [
     {headerName: "Tax", field: "id", width: 50},
@@ -26,7 +26,7 @@
 
     var gridOptionsTaxes = {
         columnDefs: columnDefsTaxes,
-        rowData: model.taxes,
+        rowData: Dto.taxes,
         // PROPERTIES
         rowSelection: 'multiple',
     };
@@ -47,7 +47,7 @@
 
     var gridOptionsTaxGroups = {
         columnDefs: columnDefsTaxGroups,
-        rowData: model.taxGroups,
+        rowData: Dto.taxGroups,
         // PROPERTIES
         rowSelection: 'multiple',
     };
@@ -65,7 +65,7 @@
 
     var gridOptionsItemTaxGroups = {
         columnDefs: columnDefsItemTaxGroups,
-        rowData: model.itemTaxGroups,
+        rowData: Dto.itemTaxGroups,
         // PROPERTIES
         rowSelection: 'multiple',
     };

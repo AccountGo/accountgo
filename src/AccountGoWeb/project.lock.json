@@ -1824,7 +1824,7 @@
           "lib/net46/System.Xml.XPath.XDocument.dll": {}
         }
       },
-      "Model/1.0.0": {
+      "Dto/1.0.0": {
         "type": "project"
       }
     }
@@ -5674,9 +5674,9 @@
         "ref/xamarinwatchos10/_._"
       ]
     },
-    "Model/1.0.0": {
+    "Dto/1.0.0": {
       "type": "project",
-      "msbuildProject": "../Model/Model.csproj"
+      "msbuildProject": "../Dto/Dto.csproj"
     }
   },
   "projectFileDependencyGroups": {
@@ -5694,9 +5694,7 @@
       "Microsoft.Extensions.Logging.Debug >= 1.0.0",
       "Microsoft.Net.Http >= 2.2.22"
     ],
-    ".NETFramework,Version=v4.6.1": [
-      "Model"
-    ]
+    ".NETFramework,Version=v4.6.1": []
   },
   "tools": {
     ".NETCoreApp,Version=v1.0": {

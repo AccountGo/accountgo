@@ -1,5 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using Model.TaxSystem;
+using Dto.TaxSystem;
 using Services.TaxSystem;
 using System.Collections.Generic;
 using System.Linq;
@@ -22,7 +22,7 @@ namespace Api.Controllers
         {
             var taxes = _taxService.GetTaxes(true);
 
-            var taxSystemModelDto = new TaxSystemModel();
+            var taxSystemDtoDto = new TaxSystemDto();
 
             var taxesDto = new List<Tax>();
 
@@ -36,7 +36,7 @@ namespace Api.Controllers
                 });                
             }
 
-            taxSystemModelDto.Taxes = taxesDto.AsEnumerable();
+            taxSystemDtoDto.Taxes = taxesDto.AsEnumerable();
 
             var taxGroupsDto = new List<TaxGroup>();
             var taxGroups = _taxService.GetTaxGroups();
@@ -53,7 +53,7 @@ namespace Api.Controllers
                 taxGroupsDto.Add(groupDto);
             }
 
-            taxSystemModelDto.TaxGroups = taxGroupsDto.AsEnumerable();
+            taxSystemDtoDto.TaxGroups = taxGroupsDto.AsEnumerable();
             
             var itemTaxGroupsDto = new List<ItemTaxGroup>();
             var itemTaxGroups = _taxService.GetItemTaxGroups();
@@ -70,9 +70,9 @@ namespace Api.Controllers
                 itemTaxGroupsDto.Add(groupDto);
             }
 
-            taxSystemModelDto.ItemTaxGroups = itemTaxGroupsDto.AsEnumerable();
+            taxSystemDtoDto.ItemTaxGroups = itemTaxGroupsDto.AsEnumerable();
 
-            return new ObjectResult(taxSystemModelDto);
+            return new ObjectResult(taxSystemDtoDto);
         }
     }
 }

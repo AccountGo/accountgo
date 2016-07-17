@@ -38,11 +38,13 @@ var config = {
         new webpack.optimize.CommonsChunkPlugin("vendor", "vendor.bundle.js")
     ],
     externals: {
-        'Config': JSON.stringify(process.env.ENV === 'production' ? {
-            apiUrl: "http://accountgo-dev-api.azurewebsites.net/"
-        } : {
-            apiUrl: "http://localhost:5000/"
-        })
+        'Config': JSON.stringify(process.env.ENV === 'production' ?
+            {
+                apiUrl: "http://accountgo-dev-api.azurewebsites.net/"
+            } :
+            {
+                apiUrl: "http://localhost:5000/"
+            })
     }
 };
 

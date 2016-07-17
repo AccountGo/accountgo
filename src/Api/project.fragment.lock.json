@@ -18,17 +18,17 @@
         }
       }
     },
-    "Model/1.0.0": {
+    "Dto/1.0.0": {
       "type": "project",
       "framework": ".NETFramework,Version=v4.6",
       "compile": {
-        "bin/Debug/Model.dll": {}
+        "bin/Debug/Dto.dll": {}
       },
       "runtime": {
-        "bin/Debug/Model.dll": {}
+        "bin/Debug/Dto.dll": {}
       },
       "contentFiles": {
-        "bin/Debug/Model.pdb": {
+        "bin/Debug/Dto.pdb": {
           "buildAction": "None",
           "codeLanguage": "any",
           "copyToOutput": true

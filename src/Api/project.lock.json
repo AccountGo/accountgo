@@ -1898,7 +1898,7 @@
       "Core/1.0.0": {
         "type": "project"
       },
-      "Model/1.0.0": {
+      "Dto/1.0.0": {
         "type": "project"
       },
       "Services/1.0.0": {
@@ -2681,8 +2681,8 @@
     "Microsoft.Extensions.DependencyModel/1.0.0": {
       "sha512": "n55Y2T4qMgCNMrJaqAN+nlG2EH4XL+e9uxIg4vdFsQeF+L8UKxRdD3C35Bt+xk3vO3Zwp3g+6KFq2VPH2COSmg==",
       "type": "package",
+      "path": "Microsoft.Extensions.DependencyModel/1.0.0",
       "files": [
-        "Microsoft.Extensions.DependencyModel.1.0.0.nupkg",
         "Microsoft.Extensions.DependencyModel.1.0.0.nupkg.sha512",
         "Microsoft.Extensions.DependencyModel.nuspec",
         "lib/net451/Microsoft.Extensions.DependencyModel.dll",
@@ -5732,9 +5732,9 @@
       "type": "project",
       "msbuildProject": "../Core/Core.csproj"
     },
-    "Model/1.0.0": {
+    "Dto/1.0.0": {
       "type": "project",
-      "msbuildProject": "../Model/Model.csproj"
+      "msbuildProject": "../Dto/Dto.csproj"
     },
     "Services/1.0.0": {
       "type": "project",
@@ -5759,7 +5759,7 @@
     ],
     ".NETFramework,Version=v4.6.1": [
       "Core",
-      "Model",
+      "Dto",
       "Services"
     ]
   },

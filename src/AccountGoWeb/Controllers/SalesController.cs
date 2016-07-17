@@ -25,28 +25,28 @@ namespace AccountGoWeb.Controllers
         }
 
         [HttpPost]
-        public IActionResult AddSalesOrder(object model)
+        public IActionResult AddSalesOrder(object Dto)
         {
             return Ok();
         }
 
-        public IActionResult GetAddSalesOrderModel()
+        public IActionResult GetAddSalesOrderDto()
         {
-            var model = new object();
+            var Dto = new object();
 
-            //model.Customers = new HashSet<Microsoft.AspNet.Mvc.Rendering.SelectListItem>();
-            //model.Customers.Add(new Microsoft.AspNet.Mvc.Rendering.SelectListItem() { Value = "0", Text = "Choose customer..." });
-            //model.Customers.Add(new Microsoft.AspNet.Mvc.Rendering.SelectListItem() { Value = "1", Text = "John Doe" });
-            //model.Customers.Add(new Microsoft.AspNet.Mvc.Rendering.SelectListItem() { Value = "2", Text = "Joe Blogs" });
-            //model.Customers.Add(new Microsoft.AspNet.Mvc.Rendering.SelectListItem() { Value = "3", Text = "Mary Walter" });
+            //Dto.Customers = new HashSet<Microsoft.AspNet.Mvc.Rendering.SelectListItem>();
+            //Dto.Customers.Add(new Microsoft.AspNet.Mvc.Rendering.SelectListItem() { Value = "0", Text = "Choose customer..." });
+            //Dto.Customers.Add(new Microsoft.AspNet.Mvc.Rendering.SelectListItem() { Value = "1", Text = "John Doe" });
+            //Dto.Customers.Add(new Microsoft.AspNet.Mvc.Rendering.SelectListItem() { Value = "2", Text = "Joe Blogs" });
+            //Dto.Customers.Add(new Microsoft.AspNet.Mvc.Rendering.SelectListItem() { Value = "3", Text = "Mary Walter" });
 
-            //model.Items = new HashSet<Microsoft.AspNet.Mvc.Rendering.SelectListItem>();
-            //model.Items.Add(new Microsoft.AspNet.Mvc.Rendering.SelectListItem() { Value = "0", Text = "Choose item..." });
-            //model.Items.Add(new Microsoft.AspNet.Mvc.Rendering.SelectListItem() { Value = "1", Text = "Mouse" });
-            //model.Items.Add(new Microsoft.AspNet.Mvc.Rendering.SelectListItem() { Value = "2", Text = "Keyboard" });
-            //model.Items.Add(new Microsoft.AspNet.Mvc.Rendering.SelectListItem() { Value = "3", Text = "Monitor" });
+            //Dto.Items = new HashSet<Microsoft.AspNet.Mvc.Rendering.SelectListItem>();
+            //Dto.Items.Add(new Microsoft.AspNet.Mvc.Rendering.SelectListItem() { Value = "0", Text = "Choose item..." });
+            //Dto.Items.Add(new Microsoft.AspNet.Mvc.Rendering.SelectListItem() { Value = "1", Text = "Mouse" });
+            //Dto.Items.Add(new Microsoft.AspNet.Mvc.Rendering.SelectListItem() { Value = "2", Text = "Keyboard" });
+            //Dto.Items.Add(new Microsoft.AspNet.Mvc.Rendering.SelectListItem() { Value = "3", Text = "Monitor" });
 
-            return new ObjectResult(model);
+            return new ObjectResult(Dto);
         }
 
         public IActionResult SalesInvoices()

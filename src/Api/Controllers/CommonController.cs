@@ -1,7 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using Model.Inventory;
-using Model.Purchasing;
-using Model.Sales;
+using Dto.Inventory;
+using Dto.Purchasing;
+using Dto.Sales;
 using Services.Administration;
 using Services.Inventory;
 using Services.Purchasing;

@@ -31,7 +31,7 @@ namespace AccountGoWeb.Controllers
                 {
                     var responseJson = await response.Content.ReadAsStringAsync();
                     try {
-                        var quotes = Newtonsoft.Json.JsonConvert.DeserializeObject<System.Collections.Generic.List<Model.Sales.SalesQuotation>>(responseJson);
+                        var quotes = Newtonsoft.Json.JsonConvert.DeserializeObject<System.Collections.Generic.List<Dto.Sales.SalesQuotation>>(responseJson);
                         return View(model: responseJson);
                     }
                     catch(System.Exception ex)

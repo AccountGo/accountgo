@@ -1,5 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using Model.Inventory;
+using Dto.Inventory;
 using Services.Administration;
 using Services.Inventory;
 using System.Collections.Generic;
@@ -29,7 +29,8 @@ namespace Api.Controllers
             var items = _inventoryService.GetAllItems();
             ICollection<Item> itemsDto = new HashSet<Item>();
 
-            foreach (var item in items) {
+            foreach (var item in items)
+            {
                 itemsDto.Add(new Item()
                 {
                     Id = item.Id,
@@ -43,5 +44,26 @@ namespace Api.Controllers
 
             return new ObjectResult(itemsDto.AsEnumerable());
         }
+
+        [HttpGet]
+        [Route("[action]")]
+        public IActionResult ICJ()
+        {
+            var invControlJournals = _inventoryService.GetInventoryControlJournals();
+            var icjDto = new List<InventoryControlJournal>();
+            foreach (var icj in invControlJournals)
+            {
+                icjDto.Add(new InventoryControlJournal()
+                {
+                    Id = icj.Id,
+                    In = icj.INQty,
+                    Out = icj.OUTQty,
+                    Item = icj.Item.Description,
+                    Measurement = icj.Measurement.Code,
+                    Date = icj.Date
+                });
+            }
+            return new ObjectResult(icjDto.AsEnumerable());
+        }    
     }
 }

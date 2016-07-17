@@ -36,7 +36,7 @@ namespace Api.Controllers
                     return Ok();
                 }
 
-                var customerModel = new Model.Sales.Customer()
+                var customerDto = new Dto.Sales.Customer()
                 {
                     Id = customer.Id,
                     No = customer.No,
@@ -47,7 +47,7 @@ namespace Api.Controllers
                     Balance = customer.Balance
                 };
 
-                return new ObjectResult(customerModel);
+                return new ObjectResult(customerDto);
             }
             catch (Exception ex)
             {
@@ -57,7 +57,7 @@ namespace Api.Controllers
 
         [HttpPost]
         [Route("[action]")]
-        public IActionResult CreateCustomer([FromBody]Model.Sales.CreateCustomer model)
+        public IActionResult CreateCustomer([FromBody]Dto.Sales.CreateCustomer Dto)
         {
             try
             {
@@ -66,20 +66,20 @@ namespace Api.Controllers
                     Party = new Core.Domain.Party()
                     {
                         PartyType = Core.Domain.PartyTypes.Customer,
-                        Name = model.Name,
-                        Phone = model.Phone,
+                        Name = Dto.Name,
+                        Phone = Dto.Phone,
                     },
                 };
 
                 _salesService.AddCustomer(customer);
 
-                var customerModel = new Model.Sales.Customer();
-                customerModel.Id = customer.Id;
-                customerModel.No = customer.No;
-                customerModel.Name = customer.Party.Name;
-                customerModel.Phone = customer.Party.Phone;
+                var customerDto = new Dto.Sales.Customer();
+                customerDto.Id = customer.Id;
+                customerDto.No = customer.No;
+                customerDto.Name = customer.Party.Name;
+                customerDto.Phone = customer.Party.Phone;
 
-                return new ObjectResult(customerModel);
+                return new ObjectResult(customerDto);
             }
             catch (Exception ex)
             {
@@ -91,13 +91,13 @@ namespace Api.Controllers
         [Route("[action]")]
         public IActionResult Customers()
         {
-            IList<Model.Sales.Customer> model = new List<Model.Sales.Customer>();
+            IList<Dto.Sales.Customer> Dto = new List<Dto.Sales.Customer>();
             try
             {
                 var customers = _salesService.GetCustomers();
                 foreach (var customer in customers)
                 {
-                    var customerModel = new Model.Sales.Customer()
+                    var customerDto = new Dto.Sales.Customer()
                     {
                         Id = customer.Id,
                         No = customer.No,
@@ -108,10 +108,10 @@ namespace Api.Controllers
                         Balance = customer.Balance
                     };
 
-                    model.Add(customerModel);
+                    Dto.Add(customerDto);
                 }
 
-                return new ObjectResult(model);
+                return new ObjectResult(Dto);
             }
             catch (Exception ex)
             {
@@ -123,9 +123,9 @@ namespace Api.Controllers
         [Route("[action]")]
         public IActionResult GetSalesOrders()
         {
-            IList<Model.Sales.SalesOrder> model = new List<Model.Sales.SalesOrder>();
+            IList<Dto.Sales.SalesOrder> Dto = new List<Dto.Sales.SalesOrder>();
 
-            var salesOrderModel1 = new Model.Sales.SalesOrder()
+            var salesOrderDto1 = new Dto.Sales.SalesOrder()
             {
                 Id = 1,
                 CustomerId = 1,
@@ -134,9 +134,9 @@ namespace Api.Controllers
                 OrderDate = DateTime.Now,
                 TotalAmount = 2500
             };
-            model.Add(salesOrderModel1);
+            Dto.Add(salesOrderDto1);
 
-            var salesOrderModel2 = new Model.Sales.SalesOrder()
+            var salesOrderDto2 = new Dto.Sales.SalesOrder()
             {
                 Id = 2,
                 CustomerId = 2,
@@ -145,16 +145,16 @@ namespace Api.Controllers
                 OrderDate = DateTime.Now,
                 TotalAmount = 3500
             };
-            model.Add(salesOrderModel2);
+            Dto.Add(salesOrderDto2);
 
-            return new ObjectResult(model);
+            return new ObjectResult(Dto);
             //try
             //{
             //    var salesOrders = _salesService.GetSalesOrders();
 
             //    foreach (var salesOrder in salesOrders)
             //    {
-            //        var salesOrderModel = new Model.Sales.SalesOrder()
+            //        var salesOrderDto = new Dto.Sales.SalesOrder()
             //        {
             //            Id = salesOrder.Id,
             //            CustomerId = salesOrder.CustomerId.Value,
@@ -164,10 +164,10 @@ namespace Api.Controllers
             //            TotalAmount = salesOrder.SalesOrderLines.Sum(l => l.Amount)
             //        };
 
-            //        model.Add(salesOrderModel);
+            //        Dto.Add(salesOrderDto);
             //    }
 
-            //    return new ObjectResult(model);
+            //    return new ObjectResult(Dto);
             //}
             //catch(Exception ex)
             //{
@@ -179,13 +179,13 @@ namespace Api.Controllers
         [Route("[action]/{id:int}")]
         public IActionResult GetSalesOrderById(int id)
         {
-            IList<Model.Sales.SalesOrder> model = new List<Model.Sales.SalesOrder>();
+            IList<Dto.Sales.SalesOrder> Dto = new List<Dto.Sales.SalesOrder>();
 
             try
             {
                 var salesOrder = _salesService.GetSalesOrderById(id);
 
-                var salesOrderModel = new Model.Sales.SalesOrder()
+                var salesOrderDto = new Dto.Sales.SalesOrder()
                 {
                     Id = salesOrder.Id,
                     CustomerId = salesOrder.CustomerId.Value,
@@ -193,25 +193,25 @@ namespace Api.Controllers
                     CustomerName = _salesService.GetCustomerById(salesOrder.CustomerId.Value).Party.Name,
                     OrderDate = salesOrder.Date,
                     TotalAmount = salesOrder.SalesOrderLines.Sum(l => l.Amount),
-                    SalesOrderLines = new List<Model.Sales.SalesOrderLine>()
+                    SalesOrderLines = new List<Dto.Sales.SalesOrderLine>()
                 };
 
                 foreach (var line in salesOrder.SalesOrderLines)
                 {
-                    var lineModel = new Model.Sales.SalesOrderLine();
-                    lineModel.Id = line.Id;
-                    lineModel.Amount = line.Amount;
-                    lineModel.Discount = line.Discount;
-                    lineModel.Quantity = line.Quantity;
-                    lineModel.ItemId = line.ItemId;
-                    lineModel.ItemDescription = line.Item.Description;
-                    lineModel.MeasurementId = line.MeasurementId;
-                    lineModel.MeasurementDescription = line.Measurement.Description;
+                    var lineDto = new Dto.Sales.SalesOrderLine();
+                    lineDto.Id = line.Id;
+                    lineDto.Amount = line.Amount;
+                    lineDto.Discount = line.Discount;
+                    lineDto.Quantity = line.Quantity;
+                    lineDto.ItemId = line.ItemId;
+                    lineDto.ItemDescription = line.Item.Description;
+                    lineDto.MeasurementId = line.MeasurementId;
+                    lineDto.MeasurementDescription = line.Measurement.Description;
 
-                    salesOrderModel.SalesOrderLines.Add(lineModel);
+                    salesOrderDto.SalesOrderLines.Add(lineDto);
                 }
 
-                return new ObjectResult(salesOrderModel);
+                return new ObjectResult(salesOrderDto);
             }
             catch (Exception ex)
             {
@@ -221,17 +221,17 @@ namespace Api.Controllers
 
         [HttpPost]
         [Route("[action]")]
-        public IActionResult CreateSalesOrder([FromBody]Model.Sales.SalesOrder model)
+        public IActionResult CreateSalesOrder([FromBody]Dto.Sales.SalesOrder Dto)
         {
             try
             {
                 var salesOrder = new Core.Domain.Sales.SalesOrderHeader()
                 {
-                    CustomerId = model.CustomerId,
-                    Date = model.OrderDate,
+                    CustomerId = Dto.CustomerId,
+                    Date = Dto.OrderDate,
                 };
 
-                foreach (var line in model.SalesOrderLines)
+                foreach (var line in Dto.SalesOrderLines)
                 {
                     var salesOrderLine = new Core.Domain.Sales.SalesOrderLine();
                     salesOrderLine.Amount = line.Amount;
@@ -245,9 +245,9 @@ namespace Api.Controllers
 
                 _salesService.AddSalesOrder(salesOrder, true);
 
-                model.Id = salesOrder.Id;
+                Dto.Id = salesOrder.Id;
 
-                return new ObjectResult(model);
+                return new ObjectResult(Dto);
             }
             catch (Exception ex)
             {
@@ -257,17 +257,17 @@ namespace Api.Controllers
 
         [HttpPost]
         [Route("[action]")]
-        public IActionResult AddQuotation([FromBody]Model.Sales.SalesQuotation model)
+        public IActionResult AddQuotation([FromBody]Dto.Sales.SalesQuotation Dto)
         {
             try
             {
                 var salesQuote = new Core.Domain.Sales.SalesQuoteHeader()
                 {
-                    CustomerId = model.CustomerId,
-                    Date = model.QuotationDate,
+                    CustomerId = Dto.CustomerId,
+                    Date = Dto.QuotationDate,
                 };
 
-                foreach (var line in model.SalesQuotationLines)
+                foreach (var line in Dto.SalesQuotationLines)
                 {
                     var salesQuoteLine = new Core.Domain.Sales.SalesQuoteLine();
                     salesQuoteLine.Amount = line.Amount == null ? 0 : line.Amount.Value;
@@ -281,7 +281,7 @@ namespace Api.Controllers
 
                 _salesService.AddSalesQuote(salesQuote);
 
-                return new ObjectResult(model);
+                return new ObjectResult(Dto);
             }
             catch (Exception ex)
             {
@@ -295,10 +295,10 @@ namespace Api.Controllers
         {
             var quotes = _salesService.GetSalesQuotes();
 
-            var quoteDtos = new List<Model.Sales.SalesQuotation>();
+            var quoteDtos = new List<Dto.Sales.SalesQuotation>();
 
             foreach (var quote in quotes) {
-                var quoteDto = new Model.Sales.SalesQuotation()
+                var quoteDto = new Dto.Sales.SalesQuotation()
                 {
                     CustomerId = quote.CustomerId,
                     CustomerName = quote.Customer.Party.Name,
@@ -307,7 +307,7 @@ namespace Api.Controllers
                 };
 
                 foreach (var line in quote.SalesQuoteLines) {
-                    var lineDto = new Model.Sales.SalesQuotationLine()
+                    var lineDto = new Dto.Sales.SalesQuotationLine()
                     {
                         ItemId = line.ItemId,
                         MeasurementId = line.MeasurementId,

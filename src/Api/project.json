@@ -27,7 +27,7 @@
         "Core": {
           "target": "project"
         },
-        "Model": {
+        "Dto": {
           "target": "project"
         },
         "Services": {

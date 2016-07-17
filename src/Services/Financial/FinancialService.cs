@@ -30,6 +30,7 @@ namespace Services.Financial
         private readonly IRepository<Account> _accountRepo;
         private readonly IRepository<Tax> _taxRepo;
         private readonly IRepository<JournalEntryHeader> _journalEntryRepo;
+        private readonly IRepository<JournalEntryLine> _journalEntryLineRepo;
         private readonly IRepository<GeneralLedgerLine> _generalLedgerLineRepository;
         private readonly IRepository<FinancialYear> _fiscalYearRepo;
         private readonly IRepository<TaxGroup> _taxGroupRepo;
@@ -50,6 +51,7 @@ namespace Services.Financial
             IRepository<Account> accountRepo,
             IRepository<Tax> taxRepo,
             IRepository<JournalEntryHeader> journalEntryRepo,
+            IRepository<JournalEntryLine> journalEntryLineRepo,
             IRepository<FinancialYear> fiscalYearRepo,
             IRepository<TaxGroup> taxGroupRepo,
             IRepository<ItemTaxGroup> itemTaxGroupRepo,
@@ -70,6 +72,7 @@ namespace Services.Financial
             _accountRepo = accountRepo;
             _taxRepo = taxRepo;
             _journalEntryRepo = journalEntryRepo;
+            _journalEntryLineRepo = journalEntryLineRepo;
             _generalLedgerLineRepository = generalLedgerLineRepository;
             _fiscalYearRepo = fiscalYearRepo;
             _taxGroupRepo = taxGroupRepo;
@@ -198,6 +201,12 @@ namespace Services.Financial
             return true;
         }
 
+        public IEnumerable<JournalEntryLine> GetJournalEntryLines()
+        {
+            var query = _journalEntryLineRepo.GetAllIncluding(j => j.JournalEntryHeader, a => a.Account, h => h.JournalEntryHeader.GeneralLedgerHeader);
+            return query.AsEnumerable();
+        }
+
         public IEnumerable<JournalEntryHeader> GetJournalEntries()
         {
             var query = from je in _journalEntryRepo.Table
@@ -214,7 +223,7 @@ namespace Services.Financial
 
         public ICollection<TrialBalance> TrialBalance(DateTime? from = default(DateTime?), DateTime? to = default(DateTime?))
         {            
-            var allDr = (from dr in _generalLedgerLineRepository.Table.AsEnumerable()
+            var allDr = (from dr in _generalLedgerLineRepository.GetAllIncluding(a => a.Account, h => h.GeneralLedgerHeader).AsEnumerable()
                          where dr.DrCr == DrOrCrSide.Dr
                          //&& IsDateBetweenFinancialYearStartDateAndEndDate(dr.GLHeader.Date)
                          group dr by new { dr.AccountId, dr.Account.AccountCode, dr.Account.AccountName, dr.Amount } into tb
@@ -226,7 +235,7 @@ namespace Services.Financial
                              Debit = tb.Sum(d => d.Amount),
                          });
 
-            var allCr = (from cr in _generalLedgerLineRepository.Table.AsEnumerable()
+            var allCr = (from cr in _generalLedgerLineRepository.GetAllIncluding(a => a.Account, h => h.GeneralLedgerHeader).AsEnumerable()
                          where cr.DrCr == DrOrCrSide.Cr
                          //&& IsDateBetweenFinancialYearStartDateAndEndDate(cr.GLHeader.Date)
                          group cr by new { cr.AccountId, cr.Account.AccountCode, cr.Account.AccountName, cr.Amount } into tb
@@ -276,13 +285,25 @@ namespace Services.Financial
 
         public ICollection<BalanceSheet> BalanceSheet(DateTime? from = default(DateTime?), DateTime? to = default(DateTime?))
         {
-            var assets = from a in _accountRepo.Table
+            var assets = from a in _accountRepo.GetAllIncluding(a => a.AccountClass, 
+                a => a.ChildAccounts, 
+                a => a.ContraAccounts, 
+                a => a.ParentAccount, 
+                h => h.GeneralLedgerLines).AsEnumerable()
                          where a.AccountClassId == 1 && a.ParentAccountId != null && !a.IsContraAccount
                          select a;
-            var liabilities = from a in _accountRepo.Table
+            var liabilities = from a in _accountRepo.GetAllIncluding(a => a.AccountClass,
+                a => a.ChildAccounts,
+                a => a.ContraAccounts,
+                a => a.ParentAccount,
+                h => h.GeneralLedgerLines).AsEnumerable()
                               where a.AccountClassId == 2 && a.ParentAccountId != null && !a.IsContraAccount
                               select a;
-            var equities = from a in _accountRepo.Table
+            var equities = from a in _accountRepo.GetAllIncluding(a => a.AccountClass,
+                a => a.ChildAccounts,
+                a => a.ContraAccounts,
+                a => a.ParentAccount,
+                h => h.GeneralLedgerLines).AsEnumerable()
                            where a.AccountClassId == 3 && a.ParentAccountId != null && !a.IsContraAccount
                            select a;
 
@@ -325,11 +346,19 @@ namespace Services.Financial
 
         public ICollection<IncomeStatement> IncomeStatement(DateTime? from = default(DateTime?), DateTime? to = default(DateTime?))
         {
-            var revenues = from r in _accountRepo.Table
+            var revenues = from r in _accountRepo.GetAllIncluding(a => a.AccountClass,
+                a => a.ChildAccounts,
+                a => a.ContraAccounts,
+                a => a.ParentAccount,
+                h => h.GeneralLedgerLines).AsEnumerable()
                            where r.AccountClassId == 4 && r.ParentAccountId != null && !r.IsContraAccount
                            select r;
 
-            var expenses = from e in _accountRepo.Table
+            var expenses = from e in _accountRepo.GetAllIncluding(a => a.AccountClass,
+                a => a.ChildAccounts,
+                a => a.ContraAccounts,
+                a => a.ParentAccount,
+                h => h.GeneralLedgerLines).AsEnumerable()
                            where e.AccountClassId == 5 && e.ParentAccountId != null && !e.IsContraAccount
                            select e;
 
@@ -364,7 +393,7 @@ namespace Services.Financial
             string accountCode = null, 
             int? transactionNo = null)
         {
-            var allDr = (from dr in _generalLedgerLineRepository.Table.AsEnumerable()
+            var allDr = (from dr in _generalLedgerLineRepository.GetAllIncluding(l => l.GeneralLedgerHeader, a => a.Account).AsEnumerable()
                          where dr.DrCr == DrOrCrSide.Dr
                          //&& GeneralLedgerHelper.IsBetween(dr.GLHeader.Date, (DateTime)fromDate, (DateTime)toDate) == true
                          select new MasterGeneralLedger
@@ -381,7 +410,7 @@ namespace Services.Financial
                              DocumentType = Enum.GetName(typeof(DocumentTypes), dr.GeneralLedgerHeader.DocumentType)
                          });
 
-            var allCr = (from cr in _generalLedgerLineRepository.Table.AsEnumerable()
+            var allCr = (from cr in _generalLedgerLineRepository.GetAllIncluding(l => l.GeneralLedgerHeader, a => a.Account).AsEnumerable()
                          where cr.DrCr == DrOrCrSide.Cr
                          //&& GeneralLedgerHelper.IsBetween(cr.GLHeader.Date, (DateTime)fromDate, (DateTime)toDate) == true
                          select new MasterGeneralLedger

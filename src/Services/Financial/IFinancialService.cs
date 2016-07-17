@@ -22,6 +22,7 @@ namespace Services.Financial
         GeneralLedgerHeader CreateGeneralLedgerHeader(DocumentTypes documentType, DateTime Date, string description);
         IEnumerable<Account> GetAccounts();
         IEnumerable<JournalEntryHeader> GetJournalEntries();
+        IEnumerable<JournalEntryLine> GetJournalEntryLines();
         void AddJournalEntry(JournalEntryHeader journalEntry);
         ICollection<TrialBalance> TrialBalance(DateTime? from = null, DateTime? to = null);
         ICollection<BalanceSheet> BalanceSheet(DateTime? from = null, DateTime? to = null);

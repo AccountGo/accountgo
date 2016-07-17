@@ -30,5 +30,25 @@ namespace AccountGoWeb.Controllers
 
             return View();
         }
+
+        public async System.Threading.Tasks.Task<IActionResult> ICJ()
+        {
+            ViewBag.PageContentHeader = "Inventory Control Journal";
+
+            using (var client = new System.Net.Http.HttpClient())
+            {
+                var baseUri = _config["ApiUrl"];
+                client.BaseAddress = new System.Uri(baseUri);
+                client.DefaultRequestHeaders.Accept.Clear();
+                var response = await client.GetAsync(baseUri + "inventory/icj");
+                if (response.IsSuccessStatusCode)
+                {
+                    var responseJson = await response.Content.ReadAsStringAsync();
+                    return View(model: responseJson);
+                }
+            }
+
+            return View();
+        }
     }
 }
