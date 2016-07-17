@@ -20,6 +20,6 @@
     "d3": "latest",
     "react-router": "latest",
     "ag-grid": "latest",
-    "ag-grid-react": "latest"
+    "ag-grid-react": "latest"    
   }
 }
