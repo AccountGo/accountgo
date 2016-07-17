@@ -1,18 +1,46 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
+using System.Net.Http;
 
 namespace AccountGoWeb.Controllers
 {
     public class PurchasingController : Controller
     {
+        private readonly IConfiguration _config;
+
+        public PurchasingController(IConfiguration config)
+        {
+            _config = config;
+        }
+
         public IActionResult Index()
         {
             return View();
         }
 
-        public IActionResult PurchaseOrders()
+        public async System.Threading.Tasks.Task<IActionResult> PurchaseOrders()
         {
             ViewBag.PageContentHeader = "Purchase Orders";
-
+            using (var client = new HttpClient())
+            {
+                var baseUri = _config["ApiUrl"];
+                client.BaseAddress = new System.Uri(baseUri);
+                client.DefaultRequestHeaders.Accept.Clear();
+                var response = await client.GetAsync(baseUri + "purchasing/purchaseorders");
+                if (response.IsSuccessStatusCode)
+                {
+                    var responseJson = await response.Content.ReadAsStringAsync();
+                    try
+                    {
+                        var quotes = Newtonsoft.Json.JsonConvert.DeserializeObject<System.Collections.Generic.List<Dto.Sales.SalesQuotation>>(responseJson);
+                        return View(model: responseJson);
+                    }
+                    catch (System.Exception ex)
+                    {
+                        System.Diagnostics.Debug.Write(ex.Message);
+                    }
+                }
+            }
             return View();
         }
 
@@ -23,10 +51,29 @@ namespace AccountGoWeb.Controllers
             return View();
         }
 
-        public IActionResult PurchaseInvoices()
+        public async System.Threading.Tasks.Task<IActionResult> PurchaseInvoices()
         {
             ViewBag.PageContentHeader = "Purchase Invoices";
-
+            using (var client = new HttpClient())
+            {
+                var baseUri = _config["ApiUrl"];
+                client.BaseAddress = new System.Uri(baseUri);
+                client.DefaultRequestHeaders.Accept.Clear();
+                var response = await client.GetAsync(baseUri + "purchasing/purchaseinvoices");
+                if (response.IsSuccessStatusCode)
+                {
+                    var responseJson = await response.Content.ReadAsStringAsync();
+                    try
+                    {
+                        var quotes = Newtonsoft.Json.JsonConvert.DeserializeObject<System.Collections.Generic.List<Dto.Sales.SalesQuotation>>(responseJson);
+                        return View(model: responseJson);
+                    }
+                    catch (System.Exception ex)
+                    {
+                        System.Diagnostics.Debug.Write(ex.Message);
+                    }
+                }
+            }
             return View();
         }
 

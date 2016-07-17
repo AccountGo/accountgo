@@ -289,9 +289,11 @@ namespace Services.Sales
 
         public IEnumerable<SalesInvoiceHeader> GetSalesInvoices()
         {
-            var query = from invoice in _salesInvoiceRepo.Table
-                        select invoice;
-            return query.ToList();
+            var query = _salesInvoiceRepo.GetAllIncluding(inv => inv.Customer,
+                inv => inv.Customer.Party,
+                inv => inv.SalesInvoiceLines);
+
+            return query.AsEnumerable();
         }
 
         public SalesInvoiceHeader GetSalesInvoiceById(int id)
@@ -314,9 +316,13 @@ namespace Services.Sales
 
         public IEnumerable<SalesReceiptHeader> GetSalesReceipts()
         {
-            var query = from receipt in _salesReceiptRepo.Table
-                        select receipt;
-            return query.ToList();
+            var query = _salesReceiptRepo.GetAllIncluding(s => s.Customer,
+                s => s.Customer.Party,
+                s => s.AccountToDebit,
+                s => s.GeneralLedgerHeader,
+                s => s.SalesReceiptLines);
+
+            return query.AsEnumerable();
         }
 
         public SalesReceiptHeader GetSalesReceiptById(int id)
@@ -486,14 +492,10 @@ namespace Services.Sales
 
         public IEnumerable<SalesOrderHeader> GetSalesOrders()
         {
-            var salesOrders = _salesOrderRepo.GetAllIncluding(c => c.Customer,
-                pt => pt.PaymentTerm,
-                lines => lines.SalesOrderLines);
-
-            foreach(var salesOrder in salesOrders)
-            {
-                salesOrder.Customer.Party = GetCustomerById(salesOrder.CustomerId.Value).Party;
-            }
+            var salesOrders = _salesOrderRepo.GetAllIncluding(so => so.Customer,
+                so => so.PaymentTerm,
+                so => so.SalesOrderLines,
+                so => so.Customer.Party);
 
             return salesOrders;
         }

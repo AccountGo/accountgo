@@ -1,6 +1,29 @@
 ﻿<div>
-    <a href="~/Purchasing/AddPurchaseOrder">Add</a>
+    <a href="~/purchasing/addpurchaseorder">Add</a>
 </div>
 <div>
-    Purchase Order List Here
+    <div id="purchaseorders" class="ag-fresh" style="height: 400px;"></div>
 </div>
+<script>
+    var columnDefs = [
+        {headerName: "Order", field: "id", width: 50},
+        {headerName: "Vendor Name", field: "vendorName", width: 350},
+        {headerName: "Order Date", field: "orderDate", width: 100},
+        {headerName: "Amount", field: "Amount", width: 100}
+    ];
+
+    var gridOptions = {
+        columnDefs: columnDefs,
+        rowData: @Html.Raw(Model),
+
+        // PROPERTIES - simple boolean / string / number properties
+        rowSelection: 'multiple',
+     };
+
+    // wait for the document to be loaded, otherwise
+    // ag-Grid will not find the div in the document.
+    document.addEventListener("DOMContentLoaded", function() {
+        var eGridDiv = document.querySelector('#purchaseorders');
+        new agGrid.Grid(eGridDiv, gridOptions);
+    });
+</script>

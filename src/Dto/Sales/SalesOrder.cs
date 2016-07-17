@@ -9,7 +9,7 @@ namespace Dto.Sales
         public string CustomerNo { get; set; }
         public string CustomerName { get; set; }
         public DateTime OrderDate { get; set; }
-        public decimal TotalAmount { get; set; }
+        public decimal Amount { get; set; }
         public IList<SalesOrderLine> SalesOrderLines { get; set; }
     }
 

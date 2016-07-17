@@ -1,6 +1,30 @@
 ﻿<div>
-    <a href="~/Sales/AddSalesReceipt">Add</a>
+    <a href="~/sales/addsalesreceipt">Add</a>
 </div>
 <div>
-    Sales Receipts List Here
+    <div id="receipts" class="ag-fresh" style="height: 400px;"></div>
 </div>
+<script>
+    var columnDefs = [
+        {headerName: "Receipt", field: "id", width: 50},
+        {headerName: "No", field: "receiptNo", width: 50},
+        {headerName: "Customer Name", field: "customerName", width: 350},
+        {headerName: "Receipt Date", field: "receiptDate", width: 100},
+        {headerName: "Amount", field: "amount", width: 100}
+    ];
+
+    var gridOptions = {
+        columnDefs: columnDefs,
+        rowData: @Html.Raw(Model),
+
+        // PROPERTIES - simple boolean / string / number properties
+        rowSelection: 'multiple',
+     };
+
+    // wait for the document to be loaded, otherwise
+    // ag-Grid will not find the div in the document.
+    document.addEventListener("DOMContentLoaded", function() {
+        var eGridDiv = document.querySelector('#receipts');
+        new agGrid.Grid(eGridDiv, gridOptions);
+    });
+</script>

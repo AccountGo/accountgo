@@ -121,58 +121,27 @@ namespace Api.Controllers
 
         [HttpGet]
         [Route("[action]")]
-        public IActionResult GetSalesOrders()
+        public IActionResult SalesOrders()
         {
-            IList<Dto.Sales.SalesOrder> Dto = new List<Dto.Sales.SalesOrder>();
+            var salesOrders = _salesService.GetSalesOrders();
+            IList<Dto.Sales.SalesOrder> salesOrdersDto = new List<Dto.Sales.SalesOrder>();
 
-            var salesOrderDto1 = new Dto.Sales.SalesOrder()
+            foreach (var salesOrder in salesOrders)
             {
-                Id = 1,
-                CustomerId = 1,
-                CustomerNo = "001",
-                CustomerName = "John Doe",
-                OrderDate = DateTime.Now,
-                TotalAmount = 2500
-            };
-            Dto.Add(salesOrderDto1);
+                var salesOrderDto = new Dto.Sales.SalesOrder()
+                {
+                    Id = salesOrder.Id,
+                    CustomerId = salesOrder.CustomerId.Value,
+                    CustomerNo = salesOrder.Customer.No,
+                    CustomerName = salesOrder.Customer.Party.Name,
+                    OrderDate = salesOrder.Date,
+                    Amount = salesOrder.SalesOrderLines.Sum(l => l.Amount)
+                };
 
-            var salesOrderDto2 = new Dto.Sales.SalesOrder()
-            {
-                Id = 2,
-                CustomerId = 2,
-                CustomerNo = "002",
-                CustomerName = "Joe Bloggs",
-                OrderDate = DateTime.Now,
-                TotalAmount = 3500
-            };
-            Dto.Add(salesOrderDto2);
+                salesOrdersDto.Add(salesOrderDto);
+            }
 
-            return new ObjectResult(Dto);
-            //try
-            //{
-            //    var salesOrders = _salesService.GetSalesOrders();
-
-            //    foreach (var salesOrder in salesOrders)
-            //    {
-            //        var salesOrderDto = new Dto.Sales.SalesOrder()
-            //        {
-            //            Id = salesOrder.Id,
-            //            CustomerId = salesOrder.CustomerId.Value,
-            //            CustomerNo = salesOrder.Customer.No,
-            //            CustomerName = _salesService.GetCustomerById(salesOrder.CustomerId.Value).Party.Name,
-            //            OrderDate = salesOrder.Date,
-            //            TotalAmount = salesOrder.SalesOrderLines.Sum(l => l.Amount)
-            //        };
-
-            //        Dto.Add(salesOrderDto);
-            //    }
-
-            //    return new ObjectResult(Dto);
-            //}
-            //catch(Exception ex)
-            //{
-            //    return new ObjectResult(ex);
-            //}
+            return new ObjectResult(salesOrdersDto);
         }
 
         [HttpGet]
@@ -192,7 +161,7 @@ namespace Api.Controllers
                     CustomerNo = salesOrder.Customer.No,
                     CustomerName = _salesService.GetCustomerById(salesOrder.CustomerId.Value).Party.Name,
                     OrderDate = salesOrder.Date,
-                    TotalAmount = salesOrder.SalesOrderLines.Sum(l => l.Amount),
+                    Amount = salesOrder.SalesOrderLines.Sum(l => l.Amount),
                     SalesOrderLines = new List<Dto.Sales.SalesOrderLine>()
                 };
 
@@ -322,6 +291,55 @@ namespace Api.Controllers
             }
 
             return new ObjectResult(quoteDtos);
+        }
+
+        [HttpGet]
+        [Route("[action]")]
+        public IActionResult SalesInvoices()
+        {
+            var salesInvoices = _salesService.GetSalesInvoices();
+            IList<Dto.Sales.SalesInvoice> salesInvoicesDto = new List<Dto.Sales.SalesInvoice>();
+
+            foreach (var salesInvoice in salesInvoices)
+            {
+                var salesInvoiceDto = new Dto.Sales.SalesInvoice()
+                {
+                    Id = salesInvoice.Id,
+                    CustomerId = salesInvoice.CustomerId,
+                    CustomerName = salesInvoice.Customer.Party.Name,
+                    InvoiceDate = salesInvoice.Date,
+                    TotalAmount = salesInvoice.SalesInvoiceLines.Sum(l => l.Amount)
+                };
+
+                salesInvoicesDto.Add(salesInvoiceDto);
+            }
+
+            return new ObjectResult(salesInvoicesDto);
+        }
+
+        [HttpGet]
+        [Route("[action]")]
+        public IActionResult SalesReceipts()
+        {
+            var salesReceipts = _salesService.GetSalesReceipts();
+            IList<Dto.Sales.SalesReceipt> salesReceiptsDto = new List<Dto.Sales.SalesReceipt>();
+
+            foreach (var salesReceipt in salesReceipts)
+            {
+                var salesReceiptDto = new Dto.Sales.SalesReceipt()
+                {
+                    Id = salesReceipt.Id,
+                    ReceiptNo = salesReceipt.No,
+                    CustomerId = salesReceipt.CustomerId,
+                    CustomerName = salesReceipt.Customer.Party.Name,
+                    ReceiptDate = salesReceipt.Date,
+                    Amount = salesReceipt.Amount
+                };
+
+                salesReceiptsDto.Add(salesReceiptDto);
+            }
+
+            return new ObjectResult(salesReceiptsDto);
         }
     }
 }
