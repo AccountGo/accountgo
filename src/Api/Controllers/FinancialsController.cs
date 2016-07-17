@@ -74,6 +74,20 @@ namespace Api.Controllers
             return new OkObjectResult(Dto.AsEnumerable());
         }
 
+        [HttpPost]
+        [Route("[action]")]
+        public IActionResult AddJournalEntry([FromBody]JournalEntry journalEntryDto)
+        {
+            try
+            {
+                return new ObjectResult(null);
+            }
+            catch (Exception ex)
+            {
+                return new ObjectResult(ex);
+            }
+        }
+
         [HttpGet]
         [Route("[action]")]
         public IActionResult GeneralLedger(DateTime? from = default(DateTime?),

@@ -1,8 +1,13 @@
-﻿namespace Dto.Financial
+﻿using System;
+
+namespace Dto.Financial
 {
     public class JournalEntry
     {
-
+        public DateTime Date { get; set; }
+        public int VoucherType { get; set; }
+        public string ReferenceNo { get; set; }
+        public string Memo { get; set; }
     }
 
     public class JournalEntryLine

@@ -13,4 +13,10 @@
         public decimal DebitBalance { get; set; }
         public decimal CreditBalance { get; set; }
     }
+
+    public class SelectAccount
+    {
+        public int Id { get; set; }
+        public string AccountName { get; set; }
+    }
 }

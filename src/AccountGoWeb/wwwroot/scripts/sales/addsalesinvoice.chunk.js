@@ -1,4 +1,4 @@
-webpackJsonp([4],{
+webpackJsonp([5],{
 
 /***/ 0:
 /*!********************************************************!*\
@@ -21,11 +21,11 @@ webpackJsonp([4],{
 	var React = __webpack_require__(/*! react */ 1);
 	var ReactDOM = __webpack_require__(/*! react-dom */ 38);
 	var mobx_react_1 = __webpack_require__(/*! mobx-react */ 168);
-	var SelectCustomer_1 = __webpack_require__(/*! ../Shared/Components/SelectCustomer */ 180);
-	var SelectPaymentTerm_1 = __webpack_require__(/*! ../Shared/Components/SelectPaymentTerm */ 171);
-	var SelectLineItem_1 = __webpack_require__(/*! ../Shared/Components/SelectLineItem */ 172);
-	var SelectLineMeasurement_1 = __webpack_require__(/*! ../Shared/Components/SelectLineMeasurement */ 173);
-	var SalesInvoiceStore_1 = __webpack_require__(/*! ../Shared/Stores/Sales/SalesInvoiceStore */ 205);
+	var SelectCustomer_1 = __webpack_require__(/*! ../Shared/Components/SelectCustomer */ 207);
+	var SelectPaymentTerm_1 = __webpack_require__(/*! ../Shared/Components/SelectPaymentTerm */ 198);
+	var SelectLineItem_1 = __webpack_require__(/*! ../Shared/Components/SelectLineItem */ 199);
+	var SelectLineMeasurement_1 = __webpack_require__(/*! ../Shared/Components/SelectLineMeasurement */ 200);
+	var SalesInvoiceStore_1 = __webpack_require__(/*! ../Shared/Stores/Sales/SalesInvoiceStore */ 211);
 	var store = new SalesInvoiceStore_1.default();
 	var SaveInvoiceButton = (function (_super) {
 	    __extends(SaveInvoiceButton, _super);
@@ -2833,7 +2833,7 @@ webpackJsonp([4],{
 
 /***/ },
 
-/***/ 171:
+/***/ 198:
 /*!**********************************************************************!*\
   !*** ./wwwroot/libs/tsxbuild/Shared/Components/SelectPaymentTerm.js ***!
   \**********************************************************************/
@@ -2879,7 +2879,7 @@ webpackJsonp([4],{
 
 /***/ },
 
-/***/ 172:
+/***/ 199:
 /*!*******************************************************************!*\
   !*** ./wwwroot/libs/tsxbuild/Shared/Components/SelectLineItem.js ***!
   \*******************************************************************/
@@ -2905,7 +2905,8 @@ webpackJsonp([4],{
 	        _super.apply(this, arguments);
 	    }
 	    SelectLineItem.prototype.onChangeItem = function (e) {
-	        this.props.store.updateLineItem(this.props.row, "itemId", e.target.value);
+	        if (this.props.row !== undefined)
+	            this.props.store.updateLineItem(this.props.row, "itemId", e.target.value);
 	    };
 	    SelectLineItem.prototype.render = function () {
 	        var options = [];
@@ -2925,7 +2926,7 @@ webpackJsonp([4],{
 
 /***/ },
 
-/***/ 173:
+/***/ 200:
 /*!**************************************************************************!*\
   !*** ./wwwroot/libs/tsxbuild/Shared/Components/SelectLineMeasurement.js ***!
   \**************************************************************************/
@@ -2951,7 +2952,8 @@ webpackJsonp([4],{
 	        _super.apply(this, arguments);
 	    }
 	    SelectLineMeasurement.prototype.onChangeMeasurement = function (e) {
-	        this.props.store.updateLineItem(this.props.row, "measurementId", e.target.value);
+	        if (this.props.row !== undefined)
+	            this.props.store.updateLineItem(this.props.row, "measurementId", e.target.value);
 	    };
 	    SelectLineMeasurement.prototype.render = function () {
 	        var options = [];
@@ -2971,7 +2973,7 @@ webpackJsonp([4],{
 
 /***/ },
 
-/***/ 180:
+/***/ 207:
 /*!*******************************************************************!*\
   !*** ./wwwroot/libs/tsxbuild/Shared/Components/SelectCustomer.js ***!
   \*******************************************************************/
@@ -3017,7 +3019,7 @@ webpackJsonp([4],{
 
 /***/ },
 
-/***/ 205:
+/***/ 211:
 /*!************************************************************************!*\
   !*** ./wwwroot/libs/tsxbuild/Shared/Stores/Sales/SalesInvoiceStore.js ***!
   \************************************************************************/
@@ -3025,8 +3027,8 @@ webpackJsonp([4],{
 
 	"use strict";
 	var mobx_1 = __webpack_require__(/*! mobx */ 169);
-	var SalesInvoice_1 = __webpack_require__(/*! ./SalesInvoice */ 206);
-	var SalesInvoiceLine_1 = __webpack_require__(/*! ./SalesInvoiceLine */ 207);
+	var SalesInvoice_1 = __webpack_require__(/*! ./SalesInvoice */ 212);
+	var SalesInvoiceLine_1 = __webpack_require__(/*! ./SalesInvoiceLine */ 213);
 	var SalesStore = (function () {
 	    function SalesStore() {
 	        this.salesInvoice = new SalesInvoice_1.default();
@@ -3076,7 +3078,7 @@ webpackJsonp([4],{
 
 /***/ },
 
-/***/ 206:
+/***/ 212:
 /*!*******************************************************************!*\
   !*** ./wwwroot/libs/tsxbuild/Shared/Stores/Sales/SalesInvoice.js ***!
   \*******************************************************************/
@@ -3095,7 +3097,7 @@ webpackJsonp([4],{
 
 /***/ },
 
-/***/ 207:
+/***/ 213:
 /*!***********************************************************************!*\
   !*** ./wwwroot/libs/tsxbuild/Shared/Stores/Sales/SalesInvoiceLine.js ***!
   \***********************************************************************/

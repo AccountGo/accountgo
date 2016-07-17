@@ -10,6 +10,7 @@ export default class CommonStore {
     @observable items = [];
     @observable measurements = [];
     @observable vendors = [];
+    @observable accounts = [];
 
     constructor() {
         this.loadCustomersLookup();
@@ -17,6 +18,7 @@ export default class CommonStore {
         this.loadItemsLookup();
         this.loadMeasurementsLookup();
         this.loadVendorsLookup();
+        this.loadAccountsLookup();
     }
 
     loadCustomersLookup() {
@@ -70,6 +72,20 @@ export default class CommonStore {
                 const data = result.data as [];
                 for (var i = 0; i < data.length; i++) {
                     measurements.push(data[i]);
+                }
+            });
+    }
+
+    loadVoucherTypesLookup() {
+    }
+
+    loadAccountsLookup() {
+        let accounts = this.accounts;
+        axios.get(Config.apiUrl + "api/common/accounts")
+            .then(function (result) {
+                const data = result.data as [];
+                for (var i = 0; i < data.length; i++) {
+                    accounts.push(data[i]);
                 }
             });
     }

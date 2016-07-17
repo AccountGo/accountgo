@@ -7,6 +7,9 @@ using Services.Inventory;
 using Services.Purchasing;
 using Services.Sales;
 using System.Collections.Generic;
+using Services.Financial;
+using Dto.Financial;
+using System.Linq;
 
 namespace Api.Controllers
 {
@@ -17,16 +20,19 @@ namespace Api.Controllers
         private readonly IAdministrationService _administrationService;
         private readonly IInventoryService _inventoryService;
         private readonly IPurchasingService _purchasingService;
+        private readonly IFinancialService _financialService;
 
         public CommonController(ISalesService salesService,
             IAdministrationService administrationService,
             IInventoryService inventoryService,
-            IPurchasingService purchasingService)
+            IPurchasingService purchasingService,
+            IFinancialService financialService)
         {
             _salesService = salesService;
             _administrationService = administrationService;
             _inventoryService = inventoryService;
             _purchasingService = purchasingService;
+            _financialService = financialService;
         }
 
         [HttpGet]
@@ -87,6 +93,19 @@ namespace Api.Controllers
             }
 
             return new ObjectResult(vendorsDto);
+        }
+
+        [HttpGet]
+        [Route("[action]")]
+        public IActionResult Accounts()
+        {
+            var accounts = _financialService.GetAccounts();
+            ICollection<SelectAccount> accountsDto = new HashSet<SelectAccount>();
+
+            foreach (var account in accounts)
+                accountsDto.Add(new SelectAccount() { Id = account.Id, AccountName = account.AccountName });
+
+            return Ok(accountsDto.AsEnumerable());
         }
     }
 }

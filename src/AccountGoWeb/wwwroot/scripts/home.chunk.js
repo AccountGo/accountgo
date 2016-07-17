@@ -1,4 +1,4 @@
-webpackJsonp([0],[
+webpackJsonp([1],[
 /* 0 */
 /*!********************************************!*\
   !*** ./wwwroot/libs/tsxbuild/home/home.js ***!
