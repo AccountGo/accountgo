@@ -5,13 +5,13 @@
       "type": "project",
       "framework": ".NETFramework,Version=v4.6",
       "compile": {
-        "bin/Release/Dto.dll": {}
+        "bin/Debug/Dto.dll": {}
       },
       "runtime": {
-        "bin/Release/Dto.dll": {}
+        "bin/Debug/Dto.dll": {}
       },
       "contentFiles": {
-        "bin/Release/Dto.pdb": {
+        "bin/Debug/Dto.pdb": {
           "buildAction": "None",
           "codeLanguage": "any",
           "copyToOutput": true
