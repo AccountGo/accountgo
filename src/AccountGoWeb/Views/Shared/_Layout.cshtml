@@ -481,5 +481,17 @@ desired effect
     <script src="~/adminLTE/js/app.js"></script>
     <!--AG-GRID-->
     <script src="~/plugins/ag-grid/dist/ag-grid.js?ignore=notused24"></script>
+    <!--TODO : this is temporary solution.-->
+    <script>
+        $(document).ready(function () {
+            $('li').each(function () {
+                if (window.location.href.indexOf($(this).find('a:first').attr('href')) > -1) {
+                    $(this).addClass('active').siblings().removeClass('active');
+                    $(this).parent().parent().addClass('treeview active');
+                }
+            });
+        });
+    </script>
+    <!--//END TODO-->
 </body>
 </html>
