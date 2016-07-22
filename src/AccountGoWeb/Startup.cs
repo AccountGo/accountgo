@@ -33,6 +33,17 @@ namespace AccountGoWeb
         {
             app.UseStaticFiles();
 
+            var options = new CookieAuthenticationOptions()
+            {
+                AuthenticationScheme = "AuthCookie",
+                LoginPath = new Microsoft.AspNetCore.Http.PathString("/account/signin/"),
+                AccessDeniedPath = new Microsoft.AspNetCore.Http.PathString("/account/unauthorized/"),
+                AutomaticAuthenticate = true,
+                AutomaticChallenge = true
+            };
+
+            app.UseCookieAuthentication(options);
+
             app.UseMvc(routes =>
             {
                 routes.MapRoute(

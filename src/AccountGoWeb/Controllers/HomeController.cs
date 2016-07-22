@@ -2,6 +2,7 @@
 
 namespace AccountGoWeb.Controllers
 {
+    [Microsoft.AspNetCore.Authorization.Authorize]
     public class HomeController : Controller
     {
         public IActionResult Index()

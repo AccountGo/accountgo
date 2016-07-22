@@ -8,7 +8,7 @@
 
 using System;
 
-namespace Models
+namespace AccountGoWeb.Models
 {
     public class TrialBalance
     {
