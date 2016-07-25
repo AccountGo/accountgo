@@ -1,0 +1,64 @@
+﻿@model Dto.Inventory.Item
+
+<div class="col-md-9">
+    <form action="~/inventory/item" method="post">
+        @Html.HiddenFor(m => m.Id)
+        <div class="box">
+            <div class="box-header with-border">
+                <h3 class="box-title">General</h3>
+                <div class="box-tools pull-right">
+                    <button type="button" class="btn btn-box-tool" data-widget="collapse" data-toggle="tooltip" title="Collapse">
+                        <i class="fa fa-minus"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="box-body">
+                <div class="col-sm-6">
+                    <div class="row">
+                        <div class="col-sm-2">Code</div>
+                        <div class="col-sm-10"><input asp-for="Code" class="form-control" type="text" placeholder="Code ..." /></div>
+                    </div>
+                    <div class="row">
+                        <div class="col-sm-2">Description</div>
+                        <div class="col-sm-10"><input asp-for="Description" class="form-control" type="text" placeholder="Description ..." /></div>
+                    </div>
+                </div>
+                <div class="col-sm-6">
+                    <div class="row">
+                        <div class="col-sm-2">Category</div>
+                        <div class="col-sm-10">Category</div>
+                    </div>
+                    <div class="row">
+                        <div class="col-sm-2">Item Tax Group</div>
+                        <div class="col-sm-10">Code</div>
+                    </div>
+                </div>
+            </div>
+            <!-- /.box-body -->
+        </div>
+        <!-- /.box -->
+        <div class="box">
+            <div class="box-header with-border">
+                <h3 class="box-title">Invoicing</h3>
+                <div class="box-tools pull-right">
+                    <button type="button" class="btn btn-box-tool" data-widget="collapse" data-toggle="tooltip" title="Collapse">
+                        <i class="fa fa-minus"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="box-body">
+                <div class="col-sm-6">
+                </div>
+                <div class="col-sm-6">
+                </div>
+            </div>
+            <!-- /.box-body -->
+        </div>
+        <!-- /.box -->
+        <div>
+            <input class="btn btn-primary btn-flat" type="submit" value="Save" />
+        </div>
+    </form>
+</div>
+<div class="col-md-3">
+</div>

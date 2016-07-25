@@ -1,5 +1,8 @@
-webpackJsonp([0],[
+webpackJsonp([1],[
 /* 0 */
+/*!********************************************!*\
+  !*** ./wwwroot/libs/tsxbuild/home/home.js ***!
+  \********************************************/
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -8,19 +11,19 @@ webpackJsonp([0],[
 	    function __() { this.constructor = d; }
 	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 	};
-	var React = __webpack_require__(1);
-	var ReactDOM = __webpack_require__(38);
+	var React = __webpack_require__(/*! react */ 1);
+	var ReactDOM = __webpack_require__(/*! react-dom */ 38);
 	var Home = (function (_super) {
 	    __extends(Home, _super);
 	    function Home() {
 	        _super.apply(this, arguments);
 	    }
 	    Home.prototype.render = function () {
-	        return React.createElement("div", null, this.props.pageTitle, ".If you can see this message means you have successfully configured reactjs+typescript+webpack+babel-loader.");
+	        return (React.createElement("div", null, "Tiles or widgets here"));
 	    };
 	    return Home;
 	}(React.Component));
-	ReactDOM.render(React.createElement(Home, {pageTitle: "Dashboard"}), document.getElementById("home"));
+	ReactDOM.render(React.createElement(Home, null), document.getElementById("home"));
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.default = Home;
 	//# sourceMappingURL=Home.js.map

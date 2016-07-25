@@ -1,0 +1,31 @@
+﻿@model string
+
+<div>
+</div>
+<div>
+    <div id="masterGL" class="ag-fresh" style="height: 400px;"></div>
+</div>
+<script>
+    var columnDefs = [
+    {headerName: "GL", field: "id", width: 50},
+    {headerName: "Account", field: "accountName", width: 350},
+    {headerName: "Transaction No", field: "transactionNo", width: 100},
+    {headerName: "Date", field: "date", width: 250},
+    {headerName: "Debit", field: "debit", width: 100},
+    {headerName: "Credit", field: "credit", width: 100}
+    ];
+
+    var gridOptions = {
+        columnDefs: columnDefs,
+        rowData: @Html.Raw(Model),
+        // PROPERTIES
+        rowSelection: 'multiple',
+    };
+
+    // wait for the document to be loaded, otherwise
+    // ag-Grid will not find the div in the document.
+    document.addEventListener("DOMContentLoaded", function() {
+        var eGridDiv = document.querySelector('#masterGL');
+        new agGrid.Grid(eGridDiv, gridOptions);
+    });
+</script>

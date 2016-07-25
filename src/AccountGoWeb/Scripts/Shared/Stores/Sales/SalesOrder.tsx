@@ -1,11 +1,23 @@
-﻿import * as React from 'react';
+﻿import SalesOrderLine from "./SalesOrderLine";
 
-//export default class SalesOrders {
-//    count: number;
-//    totalAmount: number;
-//    salesOrders: SalesOrder[];
-//}
+interface ISalesOrder {
+    customerId;
+    orderDate;
+    paymentTermid;
+    referenceNo;
+    salesOrderLines: SalesOrderLine[];
+}
 
-export default class SalesOrder {
-    constructor(private id: number) { }
+export default class SalesOrder implements ISalesOrder {
+    customerId: number;
+    orderDate: Date;
+    paymentTermid: number;
+    referenceNo: string;
+    salesOrderLines: SalesOrderLine[] = [];
+    //constructor(customerId, orderDate, paymentTermId, referenceNo) {
+    //    this.customerId = customerId;
+    //    this.orderDate = orderDate;
+    //    this.paymentTermid = paymentTermId;
+    //    this.referenceNo = referenceNo;
+    //}
 }

@@ -1,4 +1,5 @@
-﻿var webpack = require('webpack');
+﻿/// <binding BeforeBuild='Run - Development' />
+var webpack = require('webpack');
 var path = require('path');
 
 var buildDir = path.resolve(__dirname, './wwwroot/scripts');
@@ -8,7 +9,12 @@ var scriptsDir = path.resolve(__dirname, './wwwroot/libs/tsxbuild');
 var config = {
     entry: {
         home: scriptsDir + '/home' + '/home',
-        "sales/salesorders": scriptsDir + '/sales/salesorders',
+        "sales/addsalesorder": scriptsDir + '/sales/addsalesorder',
+        "quotations/addsalesquotation": scriptsDir + '/quotations/addsalesquotation',
+        "sales/addsalesinvoice": scriptsDir + '/sales/addsalesinvoice',
+        "purchasing/addpurchaseorder": scriptsDir + '/purchasing/addpurchaseorder',
+        "purchasing/addpurchaseinvoice": scriptsDir + '/purchasing/addpurchaseinvoice',
+        "financials/addjournalentry": scriptsDir + '/financials/addjournalentry',
         vendor: ['react', 'react-dom']
     },
     output: {
@@ -33,11 +39,13 @@ var config = {
         new webpack.optimize.CommonsChunkPlugin("vendor", "vendor.bundle.js")
     ],
     externals: {
-        'Config': JSON.stringify(process.env.ENV === 'production' ? {
-            apiUrl: ""
-        } : {
-            apiUrl: "http://localhost:5000"
-        })
+        'Config': JSON.stringify(process.env.ENV === 'production' ?
+            {
+                apiUrl: "http://accountgo-dev-api.azurewebsites.net/"
+            } :
+            {
+                apiUrl: "http://localhost:5000/"
+            })
     }
 };
 

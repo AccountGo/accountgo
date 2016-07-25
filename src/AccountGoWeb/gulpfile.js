@@ -6,7 +6,8 @@ var destPath = './wwwroot/plugins/';
 gulp.task("libs", () => {
     gulp.src([
             'bootstrap/dist/**',
-            'jquery/dist/**'
+            'jquery/dist/**',
+            'ag-grid/dist/**'
     ],
     {
         cwd: "node_modules/**"

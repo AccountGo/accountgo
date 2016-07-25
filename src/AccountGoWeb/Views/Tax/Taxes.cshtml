@@ -1,0 +1,77 @@
+﻿@model string
+
+<div>
+</div>
+<div>
+    <div id="taxes" class="ag-fresh" style="height: 200px;"></div>
+</div>
+<h3>Tax Group</h3>
+<div>
+    <div id="taxGroups" class="ag-fresh" style="height: 200px;"></div>
+</div>
+<h3>Item Tax Group</h3>
+<div>
+    <div id="itemTaxGroups" class="ag-fresh" style="height: 200px;"></div>
+</div>
+<script>
+    var Dto = @Html.Raw(Model);
+
+    var columnDefsTaxes = [
+    {headerName: "Tax", field: "id", width: 50},
+    {headerName: "Code", field: "taxCode", width: 100},
+    {headerName: "Name", field: "taxName", width: 350},
+    {headerName: "Rate", field: "rate", width: 100},
+    {headerName: "Active", field: "isActive", width: 100},
+    ];
+
+    var gridOptionsTaxes = {
+        columnDefs: columnDefsTaxes,
+        rowData: Dto.taxes,
+        // PROPERTIES
+        rowSelection: 'multiple',
+    };
+
+    // wait for the document to be loaded, otherwise
+    // ag-Grid will not find the div in the document.
+    document.addEventListener("DOMContentLoaded", function() {
+        var eGridDiv = document.querySelector('#taxes');
+        new agGrid.Grid(eGridDiv, gridOptionsTaxes);
+    });
+
+    var columnDefsTaxGroups = [
+    {headerName: "Tax Group", field: "id", width: 50},
+    {headerName: "Description", field: "description", width: 350},
+    {headerName: "Applied To Shippine", field: "isAppliedToShipping", width: 100},
+    {headerName: "Active", field: "isActive", width: 100},
+        ];
+
+    var gridOptionsTaxGroups = {
+        columnDefs: columnDefsTaxGroups,
+        rowData: Dto.taxGroups,
+        // PROPERTIES
+        rowSelection: 'multiple',
+    };
+
+    document.addEventListener("DOMContentLoaded", function() {
+        var eGridDiv = document.querySelector('#taxGroups');
+        new agGrid.Grid(eGridDiv, gridOptionsTaxGroups);
+    });
+
+    var columnDefsItemTaxGroups = [
+    {headerName: "Item Tax Group", field: "id", width: 50},
+    {headerName: "Name", field: "name", width: 350},
+    {headerName: "Is Fully Exempt", field: "isFullyExempt", width: 100},
+        ];
+
+    var gridOptionsItemTaxGroups = {
+        columnDefs: columnDefsItemTaxGroups,
+        rowData: Dto.itemTaxGroups,
+        // PROPERTIES
+        rowSelection: 'multiple',
+    };
+
+    document.addEventListener("DOMContentLoaded", function() {
+        var eGridDiv = document.querySelector('#itemTaxGroups');
+        new agGrid.Grid(eGridDiv, gridOptionsItemTaxGroups);
+    });
+</script>

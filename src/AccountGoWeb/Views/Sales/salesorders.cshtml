@@ -1,3 +1,31 @@
-﻿<div id="salesorders"></div>
+﻿@model string
 
-<script src="~/scripts/sales/salesorders.chunk.js"></script>
+<div>
+    <a class="btn btn-sm btn-default btn-flat" href="~/sales/addsalesorder">Add</a>
+</div>
+<div>
+    <div id="salesorders" class="ag-fresh" style="height: 400px;"></div>
+</div>
+<script>
+    var columnDefs = [
+        {headerName: "Order", field: "id", width: 50},
+        {headerName: "Customer Name", field: "customerName", width: 350},
+        {headerName: "Order Date", field: "orderDate", width: 100},
+        {headerName: "Amount", field: "totalAmount", width: 100}
+    ];
+
+    var gridOptions = {
+        columnDefs: columnDefs,
+        rowData: @Html.Raw(Model),
+
+        // PROPERTIES - simple boolean / string / number properties
+        rowSelection: 'multiple',
+     };
+
+    // wait for the document to be loaded, otherwise
+    // ag-Grid will not find the div in the document.
+    document.addEventListener("DOMContentLoaded", function() {
+        var eGridDiv = document.querySelector('#salesorders');
+        new agGrid.Grid(eGridDiv, gridOptions);
+    });
+</script>

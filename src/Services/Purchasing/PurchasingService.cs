@@ -249,19 +249,24 @@ namespace Services.Purchasing
 
         public IEnumerable<Vendor> GetVendors()
         {
-            var query = from f in _vendorRepo.Table
-                        select f;
-            return query.AsEnumerable();
+            System.Linq.Expressions.Expression<Func<Vendor, object>>[] includeProperties =
+                { p => p.Party, c => c.AccountsPayableAccount };
+
+            var vendors = _vendorRepo.GetAllIncluding(includeProperties);
+
+            return vendors.AsEnumerable();
         }
 
         public Vendor GetVendorById(int id)
         {
-            return _vendorRepo.GetById(id);
+            return _vendorRepo.GetAllIncluding(p => p.Party).Where(v => v.Id == id).FirstOrDefault();
         }
 
         public IEnumerable<PurchaseOrderHeader> GetPurchaseOrders()
         {
-            var query = _purchaseOrderRepo.Table;
+            var query = _purchaseOrderRepo.GetAllIncluding(po => po.Vendor,
+                po => po.Vendor.Party,
+                po => po.PurchaseOrderLines);
 
             return query.AsEnumerable();
         }
@@ -294,9 +299,11 @@ namespace Services.Purchasing
 
         public IEnumerable<PurchaseInvoiceHeader> GetPurchaseInvoices()
         {
-            var query = from purchInvoice in _purchaseInvoiceRepo.Table
-                        select purchInvoice;
-            return query.ToList();
+            var query =_purchaseInvoiceRepo.GetAllIncluding(po => po.Vendor,
+                po => po.Vendor.Party,
+                po => po.PurchaseInvoiceLines);
+
+            return query.AsEnumerable();
         }
 
         public PurchaseInvoiceHeader GetPurchaseInvoiceById(int id)

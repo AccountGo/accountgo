@@ -135,8 +135,7 @@ namespace Services.Inventory
 
         public IEnumerable<InventoryControlJournal> GetInventoryControlJournals()
         {
-            var query = from f in _icjRepo.Table
-                        select f;
+            var query = _icjRepo.GetAllIncluding(m => m.Measurement, i => i.Item);
             return query.AsEnumerable();
         }
 

@@ -33,10 +33,10 @@ namespace Web.Controllers
         public ActionResult Accounts()
         {
             var accounts = _financialService.GetAccounts();
-            var model = new Models.ViewModels.Financials.Accounts();
+            var model = new Accounts();
             foreach(var account in accounts)
             {
-                model.AccountsListLines.Add(new Models.ViewModels.Financials.AccountsListLine()
+                model.AccountsListLines.Add(new AccountsListLine()
                 {
                     Id = account.Id,
                     AccountCode = account.AccountCode,

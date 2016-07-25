@@ -1,0 +1,31 @@
+﻿@model string
+
+<div>
+</div>
+<div>
+    <div id="icj" class="ag-fresh" style="height: 400px;"></div>
+</div>
+<script>
+    var columnDefs = [
+    {headerName: "Id", field: "id", width: 50},
+    {headerName: "Item", field: "item", width: 350},
+    {headerName: "Measurement", field: "measurement", width: 100},
+    {headerName: "IN", field: "in", width: 100},
+    {headerName: "OUT", field: "out", width: 100},
+    {headerName: "Date", field: "date", width: 100}
+    ];
+
+    var gridOptions = {
+        columnDefs: columnDefs,
+        rowData: @Html.Raw(Model),
+        // PROPERTIES
+        rowSelection: 'multiple',
+    };
+
+    // wait for the document to be loaded, otherwise
+    // ag-Grid will not find the div in the document.
+    document.addEventListener("DOMContentLoaded", function() {
+        var eGridDiv = document.querySelector('#icj');
+        new agGrid.Grid(eGridDiv, gridOptions);
+    });
+</script>

@@ -13,6 +13,9 @@
     },
     "axios/axios.d.ts": {
       "commit": "1315d46f8066eec8c197914da88e98629ebc2254"
+    },
+    "d3/d3.d.ts": {
+      "commit": "77b1b1709315b03b9b1b67c589d599bebeeef2ee"
     }
   }
 }

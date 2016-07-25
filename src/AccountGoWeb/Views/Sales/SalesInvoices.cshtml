@@ -1,0 +1,31 @@
+﻿@model string
+
+<div>
+    <a class="btn btn-sm btn-default btn-flat" href="~/sales/addsalesinvoice">Add</a>
+</div>
+<div>
+    <div id="salesinvoices" class="ag-fresh" style="height: 400px;"></div>
+</div>
+<script>
+    var columnDefs = [
+        {headerName: "Invoice", field: "id", width: 50},
+        {headerName: "Customer Name", field: "customerName", width: 350},
+        {headerName: "Invoiced Date", field: "InvoiceDate", width: 100},
+        {headerName: "Amount", field: "totalAmount", width: 100}
+    ];
+
+    var gridOptions = {
+        columnDefs: columnDefs,
+        rowData: @Html.Raw(Model),
+
+        // PROPERTIES - simple boolean / string / number properties
+        rowSelection: 'multiple',
+     };
+
+    // wait for the document to be loaded, otherwise
+    // ag-Grid will not find the div in the document.
+    document.addEventListener("DOMContentLoaded", function() {
+        var eGridDiv = document.querySelector('#salesinvoices');
+        new agGrid.Grid(eGridDiv, gridOptions);
+    });
+</script>

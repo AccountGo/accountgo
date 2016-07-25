@@ -6,6 +6,9 @@ namespace Services.TaxSystem
 {
     public interface ITaxService
     {
+        IEnumerable<Core.Domain.TaxSystem.Tax> GetTaxes(bool includeInActive = false);
+        IEnumerable<Core.Domain.TaxSystem.TaxGroup> GetTaxGroups();
+        IEnumerable<Core.Domain.TaxSystem.ItemTaxGroup> GetItemTaxGroups();
         IEnumerable<Core.Domain.TaxSystem.Tax> GetIntersectionTaxes(int itemId, int partyId, Core.Domain.PartyTypes partyType);
         List<KeyValuePair<int, decimal>> GetPurchaseTaxes(int vendorId, IEnumerable<PurchaseInvoiceLine> purchaseInvoiceLines);
         List<KeyValuePair<int, decimal>> GetPurchaseTaxes(int vendorId, int itemId, decimal quantity, decimal amount, decimal discount);

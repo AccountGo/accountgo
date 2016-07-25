@@ -39,6 +39,7 @@ namespace Services.Sales
         private readonly IRepository<GeneralLedgerSetting> _genetalLedgerSetting;
         private readonly IRepository<Contact> _contactRepo;
         private readonly IRepository<TaxGroup> _taxGroupRepo;
+        private readonly IRepository<SalesQuoteHeader> _salesQuoteRepo;
 
         public SalesService(IFinancialService financialService,
             IInventoryService inventoryService,
@@ -55,7 +56,8 @@ namespace Services.Sales
             IRepository<Bank> bankRepo,
             IRepository<GeneralLedgerSetting> generalLedgerSetting,
             IRepository<Contact> contactRepo,
-            IRepository<TaxGroup> taxGroupRepo)
+            IRepository<TaxGroup> taxGroupRepo,
+            IRepository<SalesQuoteHeader> salesQuoteRepo)
             : base(sequenceNumberRepo, generalLedgerSetting, paymentTermRepo, bankRepo)
         {
             _financialService = financialService;
@@ -74,6 +76,7 @@ namespace Services.Sales
             _genetalLedgerSetting = generalLedgerSetting;
             _contactRepo = contactRepo;
             _taxGroupRepo = taxGroupRepo;
+            _salesQuoteRepo = salesQuoteRepo;
         }
 
         public void AddSalesOrder(SalesOrderHeader salesOrder, bool toSave)
@@ -286,9 +289,11 @@ namespace Services.Sales
 
         public IEnumerable<SalesInvoiceHeader> GetSalesInvoices()
         {
-            var query = from invoice in _salesInvoiceRepo.Table
-                        select invoice;
-            return query.ToList();
+            var query = _salesInvoiceRepo.GetAllIncluding(inv => inv.Customer,
+                inv => inv.Customer.Party,
+                inv => inv.SalesInvoiceLines);
+
+            return query.AsEnumerable();
         }
 
         public SalesInvoiceHeader GetSalesInvoiceById(int id)
@@ -311,9 +316,13 @@ namespace Services.Sales
 
         public IEnumerable<SalesReceiptHeader> GetSalesReceipts()
         {
-            var query = from receipt in _salesReceiptRepo.Table
-                        select receipt;
-            return query.ToList();
+            var query = _salesReceiptRepo.GetAllIncluding(s => s.Customer,
+                s => s.Customer.Party,
+                s => s.AccountToDebit,
+                s => s.GeneralLedgerHeader,
+                s => s.SalesReceiptLines);
+
+            return query.AsEnumerable();
         }
 
         public SalesReceiptHeader GetSalesReceiptById(int id)
@@ -483,14 +492,10 @@ namespace Services.Sales
 
         public IEnumerable<SalesOrderHeader> GetSalesOrders()
         {
-            var salesOrders = _salesOrderRepo.GetAllIncluding(c => c.Customer,
-                pt => pt.PaymentTerm,
-                lines => lines.SalesOrderLines);
-
-            foreach(var salesOrder in salesOrders)
-            {
-                salesOrder.Customer.Party = GetCustomerById(salesOrder.CustomerId.Value).Party;
-            }
+            var salesOrders = _salesOrderRepo.GetAllIncluding(so => so.Customer,
+                so => so.PaymentTerm,
+                so => so.SalesOrderLines,
+                so => so.Customer.Party);
 
             return salesOrders;
         }
@@ -541,6 +546,19 @@ namespace Services.Sales
         public ICollection<CustomerAllocation> GetCustomerAllocations(int customerId)
         {
             return null;
+        }
+
+        public void AddSalesQuote(SalesQuoteHeader salesQuoteHeader)
+        {
+            _salesQuoteRepo.Insert(salesQuoteHeader);
+        }
+
+        public IEnumerable<SalesQuoteHeader> GetSalesQuotes()
+        {
+            var quotes = _salesQuoteRepo
+                .GetAllIncluding(line => line.SalesQuoteLines, p => p.Customer.Party)
+                .AsEnumerable();
+            return quotes;
         }
     }
 }

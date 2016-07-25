@@ -1,16 +1,16 @@
 ﻿<!DOCTYPE html>
+<!--
+This is a starter template page. Use this page to start your new project from
+scratch. This page gets rid of all links and provides the needed markup only.
+-->
 <html>
 <head>
-    <base href="/" />
     <meta charset="utf-8">
-    <!-- Tell the browser to be responsive to screen width -->
-    <meta content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" name="viewport">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <title>AccountGo</title>
     <link rel="stylesheet" href="~/plugins/bootstrap/dist/css/bootstrap.min.css">
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.5.0/css/font-awesome.min.css">
-    <!-- Ionicons -->
-    @*<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/ionicons/2.0.1/css/ionicons.min.css">*@
     <!-- Theme style -->
     <link rel="stylesheet" href="~/adminLTE/css/AdminLTE.css">
     <!-- AdminLTE Skins. We have chosen the skin-blue for this starter
@@ -27,13 +27,32 @@
     <![endif]-->
     <script src="~/scripts/vendor.bundle.js"></script>
 </head>
+<!--
+BODY TAG OPTIONS:
+=================
+Apply one or more of the following classes to get the
+desired effect
+|---------------------------------------------------------|
+| SKINS         | skin-blue                               |
+|               | skin-black                              |
+|               | skin-purple                             |
+|               | skin-yellow                             |
+|               | skin-red                                |
+|               | skin-green                              |
+|---------------------------------------------------------|
+|LAYOUT OPTIONS | fixed                                   |
+|               | layout-boxed                            |
+|               | layout-top-nav                          |
+|               | sidebar-collapse                        |
+|               | sidebar-mini                            |
+|---------------------------------------------------------|
+-->
 <body class="hold-transition skin-blue sidebar-mini">
-    <!-- wrapper -->
     <div class="wrapper">
         <!-- Main Header -->
         <header class="main-header">
             <!-- Logo -->
-            <a href="." class="logo">
+            <a href="~/" class="logo">
                 <!-- mini logo for sidebar mini 50x50 pixels -->
                 <span class="logo-mini"><b>AG</b></span>
                 <!-- logo for regular state and mobile devices -->
@@ -80,9 +99,7 @@
                                     </ul>
                                     <!-- /.menu -->
                                 </li>
-                                <li class="footer">
-                                    <a href="#">See All Messages</a>
-                                </li>
+                                <li class="footer"><a href="#">See All Messages</a></li>
                             </ul>
                         </li>
                         <!-- /.messages-menu -->
@@ -107,9 +124,7 @@
                                         <!-- end notification -->
                                     </ul>
                                 </li>
-                                <li class="footer">
-                                    <a href="#">View all</a>
-                                </li>
+                                <li class="footer"><a href="#">View all</a></li>
                             </ul>
                         </li>
                         <!-- Tasks Menu -->
@@ -163,8 +178,8 @@
                                 <li class="user-header">
                                     <img src="~/adminLTE/img/user2-160x160.png" class="img-circle" alt="User Image">
                                     <p>
-                                        Marvin Perez
-                                        <small>Founder</small>
+                                        Marvin Perez - Founder
+                                        <small>Member since Jan. 2010</small>
                                     </p>
                                 </li>
                                 <!-- Menu Body -->
@@ -188,7 +203,7 @@
                                         <a href="#" class="btn btn-default btn-flat">Profile</a>
                                     </div>
                                     <div class="pull-right">
-                                        <a href="#" class="btn btn-default btn-flat">Sign out</a>
+                                        <a href="~/account/signout" class="btn btn-default btn-flat">Sign out</a>
                                     </div>
                                 </li>
                             </ul>
@@ -206,18 +221,18 @@
             <!-- sidebar: style can be found in sidebar.less -->
             <section class="sidebar">
                 <!-- Sidebar user panel (optional) -->
-                <!--<div class="user-panel">
-                <div class="pull-left image">
-                    <img src="./assets/dist/img/user2-160x160.png" class="img-circle" alt="User Image">
-                </div>
-                <div class="pull-left info">
-                    <p>Marvin Perez</p>-->
-                <!-- Status -->
-                <!--<a href="#"><i class="fa fa-circle text-success"></i> Online</a>
+                @*<div class="user-panel">
+                    <div class="pull-left image">
+                        <img src="dist/img/user2-160x160.jpg" class="img-circle" alt="User Image">
                     </div>
-                </div>-->
+                    <div class="pull-left info">
+                        <p>Alexander Pierce</p>
+                        <!-- Status -->
+                        <a href="#"><i class="fa fa-circle text-success"></i> Online</a>
+                    </div>
+                </div>*@
                 <!-- search form (Optional) -->
-                <!--<form action="#" method="get" class="sidebar-form">
+                @*<form action="#" method="get" class="sidebar-form">
                     <div class="input-group">
                         <input type="text" name="q" class="form-control" placeholder="Search...">
                         <span class="input-group-btn">
@@ -226,34 +241,55 @@
                             </button>
                         </span>
                     </div>
-                </form>-->
+                </form>*@
                 <!-- /.search form -->
                 <!-- Sidebar Menu -->
+                @*<ul class="sidebar-menu">
+                    <li class="header">HEADER</li>
+                    <!-- Optionally, you can add icons to the links -->
+                    <li class="active"><a href="#"><i class="fa fa-link"></i> <span>Link</span></a></li>
+                    <li><a href="#"><i class="fa fa-link"></i> <span>Another Link</span></a></li>
+                    <li class="treeview">
+                        <a href="#">
+                            <i class="fa fa-link"></i> <span>Multilevel</span>
+                            <span class="pull-right-container">
+                                <i class="fa fa-angle-left pull-right"></i>
+                            </span>
+                        </a>
+                        <ul class="treeview-menu">
+                            <li><a href="#">Link in level 2</a></li>
+                            <li><a href="#">Link in level 2</a></li>
+                        </ul>
+                    </li>
+                </ul>*@
                 <ul class="sidebar-menu">
                     <li class="header">NAVIGATION</li>
                     <!-- Optionally, you can add icons to the links -->
                     <li class="active">
                         <!--<a href="#"><i class="fa fa-dashboard"></i> <span>Dashboard</span></a>-->
-                        <a href="#"><i class="fa fa-dashboard"></i><span>Dashboard</span></a>
+                        <a href="~/"><i class="fa fa-dashboard"></i><span>Dashboard</span></a>
                     </li>
                     <li class="treeview">
                         <a href="#"><i class="fa fa-industry"></i> <span>Accounts Receivable</span> <i class="fa fa-angle-left pull-right"></i></a>
                         <ul class="treeview-menu">
                             <li>
-                                <a href="sales/quotations">Sales Quotations</a>
+                                <a href="~/quotations/">Sales Quotations</a>
                                 <!--<a href="#">Sales Quotations</a>-->
                             </li>
                             <li>
-                                <a href="sales/salesorders">Sales Orders</a>
+                                <a href="~/sales/salesorders">Sales Orders</a>
                                 <!--<a href="#">Sales Orders</a>-->
                             </li>
                             <li>
                                 <!--<a href="#">Sales Receipts</a>-->
-                                <a href="#">Sales Receipts</a>
+                                <a href="~/sales/salesreceipts">Sales Receipts</a>
                             </li>
                             <li>
                                 <!--<a href="#">Sales Invoices</a>-->
-                                <a href="#">Sales Receipts</a>
+                                <a href="~/sales/salesinvoices">Sales Invoices</a>
+                            </li>
+                            <li>
+                                <a href="~/sales/customers">Customers</a>
                             </li>
                         </ul>
                     </li>
@@ -262,11 +298,14 @@
                         <ul class="treeview-menu">
                             <li>
                                 <!--<a href="#">Purchase Orders</a>-->
-                                <a href="#">Purchase Orders</a>
+                                <a href="~/purchasing/purchaseorders">Purchase Orders</a>
                             </li>
                             <li>
                                 <!--<a href="#">Purchase Invoices</a>-->
-                                <a href="#">Purchase Invoices</a>
+                                <a href="~/purchasing/purchaseinvoices">Purchase Invoices</a>
+                            </li>
+                            <li>
+                                <a href="~/purchasing/vendors">Vendors</a>
                             </li>
                         </ul>
                     </li>
@@ -274,11 +313,11 @@
                         <a href="#"><i class="fa fa-wrench"></i> <span>Inventory Control</span> <i class="fa fa-angle-left pull-right"></i></a>
                         <ul class="treeview-menu">
                             <li>
-                                <a href="#">Items</a>
+                                <a href="~/inventory/items">Items</a>
                             </li>
                             <li>
                                 <!--<a href="#">Inventory Control Journal</a>-->
-                                <a href="#">Inventory Control Journal</a>
+                                <a href="~/inventory/icj">Inventory Control Journal</a>
                             </li>
                         </ul>
                     </li>
@@ -287,15 +326,19 @@
                         <ul class="treeview-menu">
                             <li>
                                 <!--<a href="#">Journal Entries</a>-->
-                                <a href="#">Journal Entries</a>
+                                <a href="~/financials/journalentries">Journal Entries</a>
                             </li>
                             <li>
                                 <!--<a href="#">General Ledgers</a>-->
-                                <a href="#">General Ledgers</a>
+                                <a href="~/financials/generalledger">General Ledgers</a>
                             </li>
                             <li>
                                 <!--<a href="#">Taxes</a>-->
-                                <a href="tax/taxes">Taxes</a>
+                                <a href="~/tax/taxes">Taxes</a>
+                            </li>
+                            <li>
+                                <!--<a href="#">Taxes</a>-->
+                                <a href="~/financials/accounts">Accounts</a>
                             </li>
                         </ul>
                     </li>
@@ -304,15 +347,15 @@
                         <ul class="treeview-menu">
                             <li>
                                 <!--<a href="#">Balance Sheet</a>-->
-                                <a href="#">Balance Sheet</a>
+                                <a href="~/financials/balancesheet">Balance Sheet</a>
                             </li>
                             <li>
                                 <!--<a href="#">Income Statement</a>-->
-                                <a href="#">Income Statement</a>
+                                <a href="~/financials/incomestatement">Income Statement</a>
                             </li>
                             <li>
                                 <!--<a href="#">Trial Balance</a>-->
-                                <a href="#">Trial Balance</a>
+                                <a href="~/financials/trialbalance">Trial Balance</a>
                             </li>
                         </ul>
                     </li>
@@ -340,17 +383,15 @@
             <section class="content-header">
                 <h1>
                     @ViewBag.PageContentHeader
-                    <small>Optional description</small>
+                    <small>@ViewBag.PageContentOptionalDescription</small>
                 </h1>
-                <ol class="breadcrumb">
-                    <li>
-                        <a href="#"><i class="fa fa-dashboard"></i> Level</a>
-                    </li>
+                @*<ol class="breadcrumb">
+                    <li><a href="#"><i class="fa fa-dashboard"></i> Level</a></li>
                     <li class="active">Here</li>
-                </ol>
+                </ol>*@
             </section>
             <!-- Main content -->
-            <section class="content" id="page-content">
+            <section class="content">
                 <!-- Your Page Content Here -->
                 @RenderBody()
             </section>
@@ -361,25 +402,21 @@
         <footer class="main-footer">
             <!-- To the right -->
             <div class="pull-right hidden-xs">
-                Powered by AccountGo
+                Powered by <a href="#">AccountGo</a>
             </div>
             <!-- Default to the left -->
             <strong>Copyright &copy; 2016 <a href="#">AccountGo</a>.</strong> All rights reserved.
         </footer>
-        <!-- /.control-sidebar -->
         <!-- Control Sidebar -->
         <aside class="control-sidebar control-sidebar-dark">
             <!-- Create the tabs -->
             <ul class="nav nav-tabs nav-justified control-sidebar-tabs">
-                <li class="active">
-                    <a href="#control-sidebar-home-tab" data-toggle="tab"><i class="fa fa-home"></i></a>
-                </li>
-                <li>
-                    <a href="#control-sidebar-settings-tab" data-toggle="tab"><i class="fa fa-gears"></i></a>
-                </li>
+                <li class="active"><a href="#control-sidebar-home-tab" data-toggle="tab"><i class="fa fa-home"></i></a></li>
+                <li><a href="#control-sidebar-settings-tab" data-toggle="tab"><i class="fa fa-gears"></i></a></li>
             </ul>
             <!-- Tab panes -->
             <div class="tab-content">
+                <!-- Home tab content -->
                 <div class="tab-pane active" id="control-sidebar-home-tab">
                     <h3 class="control-sidebar-heading">Recent Activity</h3>
                     <ul class="control-sidebar-menu">
@@ -400,7 +437,9 @@
                             <a href="javascript::;">
                                 <h4 class="control-sidebar-subheading">
                                     Custom Template Design
-                                    <span class="label label-danger pull-right">70%</span>
+                                    <span class="pull-right-container">
+                                        <span class="label label-danger pull-right">70%</span>
+                                    </span>
                                 </h4>
                                 <div class="progress progress-xxs">
                                     <div class="progress-bar progress-bar-danger" style="width: 70%"></div>
@@ -433,16 +472,32 @@
                 <!-- /.tab-pane -->
             </div>
         </aside>
-        <!-- Add the sidebar's background. This div must be place immediately after the control sidebar -->
+        <!-- /.control-sidebar -->
+        <!-- Add the sidebar's background. This div must be placed
+             immediately after the control sidebar -->
         <div class="control-sidebar-bg"></div>
     </div>
     <!-- ./wrapper -->
-    <!-- REQUIRED JS SCRIPTS -->
+    <!-- REQUIRED JS SCRIPTS -->    
     <!-- jQuery 2.2.0 -->
     <script src="~/plugins/jquery/dist/jquery.min.js"></script>
     <!-- Bootstrap 3.3.6 -->
     <script src="~/plugins/bootstrap/dist/js/bootstrap.min.js"></script>
     <!-- AdminLTE App -->
     <script src="~/adminLTE/js/app.js"></script>
+    <!--AG-GRID-->
+    <script src="~/plugins/ag-grid/dist/ag-grid.js?ignore=notused24"></script>
+    <!--TODO : this is temporary solution.-->
+    <script>
+        $(document).ready(function () {
+            $('li').each(function () {
+                if (window.location.href.indexOf($(this).find('a:first').attr('href')) > -1) {
+                    $(this).addClass('active').siblings().removeClass('active');
+                    $(this).parent().parent().addClass('treeview active');
+                }
+            });
+        });
+    </script>
+    <!--//END TODO-->
 </body>
 </html>

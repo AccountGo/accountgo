@@ -14,14 +14,41 @@ namespace Services.TaxSystem
         private readonly IRepository<Item> _itemRepo;
         private readonly IRepository<Vendor> _vendorRepo;
         private readonly IRepository<Customer> _customerRepo;
+        private readonly IRepository<Tax> _taxRepo;
+        private IRepository<TaxGroup> _taxGroupRepo;
+        private IRepository<ItemTaxGroup> _itemTaxGroupRep;
 
-        public TaxService(IRepository<Vendor> vendorRepo, IRepository<Customer> customerRepo, IRepository<Item> itemRepo)
+        public TaxService(IRepository<Vendor> vendorRepo,
+            IRepository<Customer> customerRepo,
+            IRepository<Item> itemRepo,
+            IRepository<Tax> taxRepo,
+            IRepository<TaxGroup> taxGroupRepo,
+            IRepository<ItemTaxGroup> itemTaxGroupRepo)
         {
             _vendorRepo = vendorRepo;
             _customerRepo = customerRepo;
             _itemRepo = itemRepo;
+            _taxRepo = taxRepo;
+            _taxGroupRepo = taxGroupRepo;
+            _itemTaxGroupRep = itemTaxGroupRepo;
         }
 
+        public IEnumerable<Tax> GetTaxes(bool includeInActive = false)
+        {
+            var taxes = _taxRepo
+                .GetAllIncluding(s => s.SalesAccount, p => p.PurchasingAccount)
+                .AsEnumerable();
+
+            return taxes;
+        }
+        public IEnumerable<TaxGroup> GetTaxGroups() {
+            var taxGroups = _taxGroupRepo.GetAllIncluding(t => t.TaxGroupTax).AsEnumerable();
+            return taxGroups;
+        }
+        public IEnumerable<ItemTaxGroup> GetItemTaxGroups() {
+            var itemTaxGroup = _itemTaxGroupRep.GetAllIncluding(t => t.ItemTaxGroupTax).AsEnumerable();
+            return itemTaxGroup;
+        }
         public List<KeyValuePair<int, decimal>> GetPurchaseTaxes(int vendorId, IEnumerable<PurchaseInvoiceLine> purchaseInvoiceLines)
         {
             var taxes = new List<KeyValuePair<int, decimal>>();
