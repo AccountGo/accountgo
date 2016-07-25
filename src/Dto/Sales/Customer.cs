@@ -1,4 +1,6 @@
-﻿namespace Dto.Sales
+﻿using Dto.Common;
+
+namespace Dto.Sales
 {
     public class Customer : BaseDto
     {
@@ -10,5 +12,6 @@
         public string Fax { get; set; }
         public decimal Balance { get; set; }
 
+        public Contact PrimaryContact { get; set; }
     }
 }

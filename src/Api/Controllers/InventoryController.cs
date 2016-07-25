@@ -47,6 +47,24 @@ namespace Api.Controllers
 
         [HttpGet]
         [Route("[action]")]
+        public IActionResult Item(int id)
+        {
+            var item = _inventoryService.GetItemById(id);
+            var itemDto = new Item()
+            {
+                Id = item.Id,
+                Code = item.Code,
+                Description = item.Description,
+                Cost = item.Cost,
+                Price = item.Price,
+                QuantityOnHand = item.ComputeQuantityOnHand()
+            };
+
+            return new ObjectResult(itemDto);
+        }
+
+        [HttpGet]
+        [Route("[action]")]
         public IActionResult ICJ()
         {
             var invControlJournals = _inventoryService.GetInventoryControlJournals();

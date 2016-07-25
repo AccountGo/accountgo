@@ -249,14 +249,17 @@ namespace Services.Purchasing
 
         public IEnumerable<Vendor> GetVendors()
         {
-            var query = from f in _vendorRepo.Table
-                        select f;
-            return query.AsEnumerable();
+            System.Linq.Expressions.Expression<Func<Vendor, object>>[] includeProperties =
+                { p => p.Party, c => c.AccountsPayableAccount };
+
+            var vendors = _vendorRepo.GetAllIncluding(includeProperties);
+
+            return vendors.AsEnumerable();
         }
 
         public Vendor GetVendorById(int id)
         {
-            return _vendorRepo.GetById(id);
+            return _vendorRepo.GetAllIncluding(p => p.Party).Where(v => v.Id == id).FirstOrDefault();
         }
 
         public IEnumerable<PurchaseOrderHeader> GetPurchaseOrders()

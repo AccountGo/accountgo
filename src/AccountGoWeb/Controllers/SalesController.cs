@@ -1,5 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
+using System.Collections.Generic;
+using System.Linq;
 using System.Net.Http;
 
 namespace AccountGoWeb.Controllers
@@ -49,25 +51,6 @@ namespace AccountGoWeb.Controllers
             return Ok();
         }
 
-        public IActionResult GetAddSalesOrderDto()
-        {
-            var Dto = new object();
-
-            //Dto.Customers = new HashSet<Microsoft.AspNet.Mvc.Rendering.SelectListItem>();
-            //Dto.Customers.Add(new Microsoft.AspNet.Mvc.Rendering.SelectListItem() { Value = "0", Text = "Choose customer..." });
-            //Dto.Customers.Add(new Microsoft.AspNet.Mvc.Rendering.SelectListItem() { Value = "1", Text = "John Doe" });
-            //Dto.Customers.Add(new Microsoft.AspNet.Mvc.Rendering.SelectListItem() { Value = "2", Text = "Joe Blogs" });
-            //Dto.Customers.Add(new Microsoft.AspNet.Mvc.Rendering.SelectListItem() { Value = "3", Text = "Mary Walter" });
-
-            //Dto.Items = new HashSet<Microsoft.AspNet.Mvc.Rendering.SelectListItem>();
-            //Dto.Items.Add(new Microsoft.AspNet.Mvc.Rendering.SelectListItem() { Value = "0", Text = "Choose item..." });
-            //Dto.Items.Add(new Microsoft.AspNet.Mvc.Rendering.SelectListItem() { Value = "1", Text = "Mouse" });
-            //Dto.Items.Add(new Microsoft.AspNet.Mvc.Rendering.SelectListItem() { Value = "2", Text = "Keyboard" });
-            //Dto.Items.Add(new Microsoft.AspNet.Mvc.Rendering.SelectListItem() { Value = "3", Text = "Monitor" });
-
-            return new ObjectResult(Dto);
-        }
-
         public async System.Threading.Tasks.Task<IActionResult> SalesInvoices()
         {
             ViewBag.PageContentHeader = "Sales Invoices";
@@ -111,11 +94,99 @@ namespace AccountGoWeb.Controllers
             return View();
         }
 
-        public IActionResult AddSalesReceipt()
+        public IActionResult AddReceipt()
         {
-            ViewBag.PageContentHeader = "Add Sales Receipt";
+            ViewBag.PageContentHeader = "Add Receipt";
 
+            var model = new Models.Sales.AddReceipt();
+
+            var customers = GetAsync<IEnumerable<Dto.Sales.Customer>>("sales/customers").Result;
+            
+            ViewBag.Customers = new HashSet<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>();
+
+            foreach (var customer in customers)
+                ViewBag.Customers.Add(new Microsoft.AspNetCore.Mvc.Rendering.SelectListItem() { Value = customer.Id.ToString(), Text = customer.Name });
+
+            var accounts = GetAsync<IEnumerable<Dto.Financial.Account>>("financials/accounts").Result;
+
+            ViewBag.DebitAccounts = new HashSet<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>();
+
+            foreach (var account in accounts.Where(a => a.IsCash == true))
+                ViewBag.DebitAccounts.Add(new Microsoft.AspNetCore.Mvc.Rendering.SelectListItem() { Value = account.Id.ToString(), Text = account.AccountName });
+
+            ViewBag.CreditAccounts = new HashSet<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>();
+
+            foreach (var account in accounts)
+                ViewBag.CreditAccounts.Add(new Microsoft.AspNetCore.Mvc.Rendering.SelectListItem() { Value = account.Id.ToString(), Text = account.AccountName });
+
+            return View(model);
+        }
+
+        [HttpPost]
+        public IActionResult AddReceipt(Models.Sales.AddReceipt model)
+        {
+            if (ModelState.IsValid)
+            { }
+
+            return RedirectToAction("salesreceipts");
+        }
+
+
+        public async System.Threading.Tasks.Task<IActionResult> Customers()
+        {
+            ViewBag.PageContentHeader = "Customers";
+            using (var client = new HttpClient())
+            {
+                var baseUri = _config["ApiUrl"];
+                client.BaseAddress = new System.Uri(baseUri);
+                client.DefaultRequestHeaders.Accept.Clear();
+                var response = await client.GetAsync(baseUri + "sales/customers");
+                if (response.IsSuccessStatusCode)
+                {
+                    var responseJson = await response.Content.ReadAsStringAsync();
+                    return View(model: responseJson);
+                }
+            }
             return View();
         }
+
+        public async System.Threading.Tasks.Task<IActionResult> Customer(int id)
+        {
+            ViewBag.PageContentHeader = "Customer Card";
+
+            using (var client = new HttpClient())
+            {
+                var baseUri = _config["ApiUrl"];
+                client.BaseAddress = new System.Uri(baseUri);
+                client.DefaultRequestHeaders.Accept.Clear();
+                var response = await client.GetAsync(baseUri + "sales/customer?id=" + id);
+                if (response.IsSuccessStatusCode)
+                {
+                    var responseJson = await response.Content.ReadAsStringAsync();
+                    var model = Newtonsoft.Json.JsonConvert.DeserializeObject<Dto.Sales.Customer>(responseJson);
+                    return View(model);
+                }
+            }
+            return View();
+        }
+
+        #region Private methods
+        public async System.Threading.Tasks.Task<T> GetAsync<T>(string uri)
+        {
+            string responseJson = string.Empty;
+            using (var client = new HttpClient())
+            {
+                var baseUri = _config["ApiUrl"];
+                client.BaseAddress = new System.Uri(baseUri);
+                client.DefaultRequestHeaders.Accept.Clear();
+                var response = await client.GetAsync(baseUri + uri);
+                if (response.IsSuccessStatusCode)
+                {
+                    responseJson = await response.Content.ReadAsStringAsync();
+                }
+            }
+            return Newtonsoft.Json.JsonConvert.DeserializeObject<T>(responseJson);
+        }
+        #endregion
     }
 }

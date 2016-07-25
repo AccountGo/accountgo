@@ -267,7 +267,7 @@ desired effect
                     <!-- Optionally, you can add icons to the links -->
                     <li class="active">
                         <!--<a href="#"><i class="fa fa-dashboard"></i> <span>Dashboard</span></a>-->
-                        <a href="#"><i class="fa fa-dashboard"></i><span>Dashboard</span></a>
+                        <a href="~/"><i class="fa fa-dashboard"></i><span>Dashboard</span></a>
                     </li>
                     <li class="treeview">
                         <a href="#"><i class="fa fa-industry"></i> <span>Accounts Receivable</span> <i class="fa fa-angle-left pull-right"></i></a>
@@ -288,6 +288,9 @@ desired effect
                                 <!--<a href="#">Sales Invoices</a>-->
                                 <a href="~/sales/salesinvoices">Sales Invoices</a>
                             </li>
+                            <li>
+                                <a href="~/sales/customers">Customers</a>
+                            </li>
                         </ul>
                     </li>
                     <li class="treeview">
@@ -300,6 +303,9 @@ desired effect
                             <li>
                                 <!--<a href="#">Purchase Invoices</a>-->
                                 <a href="~/purchasing/purchaseinvoices">Purchase Invoices</a>
+                            </li>
+                            <li>
+                                <a href="~/purchasing/vendors">Vendors</a>
                             </li>
                         </ul>
                     </li>
@@ -377,12 +383,12 @@ desired effect
             <section class="content-header">
                 <h1>
                     @ViewBag.PageContentHeader
-                    <small>Optional description</small>
+                    <small>@ViewBag.PageContentOptionalDescription</small>
                 </h1>
-                <ol class="breadcrumb">
+                @*<ol class="breadcrumb">
                     <li><a href="#"><i class="fa fa-dashboard"></i> Level</a></li>
                     <li class="active">Here</li>
-                </ol>
+                </ol>*@
             </section>
             <!-- Main content -->
             <section class="content">
@@ -396,10 +402,10 @@ desired effect
         <footer class="main-footer">
             <!-- To the right -->
             <div class="pull-right hidden-xs">
-                Powered by AccountGo
+                Powered by <a href="#">AccountGo</a>
             </div>
             <!-- Default to the left -->
-            <strong>Copyright &copy; 2016 <a href="#">Company</a>.</strong> All rights reserved.
+            <strong>Copyright &copy; 2016 <a href="#">AccountGo</a>.</strong> All rights reserved.
         </footer>
         <!-- Control Sidebar -->
         <aside class="control-sidebar control-sidebar-dark">

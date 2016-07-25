@@ -19,11 +19,11 @@ webpackJsonp([1],[
 	        _super.apply(this, arguments);
 	    }
 	    Home.prototype.render = function () {
-	        return React.createElement("div", null, this.props.pageTitle, ".If you can see this message means you have successfully configured reactjs+typescript+webpack+babel-loader.");
+	        return (React.createElement("div", null, "Tiles or widgets here"));
 	    };
 	    return Home;
 	}(React.Component));
-	ReactDOM.render(React.createElement(Home, {pageTitle: "Dashboard"}), document.getElementById("home"));
+	ReactDOM.render(React.createElement(Home, null), document.getElementById("home"));
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.default = Home;
 	//# sourceMappingURL=Home.js.map

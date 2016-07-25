@@ -1,13 +1,16 @@
 ﻿@model string
 
 <div>
+    <a class="btn btn-sm btn-default btn-flat" href="~/inventory/additem">Add</a>
 </div>
 <div>
     <div id="items" class="ag-fresh" style="height: 400px;"></div>
 </div>
 <script>
     var columnDefs = [
-    {headerName: "Item", field: "id", width: 50, checkbox: true},
+    {headerName: "Item", field: "id", width: 50, cellRenderer: function(params) {
+        return '<a href="item/' + params.value + '">' + params.value + '</a>';
+    }},
     {headerName: "Code", field: "code", width: 100},
     {headerName: "Description", field: "description", width: 350},
     {headerName: "Cost", field: "cost", width: 100},

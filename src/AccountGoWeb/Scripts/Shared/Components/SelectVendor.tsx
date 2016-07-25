@@ -15,7 +15,7 @@ export default class SelectVendor extends React.Component<any, {}>{
         });
 
         return (
-            <select id="optVendor" onChange={this.onChangeVendor.bind(this)} >
+            <select id="optVendor" onChange={this.onChangeVendor.bind(this) } className="form-control select2">
                 {options}
             </select>
         );

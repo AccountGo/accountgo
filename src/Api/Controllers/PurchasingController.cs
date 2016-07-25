@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Services.Administration;
 using Services.Purchasing;
+using System;
 using System.Collections.Generic;
 
 // For more information on enabling Web API for empty projects, visit http://go.microsoft.com/fwlink/?LinkID=397860
@@ -65,6 +66,65 @@ namespace Api.Controllers
             }
 
             return new ObjectResult(purchaseInvoicesDto);
+        }
+
+        [HttpGet]
+        [Route("[action]")]
+        public IActionResult Vendors()
+        {
+            IList<Dto.Purchasing.Vendor> vendorsDto = new List<Dto.Purchasing.Vendor>();
+            try
+            {
+                var vendors = _purchasingService.GetVendors();
+                foreach (var vendor in vendors)
+                {
+                    var vendorDto = new Dto.Purchasing.Vendor()
+                    {
+                        Id = vendor.Id,
+                        //No = vendor.No,
+                        Name = vendor.Party.Name,
+                        //Email = vendor.Party.Email,
+                        //Phone = vendor.Party.Phone,
+                        //Fax = vendor.Party.Fax,
+                        //Balance = vendor.Balance
+                    };
+
+                    vendorsDto.Add(vendorDto);
+                }
+
+                return new ObjectResult(vendorsDto);
+            }
+            catch (Exception ex)
+            {
+                return new ObjectResult(ex);
+            }
+        }
+
+        [HttpGet]
+        [Route("[action]/{id:int}")]
+        public IActionResult GetVendorById(int id)
+        {
+            try
+            {
+                var vendor = _purchasingService.GetVendorById(id);
+
+                var vendorDto = new Dto.Purchasing.Vendor()
+                {
+                    Id = vendor.Id,
+                    //No = vendor.No,
+                    Name = vendor.Party.Name,
+                    //Email = vendor.Party.Email,
+                    //Phone = vendor.Party.Phone,
+                    //Fax = vendor.Party.Fax,
+                    //Balance = vendor.Balance
+                };
+
+                return new ObjectResult(vendorDto);
+            }
+            catch (Exception ex)
+            {
+                return new BadRequestObjectResult(ex);
+            }
         }
     }
 }

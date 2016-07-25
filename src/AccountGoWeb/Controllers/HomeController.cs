@@ -7,6 +7,8 @@ namespace AccountGoWeb.Controllers
     {
         public IActionResult Index()
         {
+            ViewBag.PageContentHeader = "Dashboard";
+
             return View();
         }
     }

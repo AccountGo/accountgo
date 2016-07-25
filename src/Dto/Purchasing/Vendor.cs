@@ -1,8 +1,7 @@
 ﻿namespace Dto.Purchasing
 {
-    public class Vendor
+    public class Vendor : BaseDto
     {
-        public int Id { get; set; }
         public string Name { get; set; }
     }
 }

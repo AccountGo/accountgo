@@ -2850,7 +2850,7 @@ webpackJsonp([0],{
 	        options.push(React.createElement("option", {key: "3", value: "3"}, " Adjustment Entries "));
 	        options.push(React.createElement("option", {key: "4", value: "4"}, " Correction Entries "));
 	        options.push(React.createElement("option", {key: "5", value: "5"}, " Transfer Entries "));
-	        return (React.createElement("select", {id: this.props.controlId, onChange: this.onChangeVoucherType.bind(this)}, options));
+	        return (React.createElement("select", {id: this.props.controlId, onChange: this.onChangeVoucherType.bind(this), className: "form-control select2"}, options));
 	    };
 	    SelectVoucherType = __decorate([
 	        mobx_react_1.observer
@@ -2897,7 +2897,7 @@ webpackJsonp([0],{
 	        this.props.store.commonStore.accounts.map(function (account) {
 	            return (options.push(React.createElement("option", {key: account.id, value: account.id}, " ", account.accountName, " ")));
 	        });
-	        return (React.createElement("select", {defaultValue: this.props.selected, id: this.props.controlId, onChange: this.onChangeAccount.bind(this)}, options));
+	        return (React.createElement("select", {defaultValue: this.props.selected, id: this.props.controlId, onChange: this.onChangeAccount.bind(this), className: "form-control select2"}, options));
 	    };
 	    SelectVoucherType = __decorate([
 	        mobx_react_1.observer
@@ -2943,7 +2943,7 @@ webpackJsonp([0],{
 	        var options = [];
 	        options.push(React.createElement("option", {key: "1", value: "1"}, "Debit"));
 	        options.push(React.createElement("option", {key: "2", value: "2"}, "Credit"));
-	        return (React.createElement("select", {id: this.props.controlId, onChange: this.onChangeDebitCredit.bind(this)}, options));
+	        return (React.createElement("select", {id: this.props.controlId, onChange: this.onChangeDebitCredit.bind(this), className: "form-control select2"}, options));
 	    };
 	    SelectDebiCredit = __decorate([
 	        mobx_react_1.observer

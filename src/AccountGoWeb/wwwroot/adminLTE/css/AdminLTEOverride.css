@@ -17,3 +17,7 @@
   -o-transition: none !important;
   transition: none !important;
 }
+
+.margin-a{
+    margin: 2px;
+}

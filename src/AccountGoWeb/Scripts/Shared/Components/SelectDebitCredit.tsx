@@ -13,7 +13,7 @@ export default class SelectDebiCredit extends React.Component<any, {}>{
         options.push(<option key="2" value="2">Credit</option>);
 
         return (
-            <select id={this.props.controlId} onChange={this.onChangeDebitCredit.bind(this) } >
+            <select id={this.props.controlId} onChange={this.onChangeDebitCredit.bind(this) } className="form-control select2" >
                 {options}
             </select>
         );

@@ -1,17 +1,18 @@
 ﻿@model string
 
 <div>
-    <a class="btn btn-sm btn-default btn-flat" href="~/purchasing/addpurchaseorder">Add</a>
+    <a class="btn btn-sm btn-default btn-flat" href="~/purchasing/addvendor">Add</a>
 </div>
 <div>
-    <div id="purchaseorders" class="ag-fresh" style="height: 400px;"></div>
+    <div id="vendors" class="ag-fresh" style="height: 400px;"></div>
 </div>
 <script>
     var columnDefs = [
-        {headerName: "Order", field: "id", width: 50},
-        {headerName: "Vendor Name", field: "vendorName", width: 350},
-        {headerName: "Order Date", field: "orderDate", width: 100},
-        {headerName: "Amount", field: "Amount", width: 100}
+        {headerName: "Id", field: "id", width: 50, cellRenderer: function(params) {
+            return '<a href="vendor/' + params.value + '">' + params.value + '</a>';
+        }},
+        {headerName: "Vendor Name", field: "name", width: 350},
+        {headerName: "Balance", field: "balance", width: 100}
     ];
 
     var gridOptions = {
@@ -25,7 +26,7 @@
     // wait for the document to be loaded, otherwise
     // ag-Grid will not find the div in the document.
     document.addEventListener("DOMContentLoaded", function() {
-        var eGridDiv = document.querySelector('#purchaseorders');
+        var eGridDiv = document.querySelector('#vendors');
         new agGrid.Grid(eGridDiv, gridOptions);
     });
 </script>

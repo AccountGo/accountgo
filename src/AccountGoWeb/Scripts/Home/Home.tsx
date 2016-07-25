@@ -5,14 +5,18 @@ interface IHomeProps {
     pageTitle: string;
 }
 
-class Home extends React.Component<IHomeProps, {}> {
+class Home extends React.Component<any, {}> {
     render() {
-        return <div>{this.props.pageTitle}.If you can see this message means you have successfully configured reactjs+typescript+webpack+babel-loader.</div>;
+        return (
+            <div>
+                Tiles or widgets here
+            </div>
+        );
     }
 }
 
 ReactDOM.render(
-    <Home pageTitle="Dashboard" />,
+    <Home />,
     document.getElementById("home")
 );
 

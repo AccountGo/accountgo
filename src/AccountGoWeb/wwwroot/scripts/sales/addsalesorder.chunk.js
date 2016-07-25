@@ -2866,7 +2866,7 @@ webpackJsonp([6],{
 	        this.props.store.commonStore.paymentTerms.map(function (term) {
 	            return (options.push(React.createElement("option", {key: term.id, value: term.id}, " ", term.description, " ")));
 	        });
-	        return (React.createElement("select", {id: "optPaymentTerm", onChange: this.onChangePaymentTerm.bind(this)}, options));
+	        return (React.createElement("select", {id: "optPaymentTerm", onChange: this.onChangePaymentTerm.bind(this), className: "form-control select2"}, options));
 	    };
 	    SelectPaymentTerm = __decorate([
 	        mobx_react_1.observer
@@ -2913,7 +2913,7 @@ webpackJsonp([6],{
 	        this.props.store.commonStore.items.map(function (item) {
 	            return (options.push(React.createElement("option", {key: item.id, value: item.id}, " ", item.description, " ")));
 	        });
-	        return (React.createElement("select", {defaultValue: this.props.selected, id: this.props.controlId, onChange: this.onChangeItem.bind(this)}, options));
+	        return (React.createElement("select", {defaultValue: this.props.selected, id: this.props.controlId, onChange: this.onChangeItem.bind(this), className: "form-control select2"}, options));
 	    };
 	    SelectLineItem = __decorate([
 	        mobx_react_1.observer
@@ -2960,7 +2960,7 @@ webpackJsonp([6],{
 	        this.props.store.commonStore.measurements.map(function (measurement) {
 	            return (options.push(React.createElement("option", {key: measurement.id, value: measurement.id}, " ", measurement.description, " ")));
 	        });
-	        return (React.createElement("select", {defaultValue: this.props.selected, id: this.props.controlId, onChange: this.onChangeMeasurement.bind(this)}, options));
+	        return (React.createElement("select", {defaultValue: this.props.selected, id: this.props.controlId, onChange: this.onChangeMeasurement.bind(this), className: "form-control select2"}, options));
 	    };
 	    SelectLineMeasurement = __decorate([
 	        mobx_react_1.observer
@@ -3006,7 +3006,7 @@ webpackJsonp([6],{
 	        this.props.store.commonStore.customers.map(function (customer) {
 	            return (options.push(React.createElement("option", {key: customer.id, value: customer.id}, " ", customer.name, " ")));
 	        });
-	        return (React.createElement("select", {id: "optCustomer", onChange: this.onChangeCustomer.bind(this)}, options));
+	        return (React.createElement("select", {id: "optCustomer", onChange: this.onChangeCustomer.bind(this), className: "form-control select2"}, options));
 	    };
 	    SelectCustomer = __decorate([
 	        mobx_react_1.observer

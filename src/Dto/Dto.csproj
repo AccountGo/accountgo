@@ -46,6 +46,7 @@
     <Compile Include="Common\Address.cs" />
     <Compile Include="Common\Contact.cs" />
     <Compile Include="Common\Party.cs" />
+    <Compile Include="Common\PaymentTerm.cs" />
     <Compile Include="Financial\Account.cs" />
     <Compile Include="Financial\AccountClass.cs" />
     <Compile Include="Financial\Bank.cs" />

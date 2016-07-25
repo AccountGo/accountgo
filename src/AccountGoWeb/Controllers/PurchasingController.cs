@@ -67,5 +67,43 @@ namespace AccountGoWeb.Controllers
 
             return View();
         }
+
+        public async System.Threading.Tasks.Task<IActionResult> Vendors()
+        {
+            ViewBag.PageContentHeader = "Vendors";
+            using (var client = new HttpClient())
+            {
+                var baseUri = _config["ApiUrl"];
+                client.BaseAddress = new System.Uri(baseUri);
+                client.DefaultRequestHeaders.Accept.Clear();
+                var response = await client.GetAsync(baseUri + "purchasing/vendors");
+                if (response.IsSuccessStatusCode)
+                {
+                    var responseJson = await response.Content.ReadAsStringAsync();
+                    return View(model: responseJson);
+                }
+            }
+            return View();
+        }
+        public async System.Threading.Tasks.Task<IActionResult> Vendor(int id)
+        {
+            ViewBag.PageContentHeader = "Vendor Card";
+
+            using (var client = new HttpClient())
+            {
+                var baseUri = _config["ApiUrl"];
+                client.BaseAddress = new System.Uri(baseUri);
+                client.DefaultRequestHeaders.Accept.Clear();
+                var response = await client.GetAsync(baseUri + "purchasing/vendor?id=" + id);
+                if (response.IsSuccessStatusCode)
+                {
+                    var responseJson = await response.Content.ReadAsStringAsync();
+                    var model = Newtonsoft.Json.JsonConvert.DeserializeObject(responseJson);
+                    return View(model);
+                }
+
+                return View();
+            }
+        }
     }
 }

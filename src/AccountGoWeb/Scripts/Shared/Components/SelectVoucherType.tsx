@@ -16,7 +16,7 @@ export default class SelectVoucherType extends React.Component<any, {}>{
         options.push(<option key="5" value="5"> Transfer Entries </option>);
 
         return (
-            <select id={this.props.controlId} onChange={this.onChangeVoucherType.bind(this) } >
+            <select id={this.props.controlId} onChange={this.onChangeVoucherType.bind(this) } className="form-control select2">
                 {options}
             </select>
         );

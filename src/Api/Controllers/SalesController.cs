@@ -22,19 +22,14 @@ namespace Api.Controllers
             _salesService = salesService;
         }
 
-        // GET api/sales/getcustomerbyid/1
         [HttpGet]
-        [Route("[action]/{id:int}")]
-        public IActionResult GetCustomerById(int id)
+        //[Route("[action]/{id:int}")]
+        [Route("[action]")]
+        public IActionResult Customer(int id)
         {
             try
             {
                 var customer = _salesService.GetCustomerById(id);
-
-                if (customer == null)
-                {
-                    return Ok();
-                }
 
                 var customerDto = new Dto.Sales.Customer()
                 {
@@ -91,10 +86,10 @@ namespace Api.Controllers
         [Route("[action]")]
         public IActionResult Customers()
         {
-            IList<Dto.Sales.Customer> Dto = new List<Dto.Sales.Customer>();
+            IList<Dto.Sales.Customer> customersDto = new List<Dto.Sales.Customer>();
             try
             {
-                var customers = _salesService.GetCustomers();
+                var customers = _salesService.GetCustomers().Where(p => p.Party != null);
                 foreach (var customer in customers)
                 {
                     var customerDto = new Dto.Sales.Customer()
@@ -108,10 +103,10 @@ namespace Api.Controllers
                         Balance = customer.Balance
                     };
 
-                    Dto.Add(customerDto);
+                    customersDto.Add(customerDto);
                 }
 
-                return new ObjectResult(Dto);
+                return new ObjectResult(customersDto);
             }
             catch (Exception ex)
             {

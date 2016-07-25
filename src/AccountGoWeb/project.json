@@ -27,7 +27,13 @@
   },
 
   "frameworks": {
-    "net461": { }
+    "net461": {
+      "dependencies": {
+        "Dto": {
+          "target": "project"
+        }
+      }
+    }
     //"netcoreapp1.0": {
     //  "imports": [
     //    "dotnet5.6",

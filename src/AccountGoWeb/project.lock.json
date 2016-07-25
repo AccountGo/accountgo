@@ -1857,6 +1857,9 @@
         "runtime": {
           "lib/net46/System.Xml.XPath.XDocument.dll": {}
         }
+      },
+      "Dto/1.0.0": {
+        "type": "project"
       }
     }
   },
@@ -5730,6 +5733,10 @@
         "ref/xamarintvos10/_._",
         "ref/xamarinwatchos10/_._"
       ]
+    },
+    "Dto/1.0.0": {
+      "type": "project",
+      "msbuildProject": "../Dto/Dto.csproj"
     }
   },
   "projectFileDependencyGroups": {
@@ -5749,7 +5756,9 @@
       "Microsoft.Extensions.Logging.Debug >= 1.0.0",
       "Microsoft.Net.Http >= 2.2.22"
     ],
-    ".NETFramework,Version=v4.6.1": []
+    ".NETFramework,Version=v4.6.1": [
+      "Dto"
+    ]
   },
   "tools": {
     ".NETCoreApp,Version=v1.0": {
