@@ -1,4 +1,5 @@
 ﻿using Dto.Common;
+using System.Collections.Generic;
 
 namespace Dto.Sales
 {
@@ -13,5 +14,6 @@ namespace Dto.Sales
         public decimal Balance { get; set; }
 
         public Contact PrimaryContact { get; set; }
+        public IEnumerable<SalesInvoice> Invoices { get; set; }
     }
 }

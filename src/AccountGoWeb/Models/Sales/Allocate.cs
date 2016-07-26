@@ -8,11 +8,11 @@ namespace AccountGoWeb.Models.Sales
         public int ReceiptId { get; set; }
         public System.DateTime Date { get; set; }
         public double Amount { get; set; }
-        public ICollection<AllocationLine> AllocationLines { get; set; }
+        public IList<AllocationLine> AllocationLines { get; set; }
 
         public Allocate()
         {
-            AllocationLines = new HashSet<AllocationLine>();
+            AllocationLines = new List<AllocationLine>();
         }
     }
 
@@ -20,5 +20,6 @@ namespace AccountGoWeb.Models.Sales
     {
         public int InvoiceId { get; set; }
         public double Amount { get; set; }
-    }
+        public double AllocatedAmount { get; set; }
+    }    
 }

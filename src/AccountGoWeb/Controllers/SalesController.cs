@@ -190,7 +190,25 @@ namespace AccountGoWeb.Controllers
             model.Date = receipt.ReceiptDate;
             model.Amount = (double)receipt.Amount;
 
+            var invoices = GetAsync<IEnumerable<Dto.Sales.SalesInvoice>>("sales/customerinvoices?id=" + receipt.CustomerId).Result;
+
+            foreach (var invoice in invoices) {
+                model.AllocationLines.Add(new Models.Sales.AllocationLine() {
+                    InvoiceId = invoice.Id,
+                    Amount = (double)invoice.TotalAmount
+                });
+            }
+
             return View(model);
+        }
+
+        [HttpPost]
+        public IActionResult Allocate(Models.Sales.Allocate model)
+        {
+            if (ModelState.IsValid)
+            { }
+
+            return RedirectToAction("salesreceipts");
         }
 
         #region Private methods

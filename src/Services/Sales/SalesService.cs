@@ -352,8 +352,11 @@ namespace Services.Sales
 
         public Customer GetCustomerById(int id)
         {
-            System.Linq.Expressions.Expression<Func<Customer, object>>[] includeProperties =
-                { p => p.Party, c => c.AccountsReceivableAccount };
+            System.Linq.Expressions.Expression<Func<Customer, object>>[] includeProperties = {
+                p => p.Party,
+                c => c.AccountsReceivableAccount,
+                c => c.SalesInvoices
+            };
 
             var customer = _customerRepo.GetAllIncluding(includeProperties)
                 .Where(c => c.Id == id).FirstOrDefault();
@@ -564,6 +567,14 @@ namespace Services.Sales
                 .GetAllIncluding(line => line.SalesQuoteLines, p => p.Customer.Party)
                 .AsEnumerable();
             return quotes;
+        }
+
+        public IEnumerable<SalesInvoiceHeader> GetCustomerInvoices(int customerId)
+        {
+            var invoices = _salesInvoiceRepo.GetAllIncluding(i => i.SalesInvoiceLines)
+                .Where(i => i.CustomerId == customerId);
+
+            return invoices;
         }
     }
 }

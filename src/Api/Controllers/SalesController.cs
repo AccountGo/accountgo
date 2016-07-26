@@ -354,5 +354,36 @@ namespace Api.Controllers
 
             return new ObjectResult(salesReceiptDto);
         }
+
+        [HttpGet]
+        [Route("[action]")]
+        public IActionResult CustomerInvoices(int id)
+        {
+            try
+            {
+                var invoices = _salesService.GetCustomerInvoices(id);
+
+                var invoicesDto = new HashSet<Dto.Sales.SalesInvoice>();
+
+                foreach (var invoice in invoices)
+                {
+                    var invoiceDto = new Dto.Sales.SalesInvoice()
+                    {
+                        Id = invoice.Id,
+                        InvoiceDate = invoice.Date,
+                        CustomerId = invoice.CustomerId,
+                        TotalAmount = invoice.ComputeTotalAmount()
+                    };
+
+                    invoicesDto.Add(invoiceDto);
+                }
+
+                return new ObjectResult(invoicesDto);
+            }
+            catch (Exception ex)
+            {
+                return new BadRequestObjectResult(ex);
+            }
+        }
     }
 }
