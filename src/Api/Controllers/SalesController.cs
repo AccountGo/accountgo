@@ -336,5 +336,23 @@ namespace Api.Controllers
 
             return new ObjectResult(salesReceiptsDto);
         }
+
+        [HttpGet]
+        [Route("[action]")]
+        public IActionResult SalesReceipt(int id)
+        {
+            var salesReceipt = _salesService.GetSalesReceiptById(id);
+            var salesReceiptDto = new Dto.Sales.SalesReceipt()
+            {
+                Id = salesReceipt.Id,
+                ReceiptNo = salesReceipt.No,
+                CustomerId = salesReceipt.CustomerId,
+                CustomerName = salesReceipt.Customer.Party.Name,
+                ReceiptDate = salesReceipt.Date,
+                Amount = salesReceipt.Amount
+            };
+
+            return new ObjectResult(salesReceiptDto);
+        }
     }
 }

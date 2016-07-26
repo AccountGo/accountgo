@@ -327,7 +327,12 @@ namespace Services.Sales
 
         public SalesReceiptHeader GetSalesReceiptById(int id)
         {
-            return _salesReceiptRepo.GetById(id);
+            var receipt = _salesReceiptRepo.GetAllIncluding(r => r.Customer, 
+                r => r.CustomerAllocations,
+                r => r.Customer.Party)
+                .Where(r => r.Id == id).FirstOrDefault();
+
+            return receipt;
         }
 
         public void UpdateSalesReceipt(SalesReceiptHeader salesReceipt)

@@ -170,6 +170,29 @@ namespace AccountGoWeb.Controllers
             return View();
         }
 
+        public IActionResult CustomerAllocations(int id)
+        {
+            ViewBag.PageContentHeader = "Customer Allocations";
+
+            return View();
+        }
+
+        public IActionResult Allocate(int id)
+        {
+            ViewBag.PageContentHeader = "Receipt Allocation";
+
+            var model = new Models.Sales.Allocate();
+
+            var receipt = GetAsync<Dto.Sales.SalesReceipt>("sales/salesreceipt?id=" + id).Result;
+
+            model.CustomerId = receipt.CustomerId;
+            model.ReceiptId = receipt.Id;
+            model.Date = receipt.ReceiptDate;
+            model.Amount = (double)receipt.Amount;
+
+            return View(model);
+        }
+
         #region Private methods
         public async System.Threading.Tasks.Task<T> GetAsync<T>(string uri)
         {

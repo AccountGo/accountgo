@@ -1,0 +1,25 @@
+﻿@model IEnumerable<Dto.Financial.Bank>
+
+<div class="col-md-9">
+    <div class="box">
+        <div class="box-body table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Account No</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var bank in Model)
+                    {
+                        <tr>
+                            <td>@bank.Name</td>
+                            <td>@bank.AccountNo</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

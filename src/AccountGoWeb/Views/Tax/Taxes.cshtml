@@ -1,18 +1,28 @@
 ﻿@model string
 
-<div>
+<div class="nav-tabs-custom">
+    <ul class="nav nav-tabs">
+        <li class="active"><a href="#tab_1" data-toggle="tab">Taxes</a></li>
+        <li><a href="#tab_2" data-toggle="tab">Tax Groups</a></li>
+        <li><a href="#tab_3" data-toggle="tab">Item Tax Groups</a></li>
+    </ul>
+    <div class="tab-content">
+        <div class="tab-pane active" id="tab_1">            
+            <div id="taxes" class="ag-fresh"></div>
+        </div>
+        <!-- /.tab-pane -->
+        <div class="tab-pane" id="tab_2">
+            <div id="taxGroups" class="ag-fresh"></div>
+        </div>
+        <!-- /.tab-pane -->
+        <div class="tab-pane" id="tab_3">
+            <div id="itemTaxGroups" class="ag-fresh"></div>
+        </div>
+        <!-- /.tab-pane -->
+    </div>
+    <!-- /.tab-content -->
 </div>
-<div>
-    <div id="taxes" class="ag-fresh" style="height: 200px;"></div>
-</div>
-<h3>Tax Group</h3>
-<div>
-    <div id="taxGroups" class="ag-fresh" style="height: 200px;"></div>
-</div>
-<h3>Item Tax Group</h3>
-<div>
-    <div id="itemTaxGroups" class="ag-fresh" style="height: 200px;"></div>
-</div>
+
 <script>
     var Dto = @Html.Raw(Model);
 
@@ -43,7 +53,7 @@
     {headerName: "Description", field: "description", width: 350},
     {headerName: "Applied To Shippine", field: "isAppliedToShipping", width: 100},
     {headerName: "Active", field: "isActive", width: 100},
-        ];
+    ];
 
     var gridOptionsTaxGroups = {
         columnDefs: columnDefsTaxGroups,
@@ -61,7 +71,7 @@
     {headerName: "Item Tax Group", field: "id", width: 50},
     {headerName: "Name", field: "name", width: 350},
     {headerName: "Is Fully Exempt", field: "isFullyExempt", width: 100},
-        ];
+    ];
 
     var gridOptionsItemTaxGroups = {
         columnDefs: columnDefsItemTaxGroups,

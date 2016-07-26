@@ -1,0 +1,45 @@
+﻿@model AccountGoWeb.Models.Purchasing.Payment
+
+<div class="col-md-9">
+    <div class="box">
+        <div class="box-header with-border">
+            <h3 class="box-title">General</h3>
+            <div class="box-tools pull-right">
+                <button type="button" class="btn btn-box-tool" data-widget="collapse" data-toggle="tooltip" title="Collapse">
+                    <i class="fa fa-minus"></i>
+                </button>
+            </div>
+        </div>
+        <div class="box-body">
+            <div class="col-sm-6">
+                <div class="row">
+                    <div class="col-sm-4">Invoice No</div>
+                    <div class="col-sm-8">No</div>
+                </div>
+                <div class="row">
+                    <div class="col-sm-4">Vendor Name</div>
+                    <div class="col-sm-8">@Model.VendorId</div>
+                </div>
+                <div class="row">
+                    <div class="col-sm-4">Invoice Date</div>
+                    <div class="col-sm-8"></div>
+                </div>
+                <div class="row">
+                    <div class="col-sm-4">Invoice Amount</div>
+                    <div class="col-sm-8">@Model.InvoiceAmount</div>
+                </div>
+                <div class="row">
+                    <div class="col-sm-4">Amount to Pay</div>
+                    <div class="col-sm-8">@Model.AmountToPay</div>
+                </div>
+                <div class="row">
+                    <div class="col-sm-4">Account</div>
+                    <div class="col-sm-8">@Model.AccountId</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div>
+        <input class="btn btn-primary btn-flat" type="submit" value="Save" />
+    </div>
+</div>

@@ -23,10 +23,29 @@ namespace Api.Controllers
 
         [HttpGet]
         [Route("[action]")]
+        public IActionResult CashBanks()
+        {
+            var cashAndBanks = _financialService.GetCashAndBanks();
+            var cashAndBanksDto = new List<Bank>();
+
+            foreach (var bank in cashAndBanks) {
+                cashAndBanksDto.Add(new Bank()
+                {
+                    Id = bank.Id,
+                    Name = bank.Name,
+                    AccountNo = bank.Number
+                });
+            }
+
+            return new ObjectResult(cashAndBanksDto);
+        }
+
+        [HttpGet]
+        [Route("[action]")]
         public IActionResult Accounts()
         {
             var accounts = _financialService.GetAccounts();
-            var accountsDto = new System.Collections.Generic.List<Dto.Financial.Account>();
+            var accountsDto = new List<Dto.Financial.Account>();
 
             foreach (var account in accounts)
             {

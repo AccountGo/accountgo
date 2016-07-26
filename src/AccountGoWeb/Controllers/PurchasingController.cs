@@ -105,5 +105,12 @@ namespace AccountGoWeb.Controllers
                 return View();
             }
         }
+
+        public IActionResult Payment(int invoiceId)
+        {
+            ViewBag.PageContentHeader = "Make Payment";
+            var model = new Models.Purchasing.Payment();
+            return View(model);
+        }
     }
 }

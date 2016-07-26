@@ -1,5 +1,7 @@
 ﻿@model Dto.Sales.Customer
-
+<div class="col-md-12">
+    <a href="~/sales/customerallocations/@Model.Id"><i class="fa fa-tasks margin-a"></i>Allocations</a>
+</div>
 <div class="col-md-9">
     <form action="~/sales/updatecustomer" method="post">
         @Html.HiddenFor(m => m.Id)

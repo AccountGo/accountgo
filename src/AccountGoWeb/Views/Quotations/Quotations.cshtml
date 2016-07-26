@@ -1,7 +1,7 @@
 ﻿@model string
 
 <div>
-    <a href="~/quotations/addsalesquotation"><i class="fa fa-plus margin-a"></i>Add</a>
+    <a href="~/quotations/addsalesquotation"><i class="fa fa-plus margin-a"></i>New Quotation</a>
 </div>
 <div>
     <div id="quotations" class="ag-fresh"></div>
@@ -19,7 +19,7 @@
         rowData: @Html.Raw(Model),
 
         // PROPERTIES - simple boolean / string / number properties
-        rowSelection: 'multiple',
+        rowSelection: 'multiple',        
      };
 
     // wait for the document to be loaded, otherwise

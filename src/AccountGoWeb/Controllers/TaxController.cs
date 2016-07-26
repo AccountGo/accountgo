@@ -17,7 +17,7 @@ namespace AccountGoWeb.Controllers
 
         public async System.Threading.Tasks.Task<IActionResult> Taxes()
         {
-            ViewBag.PageContentHeader = "Taxes";            
+            ViewBag.PageContentHeader = "Tax";            
 
             using (var client = new System.Net.Http.HttpClient())
             {

@@ -1,12 +1,15 @@
 ﻿@model string
 
 <div>
-    <a class="btn btn-sm btn-default btn-flat" href="~/sales/addreceipt">Add</a>
+    <a href="~/sales/addreceipt"><i class="fa fa-plus margin-a"></i>New Receipt</a>
+    <a href="~/sales/allocate/2" class="disabled"><i class="fa fa-tasks margin-a"></i>Allocate</a>
 </div>
 <div>
     <div id="receipts" class="ag-fresh" style="height: 400px;"></div>
 </div>
 <script>
+    var selectedRow = {};
+
     var columnDefs = [
         {headerName: "Receipt", field: "id", width: 50},
         {headerName: "No", field: "receiptNo", width: 50},
@@ -20,8 +23,21 @@
         rowData: @Html.Raw(Model),
 
         // PROPERTIES - simple boolean / string / number properties
-        rowSelection: 'multiple',
+        rowSelection: 'single',
+        onSelectionChanged: onSelectionChanged,
      };
+
+    function onSelectionChanged() {
+        var selectedRows = gridOptions.api.getSelectedRows();
+        //var selectedRowsString = '';
+        //selectedRows.forEach( function(selectedRow, index) {
+        //    if (index!=0) {
+        //        selectedRowsString += ', ';
+        //    }
+        //    selectedRowsString += selectedRow.id;
+        //});
+        selectedRow = selectedRows[0];
+    }
 
     // wait for the document to be loaded, otherwise
     // ag-Grid will not find the div in the document.
