@@ -107,5 +107,13 @@ namespace Api.Controllers
 
             return Ok(accountsDto.AsEnumerable());
         }
+
+        [HttpGet]
+        [Route("[action]")]
+        public IActionResult ItemCategories()
+        {
+            var itemcategories = _inventoryService.GetItemCategories();
+            return Ok(itemcategories.AsEnumerable());
+        }
     }
 }

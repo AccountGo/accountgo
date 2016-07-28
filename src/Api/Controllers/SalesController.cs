@@ -24,7 +24,6 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        //[Route("[action]/{id:int}")]
         [Route("[action]")]
         public IActionResult Customer(int id)
         {
@@ -48,6 +47,16 @@ namespace Api.Controllers
                 customerDto.Website = customer.Party.Website;
                 customerDto.Phone = customer.Party.Phone;
                 customerDto.Fax = customer.Party.Fax;
+
+                if (customer.PrimaryContact != null) {
+                    customerDto.PrimaryContact.FirstName = customer.PrimaryContact.FirstName;
+                    customerDto.PrimaryContact.LastName = customer.PrimaryContact.LastName;
+                    customerDto.PrimaryContact.Party.Email = customer.PrimaryContact.Party.Email;
+                    customerDto.PrimaryContact.Party.Phone = customer.PrimaryContact.Party.Phone;
+                    customerDto.PrimaryContact.Party.Fax = customer.PrimaryContact.Party.Fax;
+                    customerDto.PrimaryContact.Party.Website = customer.PrimaryContact.Party.Website;
+                    customerDto.PrimaryContact.Party.Name = customer.PrimaryContact.Party.Name;
+                }
 
                 return new ObjectResult(customerDto);
             }

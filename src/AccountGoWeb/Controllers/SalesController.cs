@@ -176,7 +176,7 @@ namespace AccountGoWeb.Controllers
             return View(customerModel);
         }
 
-        public IActionResult SaveCustomer(Customer model)
+        public IActionResult SaveCustomer(Customer customerModel)
         {
             if (ModelState.IsValid)
             {
@@ -188,12 +188,12 @@ namespace AccountGoWeb.Controllers
                 ViewBag.PaymentTerms = SelectListItemHelper.PaymentTerms();
             }
 
-            if(model.Id == -1)
+            if(customerModel.Id == -1)
                 ViewBag.PageContentHeader = "New Customer";
             else
                 ViewBag.PageContentHeader = "Customer Card";
 
-            return View("Customer", model);
+            return View("Customer", customerModel);
         }
 
         public IActionResult CustomerAllocations(int id)

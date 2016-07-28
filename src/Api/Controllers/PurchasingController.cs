@@ -83,12 +83,12 @@ namespace Api.Controllers
                     var vendorDto = new Dto.Purchasing.Vendor()
                     {
                         Id = vendor.Id,
-                        //No = vendor.No,
+                        No = vendor.No,
                         Name = vendor.Party.Name,
-                        //Email = vendor.Party.Email,
-                        //Phone = vendor.Party.Phone,
-                        //Fax = vendor.Party.Fax,
-                        //Balance = vendor.Balance
+                        Email = vendor.Party.Email,
+                        Phone = vendor.Party.Phone,
+                        Fax = vendor.Party.Fax,
+                        Website = vendor.Party.Website
                     };
 
                     vendorsDto.Add(vendorDto);
@@ -103,8 +103,8 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("[action]/{id:int}")]
-        public IActionResult GetVendorById(int id)
+        [Route("[action]")]
+        public IActionResult Vendor(int id)
         {
             try
             {
@@ -113,14 +113,30 @@ namespace Api.Controllers
                 var vendorDto = new Dto.Purchasing.Vendor()
                 {
                     Id = vendor.Id,
-                    //No = vendor.No,
+                    No = vendor.No,
                     Name = vendor.Party.Name,
-                    //Email = vendor.Party.Email,
-                    //Phone = vendor.Party.Phone,
-                    //Fax = vendor.Party.Fax,
-                    //Balance = vendor.Balance
+                    Email = vendor.Party.Email,
+                    Phone = vendor.Party.Phone,
+                    Fax = vendor.Party.Fax,
+                    Website = vendor.Party.Website,
+                    AccountsPayableAccountId = vendor.AccountsPayableAccountId.GetValueOrDefault(),
+                    PurchaseAccountId = vendor.PurchaseAccountId.GetValueOrDefault(),
+                    PurchaseDiscountAccountId = vendor.PurchaseDiscountAccountId.GetValueOrDefault(),
+                    TaxGroupId = vendor.TaxGroupId.GetValueOrDefault(),
+                    PaymentTermId = vendor.PaymentTermId.GetValueOrDefault(),
                 };
 
+                if (vendor.PrimaryContact != null)
+                {
+                    vendorDto.PrimaryContact.FirstName = vendor.PrimaryContact.FirstName;
+                    vendorDto.PrimaryContact.LastName = vendor.PrimaryContact.LastName;
+                    vendorDto.PrimaryContact.Party.Email = vendor.PrimaryContact.Party.Email;
+                    vendorDto.PrimaryContact.Party.Phone = vendor.PrimaryContact.Party.Phone;
+                    vendorDto.PrimaryContact.Party.Fax = vendor.PrimaryContact.Party.Fax;
+                    vendorDto.PrimaryContact.Party.Website = vendor.PrimaryContact.Party.Website;
+                    vendorDto.PrimaryContact.Party.Name = vendor.PrimaryContact.Party.Name;
+                }
+                
                 return new ObjectResult(vendorDto);
             }
             catch (Exception ex)

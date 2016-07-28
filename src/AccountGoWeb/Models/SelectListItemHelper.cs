@@ -31,6 +31,17 @@ namespace AccountGoWeb.Models
             return selectTaxGroups;
         }
 
+        public static IEnumerable<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem> ItemTaxGroups()
+        {
+            var itemtaxgroups = GetAsync<IEnumerable<Dto.TaxSystem.ItemTaxGroup>>("tax/itemtaxgroups").Result;
+            var selectitemtaxgroups = new HashSet<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>();
+            selectitemtaxgroups.Add(new Microsoft.AspNetCore.Mvc.Rendering.SelectListItem() { Value = "-1", Text = "" });
+            foreach (var taxGroup in itemtaxgroups)
+                selectitemtaxgroups.Add(new Microsoft.AspNetCore.Mvc.Rendering.SelectListItem() { Value = taxGroup.Id.ToString(), Text = taxGroup.Name });
+
+            return selectitemtaxgroups;
+        }
+
         public static IEnumerable<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem> PaymentTerms()
         {
             var paymentTerms = GetAsync<IEnumerable<Dto.TaxSystem.TaxGroup>>("common/paymentterms").Result;
@@ -40,6 +51,28 @@ namespace AccountGoWeb.Models
                 selectPaymentTerms.Add(new Microsoft.AspNetCore.Mvc.Rendering.SelectListItem() { Value = term.Id.ToString(), Text = term.Description });
 
             return selectPaymentTerms;
+        }
+
+        public static IEnumerable<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem> UnitOfMeasurements()
+        {
+            var uoms = GetAsync<IEnumerable<Dto.TaxSystem.TaxGroup>>("common/measurements").Result;
+            var selectUOMS = new HashSet<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>();
+            selectUOMS.Add(new Microsoft.AspNetCore.Mvc.Rendering.SelectListItem() { Value = "-1", Text = "" });
+            foreach (var item in uoms)
+                selectUOMS.Add(new Microsoft.AspNetCore.Mvc.Rendering.SelectListItem() { Value = item.Id.ToString(), Text = item.Description });
+
+            return selectUOMS;
+        }
+
+        public static IEnumerable<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem> ItemCategories()
+        {
+            var categories = GetAsync<IEnumerable<Dto.Inventory.ItemCategory>>("common/itemcategories").Result;
+            var selectCategories = new HashSet<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>();
+            selectCategories.Add(new Microsoft.AspNetCore.Mvc.Rendering.SelectListItem() { Value = "-1", Text = "" });
+            foreach (var item in categories)
+                selectCategories.Add(new Microsoft.AspNetCore.Mvc.Rendering.SelectListItem() { Value = item.Id.ToString(), Text = item.Name });
+
+            return selectCategories;
         }
 
         #region Private methods

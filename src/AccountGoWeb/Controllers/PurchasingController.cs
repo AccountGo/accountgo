@@ -11,6 +11,7 @@ namespace AccountGoWeb.Controllers
         public PurchasingController(IConfiguration config)
         {
             _config = config;
+            Models.SelectListItemHelper._config = _config;
         }
 
         public IActionResult Index()
@@ -85,25 +86,47 @@ namespace AccountGoWeb.Controllers
             }
             return View();
         }
-        public async System.Threading.Tasks.Task<IActionResult> Vendor(int id)
+        public IActionResult Vendor(int id = -1)
         {
-            ViewBag.PageContentHeader = "Vendor Card";
-
-            using (var client = new HttpClient())
+            Dto.Purchasing.Vendor vendorModel = null;
+            if (id == -1)
             {
-                var baseUri = _config["ApiUrl"];
-                client.BaseAddress = new System.Uri(baseUri);
-                client.DefaultRequestHeaders.Accept.Clear();
-                var response = await client.GetAsync(baseUri + "purchasing/vendor?id=" + id);
-                if (response.IsSuccessStatusCode)
-                {
-                    var responseJson = await response.Content.ReadAsStringAsync();
-                    var model = Newtonsoft.Json.JsonConvert.DeserializeObject(responseJson);
-                    return View(model);
-                }
-
-                return View();
+                ViewBag.PageContentHeader = "New Vendor";
+                vendorModel = new Dto.Purchasing.Vendor();
+                vendorModel.No = new System.Random().Next(1, 99999).ToString(); // TODO: Replace with system generated numbering.
             }
+            else
+            {
+                ViewBag.PageContentHeader = "Vendor Card";
+                vendorModel = GetAsync<Dto.Purchasing.Vendor>("purchasing/vendor?id=" + id).Result;
+            }
+
+            ViewBag.Accounts = Models.SelectListItemHelper.Accounts();
+            ViewBag.TaxGroups = Models.SelectListItemHelper.TaxGroups();
+            ViewBag.PaymentTerms = Models.SelectListItemHelper.PaymentTerms();
+
+            return View(vendorModel);
+        }
+
+        public IActionResult SaveVendor(Dto.Purchasing.Vendor vendorModel)
+        {
+            if (ModelState.IsValid)
+            {
+                return RedirectToAction("Vendors");
+            }
+            else
+            {
+                ViewBag.Accounts = Models.SelectListItemHelper.Accounts();
+                ViewBag.TaxGroups = Models.SelectListItemHelper.TaxGroups();
+                ViewBag.PaymentTerms = Models.SelectListItemHelper.PaymentTerms();
+            }
+
+            if (vendorModel.Id == -1)
+                ViewBag.PageContentHeader = "New Vendor";
+            else
+                ViewBag.PageContentHeader = "Vendor Card";
+
+            return View("Vendor", vendorModel);
         }
 
         public IActionResult Payment(int invoiceId)
@@ -112,5 +135,24 @@ namespace AccountGoWeb.Controllers
             var model = new Models.Purchasing.Payment();
             return View(model);
         }
+
+        #region Private methods
+        public async System.Threading.Tasks.Task<T> GetAsync<T>(string uri)
+        {
+            string responseJson = string.Empty;
+            using (var client = new HttpClient())
+            {
+                var baseUri = _config["ApiUrl"];
+                client.BaseAddress = new System.Uri(baseUri);
+                client.DefaultRequestHeaders.Accept.Clear();
+                var response = await client.GetAsync(baseUri + uri);
+                if (response.IsSuccessStatusCode)
+                {
+                    responseJson = await response.Content.ReadAsStringAsync();
+                }
+            }
+            return Newtonsoft.Json.JsonConvert.DeserializeObject<T>(responseJson);
+        }
+        #endregion
     }
 }
