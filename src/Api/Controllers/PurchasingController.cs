@@ -70,6 +70,50 @@ namespace Api.Controllers
             return new ObjectResult(purchaseInvoicesDto);
         }
 
+        [HttpPost]
+        [Route("[action]")]
+        public IActionResult SaveVendor([FromBody]Dto.Purchasing.Vendor vendorDto)
+        {
+            bool isNew = vendorDto.Id == 0;
+            Core.Domain.Purchases.Vendor vendor = null;
+
+            if (isNew)
+            {
+                vendor = new Core.Domain.Purchases.Vendor();
+                vendor.Party = new Core.Domain.Party();
+                vendor.PrimaryContact = new Core.Domain.Contact();
+                vendor.PrimaryContact.Party = new Core.Domain.Party();
+            }
+            else
+            {
+                vendor = _purchasingService.GetVendorById(vendorDto.Id);
+            }
+
+            vendor.No = vendorDto.No;
+            vendor.Party.PartyType = Core.Domain.PartyTypes.Vendor;
+            vendor.Party.Name = vendorDto.Name;
+            vendor.Party.Phone = vendorDto.Phone;
+            vendor.Party.Fax = vendorDto.Fax;
+            vendor.Party.Email = vendorDto.Email;
+            vendor.Party.Website = vendorDto.Website;
+            vendor.AccountsPayableAccountId = vendor.AccountsPayableAccountId;
+            vendor.PurchaseAccountId = vendor.PurchaseAccountId;
+            vendor.PurchaseDiscountAccountId = vendor.PurchaseDiscountAccountId;
+            vendor.TaxGroupId = vendor.TaxGroupId;
+            vendor.PaymentTermId = vendor.PaymentTermId;
+
+            if (isNew)
+            {
+                _purchasingService.AddVendor(vendor);
+            }
+            else
+            {
+                _purchasingService.UpdateVendor(vendor);
+            }
+
+            return Ok();
+        }
+
         [HttpGet]
         [Route("[action]")]
         public IActionResult Vendors()

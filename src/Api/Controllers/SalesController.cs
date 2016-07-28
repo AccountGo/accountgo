@@ -23,6 +23,63 @@ namespace Api.Controllers
             _salesService = salesService;
         }
 
+        [HttpPost]
+        [Route("[action]")]
+        public IActionResult SaveCustomer([FromBody]Dto.Sales.Customer customerDto)
+        {
+            bool isNew = customerDto.Id == 0;
+            Core.Domain.Sales.Customer customer = null;
+
+            if (isNew)
+            {
+                customer = new Core.Domain.Sales.Customer();                
+
+                customer.Party = new Core.Domain.Party()
+                {
+                    PartyType = Core.Domain.PartyTypes.Customer,
+                };
+
+                customer.PrimaryContact = new Core.Domain.Contact()
+                {
+                    ContactType = Core.Domain.ContactTypes.Customer,
+                    Party = new Core.Domain.Party() {
+                        PartyType = Core.Domain.PartyTypes.Contact
+                    }                                   
+                };                
+            }
+            else
+            {
+                customer = _salesService.GetCustomerById(customerDto.Id);
+            }
+
+            customer.No = customerDto.No;
+            customer.Party.Name = customerDto.Name;
+            customer.Party.Phone = customerDto.Phone;
+            customer.Party.Email = customerDto.Email;
+            customer.Party.Fax = customerDto.Fax;
+            customer.Party.Website = customerDto.Website;
+            //customer.PrimaryContact.FirstName = customerDto.PrimaryContact.FirstName;
+            //customer.PrimaryContact.LastName = customerDto.PrimaryContact.LastName;
+            //customer.PrimaryContact.Party.Name = customerDto.PrimaryContact.Party.Name;
+            //customer.PrimaryContact.Party.Phone = customerDto.PrimaryContact.Party.Phone;
+            //customer.PrimaryContact.Party.Email = customerDto.PrimaryContact.Party.Email;
+            //customer.PrimaryContact.Party.Fax = customerDto.PrimaryContact.Party.Fax;
+            //customer.PrimaryContact.Party.Website = customerDto.PrimaryContact.Party.Website;
+            customer.AccountsReceivableAccountId = customerDto.AccountsReceivableId;
+            customer.SalesAccountId = customerDto.SalesAccountId;
+            customer.CustomerAdvancesAccountId = customerDto.PrepaymentAccountId;
+            customer.SalesDiscountAccountId = customerDto.SalesDiscountAccountId;
+            customer.PaymentTermId = customerDto.PaymentTermId != -1 ? customerDto.PaymentTermId : (int?)null;
+            customer.TaxGroupId = customerDto.TaxGroupId;
+
+            if(isNew)
+                _salesService.AddCustomer(customer);
+            else
+                _salesService.UpdateCustomer(customer);
+
+            return Ok();
+        }
+
         [HttpGet]
         [Route("[action]")]
         public IActionResult Customer(int id)

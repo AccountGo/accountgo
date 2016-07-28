@@ -360,7 +360,9 @@ namespace Services.Sales
                 c => c.SalesInvoices,
                 c => c.CustomerAdvancesAccount,
                 c => c.SalesAccount,
-                c => c.PromptPaymentDiscountAccount                
+                c => c.PromptPaymentDiscountAccount,
+                c => c.PrimaryContact,
+                c => c.PrimaryContact.Party
             };
 
             var customer = _customerRepo.GetAllIncluding(includeProperties)

@@ -22,6 +22,51 @@ namespace Api.Controllers
             _inventoryService = inventoryService;
         }
 
+        [HttpPost]
+        [Route("[action]")]
+        public IActionResult SaveItem([FromBody]Item itemDto)
+        {
+            bool isNew = itemDto.Id == 0;
+            Core.Domain.Items.Item item = null;
+
+            if (isNew)
+            {
+                item = new Core.Domain.Items.Item();
+            }
+            else
+            {
+                item = _inventoryService.GetItemById(itemDto.Id);
+            }
+
+            item.No = itemDto.No;
+            item.Code = itemDto.Code;
+            item.Description = itemDto.Description;
+            item.SellDescription = itemDto.SellDescription;
+            item.PurchaseDescription = itemDto.PurchaseDescription;
+            item.Cost = itemDto.Cost;
+            item.Price = itemDto.Price;
+            item.SmallestMeasurementId = itemDto.SmallestMeasurementId;
+            item.SellMeasurementId = itemDto.SellMeasurementId;
+            item.PurchaseMeasurementId = itemDto.PurchaseMeasurementId;
+            item.ItemCategoryId = itemDto.ItemCategoryId;
+            item.ItemTaxGroupId = itemDto.ItemTaxGroupId;
+            item.SalesAccountId = itemDto.SalesAccountId;
+            item.InventoryAccountId = itemDto.InventoryAccountId;
+            item.InventoryAdjustmentAccountId = itemDto.InventoryAdjustmentAccountId;
+            item.CostOfGoodsSoldAccountId = itemDto.CostOfGoodsSoldAccountId;
+            
+            if (isNew)
+            {
+                _inventoryService.AddItem(item);
+            }
+            else
+            {
+                _inventoryService.UpdateItem(item);
+            }
+
+            return Ok();
+        }
+
         [HttpGet]
         [Route("[action]")]
         public IActionResult Items()

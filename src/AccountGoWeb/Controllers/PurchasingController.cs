@@ -112,6 +112,12 @@ namespace AccountGoWeb.Controllers
         {
             if (ModelState.IsValid)
             {
+                var serialize = Newtonsoft.Json.JsonConvert.SerializeObject(vendorModel);
+                var content = new StringContent(serialize);
+                content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+
+                var response = PostAsync("purchasing/savevendor", content);
+
                 return RedirectToAction("Vendors");
             }
             else
@@ -152,6 +158,24 @@ namespace AccountGoWeb.Controllers
                 }
             }
             return Newtonsoft.Json.JsonConvert.DeserializeObject<T>(responseJson);
+        }
+
+        public async System.Threading.Tasks.Task<string> PostAsync(string uri, StringContent data)
+        {
+            string responseJson = string.Empty;
+            using (var client = new HttpClient())
+            {
+                var baseUri = _config["ApiUrl"];
+                client.BaseAddress = new System.Uri(baseUri);
+                client.DefaultRequestHeaders.Accept.Clear();
+                var response = await client.PostAsync(baseUri + uri, data);
+                if (response.IsSuccessStatusCode)
+                {
+                    responseJson = await response.Content.ReadAsStringAsync();
+                }
+            }
+
+            return Newtonsoft.Json.JsonConvert.DeserializeObject<string>(responseJson);
         }
         #endregion
     }
