@@ -2,11 +2,12 @@
 
 <div>
     <a href="~/sales/addreceipt"><i class="fa fa-plus margin-a"></i>New Receipt</a>
-    <a href="~/sales/allocate/1" class="disabled"><i class="fa fa-tasks margin-a"></i>Allocate</a>
+    <a href="~/sales/allocate/1" id="linkAllocate" class="inactiveLink"><i class="fa fa-tasks margin-a"></i>Allocate</a>
 </div>
 <div>
     <div id="receipts" class="ag-fresh" style="height: 400px;"></div>
 </div>
+
 <script>
     var selectedRow = {};
 
@@ -15,7 +16,8 @@
         {headerName: "No", field: "receiptNo", width: 50},
         {headerName: "Customer Name", field: "customerName", width: 350},
         {headerName: "Receipt Date", field: "receiptDate", width: 100},
-        {headerName: "Amount", field: "amount", width: 100}
+        {headerName: "Amount", field: "amount", width: 100},
+        {headerName: "Left to Allocate", field: "remainingAmountToAllocate", width: 100}
     ];
 
     var gridOptions = {
@@ -29,14 +31,14 @@
 
     function onSelectionChanged() {
         var selectedRows = gridOptions.api.getSelectedRows();
-        //var selectedRowsString = '';
-        //selectedRows.forEach( function(selectedRow, index) {
-        //    if (index!=0) {
-        //        selectedRowsString += ', ';
-        //    }
-        //    selectedRowsString += selectedRow.id;
-        //});
         selectedRow = selectedRows[0];
+        
+        document.getElementById('linkAllocate').setAttribute('href', 'allocate/' + selectedRow.id);
+        
+        if(selectedRow.remainingAmountToAllocate > 0)
+            document.getElementById('linkAllocate').setAttribute('class', '');
+        else
+            document.getElementById('linkAllocate').setAttribute('class', 'inactiveLink');
     }
 
     // wait for the document to be loaded, otherwise

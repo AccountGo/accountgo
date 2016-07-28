@@ -266,6 +266,7 @@ namespace Services.Purchasing
         {
             var query = _purchaseOrderRepo.GetAllIncluding(po => po.Vendor,
                 po => po.Vendor.Party,
+                po => po.PurchaseReceipts,
                 po => po.PurchaseOrderLines);
 
             return query.AsEnumerable();
@@ -299,9 +300,12 @@ namespace Services.Purchasing
 
         public IEnumerable<PurchaseInvoiceHeader> GetPurchaseInvoices()
         {
-            var query =_purchaseInvoiceRepo.GetAllIncluding(po => po.Vendor,
-                po => po.Vendor.Party,
-                po => po.PurchaseInvoiceLines);
+            var query =_purchaseInvoiceRepo.GetAllIncluding(inv => inv.Vendor,
+                inv => inv.Vendor.Party,
+                inv => inv.VendorPayments,
+                inv => inv.PurchaseInvoiceLines,
+                inv => inv.GeneralLedgerHeader,
+                inv => inv.GeneralLedgerHeader.GeneralLedgerLines);
 
             return query.AsEnumerable();
         }

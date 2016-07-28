@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Dto.Common;
+using Microsoft.AspNetCore.Mvc;
 using Services.Administration;
 using Services.Sales;
 using System;
@@ -34,13 +35,19 @@ namespace Api.Controllers
                 var customerDto = new Dto.Sales.Customer()
                 {
                     Id = customer.Id,
-                    No = customer.No,
-                    Name = customer.Party.Name,
-                    Email = customer.Party.Email,
-                    Phone = customer.Party.Phone,
-                    Fax = customer.Party.Fax,
-                    Balance = customer.Balance
+                    No = customer.No,                  
+                    AccountsReceivableId = customer.AccountsReceivableAccountId.GetValueOrDefault(),
+                    SalesAccountId = customer.SalesAccountId.GetValueOrDefault(),
+                    PrepaymentAccountId = customer.CustomerAdvancesAccountId.GetValueOrDefault(),
+                    SalesDiscountAccountId = customer.SalesDiscountAccountId.GetValueOrDefault(),
+                    PaymentTermId = customer.PaymentTermId.GetValueOrDefault(),
+                    TaxGroupId = customer.TaxGroupId.GetValueOrDefault()
                 };
+                customerDto.Name = customer.Party.Name;
+                customerDto.Email = customer.Party.Email;
+                customerDto.Website = customer.Party.Website;
+                customerDto.Phone = customer.Party.Phone;
+                customerDto.Fax = customer.Party.Fax;
 
                 return new ObjectResult(customerDto);
             }
@@ -95,13 +102,14 @@ namespace Api.Controllers
                     var customerDto = new Dto.Sales.Customer()
                     {
                         Id = customer.Id,
-                        No = customer.No,
-                        Name = customer.Party.Name,
-                        Email = customer.Party.Email,
-                        Phone = customer.Party.Phone,
-                        Fax = customer.Party.Fax,
-                        Balance = customer.Balance
+                        No = customer.No
                     };
+
+                    customerDto.Name = customer.Party.Name;
+                    customerDto.Email = customer.Party.Email;
+                    customerDto.Website = customer.Party.Website;
+                    customerDto.Phone = customer.Party.Phone;
+                    customerDto.Fax = customer.Party.Fax;
 
                     customersDto.Add(customerDto);
                 }
@@ -328,7 +336,8 @@ namespace Api.Controllers
                     CustomerId = salesReceipt.CustomerId,
                     CustomerName = salesReceipt.Customer.Party.Name,
                     ReceiptDate = salesReceipt.Date,
-                    Amount = salesReceipt.Amount
+                    Amount = salesReceipt.Amount,
+                    RemainingAmountToAllocate = salesReceipt.AvailableAmountToAllocate
                 };
 
                 salesReceiptsDto.Add(salesReceiptDto);

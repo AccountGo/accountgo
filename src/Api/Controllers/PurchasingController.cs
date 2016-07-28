@@ -2,6 +2,7 @@
 using Services.Administration;
 using Services.Purchasing;
 using System;
+using System.Linq;
 using System.Collections.Generic;
 
 // For more information on enabling Web API for empty projects, visit http://go.microsoft.com/fwlink/?LinkID=397860
@@ -35,7 +36,7 @@ namespace Api.Controllers
                     VendorId = purchaseOrder.VendorId.Value,
                     VendorName = purchaseOrder.Vendor.Party.Name,
                     OrderDate = purchaseOrder.Date,
-                    //Amount = purchaseOrder.SalesOrderLines.Sum(l => l.Amount)
+                    Amount = purchaseOrder.PurchaseOrderLines.Sum(l => l.Amount)
                 };
 
                 purchaseOrdersDto.Add(purchaseOrderDto);
@@ -59,7 +60,8 @@ namespace Api.Controllers
                     VendorId = purchaseInvoice.VendorId.Value,
                     VendorName = purchaseInvoice.Vendor.Party.Name,
                     InvoiceDate = purchaseInvoice.Date,
-                    //Amount = purchaseOrder.SalesOrderLines.Sum(l => l.Amount)
+                    Amount = purchaseInvoice.PurchaseInvoiceLines.Sum(l => l.Amount),
+                    IsPaid = purchaseInvoice.IsPaid()
                 };
 
                 purchaseInvoicesDto.Add(purchaseInvoiceDto);

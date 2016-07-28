@@ -3,6 +3,19 @@
   "version": 2,
   "targets": {
     ".NETFramework,Version=v4.6.1": {
+      "BundlerMinifier.Core/2.1.258": {
+        "type": "package",
+        "dependencies": {
+          "NUglify": "1.5.1",
+          "Newtonsoft.Json": "9.0.1"
+        },
+        "compile": {
+          "lib/net452/dotnet-bundle.exe": {}
+        },
+        "runtime": {
+          "lib/net452/dotnet-bundle.exe": {}
+        }
+      },
       "Libuv/1.9.0": {
         "type": "package",
         "dependencies": {
@@ -658,7 +671,7 @@
           "lib/net451/Microsoft.AspNetCore.WebUtilities.dll": {}
         }
       },
-      "Microsoft.Bcl/1.1.9": {
+      "Microsoft.Bcl/1.1.10": {
         "type": "package",
         "dependencies": {
           "Microsoft.Bcl.Build": "1.0.14"
@@ -1128,10 +1141,10 @@
           "lib/netstandard1.0/Microsoft.Extensions.WebEncoders.dll": {}
         }
       },
-      "Microsoft.Net.Http/2.2.22": {
+      "Microsoft.Net.Http/2.2.29": {
         "type": "package",
         "dependencies": {
-          "Microsoft.Bcl": "1.1.9",
+          "Microsoft.Bcl": "1.1.10",
           "Microsoft.Bcl.Build": "1.0.14"
         },
         "frameworkAssemblies": [
@@ -1182,6 +1195,21 @@
         },
         "runtime": {
           "lib/net45/Newtonsoft.Json.dll": {}
+        }
+      },
+      "NUglify/1.5.1": {
+        "type": "package",
+        "frameworkAssemblies": [
+          "System",
+          "System.Core",
+          "System.Xml",
+          "mscorlib"
+        ],
+        "compile": {
+          "lib/net40/NUglify.dll": {}
+        },
+        "runtime": {
+          "lib/net40/NUglify.dll": {}
         }
       },
       "System.AppContext/4.1.0": {
@@ -1864,6 +1892,18 @@
     }
   },
   "libraries": {
+    "BundlerMinifier.Core/2.1.258": {
+      "sha512": "dHTcSnKRM2Dvk1s2eCLU8U1WCxLlfk4y0GQlBUFaHaLt1NN1JhxJeDhhVo6jqKhHZsBaY7Cz04UYuKrKSwItZQ==",
+      "type": "package",
+      "path": "BundlerMinifier.Core/2.1.258",
+      "files": [
+        "BundlerMinifier.Core.2.1.258.nupkg.sha512",
+        "BundlerMinifier.Core.nuspec",
+        "lib/net452/dotnet-bundle.exe",
+        "lib/netcoreapp1.0/dotnet-bundle.dll",
+        "lib/netcoreapp1.0/dotnet-bundle.runtimeconfig.json"
+      ]
+    },
     "Libuv/1.9.0": {
       "sha512": "9Q7AaqtQhS8JDSIvRBt6ODSLWDBI4c8YxNxyCQemWebBFUtBbc6M5Vi5Gz1ZyIUlTW3rZK9bIr5gnVyv0z7a2Q==",
       "type": "package",
@@ -2396,27 +2436,15 @@
         "lib/netstandard1.3/Microsoft.AspNetCore.WebUtilities.xml"
       ]
     },
-    "Microsoft.Bcl/1.1.9": {
-      "sha512": "USQ55innJy8K+tAXvVa1O8dUTp2s7pmJ5cJj6Tl02HtGc2xBDj0P2QH5620HbGXIWKWYhydoeQF8Rm/JRDBGhw==",
+    "Microsoft.Bcl/1.1.10": {
+      "sha512": "+tTqoh/M1pyL8El3qLy30EcwnAtyvFoDZJtdG9Cbg/WdFbh4N8kyrq198XHuEL7lnJbeD0DRO8jcX5IIOh05cQ==",
       "type": "package",
-      "path": "Microsoft.Bcl/1.1.9",
+      "path": "Microsoft.Bcl/1.1.10",
       "files": [
         "License-Stable.rtf",
-        "Microsoft.Bcl.1.1.9.nupkg.sha512",
+        "Microsoft.Bcl.1.1.10.nupkg.sha512",
         "Microsoft.Bcl.nuspec",
-        "content/monoandroid/_._",
-        "content/monotouch/_._",
-        "content/net45/_._",
-        "content/portable-net45+win8+wp8+wpa81/_._",
-        "content/portable-net45+win8+wpa81/_._",
-        "content/portable-net451+win81+wpa81/_._",
-        "content/portable-net451+win81/_._",
-        "content/portable-win81+wp81+wpa81/_._",
-        "content/sl4/_._",
-        "content/sl5/_._",
-        "content/win8/_._",
-        "content/wp8/_._",
-        "content/wpa81/_._",
+        "lib/Xamarin.iOS10/_._",
         "lib/monoandroid/_._",
         "lib/monotouch/_._",
         "lib/net40/System.IO.dll",
@@ -2941,14 +2969,18 @@
         "lib/netstandard1.0/Microsoft.Extensions.WebEncoders.xml"
       ]
     },
-    "Microsoft.Net.Http/2.2.22": {
-      "sha512": "bqVLJ2UimlAEs2bn3y28lB1pmFRxuysv9pFyB0A86WEMYGYTfDyfjAGjm0fiaSRjlMNU1jVnp8Mxt8qe4OmpXQ==",
+    "Microsoft.Net.Http/2.2.29": {
+      "sha512": "fc4CPEewJ30Xgal+fSq1lYIBt582A7eKlAL7O4HXiYAiTp2VTnA4osSvk7T2n8aS4xTCPVJusQk3yKLT0XSpkg==",
       "type": "package",
-      "path": "Microsoft.Net.Http/2.2.22",
+      "path": "Microsoft.Net.Http/2.2.29",
       "files": [
         "License-Stable.rtf",
-        "Microsoft.Net.Http.2.2.22.nupkg.sha512",
+        "Microsoft.Net.Http.2.2.29.nupkg.sha512",
         "Microsoft.Net.Http.nuspec",
+        "lib/Xamarin.iOS10/System.Net.Http.Extensions.XML",
+        "lib/Xamarin.iOS10/System.Net.Http.Extensions.dll",
+        "lib/Xamarin.iOS10/System.Net.Http.Primitives.dll",
+        "lib/Xamarin.iOS10/System.Net.Http.Primitives.xml",
         "lib/monoandroid/System.Net.Http.Extensions.XML",
         "lib/monoandroid/System.Net.Http.Extensions.dll",
         "lib/monoandroid/System.Net.Http.Primitives.dll",
@@ -3050,6 +3082,21 @@
         "lib/portable-net45+wp80+win8+wpa81/Newtonsoft.Json.dll",
         "lib/portable-net45+wp80+win8+wpa81/Newtonsoft.Json.xml",
         "tools/install.ps1"
+      ]
+    },
+    "NUglify/1.5.1": {
+      "sha512": "iYV/OtSs+HgyE/RilY7UvGXYec6r0OJenWlPIdX/IivedVpSSdzxvPvUIyWpiV/6ad7VjantH0/6oaOhAZbaoQ==",
+      "type": "package",
+      "path": "NUglify/1.5.1",
+      "files": [
+        "NUglify.1.5.1.nupkg.sha512",
+        "NUglify.nuspec",
+        "lib/net35/NUglify.dll",
+        "lib/net35/NUglify.xml",
+        "lib/net40/NUglify.dll",
+        "lib/net40/NUglify.xml",
+        "lib/netstandard1.3/NUglify.dll",
+        "lib/netstandard1.3/NUglify.xml"
       ]
     },
     "System.AppContext/4.1.0": {
@@ -5741,6 +5788,7 @@
   },
   "projectFileDependencyGroups": {
     "": [
+      "BundlerMinifier.Core >= 2.1.258",
       "Microsoft.AspNetCore.Authentication >= 1.0.0",
       "Microsoft.AspNetCore.Authentication.Cookies >= 1.0.0",
       "Microsoft.AspNetCore.Mvc >= 1.0.0",
@@ -5754,7 +5802,7 @@
       "Microsoft.Extensions.Logging >= 1.0.0",
       "Microsoft.Extensions.Logging.Console >= 1.0.0",
       "Microsoft.Extensions.Logging.Debug >= 1.0.0",
-      "Microsoft.Net.Http >= 2.2.22"
+      "Microsoft.Net.Http >= 2.2.29"
     ],
     ".NETFramework,Version=v4.6.1": [
       "Dto"
@@ -5762,20 +5810,6 @@
   },
   "tools": {
     ".NETCoreApp,Version=v1.0": {
-      "BundlerMinifier.Core/2.0.238": {
-        "type": "package",
-        "dependencies": {
-          "Microsoft.NETCore.App": "1.0.0",
-          "NUglify": "1.5.0",
-          "Newtonsoft.Json": "9.0.1"
-        },
-        "compile": {
-          "lib/netcoreapp1.0/dotnet-bundle.dll": {}
-        },
-        "runtime": {
-          "lib/netcoreapp1.0/dotnet-bundle.dll": {}
-        }
-      },
       "Microsoft.AspNetCore.Razor.Tools/1.0.0-preview2-final": {
         "type": "package",
         "dependencies": {
@@ -5815,7 +5849,6 @@
   },
   "projectFileToolGroups": {
     ".NETCoreApp,Version=v1.0": [
-      "BundlerMinifier.Core >= 2.0.238",
       "Microsoft.AspNetCore.Razor.Tools >= 1.0.0-preview2-final",
       "Microsoft.AspNetCore.Server.IISIntegration.Tools >= 1.0.0-preview2-final"
     ]

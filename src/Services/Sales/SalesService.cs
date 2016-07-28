@@ -318,6 +318,7 @@ namespace Services.Sales
         {
             var query = _salesReceiptRepo.GetAllIncluding(s => s.Customer,
                 s => s.Customer.Party,
+                s => s.CustomerAllocations,
                 s => s.AccountToDebit,
                 s => s.GeneralLedgerHeader,
                 s => s.SalesReceiptLines);
@@ -356,7 +357,10 @@ namespace Services.Sales
             System.Linq.Expressions.Expression<Func<Customer, object>>[] includeProperties = {
                 p => p.Party,
                 c => c.AccountsReceivableAccount,
-                c => c.SalesInvoices
+                c => c.SalesInvoices,
+                c => c.CustomerAdvancesAccount,
+                c => c.SalesAccount,
+                c => c.PromptPaymentDiscountAccount                
             };
 
             var customer = _customerRepo.GetAllIncluding(includeProperties)

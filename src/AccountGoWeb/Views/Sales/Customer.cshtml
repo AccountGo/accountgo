@@ -1,11 +1,10 @@
 ﻿@model Dto.Sales.Customer
-<div class="col-md-12">
+@*<div class="col-md-12">
     <a href="~/sales/customerallocations/@Model.Id"><i class="fa fa-tasks margin-a"></i>Allocations</a>
-</div>
+</div>*@
 <div class="col-md-9">
-    <form action="~/sales/updatecustomer" method="post">
+    <form action="~/sales/savecustomer" method="post">
         @Html.HiddenFor(m => m.Id)
-        <!-- Default box -->
         <div class="box">
             <div class="box-header with-border">
                 <h3 class="box-title">General</h3>
@@ -19,11 +18,15 @@
                 <div class="col-sm-6">
                     <div class="row">
                         <div class="col-sm-2">No</div>
-                        <div class="col-sm-10">No</div>
+                        <div class="col-sm-10">@Model.No</div>
+                        @Html.HiddenFor(m => m.No)
                     </div>
                     <div class="row">
                         <div class="col-sm-2">Name</div>
-                        <div class="col-sm-10"><input asp-for="Name" class="form-control" type="text" placeholder="Name ..." /></div>
+                        <div class="col-sm-10">
+                            <input asp-for="Name" class="form-control" type="text" placeholder="Name ..." />
+                            <span asp-validation-for="Name" class="danger"></span>
+                        </div>
                     </div>
                 </div>
                 <div class="col-sm-6">
@@ -53,10 +56,61 @@
                     </div>
                 </div>
             </div>
-            <!-- /.box-body -->
         </div>
-        <!-- /.box -->
-        <!-- Default box -->
+
+        <div class="box">
+            <div class="box-header with-border">
+                <h3 class="box-title">Contact</h3>
+                <div class="box-tools pull-right">
+                    <button type="button" class="btn btn-box-tool" data-widget="collapse" data-toggle="tooltip" title="Collapse">
+                        <i class="fa fa-minus"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="box-body">
+                <div class="col-sm-6">
+                    <div class="row">
+                        <div class="col-sm-4">First Name</div>
+                        <div class="col-sm-8">
+                            <input asp-for="PrimaryContact.FirstName" class="form-control" type="text" placeholder="Phone ..." />
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-sm-4">Last Name</div>
+                        <div class="col-sm-8">
+                            <input asp-for="PrimaryContact.LastName" class="form-control" type="text" placeholder="Fax ..." />
+                        </div>
+                    </div>
+                </div>
+                <div class="col-sm-6">
+                    <div class="row">
+                        <div class="col-sm-4">Phone</div>
+                        <div class="col-sm-8">
+                            <input asp-for="PrimaryContact.Party.Phone" class="form-control" type="text" placeholder="Phone ..." />
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-sm-4">Fax</div>
+                        <div class="col-sm-8">
+                            <input asp-for="PrimaryContact.Party.Fax" class="form-control" type="text" placeholder="Fax ..." />
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-sm-4">Website</div>
+                        <div class="col-sm-8">
+                            <input asp-for="PrimaryContact.Party.Website" class="form-control" type="text" placeholder="Website ..." />
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-sm-4">Email</div>
+                        <div class="col-sm-8">
+                            <input asp-for="PrimaryContact.Party.Email" class="form-control" type="text" placeholder="Email ..." />
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="box">
             <div class="box-header with-border">
                 <h3 class="box-title">Invoicing</h3>
@@ -67,11 +121,43 @@
                 </div>
             </div>
             <div class="box-body">
-                Start creating your amazing application!
+                <div class="col-sm-6">
+                    <div class="row">
+                        <div class="col-sm-6">Accounts Receivable</div>
+                        <div class="col-sm-6">
+                            <select class="form-control" asp-for="AccountsReceivableId" asp-items="@ViewBag.Accounts"></select>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-sm-6">Sales</div>
+                        <div class="col-sm-6">
+                            <select class="form-control" asp-for="SalesAccountId" asp-items="@ViewBag.Accounts"></select>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-sm-6">Prepayment</div>
+                        <div class="col-sm-6">
+                            <select class="form-control" asp-for="PrepaymentAccountId" asp-items="@ViewBag.Accounts"></select>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-sm-6">Discount</div>
+                        <div class="col-sm-6">
+                            <select class="form-control" asp-for="SalesDiscountAccountId" asp-items="@ViewBag.Accounts"></select>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-sm-6">
+                    <div class="row">
+                        <div class="col-sm-4">Tax Group</div>
+                        <div class="col-sm-8">
+                            <select class="form-control" asp-for="TaxGroupId" asp-items="@ViewBag.TaxGroups"></select>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <!-- /.box-body -->
         </div>
-        <!-- /.box -->
+
         <div class="box">
             <div class="box-header with-border">
                 <h3 class="box-title">Payment</h3>
@@ -82,18 +168,26 @@
                 </div>
             </div>
             <div class="box-body">
-                Start creating your amazing application!
+                <div class="col-sm-6">
+                    <div class="row">
+                        <div class="col-sm-4">Payment Term</div>
+                        <div class="col-sm-8">
+                            <select class="form-control" asp-for="PaymentTermId" asp-items="@ViewBag.PaymentTerms"></select>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <!-- /.box-body -->
         </div>
-        <!-- /.box -->
         <div>
             <input class="btn btn-primary btn-flat" type="submit" value="Save" />
         </div>
     </form>
 </div>
 <div class="col-md-3">
-    @*<fieldset>
-        <legend>Fact box</legend>
-    </fieldset>*@
 </div>
+
+@section scripts{
+    <script>
+
+    </script>
+}

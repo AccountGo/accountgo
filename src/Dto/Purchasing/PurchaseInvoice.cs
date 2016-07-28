@@ -8,6 +8,7 @@ namespace Dto.Purchasing
         public string VendorName { get; set; }
         public DateTime InvoiceDate { get; set; }
         public decimal Amount { get; set; }
+        public bool IsPaid { get; set; }
     }
 
     public class PurchaseInvoiceLine : BaseDto

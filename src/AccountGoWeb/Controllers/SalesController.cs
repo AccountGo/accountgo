@@ -1,4 +1,6 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using AccountGoWeb.Models;
+using Dto.Sales;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using System.Collections.Generic;
 using System.Linq;
@@ -13,6 +15,8 @@ namespace AccountGoWeb.Controllers
         public SalesController(IConfiguration config)
         {
             _config = config;
+
+            Models.SelectListItemHelper._config = _config;
         }
 
         public IActionResult Index()
@@ -149,25 +153,47 @@ namespace AccountGoWeb.Controllers
             }
             return View();
         }
-
-        public async System.Threading.Tasks.Task<IActionResult> Customer(int id)
+        
+        public IActionResult Customer(int id = -1)
         {
-            ViewBag.PageContentHeader = "Customer Card";
-
-            using (var client = new HttpClient())
+            Customer customerModel = null;
+            if (id == -1)
             {
-                var baseUri = _config["ApiUrl"];
-                client.BaseAddress = new System.Uri(baseUri);
-                client.DefaultRequestHeaders.Accept.Clear();
-                var response = await client.GetAsync(baseUri + "sales/customer?id=" + id);
-                if (response.IsSuccessStatusCode)
-                {
-                    var responseJson = await response.Content.ReadAsStringAsync();
-                    var model = Newtonsoft.Json.JsonConvert.DeserializeObject<Dto.Sales.Customer>(responseJson);
-                    return View(model);
-                }
+                ViewBag.PageContentHeader = "New Customer";
+                customerModel = new Customer();
+                customerModel.No = new System.Random().Next(1, 99999).ToString(); // TODO: Replace with system generated numbering.
             }
-            return View();
+            else
+            {
+                ViewBag.PageContentHeader = "Customer Card";
+                customerModel = GetAsync<Customer>("sales/customer?id=" + id).Result;
+            }
+
+            ViewBag.Accounts = SelectListItemHelper.Accounts();
+            ViewBag.TaxGroups = SelectListItemHelper.TaxGroups();
+            ViewBag.PaymentTerms = SelectListItemHelper.PaymentTerms();
+
+            return View(customerModel);
+        }
+
+        public IActionResult SaveCustomer(Customer model)
+        {
+            if (ModelState.IsValid)
+            {
+                return RedirectToAction("Customers");
+            }
+            else {
+                ViewBag.Accounts = SelectListItemHelper.Accounts();
+                ViewBag.TaxGroups = SelectListItemHelper.TaxGroups();
+                ViewBag.PaymentTerms = SelectListItemHelper.PaymentTerms();
+            }
+
+            if(model.Id == -1)
+                ViewBag.PageContentHeader = "New Customer";
+            else
+                ViewBag.PageContentHeader = "Customer Card";
+
+            return View("Customer", model);
         }
 
         public IActionResult CustomerAllocations(int id)

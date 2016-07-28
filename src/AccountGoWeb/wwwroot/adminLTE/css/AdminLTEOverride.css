@@ -21,3 +21,9 @@
 .margin-a{
     margin: 2px;
 }
+
+.inactiveLink {
+   pointer-events: none;
+   cursor: default;
+   color:gray;
+}
