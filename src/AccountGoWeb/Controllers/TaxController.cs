@@ -17,7 +17,7 @@ namespace AccountGoWeb.Controllers
 
         public async System.Threading.Tasks.Task<IActionResult> Taxes()
         {
-            ViewBag.PageContentHeader = "Tax";            
+            ViewBag.PageContentHeader = "Tax";
 
             using (var client = new System.Net.Http.HttpClient())
             {
@@ -28,7 +28,13 @@ namespace AccountGoWeb.Controllers
                 if (response.IsSuccessStatusCode)
                 {
                     var responseJson = await response.Content.ReadAsStringAsync();
-                    return View(model: responseJson);
+                    var taxSystemDto = Newtonsoft.Json.JsonConvert.DeserializeObject<Dto.TaxSystem.TaxSystemDto>(responseJson);
+                    var taxSystemViewModel = new Models.TaxSystem.TaxSystemViewModel();
+                    taxSystemViewModel.Taxes = taxSystemDto.Taxes;
+                    taxSystemViewModel.ItemTaxGroups = taxSystemDto.ItemTaxGroups;
+                    taxSystemViewModel.TaxGroups = taxSystemDto.TaxGroups;
+
+                    return View(taxSystemViewModel);
                 }
             }
 

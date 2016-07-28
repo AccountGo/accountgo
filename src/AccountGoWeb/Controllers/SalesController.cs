@@ -189,14 +189,20 @@ namespace AccountGoWeb.Controllers
             model.ReceiptId = receipt.Id;
             model.Date = receipt.ReceiptDate;
             model.Amount = (double)receipt.Amount;
+            model.RemainingAmountToAllocate = (double)receipt.RemainingAmountToAllocate;
 
-            var invoices = GetAsync<IEnumerable<Dto.Sales.SalesInvoice>>("sales/customerinvoices?id=" + receipt.CustomerId).Result;
+             var invoices = GetAsync<IEnumerable<Dto.Sales.SalesInvoice>>("sales/customerinvoices?id=" + receipt.CustomerId).Result;
 
             foreach (var invoice in invoices) {
-                model.AllocationLines.Add(new Models.Sales.AllocationLine() {
-                    InvoiceId = invoice.Id,
-                    Amount = (double)invoice.TotalAmount
-                });
+                if (invoice.TotalAllocatedAmount < (double)invoice.TotalAmount)
+                {
+                    model.AllocationLines.Add(new Models.Sales.AllocationLine()
+                    {
+                        InvoiceId = invoice.Id,
+                        Amount = (double)invoice.TotalAmount,
+                        AllocatedAmount = invoice.TotalAllocatedAmount
+                    });
+                }
             }
 
             return View(model);
@@ -206,7 +212,11 @@ namespace AccountGoWeb.Controllers
         public IActionResult Allocate(Models.Sales.Allocate model)
         {
             if (ModelState.IsValid)
-            { }
+            {
+                if (!model.IsValid()) {
+                    return View(model);
+                }
+            }
 
             return RedirectToAction("salesreceipts");
         }

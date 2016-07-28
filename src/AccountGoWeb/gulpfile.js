@@ -7,7 +7,9 @@ gulp.task("libs", () => {
     gulp.src([
             'bootstrap/dist/**',
             'jquery/dist/**',
-            'ag-grid/dist/**'
+            'ag-grid/dist/**',
+            'knockout/build/output/**',
+            'knockout-mapping/dist/**'
     ],
     {
         cwd: "node_modules/**"

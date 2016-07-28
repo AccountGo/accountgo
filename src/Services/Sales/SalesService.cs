@@ -329,6 +329,7 @@ namespace Services.Sales
         {
             var receipt = _salesReceiptRepo.GetAllIncluding(r => r.Customer, 
                 r => r.CustomerAllocations,
+                r => r.SalesReceiptLines,
                 r => r.Customer.Party)
                 .Where(r => r.Id == id).FirstOrDefault();
 
@@ -571,7 +572,8 @@ namespace Services.Sales
 
         public IEnumerable<SalesInvoiceHeader> GetCustomerInvoices(int customerId)
         {
-            var invoices = _salesInvoiceRepo.GetAllIncluding(i => i.SalesInvoiceLines)
+            var invoices = _salesInvoiceRepo.GetAllIncluding(i => i.SalesInvoiceLines,
+                i => i.CustomerAllocations)
                 .Where(i => i.CustomerId == customerId);
 
             return invoices;

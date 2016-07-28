@@ -22,7 +22,7 @@ namespace Api.Controllers
         {
             var taxes = _taxService.GetTaxes(true);
 
-            var taxSystemDtoDto = new TaxSystemDto();
+            var taxSystemDto = new TaxSystemDto();
 
             var taxesDto = new List<Tax>();
 
@@ -36,7 +36,7 @@ namespace Api.Controllers
                 });                
             }
 
-            taxSystemDtoDto.Taxes = taxesDto.AsEnumerable();
+            taxSystemDto.Taxes = taxesDto;
 
             var taxGroupsDto = new List<TaxGroup>();
             var taxGroups = _taxService.GetTaxGroups();
@@ -49,11 +49,22 @@ namespace Api.Controllers
                     IsActive = group.IsActive,
                     TaxAppliedToShipping = group.TaxAppliedToShipping
                 };
-                                
+
+                foreach (var tax in group.TaxGroupTax) {
+                    var taxDto = new TaxGroupTax()
+                    {
+                        Id = tax.Id,
+                        TaxId = tax.TaxId,
+                        TaxGroupId = tax.TaxGroupId
+                    };
+
+                    groupDto.Taxes.Add(taxDto);
+                }
+
                 taxGroupsDto.Add(groupDto);
             }
 
-            taxSystemDtoDto.TaxGroups = taxGroupsDto.AsEnumerable();
+            taxSystemDto.TaxGroups = taxGroupsDto;
             
             var itemTaxGroupsDto = new List<ItemTaxGroup>();
             var itemTaxGroups = _taxService.GetItemTaxGroups();
@@ -67,12 +78,24 @@ namespace Api.Controllers
                     IsFullyExempt = group.IsFullyExempt
                 };
 
+                foreach (var tax in group.ItemTaxGroupTax)
+                {
+                    var taxDto = new ItemTaxGroupTax()
+                    {
+                        Id = tax.Id,
+                        TaxId = tax.TaxId,
+                        ItemTaxGroupId = tax.ItemTaxGroupId
+                    };
+
+                    groupDto.Taxes.Add(taxDto);
+                }
+
                 itemTaxGroupsDto.Add(groupDto);
             }
 
-            taxSystemDtoDto.ItemTaxGroups = itemTaxGroupsDto.AsEnumerable();
+            taxSystemDto.ItemTaxGroups = itemTaxGroupsDto;
 
-            return new ObjectResult(taxSystemDtoDto);
+            return new ObjectResult(taxSystemDto);
         }
     }
 }

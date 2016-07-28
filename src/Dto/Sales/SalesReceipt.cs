@@ -8,6 +8,7 @@ namespace Dto.Sales
         public int CustomerId { get; set; }
         public string CustomerName { get; set; }
         public decimal Amount { get; set; }
+        public decimal RemainingAmountToAllocate { get; set; }
         public int AccountToDebitId { get; set; }
         public string AccountToDebit { get; set; }
         public int GeneralLedgerHederId { get; set; }

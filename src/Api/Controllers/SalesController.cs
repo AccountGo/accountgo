@@ -349,7 +349,8 @@ namespace Api.Controllers
                 CustomerId = salesReceipt.CustomerId,
                 CustomerName = salesReceipt.Customer.Party.Name,
                 ReceiptDate = salesReceipt.Date,
-                Amount = salesReceipt.Amount
+                Amount = salesReceipt.Amount,
+                RemainingAmountToAllocate = salesReceipt.AvailableAmountToAllocate
             };
 
             return new ObjectResult(salesReceiptDto);
@@ -372,7 +373,8 @@ namespace Api.Controllers
                         Id = invoice.Id,
                         InvoiceDate = invoice.Date,
                         CustomerId = invoice.CustomerId,
-                        TotalAmount = invoice.ComputeTotalAmount()
+                        TotalAmount = invoice.ComputeTotalAmount(),
+                        TotalAllocatedAmount = (double)invoice.CustomerAllocations.Sum(i => i.Amount)
                     };
 
                     invoicesDto.Add(invoiceDto);
