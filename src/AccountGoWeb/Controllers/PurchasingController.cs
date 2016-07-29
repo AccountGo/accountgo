@@ -41,6 +41,8 @@ namespace AccountGoWeb.Controllers
         {
             ViewBag.PageContentHeader = "Add Purchase Order";
 
+            ViewBag.Vendors = Models.SelectListItemHelper.Vendors();
+
             return View();
         }
 
@@ -166,7 +168,7 @@ namespace AccountGoWeb.Controllers
             else
             {
                 ViewBag.PageContentHeader = "Make Payment";
-                ViewBag.Accounts = Models.SelectListItemHelper.Accounts();
+                ViewBag.CashBanks = Models.SelectListItemHelper.CashBanks();
             }
             return View(model);
         }

@@ -100,25 +100,13 @@ namespace AccountGoWeb.Controllers
 
         public IActionResult AddReceipt()
         {
-            ViewBag.PageContentHeader = "Add Receipt";
+            ViewBag.PageContentHeader = "New Receipt";
 
             var model = new Models.Sales.AddReceipt();
 
-            var customers = GetAsync<IEnumerable<Dto.Sales.Customer>>("sales/customers").Result;
-            
-            ViewBag.Customers = new HashSet<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>();
-
-            foreach (var customer in customers)
-                ViewBag.Customers.Add(new Microsoft.AspNetCore.Mvc.Rendering.SelectListItem() { Value = customer.Id.ToString(), Text = customer.Name });
-            
+            ViewBag.Customers = Models.SelectListItemHelper.Customers();
             ViewBag.DebitAccounts = Models.SelectListItemHelper.CashBanks();
-
-            var accounts = GetAsync<IEnumerable<Dto.Financial.Account>>("financials/accounts").Result;
-
-            ViewBag.CreditAccounts = new HashSet<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>();
-
-            foreach (var account in accounts)
-                ViewBag.CreditAccounts.Add(new Microsoft.AspNetCore.Mvc.Rendering.SelectListItem() { Value = account.Id.ToString(), Text = account.AccountName });
+            ViewBag.CreditAccounts = Models.SelectListItemHelper.Accounts();
 
             return View(model);
         }
@@ -127,9 +115,19 @@ namespace AccountGoWeb.Controllers
         public IActionResult AddReceipt(Models.Sales.AddReceipt model)
         {
             if (ModelState.IsValid)
-            { }
+            {
+                return RedirectToAction("salesreceipts");
+            }
+            else
+            {
+                ViewBag.PageContentHeader = "New Receipt";
 
-            return RedirectToAction("salesreceipts");
+                ViewBag.Customers = Models.SelectListItemHelper.Customers();
+                ViewBag.DebitAccounts = Models.SelectListItemHelper.CashBanks();
+                ViewBag.CreditAccounts = Models.SelectListItemHelper.Accounts();
+            }
+
+            return View(model);
         }
 
 

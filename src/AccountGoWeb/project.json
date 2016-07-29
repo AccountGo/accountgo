@@ -18,7 +18,8 @@
     "Microsoft.AspNetCore.Authentication": "1.0.0",
     "Microsoft.AspNetCore.Authentication.Cookies": "1.0.0",
     "BundlerMinifier.Core": "2.1.258",
-    "Microsoft.Net.Http": "2.2.29"
+    "Microsoft.Net.Http": "2.2.29",
+    "ExpressiveAnnotations": "2.8.0"
   },
 
   "tools": {

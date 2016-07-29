@@ -1,7 +1,7 @@
 ﻿import * as React from "react";
 import * as ReactDOM from "react-dom";
 import {observer} from "mobx-react";
-import * as d3 from "d3";
+
 import Config = require("Config");
 
 import SelectCustomer from "../Shared/Components/SelectCustomer";
@@ -51,7 +51,7 @@ class SalesInvoiceHeader extends React.Component<any, {}>{
                 </div>
                 <div>
                     <label>Payment Term: </label>
-                    <SelectPaymentTerm />
+                    <SelectPaymentTerm store={store} />
                 </div>
                 <div>
                     <label>Reference No: </label>

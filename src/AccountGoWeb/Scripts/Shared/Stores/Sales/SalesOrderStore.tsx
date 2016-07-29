@@ -1,9 +1,22 @@
 ﻿import {observable, extendObservable, action} from 'mobx';
+import * as axios from "axios";
+
+import Config = require("Config");
+
 import SalesOrder from './SalesOrder';
 import SalesOrderLine from './SalesOrderLine';
 
+import CommonStore from "../Common/CommonStore";
+
+let baseUrl = location.protocol
+    + "//" + location.hostname
+    + (location.port && ":" + location.port)
+    + "/";
+
 export default class SalesOrderStore {
     salesOrder;
+    commonStore;
+
     constructor() {
         this.salesOrder = new SalesOrder();
         extendObservable(this.salesOrder, {
@@ -13,6 +26,8 @@ export default class SalesOrderStore {
             referenceNo: this.salesOrder.referenceNo,
             salesOrderLines: []
         });
+
+        this.commonStore = new CommonStore();
     }
     
     changedCustomer(custId) {

@@ -15,23 +15,38 @@
                 <div class="col-sm-6">
                     <div class="row">
                         <div class="col-sm-4">Receipt No</div>
-                        <div class="col-sm-8">No</div>
+                        <div class="col-sm-8">
+                            @Html.DisplayFor(m => m.ReceiptId)
+                            @Html.HiddenFor(m => m.ReceiptId)
+                        </div>
                     </div>
                     <div class="row">
                         <div class="col-sm-4">Customer Name</div>
-                        <div class="col-sm-8">@Model.CustomerId</div>
+                        <div class="col-sm-8">
+                            @Model.CustomerId
+                            @Html.HiddenFor(m => m.CustomerId)
+                        </div>
                     </div>
                     <div class="row">
                         <div class="col-sm-4">Receipt Date</div>
-                        <div class="col-sm-8">@Model.Date</div>
+                        <div class="col-sm-8">
+                            @Model.Date
+                            @Html.HiddenFor(m => m.Date)
+                        </div>
                     </div>
                     <div class="row">
                         <div class="col-sm-4">Amount</div>
-                        <div class="col-sm-8">@Model.Amount</div>
+                        <div class="col-sm-8">
+                            @Model.Amount
+                            @Html.HiddenFor(m => m.Amount)
+                        </div>
                     </div>
                     <div class="row">
                         <div class="col-sm-4">Remaining</div>
-                        <div class="col-sm-8">@Model.RemainingAmountToAllocate</div>
+                        <div class="col-sm-8">
+                            @Model.RemainingAmountToAllocate
+                            @Html.HiddenFor(m => m.RemainingAmountToAllocate)
+                        </div>
                     </div>
                 </div>
             </div>
@@ -77,4 +92,5 @@
             <input class="btn btn-primary btn-flat" type="submit" value="Save" />
         </div>
     </form>
+
 </div>

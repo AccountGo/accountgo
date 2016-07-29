@@ -1,9 +1,22 @@
 ﻿import {observable, extendObservable, action} from 'mobx';
+import * as axios from "axios";
+
+import Config = require("Config");
+
 import PurchaseInvoice from './PurchaseInvoice';
 import PurchaseInvoiceLine from './PurchaseInvoiceLine';
 
+import CommonStore from "../Common/CommonStore";
+
+let baseUrl = location.protocol
+    + "//" + location.hostname
+    + (location.port && ":" + location.port)
+    + "/";
+
 export default class PurchaseOrderStore {
     purchaseInvoice;
+    commonStore;
+
     constructor() {
         this.purchaseInvoice = new PurchaseInvoice();
         extendObservable(this.purchaseInvoice, {
@@ -13,6 +26,8 @@ export default class PurchaseOrderStore {
             referenceNo: this.purchaseInvoice.referenceNo,
             purchaseInvoiceLines: []
         });
+
+        this.commonStore = new CommonStore();
     }
     
     changedVendor(vendorId) {

@@ -1,6 +1,5 @@
 ﻿import {observable, extendObservable, action} from 'mobx';
 import * as axios from "axios";
-import * as d3 from "d3";
 
 import Config = require("Config");
 

@@ -16,6 +16,32 @@
           "lib/net452/dotnet-bundle.exe": {}
         }
       },
+      "ExpressiveAnnotations/2.8.0": {
+        "type": "package",
+        "dependencies": {
+          "Microsoft.jQuery.Unobtrusive.Validation": "3.1.1",
+          "Newtonsoft.Json": "4.5.11",
+          "jQuery": "1.8.2",
+          "jQuery.Validation": "1.10.0"
+        },
+        "compile": {
+          "lib/net45/ExpressiveAnnotations.MvcUnobtrusive.dll": {},
+          "lib/net45/ExpressiveAnnotations.dll": {}
+        },
+        "runtime": {
+          "lib/net45/ExpressiveAnnotations.MvcUnobtrusive.dll": {},
+          "lib/net45/ExpressiveAnnotations.dll": {}
+        }
+      },
+      "jQuery/1.8.2": {
+        "type": "package"
+      },
+      "jQuery.Validation/1.10.0": {
+        "type": "package",
+        "dependencies": {
+          "jQuery": "1.3.2"
+        }
+      },
       "Libuv/1.9.0": {
         "type": "package",
         "dependencies": {
@@ -1141,6 +1167,13 @@
           "lib/netstandard1.0/Microsoft.Extensions.WebEncoders.dll": {}
         }
       },
+      "Microsoft.jQuery.Unobtrusive.Validation/3.1.1": {
+        "type": "package",
+        "dependencies": {
+          "jQuery": "1.8.0",
+          "jQuery.Validation": "1.8.0"
+        }
+      },
       "Microsoft.Net.Http/2.2.29": {
         "type": "package",
         "dependencies": {
@@ -1902,6 +1935,53 @@
         "lib/net452/dotnet-bundle.exe",
         "lib/netcoreapp1.0/dotnet-bundle.dll",
         "lib/netcoreapp1.0/dotnet-bundle.runtimeconfig.json"
+      ]
+    },
+    "ExpressiveAnnotations/2.8.0": {
+      "sha512": "WQka+D4tOyb/QQ14tDkBlpepd4Mt+UhlQ1+h+oC7i412BzqJztaAes3L+hMkfgh7mH+Kb1I58Te5j8qNUbYJAg==",
+      "type": "package",
+      "path": "ExpressiveAnnotations/2.8.0",
+      "files": [
+        "ExpressiveAnnotations.2.8.0.nupkg.sha512",
+        "ExpressiveAnnotations.nuspec",
+        "content/Scripts/expressive.annotations.validate.js",
+        "content/Scripts/expressive.annotations.validate.min.js",
+        "lib/net40/ExpressiveAnnotations.MvcUnobtrusive.dll",
+        "lib/net40/ExpressiveAnnotations.MvcUnobtrusive.xml",
+        "lib/net40/ExpressiveAnnotations.dll",
+        "lib/net40/ExpressiveAnnotations.xml",
+        "lib/net45/ExpressiveAnnotations.MvcUnobtrusive.dll",
+        "lib/net45/ExpressiveAnnotations.MvcUnobtrusive.xml",
+        "lib/net45/ExpressiveAnnotations.dll",
+        "lib/net45/ExpressiveAnnotations.xml"
+      ]
+    },
+    "jQuery/1.8.2": {
+      "sha512": "uhcB1DuO8O6WW6wWe7SDn0Rz4vZZPqNJHld10yrtG9Z/l4HiTHBhncn2GWAzF7Yv6hoNC/+kAM/6WMsrIdThWA==",
+      "type": "package",
+      "path": "jQuery/1.8.2",
+      "files": [
+        "Content/Scripts/jquery-1.8.2-vsdoc.js",
+        "Content/Scripts/jquery-1.8.2.js",
+        "Content/Scripts/jquery-1.8.2.min.js",
+        "Tools/common.ps1",
+        "Tools/install.ps1",
+        "Tools/jquery-1.8.2.intellisense.js",
+        "Tools/uninstall.ps1",
+        "jQuery.1.8.2.nupkg.sha512",
+        "jQuery.nuspec"
+      ]
+    },
+    "jQuery.Validation/1.10.0": {
+      "sha512": "3DkiimjcU1Ar8lzlO4V45LvPgBeY5ed7AbGd6MsEVlVFe3kOI1wQMbEbEPnB8aCdHTrxmAZon9gxkLhBRiRD3Q==",
+      "type": "package",
+      "path": "jQuery.Validation/1.10.0",
+      "files": [
+        "Content/Scripts/jquery.validate-vsdoc.js",
+        "Content/Scripts/jquery.validate.js",
+        "Content/Scripts/jquery.validate.min.js",
+        "jQuery.Validation.1.10.0.nupkg.sha512",
+        "jQuery.Validation.nuspec"
       ]
     },
     "Libuv/1.9.0": {
@@ -2967,6 +3047,17 @@
         "Microsoft.Extensions.WebEncoders.nuspec",
         "lib/netstandard1.0/Microsoft.Extensions.WebEncoders.dll",
         "lib/netstandard1.0/Microsoft.Extensions.WebEncoders.xml"
+      ]
+    },
+    "Microsoft.jQuery.Unobtrusive.Validation/3.1.1": {
+      "sha512": "4B/hmUZnLcT1F6P72HakRCmYFGLDU2zXaI+CXzHBEkrDA7BBjGtwls72un6NH8wvNyeysg6p0fStZpM7tUK1zQ==",
+      "type": "package",
+      "path": "Microsoft.jQuery.Unobtrusive.Validation/3.1.1",
+      "files": [
+        "Content/Scripts/jquery.validate.unobtrusive.js",
+        "Content/Scripts/jquery.validate.unobtrusive.min.js",
+        "Microsoft.jQuery.Unobtrusive.Validation.3.1.1.nupkg.sha512",
+        "Microsoft.jQuery.Unobtrusive.Validation.nuspec"
       ]
     },
     "Microsoft.Net.Http/2.2.29": {
@@ -5789,6 +5880,7 @@
   "projectFileDependencyGroups": {
     "": [
       "BundlerMinifier.Core >= 2.1.258",
+      "ExpressiveAnnotations >= 2.8.0",
       "Microsoft.AspNetCore.Authentication >= 1.0.0",
       "Microsoft.AspNetCore.Authentication.Cookies >= 1.0.0",
       "Microsoft.AspNetCore.Mvc >= 1.0.0",

@@ -86,6 +86,50 @@ namespace AccountGoWeb.Models
             return selectCashBanks;
         }
 
+        public static IEnumerable<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem> Customers()
+        {
+            var customers = GetAsync<IEnumerable<Dto.Sales.Customer>>("sales/customers").Result;
+            var selectCustomers = new HashSet<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>();
+            selectCustomers.Add(new Microsoft.AspNetCore.Mvc.Rendering.SelectListItem() { Value = "", Text = "" });
+            foreach (var item in customers)
+                selectCustomers.Add(new Microsoft.AspNetCore.Mvc.Rendering.SelectListItem() { Value = item.Id.ToString(), Text = item.Name });
+
+            return selectCustomers;
+        }
+
+        public static IEnumerable<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem> Vendors()
+        {
+            var vendors = GetAsync<IEnumerable<Dto.Purchasing.Vendor>>("purchasing/vendors").Result;
+            var selectVendors = new HashSet<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>();
+            selectVendors.Add(new Microsoft.AspNetCore.Mvc.Rendering.SelectListItem() { Value = "", Text = "" });
+            foreach (var item in vendors)
+                selectVendors.Add(new Microsoft.AspNetCore.Mvc.Rendering.SelectListItem() { Value = item.Id.ToString(), Text = item.Name });
+
+            return selectVendors;
+        }
+
+        public static IEnumerable<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem> Items()
+        {
+            var items = GetAsync<IEnumerable<Dto.Inventory.Item>>("inventory/items").Result;
+            var selectItems = new HashSet<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>();
+            selectItems.Add(new Microsoft.AspNetCore.Mvc.Rendering.SelectListItem() { Value = "", Text = "" });
+            foreach (var item in items)
+                selectItems.Add(new Microsoft.AspNetCore.Mvc.Rendering.SelectListItem() { Value = item.Id.ToString(), Text = item.Description });
+
+            return selectItems;
+        }
+
+        public static IEnumerable<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem> Measurements()
+        {
+            var measurements = GetAsync<IEnumerable<Dto.Inventory.Measurement>>("inventory/items").Result;
+            var selectMeasurements = new HashSet<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>();
+            selectMeasurements.Add(new Microsoft.AspNetCore.Mvc.Rendering.SelectListItem() { Value = "", Text = "" });
+            foreach (var item in measurements)
+                selectMeasurements.Add(new Microsoft.AspNetCore.Mvc.Rendering.SelectListItem() { Value = item.Id.ToString(), Text = item.Description });
+
+            return selectMeasurements;
+        }
+
         #region Private methods
         public static async System.Threading.Tasks.Task<T> GetAsync<T>(string uri)
         {
