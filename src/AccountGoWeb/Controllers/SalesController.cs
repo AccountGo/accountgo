@@ -110,13 +110,10 @@ namespace AccountGoWeb.Controllers
 
             foreach (var customer in customers)
                 ViewBag.Customers.Add(new Microsoft.AspNetCore.Mvc.Rendering.SelectListItem() { Value = customer.Id.ToString(), Text = customer.Name });
+            
+            ViewBag.DebitAccounts = Models.SelectListItemHelper.CashBanks();
 
             var accounts = GetAsync<IEnumerable<Dto.Financial.Account>>("financials/accounts").Result;
-
-            ViewBag.DebitAccounts = new HashSet<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>();
-
-            foreach (var account in accounts.Where(a => a.IsCash == true))
-                ViewBag.DebitAccounts.Add(new Microsoft.AspNetCore.Mvc.Rendering.SelectListItem() { Value = account.Id.ToString(), Text = account.AccountName });
 
             ViewBag.CreditAccounts = new HashSet<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>();
 

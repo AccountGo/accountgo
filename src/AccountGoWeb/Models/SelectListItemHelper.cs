@@ -75,6 +75,17 @@ namespace AccountGoWeb.Models
             return selectCategories;
         }
 
+        public static IEnumerable<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem> CashBanks()
+        {
+            var cashBanks = GetAsync<IEnumerable<Dto.Financial.Bank>>("common/cashbanks").Result;
+            var selectCashBanks = new HashSet<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>();
+            selectCashBanks.Add(new Microsoft.AspNetCore.Mvc.Rendering.SelectListItem() { Value = "", Text = "" });
+            foreach (var item in cashBanks)
+                selectCashBanks.Add(new Microsoft.AspNetCore.Mvc.Rendering.SelectListItem() { Value = item.Id.ToString(), Text = item.Name });
+
+            return selectCashBanks;
+        }
+
         #region Private methods
         public static async System.Threading.Tasks.Task<T> GetAsync<T>(string uri)
         {

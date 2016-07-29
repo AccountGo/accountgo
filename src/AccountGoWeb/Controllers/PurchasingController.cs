@@ -135,10 +135,39 @@ namespace AccountGoWeb.Controllers
             return View("Vendor", vendorModel);
         }
 
-        public IActionResult Payment(int invoiceId)
+        public IActionResult Payment(int id)
         {
             ViewBag.PageContentHeader = "Make Payment";
-            var model = new Models.Purchasing.Payment();
+
+            var invoice = GetAsync<Dto.Purchasing.PurchaseInvoice>("purchasing/invoice?id=" + id).Result;
+
+            var model = new Models.Purchasing.Payment()
+            {
+                InvoiceId = invoice.Id,
+                InvoiceNo = invoice.InvoiceNo,
+                VendorId = invoice.VendorId,
+                VendorName = invoice.VendorName,
+                InvoiceAmount = invoice.Amount,
+                Date = invoice.InvoiceDate
+            };
+
+            ViewBag.CashBanks = Models.SelectListItemHelper.CashBanks();
+
+            return View(model);
+        }
+        
+        [HttpPost]
+        public IActionResult Payment(Models.Purchasing.Payment model)
+        {
+            if (ModelState.IsValid)
+            {
+                return RedirectToAction("PurchaseInvoices");
+            }
+            else
+            {
+                ViewBag.PageContentHeader = "Make Payment";
+                ViewBag.Accounts = Models.SelectListItemHelper.Accounts();
+            }
             return View(model);
         }
 

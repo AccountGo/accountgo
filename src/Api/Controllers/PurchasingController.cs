@@ -70,6 +70,24 @@ namespace Api.Controllers
             return new ObjectResult(purchaseInvoicesDto);
         }
 
+        [HttpGet]
+        [Route("[action]")]
+        public IActionResult Invoice(int id)
+        {
+            var invoice = _purchasingService.GetPurchaseInvoiceById(id);
+            var purchaseInvoiceDto = new Dto.Purchasing.PurchaseInvoice()
+            {
+                Id = invoice.Id,
+                InvoiceNo = invoice.No,
+                VendorId = invoice.VendorId.GetValueOrDefault(),
+                VendorName = invoice.Vendor.Party.Name,
+                InvoiceDate = invoice.Date,
+                Amount = invoice.PurchaseInvoiceLines.Sum(l => l.Amount)
+            };
+
+            return new ObjectResult(purchaseInvoiceDto);
+        }
+
         [HttpPost]
         [Route("[action]")]
         public IActionResult SaveVendor([FromBody]Dto.Purchasing.Vendor vendorDto)

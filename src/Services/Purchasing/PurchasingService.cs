@@ -319,7 +319,14 @@ namespace Services.Purchasing
 
         public PurchaseInvoiceHeader GetPurchaseInvoiceById(int id)
         {
-            return _purchaseInvoiceRepo.GetById(id);
+            var invoice = _purchaseInvoiceRepo.GetAllIncluding(inv => inv.Vendor,
+                inv => inv.Vendor.Party,
+                inv => inv.PurchaseInvoiceLines,
+                inv => inv.VendorPayments)
+                .Where(inv => inv.Id == id)
+                .FirstOrDefault();
+
+            return invoice;
         }
 
         public void SavePayment(int invoiceId, int vendorId, int accountId, decimal amount, DateTime date)
