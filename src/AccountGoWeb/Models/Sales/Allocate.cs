@@ -7,9 +7,9 @@ namespace AccountGoWeb.Models.Sales
         public int CustomerId { get; set; }        
         public int ReceiptId { get; set; }
         public System.DateTime Date { get; set; }
-        public double Amount { get; set; }
-        public double RemainingAmountToAllocate { get; set; }
-        public double SumAllocatedAmount { get { return ComputeSumToAllocateAmount(); } }
+        public decimal Amount { get; set; }
+        public decimal RemainingAmountToAllocate { get; set; }
+        public decimal SumAllocatedAmount { get { return ComputeSumToAllocateAmount(); } }
         public IList<AllocationLine> AllocationLines { get; set; }
 
         public Allocate()
@@ -17,9 +17,9 @@ namespace AccountGoWeb.Models.Sales
             AllocationLines = new List<AllocationLine>();
         }
 
-        private double ComputeSumToAllocateAmount()
+        private decimal ComputeSumToAllocateAmount()
         {
-            double sum = 0;
+            decimal sum = 0;
 
             foreach (var line in AllocationLines) {
                 sum += line.AmountToAllocate;
@@ -40,8 +40,8 @@ namespace AccountGoWeb.Models.Sales
     public class AllocationLine
     {
         public int InvoiceId { get; set; }
-        public double Amount { get; set; }
-        public double AllocatedAmount { get; set; }
-        public double AmountToAllocate { get; set; }
+        public decimal Amount { get; set; }
+        public decimal AllocatedAmount { get; set; }
+        public decimal AmountToAllocate { get; set; }
     }    
 }

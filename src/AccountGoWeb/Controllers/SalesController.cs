@@ -220,18 +220,18 @@ namespace AccountGoWeb.Controllers
             model.CustomerId = receipt.CustomerId;
             model.ReceiptId = receipt.Id;
             model.Date = receipt.ReceiptDate;
-            model.Amount = (double)receipt.Amount;
-            model.RemainingAmountToAllocate = (double)receipt.RemainingAmountToAllocate;
+            model.Amount = receipt.Amount;
+            model.RemainingAmountToAllocate = receipt.RemainingAmountToAllocate;
 
              var invoices = GetAsync<IEnumerable<Dto.Sales.SalesInvoice>>("sales/customerinvoices?id=" + receipt.CustomerId).Result;
 
             foreach (var invoice in invoices) {
-                if (invoice.TotalAllocatedAmount < (double)invoice.TotalAmount)
+                if (invoice.TotalAllocatedAmount < invoice.TotalAmount)
                 {
                     model.AllocationLines.Add(new Models.Sales.AllocationLine()
                     {
                         InvoiceId = invoice.Id,
-                        Amount = (double)invoice.TotalAmount,
+                        Amount = invoice.TotalAmount,
                         AllocatedAmount = invoice.TotalAllocatedAmount
                     });
                 }

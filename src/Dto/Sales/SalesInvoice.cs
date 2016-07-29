@@ -9,7 +9,7 @@ namespace Dto.Sales
         public string CustomerName { get; set; }
         public DateTime InvoiceDate { get; set; }
         public decimal TotalAmount { get; set; }
-        public double TotalAllocatedAmount { get; set; }
+        public decimal TotalAllocatedAmount { get; set; }
 
         public IList<SalesInvoiceLine> SalesInvoiceLines { get; set; }
     }
