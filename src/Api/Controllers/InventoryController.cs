@@ -102,7 +102,19 @@ namespace Api.Controllers
                 Description = item.Description,
                 Cost = item.Cost,
                 Price = item.Price,
-                QuantityOnHand = item.ComputeQuantityOnHand()
+                SellDescription = item.SellDescription,
+                PurchaseDescription = item.PurchaseDescription,
+                QuantityOnHand = item.ComputeQuantityOnHand(),
+                ItemCategoryId = item.ItemCategoryId,
+                SmallestMeasurementId = item.SmallestMeasurementId,
+                SellMeasurementId = item.SellMeasurementId,
+                PurchaseMeasurementId = item.PurchaseMeasurementId,
+                PreferredVendorId = item.PreferredVendorId,
+                ItemTaxGroupId = item.ItemTaxGroupId,
+                SalesAccountId = item.SalesAccountId,
+                InventoryAccountId = item.InventoryAccountId,
+                CostOfGoodsSoldAccountId = item.CostOfGoodsSoldAccountId,
+                InventoryAdjustmentAccountId = item.InventoryAdjustmentAccountId
             };
 
             return new ObjectResult(itemDto);

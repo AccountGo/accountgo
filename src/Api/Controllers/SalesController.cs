@@ -58,18 +58,18 @@ namespace Api.Controllers
             customer.Party.Email = customerDto.Email;
             customer.Party.Fax = customerDto.Fax;
             customer.Party.Website = customerDto.Website;
-            //customer.PrimaryContact.FirstName = customerDto.PrimaryContact.FirstName;
-            //customer.PrimaryContact.LastName = customerDto.PrimaryContact.LastName;
-            //customer.PrimaryContact.Party.Name = customerDto.PrimaryContact.Party.Name;
-            //customer.PrimaryContact.Party.Phone = customerDto.PrimaryContact.Party.Phone;
-            //customer.PrimaryContact.Party.Email = customerDto.PrimaryContact.Party.Email;
-            //customer.PrimaryContact.Party.Fax = customerDto.PrimaryContact.Party.Fax;
-            //customer.PrimaryContact.Party.Website = customerDto.PrimaryContact.Party.Website;
+            customer.PrimaryContact.FirstName = customerDto.PrimaryContact.FirstName;
+            customer.PrimaryContact.LastName = customerDto.PrimaryContact.LastName;
+            customer.PrimaryContact.Party.Name = customerDto.PrimaryContact.Party.Name;
+            customer.PrimaryContact.Party.Phone = customerDto.PrimaryContact.Party.Phone;
+            customer.PrimaryContact.Party.Email = customerDto.PrimaryContact.Party.Email;
+            customer.PrimaryContact.Party.Fax = customerDto.PrimaryContact.Party.Fax;
+            customer.PrimaryContact.Party.Website = customerDto.PrimaryContact.Party.Website;
             customer.AccountsReceivableAccountId = customerDto.AccountsReceivableId;
             customer.SalesAccountId = customerDto.SalesAccountId;
             customer.CustomerAdvancesAccountId = customerDto.PrepaymentAccountId;
             customer.SalesDiscountAccountId = customerDto.SalesDiscountAccountId;
-            customer.PaymentTermId = customerDto.PaymentTermId != -1 ? customerDto.PaymentTermId : (int?)null;
+            customer.PaymentTermId = customerDto.PaymentTermId;
             customer.TaxGroupId = customerDto.TaxGroupId;
 
             if(isNew)

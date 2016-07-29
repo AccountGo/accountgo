@@ -96,11 +96,11 @@ namespace Api.Controllers
             vendor.Party.Fax = vendorDto.Fax;
             vendor.Party.Email = vendorDto.Email;
             vendor.Party.Website = vendorDto.Website;
-            vendor.AccountsPayableAccountId = vendor.AccountsPayableAccountId;
-            vendor.PurchaseAccountId = vendor.PurchaseAccountId;
-            vendor.PurchaseDiscountAccountId = vendor.PurchaseDiscountAccountId;
-            vendor.TaxGroupId = vendor.TaxGroupId;
-            vendor.PaymentTermId = vendor.PaymentTermId;
+            vendor.AccountsPayableAccountId = vendorDto.AccountsPayableAccountId;
+            vendor.PurchaseAccountId = vendorDto.PurchaseAccountId;
+            vendor.PurchaseDiscountAccountId = vendorDto.PurchaseDiscountAccountId;
+            vendor.TaxGroupId = vendorDto.TaxGroupId;
+            vendor.PaymentTermId = vendorDto.PaymentTermId;
 
             if (isNew)
             {

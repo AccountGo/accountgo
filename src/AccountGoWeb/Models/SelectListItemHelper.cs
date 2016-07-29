@@ -13,7 +13,7 @@ namespace AccountGoWeb.Models
             var accounts = GetAsync<IEnumerable<Dto.Financial.Account>>("financials/accounts").Result;
 
             var selectAccounts = new HashSet<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>();
-            selectAccounts.Add(new Microsoft.AspNetCore.Mvc.Rendering.SelectListItem() { Value = "-1", Text = "" });
+            selectAccounts.Add(new Microsoft.AspNetCore.Mvc.Rendering.SelectListItem() { Value = "", Text = "" });
             foreach (var account in accounts)
                 selectAccounts.Add(new Microsoft.AspNetCore.Mvc.Rendering.SelectListItem() { Value = account.Id.ToString(), Text = account.AccountName });
 
@@ -24,7 +24,7 @@ namespace AccountGoWeb.Models
         {
             var taxGroups = GetAsync<IEnumerable<Dto.TaxSystem.TaxGroup>>("tax/taxgroups").Result;
             var selectTaxGroups = new HashSet<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>();
-            selectTaxGroups.Add(new Microsoft.AspNetCore.Mvc.Rendering.SelectListItem() { Value = "-1", Text = "" });
+            selectTaxGroups.Add(new Microsoft.AspNetCore.Mvc.Rendering.SelectListItem() { Value = "", Text = "" });
             foreach (var taxGroup in taxGroups)
                 selectTaxGroups.Add(new Microsoft.AspNetCore.Mvc.Rendering.SelectListItem() { Value = taxGroup.Id.ToString(), Text = taxGroup.Description });
 
@@ -35,7 +35,7 @@ namespace AccountGoWeb.Models
         {
             var itemtaxgroups = GetAsync<IEnumerable<Dto.TaxSystem.ItemTaxGroup>>("tax/itemtaxgroups").Result;
             var selectitemtaxgroups = new HashSet<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>();
-            selectitemtaxgroups.Add(new Microsoft.AspNetCore.Mvc.Rendering.SelectListItem() { Value = "-1", Text = "" });
+            selectitemtaxgroups.Add(new Microsoft.AspNetCore.Mvc.Rendering.SelectListItem() { Value = "", Text = "" });
             foreach (var taxGroup in itemtaxgroups)
                 selectitemtaxgroups.Add(new Microsoft.AspNetCore.Mvc.Rendering.SelectListItem() { Value = taxGroup.Id.ToString(), Text = taxGroup.Name });
 
@@ -46,7 +46,7 @@ namespace AccountGoWeb.Models
         {
             var paymentTerms = GetAsync<IEnumerable<Dto.TaxSystem.TaxGroup>>("common/paymentterms").Result;
             var selectPaymentTerms = new HashSet<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>();
-            selectPaymentTerms.Add(new Microsoft.AspNetCore.Mvc.Rendering.SelectListItem() { Value = "-1", Text = "" });
+            selectPaymentTerms.Add(new Microsoft.AspNetCore.Mvc.Rendering.SelectListItem() { Value = "", Text = "" });
             foreach (var term in paymentTerms)
                 selectPaymentTerms.Add(new Microsoft.AspNetCore.Mvc.Rendering.SelectListItem() { Value = term.Id.ToString(), Text = term.Description });
 
@@ -57,7 +57,7 @@ namespace AccountGoWeb.Models
         {
             var uoms = GetAsync<IEnumerable<Dto.TaxSystem.TaxGroup>>("common/measurements").Result;
             var selectUOMS = new HashSet<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>();
-            selectUOMS.Add(new Microsoft.AspNetCore.Mvc.Rendering.SelectListItem() { Value = "-1", Text = "" });
+            selectUOMS.Add(new Microsoft.AspNetCore.Mvc.Rendering.SelectListItem() { Value = "", Text = "" });
             foreach (var item in uoms)
                 selectUOMS.Add(new Microsoft.AspNetCore.Mvc.Rendering.SelectListItem() { Value = item.Id.ToString(), Text = item.Description });
 
@@ -68,7 +68,7 @@ namespace AccountGoWeb.Models
         {
             var categories = GetAsync<IEnumerable<Dto.Inventory.ItemCategory>>("common/itemcategories").Result;
             var selectCategories = new HashSet<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>();
-            selectCategories.Add(new Microsoft.AspNetCore.Mvc.Rendering.SelectListItem() { Value = "-1", Text = "" });
+            selectCategories.Add(new Microsoft.AspNetCore.Mvc.Rendering.SelectListItem() { Value = "", Text = "" });
             foreach (var item in categories)
                 selectCategories.Add(new Microsoft.AspNetCore.Mvc.Rendering.SelectListItem() { Value = item.Id.ToString(), Text = item.Name });
 

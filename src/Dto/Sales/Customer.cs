@@ -14,13 +14,13 @@ namespace Dto.Sales
         public string Phone { get; set; }
         public string Fax { get; set; }
 
-        public int AccountsReceivableId { get; set; }
-        public int SalesAccountId { get; set; }
-        public int PrepaymentAccountId { get; set; }
-        public int SalesDiscountAccountId { get; set; }
-        public int TaxGroupId { get; set; }
+        public int? AccountsReceivableId { get; set; }
+        public int? SalesAccountId { get; set; }
+        public int? PrepaymentAccountId { get; set; }
+        public int? SalesDiscountAccountId { get; set; }
+        public int? TaxGroupId { get; set; }
 
-        public int PaymentTermId { get; set; }
+        public int? PaymentTermId { get; set; }
 
         public Contact PrimaryContact { get; set; }
         public IEnumerable<SalesInvoice> Invoices { get; set; }

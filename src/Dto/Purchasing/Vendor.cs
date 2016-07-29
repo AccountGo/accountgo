@@ -13,11 +13,11 @@ namespace Dto.Purchasing
         public string Phone { get; set; }
         public string Fax { get; set; }
 
-        public int AccountsPayableAccountId { get; set; }
-        public int PurchaseAccountId { get; set; }
-        public int PurchaseDiscountAccountId { get; set; }
-        public int PaymentTermId { get; set; }
-        public int TaxGroupId { get; set; }
+        public int? AccountsPayableAccountId { get; set; }
+        public int? PurchaseAccountId { get; set; }
+        public int? PurchaseDiscountAccountId { get; set; }
+        public int? PaymentTermId { get; set; }
+        public int? TaxGroupId { get; set; }
 
         public Contact PrimaryContact { get; set; }
 
