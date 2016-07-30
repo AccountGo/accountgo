@@ -13,6 +13,28 @@ import SalesQuotationStore from "../Shared/Stores/Quotations/SalesQuotationStore
 
 let store = new SalesQuotationStore();
 
+@observer
+class ValidationErrors extends React.Component<any, {}>{
+    render() {
+        if (store.validationErrors !== undefined && store.validationErrors.length > 0) {
+            var errors = [];
+            store.validationErrors.map(function (item, index) {
+                errors.push(<li key={index}>{item}</li>);
+            });
+            return (
+                <div>
+                    <ul>
+                        {errors}
+                    </ul>
+                </div>
+
+            );
+        }
+        return null;
+    }
+}
+
+
 class SaveQuotationButton extends React.Component<any, {}>{
     saveNewSalesQuotation(e) {
         store.saveNewQuotation();
@@ -194,6 +216,7 @@ export default class AddSalesQuotation extends React.Component<any, {}> {
     render() {
         return (
             <div>
+                <ValidationErrors />
                 <SalesQuotationHeader />
                 <SalesQuotationLines />
                 <SalesQuotationTotals />

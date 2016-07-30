@@ -13,6 +13,27 @@ import PurchaseInvoiceStore from "../Shared/Stores/Purchasing/PurchaseInvoiceSto
 
 let store = new PurchaseInvoiceStore();
 
+@observer
+class ValidationErrors extends React.Component<any, {}>{
+    render() {
+        if (store.validationErrors !== undefined && store.validationErrors.length > 0) {
+            var errors = [];
+            store.validationErrors.map(function (item, index) {
+                errors.push(<li key={index}>{item}</li>);
+            });
+            return (
+                <div>
+                    <ul>
+                        {errors}
+                    </ul>
+                </div>
+
+            );
+        }
+        return null;
+    }
+}
+
 class SavePurchaseInvoiceButton extends React.Component<any, {}>{
     saveNewPurchaseInvoice(e) {
 
@@ -194,18 +215,10 @@ export default class AddPurchaseInvoice extends React.Component<any, {}> {
     render() {
         return (
             <div>
-                <div>
-                    <PurchaseInvoiceHeader />
-                </div>
-                <hr />
-                <div>
-                    <PurchaseInvoiceLines />
-                </div>
-                <hr />
-                <div>
-                    <PurchaseInvoiceTotals />
-                </div>
-                <hr />
+                <ValidationErrors />
+                <PurchaseInvoiceHeader />
+                <PurchaseInvoiceLines />
+                <PurchaseInvoiceTotals />
                 <div>
                     <SavePurchaseInvoiceButton />
                     <CancelPurchaseInvoiceButton />

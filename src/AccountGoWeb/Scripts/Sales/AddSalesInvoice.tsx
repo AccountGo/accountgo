@@ -13,6 +13,27 @@ import SalesInvoiceStore from "../Shared/Stores/Sales/SalesInvoiceStore";
 
 let store = new SalesInvoiceStore();
 
+@observer
+class ValidationErrors extends React.Component<any, {}>{
+    render() {
+        if (store.validationErrors !== undefined && store.validationErrors.length > 0) {
+            var errors = [];
+            store.validationErrors.map(function (item, index) {
+                errors.push(<li key={index}>{item}</li>);
+            });
+            return (
+                <div>
+                    <ul>
+                        {errors}
+                    </ul>
+                </div>
+
+            );
+        }
+        return null;
+    }
+}
+
 class SaveInvoiceButton extends React.Component<any, {}>{
     saveNewSalesInvoice(e) {
 
@@ -194,6 +215,7 @@ export default class AddSalesInvoice extends React.Component<any, {}> {
     render() {
         return (
             <div>
+                <ValidationErrors />
                 <SalesInvoiceHeader />
                 <SalesInvoiceLines />
                 <SalesInvoiceTotals />

@@ -27,6 +27,26 @@ webpackJsonp([5],{
 	var SelectLineMeasurement_1 = __webpack_require__(/*! ../Shared/Components/SelectLineMeasurement */ 200);
 	var SalesInvoiceStore_1 = __webpack_require__(/*! ../Shared/Stores/Sales/SalesInvoiceStore */ 211);
 	var store = new SalesInvoiceStore_1.default();
+	var ValidationErrors = (function (_super) {
+	    __extends(ValidationErrors, _super);
+	    function ValidationErrors() {
+	        _super.apply(this, arguments);
+	    }
+	    ValidationErrors.prototype.render = function () {
+	        if (store.validationErrors !== undefined && store.validationErrors.length > 0) {
+	            var errors = [];
+	            store.validationErrors.map(function (item, index) {
+	                errors.push(React.createElement("li", {key: index}, item));
+	            });
+	            return (React.createElement("div", null, React.createElement("ul", null, errors)));
+	        }
+	        return null;
+	    };
+	    ValidationErrors = __decorate([
+	        mobx_react_1.observer
+	    ], ValidationErrors);
+	    return ValidationErrors;
+	}(React.Component));
 	var SaveInvoiceButton = (function (_super) {
 	    __extends(SaveInvoiceButton, _super);
 	    function SaveInvoiceButton() {
@@ -126,7 +146,7 @@ webpackJsonp([5],{
 	        _super.apply(this, arguments);
 	    }
 	    AddSalesInvoice.prototype.render = function () {
-	        return (React.createElement("div", null, React.createElement(SalesInvoiceHeader, null), React.createElement(SalesInvoiceLines, null), React.createElement(SalesInvoiceTotals, null), React.createElement("div", null, React.createElement(SaveInvoiceButton, null), React.createElement(CancelInvoiceButton, null))));
+	        return (React.createElement("div", null, React.createElement(ValidationErrors, null), React.createElement(SalesInvoiceHeader, null), React.createElement(SalesInvoiceLines, null), React.createElement(SalesInvoiceTotals, null), React.createElement("div", null, React.createElement(SaveInvoiceButton, null), React.createElement(CancelInvoiceButton, null))));
 	    };
 	    return AddSalesInvoice;
 	}(React.Component));
@@ -4443,7 +4463,15 @@ webpackJsonp([5],{
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
+	var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+	    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+	    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+	    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+	    return c > 3 && r && Object.defineProperty(target, key, r), r;
+	};
 	var mobx_1 = __webpack_require__(/*! mobx */ 169);
+	var axios = __webpack_require__(/*! axios */ 174);
+	var Config = __webpack_require__(/*! Config */ 193);
 	var SalesInvoice_1 = __webpack_require__(/*! ./SalesInvoice */ 212);
 	var SalesInvoiceLine_1 = __webpack_require__(/*! ./SalesInvoiceLine */ 213);
 	var CommonStore_1 = __webpack_require__(/*! ../Common/CommonStore */ 196);
@@ -4463,6 +4491,52 @@ webpackJsonp([5],{
 	        });
 	        this.commonStore = new CommonStore_1.default();
 	    }
+	    SalesStore.prototype.saveNewSalesInvoice = function () {
+	        this.validationErrors = [];
+	        if (this.salesInvoice.customerId === undefined || this.salesInvoice.customerId === "")
+	            this.validationErrors.push("Customer is required.");
+	        if (this.salesInvoice.paymentTermId === undefined || this.salesInvoice.paymentTermId === "")
+	            this.salesInvoice.push("Payment term is required.");
+	        if (this.salesInvoice.orderDate === undefined || this.salesInvoice.orderDate === "")
+	            this.validationErrors.push("Date is required.");
+	        if (this.salesInvoice.purchaseOrderLines === undefined || this.salesInvoice.purchaseOrderLines.length < 1)
+	            this.validationErrors.push("Enter at least 1 line item.");
+	        if (this.salesInvoice.purchaseOrderLines !== undefined && this.salesInvoice.purchaseOrderLines.length > 0) {
+	            for (var i = 0; i < this.salesInvoice.purchaseOrderLines.length; i++) {
+	                if (this.salesInvoice.purchaseOrderLines[i].itemId === undefined
+	                    || this.salesInvoice.purchaseOrderLines[i].itemId === "")
+	                    this.validationErrors.push("Item is required.");
+	                if (this.salesInvoice.purchaseOrderLines[i].measurementId === undefined
+	                    || this.salesInvoice.purchaseOrderLines[i].measurementId === "")
+	                    this.validationErrors.push("Uom is required.");
+	                if (this.salesInvoice.purchaseOrderLines[i].quantity === undefined
+	                    || this.salesInvoice.purchaseOrderLines[i].quantity === ""
+	                    || this.salesInvoice.purchaseOrderLines[i].quantity === 0)
+	                    this.validationErrors.push("Quantity is required.");
+	                if (this.salesInvoice.purchaseOrderLines[i].amount === undefined
+	                    || this.salesInvoice.purchaseOrderLines[i].amount === ""
+	                    || this.salesInvoice.purchaseOrderLines[i].amount === 0)
+	                    this.validationErrors.push("Amount is required.");
+	                if (this.lineTotal(i) === undefined
+	                    || this.lineTotal(i).toString() === "NaN"
+	                    || this.lineTotal(i) === 0)
+	                    this.validationErrors.push("Invalid data.");
+	            }
+	        }
+	        if (this.validationErrors.length === 0) {
+	            axios.post(Config.apiUrl + "api/sales/savesalesinvoice", JSON.stringify(this.salesInvoice), {
+	                headers: {
+	                    'Content-type': 'application/json'
+	                }
+	            })
+	                .then(function (response) {
+	                console.log(response);
+	            })
+	                .catch(function (error) {
+	                console.log(error);
+	            }.bind(this));
+	        }
+	    };
 	    SalesStore.prototype.changedCustomer = function (custId) {
 	        this.salesInvoice.customerId = custId;
 	    };
@@ -4493,6 +4567,9 @@ webpackJsonp([5],{
 	        ;
 	        return lineSum;
 	    };
+	    __decorate([
+	        mobx_1.observable
+	    ], SalesStore.prototype, "validationErrors", void 0);
 	    return SalesStore;
 	}());
 	Object.defineProperty(exports, "__esModule", { value: true });

@@ -131,28 +131,37 @@ namespace Api.Controllers
         [Route("[action]")]
         public IActionResult SavePurchaseInvoice([FromBody]Dto.Purchasing.PurchaseInvoice purchaseInvoiceDto)
         {
+            ModelState.AddModelError("", "Testing - sample errors.");
+            if (!ModelState.IsValid)
+                return new BadRequestObjectResult(ModelState);
+
             bool isNew = purchaseInvoiceDto.Id == 0;
             Core.Domain.Purchases.PurchaseInvoiceHeader purchInvoice = null;
 
-            if (isNew)
+            try
             {
-                purchInvoice = new Core.Domain.Purchases.PurchaseInvoiceHeader();
-            }
-            else
-            {
-                purchInvoice = _purchasingService.GetPurchaseInvoiceById(purchaseInvoiceDto.Id);
-            }
+                if (isNew)
+                {
+                    purchInvoice = new Core.Domain.Purchases.PurchaseInvoiceHeader();
+                }
+                else
+                {
+                    purchInvoice = _purchasingService.GetPurchaseInvoiceById(purchaseInvoiceDto.Id);
+                }
 
-            if (isNew)
-            {
-                //_purchasingService.AddPurchaseOrder(purchOrder, true);
-            }
-            else
-            {
+                if (isNew)
+                {
+                    //_purchasingService.AddPurchaseOrder(purchOrder, true);
+                }
+                else
+                {
 
+                }
+                return new OkObjectResult(Ok());
             }
-
-            return new ObjectResult(purchaseInvoiceDto);
+            catch (Exception ex) {
+                return new ObjectResult(ex);
+            }
         }
 
         [HttpPost]

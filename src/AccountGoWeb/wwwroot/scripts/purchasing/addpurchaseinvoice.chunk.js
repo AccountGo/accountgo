@@ -27,6 +27,26 @@ webpackJsonp([2],{
 	var SelectLineMeasurement_1 = __webpack_require__(/*! ../Shared/Components/SelectLineMeasurement */ 200);
 	var PurchaseInvoiceStore_1 = __webpack_require__(/*! ../Shared/Stores/Purchasing/PurchaseInvoiceStore */ 201);
 	var store = new PurchaseInvoiceStore_1.default();
+	var ValidationErrors = (function (_super) {
+	    __extends(ValidationErrors, _super);
+	    function ValidationErrors() {
+	        _super.apply(this, arguments);
+	    }
+	    ValidationErrors.prototype.render = function () {
+	        if (store.validationErrors !== undefined && store.validationErrors.length > 0) {
+	            var errors = [];
+	            store.validationErrors.map(function (item, index) {
+	                errors.push(React.createElement("li", {key: index}, item));
+	            });
+	            return (React.createElement("div", null, React.createElement("ul", null, errors)));
+	        }
+	        return null;
+	    };
+	    ValidationErrors = __decorate([
+	        mobx_react_1.observer
+	    ], ValidationErrors);
+	    return ValidationErrors;
+	}(React.Component));
 	var SavePurchaseInvoiceButton = (function (_super) {
 	    __extends(SavePurchaseInvoiceButton, _super);
 	    function SavePurchaseInvoiceButton() {
@@ -126,7 +146,7 @@ webpackJsonp([2],{
 	        _super.apply(this, arguments);
 	    }
 	    AddPurchaseInvoice.prototype.render = function () {
-	        return (React.createElement("div", null, React.createElement("div", null, React.createElement(PurchaseInvoiceHeader, null)), React.createElement("hr", null), React.createElement("div", null, React.createElement(PurchaseInvoiceLines, null)), React.createElement("hr", null), React.createElement("div", null, React.createElement(PurchaseInvoiceTotals, null)), React.createElement("hr", null), React.createElement("div", null, React.createElement(SavePurchaseInvoiceButton, null), React.createElement(CancelPurchaseInvoiceButton, null))));
+	        return (React.createElement("div", null, React.createElement(ValidationErrors, null), React.createElement(PurchaseInvoiceHeader, null), React.createElement(PurchaseInvoiceLines, null), React.createElement(PurchaseInvoiceTotals, null), React.createElement("div", null, React.createElement(SavePurchaseInvoiceButton, null), React.createElement(CancelPurchaseInvoiceButton, null))));
 	    };
 	    return AddPurchaseInvoice;
 	}(React.Component));
@@ -4443,7 +4463,15 @@ webpackJsonp([2],{
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
+	var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+	    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+	    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+	    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+	    return c > 3 && r && Object.defineProperty(target, key, r), r;
+	};
 	var mobx_1 = __webpack_require__(/*! mobx */ 169);
+	var axios = __webpack_require__(/*! axios */ 174);
+	var Config = __webpack_require__(/*! Config */ 193);
 	var PurchaseInvoice_1 = __webpack_require__(/*! ./PurchaseInvoice */ 202);
 	var PurchaseInvoiceLine_1 = __webpack_require__(/*! ./PurchaseInvoiceLine */ 203);
 	var CommonStore_1 = __webpack_require__(/*! ../Common/CommonStore */ 196);
@@ -4463,6 +4491,53 @@ webpackJsonp([2],{
 	        });
 	        this.commonStore = new CommonStore_1.default();
 	    }
+	    PurchaseOrderStore.prototype.savePurchaseInvoice = function () {
+	        this.validationErrors = [];
+	        if (this.purchaseInvoice.vendorId === undefined || this.purchaseInvoice.vendorId === "")
+	            this.validationErrors.push("Vendor is required.");
+	        if (this.purchaseInvoice.paymentTermId === undefined || this.purchaseInvoice.paymentTermId === "")
+	            this.validationErrors.push("Payment term is required.");
+	        if (this.purchaseInvoice.orderDate === undefined || this.purchaseInvoice.orderDate === "")
+	            this.validationErrors.push("Date is required.");
+	        if (this.purchaseInvoice.purchaseOrderLines === undefined || this.purchaseInvoice.purchaseOrderLines.length < 1)
+	            this.validationErrors.push("Enter at least 1 line item.");
+	        if (this.purchaseInvoice.purchaseOrderLines !== undefined && this.purchaseInvoice.purchaseOrderLines.length > 0) {
+	            for (var i = 0; i < this.purchaseInvoice.purchaseOrderLines.length; i++) {
+	                if (this.purchaseInvoice.purchaseOrderLines[i].itemId === undefined
+	                    || this.purchaseInvoice.purchaseOrderLines[i].itemId === "")
+	                    this.validationErrors.push("Item is required.");
+	                if (this.purchaseInvoice.purchaseOrderLines[i].measurementId === undefined
+	                    || this.purchaseInvoice.purchaseOrderLines[i].measurementId === "")
+	                    this.validationErrors.push("Uom is required.");
+	                if (this.purchaseInvoice.purchaseOrderLines[i].quantity === undefined
+	                    || this.purchaseInvoice.purchaseOrderLines[i].quantity === ""
+	                    || this.purchaseInvoice.purchaseOrderLines[i].quantity === 0)
+	                    this.validationErrors.push("Quantity is required.");
+	                if (this.purchaseInvoice.purchaseOrderLines[i].amount === undefined
+	                    || this.purchaseInvoice.purchaseOrderLines[i].amount === ""
+	                    || this.purchaseInvoice.purchaseOrderLines[i].amount === 0)
+	                    this.validationErrors.push("Amount is required.");
+	                if (this.lineTotal(i) === undefined
+	                    || this.lineTotal(i).toString() === "NaN"
+	                    || this.lineTotal(i) === 0)
+	                    this.validationErrors.push("Invalid data.");
+	            }
+	        }
+	        if (this.validationErrors.length === 0) {
+	            axios.post(Config.apiUrl + "api/purchasing/savepurchaseinvoice", JSON.stringify(this.purchaseInvoice), {
+	                headers: {
+	                    'Content-type': 'application/json'
+	                }
+	            })
+	                .then(function (response) {
+	                return;
+	            })
+	                .catch(function (error) {
+	                console.log(error);
+	                this.validationErrors.push("An error occured on posting data. Please check the browser console for more details.");
+	            }.bind(this));
+	        }
+	    };
 	    PurchaseOrderStore.prototype.changedVendor = function (vendorId) {
 	        this.purchaseInvoice.vendorId = vendorId;
 	    };
@@ -4492,6 +4567,9 @@ webpackJsonp([2],{
 	        var lineSum = this.purchaseInvoice.purchaseInvoiceLines[row].quantity * this.purchaseInvoice.purchaseInvoiceLines[row].amount;
 	        return lineSum;
 	    };
+	    __decorate([
+	        mobx_1.observable
+	    ], PurchaseOrderStore.prototype, "validationErrors", void 0);
 	    return PurchaseOrderStore;
 	}());
 	Object.defineProperty(exports, "__esModule", { value: true });

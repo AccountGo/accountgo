@@ -16,6 +16,7 @@ let baseUrl = location.protocol
 export default class SalesOrderStore {
     salesOrder;
     commonStore;
+    @observable validationErrors;
 
     constructor() {
         this.salesOrder = new SalesOrder();
@@ -29,7 +30,56 @@ export default class SalesOrderStore {
 
         this.commonStore = new CommonStore();
     }
-    
+
+    saveNewSalesOrder() {
+        this.validationErrors = [];
+        if (this.salesOrder.customerId === undefined || this.salesOrder.customerId === "")
+            this.validationErrors.push("Customer is required.");
+        if (this.salesOrder.paymentTermId === undefined || this.salesOrder.paymentTermId === "")
+            this.salesOrder.push("Payment term is required.");
+        if (this.salesOrder.orderDate === undefined || this.salesOrder.orderDate === "")
+            this.validationErrors.push("Date is required.");
+        if (this.salesOrder.purchaseOrderLines === undefined || this.salesOrder.purchaseOrderLines.length < 1)
+            this.validationErrors.push("Enter at least 1 line item.");
+        if (this.salesOrder.purchaseOrderLines !== undefined && this.salesOrder.purchaseOrderLines.length > 0) {
+            for (var i = 0; i < this.salesOrder.purchaseOrderLines.length; i++) {
+                if (this.salesOrder.purchaseOrderLines[i].itemId === undefined
+                    || this.salesOrder.purchaseOrderLines[i].itemId === "")
+                    this.validationErrors.push("Item is required.");
+                if (this.salesOrder.purchaseOrderLines[i].measurementId === undefined
+                    || this.salesOrder.purchaseOrderLines[i].measurementId === "")
+                    this.validationErrors.push("Uom is required.");
+                if (this.salesOrder.purchaseOrderLines[i].quantity === undefined
+                    || this.salesOrder.purchaseOrderLines[i].quantity === ""
+                    || this.salesOrder.purchaseOrderLines[i].quantity === 0)
+                    this.validationErrors.push("Quantity is required.");
+                if (this.salesOrder.purchaseOrderLines[i].amount === undefined
+                    || this.salesOrder.purchaseOrderLines[i].amount === ""
+                    || this.salesOrder.purchaseOrderLines[i].amount === 0)
+                    this.validationErrors.push("Amount is required.");
+                if (this.lineTotal(i) === undefined
+                    || this.lineTotal(i).toString() === "NaN"
+                    || this.lineTotal(i) === 0)
+                    this.validationErrors.push("Invalid data.");
+            }
+        }
+
+        if (this.validationErrors.length === 0) {
+            axios.post(Config.apiUrl + "api/sales/savesalesorder", JSON.stringify(this.salesOrder),
+                {
+                    headers: {
+                        'Content-type': 'application/json'
+                    }
+                })
+                .then(function (response) {
+                    console.log(response);
+                })
+                .catch(function (error) {
+                    console.log(error);
+                }.bind(this))
+        }
+    }
+
     changedCustomer(custId) {
         this.salesOrder.customerId = custId;
     }

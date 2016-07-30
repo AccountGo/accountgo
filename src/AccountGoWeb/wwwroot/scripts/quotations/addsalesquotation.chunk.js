@@ -27,6 +27,26 @@ webpackJsonp([4],{
 	var SelectLineMeasurement_1 = __webpack_require__(/*! ../Shared/Components/SelectLineMeasurement */ 200);
 	var SalesQuotationStore_1 = __webpack_require__(/*! ../Shared/Stores/Quotations/SalesQuotationStore */ 208);
 	var store = new SalesQuotationStore_1.default();
+	var ValidationErrors = (function (_super) {
+	    __extends(ValidationErrors, _super);
+	    function ValidationErrors() {
+	        _super.apply(this, arguments);
+	    }
+	    ValidationErrors.prototype.render = function () {
+	        if (store.validationErrors !== undefined && store.validationErrors.length > 0) {
+	            var errors = [];
+	            store.validationErrors.map(function (item, index) {
+	                errors.push(React.createElement("li", {key: index}, item));
+	            });
+	            return (React.createElement("div", null, React.createElement("ul", null, errors)));
+	        }
+	        return null;
+	    };
+	    ValidationErrors = __decorate([
+	        mobx_react_1.observer
+	    ], ValidationErrors);
+	    return ValidationErrors;
+	}(React.Component));
 	var SaveQuotationButton = (function (_super) {
 	    __extends(SaveQuotationButton, _super);
 	    function SaveQuotationButton() {
@@ -126,7 +146,7 @@ webpackJsonp([4],{
 	        _super.apply(this, arguments);
 	    }
 	    AddSalesQuotation.prototype.render = function () {
-	        return (React.createElement("div", null, React.createElement(SalesQuotationHeader, null), React.createElement(SalesQuotationLines, null), React.createElement(SalesQuotationTotals, null), React.createElement("div", null, React.createElement(SaveQuotationButton, null), React.createElement(CancelQuotationButton, null))));
+	        return (React.createElement("div", null, React.createElement(ValidationErrors, null), React.createElement(SalesQuotationHeader, null), React.createElement(SalesQuotationLines, null), React.createElement(SalesQuotationTotals, null), React.createElement("div", null, React.createElement(SaveQuotationButton, null), React.createElement(CancelQuotationButton, null))));
 	    };
 	    return AddSalesQuotation;
 	}(React.Component));
@@ -4443,6 +4463,12 @@ webpackJsonp([4],{
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
+	var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+	    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+	    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+	    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+	    return c > 3 && r && Object.defineProperty(target, key, r), r;
+	};
 	var mobx_1 = __webpack_require__(/*! mobx */ 169);
 	var axios = __webpack_require__(/*! axios */ 174);
 	var Config = __webpack_require__(/*! Config */ 193);
@@ -4466,17 +4492,50 @@ webpackJsonp([4],{
 	        this.commonStore = new CommonStore_1.default();
 	    }
 	    SalesQuotationStore.prototype.saveNewQuotation = function () {
-	        axios.post(Config.apiUrl + "api/sales/addquotation", JSON.stringify(this.salesQuotation), {
-	            headers: {
-	                'Content-type': 'application/json'
+	        this.validationErrors = [];
+	        if (this.salesQuotation.customerId === undefined || this.salesQuotation.customerId === "")
+	            this.validationErrors.push("Customer is required.");
+	        if (this.salesQuotation.paymentTermId === undefined || this.salesQuotation.paymentTermId === "")
+	            this.salesQuotation.push("Payment term is required.");
+	        if (this.salesQuotation.orderDate === undefined || this.salesQuotation.orderDate === "")
+	            this.validationErrors.push("Date is required.");
+	        if (this.salesQuotation.purchaseOrderLines === undefined || this.salesQuotation.purchaseOrderLines.length < 1)
+	            this.validationErrors.push("Enter at least 1 line item.");
+	        if (this.salesQuotation.purchaseOrderLines !== undefined && this.salesQuotation.purchaseOrderLines.length > 0) {
+	            for (var i = 0; i < this.salesQuotation.purchaseOrderLines.length; i++) {
+	                if (this.salesQuotation.purchaseOrderLines[i].itemId === undefined
+	                    || this.salesQuotation.purchaseOrderLines[i].itemId === "")
+	                    this.validationErrors.push("Item is required.");
+	                if (this.salesQuotation.purchaseOrderLines[i].measurementId === undefined
+	                    || this.salesQuotation.purchaseOrderLines[i].measurementId === "")
+	                    this.validationErrors.push("Uom is required.");
+	                if (this.salesQuotation.purchaseOrderLines[i].quantity === undefined
+	                    || this.salesQuotation.purchaseOrderLines[i].quantity === ""
+	                    || this.salesQuotation.purchaseOrderLines[i].quantity === 0)
+	                    this.validationErrors.push("Quantity is required.");
+	                if (this.salesQuotation.purchaseOrderLines[i].amount === undefined
+	                    || this.salesQuotation.purchaseOrderLines[i].amount === ""
+	                    || this.salesQuotation.purchaseOrderLines[i].amount === 0)
+	                    this.validationErrors.push("Amount is required.");
+	                if (this.lineTotal(i) === undefined
+	                    || this.lineTotal(i).toString() === "NaN"
+	                    || this.lineTotal(i) === 0)
+	                    this.validationErrors.push("Invalid data.");
 	            }
-	        })
-	            .then(function (response) {
-	            console.log(response);
-	        })
-	            .catch(function (error) {
-	            console.log(error);
-	        }.bind(this));
+	        }
+	        if (this.validationErrors.length === 0) {
+	            axios.post(Config.apiUrl + "api/sales/savequotation", JSON.stringify(this.salesQuotation), {
+	                headers: {
+	                    'Content-type': 'application/json'
+	                }
+	            })
+	                .then(function (response) {
+	                console.log(response);
+	            })
+	                .catch(function (error) {
+	                console.log(error);
+	            }.bind(this));
+	        }
 	    };
 	    SalesQuotationStore.prototype.changedCustomer = function (custId) {
 	        this.salesQuotation.customerId = custId;
@@ -4511,6 +4570,9 @@ webpackJsonp([4],{
 	        ;
 	        return lineSum;
 	    };
+	    __decorate([
+	        mobx_1.observable
+	    ], SalesQuotationStore.prototype, "validationErrors", void 0);
 	    return SalesQuotationStore;
 	}());
 	Object.defineProperty(exports, "__esModule", { value: true });

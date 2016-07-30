@@ -291,40 +291,6 @@ namespace Api.Controllers
             }
         }
 
-        [HttpPost]
-        [Route("[action]")]
-        public IActionResult AddQuotation([FromBody]Dto.Sales.SalesQuotation Dto)
-        {
-            try
-            {
-                var salesQuote = new Core.Domain.Sales.SalesQuoteHeader()
-                {
-                    CustomerId = Dto.CustomerId,
-                    Date = Dto.QuotationDate,
-                };
-
-                foreach (var line in Dto.SalesQuotationLines)
-                {
-                    var salesQuoteLine = new Core.Domain.Sales.SalesQuoteLine();
-                    salesQuoteLine.Amount = line.Amount == null ? 0 : line.Amount.Value;
-                    salesQuoteLine.Discount = line.Discount == null ? 0 : line.Discount.Value;
-                    salesQuoteLine.Quantity = line.Quantity == null ? 0 : line.Quantity.Value;
-                    salesQuoteLine.ItemId = line.ItemId;
-                    salesQuoteLine.MeasurementId = line.MeasurementId;
-
-                    salesQuote.SalesQuoteLines.Add(salesQuoteLine);
-                }
-
-                _salesService.AddSalesQuote(salesQuote);
-
-                return new ObjectResult(Dto);
-            }
-            catch (Exception ex)
-            {
-                return new ObjectResult(ex);
-            }
-        }
-
         [HttpGet]
         [Route("[action]")]
         public IActionResult Quotations()
@@ -458,6 +424,116 @@ namespace Api.Controllers
             catch (Exception ex)
             {
                 return new BadRequestObjectResult(ex);
+            }
+        }
+
+        [HttpPost]
+        [Route("[action]")]
+        public IActionResult SaveSalesOrder([FromBody]Dto.Sales.SalesOrder salesOrderDto)
+        {
+            ModelState.AddModelError("", "Testing - sample errors.");
+            if (!ModelState.IsValid)
+                return new BadRequestObjectResult(ModelState);
+
+            bool isNew = salesOrderDto.Id == 0;
+            Core.Domain.Sales.SalesOrderHeader salesOrder = null;
+
+            try
+            {
+                if (isNew)
+                {
+                    salesOrder = new Core.Domain.Sales.SalesOrderHeader();
+                }
+                else
+                {
+                    salesOrder = _salesService.GetSalesOrderById(salesOrderDto.Id);
+                }
+
+                if (isNew)
+                {
+                    //_salesService.AddSalesOrder(salesOrder, true);
+                }
+                else
+                {
+
+                }
+                return new OkObjectResult(Ok());
+            }
+            catch (Exception ex)
+            {
+                return new ObjectResult(ex);
+            }
+        }
+
+        [HttpPost]
+        [Route("[action]")]
+        public IActionResult SaveSalesInvoice([FromBody]Dto.Sales.SalesOrder salesInvoiceDto)
+        {
+            ModelState.AddModelError("", "Testing - sample errors.");
+            if (!ModelState.IsValid)
+                return new BadRequestObjectResult(ModelState);
+
+            bool isNew = salesInvoiceDto.Id == 0;
+            Core.Domain.Sales.SalesInvoiceHeader salesInvoice = null;
+
+            try
+            {
+                if (isNew)
+                {
+                    salesInvoice = new Core.Domain.Sales.SalesInvoiceHeader();
+                }
+                else
+                {
+                    salesInvoice = _salesService.GetSalesInvoiceById(salesInvoiceDto.Id);
+                }
+
+                if (isNew)
+                {
+                    //_salesService.AddSalesOrder(salesOrder, true);
+                }
+                else
+                {
+
+                }
+                return new OkObjectResult(Ok());
+            }
+            catch (Exception ex)
+            {
+                return new ObjectResult(ex);
+            }
+        }
+
+        [HttpPost]
+        [Route("[action]")]
+        public IActionResult SaveQuotation([FromBody]Dto.Sales.SalesQuotation Dto)
+        {
+            try
+            {
+                var salesQuote = new Core.Domain.Sales.SalesQuoteHeader()
+                {
+                    CustomerId = Dto.CustomerId,
+                    Date = Dto.QuotationDate,
+                };
+
+                foreach (var line in Dto.SalesQuotationLines)
+                {
+                    var salesQuoteLine = new Core.Domain.Sales.SalesQuoteLine();
+                    salesQuoteLine.Amount = line.Amount == null ? 0 : line.Amount.Value;
+                    salesQuoteLine.Discount = line.Discount == null ? 0 : line.Discount.Value;
+                    salesQuoteLine.Quantity = line.Quantity == null ? 0 : line.Quantity.Value;
+                    salesQuoteLine.ItemId = line.ItemId;
+                    salesQuoteLine.MeasurementId = line.MeasurementId;
+
+                    salesQuote.SalesQuoteLines.Add(salesQuoteLine);
+                }
+
+                _salesService.AddSalesQuote(salesQuote);
+
+                return new ObjectResult(Dto);
+            }
+            catch (Exception ex)
+            {
+                return new ObjectResult(ex);
             }
         }
     }

@@ -13,6 +13,27 @@ import SalesOrderStore from "../Shared/Stores/Sales/SalesOrderStore";
 
 let store = new SalesOrderStore();
 
+@observer
+class ValidationErrors extends React.Component<any, {}>{
+    render() {
+        if (store.validationErrors !== undefined && store.validationErrors.length > 0) {
+            var errors = [];
+            store.validationErrors.map(function (item, index) {
+                errors.push(<li key={index}>{item}</li>);
+            });
+            return (
+                <div>
+                    <ul>
+                        {errors}
+                    </ul>
+                </div>
+
+            );
+        }
+        return null;
+    }
+}
+
 class SaveOrderButton extends React.Component<any, {}>{
     saveNewSalesOrder(e) {
 
@@ -194,6 +215,7 @@ export default class AddSalesOrder extends React.Component<any, {}> {
     render() {
         return (
             <div>
+                <ValidationErrors />
                 <SalesOrderHeader />
                 <SalesOrderLines />
                 <SalesOrderTotals />
