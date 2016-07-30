@@ -50,7 +50,7 @@ class SalesQuotationHeader extends React.Component<any, {}>{
                     </div>
                 </div>
                 <div className="box-body">
-                    <div className="col-sm-6">
+                    <div className="col-md-6">
                         <div className="row">
                             <div className="col-sm-2">Customer</div>
                             <div className="col-sm-10"><SelectCustomer store={store} /></div>

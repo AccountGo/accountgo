@@ -14,6 +14,7 @@ export default class SelectDebiCredit extends React.Component<any, {}>{
 
         return (
             <select id={this.props.controlId} onChange={this.onChangeDebitCredit.bind(this) } className="form-control select2" >
+                <option key={ -1 } value=""></option>
                 {options}
             </select>
         );

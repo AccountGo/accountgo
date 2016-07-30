@@ -17,6 +17,7 @@ export default class SelectPaymentTerm extends React.Component<any, {}>{
 
         return (
             <select id="optPaymentTerm" onChange={this.onChangePaymentTerm.bind(this) } className="form-control select2">
+                <option key={ -1 } value=""></option>
                 {options}
             </select>
         );

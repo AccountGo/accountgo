@@ -16,6 +16,7 @@ let baseUrl = location.protocol
 export default class PurchaseOrderStore {
     purchaseOrder;
     commonStore;
+    @observable validationErrors;
 
     constructor() {
         this.purchaseOrder = new PurchaseOrder();
@@ -29,9 +30,64 @@ export default class PurchaseOrderStore {
 
         this.commonStore = new CommonStore();
     }
-    
+
+    savePurchaseOrder() {
+        //console.log(this.purchaseOrder);
+        this.validationErrors = [];
+        if (this.purchaseOrder.vendorId === undefined || this.purchaseOrder.vendorId === "")
+            this.validationErrors.push("Vendor is required.");
+        if (this.purchaseOrder.paymentTermId === undefined || this.purchaseOrder.paymentTermId === "")
+            this.validationErrors.push("Payment term is required.");
+        if (this.purchaseOrder.orderDate === undefined || this.purchaseOrder.orderDate === "")
+            this.validationErrors.push("Date is required.");
+        if (this.purchaseOrder.purchaseOrderLines === undefined || this.purchaseOrder.purchaseOrderLines.length < 1)
+            this.validationErrors.push("Enter at least 1 line item.");
+        if (this.purchaseOrder.purchaseOrderLines !== undefined && this.purchaseOrder.purchaseOrderLines.length > 0) {
+            for (var i = 0; i < this.purchaseOrder.purchaseOrderLines.length; i++) {
+                if (this.purchaseOrder.purchaseOrderLines[i].itemId === undefined
+                    || this.purchaseOrder.purchaseOrderLines[i].itemId === "")
+                    this.validationErrors.push("Item is required.");
+                if (this.purchaseOrder.purchaseOrderLines[i].measurementId === undefined
+                    || this.purchaseOrder.purchaseOrderLines[i].measurementId === "")
+                    this.validationErrors.push("Uom is required.");
+                if (this.purchaseOrder.purchaseOrderLines[i].quantity === undefined
+                    || this.purchaseOrder.purchaseOrderLines[i].quantity === ""
+                    || this.purchaseOrder.purchaseOrderLines[i].quantity === 0)
+                    this.validationErrors.push("Quantity is required.");
+                if (this.purchaseOrder.purchaseOrderLines[i].amount === undefined
+                    || this.purchaseOrder.purchaseOrderLines[i].amount === ""
+                    || this.purchaseOrder.purchaseOrderLines[i].amount === 0)
+                    this.validationErrors.push("Amount is required.");
+                if (this.lineTotal(i) === undefined
+                    || this.lineTotal(i).toString() === "NaN"
+                    || this.lineTotal(i) === 0)
+                    this.validationErrors.push("Invalid data.");
+            }
+        }
+
+        if (this.validationErrors.length === 0) {
+            axios.post(Config.apiUrl + "api/purchasing/savepurchaseorder", JSON.stringify(this.purchaseOrder),
+                {
+                    headers: {
+                        'Content-type': 'application/json'
+                    }
+                })
+                .then(function (response) {
+                    return;
+                })
+                .catch(function (error) {
+                    console.log(error);            
+                    this.validationErrors.push("An error occured on posting data. Please check the browser console for more details.");
+                }.bind(this))
+        }
+    }
+
     changedVendor(vendorId) {
         this.purchaseOrder.vendorId = vendorId;
+    }
+
+    changedPaymentTerm(paymentTermId) {
+        this.purchaseOrder.paymentTermId = paymentTermId;
     }
 
     changedOrderDate(date) {

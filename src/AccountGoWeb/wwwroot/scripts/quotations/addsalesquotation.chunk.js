@@ -59,7 +59,7 @@ webpackJsonp([4],{
 	        store.changedQuotationDate(e.target.value);
 	    };
 	    SalesQuotationHeader.prototype.render = function () {
-	        return (React.createElement("div", {className: "box"}, React.createElement("div", {className: "box-header with-border"}, React.createElement("h3", {className: "box-title"}, "Customer Information"), React.createElement("div", {className: "box-tools pull-right"}, React.createElement("button", {type: "button", className: "btn btn-box-tool", "data-widget": "collapse", "data-toggle": "tooltip", title: "Collapse"}, React.createElement("i", {className: "fa fa-minus"})))), React.createElement("div", {className: "box-body"}, React.createElement("div", {className: "col-sm-6"}, React.createElement("div", {className: "row"}, React.createElement("div", {className: "col-sm-2"}, "Customer"), React.createElement("div", {className: "col-sm-10"}, React.createElement(SelectCustomer_1.default, {store: store}))), React.createElement("div", {className: "row"}, React.createElement("div", {className: "col-sm-2"}, "Payment Term"), React.createElement("div", {className: "col-sm-10"}, React.createElement(SelectPaymentTerm_1.default, {store: store})))), React.createElement("div", {className: "col-md-6"}, React.createElement("div", {className: "row"}, React.createElement("div", {className: "col-sm-2"}, "Date"), React.createElement("div", {className: "col-sm-10"}, React.createElement("input", {type: "date", className: "form-control pull-right", onChange: this.onChangeQuotationDate.bind(this), defaultValue: store.salesQuotation.quotationDate}))), React.createElement("div", {className: "row"}, React.createElement("div", {className: "col-sm-2"}, "Reference no."), React.createElement("div", {className: "col-sm-10"}, React.createElement("input", {type: "text", className: "form-control"})))))));
+	        return (React.createElement("div", {className: "box"}, React.createElement("div", {className: "box-header with-border"}, React.createElement("h3", {className: "box-title"}, "Customer Information"), React.createElement("div", {className: "box-tools pull-right"}, React.createElement("button", {type: "button", className: "btn btn-box-tool", "data-widget": "collapse", "data-toggle": "tooltip", title: "Collapse"}, React.createElement("i", {className: "fa fa-minus"})))), React.createElement("div", {className: "box-body"}, React.createElement("div", {className: "col-md-6"}, React.createElement("div", {className: "row"}, React.createElement("div", {className: "col-sm-2"}, "Customer"), React.createElement("div", {className: "col-sm-10"}, React.createElement(SelectCustomer_1.default, {store: store}))), React.createElement("div", {className: "row"}, React.createElement("div", {className: "col-sm-2"}, "Payment Term"), React.createElement("div", {className: "col-sm-10"}, React.createElement(SelectPaymentTerm_1.default, {store: store})))), React.createElement("div", {className: "col-md-6"}, React.createElement("div", {className: "row"}, React.createElement("div", {className: "col-sm-2"}, "Date"), React.createElement("div", {className: "col-sm-10"}, React.createElement("input", {type: "date", className: "form-control pull-right", onChange: this.onChangeQuotationDate.bind(this), defaultValue: store.salesQuotation.quotationDate}))), React.createElement("div", {className: "row"}, React.createElement("div", {className: "col-sm-2"}, "Reference no."), React.createElement("div", {className: "col-sm-10"}, React.createElement("input", {type: "text", className: "form-control"})))))));
 	    };
 	    SalesQuotationHeader = __decorate([
 	        mobx_react_1.observer
@@ -4283,7 +4283,7 @@ webpackJsonp([4],{
 	        this.props.store.commonStore.paymentTerms.map(function (term) {
 	            return (options.push(React.createElement("option", {key: term.id, value: term.id}, " ", term.description, " ")));
 	        });
-	        return (React.createElement("select", {id: "optPaymentTerm", onChange: this.onChangePaymentTerm.bind(this), className: "form-control select2"}, options));
+	        return (React.createElement("select", {id: "optPaymentTerm", onChange: this.onChangePaymentTerm.bind(this), className: "form-control select2"}, React.createElement("option", {key: -1, value: ""}), options));
 	    };
 	    SelectPaymentTerm = __decorate([
 	        mobx_react_1.observer
@@ -4330,7 +4330,7 @@ webpackJsonp([4],{
 	        this.props.store.commonStore.items.map(function (item) {
 	            return (options.push(React.createElement("option", {key: item.id, value: item.id}, " ", item.description, " ")));
 	        });
-	        return (React.createElement("select", {defaultValue: this.props.selected, id: this.props.controlId, onChange: this.onChangeItem.bind(this), className: "form-control select2"}, options));
+	        return (React.createElement("select", {defaultValue: this.props.selected, id: this.props.controlId, onChange: this.onChangeItem.bind(this), className: "form-control select2"}, React.createElement("option", {key: -1, value: ""}), options));
 	    };
 	    SelectLineItem = __decorate([
 	        mobx_react_1.observer
@@ -4377,7 +4377,7 @@ webpackJsonp([4],{
 	        this.props.store.commonStore.measurements.map(function (measurement) {
 	            return (options.push(React.createElement("option", {key: measurement.id, value: measurement.id}, " ", measurement.description, " ")));
 	        });
-	        return (React.createElement("select", {defaultValue: this.props.selected, id: this.props.controlId, onChange: this.onChangeMeasurement.bind(this), className: "form-control select2"}, options));
+	        return (React.createElement("select", {defaultValue: this.props.selected, id: this.props.controlId, onChange: this.onChangeMeasurement.bind(this), className: "form-control select2"}, React.createElement("option", {key: -1, value: ""}), options));
 	    };
 	    SelectLineMeasurement = __decorate([
 	        mobx_react_1.observer
@@ -4423,7 +4423,7 @@ webpackJsonp([4],{
 	        this.props.store.commonStore.customers.map(function (customer) {
 	            return (options.push(React.createElement("option", {key: customer.id, value: customer.id}, " ", customer.name, " ")));
 	        });
-	        return (React.createElement("select", {id: "optCustomer", onChange: this.onChangeCustomer.bind(this), className: "form-control select2"}, options));
+	        return (React.createElement("select", {id: "optCustomer", onChange: this.onChangeCustomer.bind(this), className: "form-control select2"}, React.createElement("option", {key: -1, value: ""}), options));
 	    };
 	    SelectCustomer = __decorate([
 	        mobx_react_1.observer
@@ -4466,7 +4466,6 @@ webpackJsonp([4],{
 	        this.commonStore = new CommonStore_1.default();
 	    }
 	    SalesQuotationStore.prototype.saveNewQuotation = function () {
-	        console.log(JSON.stringify(this.salesQuotation));
 	        axios.post(Config.apiUrl + "api/sales/addquotation", JSON.stringify(this.salesQuotation), {
 	            headers: {
 	                'Content-type': 'application/json'
@@ -4477,7 +4476,7 @@ webpackJsonp([4],{
 	        })
 	            .catch(function (error) {
 	            console.log(error);
-	        });
+	        }.bind(this));
 	    };
 	    SalesQuotationStore.prototype.changedCustomer = function (custId) {
 	        this.salesQuotation.customerId = custId;

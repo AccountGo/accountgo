@@ -17,6 +17,7 @@ export default class SelectLineMeasurement extends React.Component<any, {}>{
 
         return (
             <select defaultValue={this.props.selected} id={this.props.controlId} onChange={this.onChangeMeasurement.bind(this) } className="form-control select2">
+                <option key={ -1 } value=""></option>
                 {options}
             </select>
         );

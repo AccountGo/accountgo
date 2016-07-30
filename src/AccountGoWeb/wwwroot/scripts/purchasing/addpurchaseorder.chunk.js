@@ -27,12 +27,33 @@ webpackJsonp([3],{
 	var SelectLineMeasurement_1 = __webpack_require__(/*! ../Shared/Components/SelectLineMeasurement */ 200);
 	var PurchaseOrderStore_1 = __webpack_require__(/*! ../Shared/Stores/Purchasing/PurchaseOrderStore */ 204);
 	var store = new PurchaseOrderStore_1.default();
+	var ValidationErrors = (function (_super) {
+	    __extends(ValidationErrors, _super);
+	    function ValidationErrors() {
+	        _super.apply(this, arguments);
+	    }
+	    ValidationErrors.prototype.render = function () {
+	        if (store.validationErrors !== undefined && store.validationErrors.length > 0) {
+	            var errors = [];
+	            store.validationErrors.map(function (item, index) {
+	                errors.push(React.createElement("li", {key: index}, item));
+	            });
+	            return (React.createElement("div", null, React.createElement("ul", null, errors)));
+	        }
+	        return null;
+	    };
+	    ValidationErrors = __decorate([
+	        mobx_react_1.observer
+	    ], ValidationErrors);
+	    return ValidationErrors;
+	}(React.Component));
 	var SavePurchaseOrderButton = (function (_super) {
 	    __extends(SavePurchaseOrderButton, _super);
 	    function SavePurchaseOrderButton() {
 	        _super.apply(this, arguments);
 	    }
 	    SavePurchaseOrderButton.prototype.saveNewPurchaseOrder = function (e) {
+	        store.savePurchaseOrder();
 	    };
 	    SavePurchaseOrderButton.prototype.render = function () {
 	        return (React.createElement("input", {type: "button", value: "Save", onClick: this.saveNewPurchaseOrder.bind(this)}));
@@ -58,7 +79,7 @@ webpackJsonp([3],{
 	        store.changedOrderDate(e.target.value);
 	    };
 	    PurchaseOrderHeader.prototype.render = function () {
-	        return (React.createElement("div", null, React.createElement("div", null, React.createElement("label", null, "Vendor: "), React.createElement(SelectVendor_1.default, {store: store}), store.purchaseOrder.vendorId), React.createElement("div", null, React.createElement("label", null, "PurchaseOrder Date: "), React.createElement("input", {type: "date", onChange: this.onChangeOrderDate.bind(this), defaultValue: store.purchaseOrder.orderDate})), React.createElement("div", null, React.createElement("label", null, "Payment Term: "), React.createElement(SelectPaymentTerm_1.default, {store: store})), React.createElement("div", null, React.createElement("label", null, "Reference No: "), React.createElement("input", {type: "text"}))));
+	        return (React.createElement("div", {className: "box"}, React.createElement("div", {className: "box-header with-border"}, React.createElement("h3", {className: "box-title"}, "Vendor Information"), React.createElement("div", {className: "box-tools pull-right"}, React.createElement("button", {type: "button", className: "btn btn-box-tool", "data-widget": "collapse", "data-toggle": "tooltip", title: "Collapse"}, React.createElement("i", {className: "fa fa-minus"})))), React.createElement("div", {className: "box-body"}, React.createElement("div", {className: "col-sm-6"}, React.createElement("div", {className: "row"}, React.createElement("div", {className: "col-sm-2"}, "Vendor"), React.createElement("div", {className: "col-sm-10"}, React.createElement(SelectVendor_1.default, {store: store}))), React.createElement("div", {className: "row"}, React.createElement("div", {className: "col-sm-2"}, "Payment Term"), React.createElement("div", {className: "col-sm-10"}, React.createElement(SelectPaymentTerm_1.default, {store: store})))), React.createElement("div", {className: "col-md-6"}, React.createElement("div", {className: "row"}, React.createElement("div", {className: "col-sm-2"}, "Date"), React.createElement("div", {className: "col-sm-10"}, React.createElement("input", {type: "date", className: "form-control pull-right", onChange: this.onChangeOrderDate.bind(this), defaultValue: store.purchaseOrder.orderDate}))), React.createElement("div", {className: "row"}, React.createElement("div", {className: "col-sm-2"}, "Reference no."), React.createElement("div", {className: "col-sm-10"}, React.createElement("input", {type: "text", className: "form-control"})))))));
 	    };
 	    PurchaseOrderHeader = __decorate([
 	        mobx_react_1.observer
@@ -77,7 +98,6 @@ webpackJsonp([3],{
 	        quantity = document.getElementById("txtNewQuantity").value;
 	        amount = document.getElementById("txtNewAmount").value;
 	        discount = document.getElementById("txtNewDiscount").value;
-	        console.log("itemId: " + itemId + " | measurementId: " + measurementId + " | quantity: " + quantity + " | amount: " + amount + " | discount: " + discount);
 	        store.addLineItem(itemId, measurementId, quantity, amount, discount);
 	        document.getElementById("txtNewQuantity").value = "1";
 	        document.getElementById("txtNewAmount").value = "0";
@@ -98,9 +118,9 @@ webpackJsonp([3],{
 	    PurchaseOrderLines.prototype.render = function () {
 	        var lineItems = [];
 	        for (var i = 0; i < store.purchaseOrder.purchaseOrderLines.length; i++) {
-	            lineItems.push(React.createElement("tr", {key: i}, React.createElement("td", null, React.createElement(SelectLineItem_1.default, {store: store, row: i, selected: store.purchaseOrder.purchaseOrderLines[i].itemId})), React.createElement("td", null, store.purchaseOrder.purchaseOrderLines[i].itemId), React.createElement("td", null, React.createElement(SelectLineMeasurement_1.default, {row: i, store: store, selected: store.purchaseOrder.purchaseOrderLines[i].measurementId}), store.purchaseOrder.purchaseOrderLines[i].measurementId), React.createElement("td", null, React.createElement("input", {type: "text", name: i, value: store.purchaseOrder.purchaseOrderLines[i].quantity, onChange: this.onChangeQuantity.bind(this)})), React.createElement("td", null, React.createElement("input", {type: "text", name: i, value: store.purchaseOrder.purchaseOrderLines[i].amount, onChange: this.onChangeAmount.bind(this)})), React.createElement("td", null, React.createElement("input", {type: "text", name: i, value: store.purchaseOrder.purchaseOrderLines[i].discount, onChange: this.onChangeDiscount.bind(this)})), React.createElement("td", null, store.lineTotal(i)), React.createElement("td", null, React.createElement("input", {type: "button", name: i, value: "Remove", onClick: this.onClickRemoveLineItem.bind(this)}))));
+	            lineItems.push(React.createElement("tr", {key: i}, React.createElement("td", null, React.createElement(SelectLineItem_1.default, {store: store, row: i, selected: store.purchaseOrder.purchaseOrderLines[i].itemId})), React.createElement("td", null, store.purchaseOrder.purchaseOrderLines[i].itemId), React.createElement("td", null, React.createElement(SelectLineMeasurement_1.default, {row: i, store: store, selected: store.purchaseOrder.purchaseOrderLines[i].measurementId})), React.createElement("td", null, React.createElement("input", {type: "text", className: "form-control", name: i, value: store.purchaseOrder.purchaseOrderLines[i].quantity, onChange: this.onChangeQuantity.bind(this)})), React.createElement("td", null, React.createElement("input", {type: "text", className: "form-control", name: i, value: store.purchaseOrder.purchaseOrderLines[i].amount, onChange: this.onChangeAmount.bind(this)})), React.createElement("td", null, React.createElement("input", {type: "text", className: "form-control", name: i, value: store.purchaseOrder.purchaseOrderLines[i].discount, onChange: this.onChangeDiscount.bind(this)})), React.createElement("td", null, store.lineTotal(i)), React.createElement("td", null, React.createElement("input", {type: "button", name: i, value: "Remove", onClick: this.onClickRemoveLineItem.bind(this)}))));
 	        }
-	        return (React.createElement("div", null, React.createElement("table", null, React.createElement("thead", null, React.createElement("tr", null, React.createElement("td", null, "Item Id"), React.createElement("td", null, "Item Name"), React.createElement("td", null, "Measurement"), React.createElement("td", null, "Quantity"), React.createElement("td", null, "Amount"), React.createElement("td", null, "Discount"), React.createElement("td", null, "Line Total"), React.createElement("td", null))), React.createElement("tbody", null, lineItems, React.createElement("tr", null, React.createElement("td", null, React.createElement(SelectLineItem_1.default, {store: store, controlId: "optNewItemId"})), React.createElement("td", null, "Item Name"), React.createElement("td", null, React.createElement(SelectLineMeasurement_1.default, {store: store, controlId: "optNewMeasurementId"})), React.createElement("td", null, React.createElement("input", {type: "text", id: "txtNewQuantity"})), React.createElement("td", null, React.createElement("input", {type: "text", id: "txtNewAmount"})), React.createElement("td", null, React.createElement("input", {type: "text", id: "txtNewDiscount"})), React.createElement("td", null), React.createElement("td", null, React.createElement("input", {type: "button", value: "Add", onClick: this.addLineItem})))), React.createElement("tfoot", null, React.createElement("tr", null, React.createElement("td", {colSpan: "8"}, "Count: ", store.purchaseOrder.purchaseOrderLines.length))))));
+	        return (React.createElement("div", {className: "box"}, React.createElement("div", {className: "box-header with-border"}, React.createElement("h3", {className: "box-title"}, "Line Items"), React.createElement("div", {className: "box-tools pull-right"}, React.createElement("button", {type: "button", className: "btn btn-box-tool", "data-widget": "collapse", "data-toggle": "tooltip", title: "Collapse"}, React.createElement("i", {className: "fa fa-minus"})))), React.createElement("div", {className: "box-body table-responsive"}, React.createElement("table", {className: "table table-hover"}, React.createElement("thead", null, React.createElement("tr", null, React.createElement("td", null, "Item Id"), React.createElement("td", null, "Item Name"), React.createElement("td", null, "Measurement"), React.createElement("td", null, "Quantity"), React.createElement("td", null, "Amount"), React.createElement("td", null, "Discount"), React.createElement("td", null, "Line Total"), React.createElement("td", null))), React.createElement("tbody", null, lineItems, React.createElement("tr", null, React.createElement("td", null, React.createElement(SelectLineItem_1.default, {store: store, controlId: "optNewItemId"})), React.createElement("td", null, "Item Name"), React.createElement("td", null, React.createElement(SelectLineMeasurement_1.default, {store: store, controlId: "optNewMeasurementId"})), React.createElement("td", null, React.createElement("input", {className: "form-control", type: "text", id: "txtNewQuantity", defaultValue: 1})), React.createElement("td", null, React.createElement("input", {className: "form-control", type: "text", id: "txtNewAmount"})), React.createElement("td", null, React.createElement("input", {className: "form-control", type: "text", id: "txtNewDiscount"})), React.createElement("td", null), React.createElement("td", null, React.createElement("input", {type: "button", value: "Add", onClick: this.addLineItem}))))))));
 	    };
 	    PurchaseOrderLines = __decorate([
 	        mobx_react_1.observer
@@ -113,7 +133,7 @@ webpackJsonp([3],{
 	        _super.apply(this, arguments);
 	    }
 	    PurchaseOrderTotals.prototype.render = function () {
-	        return (React.createElement("div", null, React.createElement("div", null, React.createElement("label", null, "Running Total: ")), React.createElement("div", null, React.createElement("label", null, "Tax Total: ")), React.createElement("div", null, React.createElement("label", null, "Grand Total: "), " ", store.grandTotal())));
+	        return (React.createElement("div", {className: "box"}, React.createElement("div", {className: "box-body"}, React.createElement("div", {className: "row"}, React.createElement("div", {className: "col-md-2"}, React.createElement("label", null, "Running Total: ")), React.createElement("div", {className: "col-md-2"}, 0), React.createElement("div", {className: "col-md-2"}, React.createElement("label", null, "Tax Total: ")), React.createElement("div", {className: "col-md-2"}, 0), React.createElement("div", {className: "col-md-2"}, React.createElement("label", null, "Grand Total: ")), React.createElement("div", {className: "col-md-2"}, store.grandTotal())))));
 	    };
 	    PurchaseOrderTotals = __decorate([
 	        mobx_react_1.observer
@@ -126,7 +146,7 @@ webpackJsonp([3],{
 	        _super.apply(this, arguments);
 	    }
 	    AddPurchaseOrder.prototype.render = function () {
-	        return (React.createElement("div", null, React.createElement("div", null, React.createElement(PurchaseOrderHeader, null)), React.createElement("hr", null), React.createElement("div", null, React.createElement(PurchaseOrderLines, null)), React.createElement("hr", null), React.createElement("div", null, React.createElement(PurchaseOrderTotals, null)), React.createElement("hr", null), React.createElement("div", null, React.createElement(SavePurchaseOrderButton, null), React.createElement(CancelPurchaseOrderButton, null))));
+	        return (React.createElement("div", null, React.createElement(ValidationErrors, null), React.createElement(PurchaseOrderHeader, null), React.createElement(PurchaseOrderLines, null), React.createElement(PurchaseOrderTotals, null), React.createElement("div", null, React.createElement(SavePurchaseOrderButton, null), React.createElement(CancelPurchaseOrderButton, null))));
 	    };
 	    return AddPurchaseOrder;
 	}(React.Component));
@@ -4283,7 +4303,7 @@ webpackJsonp([3],{
 	        this.props.store.commonStore.vendors.map(function (vendor) {
 	            return (options.push(React.createElement("option", {key: vendor.id, value: vendor.id}, " ", vendor.name, " ")));
 	        });
-	        return (React.createElement("select", {id: "optVendor", onChange: this.onChangeVendor.bind(this), className: "form-control select2"}, options));
+	        return (React.createElement("select", {id: "optVendor", onChange: this.onChangeVendor.bind(this), className: "form-control select2"}, React.createElement("option", {key: -1, value: ""}), options));
 	    };
 	    SelectVendor = __decorate([
 	        mobx_react_1.observer
@@ -4329,7 +4349,7 @@ webpackJsonp([3],{
 	        this.props.store.commonStore.paymentTerms.map(function (term) {
 	            return (options.push(React.createElement("option", {key: term.id, value: term.id}, " ", term.description, " ")));
 	        });
-	        return (React.createElement("select", {id: "optPaymentTerm", onChange: this.onChangePaymentTerm.bind(this), className: "form-control select2"}, options));
+	        return (React.createElement("select", {id: "optPaymentTerm", onChange: this.onChangePaymentTerm.bind(this), className: "form-control select2"}, React.createElement("option", {key: -1, value: ""}), options));
 	    };
 	    SelectPaymentTerm = __decorate([
 	        mobx_react_1.observer
@@ -4376,7 +4396,7 @@ webpackJsonp([3],{
 	        this.props.store.commonStore.items.map(function (item) {
 	            return (options.push(React.createElement("option", {key: item.id, value: item.id}, " ", item.description, " ")));
 	        });
-	        return (React.createElement("select", {defaultValue: this.props.selected, id: this.props.controlId, onChange: this.onChangeItem.bind(this), className: "form-control select2"}, options));
+	        return (React.createElement("select", {defaultValue: this.props.selected, id: this.props.controlId, onChange: this.onChangeItem.bind(this), className: "form-control select2"}, React.createElement("option", {key: -1, value: ""}), options));
 	    };
 	    SelectLineItem = __decorate([
 	        mobx_react_1.observer
@@ -4423,7 +4443,7 @@ webpackJsonp([3],{
 	        this.props.store.commonStore.measurements.map(function (measurement) {
 	            return (options.push(React.createElement("option", {key: measurement.id, value: measurement.id}, " ", measurement.description, " ")));
 	        });
-	        return (React.createElement("select", {defaultValue: this.props.selected, id: this.props.controlId, onChange: this.onChangeMeasurement.bind(this), className: "form-control select2"}, options));
+	        return (React.createElement("select", {defaultValue: this.props.selected, id: this.props.controlId, onChange: this.onChangeMeasurement.bind(this), className: "form-control select2"}, React.createElement("option", {key: -1, value: ""}), options));
 	    };
 	    SelectLineMeasurement = __decorate([
 	        mobx_react_1.observer
@@ -4443,7 +4463,15 @@ webpackJsonp([3],{
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
+	var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+	    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+	    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+	    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+	    return c > 3 && r && Object.defineProperty(target, key, r), r;
+	};
 	var mobx_1 = __webpack_require__(/*! mobx */ 169);
+	var axios = __webpack_require__(/*! axios */ 174);
+	var Config = __webpack_require__(/*! Config */ 193);
 	var PurchaseOrder_1 = __webpack_require__(/*! ./PurchaseOrder */ 205);
 	var PurchaseOrderLine_1 = __webpack_require__(/*! ./PurchaseOrderLine */ 206);
 	var CommonStore_1 = __webpack_require__(/*! ../Common/CommonStore */ 196);
@@ -4463,8 +4491,58 @@ webpackJsonp([3],{
 	        });
 	        this.commonStore = new CommonStore_1.default();
 	    }
+	    PurchaseOrderStore.prototype.savePurchaseOrder = function () {
+	        this.validationErrors = [];
+	        if (this.purchaseOrder.vendorId === undefined || this.purchaseOrder.vendorId === "")
+	            this.validationErrors.push("Vendor is required.");
+	        if (this.purchaseOrder.paymentTermId === undefined || this.purchaseOrder.paymentTermId === "")
+	            this.validationErrors.push("Payment term is required.");
+	        if (this.purchaseOrder.orderDate === undefined || this.purchaseOrder.orderDate === "")
+	            this.validationErrors.push("Date is required.");
+	        if (this.purchaseOrder.purchaseOrderLines === undefined || this.purchaseOrder.purchaseOrderLines.length < 1)
+	            this.validationErrors.push("Enter at least 1 line item.");
+	        if (this.purchaseOrder.purchaseOrderLines !== undefined && this.purchaseOrder.purchaseOrderLines.length > 0) {
+	            for (var i = 0; i < this.purchaseOrder.purchaseOrderLines.length; i++) {
+	                if (this.purchaseOrder.purchaseOrderLines[i].itemId === undefined
+	                    || this.purchaseOrder.purchaseOrderLines[i].itemId === "")
+	                    this.validationErrors.push("Item is required.");
+	                if (this.purchaseOrder.purchaseOrderLines[i].measurementId === undefined
+	                    || this.purchaseOrder.purchaseOrderLines[i].measurementId === "")
+	                    this.validationErrors.push("Uom is required.");
+	                if (this.purchaseOrder.purchaseOrderLines[i].quantity === undefined
+	                    || this.purchaseOrder.purchaseOrderLines[i].quantity === ""
+	                    || this.purchaseOrder.purchaseOrderLines[i].quantity === 0)
+	                    this.validationErrors.push("Quantity is required.");
+	                if (this.purchaseOrder.purchaseOrderLines[i].amount === undefined
+	                    || this.purchaseOrder.purchaseOrderLines[i].amount === ""
+	                    || this.purchaseOrder.purchaseOrderLines[i].amount === 0)
+	                    this.validationErrors.push("Amount is required.");
+	                if (this.lineTotal(i) === undefined
+	                    || this.lineTotal(i).toString() === "NaN"
+	                    || this.lineTotal(i) === 0)
+	                    this.validationErrors.push("Invalid data.");
+	            }
+	        }
+	        if (this.validationErrors.length === 0) {
+	            axios.post(Config.apiUrl + "api/purchasing/savepurchaseorder", JSON.stringify(this.purchaseOrder), {
+	                headers: {
+	                    'Content-type': 'application/json'
+	                }
+	            })
+	                .then(function (response) {
+	                return;
+	            })
+	                .catch(function (error) {
+	                console.log(error);
+	                this.validationErrors.push("An error occured on posting data. Please check the browser console for more details.");
+	            }.bind(this));
+	        }
+	    };
 	    PurchaseOrderStore.prototype.changedVendor = function (vendorId) {
 	        this.purchaseOrder.vendorId = vendorId;
+	    };
+	    PurchaseOrderStore.prototype.changedPaymentTerm = function (paymentTermId) {
+	        this.purchaseOrder.paymentTermId = paymentTermId;
 	    };
 	    PurchaseOrderStore.prototype.changedOrderDate = function (date) {
 	        this.purchaseOrder.orderDate = date;
@@ -4492,6 +4570,9 @@ webpackJsonp([3],{
 	        var lineSum = this.purchaseOrder.purchaseOrderLines[row].quantity * this.purchaseOrder.purchaseOrderLines[row].amount;
 	        return lineSum;
 	    };
+	    __decorate([
+	        mobx_1.observable
+	    ], PurchaseOrderStore.prototype, "validationErrors", void 0);
 	    return PurchaseOrderStore;
 	}());
 	Object.defineProperty(exports, "__esModule", { value: true });

@@ -6,8 +6,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-// For more information on enabling Web API for empty projects, visit http://go.microsoft.com/fwlink/?LinkID=397860
-
 namespace Api.Controllers
 {
     [Route("api/[controller]")]
@@ -259,17 +257,17 @@ namespace Api.Controllers
 
         [HttpPost]
         [Route("[action]")]
-        public IActionResult CreateSalesOrder([FromBody]Dto.Sales.SalesOrder Dto)
+        public IActionResult AddSalesOrder([FromBody]Dto.Sales.SalesOrder salesorderDto)
         {
             try
             {
                 var salesOrder = new Core.Domain.Sales.SalesOrderHeader()
                 {
-                    CustomerId = Dto.CustomerId,
-                    Date = Dto.OrderDate,
+                    CustomerId = salesorderDto.CustomerId,
+                    Date = salesorderDto.OrderDate,
                 };
 
-                foreach (var line in Dto.SalesOrderLines)
+                foreach (var line in salesorderDto.SalesOrderLines)
                 {
                     var salesOrderLine = new Core.Domain.Sales.SalesOrderLine();
                     salesOrderLine.Amount = line.Amount;
@@ -283,9 +281,9 @@ namespace Api.Controllers
 
                 _salesService.AddSalesOrder(salesOrder, true);
 
-                Dto.Id = salesOrder.Id;
+                salesorderDto.Id = salesOrder.Id;
 
-                return new ObjectResult(Dto);
+                return new ObjectResult(salesorderDto);
             }
             catch (Exception ex)
             {

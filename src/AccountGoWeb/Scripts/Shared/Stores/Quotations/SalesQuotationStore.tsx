@@ -31,7 +31,7 @@ export default class SalesQuotationStore {
     }
 
     saveNewQuotation() {
-        console.log(JSON.stringify(this.salesQuotation));
+        //console.log(JSON.stringify(this.salesQuotation));
         axios.post(Config.apiUrl + "api/sales/addquotation", JSON.stringify(this.salesQuotation),
             {
                 headers: {
@@ -43,7 +43,7 @@ export default class SalesQuotationStore {
             })
             .catch(function (error) {
                 console.log(error);
-            })
+            }.bind(this))
     }
 
     changedCustomer(custId) {

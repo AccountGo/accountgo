@@ -58,7 +58,7 @@ webpackJsonp([6],{
 	        store.changedOrderDate(e.target.value);
 	    };
 	    SalesOrderHeader.prototype.render = function () {
-	        return (React.createElement("div", null, React.createElement("div", null, React.createElement("label", null, "Customer: "), React.createElement(SelectCustomer_1.default, {store: store}), store.salesOrder.customerId), React.createElement("div", null, React.createElement("label", null, "Order Date: "), React.createElement("input", {type: "date", onChange: this.onChangeOrderDate.bind(this), defaultValue: store.salesOrder.orderDate})), React.createElement("div", null, React.createElement("label", null, "Payment Term: "), React.createElement(SelectPaymentTerm_1.default, {store: store})), React.createElement("div", null, React.createElement("label", null, "Reference No: "), React.createElement("input", {type: "text"}))));
+	        return (React.createElement("div", {className: "box"}, React.createElement("div", {className: "box-header with-border"}, React.createElement("h3", {className: "box-title"}, "Customer Information"), React.createElement("div", {className: "box-tools pull-right"}, React.createElement("button", {type: "button", className: "btn btn-box-tool", "data-widget": "collapse", "data-toggle": "tooltip", title: "Collapse"}, React.createElement("i", {className: "fa fa-minus"})))), React.createElement("div", {className: "box-body"}, React.createElement("div", {className: "col-md-6"}, React.createElement("div", {className: "row"}, React.createElement("div", {className: "col-sm-2"}, "Customer"), React.createElement("div", {className: "col-sm-10"}, React.createElement(SelectCustomer_1.default, {store: store}))), React.createElement("div", {className: "row"}, React.createElement("div", {className: "col-sm-2"}, "Payment Term"), React.createElement("div", {className: "col-sm-10"}, React.createElement(SelectPaymentTerm_1.default, {store: store})))), React.createElement("div", {className: "col-md-6"}, React.createElement("div", {className: "row"}, React.createElement("div", {className: "col-sm-2"}, "Date"), React.createElement("div", {className: "col-sm-10"}, React.createElement("input", {type: "date", className: "form-control pull-right", onChange: this.onChangeOrderDate.bind(this), defaultValue: store.salesOrder.orderDate}))), React.createElement("div", {className: "row"}, React.createElement("div", {className: "col-sm-2"}, "Reference no."), React.createElement("div", {className: "col-sm-10"}, React.createElement("input", {type: "text", className: "form-control"})))))));
 	    };
 	    SalesOrderHeader = __decorate([
 	        mobx_react_1.observer
@@ -98,9 +98,9 @@ webpackJsonp([6],{
 	    SalesOrderLines.prototype.render = function () {
 	        var lineItems = [];
 	        for (var i = 0; i < store.salesOrder.salesOrderLines.length; i++) {
-	            lineItems.push(React.createElement("tr", {key: i}, React.createElement("td", null, React.createElement(SelectLineItem_1.default, {store: store, row: i, selected: store.salesOrder.salesOrderLines[i].itemId})), React.createElement("td", null, store.salesOrder.salesOrderLines[i].itemId), React.createElement("td", null, React.createElement(SelectLineMeasurement_1.default, {row: i, store: store, selected: store.salesOrder.salesOrderLines[i].measurementId}), store.salesOrder.salesOrderLines[i].measurementId), React.createElement("td", null, React.createElement("input", {type: "text", name: i, value: store.salesOrder.salesOrderLines[i].quantity, onChange: this.onChangeQuantity.bind(this)})), React.createElement("td", null, React.createElement("input", {type: "text", name: i, value: store.salesOrder.salesOrderLines[i].amount, onChange: this.onChangeAmount.bind(this)})), React.createElement("td", null, React.createElement("input", {type: "text", name: i, value: store.salesOrder.salesOrderLines[i].discount, onChange: this.onChangeDiscount.bind(this)})), React.createElement("td", null, store.lineTotal(i)), React.createElement("td", null, React.createElement("input", {type: "button", name: i, value: "Remove", onClick: this.onClickRemoveLineItem.bind(this)}))));
+	            lineItems.push(React.createElement("tr", {key: i}, React.createElement("td", null, React.createElement(SelectLineItem_1.default, {store: store, row: i, selected: store.salesOrder.salesOrderLines[i].itemId})), React.createElement("td", null, store.salesOrder.salesOrderLines[i].itemId), React.createElement("td", null, React.createElement(SelectLineMeasurement_1.default, {row: i, store: store, selected: store.salesOrder.salesOrderLines[i].measurementId}), store.salesOrder.salesOrderLines[i].measurementId), React.createElement("td", null, React.createElement("input", {type: "text", className: "form-control", name: i, value: store.salesOrder.salesOrderLines[i].quantity, onChange: this.onChangeQuantity.bind(this)})), React.createElement("td", null, React.createElement("input", {type: "text", className: "form-control", name: i, value: store.salesOrder.salesOrderLines[i].amount, onChange: this.onChangeAmount.bind(this)})), React.createElement("td", null, React.createElement("input", {type: "text", className: "form-control", name: i, value: store.salesOrder.salesOrderLines[i].discount, onChange: this.onChangeDiscount.bind(this)})), React.createElement("td", null, store.lineTotal(i)), React.createElement("td", null, React.createElement("input", {type: "button", name: i, value: "Remove", onClick: this.onClickRemoveLineItem.bind(this)}))));
 	        }
-	        return (React.createElement("div", null, React.createElement("table", null, React.createElement("thead", null, React.createElement("tr", null, React.createElement("td", null, "Item Id"), React.createElement("td", null, "Item Name"), React.createElement("td", null, "Measurement"), React.createElement("td", null, "Quantity"), React.createElement("td", null, "Amount"), React.createElement("td", null, "Discount"), React.createElement("td", null, "Line Total"), React.createElement("td", null))), React.createElement("tbody", null, lineItems, React.createElement("tr", null, React.createElement("td", null, React.createElement(SelectLineItem_1.default, {store: store, controlId: "optNewItemId"})), React.createElement("td", null, "Item Name"), React.createElement("td", null, React.createElement(SelectLineMeasurement_1.default, {store: store, controlId: "optNewMeasurementId"})), React.createElement("td", null, React.createElement("input", {type: "text", id: "txtNewQuantity"})), React.createElement("td", null, React.createElement("input", {type: "text", id: "txtNewAmount"})), React.createElement("td", null, React.createElement("input", {type: "text", id: "txtNewDiscount"})), React.createElement("td", null), React.createElement("td", null, React.createElement("input", {type: "button", value: "Add", onClick: this.addLineItem})))), React.createElement("tfoot", null, React.createElement("tr", null, React.createElement("td", {colSpan: "8"}, "Count: ", store.salesOrder.salesOrderLines.length))))));
+	        return (React.createElement("div", {className: "box"}, React.createElement("div", {className: "box-header with-border"}, React.createElement("h3", {className: "box-title"}, "Line Items"), React.createElement("div", {className: "box-tools pull-right"}, React.createElement("button", {type: "button", className: "btn btn-box-tool", "data-widget": "collapse", "data-toggle": "tooltip", title: "Collapse"}, React.createElement("i", {className: "fa fa-minus"})))), React.createElement("div", {className: "box-body table-responsive"}, React.createElement("table", {className: "table table-hover"}, React.createElement("thead", null, React.createElement("tr", null, React.createElement("td", null, "Item Id"), React.createElement("td", null, "Item Name"), React.createElement("td", null, "Measurement"), React.createElement("td", null, "Quantity"), React.createElement("td", null, "Amount"), React.createElement("td", null, "Discount"), React.createElement("td", null, "Line Total"), React.createElement("td", null))), React.createElement("tbody", null, lineItems, React.createElement("tr", null, React.createElement("td", null, React.createElement(SelectLineItem_1.default, {store: store, controlId: "optNewItemId"})), React.createElement("td", null, "Item Name"), React.createElement("td", null, React.createElement(SelectLineMeasurement_1.default, {store: store, controlId: "optNewMeasurementId"})), React.createElement("td", null, React.createElement("input", {className: "form-control", type: "text", id: "txtNewQuantity"})), React.createElement("td", null, React.createElement("input", {className: "form-control", type: "text", id: "txtNewAmount"})), React.createElement("td", null, React.createElement("input", {className: "form-control", type: "text", id: "txtNewDiscount"})), React.createElement("td", null), React.createElement("td", null, React.createElement("input", {type: "button", value: "Add", onClick: this.addLineItem}))))))));
 	    };
 	    SalesOrderLines = __decorate([
 	        mobx_react_1.observer
@@ -113,7 +113,7 @@ webpackJsonp([6],{
 	        _super.apply(this, arguments);
 	    }
 	    SalesOrderTotals.prototype.render = function () {
-	        return (React.createElement("div", null, React.createElement("div", null, React.createElement("label", null, "Running Total: ")), React.createElement("div", null, React.createElement("label", null, "Tax Total: ")), React.createElement("div", null, React.createElement("label", null, "Grand Total: "), " ", store.grandTotal())));
+	        return (React.createElement("div", {className: "box"}, React.createElement("div", {className: "box-body"}, React.createElement("div", {className: "row"}, React.createElement("div", {className: "col-md-2"}, React.createElement("label", null, "Running Total: ")), React.createElement("div", {className: "col-md-2"}, 0), React.createElement("div", {className: "col-md-2"}, React.createElement("label", null, "Tax Total: ")), React.createElement("div", {className: "col-md-2"}, 0), React.createElement("div", {className: "col-md-2"}, React.createElement("label", null, "Grand Total: ")), React.createElement("div", {className: "col-md-2"}, store.grandTotal())))));
 	    };
 	    SalesOrderTotals = __decorate([
 	        mobx_react_1.observer
@@ -126,7 +126,7 @@ webpackJsonp([6],{
 	        _super.apply(this, arguments);
 	    }
 	    AddSalesOrder.prototype.render = function () {
-	        return (React.createElement("div", null, React.createElement("div", null, React.createElement(SalesOrderHeader, null)), React.createElement("hr", null), React.createElement("div", null, React.createElement(SalesOrderLines, null)), React.createElement("hr", null), React.createElement("div", null, React.createElement(SalesOrderTotals, null)), React.createElement("hr", null), React.createElement("div", null, React.createElement(SaveOrderButton, null), React.createElement(CancelOrderButton, null))));
+	        return (React.createElement("div", null, React.createElement(SalesOrderHeader, null), React.createElement(SalesOrderLines, null), React.createElement(SalesOrderTotals, null), React.createElement("div", null, React.createElement(SaveOrderButton, null), React.createElement(CancelOrderButton, null))));
 	    };
 	    return AddSalesOrder;
 	}(React.Component));
@@ -4283,7 +4283,7 @@ webpackJsonp([6],{
 	        this.props.store.commonStore.paymentTerms.map(function (term) {
 	            return (options.push(React.createElement("option", {key: term.id, value: term.id}, " ", term.description, " ")));
 	        });
-	        return (React.createElement("select", {id: "optPaymentTerm", onChange: this.onChangePaymentTerm.bind(this), className: "form-control select2"}, options));
+	        return (React.createElement("select", {id: "optPaymentTerm", onChange: this.onChangePaymentTerm.bind(this), className: "form-control select2"}, React.createElement("option", {key: -1, value: ""}), options));
 	    };
 	    SelectPaymentTerm = __decorate([
 	        mobx_react_1.observer
@@ -4330,7 +4330,7 @@ webpackJsonp([6],{
 	        this.props.store.commonStore.items.map(function (item) {
 	            return (options.push(React.createElement("option", {key: item.id, value: item.id}, " ", item.description, " ")));
 	        });
-	        return (React.createElement("select", {defaultValue: this.props.selected, id: this.props.controlId, onChange: this.onChangeItem.bind(this), className: "form-control select2"}, options));
+	        return (React.createElement("select", {defaultValue: this.props.selected, id: this.props.controlId, onChange: this.onChangeItem.bind(this), className: "form-control select2"}, React.createElement("option", {key: -1, value: ""}), options));
 	    };
 	    SelectLineItem = __decorate([
 	        mobx_react_1.observer
@@ -4377,7 +4377,7 @@ webpackJsonp([6],{
 	        this.props.store.commonStore.measurements.map(function (measurement) {
 	            return (options.push(React.createElement("option", {key: measurement.id, value: measurement.id}, " ", measurement.description, " ")));
 	        });
-	        return (React.createElement("select", {defaultValue: this.props.selected, id: this.props.controlId, onChange: this.onChangeMeasurement.bind(this), className: "form-control select2"}, options));
+	        return (React.createElement("select", {defaultValue: this.props.selected, id: this.props.controlId, onChange: this.onChangeMeasurement.bind(this), className: "form-control select2"}, React.createElement("option", {key: -1, value: ""}), options));
 	    };
 	    SelectLineMeasurement = __decorate([
 	        mobx_react_1.observer
@@ -4423,7 +4423,7 @@ webpackJsonp([6],{
 	        this.props.store.commonStore.customers.map(function (customer) {
 	            return (options.push(React.createElement("option", {key: customer.id, value: customer.id}, " ", customer.name, " ")));
 	        });
-	        return (React.createElement("select", {id: "optCustomer", onChange: this.onChangeCustomer.bind(this), className: "form-control select2"}, options));
+	        return (React.createElement("select", {id: "optCustomer", onChange: this.onChangeCustomer.bind(this), className: "form-control select2"}, React.createElement("option", {key: -1, value: ""}), options));
 	    };
 	    SelectCustomer = __decorate([
 	        mobx_react_1.observer

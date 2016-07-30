@@ -39,22 +39,34 @@ class JournalEntryHeader extends React.Component<any, {}>{
 
     render() {
         return (
-            <div>
-                <div>
-                    <label>Date: </label>
-                    <input type="date" id="newJournalDate" onChange={this.onChangeJournalDate.bind(this) } defaultValue={store.journalEntry.date} />                 
+            <div className="box">
+                <div className="box-header with-border">
+                    <h3 className="box-title">General</h3>
+                    <div className="box-tools pull-right">
+                        <button type="button" className="btn btn-box-tool" data-widget="collapse" data-toggle="tooltip" title="Collapse">
+                            <i className="fa fa-minus"></i>
+                        </button>
+                    </div>
                 </div>
-                <div>
-                    <label>Vourcher: </label>
-                    <SelectVoucherType store={store} controlId="optNewVoucherType" />
-                </div>
-                <div>
-                    <label>Reference No: </label>
-                    <input type="text" />
-                </div>
-                <div>
-                    <label>Memo: </label>
-                    <input type="text" />
+                <div className="box-body">
+                    <div className="col-sm-6">
+                        <div className="row">
+                            <div className="col-sm-3">Date</div>
+                            <div className="col-sm-9"><input type="date" className="form-control" id="newJournalDate" onChange={this.onChangeJournalDate.bind(this) } defaultValue={store.journalEntry.date} /></div>
+                        </div>
+                        <div className="row">
+                            <div className="col-sm-3">Voucher</div>
+                            <div className="col-sm-9"><SelectVoucherType store={store} controlId="optNewVoucherType" /></div>
+                        </div>
+                        <div className="row">
+                            <div className="col-sm-3">Reference no</div>
+                            <div className="col-sm-9"><input type="text" className="form-control" /></div>
+                        </div>
+                        <div className="row">
+                            <div className="col-sm-3">Memo</div>
+                            <div className="col-sm-9"><input type="text" className="form-control" /></div>
+                        </div>
+                    </div>
                 </div>
             </div>
         );
@@ -91,40 +103,45 @@ class JournalEntryLines extends React.Component<any, {}>{
                 <tr key={i}>
                     <td><SelectAccount store={store} row={i} selected={store.journalEntry.journalEntryLines[i].accountId} /></td>
                     <td><SelectDebitCredit store={store} row={i} selected={store.journalEntry.journalEntryLines[i].drcr} /></td>
-                    <td><input type="text" name={i} onChange={this.onChangeAmount.bind(this)} /></td>
-                    <td><input type="text" name={i} onChange={this.onChangeMemo.bind(this) } /></td>
+                    <td><input type="text" className="form-control" name={i} onChange={this.onChangeAmount.bind(this) } /></td>
+                    <td><input type="text" className="form-control" name={i} onChange={this.onChangeMemo.bind(this) } /></td>
                     <td><input type="button" name={i} value="Remove" onClick={this.onClickRemoveLineItem.bind(this) } /></td>
                 </tr>
             );
         }
         return (
-            <div>
-                <table>
-                    <thead>
-                        <tr>
-                            <td>Account</td>
-                            <td>DrCr</td>
-                            <td>Amount</td>
-                            <td>Memo</td>
-                            <td></td>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {lineItems}
-                        <tr>
-                            <td><SelectAccount store={store} controlId="optNewAccountId" /></td>
-                            <td><SelectDebitCredit store={store} controlId="optNewDebitCredit" /></td>
-                            <td><input type="text" id="txtNewAmount" /></td>                            
-                            <td><input type="text" id="txtNewMemo" /></td>                            
-                            <td><input type="button" value="Add" onClick={this.addLineItem} /></td>
-                        </tr>
-                    </tbody>
-                    <tfoot>
-                        <tr>
-                            <td colSpan="8">Count:</td>
-                        </tr>
-                    </tfoot>
-                </table>
+            <div className="box">
+                <div className="box-header with-border">
+                    <h3 className="box-title">Line Items</h3>
+                    <div className="box-tools pull-right">
+                        <button type="button" className="btn btn-box-tool" data-widget="collapse" data-toggle="tooltip" title="Collapse">
+                            <i className="fa fa-minus"></i>
+                        </button>
+                    </div>
+                </div>
+                <div className="box-body table-responsive">
+                    <table>
+                        <thead>
+                            <tr>
+                                <td>Account</td>
+                                <td>DrCr</td>
+                                <td>Amount</td>
+                                <td>Memo</td>
+                                <td></td>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {lineItems}
+                            <tr>
+                                <td><SelectAccount store={store} controlId="optNewAccountId" /></td>
+                                <td><SelectDebitCredit store={store} controlId="optNewDebitCredit" /></td>
+                                <td><input type="text" className="form-control" id="txtNewAmount" /></td>                            
+                                <td><input type="text" className="form-control" id="txtNewMemo" /></td>                            
+                                <td><input type="button" value="Add" onClick={this.addLineItem} /></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         );
     }
@@ -134,12 +151,8 @@ export default class AddJournalEntry extends React.Component<any, {}> {
     render() {
         return (
             <div>
-                <div>
-                    <JournalEntryHeader />
-                </div>
-                <div>
-                    <JournalEntryLines />
-                </div>
+                <JournalEntryHeader />
+                <JournalEntryLines />
                 <div>
                     <SaveJournalEntryButton />
                     <CancelJournalEntryButton />

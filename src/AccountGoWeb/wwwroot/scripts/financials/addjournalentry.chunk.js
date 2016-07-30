@@ -58,7 +58,7 @@ webpackJsonp([0],{
 	        store.changedJournalDate(e.target.value);
 	    };
 	    JournalEntryHeader.prototype.render = function () {
-	        return (React.createElement("div", null, React.createElement("div", null, React.createElement("label", null, "Date: "), React.createElement("input", {type: "date", id: "newJournalDate", onChange: this.onChangeJournalDate.bind(this), defaultValue: store.journalEntry.date})), React.createElement("div", null, React.createElement("label", null, "Vourcher: "), React.createElement(SelectVoucherType_1.default, {store: store, controlId: "optNewVoucherType"})), React.createElement("div", null, React.createElement("label", null, "Reference No: "), React.createElement("input", {type: "text"})), React.createElement("div", null, React.createElement("label", null, "Memo: "), React.createElement("input", {type: "text"}))));
+	        return (React.createElement("div", {className: "box"}, React.createElement("div", {className: "box-header with-border"}, React.createElement("h3", {className: "box-title"}, "General"), React.createElement("div", {className: "box-tools pull-right"}, React.createElement("button", {type: "button", className: "btn btn-box-tool", "data-widget": "collapse", "data-toggle": "tooltip", title: "Collapse"}, React.createElement("i", {className: "fa fa-minus"})))), React.createElement("div", {className: "box-body"}, React.createElement("div", {className: "col-sm-6"}, React.createElement("div", {className: "row"}, React.createElement("div", {className: "col-sm-3"}, "Date"), React.createElement("div", {className: "col-sm-9"}, React.createElement("input", {type: "date", className: "form-control", id: "newJournalDate", onChange: this.onChangeJournalDate.bind(this), defaultValue: store.journalEntry.date}))), React.createElement("div", {className: "row"}, React.createElement("div", {className: "col-sm-3"}, "Voucher"), React.createElement("div", {className: "col-sm-9"}, React.createElement(SelectVoucherType_1.default, {store: store, controlId: "optNewVoucherType"}))), React.createElement("div", {className: "row"}, React.createElement("div", {className: "col-sm-3"}, "Reference no"), React.createElement("div", {className: "col-sm-9"}, React.createElement("input", {type: "text", className: "form-control"}))), React.createElement("div", {className: "row"}, React.createElement("div", {className: "col-sm-3"}, "Memo"), React.createElement("div", {className: "col-sm-9"}, React.createElement("input", {type: "text", className: "form-control"})))))));
 	    };
 	    JournalEntryHeader = __decorate([
 	        mobx_react_1.observer
@@ -93,9 +93,9 @@ webpackJsonp([0],{
 	    JournalEntryLines.prototype.render = function () {
 	        var lineItems = [];
 	        for (var i = 0; i < store.journalEntry.journalEntryLines.length; i++) {
-	            lineItems.push(React.createElement("tr", {key: i}, React.createElement("td", null, React.createElement(SelectAccount_1.default, {store: store, row: i, selected: store.journalEntry.journalEntryLines[i].accountId})), React.createElement("td", null, React.createElement(SelectDebitCredit_1.default, {store: store, row: i, selected: store.journalEntry.journalEntryLines[i].drcr})), React.createElement("td", null, React.createElement("input", {type: "text", name: i, onChange: this.onChangeAmount.bind(this)})), React.createElement("td", null, React.createElement("input", {type: "text", name: i, onChange: this.onChangeMemo.bind(this)})), React.createElement("td", null, React.createElement("input", {type: "button", name: i, value: "Remove", onClick: this.onClickRemoveLineItem.bind(this)}))));
+	            lineItems.push(React.createElement("tr", {key: i}, React.createElement("td", null, React.createElement(SelectAccount_1.default, {store: store, row: i, selected: store.journalEntry.journalEntryLines[i].accountId})), React.createElement("td", null, React.createElement(SelectDebitCredit_1.default, {store: store, row: i, selected: store.journalEntry.journalEntryLines[i].drcr})), React.createElement("td", null, React.createElement("input", {type: "text", className: "form-control", name: i, onChange: this.onChangeAmount.bind(this)})), React.createElement("td", null, React.createElement("input", {type: "text", className: "form-control", name: i, onChange: this.onChangeMemo.bind(this)})), React.createElement("td", null, React.createElement("input", {type: "button", name: i, value: "Remove", onClick: this.onClickRemoveLineItem.bind(this)}))));
 	        }
-	        return (React.createElement("div", null, React.createElement("table", null, React.createElement("thead", null, React.createElement("tr", null, React.createElement("td", null, "Account"), React.createElement("td", null, "DrCr"), React.createElement("td", null, "Amount"), React.createElement("td", null, "Memo"), React.createElement("td", null))), React.createElement("tbody", null, lineItems, React.createElement("tr", null, React.createElement("td", null, React.createElement(SelectAccount_1.default, {store: store, controlId: "optNewAccountId"})), React.createElement("td", null, React.createElement(SelectDebitCredit_1.default, {store: store, controlId: "optNewDebitCredit"})), React.createElement("td", null, React.createElement("input", {type: "text", id: "txtNewAmount"})), React.createElement("td", null, React.createElement("input", {type: "text", id: "txtNewMemo"})), React.createElement("td", null, React.createElement("input", {type: "button", value: "Add", onClick: this.addLineItem})))), React.createElement("tfoot", null, React.createElement("tr", null, React.createElement("td", {colSpan: "8"}, "Count:"))))));
+	        return (React.createElement("div", {className: "box"}, React.createElement("div", {className: "box-header with-border"}, React.createElement("h3", {className: "box-title"}, "Line Items"), React.createElement("div", {className: "box-tools pull-right"}, React.createElement("button", {type: "button", className: "btn btn-box-tool", "data-widget": "collapse", "data-toggle": "tooltip", title: "Collapse"}, React.createElement("i", {className: "fa fa-minus"})))), React.createElement("div", {className: "box-body table-responsive"}, React.createElement("table", null, React.createElement("thead", null, React.createElement("tr", null, React.createElement("td", null, "Account"), React.createElement("td", null, "DrCr"), React.createElement("td", null, "Amount"), React.createElement("td", null, "Memo"), React.createElement("td", null))), React.createElement("tbody", null, lineItems, React.createElement("tr", null, React.createElement("td", null, React.createElement(SelectAccount_1.default, {store: store, controlId: "optNewAccountId"})), React.createElement("td", null, React.createElement(SelectDebitCredit_1.default, {store: store, controlId: "optNewDebitCredit"})), React.createElement("td", null, React.createElement("input", {type: "text", className: "form-control", id: "txtNewAmount"})), React.createElement("td", null, React.createElement("input", {type: "text", className: "form-control", id: "txtNewMemo"})), React.createElement("td", null, React.createElement("input", {type: "button", value: "Add", onClick: this.addLineItem}))))))));
 	    };
 	    JournalEntryLines = __decorate([
 	        mobx_react_1.observer
@@ -108,7 +108,7 @@ webpackJsonp([0],{
 	        _super.apply(this, arguments);
 	    }
 	    AddJournalEntry.prototype.render = function () {
-	        return (React.createElement("div", null, React.createElement("div", null, React.createElement(JournalEntryHeader, null)), React.createElement("div", null, React.createElement(JournalEntryLines, null)), React.createElement("div", null, React.createElement(SaveJournalEntryButton, null), React.createElement(CancelJournalEntryButton, null))));
+	        return (React.createElement("div", null, React.createElement(JournalEntryHeader, null), React.createElement(JournalEntryLines, null), React.createElement("div", null, React.createElement(SaveJournalEntryButton, null), React.createElement(CancelJournalEntryButton, null))));
 	    };
 	    return AddJournalEntry;
 	}(React.Component));
@@ -2850,7 +2850,7 @@ webpackJsonp([0],{
 	        options.push(React.createElement("option", {key: "3", value: "3"}, " Adjustment Entries "));
 	        options.push(React.createElement("option", {key: "4", value: "4"}, " Correction Entries "));
 	        options.push(React.createElement("option", {key: "5", value: "5"}, " Transfer Entries "));
-	        return (React.createElement("select", {id: this.props.controlId, onChange: this.onChangeVoucherType.bind(this), className: "form-control select2"}, options));
+	        return (React.createElement("select", {id: this.props.controlId, onChange: this.onChangeVoucherType.bind(this), className: "form-control select2"}, React.createElement("option", {key: -1, value: ""}), options));
 	    };
 	    SelectVoucherType = __decorate([
 	        mobx_react_1.observer
@@ -2897,7 +2897,7 @@ webpackJsonp([0],{
 	        this.props.store.commonStore.accounts.map(function (account) {
 	            return (options.push(React.createElement("option", {key: account.id, value: account.id}, " ", account.accountName, " ")));
 	        });
-	        return (React.createElement("select", {defaultValue: this.props.selected, id: this.props.controlId, onChange: this.onChangeAccount.bind(this), className: "form-control select2"}, options));
+	        return (React.createElement("select", {defaultValue: this.props.selected, id: this.props.controlId, onChange: this.onChangeAccount.bind(this), className: "form-control select2"}, React.createElement("option", {key: -1, value: ""}), options));
 	    };
 	    SelectVoucherType = __decorate([
 	        mobx_react_1.observer
@@ -2943,7 +2943,7 @@ webpackJsonp([0],{
 	        var options = [];
 	        options.push(React.createElement("option", {key: "1", value: "1"}, "Debit"));
 	        options.push(React.createElement("option", {key: "2", value: "2"}, "Credit"));
-	        return (React.createElement("select", {id: this.props.controlId, onChange: this.onChangeDebitCredit.bind(this), className: "form-control select2"}, options));
+	        return (React.createElement("select", {id: this.props.controlId, onChange: this.onChangeDebitCredit.bind(this), className: "form-control select2"}, React.createElement("option", {key: -1, value: ""}), options));
 	    };
 	    SelectDebiCredit = __decorate([
 	        mobx_react_1.observer

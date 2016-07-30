@@ -17,6 +17,7 @@ export default class SelectVoucherType extends React.Component<any, {}>{
 
         return (
             <select id={this.props.controlId} onChange={this.onChangeVoucherType.bind(this) } className="form-control select2">
+                <option key={ -1 } value=""></option>
                 {options}
             </select>
         );

@@ -21,7 +21,7 @@ export default class PurchaseOrderStore {
         this.purchaseInvoice = new PurchaseInvoice();
         extendObservable(this.purchaseInvoice, {
             vendorId: this.purchaseInvoice.vendorId,
-            orderDate: this.purchaseInvoice.orderDate,
+            invoiceDate: this.purchaseInvoice.invoiceDate,
             paymentTermId: this.purchaseInvoice.paymentTermId,
             referenceNo: this.purchaseInvoice.referenceNo,
             purchaseInvoiceLines: []

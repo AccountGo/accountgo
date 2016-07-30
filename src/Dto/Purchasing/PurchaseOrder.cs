@@ -4,6 +4,7 @@ namespace Dto.Purchasing
 {
     public class PurchaseOrder : BaseDto
     {
+        public int? PurchaseInvoiceHeaderId { get; set; }
         public int VendorId { get; set; }
         public string VendorName { get; set; }
         public DateTime OrderDate { get; set; }

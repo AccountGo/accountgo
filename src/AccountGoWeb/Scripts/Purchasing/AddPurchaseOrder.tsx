@@ -13,9 +13,30 @@ import PurchaseOrderStore from "../Shared/Stores/Purchasing/PurchaseOrderStore";
 
 let store = new PurchaseOrderStore();
 
+@observer
+class ValidationErrors extends React.Component<any, {}>{
+    render() {
+        if (store.validationErrors !== undefined && store.validationErrors.length > 0) {
+            var errors = [];
+            store.validationErrors.map(function (item, index) {
+                errors.push(<li key={index}>{item}</li>);                
+            });
+            return (
+                <div>
+                    <ul>
+                        {errors}
+                    </ul>
+                </div>
+
+            );
+        }
+        return null;
+    }
+}
+
 class SavePurchaseOrderButton extends React.Component<any, {}>{
     saveNewPurchaseOrder(e) {
-
+        store.savePurchaseOrder();
     }
 
     render() {
@@ -40,22 +61,36 @@ class PurchaseOrderHeader extends React.Component<any, {}>{
     }
     render() {        
         return (
-            <div>
-                <div>
-                    <label>Vendor: </label>
-                    <SelectVendor store={store} />{ store.purchaseOrder.vendorId }
+            <div className="box">
+                <div className="box-header with-border">
+                    <h3 className="box-title">Vendor Information</h3>
+                    <div className="box-tools pull-right">
+                        <button type="button" className="btn btn-box-tool" data-widget="collapse" data-toggle="tooltip" title="Collapse">
+                            <i className="fa fa-minus"></i>
+                        </button>
+                    </div>
                 </div>
-                <div>
-                    <label>PurchaseOrder Date: </label>
-                    <input type="date" onChange={this.onChangeOrderDate.bind(this) } defaultValue={store.purchaseOrder.orderDate} />
-                </div>
-                <div>
-                    <label>Payment Term: </label>
-                    <SelectPaymentTerm store={store} />
-                </div>
-                <div>
-                    <label>Reference No: </label>
-                    <input type="text" />
+                <div className="box-body">
+                    <div className="col-sm-6">
+                        <div className="row">
+                            <div className="col-sm-2">Vendor</div>
+                            <div className="col-sm-10"><SelectVendor store={store} /></div>
+                        </div>
+                        <div className="row">
+                            <div className="col-sm-2">Payment Term</div>
+                            <div className="col-sm-10"><SelectPaymentTerm store={store} /></div>
+                        </div>
+                    </div>
+                    <div className="col-md-6">
+                        <div className="row">
+                            <div className="col-sm-2">Date</div>
+                            <div className="col-sm-10"><input type="date" className="form-control pull-right" onChange={this.onChangeOrderDate.bind(this) } defaultValue={store.purchaseOrder.orderDate} /></div>
+                        </div>
+                        <div className="row">
+                            <div className="col-sm-2">Reference no.</div>
+                            <div className="col-sm-10"><input type="text" className="form-control" /></div>
+                        </div>
+                    </div>
                 </div>
             </div>
         );
@@ -72,7 +107,7 @@ class PurchaseOrderLines extends React.Component<any, {}>{
         amount = (document.getElementById("txtNewAmount") as HTMLInputElement).value;
         discount = (document.getElementById("txtNewDiscount") as HTMLInputElement).value;
 
-        console.log(`itemId: ${itemId} | measurementId: ${measurementId} | quantity: ${quantity} | amount: ${amount} | discount: ${discount}`);
+        //console.log(`itemId: ${itemId} | measurementId: ${measurementId} | quantity: ${quantity} | amount: ${amount} | discount: ${discount}`);
         store.addLineItem(itemId, measurementId, quantity, amount, discount);
 
         (document.getElementById("txtNewQuantity") as HTMLInputElement).value = "1";
@@ -103,49 +138,54 @@ class PurchaseOrderLines extends React.Component<any, {}>{
                 <tr key={i}>
                     <td><SelectLineItem store={store} row={i} selected={store.purchaseOrder.purchaseOrderLines[i].itemId} /></td>
                     <td>{store.purchaseOrder.purchaseOrderLines[i].itemId}</td>
-                    <td><SelectLineMeasurement row={i} store={store} selected={store.purchaseOrder.purchaseOrderLines[i].measurementId} />{store.purchaseOrder.purchaseOrderLines[i].measurementId}</td>
-                    <td><input type="text" name={i} value={store.purchaseOrder.purchaseOrderLines[i].quantity} onChange={this.onChangeQuantity.bind(this)} /></td>
-                    <td><input type="text" name={i} value={store.purchaseOrder.purchaseOrderLines[i].amount} onChange={this.onChangeAmount.bind(this) } /></td>
-                    <td><input type="text" name={i} value={store.purchaseOrder.purchaseOrderLines[i].discount} onChange={this.onChangeDiscount.bind(this) } /></td>
+                    <td><SelectLineMeasurement row={i} store={store} selected={store.purchaseOrder.purchaseOrderLines[i].measurementId} /></td>
+                    <td><input type="text" className="form-control" name={i} value={store.purchaseOrder.purchaseOrderLines[i].quantity} onChange={this.onChangeQuantity.bind(this)} /></td>
+                    <td><input type="text" className="form-control" name={i} value={store.purchaseOrder.purchaseOrderLines[i].amount} onChange={this.onChangeAmount.bind(this) } /></td>
+                    <td><input type="text" className="form-control" name={i} value={store.purchaseOrder.purchaseOrderLines[i].discount} onChange={this.onChangeDiscount.bind(this) } /></td>
                     <td>{store.lineTotal(i)}</td>
                     <td><input type="button" name={i} value="Remove" onClick={this.onClickRemoveLineItem.bind(this) } /></td>
                 </tr>
             );
         }
         return (
-            <div>
-                <table>
-                    <thead>
-                        <tr>
-                            <td>Item Id</td>
-                            <td>Item Name</td>
-                            <td>Measurement</td>
-                            <td>Quantity</td>
-                            <td>Amount</td>
-                            <td>Discount</td>
-                            <td>Line Total</td>
-                            <td></td>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {lineItems}
-                        <tr>
-                            <td><SelectLineItem store={store} controlId="optNewItemId" /></td>
-                            <td>Item Name</td>
-                            <td><SelectLineMeasurement store={store} controlId="optNewMeasurementId" /></td>
-                            <td><input type="text" id="txtNewQuantity" /></td>
-                            <td><input type="text" id="txtNewAmount" /></td>
-                            <td><input type="text" id="txtNewDiscount" /></td>
-                            <td></td>
-                            <td><input type="button" value="Add" onClick={this.addLineItem} /></td>
-                        </tr>
-                    </tbody>
-                    <tfoot>
-                        <tr>
-                            <td colSpan="8">Count: {store.purchaseOrder.purchaseOrderLines.length}</td>
-                        </tr>
-                    </tfoot>
-                </table>
+            <div className="box">
+                <div className="box-header with-border">
+                    <h3 className="box-title">Line Items</h3>
+                    <div className="box-tools pull-right">
+                        <button type="button" className="btn btn-box-tool" data-widget="collapse" data-toggle="tooltip" title="Collapse">
+                            <i className="fa fa-minus"></i>
+                        </button>
+                    </div>
+                </div>
+                <div className="box-body table-responsive">
+                    <table className="table table-hover">
+                        <thead>
+                            <tr>
+                                <td>Item Id</td>
+                                <td>Item Name</td>
+                                <td>Measurement</td>
+                                <td>Quantity</td>
+                                <td>Amount</td>
+                                <td>Discount</td>
+                                <td>Line Total</td>
+                                <td></td>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {lineItems}
+                            <tr>
+                                <td><SelectLineItem store={store} controlId="optNewItemId" /></td>
+                                <td>Item Name</td>
+                                <td><SelectLineMeasurement store={store} controlId="optNewMeasurementId" /></td>
+                                <td><input className="form-control" type="text" id="txtNewQuantity" defaultValue={1} /></td>
+                                <td><input className="form-control" type="text" id="txtNewAmount" /></td>
+                                <td><input className="form-control" type="text" id="txtNewDiscount" /></td>
+                                <td></td>
+                                <td><input type="button" value="Add" onClick={this.addLineItem} /></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         );
     }
@@ -155,10 +195,17 @@ class PurchaseOrderLines extends React.Component<any, {}>{
 class PurchaseOrderTotals extends React.Component<any, {}>{
     render() {
         return (
-            <div>
-                <div><label>Running Total: </label></div>
-                <div><label>Tax Total: </label></div>
-                <div><label>Grand Total: </label> {store.grandTotal() }</div>
+            <div className="box">
+                <div className="box-body">
+                    <div className="row">
+                        <div className="col-md-2"><label>Running Total: </label></div>
+                        <div className="col-md-2">{0}</div>
+                        <div className="col-md-2"><label>Tax Total: </label></div>
+                        <div className="col-md-2">{0}</div>
+                        <div className="col-md-2"><label>Grand Total: </label></div>
+                        <div className="col-md-2">{store.grandTotal() }</div>
+                    </div>
+                </div>
             </div>
         );
     }
@@ -168,18 +215,10 @@ export default class AddPurchaseOrder extends React.Component<any, {}> {
     render() {
         return (
             <div>
-                <div>
-                    <PurchaseOrderHeader />
-                </div>
-                <hr />
-                <div>
-                    <PurchaseOrderLines />
-                </div>
-                <hr />
-                <div>
-                    <PurchaseOrderTotals />
-                </div>
-                <hr />
+                <ValidationErrors />
+                <PurchaseOrderHeader />
+                <PurchaseOrderLines />
+                <PurchaseOrderTotals />
                 <div>
                     <SavePurchaseOrderButton />
                     <CancelPurchaseOrderButton />

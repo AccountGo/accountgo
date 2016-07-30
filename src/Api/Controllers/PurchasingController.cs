@@ -33,6 +33,7 @@ namespace Api.Controllers
                 var purchaseOrderDto = new Dto.Purchasing.PurchaseOrder()
                 {
                     Id = purchaseOrder.Id,
+                    PurchaseInvoiceHeaderId = purchaseOrder.PurchaseInvoiceHeaderId,
                     VendorId = purchaseOrder.VendorId.Value,
                     VendorName = purchaseOrder.Vendor.Party.Name,
                     OrderDate = purchaseOrder.Date,
@@ -43,6 +44,44 @@ namespace Api.Controllers
             }
 
             return new ObjectResult(purchaseOrdersDto);
+        }
+
+        [HttpPost]
+        [Route("[action]")]
+        public IActionResult SavePurchaseOrder([FromBody]Dto.Purchasing.PurchaseOrder purchaseOrderDto)
+        {
+            ModelState.AddModelError("", "Testing - sample errors.");
+            if (!ModelState.IsValid)
+                return new BadRequestObjectResult(ModelState);
+                        
+            bool isNew = purchaseOrderDto.Id == 0;
+            Core.Domain.Purchases.PurchaseOrderHeader purchOrder = null;
+
+            try
+            {
+                if (isNew)
+                {
+                    purchOrder = new Core.Domain.Purchases.PurchaseOrderHeader();
+                }
+                else
+                {
+                    purchOrder = _purchasingService.GetPurchaseOrderById(purchaseOrderDto.Id);
+                }
+
+                if (isNew)
+                {
+                    //_purchasingService.AddPurchaseOrder(purchOrder, true);
+                }
+                else
+                {
+
+                }
+                return new OkObjectResult(Ok());
+            }
+            catch (Exception ex)
+            {
+                return new ObjectResult(ex);
+            }
         }
 
         [HttpGet]
@@ -84,6 +123,34 @@ namespace Api.Controllers
                 InvoiceDate = invoice.Date,
                 Amount = invoice.PurchaseInvoiceLines.Sum(l => l.Amount)
             };
+
+            return new ObjectResult(purchaseInvoiceDto);
+        }
+
+        [HttpPost]
+        [Route("[action]")]
+        public IActionResult SavePurchaseInvoice([FromBody]Dto.Purchasing.PurchaseInvoice purchaseInvoiceDto)
+        {
+            bool isNew = purchaseInvoiceDto.Id == 0;
+            Core.Domain.Purchases.PurchaseInvoiceHeader purchInvoice = null;
+
+            if (isNew)
+            {
+                purchInvoice = new Core.Domain.Purchases.PurchaseInvoiceHeader();
+            }
+            else
+            {
+                purchInvoice = _purchasingService.GetPurchaseInvoiceById(purchaseInvoiceDto.Id);
+            }
+
+            if (isNew)
+            {
+                //_purchasingService.AddPurchaseOrder(purchOrder, true);
+            }
+            else
+            {
+
+            }
 
             return new ObjectResult(purchaseInvoiceDto);
         }
