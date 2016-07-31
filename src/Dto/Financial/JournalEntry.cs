@@ -2,17 +2,16 @@
 
 namespace Dto.Financial
 {
-    public class JournalEntry
+    public class JournalEntry : BaseDto
     {
         public DateTime Date { get; set; }
-        public int VoucherType { get; set; }
+        public int? VoucherType { get; set; }
         public string ReferenceNo { get; set; }
         public string Memo { get; set; }
     }
 
-    public class JournalEntryLine
+    public class JournalEntryLine : BaseDto
     {
-        public int Id { get; set; }
         public int JournalHeaderId { get; set; }
         public int AccountId { get; set; }
         public string AccountCode { get; set; }

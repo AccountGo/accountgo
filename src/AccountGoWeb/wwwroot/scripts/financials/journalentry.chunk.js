@@ -4314,12 +4314,12 @@ webpackJsonp([0],{
 /***/ },
 
 /***/ 193:
-/*!**********************************************************!*\
-  !*** external "{\"apiUrl\":\"http://localhost:5000/\"}" ***!
-  \**********************************************************/
+/*!*******************************************************************************!*\
+  !*** external "{\"apiUrl\":\"http://accountgo-dev-api.azurewebsites.net/\"}" ***!
+  \*******************************************************************************/
 /***/ function(module, exports) {
 
-	module.exports = {"apiUrl":"http://localhost:5000/"};
+	module.exports = {"apiUrl":"http://accountgo-dev-api.azurewebsites.net/"};
 
 /***/ },
 
