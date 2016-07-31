@@ -111,7 +111,7 @@ class SalesQuotationLines extends React.Component<any, {}>{
         discount = (document.getElementById("txtNewDiscount") as HTMLInputElement).value;
 
         //console.log(`itemId: ${itemId} | measurementId: ${measurementId} | quantity: ${quantity} | amount: ${amount} | discount: ${discount}`);
-        store.addLineItem(itemId, measurementId, quantity, amount, discount);
+        store.addLineItem(0, itemId, measurementId, quantity, amount, discount);
 
         (document.getElementById("txtNewQuantity") as HTMLInputElement).value = "1";
         (document.getElementById("txtNewAmount") as HTMLInputElement).value = "0";

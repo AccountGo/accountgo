@@ -298,15 +298,24 @@ namespace Services.Sales
 
         public SalesInvoiceHeader GetSalesInvoiceById(int id)
         {
-            return _salesInvoiceRepo.GetById(id);
+            var invoice = _salesInvoiceRepo.GetAllIncluding(inv => inv.Customer,
+                inv => inv.Customer.Party,
+                inv => inv.SalesInvoiceLines)
+                .Where(inv => inv.Id == id)
+                .FirstOrDefault();
+
+            return invoice;
         }
 
         public SalesInvoiceHeader GetSalesInvoiceByNo(string no)
         {
-            var query = from invoice in _salesInvoiceRepo.Table
-                        where invoice.No == no
-                        select invoice;
-            return query.FirstOrDefault();
+            var invoice = _salesInvoiceRepo.GetAllIncluding(inv => inv.Customer,
+                inv => inv.Customer.Party,
+                inv => inv.SalesInvoiceLines)
+                .Where(inv => inv.No == no)
+                .FirstOrDefault();
+
+            return invoice;
         }
 
         public void UpdateSalesInvoice(SalesInvoiceHeader salesInvoice)

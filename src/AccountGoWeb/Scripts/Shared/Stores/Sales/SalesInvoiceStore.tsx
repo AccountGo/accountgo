@@ -14,7 +14,7 @@ let baseUrl = location.protocol
     + "/";
 
 export default class SalesStore {
-    salesInvoice;
+    salesInvoice: SalesInvoice;
     commonStore;
     @observable validationErrors;
 
@@ -30,66 +30,60 @@ export default class SalesStore {
         });
 
         if (orderId !== undefined) {
-            axios.get(Config.apiUrl + "api/sales/salesorder?id=" + orderId)
-                .then(function (result) {
-                    this.changedCustomer(result.data.customerId);
-                    this.changedInvoiceDate(result.data.orderDate);
-                    for (var i = 0; i < result.data.SalesOrderLines.length; i++) {
-                        this.addLineItem(result.data.SalesOrderLines[i].itemId,
-                            result.data.SalesOrderLines[i].measurementId,
-                            result.data.SalesOrderLines[i].quantity,
-                            result.data.SalesOrderLines[i].amount,
-                            result.data.SalesOrderLines[i].discount
-                        );
-                    }
-                }.bind(this))
-                .catch(function (error) {
-                }.bind(this));
+            var result = axios.get(Config.apiUrl + "api/sales/salesorder?id=" + orderId);
+            result.then(function (result) {
+                this.changedCustomer(result.data.customerId);
+                for (var i = 0; i < result.data.salesOrderLines.length; i++) {
+                    this.addLineItem(result.data.salesOrderLines[i].itemId,
+                        result.data.salesOrderLines[i].measurementId,
+                        result.data.salesOrderLines[i].quantity,
+                        result.data.salesOrderLines[i].amount,
+                        result.data.salesOrderLines[i].discount
+                    );
+                }
+            }.bind(this));
         }
         else if (invoiceId !== undefined) {
-            axios.get(Config.apiUrl + "api/sales/salesinvoice?id=" + invoiceId)
-                .then(function (result) {
-                    this.changedCustomer(result.data.customerId);
-                    this.changedInvoiceDate(result.data.invoiceDate);
-                    for (var i = 0; i < result.data.SalesInvoiceLines.length; i++) {
-                        this.addLineItem(result.data.SalesInvoiceLines[i].itemId,
-                            result.data.SalesInvoiceLines[i].measurementId,
-                            result.data.SalesInvoiceLines[i].quantity,
-                            result.data.SalesInvoiceLines[i].amount,
-                            result.data.SalesInvoiceLines[i].discount
-                        );
-                    }
-                }.bind(this))
-                .catch(function (error) {
-                }.bind(this));
+            var result = axios.get(Config.apiUrl + "api/sales/salesinvoice?id=" + invoiceId);
+            result.then(function (result) {
+                this.changedCustomer(result.data.customerId);
+                for (var i = 0; i < result.data.salesInvoiceLines.length; i++) {
+                    this.addLineItem(result.data.salesInvoiceLines[i].itemId,
+                        result.data.salesInvoiceLines[i].measurementId,
+                        result.data.salesInvoiceLines[i].quantity,
+                        result.data.salesInvoiceLines[i].amount,
+                        result.data.salesInvoiceLines[i].discount
+                    );
+                }
+            }.bind(this));
         }
     }
 
     saveNewSalesInvoice() {
         this.validationErrors = [];
-        if (this.salesInvoice.customerId === undefined || this.salesInvoice.customerId === "")
+        if (this.salesInvoice.customerId === undefined)
             this.validationErrors.push("Customer is required.");
-        if (this.salesInvoice.paymentTermId === undefined || this.salesInvoice.paymentTermId === "")
-            this.salesInvoice.push("Payment term is required.");
-        if (this.salesInvoice.orderDate === undefined || this.salesInvoice.orderDate === "")
+        if (this.salesInvoice.paymentTermId === undefined)
+            this.validationErrors.push("Payment term is required.");
+        if (this.salesInvoice.invoiceDate === undefined)
             this.validationErrors.push("Date is required.");
-        if (this.salesInvoice.purchaseOrderLines === undefined || this.salesInvoice.purchaseOrderLines.length < 1)
+        if (this.salesInvoice.salesInvoiceLines === undefined || this.salesInvoice.salesInvoiceLines.length < 1)
             this.validationErrors.push("Enter at least 1 line item.");
-        if (this.salesInvoice.purchaseOrderLines !== undefined && this.salesInvoice.purchaseOrderLines.length > 0) {
-            for (var i = 0; i < this.salesInvoice.purchaseOrderLines.length; i++) {
-                if (this.salesInvoice.purchaseOrderLines[i].itemId === undefined
-                    || this.salesInvoice.purchaseOrderLines[i].itemId === "")
+        if (this.salesInvoice.salesInvoiceLines !== undefined && this.salesInvoice.salesInvoiceLines.length > 0) {
+            for (var i = 0; i < this.salesInvoice.salesInvoiceLines.length; i++) {
+                if (this.salesInvoice.salesInvoiceLines[i].itemId === undefined
+                    || this.salesInvoice.salesInvoiceLines[i].itemId === "")
                     this.validationErrors.push("Item is required.");
-                if (this.salesInvoice.purchaseOrderLines[i].measurementId === undefined
-                    || this.salesInvoice.purchaseOrderLines[i].measurementId === "")
+                if (this.salesInvoice.salesInvoiceLines[i].measurementId === undefined
+                    || this.salesInvoice.salesInvoiceLines[i].measurementId === "")
                     this.validationErrors.push("Uom is required.");
-                if (this.salesInvoice.purchaseOrderLines[i].quantity === undefined
-                    || this.salesInvoice.purchaseOrderLines[i].quantity === ""
-                    || this.salesInvoice.purchaseOrderLines[i].quantity === 0)
+                if (this.salesInvoice.salesInvoiceLines[i].quantity === undefined
+                    || this.salesInvoice.salesInvoiceLines[i].quantity === ""
+                    || this.salesInvoice.salesInvoiceLines[i].quantity === 0)
                     this.validationErrors.push("Quantity is required.");
-                if (this.salesInvoice.purchaseOrderLines[i].amount === undefined
-                    || this.salesInvoice.purchaseOrderLines[i].amount === ""
-                    || this.salesInvoice.purchaseOrderLines[i].amount === 0)
+                if (this.salesInvoice.salesInvoiceLines[i].amount === undefined
+                    || this.salesInvoice.salesInvoiceLines[i].amount === ""
+                    || this.salesInvoice.salesInvoiceLines[i].amount === 0)
                     this.validationErrors.push("Amount is required.");
                 if (this.lineTotal(i) === undefined
                     || this.lineTotal(i).toString() === "NaN"

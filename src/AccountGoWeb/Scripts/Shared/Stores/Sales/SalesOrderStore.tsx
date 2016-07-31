@@ -14,7 +14,7 @@ let baseUrl = location.protocol
     + "/";
 
 export default class SalesOrderStore {
-    salesOrder;
+    salesOrder: SalesOrder;
     commonStore;
     @observable validationErrors;
 
@@ -30,66 +30,64 @@ export default class SalesOrderStore {
         });
 
         if (quotationId !== undefined) {
-            axios.get(Config.apiUrl + "api/sales/quotation?id=" + quotationId)
-                .then(function (result) {
-                    this.changedCustomer(result.data.customerId);
-                    this.changedOrderDate(result.data.quotationDate);
-                    for (var i = 0; i < result.data.SalesQuotationLines.length; i++) {
-                        this.addLineItem(result.data.SalesQuotationLines[i].itemId,
-                            result.data.SalesQuotationLines[i].measurementId,
-                            result.data.SalesQuotationLines[i].quantity,
-                            result.data.SalesQuotationLines[i].amount,
-                            result.data.SalesQuotationLines[i].discount
-                        );
-                    }
-                }.bind(this))
-                .catch(function (error) {
-                }.bind(this));
+            var result = axios.get(Config.apiUrl + "api/sales/quotation?id=" + quotationId);
+            result.then(function (result) {
+                this.changedCustomer(result.data.customerId);
+                this.changedOrderDate(result.data.quotationDate);
+                for (var i = 0; i < result.data.salesQuotationLines.length; i++) {
+                    this.addLineItem(
+                        result.data.salesQuotationLines[i].itemId,
+                        result.data.salesQuotationLines[i].measurementId,
+                        result.data.salesQuotationLines[i].quantity,
+                        result.data.salesQuotationLines[i].amount,
+                        result.data.salesQuotationLines[i].discount
+                    );
+                }
+                console.log(this.salesQuotation);
+            }.bind(this));
         }
         else if (orderId !== undefined) {
-            axios.get(Config.apiUrl + "api/sales/salesorder?id=" + orderId)
-                .then(function (result) {
-                    this.changedCustomer(result.data.customerId);
-                    this.changedOrderDate(result.data.orderDate);
-                    for (var i = 0; i < result.data.SalesOrderLines.length; i++) {
-                        this.addLineItem(result.data.SalesOrderLines[i].itemId,
-                            result.data.SalesOrderLines[i].measurementId,
-                            result.data.SalesOrderLines[i].quantity,
-                            result.data.SalesOrderLines[i].amount,
-                            result.data.SalesOrderLines[i].discount
-                        );
-                    }
-                }.bind(this))
-                .catch(function (error) {
-                }.bind(this));
+            var result = axios.get(Config.apiUrl + "api/sales/salesorder?id=" + orderId);
+            result.then(function (result) {
+                this.changedCustomer(result.data.customerId);
+                //this.changedOrderDate(result.data.orderDate);
+                for (var i = 0; i < result.data.salesOrderLines.length; i++) {
+                    this.addLineItem(result.data.salesOrderLines[i].itemId,
+                        result.data.salesOrderLines[i].measurementId,
+                        result.data.salesOrderLines[i].quantity,
+                        result.data.salesOrderLines[i].amount,
+                        result.data.salesOrderLines[i].discount
+                    );
+                }
+            }.bind(this));
         }
     }
 
     saveNewSalesOrder() {
         this.validationErrors = [];
-        if (this.salesOrder.customerId === undefined || this.salesOrder.customerId === "")
+        if (this.salesOrder.customerId === undefined)
             this.validationErrors.push("Customer is required.");
-        if (this.salesOrder.paymentTermId === undefined || this.salesOrder.paymentTermId === "")
-            this.salesOrder.push("Payment term is required.");
-        if (this.salesOrder.orderDate === undefined || this.salesOrder.orderDate === "")
+        if (this.salesOrder.paymentTermId === undefined)
+            this.validationErrors.push("Payment term is required.");
+        if (this.salesOrder.orderDate === undefined)
             this.validationErrors.push("Date is required.");
-        if (this.salesOrder.purchaseOrderLines === undefined || this.salesOrder.purchaseOrderLines.length < 1)
+        if (this.salesOrder.salesOrderLines === undefined || this.salesOrder.salesOrderLines.length < 1)
             this.validationErrors.push("Enter at least 1 line item.");
-        if (this.salesOrder.purchaseOrderLines !== undefined && this.salesOrder.purchaseOrderLines.length > 0) {
-            for (var i = 0; i < this.salesOrder.purchaseOrderLines.length; i++) {
-                if (this.salesOrder.purchaseOrderLines[i].itemId === undefined
-                    || this.salesOrder.purchaseOrderLines[i].itemId === "")
+        if (this.salesOrder.salesOrderLines !== undefined && this.salesOrder.salesOrderLines.length > 0) {
+            for (var i = 0; i < this.salesOrder.salesOrderLines.length; i++) {
+                if (this.salesOrder.salesOrderLines[i].itemId === undefined
+                    || this.salesOrder.salesOrderLines[i].itemId === "")
                     this.validationErrors.push("Item is required.");
-                if (this.salesOrder.purchaseOrderLines[i].measurementId === undefined
-                    || this.salesOrder.purchaseOrderLines[i].measurementId === "")
+                if (this.salesOrder.salesOrderLines[i].measurementId === undefined
+                    || this.salesOrder.salesOrderLines[i].measurementId === "")
                     this.validationErrors.push("Uom is required.");
-                if (this.salesOrder.purchaseOrderLines[i].quantity === undefined
-                    || this.salesOrder.purchaseOrderLines[i].quantity === ""
-                    || this.salesOrder.purchaseOrderLines[i].quantity === 0)
+                if (this.salesOrder.salesOrderLines[i].quantity === undefined
+                    || this.salesOrder.salesOrderLines[i].quantity === ""
+                    || this.salesOrder.salesOrderLines[i].quantity === 0)
                     this.validationErrors.push("Quantity is required.");
-                if (this.salesOrder.purchaseOrderLines[i].amount === undefined
-                    || this.salesOrder.purchaseOrderLines[i].amount === ""
-                    || this.salesOrder.purchaseOrderLines[i].amount === 0)
+                if (this.salesOrder.salesOrderLines[i].amount === undefined
+                    || this.salesOrder.salesOrderLines[i].amount === ""
+                    || this.salesOrder.salesOrderLines[i].amount === 0)
                     this.validationErrors.push("Amount is required.");
                 if (this.lineTotal(i) === undefined
                     || this.lineTotal(i).toString() === "NaN"

@@ -99,7 +99,7 @@ webpackJsonp([4],{
 	        quantity = document.getElementById("txtNewQuantity").value;
 	        amount = document.getElementById("txtNewAmount").value;
 	        discount = document.getElementById("txtNewDiscount").value;
-	        store.addLineItem(itemId, measurementId, quantity, amount, discount);
+	        store.addLineItem(0, itemId, measurementId, quantity, amount, discount);
 	        document.getElementById("txtNewQuantity").value = "1";
 	        document.getElementById("txtNewAmount").value = "0";
 	        document.getElementById("txtNewDiscount").value = "0";
@@ -4492,43 +4492,42 @@ webpackJsonp([4],{
 	            salesQuotationLines: []
 	        });
 	        if (quotationId !== undefined) {
-	            axios.get(Config.apiUrl + "api/sales/quotation?id=" + quotationId)
-	                .then(function (result) {
+	            var result = axios.get(Config.apiUrl + "api/sales/quotation?id=" + quotationId);
+	            result.then(function (result) {
 	                this.changedCustomer(result.data.customerId);
 	                this.changedQuotationDate(result.data.quotationDate);
-	                for (var i = 0; i < result.data.SalesQuotationLines.length; i++) {
-	                    this.addLineItem(result.data.SalesQuotationLines[i].itemId, result.data.SalesQuotationLines[i].measurementId, result.data.SalesQuotationLines[i].quantity, result.data.SalesQuotationLines[i].amount, result.data.SalesQuotationLines[i].discount);
+	                for (var i = 0; i < result.data.salesQuotationLines.length; i++) {
+	                    this.addLineItem(result.data.salesQuotationLines[i].itemId, result.data.salesQuotationLines[i].measurementId, result.data.salesQuotationLines[i].quantity, result.data.salesQuotationLines[i].amount, result.data.salesQuotationLines[i].discount);
 	                }
-	            }.bind(this))
-	                .catch(function (error) {
+	                console.log(this.salesQuotation);
 	            }.bind(this));
 	        }
 	    }
 	    SalesQuotationStore.prototype.saveNewQuotation = function () {
 	        this.validationErrors = [];
-	        if (this.salesQuotation.customerId === undefined || this.salesQuotation.customerId === "")
+	        if (this.salesQuotation.customerId === undefined)
 	            this.validationErrors.push("Customer is required.");
-	        if (this.salesQuotation.paymentTermId === undefined || this.salesQuotation.paymentTermId === "")
-	            this.salesQuotation.push("Payment term is required.");
-	        if (this.salesQuotation.orderDate === undefined || this.salesQuotation.orderDate === "")
+	        if (this.salesQuotation.paymentTermId === undefined)
+	            this.validationErrors.push("Payment term is required.");
+	        if (this.salesQuotation.quotationDate === undefined)
 	            this.validationErrors.push("Date is required.");
-	        if (this.salesQuotation.purchaseOrderLines === undefined || this.salesQuotation.purchaseOrderLines.length < 1)
+	        if (this.salesQuotation.salesQuotationLines === undefined || this.salesQuotation.salesQuotationLines.length < 1)
 	            this.validationErrors.push("Enter at least 1 line item.");
-	        if (this.salesQuotation.purchaseOrderLines !== undefined && this.salesQuotation.purchaseOrderLines.length > 0) {
-	            for (var i = 0; i < this.salesQuotation.purchaseOrderLines.length; i++) {
-	                if (this.salesQuotation.purchaseOrderLines[i].itemId === undefined
-	                    || this.salesQuotation.purchaseOrderLines[i].itemId === "")
+	        if (this.salesQuotation.salesQuotationLines !== undefined && this.salesQuotation.salesQuotationLines.length > 0) {
+	            for (var i = 0; i < this.salesQuotation.salesQuotationLines.length; i++) {
+	                if (this.salesQuotation.salesQuotationLines[i].itemId === undefined
+	                    || this.salesQuotation.salesQuotationLines[i].itemId === "")
 	                    this.validationErrors.push("Item is required.");
-	                if (this.salesQuotation.purchaseOrderLines[i].measurementId === undefined
-	                    || this.salesQuotation.purchaseOrderLines[i].measurementId === "")
+	                if (this.salesQuotation.salesQuotationLines[i].measurementId === undefined
+	                    || this.salesQuotation.salesQuotationLines[i].measurementId === "")
 	                    this.validationErrors.push("Uom is required.");
-	                if (this.salesQuotation.purchaseOrderLines[i].quantity === undefined
-	                    || this.salesQuotation.purchaseOrderLines[i].quantity === ""
-	                    || this.salesQuotation.purchaseOrderLines[i].quantity === 0)
+	                if (this.salesQuotation.salesQuotationLines[i].quantity === undefined
+	                    || this.salesQuotation.salesQuotationLines[i].quantity === ""
+	                    || this.salesQuotation.salesQuotationLines[i].quantity === 0)
 	                    this.validationErrors.push("Quantity is required.");
-	                if (this.salesQuotation.purchaseOrderLines[i].amount === undefined
-	                    || this.salesQuotation.purchaseOrderLines[i].amount === ""
-	                    || this.salesQuotation.purchaseOrderLines[i].amount === 0)
+	                if (this.salesQuotation.salesQuotationLines[i].amount === undefined
+	                    || this.salesQuotation.salesQuotationLines[i].amount === ""
+	                    || this.salesQuotation.salesQuotationLines[i].amount === 0)
 	                    this.validationErrors.push("Amount is required.");
 	                if (this.lineTotal(i) === undefined
 	                    || this.lineTotal(i).toString() === "NaN"
@@ -4559,8 +4558,9 @@ webpackJsonp([4],{
 	    SalesQuotationStore.prototype.changedQuotationDate = function (date) {
 	        this.salesQuotation.quotationDate = date;
 	    };
-	    SalesQuotationStore.prototype.addLineItem = function (itemId, measurementId, quantity, amount, discount) {
-	        var newLineItem = new SalesQuotationLine_1.default(itemId, measurementId, quantity, amount, discount);
+	    SalesQuotationStore.prototype.addLineItem = function (id, itemId, measurementId, quantity, amount, discount) {
+	        if (id === void 0) { id = 0; }
+	        var newLineItem = new SalesQuotationLine_1.default(id, itemId, measurementId, quantity, amount, discount);
 	        this.salesQuotation.salesQuotationLines.push(mobx_1.extendObservable(newLineItem, newLineItem));
 	    };
 	    SalesQuotationStore.prototype.removeLineItem = function (row) {
@@ -4621,7 +4621,9 @@ webpackJsonp([4],{
 
 	"use strict";
 	var SalesQuotationLine = (function () {
-	    function SalesQuotationLine(itemId, measurementId, quantity, amount, discount) {
+	    function SalesQuotationLine(id, itemId, measurementId, quantity, amount, discount) {
+	        if (id === void 0) { id = 0; }
+	        this.id = id;
 	        this.itemId = itemId;
 	        this.measurementId = measurementId;
 	        this.quantity = quantity;

@@ -259,7 +259,7 @@ namespace Api.Controllers
         {
             try
             {
-                var salesInvoice= _salesService.GetSalesInvoiceById(id);
+                var salesInvoice = _salesService.GetSalesInvoiceById(id);
 
                 var salesOrderDto = new Dto.Sales.SalesInvoice()
                 {
@@ -279,9 +279,7 @@ namespace Api.Controllers
                     lineDto.Discount = line.Discount;
                     lineDto.Quantity = line.Quantity;
                     lineDto.ItemId = line.ItemId;
-                    lineDto.ItemDescription = line.Item.Description;
                     lineDto.MeasurementId = line.MeasurementId;
-                    lineDto.MeasurementDescription = line.Measurement.Description;
 
                     salesOrderDto.SalesInvoiceLines.Add(lineDto);
                 }
@@ -374,6 +372,7 @@ namespace Api.Controllers
 
             var quoteDto = new Dto.Sales.SalesQuotation()
             {
+                Id = quote.Id,
                 CustomerId = quote.CustomerId,
                 CustomerName = quote.Customer.Party.Name,                
                 QuotationDate = quote.Date,
@@ -384,6 +383,7 @@ namespace Api.Controllers
             {
                 var lineDto = new Dto.Sales.SalesQuotationLine()
                 {
+                    Id = line.Id,
                     ItemId = line.ItemId,
                     MeasurementId = line.MeasurementId,
                     Quantity = line.Quantity,
