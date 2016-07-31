@@ -19,6 +19,12 @@ namespace AccountGoWeb.Controllers
             return View();
         }
 
+        public IActionResult JournalEntry(int id)
+        {
+            ViewBag.PageContentHeader = "Journal Entry";
+            return View();
+        }
+
         public async System.Threading.Tasks.Task<IActionResult> Accounts()
         {
             ViewBag.PageContentHeader = "Accounts";

@@ -2,6 +2,7 @@
 
 <div>
     <a href="~/financials/addjournalentry"><i class="fa fa-plus margin-a"></i>New</a>
+    <a href="~/financials/journalentry" id="linkViewJournalEntry" class="inactiveLink"><i class="fa fa-edit margin-a"></i>View</a>
 </div>
 <div>
     <div id="journalentries" class="ag-fresh" style="height: 400px;"></div>
@@ -9,19 +10,29 @@
 <script>
     var columnDefs = [
     {headerName: "Journal", field: "id", width: 50},
-    {headerName: "Parent", field: "journalHeaderId", width: 50},
-    {headerName: "Account", field: "accountName", width: 350},
-    {headerName: "GL", field: "generalLedgerHeaderId", width: 50},
-    {headerName: "Amount", field: "amount", width: 100},
-    {headerName: "DrOrCr", field: "drCr", width: 100}
+    {headerName: "Voucher Type", field: "voucherType", width: 50},
+    {headerName: "Amount", field: "amount", width: 50},
+    {headerName: "Date", field: "date", width: 100},
+    {headerName: "Reference No", field: "referenceNo", width: 50},
+    {headerName: "Posted", field: "posted", width: 100},
+    {headerName: "Memo", field: "memo", width: 350}
     ];
 
     var gridOptions = {
         columnDefs: columnDefs,
         rowData: @Html.Raw(Model),
         // PROPERTIES
-        rowSelection: 'multiple',
+        rowSelection: 'single',
+        onSelectionChanged: onSelectionChanged,
     };
+
+    function onSelectionChanged() {
+        var selectedRows = gridOptions.api.getSelectedRows();
+        selectedRow = selectedRows[0];
+        
+        document.getElementById('linkViewJournalEntry').setAttribute('href', 'journalentry?id=' + selectedRow.id);
+        document.getElementById('linkViewJournalEntry').setAttribute('class', '');
+    }
 
     // wait for the document to be loaded, otherwise
     // ag-Grid will not find the div in the document.

@@ -10,7 +10,9 @@ import SelectDebitCredit from "../Shared/Components/SelectDebitCredit";
 
 import JournalEntryStore from "../Shared/Stores/Financials/JournalEntryStore";
 
-let store = new JournalEntryStore();
+let journalEntryId = window.location.search.split("?id=")[1];
+
+let store = new JournalEntryStore(journalEntryId);
 
 class SaveJournalEntryButton extends React.Component<any, {}>{
     onClickSaveNewJournalEntry(e) {
@@ -52,19 +54,19 @@ class JournalEntryHeader extends React.Component<any, {}>{
                     <div className="col-sm-6">
                         <div className="row">
                             <div className="col-sm-3">Date</div>
-                            <div className="col-sm-9"><input type="date" className="form-control" id="newJournalDate" onChange={this.onChangeJournalDate.bind(this) } defaultValue={store.journalEntry.date} /></div>
+                            <div className="col-sm-9"><input type="date" className="form-control" id="newJournalDate" onChange={this.onChangeJournalDate.bind(this) } value={store.journalEntry.date} /></div>
                         </div>
                         <div className="row">
                             <div className="col-sm-3">Voucher</div>
-                            <div className="col-sm-9"><SelectVoucherType store={store} controlId="optNewVoucherType" /></div>
+                            <div className="col-sm-9"><SelectVoucherType store={store} controlId="optNewVoucherType" selected={store.journalEntry.voucherType} /></div>
                         </div>
                         <div className="row">
                             <div className="col-sm-3">Reference no</div>
-                            <div className="col-sm-9"><input type="text" className="form-control" /></div>
+                            <div className="col-sm-9"><input type="text" className="form-control" value={store.journalEntry.referenceNo} /></div>
                         </div>
                         <div className="row">
                             <div className="col-sm-3">Memo</div>
-                            <div className="col-sm-9"><input type="text" className="form-control" /></div>
+                            <div className="col-sm-9"><input type="text" className="form-control" value={store.journalEntry.memo} /></div>
                         </div>
                     </div>
                 </div>
