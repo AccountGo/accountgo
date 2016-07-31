@@ -193,9 +193,10 @@ FakesAssemblies/
 **/src/[Aa]ccount[Gg]o[Ww]eb/wwwroot/plugins/*
 **/src/[Aa]ccount[Gg]o[Ww]eb/wwwroot/[Ll]ibs/*
 **/src/[Aa]ccount[Gg]o[Ww]eb/wwwroot/[Ss]cripts/*
-**/src/[Aa]ccount[Gg]o[Ww]eb/project.fragment.lock.json
-**/src/[Aa]ccount[Gg]o[Ww]eb/project.lock.json
-
 # node modules
 **/src/[Ww]eb[Aa]ngular/node_modules
 **/src/[Ww]eb[Aa]pp/wwwroot/node_modules/*
+/src/Api/project.fragment.lock.json
+/src/Api/project.lock.json
+/src/AccountGoWeb/project.lock.json
+/src/AccountGoWeb/project.fragment.lock.json
