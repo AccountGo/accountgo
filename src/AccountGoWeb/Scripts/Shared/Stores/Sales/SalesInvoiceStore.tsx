@@ -18,7 +18,8 @@ export default class SalesStore {
     commonStore;
     @observable validationErrors;
 
-    constructor() {
+    constructor(orderId, invoiceId) {
+        this.commonStore = new CommonStore();
         this.salesInvoice = new SalesInvoice();
         extendObservable(this.salesInvoice, {
             customerId: this.salesInvoice.customerId,
@@ -28,7 +29,40 @@ export default class SalesStore {
             salesInvoiceLines: []
         });
 
-        this.commonStore = new CommonStore();
+        if (orderId !== undefined) {
+            axios.get(Config.apiUrl + "api/sales/salesorder?id=" + orderId)
+                .then(function (result) {
+                    this.changedCustomer(result.data.customerId);
+                    this.changedInvoiceDate(result.data.orderDate);
+                    for (var i = 0; i < result.data.SalesOrderLines.length; i++) {
+                        this.addLineItem(result.data.SalesOrderLines[i].itemId,
+                            result.data.SalesOrderLines[i].measurementId,
+                            result.data.SalesOrderLines[i].quantity,
+                            result.data.SalesOrderLines[i].amount,
+                            result.data.SalesOrderLines[i].discount
+                        );
+                    }
+                }.bind(this))
+                .catch(function (error) {
+                }.bind(this));
+        }
+        else if (invoiceId !== undefined) {
+            axios.get(Config.apiUrl + "api/sales/salesinvoice?id=" + invoiceId)
+                .then(function (result) {
+                    this.changedCustomer(result.data.customerId);
+                    this.changedInvoiceDate(result.data.invoiceDate);
+                    for (var i = 0; i < result.data.SalesInvoiceLines.length; i++) {
+                        this.addLineItem(result.data.SalesInvoiceLines[i].itemId,
+                            result.data.SalesInvoiceLines[i].measurementId,
+                            result.data.SalesInvoiceLines[i].quantity,
+                            result.data.SalesInvoiceLines[i].amount,
+                            result.data.SalesInvoiceLines[i].discount
+                        );
+                    }
+                }.bind(this))
+                .catch(function (error) {
+                }.bind(this));
+        }
     }
 
     saveNewSalesInvoice() {

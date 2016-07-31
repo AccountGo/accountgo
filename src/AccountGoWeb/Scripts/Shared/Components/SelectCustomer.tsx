@@ -15,7 +15,7 @@ export default class SelectCustomer extends React.Component<any, {}>{
         });
 
         return (
-            <select id="optCustomer" onChange={this.onChangeCustomer.bind(this) } className="form-control select2">
+            <select id="optCustomer" value={this.props.selected} onChange={this.onChangeCustomer.bind(this) } className="form-control select2">
                 <option key={ -1 } value=""></option>
                 {options}
             </select>

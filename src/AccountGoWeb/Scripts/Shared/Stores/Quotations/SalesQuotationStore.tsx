@@ -18,7 +18,8 @@ export default class SalesQuotationStore {
     commonStore;
     @observable validationErrors;
 
-    constructor() {
+    constructor(quotationId) {
+        this.commonStore = new CommonStore();
         this.salesQuotation = new SalesQuotation();
         extendObservable(this.salesQuotation, {
             customerId: this.salesQuotation.customerId,
@@ -28,7 +29,23 @@ export default class SalesQuotationStore {
             salesQuotationLines: []
         });
 
-        this.commonStore = new CommonStore();
+        if (quotationId !== undefined) {
+            axios.get(Config.apiUrl + "api/sales/quotation?id=" + quotationId)
+                .then(function (result) {
+                    this.changedCustomer(result.data.customerId);
+                    this.changedQuotationDate(result.data.quotationDate);
+                    for (var i = 0; i < result.data.SalesQuotationLines.length; i++) {
+                        this.addLineItem(result.data.SalesQuotationLines[i].itemId,
+                            result.data.SalesQuotationLines[i].measurementId,
+                            result.data.SalesQuotationLines[i].quantity,
+                            result.data.SalesQuotationLines[i].amount,
+                            result.data.SalesQuotationLines[i].discount
+                        );
+                    }
+                }.bind(this))
+                .catch(function (error) {
+                }.bind(this));
+        }
     }
 
     saveNewQuotation() {

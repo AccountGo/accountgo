@@ -1,6 +1,7 @@
 ﻿import SalesInvoiceLine from "./SalesInvoiceLine";
 
 interface ISalesInvoice {
+    id;
     customerId;
     invoiceDate;
     paymentTermid;
@@ -9,6 +10,7 @@ interface ISalesInvoice {
 }
 
 export default class SalesInvoice implements ISalesInvoice {
+    id: number;
     customerId: number;
     invoiceDate: Date;
     paymentTermid: number;

@@ -1,7 +1,7 @@
 ﻿import * as React from "react";
 import * as ReactDOM from "react-dom";
 import {observer} from "mobx-react";
-import * as d3 from "d3";
+
 import Config = require("Config");
 
 import SelectCustomer from "../Shared/Components/SelectCustomer";
@@ -9,9 +9,12 @@ import SelectPaymentTerm from "../Shared/Components/SelectPaymentTerm";
 import SelectLineItem from "../Shared/Components/SelectLineItem";
 import SelectLineMeasurement from "../Shared/Components/SelectLineMeasurement";
 
-import SalesQuotationStore from "../Shared/Stores/Quotations/SalesQuotationStore";
+import SalesOrderStore from "../Shared/Stores/Sales/SalesOrderStore";
 
-let store = new SalesQuotationStore();
+let quotationId = window.location.search.split("?quotationId=")[1];
+let orderId = window.location.search.split("?orderId=")[1];
+
+let store = new SalesOrderStore(quotationId, orderId);
 
 @observer
 class ValidationErrors extends React.Component<any, {}>{
@@ -34,20 +37,19 @@ class ValidationErrors extends React.Component<any, {}>{
     }
 }
 
+class SaveOrderButton extends React.Component<any, {}>{
+    saveNewSalesOrder(e) {
 
-class SaveQuotationButton extends React.Component<any, {}>{
-    saveNewSalesQuotation(e) {
-        store.saveNewQuotation();
     }
 
     render() {
         return (
-            <input type="button" value="Save" onClick={this.saveNewSalesQuotation.bind(this)} />
+            <input type="button" value="Save" onClick={this.saveNewSalesOrder.bind(this)} />
             );
     }
 }
 
-class CancelQuotationButton extends React.Component<any, {}>{
+class CancelOrderButton extends React.Component<any, {}>{
     render() {
         return (
             <input type="button" value="Cancel" />
@@ -56,9 +58,9 @@ class CancelQuotationButton extends React.Component<any, {}>{
 }
 
 @observer
-class SalesQuotationHeader extends React.Component<any, {}>{
-    onChangeQuotationDate(e) {
-        store.changedQuotationDate(e.target.value);
+class SalesOrderHeader extends React.Component<any, {}>{
+    onChangeOrderDate(e) {
+        store.changedOrderDate(e.target.value);
     }
     render() {        
         return (
@@ -75,17 +77,17 @@ class SalesQuotationHeader extends React.Component<any, {}>{
                     <div className="col-md-6">
                         <div className="row">
                             <div className="col-sm-2">Customer</div>
-                            <div className="col-sm-10"><SelectCustomer store={store} /></div>
+                            <div className="col-sm-10"><SelectCustomer store={store} selected={store.salesOrder.customerId} /></div>
                         </div>
                         <div className="row">
                             <div className="col-sm-2">Payment Term</div>
-                            <div className="col-sm-10"><SelectPaymentTerm store={store} /></div>
+                            <div className="col-sm-10"><SelectPaymentTerm store={store} selected={store.salesOrder.paymentTermId} /></div>
                         </div>
                     </div>
                     <div className="col-md-6">
                         <div className="row">
                             <div className="col-sm-2">Date</div>
-                            <div className="col-sm-10"><input type="date" className="form-control pull-right" onChange={this.onChangeQuotationDate.bind(this) } defaultValue={store.salesQuotation.quotationDate} /></div>
+                            <div className="col-sm-10"><input type="date" className="form-control pull-right" onChange={this.onChangeOrderDate.bind(this) } value={store.salesOrder.orderDate}  /></div>
                         </div>
                         <div className="row">
                             <div className="col-sm-2">Reference no.</div>
@@ -99,7 +101,7 @@ class SalesQuotationHeader extends React.Component<any, {}>{
 }
 
 @observer
-class SalesQuotationLines extends React.Component<any, {}>{
+class SalesOrderLines extends React.Component<any, {}>{
     addLineItem() {
         var itemId, measurementId, quantity, amount, discount;
         itemId = (document.getElementById("optNewItemId") as HTMLInputElement).value;
@@ -108,7 +110,7 @@ class SalesQuotationLines extends React.Component<any, {}>{
         amount = (document.getElementById("txtNewAmount") as HTMLInputElement).value;
         discount = (document.getElementById("txtNewDiscount") as HTMLInputElement).value;
 
-        //console.log(`itemId: ${itemId} | measurementId: ${measurementId} | quantity: ${quantity} | amount: ${amount} | discount: ${discount}`);
+        console.log(`itemId: ${itemId} | measurementId: ${measurementId} | quantity: ${quantity} | amount: ${amount} | discount: ${discount}`);
         store.addLineItem(itemId, measurementId, quantity, amount, discount);
 
         (document.getElementById("txtNewQuantity") as HTMLInputElement).value = "1";
@@ -134,16 +136,16 @@ class SalesQuotationLines extends React.Component<any, {}>{
 
     render() {        
         var lineItems = [];
-        for (var i = 0; i < store.salesQuotation.salesQuotationLines.length; i++) {
+        for (var i = 0; i < store.salesOrder.salesOrderLines.length; i++) {
             lineItems.push(
                 <tr key={i}>
-                    <td><SelectLineItem store={store} row={i} selected={store.salesQuotation.salesQuotationLines[i].itemId} /></td>
-                    <td>{store.salesQuotation.salesQuotationLines[i].itemId}</td>
-                    <td><SelectLineMeasurement row={i} store={store} selected={store.salesQuotation.salesQuotationLines[i].measurementId} /></td>
-                    <td><input className="form-control" type="text" name={i} value={store.salesQuotation.salesQuotationLines[i].quantity} onChange={this.onChangeQuantity.bind(this) } /></td>
-                    <td><input className="form-control" type="text" name={i} value={store.salesQuotation.salesQuotationLines[i].amount} onChange={this.onChangeAmount.bind(this) } /></td>
-                    <td><input className="form-control" type="text" name={i} value={store.salesQuotation.salesQuotationLines[i].discount} onChange={this.onChangeDiscount.bind(this) } /></td>
-                    <td>{store.lineTotal(i) }</td>
+                    <td><SelectLineItem store={store} row={i} selected={store.salesOrder.salesOrderLines[i].itemId} /></td>
+                    <td>{store.salesOrder.salesOrderLines[i].itemId}</td>
+                    <td><SelectLineMeasurement row={i} store={store} selected={store.salesOrder.salesOrderLines[i].measurementId} />{store.salesOrder.salesOrderLines[i].measurementId}</td>
+                    <td><input type="text" className="form-control" name={i} value={store.salesOrder.salesOrderLines[i].quantity} onChange={this.onChangeQuantity.bind(this)} /></td>
+                    <td><input type="text" className="form-control" name={i} value={store.salesOrder.salesOrderLines[i].amount} onChange={this.onChangeAmount.bind(this) } /></td>
+                    <td><input type="text" className="form-control" name={i} value={store.salesOrder.salesOrderLines[i].discount} onChange={this.onChangeDiscount.bind(this) } /></td>
+                    <td>{store.lineTotal(i)}</td>
                     <td><input type="button" name={i} value="Remove" onClick={this.onClickRemoveLineItem.bind(this) } /></td>
                 </tr>
             );
@@ -193,7 +195,7 @@ class SalesQuotationLines extends React.Component<any, {}>{
 }
 
 @observer
-class SalesQuotationTotals extends React.Component<any, {}>{
+class SalesOrderTotals extends React.Component<any, {}>{
     render() {
         return (
             <div className="box">
@@ -204,7 +206,7 @@ class SalesQuotationTotals extends React.Component<any, {}>{
                         <div className="col-md-2"><label>Tax Total: </label></div>
                         <div className="col-md-2">{0}</div>
                         <div className="col-md-2"><label>Grand Total: </label></div>
-                        <div className="col-md-2">{store.grandTotal()}</div>
+                        <div className="col-md-2">{store.grandTotal() }</div>
                     </div>
                 </div>
             </div>
@@ -212,21 +214,21 @@ class SalesQuotationTotals extends React.Component<any, {}>{
     }
 }
 
-export default class AddSalesQuotation extends React.Component<any, {}> {
+export default class SalesOrder extends React.Component<any, {}> {
     render() {
         return (
             <div>
                 <ValidationErrors />
-                <SalesQuotationHeader />
-                <SalesQuotationLines />
-                <SalesQuotationTotals />
+                <SalesOrderHeader />
+                <SalesOrderLines />
+                <SalesOrderTotals />
                 <div>
-                    <SaveQuotationButton />
-                    <CancelQuotationButton />
+                    <SaveOrderButton />
+                    <CancelOrderButton />
                 </div>
             </div>
             );
     }
 }
 
-ReactDOM.render(<AddSalesQuotation />, document.getElementById("divAddSalesQuotation"));
+ReactDOM.render(<SalesOrder />, document.getElementById("divSalesOrder"));

@@ -147,7 +147,7 @@ class JournalEntryLines extends React.Component<any, {}>{
     }
 }
 
-export default class AddJournalEntry extends React.Component<any, {}> {
+export default class JournalEntry extends React.Component<any, {}> {
     render() {
         return (
             <div>
@@ -162,4 +162,4 @@ export default class AddJournalEntry extends React.Component<any, {}> {
     }
 }
 
-ReactDOM.render(<AddJournalEntry />, document.getElementById("divAddJournalEntry"));
+ReactDOM.render(<JournalEntry />, document.getElementById("divJournalEntry"));

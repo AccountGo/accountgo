@@ -281,12 +281,25 @@ namespace Services.Purchasing
 
         public PurchaseOrderHeader GetPurchaseOrderById(int id)
         {
-            return _purchaseOrderRepo.GetById(id);
+            var purchOrder = _purchaseOrderRepo.GetAllIncluding(po => po.Vendor,
+                po => po.Vendor.Party,
+                po => po.PurchaseOrderLines,
+                po => po.PurchaseReceipts)
+                .Where(po => po.Id == id)
+                .FirstOrDefault();
+
+            return purchOrder;
         }
 
         public PurchaseReceiptHeader GetPurchaseReceiptById(int id)
         {
-            return _purchaseReceiptRepo.GetById(id);
+            var purchReceipt = _purchaseReceiptRepo.GetAllIncluding(pr => pr.Vendor,
+                pr => pr.Vendor.Party,
+                pr => pr.PurchaseReceiptLines)
+                .Where(pr => pr.Id == id)
+                .FirstOrDefault();
+
+            return purchReceipt;
         }
 
         public void AddVendor(Vendor vendor)

@@ -1,9 +1,9 @@
-webpackJsonp([0],{
+webpackJsonp([6],{
 
 /***/ 0:
-/*!*************************************************************!*\
-  !*** ./wwwroot/libs/tsxbuild/financials/addjournalentry.js ***!
-  \*************************************************************/
+/*!***************************************************!*\
+  !*** ./wwwroot/libs/tsxbuild/sales/salesorder.js ***!
+  \***************************************************/
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -21,101 +21,141 @@ webpackJsonp([0],{
 	var React = __webpack_require__(/*! react */ 1);
 	var ReactDOM = __webpack_require__(/*! react-dom */ 38);
 	var mobx_react_1 = __webpack_require__(/*! mobx-react */ 168);
-	var SelectVoucherType_1 = __webpack_require__(/*! ../Shared/Components/SelectVoucherType */ 170);
-	var SelectAccount_1 = __webpack_require__(/*! ../Shared/Components/SelectAccount */ 171);
-	var SelectDebitCredit_1 = __webpack_require__(/*! ../Shared/Components/SelectDebitCredit */ 172);
-	var JournalEntryStore_1 = __webpack_require__(/*! ../Shared/Stores/Financials/JournalEntryStore */ 173);
-	var store = new JournalEntryStore_1.default();
-	var SaveJournalEntryButton = (function (_super) {
-	    __extends(SaveJournalEntryButton, _super);
-	    function SaveJournalEntryButton() {
+	var SelectCustomer_1 = __webpack_require__(/*! ../Shared/Components/SelectCustomer */ 207);
+	var SelectPaymentTerm_1 = __webpack_require__(/*! ../Shared/Components/SelectPaymentTerm */ 198);
+	var SelectLineItem_1 = __webpack_require__(/*! ../Shared/Components/SelectLineItem */ 199);
+	var SelectLineMeasurement_1 = __webpack_require__(/*! ../Shared/Components/SelectLineMeasurement */ 200);
+	var SalesOrderStore_1 = __webpack_require__(/*! ../Shared/Stores/Sales/SalesOrderStore */ 214);
+	var quotationId = window.location.search.split("?quotationId=")[1];
+	var orderId = window.location.search.split("?orderId=")[1];
+	var store = new SalesOrderStore_1.default(quotationId, orderId);
+	var ValidationErrors = (function (_super) {
+	    __extends(ValidationErrors, _super);
+	    function ValidationErrors() {
 	        _super.apply(this, arguments);
 	    }
-	    SaveJournalEntryButton.prototype.onClickSaveNewJournalEntry = function (e) {
-	        store.saveNewJournalEntry();
+	    ValidationErrors.prototype.render = function () {
+	        if (store.validationErrors !== undefined && store.validationErrors.length > 0) {
+	            var errors = [];
+	            store.validationErrors.map(function (item, index) {
+	                errors.push(React.createElement("li", {key: index}, item));
+	            });
+	            return (React.createElement("div", null, React.createElement("ul", null, errors)));
+	        }
+	        return null;
 	    };
-	    SaveJournalEntryButton.prototype.render = function () {
-	        return (React.createElement("input", {type: "button", value: "Save", onClick: this.onClickSaveNewJournalEntry.bind(this)}));
-	    };
-	    return SaveJournalEntryButton;
+	    ValidationErrors = __decorate([
+	        mobx_react_1.observer
+	    ], ValidationErrors);
+	    return ValidationErrors;
 	}(React.Component));
-	var CancelJournalEntryButton = (function (_super) {
-	    __extends(CancelJournalEntryButton, _super);
-	    function CancelJournalEntryButton() {
+	var SaveOrderButton = (function (_super) {
+	    __extends(SaveOrderButton, _super);
+	    function SaveOrderButton() {
 	        _super.apply(this, arguments);
 	    }
-	    CancelJournalEntryButton.prototype.render = function () {
+	    SaveOrderButton.prototype.saveNewSalesOrder = function (e) {
+	    };
+	    SaveOrderButton.prototype.render = function () {
+	        return (React.createElement("input", {type: "button", value: "Save", onClick: this.saveNewSalesOrder.bind(this)}));
+	    };
+	    return SaveOrderButton;
+	}(React.Component));
+	var CancelOrderButton = (function (_super) {
+	    __extends(CancelOrderButton, _super);
+	    function CancelOrderButton() {
+	        _super.apply(this, arguments);
+	    }
+	    CancelOrderButton.prototype.render = function () {
 	        return (React.createElement("input", {type: "button", value: "Cancel"}));
 	    };
-	    return CancelJournalEntryButton;
+	    return CancelOrderButton;
 	}(React.Component));
-	var JournalEntryHeader = (function (_super) {
-	    __extends(JournalEntryHeader, _super);
-	    function JournalEntryHeader() {
+	var SalesOrderHeader = (function (_super) {
+	    __extends(SalesOrderHeader, _super);
+	    function SalesOrderHeader() {
 	        _super.apply(this, arguments);
 	    }
-	    JournalEntryHeader.prototype.onChangeJournalDate = function (e) {
-	        store.changedJournalDate(e.target.value);
+	    SalesOrderHeader.prototype.onChangeOrderDate = function (e) {
+	        store.changedOrderDate(e.target.value);
 	    };
-	    JournalEntryHeader.prototype.render = function () {
-	        return (React.createElement("div", {className: "box"}, React.createElement("div", {className: "box-header with-border"}, React.createElement("h3", {className: "box-title"}, "General"), React.createElement("div", {className: "box-tools pull-right"}, React.createElement("button", {type: "button", className: "btn btn-box-tool", "data-widget": "collapse", "data-toggle": "tooltip", title: "Collapse"}, React.createElement("i", {className: "fa fa-minus"})))), React.createElement("div", {className: "box-body"}, React.createElement("div", {className: "col-sm-6"}, React.createElement("div", {className: "row"}, React.createElement("div", {className: "col-sm-3"}, "Date"), React.createElement("div", {className: "col-sm-9"}, React.createElement("input", {type: "date", className: "form-control", id: "newJournalDate", onChange: this.onChangeJournalDate.bind(this), defaultValue: store.journalEntry.date}))), React.createElement("div", {className: "row"}, React.createElement("div", {className: "col-sm-3"}, "Voucher"), React.createElement("div", {className: "col-sm-9"}, React.createElement(SelectVoucherType_1.default, {store: store, controlId: "optNewVoucherType"}))), React.createElement("div", {className: "row"}, React.createElement("div", {className: "col-sm-3"}, "Reference no"), React.createElement("div", {className: "col-sm-9"}, React.createElement("input", {type: "text", className: "form-control"}))), React.createElement("div", {className: "row"}, React.createElement("div", {className: "col-sm-3"}, "Memo"), React.createElement("div", {className: "col-sm-9"}, React.createElement("input", {type: "text", className: "form-control"})))))));
+	    SalesOrderHeader.prototype.render = function () {
+	        return (React.createElement("div", {className: "box"}, React.createElement("div", {className: "box-header with-border"}, React.createElement("h3", {className: "box-title"}, "Customer Information"), React.createElement("div", {className: "box-tools pull-right"}, React.createElement("button", {type: "button", className: "btn btn-box-tool", "data-widget": "collapse", "data-toggle": "tooltip", title: "Collapse"}, React.createElement("i", {className: "fa fa-minus"})))), React.createElement("div", {className: "box-body"}, React.createElement("div", {className: "col-md-6"}, React.createElement("div", {className: "row"}, React.createElement("div", {className: "col-sm-2"}, "Customer"), React.createElement("div", {className: "col-sm-10"}, React.createElement(SelectCustomer_1.default, {store: store, selected: store.salesOrder.customerId}))), React.createElement("div", {className: "row"}, React.createElement("div", {className: "col-sm-2"}, "Payment Term"), React.createElement("div", {className: "col-sm-10"}, React.createElement(SelectPaymentTerm_1.default, {store: store, selected: store.salesOrder.paymentTermId})))), React.createElement("div", {className: "col-md-6"}, React.createElement("div", {className: "row"}, React.createElement("div", {className: "col-sm-2"}, "Date"), React.createElement("div", {className: "col-sm-10"}, React.createElement("input", {type: "date", className: "form-control pull-right", onChange: this.onChangeOrderDate.bind(this), value: store.salesOrder.orderDate}))), React.createElement("div", {className: "row"}, React.createElement("div", {className: "col-sm-2"}, "Reference no."), React.createElement("div", {className: "col-sm-10"}, React.createElement("input", {type: "text", className: "form-control"})))))));
 	    };
-	    JournalEntryHeader = __decorate([
+	    SalesOrderHeader = __decorate([
 	        mobx_react_1.observer
-	    ], JournalEntryHeader);
-	    return JournalEntryHeader;
+	    ], SalesOrderHeader);
+	    return SalesOrderHeader;
 	}(React.Component));
-	var JournalEntryLines = (function (_super) {
-	    __extends(JournalEntryLines, _super);
-	    function JournalEntryLines() {
+	var SalesOrderLines = (function (_super) {
+	    __extends(SalesOrderLines, _super);
+	    function SalesOrderLines() {
 	        _super.apply(this, arguments);
 	    }
-	    JournalEntryLines.prototype.onChangeAmount = function (e) {
-	        store.updateLineItem(e.target.name, "amount", e.target.value);
+	    SalesOrderLines.prototype.addLineItem = function () {
+	        var itemId, measurementId, quantity, amount, discount;
+	        itemId = document.getElementById("optNewItemId").value;
+	        measurementId = document.getElementById("optNewMeasurementId").value;
+	        quantity = document.getElementById("txtNewQuantity").value;
+	        amount = document.getElementById("txtNewAmount").value;
+	        discount = document.getElementById("txtNewDiscount").value;
+	        console.log("itemId: " + itemId + " | measurementId: " + measurementId + " | quantity: " + quantity + " | amount: " + amount + " | discount: " + discount);
+	        store.addLineItem(itemId, measurementId, quantity, amount, discount);
+	        document.getElementById("txtNewQuantity").value = "1";
+	        document.getElementById("txtNewAmount").value = "0";
+	        document.getElementById("txtNewDiscount").value = "0";
 	    };
-	    JournalEntryLines.prototype.onChangeMemo = function (e) {
-	        store.updateLineItem(e.target.name, "memo", e.target.value);
-	    };
-	    JournalEntryLines.prototype.onClickRemoveLineItem = function (e) {
+	    SalesOrderLines.prototype.onClickRemoveLineItem = function (e) {
 	        store.removeLineItem(e.target.name);
 	    };
-	    JournalEntryLines.prototype.addLineItem = function () {
-	        var accountId, drcr, amount, memo;
-	        accountId = document.getElementById("optNewAccountId").value;
-	        ;
-	        drcr = document.getElementById("optNewDebitCredit").value;
-	        amount = document.getElementById("txtNewAmount").value;
-	        memo = document.getElementById("txtNewMemo").value;
-	        store.addLineItem(accountId, drcr, amount, memo);
-	        document.getElementById("txtNewAmount").value = "0";
-	        document.getElementById("txtNewMemo").value = "";
+	    SalesOrderLines.prototype.onChangeQuantity = function (e) {
+	        store.updateLineItem(e.target.name, "quantity", e.target.value);
 	    };
-	    JournalEntryLines.prototype.render = function () {
+	    SalesOrderLines.prototype.onChangeAmount = function (e) {
+	        store.updateLineItem(e.target.name, "amount", e.target.value);
+	    };
+	    SalesOrderLines.prototype.onChangeDiscount = function (e) {
+	        store.updateLineItem(e.target.name, "discount", e.target.value);
+	    };
+	    SalesOrderLines.prototype.render = function () {
 	        var lineItems = [];
-	        for (var i = 0; i < store.journalEntry.journalEntryLines.length; i++) {
-	            lineItems.push(React.createElement("tr", {key: i}, React.createElement("td", null, React.createElement(SelectAccount_1.default, {store: store, row: i, selected: store.journalEntry.journalEntryLines[i].accountId})), React.createElement("td", null, React.createElement(SelectDebitCredit_1.default, {store: store, row: i, selected: store.journalEntry.journalEntryLines[i].drcr})), React.createElement("td", null, React.createElement("input", {type: "text", className: "form-control", name: i, onChange: this.onChangeAmount.bind(this)})), React.createElement("td", null, React.createElement("input", {type: "text", className: "form-control", name: i, onChange: this.onChangeMemo.bind(this)})), React.createElement("td", null, React.createElement("input", {type: "button", name: i, value: "Remove", onClick: this.onClickRemoveLineItem.bind(this)}))));
+	        for (var i = 0; i < store.salesOrder.salesOrderLines.length; i++) {
+	            lineItems.push(React.createElement("tr", {key: i}, React.createElement("td", null, React.createElement(SelectLineItem_1.default, {store: store, row: i, selected: store.salesOrder.salesOrderLines[i].itemId})), React.createElement("td", null, store.salesOrder.salesOrderLines[i].itemId), React.createElement("td", null, React.createElement(SelectLineMeasurement_1.default, {row: i, store: store, selected: store.salesOrder.salesOrderLines[i].measurementId}), store.salesOrder.salesOrderLines[i].measurementId), React.createElement("td", null, React.createElement("input", {type: "text", className: "form-control", name: i, value: store.salesOrder.salesOrderLines[i].quantity, onChange: this.onChangeQuantity.bind(this)})), React.createElement("td", null, React.createElement("input", {type: "text", className: "form-control", name: i, value: store.salesOrder.salesOrderLines[i].amount, onChange: this.onChangeAmount.bind(this)})), React.createElement("td", null, React.createElement("input", {type: "text", className: "form-control", name: i, value: store.salesOrder.salesOrderLines[i].discount, onChange: this.onChangeDiscount.bind(this)})), React.createElement("td", null, store.lineTotal(i)), React.createElement("td", null, React.createElement("input", {type: "button", name: i, value: "Remove", onClick: this.onClickRemoveLineItem.bind(this)}))));
 	        }
-	        return (React.createElement("div", {className: "box"}, React.createElement("div", {className: "box-header with-border"}, React.createElement("h3", {className: "box-title"}, "Line Items"), React.createElement("div", {className: "box-tools pull-right"}, React.createElement("button", {type: "button", className: "btn btn-box-tool", "data-widget": "collapse", "data-toggle": "tooltip", title: "Collapse"}, React.createElement("i", {className: "fa fa-minus"})))), React.createElement("div", {className: "box-body table-responsive"}, React.createElement("table", null, React.createElement("thead", null, React.createElement("tr", null, React.createElement("td", null, "Account"), React.createElement("td", null, "DrCr"), React.createElement("td", null, "Amount"), React.createElement("td", null, "Memo"), React.createElement("td", null))), React.createElement("tbody", null, lineItems, React.createElement("tr", null, React.createElement("td", null, React.createElement(SelectAccount_1.default, {store: store, controlId: "optNewAccountId"})), React.createElement("td", null, React.createElement(SelectDebitCredit_1.default, {store: store, controlId: "optNewDebitCredit"})), React.createElement("td", null, React.createElement("input", {type: "text", className: "form-control", id: "txtNewAmount"})), React.createElement("td", null, React.createElement("input", {type: "text", className: "form-control", id: "txtNewMemo"})), React.createElement("td", null, React.createElement("input", {type: "button", value: "Add", onClick: this.addLineItem}))))))));
+	        return (React.createElement("div", {className: "box"}, React.createElement("div", {className: "box-header with-border"}, React.createElement("h3", {className: "box-title"}, "Line Items"), React.createElement("div", {className: "box-tools pull-right"}, React.createElement("button", {type: "button", className: "btn btn-box-tool", "data-widget": "collapse", "data-toggle": "tooltip", title: "Collapse"}, React.createElement("i", {className: "fa fa-minus"})))), React.createElement("div", {className: "box-body table-responsive"}, React.createElement("table", {className: "table table-hover"}, React.createElement("thead", null, React.createElement("tr", null, React.createElement("td", null, "Item Id"), React.createElement("td", null, "Item Name"), React.createElement("td", null, "Measurement"), React.createElement("td", null, "Quantity"), React.createElement("td", null, "Amount"), React.createElement("td", null, "Discount"), React.createElement("td", null, "Line Total"), React.createElement("td", null))), React.createElement("tbody", null, lineItems, React.createElement("tr", null, React.createElement("td", null, React.createElement(SelectLineItem_1.default, {store: store, controlId: "optNewItemId"})), React.createElement("td", null, "Item Name"), React.createElement("td", null, React.createElement(SelectLineMeasurement_1.default, {store: store, controlId: "optNewMeasurementId"})), React.createElement("td", null, React.createElement("input", {className: "form-control", type: "text", id: "txtNewQuantity"})), React.createElement("td", null, React.createElement("input", {className: "form-control", type: "text", id: "txtNewAmount"})), React.createElement("td", null, React.createElement("input", {className: "form-control", type: "text", id: "txtNewDiscount"})), React.createElement("td", null), React.createElement("td", null, React.createElement("input", {type: "button", value: "Add", onClick: this.addLineItem}))))))));
 	    };
-	    JournalEntryLines = __decorate([
+	    SalesOrderLines = __decorate([
 	        mobx_react_1.observer
-	    ], JournalEntryLines);
-	    return JournalEntryLines;
+	    ], SalesOrderLines);
+	    return SalesOrderLines;
 	}(React.Component));
-	var AddJournalEntry = (function (_super) {
-	    __extends(AddJournalEntry, _super);
-	    function AddJournalEntry() {
+	var SalesOrderTotals = (function (_super) {
+	    __extends(SalesOrderTotals, _super);
+	    function SalesOrderTotals() {
 	        _super.apply(this, arguments);
 	    }
-	    AddJournalEntry.prototype.render = function () {
-	        return (React.createElement("div", null, React.createElement(JournalEntryHeader, null), React.createElement(JournalEntryLines, null), React.createElement("div", null, React.createElement(SaveJournalEntryButton, null), React.createElement(CancelJournalEntryButton, null))));
+	    SalesOrderTotals.prototype.render = function () {
+	        return (React.createElement("div", {className: "box"}, React.createElement("div", {className: "box-body"}, React.createElement("div", {className: "row"}, React.createElement("div", {className: "col-md-2"}, React.createElement("label", null, "Running Total: ")), React.createElement("div", {className: "col-md-2"}, 0), React.createElement("div", {className: "col-md-2"}, React.createElement("label", null, "Tax Total: ")), React.createElement("div", {className: "col-md-2"}, 0), React.createElement("div", {className: "col-md-2"}, React.createElement("label", null, "Grand Total: ")), React.createElement("div", {className: "col-md-2"}, store.grandTotal())))));
 	    };
-	    return AddJournalEntry;
+	    SalesOrderTotals = __decorate([
+	        mobx_react_1.observer
+	    ], SalesOrderTotals);
+	    return SalesOrderTotals;
+	}(React.Component));
+	var SalesOrder = (function (_super) {
+	    __extends(SalesOrder, _super);
+	    function SalesOrder() {
+	        _super.apply(this, arguments);
+	    }
+	    SalesOrder.prototype.render = function () {
+	        return (React.createElement("div", null, React.createElement(ValidationErrors, null), React.createElement(SalesOrderHeader, null), React.createElement(SalesOrderLines, null), React.createElement(SalesOrderTotals, null), React.createElement("div", null, React.createElement(SaveOrderButton, null), React.createElement(CancelOrderButton, null))));
+	    };
+	    return SalesOrder;
 	}(React.Component));
 	Object.defineProperty(exports, "__esModule", { value: true });
-	exports.default = AddJournalEntry;
-	ReactDOM.render(React.createElement(AddJournalEntry, null), document.getElementById("divAddJournalEntry"));
-	//# sourceMappingURL=AddJournalEntry.js.map
+	exports.default = SalesOrder;
+	ReactDOM.render(React.createElement(SalesOrder, null), document.getElementById("divSalesOrder"));
+	//# sourceMappingURL=SalesOrder.js.map
 
 /***/ },
 
@@ -2815,216 +2855,6 @@ webpackJsonp([0],{
 
 /***/ },
 
-/***/ 170:
-/*!**********************************************************************!*\
-  !*** ./wwwroot/libs/tsxbuild/Shared/Components/SelectVoucherType.js ***!
-  \**********************************************************************/
-/***/ function(module, exports, __webpack_require__) {
-
-	"use strict";
-	var __extends = (this && this.__extends) || function (d, b) {
-	    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
-	    function __() { this.constructor = d; }
-	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-	};
-	var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
-	    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
-	    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
-	    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
-	    return c > 3 && r && Object.defineProperty(target, key, r), r;
-	};
-	var React = __webpack_require__(/*! react */ 1);
-	var mobx_react_1 = __webpack_require__(/*! mobx-react */ 168);
-	var SelectVoucherType = (function (_super) {
-	    __extends(SelectVoucherType, _super);
-	    function SelectVoucherType() {
-	        _super.apply(this, arguments);
-	    }
-	    SelectVoucherType.prototype.onChangeVoucherType = function (e) {
-	        this.props.store.changedVoucherType(e.target.value);
-	    };
-	    SelectVoucherType.prototype.render = function () {
-	        var options = [];
-	        options.push(React.createElement("option", {key: "1", value: "1"}, " Opening Balances"));
-	        options.push(React.createElement("option", {key: "2", value: "2"}, " Closing Entries "));
-	        options.push(React.createElement("option", {key: "3", value: "3"}, " Adjustment Entries "));
-	        options.push(React.createElement("option", {key: "4", value: "4"}, " Correction Entries "));
-	        options.push(React.createElement("option", {key: "5", value: "5"}, " Transfer Entries "));
-	        return (React.createElement("select", {id: this.props.controlId, onChange: this.onChangeVoucherType.bind(this), className: "form-control select2"}, React.createElement("option", {key: -1, value: ""}), options));
-	    };
-	    SelectVoucherType = __decorate([
-	        mobx_react_1.observer
-	    ], SelectVoucherType);
-	    return SelectVoucherType;
-	}(React.Component));
-	Object.defineProperty(exports, "__esModule", { value: true });
-	exports.default = SelectVoucherType;
-	//# sourceMappingURL=SelectVoucherType.js.map
-
-/***/ },
-
-/***/ 171:
-/*!******************************************************************!*\
-  !*** ./wwwroot/libs/tsxbuild/Shared/Components/SelectAccount.js ***!
-  \******************************************************************/
-/***/ function(module, exports, __webpack_require__) {
-
-	"use strict";
-	var __extends = (this && this.__extends) || function (d, b) {
-	    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
-	    function __() { this.constructor = d; }
-	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-	};
-	var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
-	    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
-	    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
-	    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
-	    return c > 3 && r && Object.defineProperty(target, key, r), r;
-	};
-	var React = __webpack_require__(/*! react */ 1);
-	var mobx_react_1 = __webpack_require__(/*! mobx-react */ 168);
-	var SelectVoucherType = (function (_super) {
-	    __extends(SelectVoucherType, _super);
-	    function SelectVoucherType() {
-	        _super.apply(this, arguments);
-	    }
-	    SelectVoucherType.prototype.onChangeAccount = function (e) {
-	        if (this.props.row !== undefined)
-	            this.props.store.updateLineItem(this.props.row, "accountId", e.target.value);
-	    };
-	    SelectVoucherType.prototype.render = function () {
-	        var options = [];
-	        this.props.store.commonStore.accounts.map(function (account) {
-	            return (options.push(React.createElement("option", {key: account.id, value: account.id}, " ", account.accountName, " ")));
-	        });
-	        return (React.createElement("select", {defaultValue: this.props.selected, id: this.props.controlId, onChange: this.onChangeAccount.bind(this), className: "form-control select2"}, React.createElement("option", {key: -1, value: ""}), options));
-	    };
-	    SelectVoucherType = __decorate([
-	        mobx_react_1.observer
-	    ], SelectVoucherType);
-	    return SelectVoucherType;
-	}(React.Component));
-	Object.defineProperty(exports, "__esModule", { value: true });
-	exports.default = SelectVoucherType;
-	//# sourceMappingURL=SelectAccount.js.map
-
-/***/ },
-
-/***/ 172:
-/*!**********************************************************************!*\
-  !*** ./wwwroot/libs/tsxbuild/Shared/Components/SelectDebitCredit.js ***!
-  \**********************************************************************/
-/***/ function(module, exports, __webpack_require__) {
-
-	"use strict";
-	var __extends = (this && this.__extends) || function (d, b) {
-	    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
-	    function __() { this.constructor = d; }
-	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-	};
-	var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
-	    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
-	    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
-	    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
-	    return c > 3 && r && Object.defineProperty(target, key, r), r;
-	};
-	var React = __webpack_require__(/*! react */ 1);
-	var mobx_react_1 = __webpack_require__(/*! mobx-react */ 168);
-	var SelectDebiCredit = (function (_super) {
-	    __extends(SelectDebiCredit, _super);
-	    function SelectDebiCredit() {
-	        _super.apply(this, arguments);
-	    }
-	    SelectDebiCredit.prototype.onChangeDebitCredit = function (e) {
-	        if (this.props.row !== undefined)
-	            this.props.store.updateLineItem(this.props.row, "drcr", e.target.value);
-	    };
-	    SelectDebiCredit.prototype.render = function () {
-	        var options = [];
-	        options.push(React.createElement("option", {key: "1", value: "1"}, "Debit"));
-	        options.push(React.createElement("option", {key: "2", value: "2"}, "Credit"));
-	        return (React.createElement("select", {id: this.props.controlId, onChange: this.onChangeDebitCredit.bind(this), className: "form-control select2"}, React.createElement("option", {key: -1, value: ""}), options));
-	    };
-	    SelectDebiCredit = __decorate([
-	        mobx_react_1.observer
-	    ], SelectDebiCredit);
-	    return SelectDebiCredit;
-	}(React.Component));
-	Object.defineProperty(exports, "__esModule", { value: true });
-	exports.default = SelectDebiCredit;
-	//# sourceMappingURL=SelectDebitCredit.js.map
-
-/***/ },
-
-/***/ 173:
-/*!*****************************************************************************!*\
-  !*** ./wwwroot/libs/tsxbuild/Shared/Stores/Financials/JournalEntryStore.js ***!
-  \*****************************************************************************/
-/***/ function(module, exports, __webpack_require__) {
-
-	"use strict";
-	var mobx_1 = __webpack_require__(/*! mobx */ 169);
-	var axios = __webpack_require__(/*! axios */ 174);
-	var Config = __webpack_require__(/*! Config */ 193);
-	var JournalEntry_1 = __webpack_require__(/*! ./JournalEntry */ 194);
-	var JournalEntryLine_1 = __webpack_require__(/*! ./JournalEntryLine */ 195);
-	var CommonStore_1 = __webpack_require__(/*! ../Common/CommonStore */ 196);
-	var baseUrl = location.protocol
-	    + "//" + location.hostname
-	    + (location.port && ":" + location.port)
-	    + "/";
-	var JournalEntryStore = (function () {
-	    function JournalEntryStore() {
-	        this.journalEntry = new JournalEntry_1.default();
-	        mobx_1.extendObservable(this.journalEntry, {
-	            id: this.journalEntry.id,
-	            voucherType: this.journalEntry.voucherType,
-	            journalDate: this.journalEntry.journalDate,
-	            referenceNo: this.journalEntry.referenceNo,
-	            memo: this.journalEntry.memo,
-	            journalEntryLines: []
-	        });
-	        this.commonStore = new CommonStore_1.default();
-	    }
-	    JournalEntryStore.prototype.saveNewJournalEntry = function () {
-	        console.log(this.journalEntry);
-	        axios.post(Config.apiUrl + "api/financials/addjournalentry", JSON.stringify(this.journalEntry), {
-	            headers: {
-	                'Content-type': 'application/json'
-	            }
-	        })
-	            .then(function (response) {
-	            console.log(response);
-	        })
-	            .catch(function (error) {
-	            console.log(error);
-	        });
-	    };
-	    JournalEntryStore.prototype.addLineItem = function (accountId, drcr, amount, memo) {
-	        var newLineItem = new JournalEntryLine_1.default(accountId, drcr, amount, memo);
-	        this.journalEntry.journalEntryLines.push(mobx_1.extendObservable(newLineItem, newLineItem));
-	    };
-	    JournalEntryStore.prototype.updateLineItem = function (row, targetProperty, value) {
-	        if (this.journalEntry.journalEntryLines.length > 0)
-	            this.journalEntry.journalEntryLines[row][targetProperty] = value;
-	    };
-	    JournalEntryStore.prototype.removeLineItem = function (row) {
-	        this.journalEntry.journalEntryLines.splice(row, 1);
-	    };
-	    JournalEntryStore.prototype.changedJournalDate = function (date) {
-	        this.journalEntry.journalDate = date;
-	    };
-	    JournalEntryStore.prototype.changedVoucherType = function (type) {
-	        this.journalEntry.voucherType = type;
-	    };
-	    return JournalEntryStore;
-	}());
-	Object.defineProperty(exports, "__esModule", { value: true });
-	exports.default = JournalEntryStore;
-	//# sourceMappingURL=JournalEntryStore.js.map
-
-/***/ },
-
 /***/ 174:
 /*!**************************!*\
   !*** ./~/axios/index.js ***!
@@ -4323,47 +4153,6 @@ webpackJsonp([0],{
 
 /***/ },
 
-/***/ 194:
-/*!************************************************************************!*\
-  !*** ./wwwroot/libs/tsxbuild/Shared/Stores/Financials/JournalEntry.js ***!
-  \************************************************************************/
-/***/ function(module, exports) {
-
-	"use strict";
-	var JournalEntry = (function () {
-	    function JournalEntry() {
-	        this.journalEntryLines = [];
-	    }
-	    return JournalEntry;
-	}());
-	Object.defineProperty(exports, "__esModule", { value: true });
-	exports.default = JournalEntry;
-	//# sourceMappingURL=JournalEntry.js.map
-
-/***/ },
-
-/***/ 195:
-/*!****************************************************************************!*\
-  !*** ./wwwroot/libs/tsxbuild/Shared/Stores/Financials/JournalEntryLine.js ***!
-  \****************************************************************************/
-/***/ function(module, exports) {
-
-	"use strict";
-	var JournalEntryLine = (function () {
-	    function JournalEntryLine(accountId, drcr, amount, memo) {
-	        this.accountId = accountId;
-	        this.drcr = drcr;
-	        this.amount = amount;
-	        this.memo = memo;
-	    }
-	    return JournalEntryLine;
-	}());
-	Object.defineProperty(exports, "__esModule", { value: true });
-	exports.default = JournalEntryLine;
-	//# sourceMappingURL=JournalEntryLine.js.map
-
-/***/ },
-
 /***/ 196:
 /*!*******************************************************************!*\
   !*** ./wwwroot/libs/tsxbuild/Shared/Stores/Common/CommonStore.js ***!
@@ -4423,7 +4212,7 @@ webpackJsonp([0],{
 	            for (var i = 0; i < data.length; i++) {
 	                vendors.push(data[i]);
 	            }
-	        });
+	        }.bind(this));
 	    };
 	    CommonStore.prototype.loadItemsLookup = function () {
 	        var items = this.items;
@@ -4481,7 +4270,381 @@ webpackJsonp([0],{
 	exports.default = CommonStore;
 	//# sourceMappingURL=CommonStore.js.map
 
+/***/ },
+
+/***/ 198:
+/*!**********************************************************************!*\
+  !*** ./wwwroot/libs/tsxbuild/Shared/Components/SelectPaymentTerm.js ***!
+  \**********************************************************************/
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	var __extends = (this && this.__extends) || function (d, b) {
+	    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
+	    function __() { this.constructor = d; }
+	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+	};
+	var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+	    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+	    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+	    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+	    return c > 3 && r && Object.defineProperty(target, key, r), r;
+	};
+	var React = __webpack_require__(/*! react */ 1);
+	var mobx_react_1 = __webpack_require__(/*! mobx-react */ 168);
+	var SelectPaymentTerm = (function (_super) {
+	    __extends(SelectPaymentTerm, _super);
+	    function SelectPaymentTerm() {
+	        _super.apply(this, arguments);
+	    }
+	    SelectPaymentTerm.prototype.onChangePaymentTerm = function (e) {
+	        this.props.store.changedPaymentTerm(e.target.value);
+	    };
+	    SelectPaymentTerm.prototype.render = function () {
+	        var options = [];
+	        this.props.store.commonStore.paymentTerms.map(function (term) {
+	            return (options.push(React.createElement("option", {key: term.id, value: term.id}, " ", term.description, " ")));
+	        });
+	        return (React.createElement("select", {id: "optPaymentTerm", value: this.props.selected, onChange: this.onChangePaymentTerm.bind(this), className: "form-control select2"}, React.createElement("option", {key: -1, value: ""}), options));
+	    };
+	    SelectPaymentTerm = __decorate([
+	        mobx_react_1.observer
+	    ], SelectPaymentTerm);
+	    return SelectPaymentTerm;
+	}(React.Component));
+	Object.defineProperty(exports, "__esModule", { value: true });
+	exports.default = SelectPaymentTerm;
+	//# sourceMappingURL=SelectPaymentTerm.js.map
+
+/***/ },
+
+/***/ 199:
+/*!*******************************************************************!*\
+  !*** ./wwwroot/libs/tsxbuild/Shared/Components/SelectLineItem.js ***!
+  \*******************************************************************/
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	var __extends = (this && this.__extends) || function (d, b) {
+	    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
+	    function __() { this.constructor = d; }
+	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+	};
+	var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+	    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+	    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+	    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+	    return c > 3 && r && Object.defineProperty(target, key, r), r;
+	};
+	var React = __webpack_require__(/*! react */ 1);
+	var mobx_react_1 = __webpack_require__(/*! mobx-react */ 168);
+	var SelectLineItem = (function (_super) {
+	    __extends(SelectLineItem, _super);
+	    function SelectLineItem() {
+	        _super.apply(this, arguments);
+	    }
+	    SelectLineItem.prototype.onChangeItem = function (e) {
+	        if (this.props.row !== undefined)
+	            this.props.store.updateLineItem(this.props.row, "itemId", e.target.value);
+	    };
+	    SelectLineItem.prototype.render = function () {
+	        var options = [];
+	        this.props.store.commonStore.items.map(function (item) {
+	            return (options.push(React.createElement("option", {key: item.id, value: item.id}, " ", item.description, " ")));
+	        });
+	        return (React.createElement("select", {value: this.props.selected, id: this.props.controlId, onChange: this.onChangeItem.bind(this), className: "form-control select2"}, React.createElement("option", {key: -1, value: ""}), options));
+	    };
+	    SelectLineItem = __decorate([
+	        mobx_react_1.observer
+	    ], SelectLineItem);
+	    return SelectLineItem;
+	}(React.Component));
+	Object.defineProperty(exports, "__esModule", { value: true });
+	exports.default = SelectLineItem;
+	//# sourceMappingURL=SelectLineItem.js.map
+
+/***/ },
+
+/***/ 200:
+/*!**************************************************************************!*\
+  !*** ./wwwroot/libs/tsxbuild/Shared/Components/SelectLineMeasurement.js ***!
+  \**************************************************************************/
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	var __extends = (this && this.__extends) || function (d, b) {
+	    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
+	    function __() { this.constructor = d; }
+	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+	};
+	var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+	    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+	    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+	    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+	    return c > 3 && r && Object.defineProperty(target, key, r), r;
+	};
+	var React = __webpack_require__(/*! react */ 1);
+	var mobx_react_1 = __webpack_require__(/*! mobx-react */ 168);
+	var SelectLineMeasurement = (function (_super) {
+	    __extends(SelectLineMeasurement, _super);
+	    function SelectLineMeasurement() {
+	        _super.apply(this, arguments);
+	    }
+	    SelectLineMeasurement.prototype.onChangeMeasurement = function (e) {
+	        if (this.props.row !== undefined)
+	            this.props.store.updateLineItem(this.props.row, "measurementId", e.target.value);
+	    };
+	    SelectLineMeasurement.prototype.render = function () {
+	        var options = [];
+	        this.props.store.commonStore.measurements.map(function (measurement) {
+	            return (options.push(React.createElement("option", {key: measurement.id, value: measurement.id}, " ", measurement.description, " ")));
+	        });
+	        return (React.createElement("select", {value: this.props.selected, id: this.props.controlId, onChange: this.onChangeMeasurement.bind(this), className: "form-control select2"}, React.createElement("option", {key: -1, value: ""}), options));
+	    };
+	    SelectLineMeasurement = __decorate([
+	        mobx_react_1.observer
+	    ], SelectLineMeasurement);
+	    return SelectLineMeasurement;
+	}(React.Component));
+	Object.defineProperty(exports, "__esModule", { value: true });
+	exports.default = SelectLineMeasurement;
+	//# sourceMappingURL=SelectLineMeasurement.js.map
+
+/***/ },
+
+/***/ 207:
+/*!*******************************************************************!*\
+  !*** ./wwwroot/libs/tsxbuild/Shared/Components/SelectCustomer.js ***!
+  \*******************************************************************/
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	var __extends = (this && this.__extends) || function (d, b) {
+	    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
+	    function __() { this.constructor = d; }
+	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+	};
+	var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+	    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+	    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+	    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+	    return c > 3 && r && Object.defineProperty(target, key, r), r;
+	};
+	var React = __webpack_require__(/*! react */ 1);
+	var mobx_react_1 = __webpack_require__(/*! mobx-react */ 168);
+	var SelectCustomer = (function (_super) {
+	    __extends(SelectCustomer, _super);
+	    function SelectCustomer() {
+	        _super.apply(this, arguments);
+	    }
+	    SelectCustomer.prototype.onChangeCustomer = function (e) {
+	        this.props.store.changedCustomer(e.target.value);
+	    };
+	    SelectCustomer.prototype.render = function () {
+	        var options = [];
+	        this.props.store.commonStore.customers.map(function (customer) {
+	            return (options.push(React.createElement("option", {key: customer.id, value: customer.id}, " ", customer.name, " ")));
+	        });
+	        return (React.createElement("select", {id: "optCustomer", value: this.props.selected, onChange: this.onChangeCustomer.bind(this), className: "form-control select2"}, React.createElement("option", {key: -1, value: ""}), options));
+	    };
+	    SelectCustomer = __decorate([
+	        mobx_react_1.observer
+	    ], SelectCustomer);
+	    return SelectCustomer;
+	}(React.Component));
+	Object.defineProperty(exports, "__esModule", { value: true });
+	exports.default = SelectCustomer;
+	//# sourceMappingURL=SelectCustomer.js.map
+
+/***/ },
+
+/***/ 214:
+/*!**********************************************************************!*\
+  !*** ./wwwroot/libs/tsxbuild/Shared/Stores/Sales/SalesOrderStore.js ***!
+  \**********************************************************************/
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+	    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+	    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+	    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+	    return c > 3 && r && Object.defineProperty(target, key, r), r;
+	};
+	var mobx_1 = __webpack_require__(/*! mobx */ 169);
+	var axios = __webpack_require__(/*! axios */ 174);
+	var Config = __webpack_require__(/*! Config */ 193);
+	var SalesOrder_1 = __webpack_require__(/*! ./SalesOrder */ 215);
+	var SalesOrderLine_1 = __webpack_require__(/*! ./SalesOrderLine */ 216);
+	var CommonStore_1 = __webpack_require__(/*! ../Common/CommonStore */ 196);
+	var baseUrl = location.protocol
+	    + "//" + location.hostname
+	    + (location.port && ":" + location.port)
+	    + "/";
+	var SalesOrderStore = (function () {
+	    function SalesOrderStore(quotationId, orderId) {
+	        this.commonStore = new CommonStore_1.default();
+	        this.salesOrder = new SalesOrder_1.default();
+	        mobx_1.extendObservable(this.salesOrder, {
+	            customerId: this.salesOrder.customerId,
+	            orderDate: this.salesOrder.orderDate,
+	            paymentTermId: this.salesOrder.paymentTermId,
+	            referenceNo: this.salesOrder.referenceNo,
+	            salesOrderLines: []
+	        });
+	        if (quotationId !== undefined) {
+	            axios.get(Config.apiUrl + "api/sales/quotation?id=" + quotationId)
+	                .then(function (result) {
+	                this.changedCustomer(result.data.customerId);
+	                this.changedOrderDate(result.data.quotationDate);
+	                for (var i = 0; i < result.data.SalesQuotationLines.length; i++) {
+	                    this.addLineItem(result.data.SalesQuotationLines[i].itemId, result.data.SalesQuotationLines[i].measurementId, result.data.SalesQuotationLines[i].quantity, result.data.SalesQuotationLines[i].amount, result.data.SalesQuotationLines[i].discount);
+	                }
+	            }.bind(this))
+	                .catch(function (error) {
+	            }.bind(this));
+	        }
+	        else if (orderId !== undefined) {
+	            axios.get(Config.apiUrl + "api/sales/salesorder?id=" + orderId)
+	                .then(function (result) {
+	                this.changedCustomer(result.data.customerId);
+	                this.changedOrderDate(result.data.orderDate);
+	                for (var i = 0; i < result.data.SalesOrderLines.length; i++) {
+	                    this.addLineItem(result.data.SalesOrderLines[i].itemId, result.data.SalesOrderLines[i].measurementId, result.data.SalesOrderLines[i].quantity, result.data.SalesOrderLines[i].amount, result.data.SalesOrderLines[i].discount);
+	                }
+	            }.bind(this))
+	                .catch(function (error) {
+	            }.bind(this));
+	        }
+	    }
+	    SalesOrderStore.prototype.saveNewSalesOrder = function () {
+	        this.validationErrors = [];
+	        if (this.salesOrder.customerId === undefined || this.salesOrder.customerId === "")
+	            this.validationErrors.push("Customer is required.");
+	        if (this.salesOrder.paymentTermId === undefined || this.salesOrder.paymentTermId === "")
+	            this.salesOrder.push("Payment term is required.");
+	        if (this.salesOrder.orderDate === undefined || this.salesOrder.orderDate === "")
+	            this.validationErrors.push("Date is required.");
+	        if (this.salesOrder.purchaseOrderLines === undefined || this.salesOrder.purchaseOrderLines.length < 1)
+	            this.validationErrors.push("Enter at least 1 line item.");
+	        if (this.salesOrder.purchaseOrderLines !== undefined && this.salesOrder.purchaseOrderLines.length > 0) {
+	            for (var i = 0; i < this.salesOrder.purchaseOrderLines.length; i++) {
+	                if (this.salesOrder.purchaseOrderLines[i].itemId === undefined
+	                    || this.salesOrder.purchaseOrderLines[i].itemId === "")
+	                    this.validationErrors.push("Item is required.");
+	                if (this.salesOrder.purchaseOrderLines[i].measurementId === undefined
+	                    || this.salesOrder.purchaseOrderLines[i].measurementId === "")
+	                    this.validationErrors.push("Uom is required.");
+	                if (this.salesOrder.purchaseOrderLines[i].quantity === undefined
+	                    || this.salesOrder.purchaseOrderLines[i].quantity === ""
+	                    || this.salesOrder.purchaseOrderLines[i].quantity === 0)
+	                    this.validationErrors.push("Quantity is required.");
+	                if (this.salesOrder.purchaseOrderLines[i].amount === undefined
+	                    || this.salesOrder.purchaseOrderLines[i].amount === ""
+	                    || this.salesOrder.purchaseOrderLines[i].amount === 0)
+	                    this.validationErrors.push("Amount is required.");
+	                if (this.lineTotal(i) === undefined
+	                    || this.lineTotal(i).toString() === "NaN"
+	                    || this.lineTotal(i) === 0)
+	                    this.validationErrors.push("Invalid data.");
+	            }
+	        }
+	        if (this.validationErrors.length === 0) {
+	            axios.post(Config.apiUrl + "api/sales/savesalesorder", JSON.stringify(this.salesOrder), {
+	                headers: {
+	                    'Content-type': 'application/json'
+	                }
+	            })
+	                .then(function (response) {
+	                console.log(response);
+	            })
+	                .catch(function (error) {
+	                console.log(error);
+	            }.bind(this));
+	        }
+	    };
+	    SalesOrderStore.prototype.changedCustomer = function (custId) {
+	        this.salesOrder.customerId = custId;
+	    };
+	    SalesOrderStore.prototype.changedOrderDate = function (date) {
+	        this.salesOrder.orderDate = date;
+	    };
+	    SalesOrderStore.prototype.addLineItem = function (itemId, measurementId, quantity, amount, discount) {
+	        var newLineItem = new SalesOrderLine_1.default(itemId, measurementId, quantity, amount, discount);
+	        this.salesOrder.salesOrderLines.push(mobx_1.extendObservable(newLineItem, newLineItem));
+	    };
+	    SalesOrderStore.prototype.removeLineItem = function (row) {
+	        this.salesOrder.salesOrderLines.splice(row, 1);
+	    };
+	    SalesOrderStore.prototype.updateLineItem = function (row, targetProperty, value) {
+	        if (this.salesOrder.salesOrderLines.length > 0)
+	            this.salesOrder.salesOrderLines[row][targetProperty] = value;
+	    };
+	    SalesOrderStore.prototype.grandTotal = function () {
+	        var sum = 0;
+	        for (var i = 0; i < this.salesOrder.salesOrderLines.length; i++) {
+	            var lineSum = this.salesOrder.salesOrderLines[i].quantity * this.salesOrder.salesOrderLines[i].amount;
+	            sum = sum + lineSum;
+	        }
+	        return sum;
+	    };
+	    SalesOrderStore.prototype.lineTotal = function (row) {
+	        var lineSum = this.salesOrder.salesOrderLines[row].quantity * this.salesOrder.salesOrderLines[row].amount;
+	        ;
+	        return lineSum;
+	    };
+	    __decorate([
+	        mobx_1.observable
+	    ], SalesOrderStore.prototype, "validationErrors", void 0);
+	    return SalesOrderStore;
+	}());
+	Object.defineProperty(exports, "__esModule", { value: true });
+	exports.default = SalesOrderStore;
+	//# sourceMappingURL=SalesOrderStore.js.map
+
+/***/ },
+
+/***/ 215:
+/*!*****************************************************************!*\
+  !*** ./wwwroot/libs/tsxbuild/Shared/Stores/Sales/SalesOrder.js ***!
+  \*****************************************************************/
+/***/ function(module, exports) {
+
+	"use strict";
+	var SalesOrder = (function () {
+	    function SalesOrder() {
+	        this.salesOrderLines = [];
+	    }
+	    return SalesOrder;
+	}());
+	Object.defineProperty(exports, "__esModule", { value: true });
+	exports.default = SalesOrder;
+	//# sourceMappingURL=SalesOrder.js.map
+
+/***/ },
+
+/***/ 216:
+/*!*********************************************************************!*\
+  !*** ./wwwroot/libs/tsxbuild/Shared/Stores/Sales/SalesOrderLine.js ***!
+  \*********************************************************************/
+/***/ function(module, exports) {
+
+	"use strict";
+	var SalesOrderLine = (function () {
+	    function SalesOrderLine(itemId, measurementId, quantity, amount, discount) {
+	        this.itemId = itemId;
+	        this.measurementId = measurementId;
+	        this.quantity = quantity;
+	        this.amount = amount;
+	        this.discount = discount;
+	    }
+	    return SalesOrderLine;
+	}());
+	Object.defineProperty(exports, "__esModule", { value: true });
+	exports.default = SalesOrderLine;
+	//# sourceMappingURL=SalesOrderLine.js.map
+
 /***/ }
 
 });
-//# sourceMappingURL=addjournalentry.chunk.js.map
+//# sourceMappingURL=salesorder.chunk.js.map

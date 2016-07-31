@@ -5,8 +5,6 @@ using System;
 using System.Linq;
 using System.Collections.Generic;
 
-// For more information on enabling Web API for empty projects, visit http://go.microsoft.com/fwlink/?LinkID=397860
-
 namespace Api.Controllers
 {
     [Route("api/[controller]")]
@@ -37,13 +35,50 @@ namespace Api.Controllers
                     VendorId = purchaseOrder.VendorId.Value,
                     VendorName = purchaseOrder.Vendor.Party.Name,
                     OrderDate = purchaseOrder.Date,
-                    Amount = purchaseOrder.PurchaseOrderLines.Sum(l => l.Amount)
+                    Amount = purchaseOrder.PurchaseOrderLines.Sum(l => l.Amount),
+                    Completed = purchaseOrder.IsCompleted()
                 };
 
                 purchaseOrdersDto.Add(purchaseOrderDto);
             }
 
             return new ObjectResult(purchaseOrdersDto);
+        }
+
+        [HttpGet]
+        [Route("[action]")]
+        public IActionResult PurchaseOrder(int id)
+        {
+            var purchaseOrder = _purchasingService.GetPurchaseOrderById(id);
+            Dto.Purchasing.PurchaseOrder purchaseOrderDto = new Dto.Purchasing.PurchaseOrder();
+
+            purchaseOrderDto = new Dto.Purchasing.PurchaseOrder()
+            {
+                Id = purchaseOrder.Id,
+                PurchaseInvoiceHeaderId = purchaseOrder.PurchaseInvoiceHeaderId,                
+                VendorId = purchaseOrder.VendorId.Value,
+                VendorName = purchaseOrder.Vendor.Party.Name,
+                OrderDate = purchaseOrder.Date,
+                Amount = purchaseOrder.PurchaseOrderLines.Sum(l => l.Amount),
+                Completed = purchaseOrder.IsCompleted()
+            };
+
+            foreach(var item in purchaseOrder.PurchaseOrderLines)
+            {
+                var line = new Dto.Purchasing.PurchaseOrderLine()
+                {
+                    Id = item.Id,
+                    ItemId = item.ItemId,
+                    MeasurementId = item.MeasurementId,
+                    Quantity = item.Quantity,
+                    Amount = item.Amount,
+                    Discount = item.Discount
+                };
+
+                purchaseOrderDto.PurchaseOrderLines.Add(line);
+            }
+
+            return new ObjectResult(purchaseOrderDto);
         }
 
         [HttpPost]
@@ -111,7 +146,7 @@ namespace Api.Controllers
 
         [HttpGet]
         [Route("[action]")]
-        public IActionResult Invoice(int id)
+        public IActionResult PurchaseInvoice(int id)
         {
             var invoice = _purchasingService.GetPurchaseInvoiceById(id);
             var purchaseInvoiceDto = new Dto.Purchasing.PurchaseInvoice()
@@ -123,6 +158,21 @@ namespace Api.Controllers
                 InvoiceDate = invoice.Date,
                 Amount = invoice.PurchaseInvoiceLines.Sum(l => l.Amount)
             };
+
+            foreach (var item in invoice.PurchaseInvoiceLines)
+            {
+                var line = new Dto.Purchasing.PurchaseInvoiceLine()
+                {
+                    Id = item.Id,
+                    ItemId = item.ItemId,
+                    MeasurementId = item.MeasurementId,
+                    Quantity = item.Quantity,
+                    Amount = item.Amount,
+                    Discount = item.Discount
+                };
+
+                purchaseInvoiceDto.PurchaseInvoiceLines.Add(line);
+            }
 
             return new ObjectResult(purchaseInvoiceDto);
         }

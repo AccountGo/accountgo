@@ -54,6 +54,18 @@ namespace AccountGoWeb.Controllers
         {
             return Ok();
         }
+        
+        public IActionResult SalesOrder(int id)
+        {
+            ViewBag.PageContentHeader = "Sales Order";
+            return View();
+        }
+
+        public IActionResult SalesInvoice(int id)
+        {
+            ViewBag.PageContentHeader = "Sales Invoice";
+            return View();
+        }
 
         public async System.Threading.Tasks.Task<IActionResult> SalesInvoices()
         {

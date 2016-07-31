@@ -2,6 +2,7 @@
 
 <div>
     <a href="~/sales/addsalesinvoice"><i class="fa fa-plus margin-a"></i>New Invoice</a>
+    <a href="~/sales/salesinvoice" id="linkViewInvoice" class="inactiveLink"><i class="fa fa-edit margin-a"></i>View</a>
 </div>
 <div>
     <div id="salesinvoices" class="ag-fresh" style="height: 400px;"></div>
@@ -17,10 +18,18 @@
     var gridOptions = {
         columnDefs: columnDefs,
         rowData: @Html.Raw(Model),
-
         // PROPERTIES - simple boolean / string / number properties
         rowSelection: 'multiple',
-     };
+        onSelectionChanged: onSelectionChanged,
+    };
+
+    function onSelectionChanged() {
+        var selectedRows = gridOptions.api.getSelectedRows();
+        selectedRow = selectedRows[0];
+        
+        document.getElementById('linkViewInvoice').setAttribute('href', 'salesinvoice?invoiceId=' + selectedRow.id);
+        document.getElementById('linkViewInvoice').setAttribute('class', '');
+    }
 
     // wait for the document to be loaded, otherwise
     // ag-Grid will not find the div in the document.

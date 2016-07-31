@@ -44,5 +44,6 @@ namespace Services.Sales
         void AddSalesQuote(SalesQuoteHeader salesQuoteHeader);
         IEnumerable<SalesQuoteHeader> GetSalesQuotes();
         IEnumerable<SalesInvoiceHeader> GetCustomerInvoices(int customerId);
+        SalesQuoteHeader GetSalesQuotationById(int id);
     }
 }

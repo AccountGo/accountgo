@@ -76,7 +76,7 @@
 /******/ 			script.charset = 'utf-8';
 /******/ 			script.async = true;
 /******/
-/******/ 			script.src = __webpack_require__.p + "" + chunkId + "." + ({"0":"financials/addjournalentry","1":"home","2":"purchasing/addpurchaseinvoice","3":"purchasing/addpurchaseorder","4":"quotations/addsalesquotation","5":"sales/addsalesinvoice","6":"sales/addsalesorder"}[chunkId]||chunkId) + ".chunk.js";
+/******/ 			script.src = __webpack_require__.p + "" + chunkId + "." + ({"0":"financials/journalentry","1":"home","2":"purchasing/purchaseinvoice","3":"purchasing/purchaseorder","4":"quotations/salesquotation","5":"sales/salesinvoice","6":"sales/salesorder"}[chunkId]||chunkId) + ".chunk.js";
 /******/ 			head.appendChild(script);
 /******/ 		}
 /******/ 	};

@@ -2,6 +2,9 @@
 
 <div>
     <a href="~/purchasing/addpurchaseorder"><i class="fa fa-plus margin-a"></i>New Order</a>
+    <a href="~/purchasing/purchaseorder" id="linkViewOrder" class="inactiveLink"><i class="fa fa-edit margin-a"></i>View</a>
+    @*<a href="~/purchasing/receipt" id="linkNewReceipt" class=""><i class="fa fa-plus margin-a"></i>New Receipt</a>*@    
+    <a href="~/purchasing/addpurchaseinvoice" id="linkCreateInvoice" class="inactiveLink"><i class="fa fa-plus margin-a"></i>Create Invoice</a>    
 </div>
 <div>
     <div id="purchaseorders" class="ag-fresh" style="height: 400px;"></div>
@@ -11,16 +14,46 @@
         {headerName: "Order", field: "id", width: 50},
         {headerName: "Vendor Name", field: "vendorName", width: 350},
         {headerName: "Order Date", field: "orderDate", width: 100},
-        {headerName: "Amount", field: "Amount", width: 100}
+        {headerName: "Amount", field: "amount", width: 100},
+        //{headerName: "Completed", field: "completed", width: 100}
     ];
 
     var gridOptions = {
         columnDefs: columnDefs,
         rowData: @Html.Raw(Model),
-
         // PROPERTIES - simple boolean / string / number properties
-        rowSelection: 'multiple',
+        rowSelection: 'single',
+        onSelectionChanged: onSelectionChanged,
      };
+
+    function onSelectionChanged() {
+        var selectedRows = gridOptions.api.getSelectedRows();
+        selectedRow = selectedRows[0];
+        
+        //document.getElementById('linkNewReceipt').setAttribute('href', 'addreceipt?purchId=' + selectedRow.id);
+        document.getElementById('linkCreateInvoice').setAttribute('href', 'addpurchaseinvoice?purchId=' + selectedRow.id);
+        document.getElementById('linkViewOrder').setAttribute('href', 'purchaseorder?purchId=' + selectedRow.id);
+        
+        if(selectedRow.purchaseInvoiceHeaderId === null){
+            document.getElementById('linkCreateInvoice').setAttribute('class', '');
+        }
+        else{
+            document.getElementById('linkCreateInvoice').setAttribute('class', 'inactiveLink');
+        }
+
+        document.getElementById('linkViewOrder').setAttribute('class', '');
+
+        //if(selectedRow.completed)
+        //{
+        //    document.getElementById('linkCreateInvoice').setAttribute('class', '');
+        //    document.getElementById('linkNewReceipt').setAttribute('class', 'inactiveLink');
+        //}
+        //else
+        //{
+        //    document.getElementById('linkCreateInvoice').setAttribute('class', 'inactiveLink');
+        //    document.getElementById('linkNewReceipt').setAttribute('class', '');
+        //}
+    }
 
     // wait for the document to be loaded, otherwise
     // ag-Grid will not find the div in the document.

@@ -1,6 +1,7 @@
 ﻿import SalesOrderLine from "./SalesOrderLine";
 
 interface ISalesOrder {
+    id;
     customerId;
     orderDate;
     paymentTermid;
@@ -9,6 +10,7 @@ interface ISalesOrder {
 }
 
 export default class SalesOrder implements ISalesOrder {
+    id: number;
     customerId: number;
     orderDate: Date;
     paymentTermid: number;

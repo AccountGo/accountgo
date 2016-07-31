@@ -19,27 +19,31 @@ namespace AccountGoWeb.Controllers
             return View();
         }
 
-        public async System.Threading.Tasks.Task<IActionResult> PurchaseOrders()
+        public IActionResult PurchaseOrders()
         {
             ViewBag.PageContentHeader = "Purchase Orders";
-            using (var client = new HttpClient())
-            {
-                var baseUri = _config["ApiUrl"];
-                client.BaseAddress = new System.Uri(baseUri);
-                client.DefaultRequestHeaders.Accept.Clear();
-                var response = await client.GetAsync(baseUri + "purchasing/purchaseorders");
-                if (response.IsSuccessStatusCode)
-                {
-                    var responseJson = await response.Content.ReadAsStringAsync();
-                    return View(model: responseJson);
-                }
-            }
-            return View();
+
+            string purchaseOrders = GetAsync<object>("purchasing/purchaseorders")
+                .Result
+                .ToString();
+
+            return View(model: purchaseOrders);
         }
 
         public IActionResult AddPurchaseOrder()
         {
             ViewBag.PageContentHeader = "Add Purchase Order";
+
+            ViewBag.Vendors = Models.SelectListItemHelper.Vendors();
+
+            return View();
+        }
+
+        public IActionResult PurchaseOrder(int purchId = 0)
+        {
+            ViewBag.PageContentHeader = "Purchase Order";
+
+            var purchOrderDto = GetAsync<Dto.Purchasing.PurchaseOrder>("purchasing/purchaseorder?id=" + purchId).Result;
 
             ViewBag.Vendors = Models.SelectListItemHelper.Vendors();
 
@@ -64,9 +68,25 @@ namespace AccountGoWeb.Controllers
             return View();
         }
 
-        public IActionResult AddPurchaseInvoice()
+        public IActionResult AddPurchaseInvoice(int purchId = 0)
         {
-            ViewBag.PageContentHeader = "Add Purchase Invoice";
+            ViewBag.PageContentHeader = "New Invoice";
+
+            return View();
+        }
+
+        public IActionResult PurchaseInvoice(int id)
+        {
+            ViewBag.PageContentHeader = "Purchase Invoice";
+
+            ViewBag.Vendors = Models.SelectListItemHelper.Vendors();
+
+            return View();
+        }
+
+        public IActionResult AddPurchaseReceipt(int purchId = 0)
+        {
+            ViewBag.PageContentHeader = "New Receipt";
 
             return View();
         }
@@ -141,7 +161,7 @@ namespace AccountGoWeb.Controllers
         {
             ViewBag.PageContentHeader = "Make Payment";
 
-            var invoice = GetAsync<Dto.Purchasing.PurchaseInvoice>("purchasing/invoice?id=" + id).Result;
+            var invoice = GetAsync<Dto.Purchasing.PurchaseInvoice>("purchasing/purchaseinvoice?id=" + id).Result;
 
             var model = new Models.Purchasing.Payment()
             {

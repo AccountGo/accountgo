@@ -584,5 +584,16 @@ namespace Services.Sales
 
             return invoices;
         }
+
+        public SalesQuoteHeader GetSalesQuotationById(int id)
+        {
+            var quotation = _salesQuoteRepo.GetAllIncluding(q => q.Customer,
+                q => q.Customer.Party,
+                q => q.SalesQuoteLines)
+                .Where(q => q.Id == id)
+                .FirstOrDefault();
+
+            return quotation;
+        }
     }
 }

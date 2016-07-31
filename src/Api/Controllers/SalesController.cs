@@ -212,11 +212,9 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("[action]/{id:int}")]
-        public IActionResult GetSalesOrderById(int id)
+        [Route("[action]")]
+        public IActionResult SalesOrder(int id)
         {
-            IList<Dto.Sales.SalesOrder> Dto = new List<Dto.Sales.SalesOrder>();
-
             try
             {
                 var salesOrder = _salesService.GetSalesOrderById(id);
@@ -245,6 +243,47 @@ namespace Api.Controllers
                     lineDto.MeasurementDescription = line.Measurement.Description;
 
                     salesOrderDto.SalesOrderLines.Add(lineDto);
+                }
+
+                return new ObjectResult(salesOrderDto);
+            }
+            catch (Exception ex)
+            {
+                return new ObjectResult(ex);
+            }
+        }
+
+        [HttpGet]
+        [Route("[action]")]
+        public IActionResult SalesInvoice(int id)
+        {
+            try
+            {
+                var salesInvoice= _salesService.GetSalesInvoiceById(id);
+
+                var salesOrderDto = new Dto.Sales.SalesInvoice()
+                {
+                    Id = salesInvoice.Id,
+                    CustomerId = salesInvoice.CustomerId,
+                    CustomerName = salesInvoice.Customer.Party.Name,
+                    InvoiceDate = salesInvoice.Date,
+                    TotalAmount = salesInvoice.SalesInvoiceLines.Sum(l => l.Amount),
+                    SalesInvoiceLines = new List<Dto.Sales.SalesInvoiceLine>()
+                };
+
+                foreach (var line in salesInvoice.SalesInvoiceLines)
+                {
+                    var lineDto = new Dto.Sales.SalesInvoiceLine();
+                    lineDto.Id = line.Id;
+                    lineDto.Amount = line.Amount;
+                    lineDto.Discount = line.Discount;
+                    lineDto.Quantity = line.Quantity;
+                    lineDto.ItemId = line.ItemId;
+                    lineDto.ItemDescription = line.Item.Description;
+                    lineDto.MeasurementId = line.MeasurementId;
+                    lineDto.MeasurementDescription = line.Measurement.Description;
+
+                    salesOrderDto.SalesInvoiceLines.Add(lineDto);
                 }
 
                 return new ObjectResult(salesOrderDto);
@@ -302,6 +341,7 @@ namespace Api.Controllers
             foreach (var quote in quotes) {
                 var quoteDto = new Dto.Sales.SalesQuotation()
                 {
+                    Id = quote.Id,
                     CustomerId = quote.CustomerId,
                     CustomerName = quote.Customer.Party.Name,
                     PaymentTermId = quote.CustomerId,
@@ -324,6 +364,36 @@ namespace Api.Controllers
             }
 
             return new ObjectResult(quoteDtos);
+        }
+
+        [HttpGet]
+        [Route("[action]")]
+        public IActionResult Quotation(int id)
+        {
+            var quote = _salesService.GetSalesQuotationById(id);
+
+            var quoteDto = new Dto.Sales.SalesQuotation()
+            {
+                CustomerId = quote.CustomerId,
+                CustomerName = quote.Customer.Party.Name,                
+                QuotationDate = quote.Date,
+            };
+
+
+            foreach (var line in quote.SalesQuoteLines)
+            {
+                var lineDto = new Dto.Sales.SalesQuotationLine()
+                {
+                    ItemId = line.ItemId,
+                    MeasurementId = line.MeasurementId,
+                    Quantity = line.Quantity,
+                    Amount = line.Amount,
+                    Discount = line.Discount
+                };
+                quoteDto.SalesQuotationLines.Add(lineDto);
+            }
+
+            return new ObjectResult(quoteDto);
         }
 
         [HttpGet]
@@ -505,31 +575,31 @@ namespace Api.Controllers
 
         [HttpPost]
         [Route("[action]")]
-        public IActionResult SaveQuotation([FromBody]Dto.Sales.SalesQuotation Dto)
+        public IActionResult SaveQuotation([FromBody]Dto.Sales.SalesQuotation quotationDto)
         {
             try
             {
                 var salesQuote = new Core.Domain.Sales.SalesQuoteHeader()
                 {
-                    CustomerId = Dto.CustomerId,
-                    Date = Dto.QuotationDate,
+                    CustomerId = quotationDto.CustomerId.GetValueOrDefault(),
+                    Date = quotationDto.QuotationDate,
                 };
 
-                foreach (var line in Dto.SalesQuotationLines)
+                foreach (var line in quotationDto.SalesQuotationLines)
                 {
                     var salesQuoteLine = new Core.Domain.Sales.SalesQuoteLine();
                     salesQuoteLine.Amount = line.Amount == null ? 0 : line.Amount.Value;
                     salesQuoteLine.Discount = line.Discount == null ? 0 : line.Discount.Value;
                     salesQuoteLine.Quantity = line.Quantity == null ? 0 : line.Quantity.Value;
-                    salesQuoteLine.ItemId = line.ItemId;
-                    salesQuoteLine.MeasurementId = line.MeasurementId;
+                    salesQuoteLine.ItemId = line.ItemId.GetValueOrDefault();
+                    salesQuoteLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
 
                     salesQuote.SalesQuoteLines.Add(salesQuoteLine);
                 }
 
                 _salesService.AddSalesQuote(salesQuote);
 
-                return new ObjectResult(Dto);
+                return new ObjectResult(Ok());
             }
             catch (Exception ex)
             {

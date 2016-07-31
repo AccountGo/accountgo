@@ -2,6 +2,7 @@
 
 <div>
     <a href="~/purchasing/addpurchaseinvoice"><i class="fa fa-plus margin-a"></i>New Invoice</a>
+    <a href="~/purchasing/purchaseinvoice" id="linkViewInvoice" class="inactiveLink"><i class="fa fa-edit margin-a"></i>View</a>
     <a href="~/purchasing/payment" id="linkMakePayment" class="inactiveLink"><i class="fa fa-tasks margin-a"></i>Make Payment</a>
 </div>
 <div>
@@ -28,11 +29,14 @@
         selectedRow = selectedRows[0];
         
         document.getElementById('linkMakePayment').setAttribute('href', 'payment/' + selectedRow.id);
+        document.getElementById('linkViewInvoice').setAttribute('href', 'purchaseinvoice?invoiceId=' + selectedRow.id);
         
         if(!selectedRow.isPaid)
             document.getElementById('linkMakePayment').setAttribute('class', '');
         else
             document.getElementById('linkMakePayment').setAttribute('class', 'inactiveLink');
+
+        document.getElementById('linkViewInvoice').setAttribute('class', '');
     }
 
     // wait for the document to be loaded, otherwise

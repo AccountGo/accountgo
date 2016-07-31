@@ -3,12 +3,12 @@ using System.Collections.Generic;
 
 namespace Dto.Sales
 {
-    public class SalesQuotation
+    public class SalesQuotation : BaseDto
     {
-        public int CustomerId { get; set; }
+        public int? CustomerId { get; set; }
         public string CustomerName { get; set; }
         public DateTime QuotationDate { get; set; }
-        public int PaymentTermId { get; set; }
+        public int? PaymentTermId { get; set; }
         public string ReferenceNo { get; set; }
         public decimal Amount { get { return GetTotalAmount(); } }
 
@@ -39,10 +39,10 @@ namespace Dto.Sales
         }
     }
 
-    public class SalesQuotationLine
+    public class SalesQuotationLine : BaseDto
     {
-        public int ItemId { get; set; }
-        public int MeasurementId { get; set; }
+        public int? ItemId { get; set; }
+        public int? MeasurementId { get; set; }
         public decimal? Quantity { get; set; }
         public decimal? Amount { get; set; }
         public decimal? Discount { get; set; }

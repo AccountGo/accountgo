@@ -1,9 +1,9 @@
-webpackJsonp([6],{
+webpackJsonp([5],{
 
 /***/ 0:
-/*!******************************************************!*\
-  !*** ./wwwroot/libs/tsxbuild/sales/addsalesorder.js ***!
-  \******************************************************/
+/*!*****************************************************!*\
+  !*** ./wwwroot/libs/tsxbuild/sales/salesinvoice.js ***!
+  \*****************************************************/
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -25,8 +25,10 @@ webpackJsonp([6],{
 	var SelectPaymentTerm_1 = __webpack_require__(/*! ../Shared/Components/SelectPaymentTerm */ 198);
 	var SelectLineItem_1 = __webpack_require__(/*! ../Shared/Components/SelectLineItem */ 199);
 	var SelectLineMeasurement_1 = __webpack_require__(/*! ../Shared/Components/SelectLineMeasurement */ 200);
-	var SalesOrderStore_1 = __webpack_require__(/*! ../Shared/Stores/Sales/SalesOrderStore */ 214);
-	var store = new SalesOrderStore_1.default();
+	var SalesInvoiceStore_1 = __webpack_require__(/*! ../Shared/Stores/Sales/SalesInvoiceStore */ 211);
+	var orderId = window.location.search.split("?orderId=")[1];
+	var invoiceId = window.location.search.split("?invoiceId=")[1];
+	var store = new SalesInvoiceStore_1.default(orderId, invoiceId);
 	var ValidationErrors = (function (_super) {
 	    __extends(ValidationErrors, _super);
 	    function ValidationErrors() {
@@ -47,50 +49,50 @@ webpackJsonp([6],{
 	    ], ValidationErrors);
 	    return ValidationErrors;
 	}(React.Component));
-	var SaveOrderButton = (function (_super) {
-	    __extends(SaveOrderButton, _super);
-	    function SaveOrderButton() {
+	var SaveInvoiceButton = (function (_super) {
+	    __extends(SaveInvoiceButton, _super);
+	    function SaveInvoiceButton() {
 	        _super.apply(this, arguments);
 	    }
-	    SaveOrderButton.prototype.saveNewSalesOrder = function (e) {
+	    SaveInvoiceButton.prototype.saveNewSalesInvoice = function (e) {
 	    };
-	    SaveOrderButton.prototype.render = function () {
-	        return (React.createElement("input", {type: "button", value: "Save", onClick: this.saveNewSalesOrder.bind(this)}));
+	    SaveInvoiceButton.prototype.render = function () {
+	        return (React.createElement("input", {type: "button", value: "Save", onClick: this.saveNewSalesInvoice.bind(this)}));
 	    };
-	    return SaveOrderButton;
+	    return SaveInvoiceButton;
 	}(React.Component));
-	var CancelOrderButton = (function (_super) {
-	    __extends(CancelOrderButton, _super);
-	    function CancelOrderButton() {
+	var CancelInvoiceButton = (function (_super) {
+	    __extends(CancelInvoiceButton, _super);
+	    function CancelInvoiceButton() {
 	        _super.apply(this, arguments);
 	    }
-	    CancelOrderButton.prototype.render = function () {
+	    CancelInvoiceButton.prototype.render = function () {
 	        return (React.createElement("input", {type: "button", value: "Cancel"}));
 	    };
-	    return CancelOrderButton;
+	    return CancelInvoiceButton;
 	}(React.Component));
-	var SalesOrderHeader = (function (_super) {
-	    __extends(SalesOrderHeader, _super);
-	    function SalesOrderHeader() {
+	var SalesInvoiceHeader = (function (_super) {
+	    __extends(SalesInvoiceHeader, _super);
+	    function SalesInvoiceHeader() {
 	        _super.apply(this, arguments);
 	    }
-	    SalesOrderHeader.prototype.onChangeOrderDate = function (e) {
-	        store.changedOrderDate(e.target.value);
+	    SalesInvoiceHeader.prototype.onChangeInvoiceDate = function (e) {
+	        store.changedInvoiceDate(e.target.value);
 	    };
-	    SalesOrderHeader.prototype.render = function () {
-	        return (React.createElement("div", {className: "box"}, React.createElement("div", {className: "box-header with-border"}, React.createElement("h3", {className: "box-title"}, "Customer Information"), React.createElement("div", {className: "box-tools pull-right"}, React.createElement("button", {type: "button", className: "btn btn-box-tool", "data-widget": "collapse", "data-toggle": "tooltip", title: "Collapse"}, React.createElement("i", {className: "fa fa-minus"})))), React.createElement("div", {className: "box-body"}, React.createElement("div", {className: "col-md-6"}, React.createElement("div", {className: "row"}, React.createElement("div", {className: "col-sm-2"}, "Customer"), React.createElement("div", {className: "col-sm-10"}, React.createElement(SelectCustomer_1.default, {store: store}))), React.createElement("div", {className: "row"}, React.createElement("div", {className: "col-sm-2"}, "Payment Term"), React.createElement("div", {className: "col-sm-10"}, React.createElement(SelectPaymentTerm_1.default, {store: store})))), React.createElement("div", {className: "col-md-6"}, React.createElement("div", {className: "row"}, React.createElement("div", {className: "col-sm-2"}, "Date"), React.createElement("div", {className: "col-sm-10"}, React.createElement("input", {type: "date", className: "form-control pull-right", onChange: this.onChangeOrderDate.bind(this), defaultValue: store.salesOrder.orderDate}))), React.createElement("div", {className: "row"}, React.createElement("div", {className: "col-sm-2"}, "Reference no."), React.createElement("div", {className: "col-sm-10"}, React.createElement("input", {type: "text", className: "form-control"})))))));
+	    SalesInvoiceHeader.prototype.render = function () {
+	        return (React.createElement("div", {className: "box"}, React.createElement("div", {className: "box-header with-border"}, React.createElement("h3", {className: "box-title"}, "Customer Information"), React.createElement("div", {className: "box-tools pull-right"}, React.createElement("button", {type: "button", className: "btn btn-box-tool", "data-widget": "collapse", "data-toggle": "tooltip", title: "Collapse"}, React.createElement("i", {className: "fa fa-minus"})))), React.createElement("div", {className: "box-body"}, React.createElement("div", {className: "col-md-6"}, React.createElement("div", {className: "row"}, React.createElement("div", {className: "col-sm-2"}, "Customer"), React.createElement("div", {className: "col-sm-10"}, React.createElement(SelectCustomer_1.default, {store: store, selected: store.salesInvoice.customerId}))), React.createElement("div", {className: "row"}, React.createElement("div", {className: "col-sm-2"}, "Payment Term"), React.createElement("div", {className: "col-sm-10"}, React.createElement(SelectPaymentTerm_1.default, {store: store, selected: store.salesInvoice.paymentTermId})))), React.createElement("div", {className: "col-md-6"}, React.createElement("div", {className: "row"}, React.createElement("div", {className: "col-sm-2"}, "Date"), React.createElement("div", {className: "col-sm-10"}, React.createElement("input", {type: "date", className: "form-control pull-right", onChange: this.onChangeInvoiceDate.bind(this), value: store.salesInvoice.invoiceDate}))), React.createElement("div", {className: "row"}, React.createElement("div", {className: "col-sm-2"}, "Reference no."), React.createElement("div", {className: "col-sm-10"}, React.createElement("input", {type: "text", className: "form-control"})))))));
 	    };
-	    SalesOrderHeader = __decorate([
+	    SalesInvoiceHeader = __decorate([
 	        mobx_react_1.observer
-	    ], SalesOrderHeader);
-	    return SalesOrderHeader;
+	    ], SalesInvoiceHeader);
+	    return SalesInvoiceHeader;
 	}(React.Component));
-	var SalesOrderLines = (function (_super) {
-	    __extends(SalesOrderLines, _super);
-	    function SalesOrderLines() {
+	var SalesInvoiceLines = (function (_super) {
+	    __extends(SalesInvoiceLines, _super);
+	    function SalesInvoiceLines() {
 	        _super.apply(this, arguments);
 	    }
-	    SalesOrderLines.prototype.addLineItem = function () {
+	    SalesInvoiceLines.prototype.addLineItem = function () {
 	        var itemId, measurementId, quantity, amount, discount;
 	        itemId = document.getElementById("optNewItemId").value;
 	        measurementId = document.getElementById("optNewMeasurementId").value;
@@ -103,57 +105,57 @@ webpackJsonp([6],{
 	        document.getElementById("txtNewAmount").value = "0";
 	        document.getElementById("txtNewDiscount").value = "0";
 	    };
-	    SalesOrderLines.prototype.onClickRemoveLineItem = function (e) {
+	    SalesInvoiceLines.prototype.onClickRemoveLineItem = function (e) {
 	        store.removeLineItem(e.target.name);
 	    };
-	    SalesOrderLines.prototype.onChangeQuantity = function (e) {
+	    SalesInvoiceLines.prototype.onChangeQuantity = function (e) {
 	        store.updateLineItem(e.target.name, "quantity", e.target.value);
 	    };
-	    SalesOrderLines.prototype.onChangeAmount = function (e) {
+	    SalesInvoiceLines.prototype.onChangeAmount = function (e) {
 	        store.updateLineItem(e.target.name, "amount", e.target.value);
 	    };
-	    SalesOrderLines.prototype.onChangeDiscount = function (e) {
+	    SalesInvoiceLines.prototype.onChangeDiscount = function (e) {
 	        store.updateLineItem(e.target.name, "discount", e.target.value);
 	    };
-	    SalesOrderLines.prototype.render = function () {
+	    SalesInvoiceLines.prototype.render = function () {
 	        var lineItems = [];
-	        for (var i = 0; i < store.salesOrder.salesOrderLines.length; i++) {
-	            lineItems.push(React.createElement("tr", {key: i}, React.createElement("td", null, React.createElement(SelectLineItem_1.default, {store: store, row: i, selected: store.salesOrder.salesOrderLines[i].itemId})), React.createElement("td", null, store.salesOrder.salesOrderLines[i].itemId), React.createElement("td", null, React.createElement(SelectLineMeasurement_1.default, {row: i, store: store, selected: store.salesOrder.salesOrderLines[i].measurementId}), store.salesOrder.salesOrderLines[i].measurementId), React.createElement("td", null, React.createElement("input", {type: "text", className: "form-control", name: i, value: store.salesOrder.salesOrderLines[i].quantity, onChange: this.onChangeQuantity.bind(this)})), React.createElement("td", null, React.createElement("input", {type: "text", className: "form-control", name: i, value: store.salesOrder.salesOrderLines[i].amount, onChange: this.onChangeAmount.bind(this)})), React.createElement("td", null, React.createElement("input", {type: "text", className: "form-control", name: i, value: store.salesOrder.salesOrderLines[i].discount, onChange: this.onChangeDiscount.bind(this)})), React.createElement("td", null, store.lineTotal(i)), React.createElement("td", null, React.createElement("input", {type: "button", name: i, value: "Remove", onClick: this.onClickRemoveLineItem.bind(this)}))));
+	        for (var i = 0; i < store.salesInvoice.salesInvoiceLines.length; i++) {
+	            lineItems.push(React.createElement("tr", {key: i}, React.createElement("td", null, React.createElement(SelectLineItem_1.default, {store: store, row: i, selected: store.salesInvoice.salesInvoiceLines[i].itemId})), React.createElement("td", null, store.salesInvoice.salesInvoiceLines[i].itemId), React.createElement("td", null, React.createElement(SelectLineMeasurement_1.default, {row: i, store: store, selected: store.salesInvoice.salesInvoiceLines[i].measurementId}), store.salesInvoice.salesInvoiceLines[i].measurementId), React.createElement("td", null, React.createElement("input", {type: "text", className: "form-control", name: i, value: store.salesInvoice.salesInvoiceLines[i].quantity, onChange: this.onChangeQuantity.bind(this)})), React.createElement("td", null, React.createElement("input", {type: "text", className: "form-control", name: i, value: store.salesInvoice.salesInvoiceLines[i].amount, onChange: this.onChangeAmount.bind(this)})), React.createElement("td", null, React.createElement("input", {type: "text", className: "form-control", name: i, value: store.salesInvoice.salesInvoiceLines[i].discount, onChange: this.onChangeDiscount.bind(this)})), React.createElement("td", null, store.lineTotal(i)), React.createElement("td", null, React.createElement("input", {type: "button", name: i, value: "Remove", onClick: this.onClickRemoveLineItem.bind(this)}))));
 	        }
 	        return (React.createElement("div", {className: "box"}, React.createElement("div", {className: "box-header with-border"}, React.createElement("h3", {className: "box-title"}, "Line Items"), React.createElement("div", {className: "box-tools pull-right"}, React.createElement("button", {type: "button", className: "btn btn-box-tool", "data-widget": "collapse", "data-toggle": "tooltip", title: "Collapse"}, React.createElement("i", {className: "fa fa-minus"})))), React.createElement("div", {className: "box-body table-responsive"}, React.createElement("table", {className: "table table-hover"}, React.createElement("thead", null, React.createElement("tr", null, React.createElement("td", null, "Item Id"), React.createElement("td", null, "Item Name"), React.createElement("td", null, "Measurement"), React.createElement("td", null, "Quantity"), React.createElement("td", null, "Amount"), React.createElement("td", null, "Discount"), React.createElement("td", null, "Line Total"), React.createElement("td", null))), React.createElement("tbody", null, lineItems, React.createElement("tr", null, React.createElement("td", null, React.createElement(SelectLineItem_1.default, {store: store, controlId: "optNewItemId"})), React.createElement("td", null, "Item Name"), React.createElement("td", null, React.createElement(SelectLineMeasurement_1.default, {store: store, controlId: "optNewMeasurementId"})), React.createElement("td", null, React.createElement("input", {className: "form-control", type: "text", id: "txtNewQuantity"})), React.createElement("td", null, React.createElement("input", {className: "form-control", type: "text", id: "txtNewAmount"})), React.createElement("td", null, React.createElement("input", {className: "form-control", type: "text", id: "txtNewDiscount"})), React.createElement("td", null), React.createElement("td", null, React.createElement("input", {type: "button", value: "Add", onClick: this.addLineItem}))))))));
 	    };
-	    SalesOrderLines = __decorate([
+	    SalesInvoiceLines = __decorate([
 	        mobx_react_1.observer
-	    ], SalesOrderLines);
-	    return SalesOrderLines;
+	    ], SalesInvoiceLines);
+	    return SalesInvoiceLines;
 	}(React.Component));
-	var SalesOrderTotals = (function (_super) {
-	    __extends(SalesOrderTotals, _super);
-	    function SalesOrderTotals() {
+	var SalesInvoiceTotals = (function (_super) {
+	    __extends(SalesInvoiceTotals, _super);
+	    function SalesInvoiceTotals() {
 	        _super.apply(this, arguments);
 	    }
-	    SalesOrderTotals.prototype.render = function () {
+	    SalesInvoiceTotals.prototype.render = function () {
 	        return (React.createElement("div", {className: "box"}, React.createElement("div", {className: "box-body"}, React.createElement("div", {className: "row"}, React.createElement("div", {className: "col-md-2"}, React.createElement("label", null, "Running Total: ")), React.createElement("div", {className: "col-md-2"}, 0), React.createElement("div", {className: "col-md-2"}, React.createElement("label", null, "Tax Total: ")), React.createElement("div", {className: "col-md-2"}, 0), React.createElement("div", {className: "col-md-2"}, React.createElement("label", null, "Grand Total: ")), React.createElement("div", {className: "col-md-2"}, store.grandTotal())))));
 	    };
-	    SalesOrderTotals = __decorate([
+	    SalesInvoiceTotals = __decorate([
 	        mobx_react_1.observer
-	    ], SalesOrderTotals);
-	    return SalesOrderTotals;
+	    ], SalesInvoiceTotals);
+	    return SalesInvoiceTotals;
 	}(React.Component));
-	var AddSalesOrder = (function (_super) {
-	    __extends(AddSalesOrder, _super);
-	    function AddSalesOrder() {
+	var SalesInvoice = (function (_super) {
+	    __extends(SalesInvoice, _super);
+	    function SalesInvoice() {
 	        _super.apply(this, arguments);
 	    }
-	    AddSalesOrder.prototype.render = function () {
-	        return (React.createElement("div", null, React.createElement(ValidationErrors, null), React.createElement(SalesOrderHeader, null), React.createElement(SalesOrderLines, null), React.createElement(SalesOrderTotals, null), React.createElement("div", null, React.createElement(SaveOrderButton, null), React.createElement(CancelOrderButton, null))));
+	    SalesInvoice.prototype.render = function () {
+	        return (React.createElement("div", null, React.createElement(ValidationErrors, null), React.createElement(SalesInvoiceHeader, null), React.createElement(SalesInvoiceLines, null), React.createElement(SalesInvoiceTotals, null), React.createElement("div", null, React.createElement(SaveInvoiceButton, null), React.createElement(CancelInvoiceButton, null))));
 	    };
-	    return AddSalesOrder;
+	    return SalesInvoice;
 	}(React.Component));
 	Object.defineProperty(exports, "__esModule", { value: true });
-	exports.default = AddSalesOrder;
-	ReactDOM.render(React.createElement(AddSalesOrder, null), document.getElementById("divAddSalesOrder"));
-	//# sourceMappingURL=AddSalesOrder.js.map
+	exports.default = SalesInvoice;
+	ReactDOM.render(React.createElement(SalesInvoice, null), document.getElementById("divSalesInvoice"));
+	//# sourceMappingURL=SalesInvoice.js.map
 
 /***/ },
 
@@ -4210,7 +4212,7 @@ webpackJsonp([6],{
 	            for (var i = 0; i < data.length; i++) {
 	                vendors.push(data[i]);
 	            }
-	        });
+	        }.bind(this));
 	    };
 	    CommonStore.prototype.loadItemsLookup = function () {
 	        var items = this.items;
@@ -4303,7 +4305,7 @@ webpackJsonp([6],{
 	        this.props.store.commonStore.paymentTerms.map(function (term) {
 	            return (options.push(React.createElement("option", {key: term.id, value: term.id}, " ", term.description, " ")));
 	        });
-	        return (React.createElement("select", {id: "optPaymentTerm", onChange: this.onChangePaymentTerm.bind(this), className: "form-control select2"}, React.createElement("option", {key: -1, value: ""}), options));
+	        return (React.createElement("select", {id: "optPaymentTerm", value: this.props.selected, onChange: this.onChangePaymentTerm.bind(this), className: "form-control select2"}, React.createElement("option", {key: -1, value: ""}), options));
 	    };
 	    SelectPaymentTerm = __decorate([
 	        mobx_react_1.observer
@@ -4350,7 +4352,7 @@ webpackJsonp([6],{
 	        this.props.store.commonStore.items.map(function (item) {
 	            return (options.push(React.createElement("option", {key: item.id, value: item.id}, " ", item.description, " ")));
 	        });
-	        return (React.createElement("select", {defaultValue: this.props.selected, id: this.props.controlId, onChange: this.onChangeItem.bind(this), className: "form-control select2"}, React.createElement("option", {key: -1, value: ""}), options));
+	        return (React.createElement("select", {value: this.props.selected, id: this.props.controlId, onChange: this.onChangeItem.bind(this), className: "form-control select2"}, React.createElement("option", {key: -1, value: ""}), options));
 	    };
 	    SelectLineItem = __decorate([
 	        mobx_react_1.observer
@@ -4397,7 +4399,7 @@ webpackJsonp([6],{
 	        this.props.store.commonStore.measurements.map(function (measurement) {
 	            return (options.push(React.createElement("option", {key: measurement.id, value: measurement.id}, " ", measurement.description, " ")));
 	        });
-	        return (React.createElement("select", {defaultValue: this.props.selected, id: this.props.controlId, onChange: this.onChangeMeasurement.bind(this), className: "form-control select2"}, React.createElement("option", {key: -1, value: ""}), options));
+	        return (React.createElement("select", {value: this.props.selected, id: this.props.controlId, onChange: this.onChangeMeasurement.bind(this), className: "form-control select2"}, React.createElement("option", {key: -1, value: ""}), options));
 	    };
 	    SelectLineMeasurement = __decorate([
 	        mobx_react_1.observer
@@ -4443,7 +4445,7 @@ webpackJsonp([6],{
 	        this.props.store.commonStore.customers.map(function (customer) {
 	            return (options.push(React.createElement("option", {key: customer.id, value: customer.id}, " ", customer.name, " ")));
 	        });
-	        return (React.createElement("select", {id: "optCustomer", onChange: this.onChangeCustomer.bind(this), className: "form-control select2"}, React.createElement("option", {key: -1, value: ""}), options));
+	        return (React.createElement("select", {id: "optCustomer", value: this.props.selected, onChange: this.onChangeCustomer.bind(this), className: "form-control select2"}, React.createElement("option", {key: -1, value: ""}), options));
 	    };
 	    SelectCustomer = __decorate([
 	        mobx_react_1.observer
@@ -4456,10 +4458,10 @@ webpackJsonp([6],{
 
 /***/ },
 
-/***/ 214:
-/*!**********************************************************************!*\
-  !*** ./wwwroot/libs/tsxbuild/Shared/Stores/Sales/SalesOrderStore.js ***!
-  \**********************************************************************/
+/***/ 211:
+/*!************************************************************************!*\
+  !*** ./wwwroot/libs/tsxbuild/Shared/Stores/Sales/SalesInvoiceStore.js ***!
+  \************************************************************************/
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -4472,50 +4474,74 @@ webpackJsonp([6],{
 	var mobx_1 = __webpack_require__(/*! mobx */ 169);
 	var axios = __webpack_require__(/*! axios */ 174);
 	var Config = __webpack_require__(/*! Config */ 193);
-	var SalesOrder_1 = __webpack_require__(/*! ./SalesOrder */ 215);
-	var SalesOrderLine_1 = __webpack_require__(/*! ./SalesOrderLine */ 216);
+	var SalesInvoice_1 = __webpack_require__(/*! ./SalesInvoice */ 212);
+	var SalesInvoiceLine_1 = __webpack_require__(/*! ./SalesInvoiceLine */ 213);
 	var CommonStore_1 = __webpack_require__(/*! ../Common/CommonStore */ 196);
 	var baseUrl = location.protocol
 	    + "//" + location.hostname
 	    + (location.port && ":" + location.port)
 	    + "/";
-	var SalesOrderStore = (function () {
-	    function SalesOrderStore() {
-	        this.salesOrder = new SalesOrder_1.default();
-	        mobx_1.extendObservable(this.salesOrder, {
-	            customerId: this.salesOrder.customerId,
-	            orderDate: this.salesOrder.orderDate,
-	            paymentTermId: this.salesOrder.paymentTermId,
-	            referenceNo: this.salesOrder.referenceNo,
-	            salesOrderLines: []
-	        });
+	var SalesStore = (function () {
+	    function SalesStore(orderId, invoiceId) {
 	        this.commonStore = new CommonStore_1.default();
+	        this.salesInvoice = new SalesInvoice_1.default();
+	        mobx_1.extendObservable(this.salesInvoice, {
+	            customerId: this.salesInvoice.customerId,
+	            invoiceDate: this.salesInvoice.invoiceDate,
+	            paymentTermId: this.salesInvoice.paymentTermId,
+	            referenceNo: this.salesInvoice.referenceNo,
+	            salesInvoiceLines: []
+	        });
+	        if (orderId !== undefined) {
+	            axios.get(Config.apiUrl + "api/sales/salesorder?id=" + orderId)
+	                .then(function (result) {
+	                this.changedCustomer(result.data.customerId);
+	                this.changedInvoiceDate(result.data.orderDate);
+	                for (var i = 0; i < result.data.SalesOrderLines.length; i++) {
+	                    this.addLineItem(result.data.SalesOrderLines[i].itemId, result.data.SalesOrderLines[i].measurementId, result.data.SalesOrderLines[i].quantity, result.data.SalesOrderLines[i].amount, result.data.SalesOrderLines[i].discount);
+	                }
+	            }.bind(this))
+	                .catch(function (error) {
+	            }.bind(this));
+	        }
+	        else if (invoiceId !== undefined) {
+	            axios.get(Config.apiUrl + "api/sales/salesinvoice?id=" + invoiceId)
+	                .then(function (result) {
+	                this.changedCustomer(result.data.customerId);
+	                this.changedInvoiceDate(result.data.invoiceDate);
+	                for (var i = 0; i < result.data.SalesInvoiceLines.length; i++) {
+	                    this.addLineItem(result.data.SalesInvoiceLines[i].itemId, result.data.SalesInvoiceLines[i].measurementId, result.data.SalesInvoiceLines[i].quantity, result.data.SalesInvoiceLines[i].amount, result.data.SalesInvoiceLines[i].discount);
+	                }
+	            }.bind(this))
+	                .catch(function (error) {
+	            }.bind(this));
+	        }
 	    }
-	    SalesOrderStore.prototype.saveNewSalesOrder = function () {
+	    SalesStore.prototype.saveNewSalesInvoice = function () {
 	        this.validationErrors = [];
-	        if (this.salesOrder.customerId === undefined || this.salesOrder.customerId === "")
+	        if (this.salesInvoice.customerId === undefined || this.salesInvoice.customerId === "")
 	            this.validationErrors.push("Customer is required.");
-	        if (this.salesOrder.paymentTermId === undefined || this.salesOrder.paymentTermId === "")
-	            this.salesOrder.push("Payment term is required.");
-	        if (this.salesOrder.orderDate === undefined || this.salesOrder.orderDate === "")
+	        if (this.salesInvoice.paymentTermId === undefined || this.salesInvoice.paymentTermId === "")
+	            this.salesInvoice.push("Payment term is required.");
+	        if (this.salesInvoice.orderDate === undefined || this.salesInvoice.orderDate === "")
 	            this.validationErrors.push("Date is required.");
-	        if (this.salesOrder.purchaseOrderLines === undefined || this.salesOrder.purchaseOrderLines.length < 1)
+	        if (this.salesInvoice.purchaseOrderLines === undefined || this.salesInvoice.purchaseOrderLines.length < 1)
 	            this.validationErrors.push("Enter at least 1 line item.");
-	        if (this.salesOrder.purchaseOrderLines !== undefined && this.salesOrder.purchaseOrderLines.length > 0) {
-	            for (var i = 0; i < this.salesOrder.purchaseOrderLines.length; i++) {
-	                if (this.salesOrder.purchaseOrderLines[i].itemId === undefined
-	                    || this.salesOrder.purchaseOrderLines[i].itemId === "")
+	        if (this.salesInvoice.purchaseOrderLines !== undefined && this.salesInvoice.purchaseOrderLines.length > 0) {
+	            for (var i = 0; i < this.salesInvoice.purchaseOrderLines.length; i++) {
+	                if (this.salesInvoice.purchaseOrderLines[i].itemId === undefined
+	                    || this.salesInvoice.purchaseOrderLines[i].itemId === "")
 	                    this.validationErrors.push("Item is required.");
-	                if (this.salesOrder.purchaseOrderLines[i].measurementId === undefined
-	                    || this.salesOrder.purchaseOrderLines[i].measurementId === "")
+	                if (this.salesInvoice.purchaseOrderLines[i].measurementId === undefined
+	                    || this.salesInvoice.purchaseOrderLines[i].measurementId === "")
 	                    this.validationErrors.push("Uom is required.");
-	                if (this.salesOrder.purchaseOrderLines[i].quantity === undefined
-	                    || this.salesOrder.purchaseOrderLines[i].quantity === ""
-	                    || this.salesOrder.purchaseOrderLines[i].quantity === 0)
+	                if (this.salesInvoice.purchaseOrderLines[i].quantity === undefined
+	                    || this.salesInvoice.purchaseOrderLines[i].quantity === ""
+	                    || this.salesInvoice.purchaseOrderLines[i].quantity === 0)
 	                    this.validationErrors.push("Quantity is required.");
-	                if (this.salesOrder.purchaseOrderLines[i].amount === undefined
-	                    || this.salesOrder.purchaseOrderLines[i].amount === ""
-	                    || this.salesOrder.purchaseOrderLines[i].amount === 0)
+	                if (this.salesInvoice.purchaseOrderLines[i].amount === undefined
+	                    || this.salesInvoice.purchaseOrderLines[i].amount === ""
+	                    || this.salesInvoice.purchaseOrderLines[i].amount === 0)
 	                    this.validationErrors.push("Amount is required.");
 	                if (this.lineTotal(i) === undefined
 	                    || this.lineTotal(i).toString() === "NaN"
@@ -4524,7 +4550,7 @@ webpackJsonp([6],{
 	            }
 	        }
 	        if (this.validationErrors.length === 0) {
-	            axios.post(Config.apiUrl + "api/sales/savesalesorder", JSON.stringify(this.salesOrder), {
+	            axios.post(Config.apiUrl + "api/sales/savesalesinvoice", JSON.stringify(this.salesInvoice), {
 	                headers: {
 	                    'Content-type': 'application/json'
 	                }
@@ -4537,88 +4563,88 @@ webpackJsonp([6],{
 	            }.bind(this));
 	        }
 	    };
-	    SalesOrderStore.prototype.changedCustomer = function (custId) {
-	        this.salesOrder.customerId = custId;
+	    SalesStore.prototype.changedCustomer = function (custId) {
+	        this.salesInvoice.customerId = custId;
 	    };
-	    SalesOrderStore.prototype.changedOrderDate = function (date) {
-	        this.salesOrder.orderDate = date;
+	    SalesStore.prototype.changedInvoiceDate = function (date) {
+	        this.salesInvoice.invoiceDate = date;
 	    };
-	    SalesOrderStore.prototype.addLineItem = function (itemId, measurementId, quantity, amount, discount) {
-	        var newLineItem = new SalesOrderLine_1.default(itemId, measurementId, quantity, amount, discount);
-	        this.salesOrder.salesOrderLines.push(mobx_1.extendObservable(newLineItem, newLineItem));
+	    SalesStore.prototype.addLineItem = function (itemId, measurementId, quantity, amount, discount) {
+	        var newLineItem = new SalesInvoiceLine_1.default(itemId, measurementId, quantity, amount, discount);
+	        this.salesInvoice.salesInvoiceLines.push(mobx_1.extendObservable(newLineItem, newLineItem));
 	    };
-	    SalesOrderStore.prototype.removeLineItem = function (row) {
-	        this.salesOrder.salesOrderLines.splice(row, 1);
+	    SalesStore.prototype.removeLineItem = function (row) {
+	        this.salesInvoice.salesInvoiceLines.splice(row, 1);
 	    };
-	    SalesOrderStore.prototype.updateLineItem = function (row, targetProperty, value) {
-	        if (this.salesOrder.salesOrderLines.length > 0)
-	            this.salesOrder.salesOrderLines[row][targetProperty] = value;
+	    SalesStore.prototype.updateLineItem = function (row, targetProperty, value) {
+	        if (this.salesInvoice.salesInvoiceLines.length > 0)
+	            this.salesInvoice.salesInvoiceLines[row][targetProperty] = value;
 	    };
-	    SalesOrderStore.prototype.grandTotal = function () {
+	    SalesStore.prototype.grandTotal = function () {
 	        var sum = 0;
-	        for (var i = 0; i < this.salesOrder.salesOrderLines.length; i++) {
-	            var lineSum = this.salesOrder.salesOrderLines[i].quantity * this.salesOrder.salesOrderLines[i].amount;
+	        for (var i = 0; i < this.salesInvoice.salesInvoiceLines.length; i++) {
+	            var lineSum = this.salesInvoice.salesInvoiceLines[i].quantity * this.salesInvoice.salesInvoiceLines[i].amount;
 	            sum = sum + lineSum;
 	        }
 	        return sum;
 	    };
-	    SalesOrderStore.prototype.lineTotal = function (row) {
-	        var lineSum = this.salesOrder.salesOrderLines[row].quantity * this.salesOrder.salesOrderLines[row].amount;
+	    SalesStore.prototype.lineTotal = function (row) {
+	        var lineSum = this.salesInvoice.salesInvoiceLines[row].quantity * this.salesInvoice.salesInvoiceLines[row].amount;
 	        ;
 	        return lineSum;
 	    };
 	    __decorate([
 	        mobx_1.observable
-	    ], SalesOrderStore.prototype, "validationErrors", void 0);
-	    return SalesOrderStore;
+	    ], SalesStore.prototype, "validationErrors", void 0);
+	    return SalesStore;
 	}());
 	Object.defineProperty(exports, "__esModule", { value: true });
-	exports.default = SalesOrderStore;
-	//# sourceMappingURL=SalesOrderStore.js.map
+	exports.default = SalesStore;
+	//# sourceMappingURL=SalesInvoiceStore.js.map
 
 /***/ },
 
-/***/ 215:
-/*!*****************************************************************!*\
-  !*** ./wwwroot/libs/tsxbuild/Shared/Stores/Sales/SalesOrder.js ***!
-  \*****************************************************************/
+/***/ 212:
+/*!*******************************************************************!*\
+  !*** ./wwwroot/libs/tsxbuild/Shared/Stores/Sales/SalesInvoice.js ***!
+  \*******************************************************************/
 /***/ function(module, exports) {
 
 	"use strict";
-	var SalesOrder = (function () {
-	    function SalesOrder() {
-	        this.salesOrderLines = [];
+	var SalesInvoice = (function () {
+	    function SalesInvoice() {
+	        this.salesInvoiceLines = [];
 	    }
-	    return SalesOrder;
+	    return SalesInvoice;
 	}());
 	Object.defineProperty(exports, "__esModule", { value: true });
-	exports.default = SalesOrder;
-	//# sourceMappingURL=SalesOrder.js.map
+	exports.default = SalesInvoice;
+	//# sourceMappingURL=SalesInvoice.js.map
 
 /***/ },
 
-/***/ 216:
-/*!*********************************************************************!*\
-  !*** ./wwwroot/libs/tsxbuild/Shared/Stores/Sales/SalesOrderLine.js ***!
-  \*********************************************************************/
+/***/ 213:
+/*!***********************************************************************!*\
+  !*** ./wwwroot/libs/tsxbuild/Shared/Stores/Sales/SalesInvoiceLine.js ***!
+  \***********************************************************************/
 /***/ function(module, exports) {
 
 	"use strict";
-	var SalesOrderLine = (function () {
-	    function SalesOrderLine(itemId, measurementId, quantity, amount, discount) {
+	var SalesInvoiceLine = (function () {
+	    function SalesInvoiceLine(itemId, measurementId, quantity, amount, discount) {
 	        this.itemId = itemId;
 	        this.measurementId = measurementId;
 	        this.quantity = quantity;
 	        this.amount = amount;
 	        this.discount = discount;
 	    }
-	    return SalesOrderLine;
+	    return SalesInvoiceLine;
 	}());
 	Object.defineProperty(exports, "__esModule", { value: true });
-	exports.default = SalesOrderLine;
-	//# sourceMappingURL=SalesOrderLine.js.map
+	exports.default = SalesInvoiceLine;
+	//# sourceMappingURL=SalesInvoiceLine.js.map
 
 /***/ }
 
 });
-//# sourceMappingURL=addsalesorder.chunk.js.map
+//# sourceMappingURL=salesinvoice.chunk.js.map

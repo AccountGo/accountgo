@@ -18,7 +18,8 @@ export default class PurchaseOrderStore {
     commonStore;
     @observable validationErrors;
 
-    constructor() {
+    constructor(purchId: any) {
+        this.commonStore = new CommonStore();
         this.purchaseOrder = new PurchaseOrder();
         extendObservable(this.purchaseOrder, {
             vendorId: this.purchaseOrder.vendorId,
@@ -28,7 +29,24 @@ export default class PurchaseOrderStore {
             purchaseOrderLines: []
         });
 
-        this.commonStore = new CommonStore();
+        if (purchId !== undefined) {
+            axios.get(Config.apiUrl + "api/purchasing/purchaseorder?id=" + purchId)
+                .then(function (result) {
+                    console.log(result);
+                    this.changedVendor(result.data.vendorId);
+                    this.changedOrderDate(result.data.orderDate);
+                    for (var i = 0; i < result.data.purchaseOrderLines.length; i++) {
+                        this.addLineItem(result.data.purchaseOrderLines[i].itemId,
+                            result.data.purchaseOrderLines[i].measurementId,
+                            result.data.purchaseOrderLines[i].quantity,
+                            result.data.purchaseOrderLines[i].amount,
+                            result.data.purchaseOrderLines[i].discount
+                        );
+                    }
+                }.bind(this))
+                .catch(function (error) {
+                }.bind(this));
+        }
     }
 
     savePurchaseOrder() {

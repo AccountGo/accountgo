@@ -18,7 +18,8 @@ export default class SalesOrderStore {
     commonStore;
     @observable validationErrors;
 
-    constructor() {
+    constructor(quotationId, orderId) {
+        this.commonStore = new CommonStore();
         this.salesOrder = new SalesOrder();
         extendObservable(this.salesOrder, {
             customerId: this.salesOrder.customerId,
@@ -28,7 +29,40 @@ export default class SalesOrderStore {
             salesOrderLines: []
         });
 
-        this.commonStore = new CommonStore();
+        if (quotationId !== undefined) {
+            axios.get(Config.apiUrl + "api/sales/quotation?id=" + quotationId)
+                .then(function (result) {
+                    this.changedCustomer(result.data.customerId);
+                    this.changedOrderDate(result.data.quotationDate);
+                    for (var i = 0; i < result.data.SalesQuotationLines.length; i++) {
+                        this.addLineItem(result.data.SalesQuotationLines[i].itemId,
+                            result.data.SalesQuotationLines[i].measurementId,
+                            result.data.SalesQuotationLines[i].quantity,
+                            result.data.SalesQuotationLines[i].amount,
+                            result.data.SalesQuotationLines[i].discount
+                        );
+                    }
+                }.bind(this))
+                .catch(function (error) {
+                }.bind(this));
+        }
+        else if (orderId !== undefined) {
+            axios.get(Config.apiUrl + "api/sales/salesorder?id=" + orderId)
+                .then(function (result) {
+                    this.changedCustomer(result.data.customerId);
+                    this.changedOrderDate(result.data.orderDate);
+                    for (var i = 0; i < result.data.SalesOrderLines.length; i++) {
+                        this.addLineItem(result.data.SalesOrderLines[i].itemId,
+                            result.data.SalesOrderLines[i].measurementId,
+                            result.data.SalesOrderLines[i].quantity,
+                            result.data.SalesOrderLines[i].amount,
+                            result.data.SalesOrderLines[i].discount
+                        );
+                    }
+                }.bind(this))
+                .catch(function (error) {
+                }.bind(this));
+        }
     }
 
     saveNewSalesOrder() {

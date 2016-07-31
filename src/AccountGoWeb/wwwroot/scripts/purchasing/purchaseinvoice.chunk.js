@@ -1,9 +1,9 @@
-webpackJsonp([3],{
+webpackJsonp([2],{
 
 /***/ 0:
-/*!**************************************************************!*\
-  !*** ./wwwroot/libs/tsxbuild/purchasing/addpurchaseorder.js ***!
-  \**************************************************************/
+/*!*************************************************************!*\
+  !*** ./wwwroot/libs/tsxbuild/purchasing/purchaseinvoice.js ***!
+  \*************************************************************/
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -25,8 +25,10 @@ webpackJsonp([3],{
 	var SelectPaymentTerm_1 = __webpack_require__(/*! ../Shared/Components/SelectPaymentTerm */ 198);
 	var SelectLineItem_1 = __webpack_require__(/*! ../Shared/Components/SelectLineItem */ 199);
 	var SelectLineMeasurement_1 = __webpack_require__(/*! ../Shared/Components/SelectLineMeasurement */ 200);
-	var PurchaseOrderStore_1 = __webpack_require__(/*! ../Shared/Stores/Purchasing/PurchaseOrderStore */ 204);
-	var store = new PurchaseOrderStore_1.default();
+	var PurchaseInvoiceStore_1 = __webpack_require__(/*! ../Shared/Stores/Purchasing/PurchaseInvoiceStore */ 201);
+	var purchId = window.location.search.split("?purchId=")[1];
+	var invoiceId = window.location.search.split("?invoiceId=")[1];
+	var store = new PurchaseInvoiceStore_1.default(purchId, invoiceId);
 	var ValidationErrors = (function (_super) {
 	    __extends(ValidationErrors, _super);
 	    function ValidationErrors() {
@@ -47,113 +49,119 @@ webpackJsonp([3],{
 	    ], ValidationErrors);
 	    return ValidationErrors;
 	}(React.Component));
-	var SavePurchaseOrderButton = (function (_super) {
-	    __extends(SavePurchaseOrderButton, _super);
-	    function SavePurchaseOrderButton() {
+	var SavePurchaseInvoiceButton = (function (_super) {
+	    __extends(SavePurchaseInvoiceButton, _super);
+	    function SavePurchaseInvoiceButton() {
 	        _super.apply(this, arguments);
 	    }
-	    SavePurchaseOrderButton.prototype.saveNewPurchaseOrder = function (e) {
-	        store.savePurchaseOrder();
+	    SavePurchaseInvoiceButton.prototype.saveNewPurchaseInvoice = function (e) {
 	    };
-	    SavePurchaseOrderButton.prototype.render = function () {
-	        return (React.createElement("input", {type: "button", value: "Save", onClick: this.saveNewPurchaseOrder.bind(this)}));
+	    SavePurchaseInvoiceButton.prototype.render = function () {
+	        return (React.createElement("input", {type: "button", value: "Save", onClick: this.saveNewPurchaseInvoice.bind(this)}));
 	    };
-	    return SavePurchaseOrderButton;
+	    return SavePurchaseInvoiceButton;
 	}(React.Component));
-	var CancelPurchaseOrderButton = (function (_super) {
-	    __extends(CancelPurchaseOrderButton, _super);
-	    function CancelPurchaseOrderButton() {
+	var CancelPurchaseInvoiceButton = (function (_super) {
+	    __extends(CancelPurchaseInvoiceButton, _super);
+	    function CancelPurchaseInvoiceButton() {
 	        _super.apply(this, arguments);
 	    }
-	    CancelPurchaseOrderButton.prototype.render = function () {
+	    CancelPurchaseInvoiceButton.prototype.render = function () {
 	        return (React.createElement("input", {type: "button", value: "Cancel"}));
 	    };
-	    return CancelPurchaseOrderButton;
+	    return CancelPurchaseInvoiceButton;
 	}(React.Component));
-	var PurchaseOrderHeader = (function (_super) {
-	    __extends(PurchaseOrderHeader, _super);
-	    function PurchaseOrderHeader() {
+	var PurchaseInvoiceHeader = (function (_super) {
+	    __extends(PurchaseInvoiceHeader, _super);
+	    function PurchaseInvoiceHeader() {
 	        _super.apply(this, arguments);
 	    }
-	    PurchaseOrderHeader.prototype.onChangeOrderDate = function (e) {
-	        store.changedOrderDate(e.target.value);
+	    PurchaseInvoiceHeader.prototype.onChangeInvoiceDate = function (e) {
+	        store.changedInvoiceDate(e.target.value);
 	    };
-	    PurchaseOrderHeader.prototype.render = function () {
-	        return (React.createElement("div", {className: "box"}, React.createElement("div", {className: "box-header with-border"}, React.createElement("h3", {className: "box-title"}, "Vendor Information"), React.createElement("div", {className: "box-tools pull-right"}, React.createElement("button", {type: "button", className: "btn btn-box-tool", "data-widget": "collapse", "data-toggle": "tooltip", title: "Collapse"}, React.createElement("i", {className: "fa fa-minus"})))), React.createElement("div", {className: "box-body"}, React.createElement("div", {className: "col-sm-6"}, React.createElement("div", {className: "row"}, React.createElement("div", {className: "col-sm-2"}, "Vendor"), React.createElement("div", {className: "col-sm-10"}, React.createElement(SelectVendor_1.default, {store: store}))), React.createElement("div", {className: "row"}, React.createElement("div", {className: "col-sm-2"}, "Payment Term"), React.createElement("div", {className: "col-sm-10"}, React.createElement(SelectPaymentTerm_1.default, {store: store})))), React.createElement("div", {className: "col-md-6"}, React.createElement("div", {className: "row"}, React.createElement("div", {className: "col-sm-2"}, "Date"), React.createElement("div", {className: "col-sm-10"}, React.createElement("input", {type: "date", className: "form-control pull-right", onChange: this.onChangeOrderDate.bind(this), defaultValue: store.purchaseOrder.orderDate}))), React.createElement("div", {className: "row"}, React.createElement("div", {className: "col-sm-2"}, "Reference no."), React.createElement("div", {className: "col-sm-10"}, React.createElement("input", {type: "text", className: "form-control"})))))));
+	    PurchaseInvoiceHeader.prototype.onChangeVendor = function (e) {
+	        store.changedVendor(e.target.value);
 	    };
-	    PurchaseOrderHeader = __decorate([
+	    PurchaseInvoiceHeader.prototype.render = function () {
+	        return (React.createElement("div", {className: "box"}, React.createElement("div", {className: "box-header with-border"}, React.createElement("h3", {className: "box-title"}, "Vendor Information"), React.createElement("div", {className: "box-tools pull-right"}, React.createElement("button", {type: "button", className: "btn btn-box-tool", "data-widget": "collapse", "data-toggle": "tooltip", title: "Collapse"}, React.createElement("i", {className: "fa fa-minus"})))), React.createElement("div", {className: "box-body"}, React.createElement("div", {className: "col-sm-6"}, React.createElement("div", {className: "row"}, React.createElement("div", {className: "col-sm-2"}, "Vendor"), React.createElement("div", {className: "col-sm-10"}, React.createElement(SelectVendor_1.default, {store: store, selected: store.purchaseInvoice.vendorId}))), React.createElement("div", {className: "row"}, React.createElement("div", {className: "col-sm-2"}, "Payment Term"), React.createElement("div", {className: "col-sm-10"}, React.createElement(SelectPaymentTerm_1.default, {store: store, selected: store.purchaseInvoice.paymentTermId})))), React.createElement("div", {className: "col-md-6"}, React.createElement("div", {className: "row"}, React.createElement("div", {className: "col-sm-2"}, "Date"), React.createElement("div", {className: "col-sm-10"}, React.createElement("input", {type: "date", className: "form-control pull-right", onChange: this.onChangeInvoiceDate.bind(this), value: store.purchaseInvoice.invoiceDate}))), React.createElement("div", {className: "row"}, React.createElement("div", {className: "col-sm-2"}, "Reference no."), React.createElement("div", {className: "col-sm-10"}, React.createElement("input", {type: "text", className: "form-control"})))))));
+	    };
+	    PurchaseInvoiceHeader = __decorate([
 	        mobx_react_1.observer
-	    ], PurchaseOrderHeader);
-	    return PurchaseOrderHeader;
+	    ], PurchaseInvoiceHeader);
+	    return PurchaseInvoiceHeader;
 	}(React.Component));
-	var PurchaseOrderLines = (function (_super) {
-	    __extends(PurchaseOrderLines, _super);
-	    function PurchaseOrderLines() {
+	var PurchaseInvoiceLines = (function (_super) {
+	    __extends(PurchaseInvoiceLines, _super);
+	    function PurchaseInvoiceLines() {
 	        _super.apply(this, arguments);
 	    }
-	    PurchaseOrderLines.prototype.addLineItem = function () {
+	    PurchaseInvoiceLines.prototype.addLineItem = function () {
 	        var itemId, measurementId, quantity, amount, discount;
 	        itemId = document.getElementById("optNewItemId").value;
 	        measurementId = document.getElementById("optNewMeasurementId").value;
 	        quantity = document.getElementById("txtNewQuantity").value;
 	        amount = document.getElementById("txtNewAmount").value;
 	        discount = document.getElementById("txtNewDiscount").value;
+	        console.log("itemId: " + itemId + " | measurementId: " + measurementId + " | quantity: " + quantity + " | amount: " + amount + " | discount: " + discount);
 	        store.addLineItem(itemId, measurementId, quantity, amount, discount);
 	        document.getElementById("txtNewQuantity").value = "1";
 	        document.getElementById("txtNewAmount").value = "0";
 	        document.getElementById("txtNewDiscount").value = "0";
 	    };
-	    PurchaseOrderLines.prototype.onClickRemoveLineItem = function (e) {
+	    PurchaseInvoiceLines.prototype.onClickRemoveLineItem = function (e) {
 	        store.removeLineItem(e.target.name);
 	    };
-	    PurchaseOrderLines.prototype.onChangeQuantity = function (e) {
+	    PurchaseInvoiceLines.prototype.onChangeQuantity = function (e) {
 	        store.updateLineItem(e.target.name, "quantity", e.target.value);
 	    };
-	    PurchaseOrderLines.prototype.onChangeAmount = function (e) {
+	    PurchaseInvoiceLines.prototype.onChangeAmount = function (e) {
 	        store.updateLineItem(e.target.name, "amount", e.target.value);
 	    };
-	    PurchaseOrderLines.prototype.onChangeDiscount = function (e) {
+	    PurchaseInvoiceLines.prototype.onChangeDiscount = function (e) {
 	        store.updateLineItem(e.target.name, "discount", e.target.value);
 	    };
-	    PurchaseOrderLines.prototype.render = function () {
-	        var lineItems = [];
-	        for (var i = 0; i < store.purchaseOrder.purchaseOrderLines.length; i++) {
-	            lineItems.push(React.createElement("tr", {key: i}, React.createElement("td", null, React.createElement(SelectLineItem_1.default, {store: store, row: i, selected: store.purchaseOrder.purchaseOrderLines[i].itemId})), React.createElement("td", null, store.purchaseOrder.purchaseOrderLines[i].itemId), React.createElement("td", null, React.createElement(SelectLineMeasurement_1.default, {row: i, store: store, selected: store.purchaseOrder.purchaseOrderLines[i].measurementId})), React.createElement("td", null, React.createElement("input", {type: "text", className: "form-control", name: i, value: store.purchaseOrder.purchaseOrderLines[i].quantity, onChange: this.onChangeQuantity.bind(this)})), React.createElement("td", null, React.createElement("input", {type: "text", className: "form-control", name: i, value: store.purchaseOrder.purchaseOrderLines[i].amount, onChange: this.onChangeAmount.bind(this)})), React.createElement("td", null, React.createElement("input", {type: "text", className: "form-control", name: i, value: store.purchaseOrder.purchaseOrderLines[i].discount, onChange: this.onChangeDiscount.bind(this)})), React.createElement("td", null, store.lineTotal(i)), React.createElement("td", null, React.createElement("input", {type: "button", name: i, value: "Remove", onClick: this.onClickRemoveLineItem.bind(this)}))));
-	        }
-	        return (React.createElement("div", {className: "box"}, React.createElement("div", {className: "box-header with-border"}, React.createElement("h3", {className: "box-title"}, "Line Items"), React.createElement("div", {className: "box-tools pull-right"}, React.createElement("button", {type: "button", className: "btn btn-box-tool", "data-widget": "collapse", "data-toggle": "tooltip", title: "Collapse"}, React.createElement("i", {className: "fa fa-minus"})))), React.createElement("div", {className: "box-body table-responsive"}, React.createElement("table", {className: "table table-hover"}, React.createElement("thead", null, React.createElement("tr", null, React.createElement("td", null, "Item Id"), React.createElement("td", null, "Item Name"), React.createElement("td", null, "Measurement"), React.createElement("td", null, "Quantity"), React.createElement("td", null, "Amount"), React.createElement("td", null, "Discount"), React.createElement("td", null, "Line Total"), React.createElement("td", null))), React.createElement("tbody", null, lineItems, React.createElement("tr", null, React.createElement("td", null, React.createElement(SelectLineItem_1.default, {store: store, controlId: "optNewItemId"})), React.createElement("td", null, "Item Name"), React.createElement("td", null, React.createElement(SelectLineMeasurement_1.default, {store: store, controlId: "optNewMeasurementId"})), React.createElement("td", null, React.createElement("input", {className: "form-control", type: "text", id: "txtNewQuantity", defaultValue: 1})), React.createElement("td", null, React.createElement("input", {className: "form-control", type: "text", id: "txtNewAmount"})), React.createElement("td", null, React.createElement("input", {className: "form-control", type: "text", id: "txtNewDiscount"})), React.createElement("td", null), React.createElement("td", null, React.createElement("input", {type: "button", value: "Add", onClick: this.addLineItem}))))))));
+	    PurchaseInvoiceLines.prototype.onChangeItem = function (e) {
+	        store.updateLineItem(e.target.name, "itemId", e.target.value);
 	    };
-	    PurchaseOrderLines = __decorate([
+	    PurchaseInvoiceLines.prototype.render = function () {
+	        var lineItems = [];
+	        for (var i = 0; i < store.purchaseInvoice.purchaseInvoiceLines.length; i++) {
+	            lineItems.push(React.createElement("tr", {key: i}, React.createElement("td", null, React.createElement(SelectLineItem_1.default, {store: store, row: i, selected: store.purchaseInvoice.purchaseInvoiceLines[i].itemId})), React.createElement("td", null, React.createElement("input", {type: "text", className: "form-control", name: i, value: store.purchaseInvoice.purchaseInvoiceLines[i].itemId, onChange: this.onChangeItem.bind(this)})), React.createElement("td", null, React.createElement(SelectLineMeasurement_1.default, {row: i, store: store, selected: store.purchaseInvoice.purchaseInvoiceLines[i].measurementId})), React.createElement("td", null, React.createElement("input", {type: "text", className: "form-control", name: i, value: store.purchaseInvoice.purchaseInvoiceLines[i].quantity, onChange: this.onChangeQuantity.bind(this)})), React.createElement("td", null, React.createElement("input", {type: "text", className: "form-control", name: i, value: store.purchaseInvoice.purchaseInvoiceLines[i].amount, onChange: this.onChangeAmount.bind(this)})), React.createElement("td", null, React.createElement("input", {type: "text", className: "form-control", name: i, value: store.purchaseInvoice.purchaseInvoiceLines[i].discount, onChange: this.onChangeDiscount.bind(this)})), React.createElement("td", null, store.lineTotal(i)), React.createElement("td", null, React.createElement("input", {type: "button", name: i, value: "Remove", onClick: this.onClickRemoveLineItem.bind(this)}))));
+	        }
+	        return (React.createElement("div", {className: "box"}, React.createElement("div", {className: "box-header with-border"}, React.createElement("h3", {className: "box-title"}, "Line Items"), React.createElement("div", {className: "box-tools pull-right"}, React.createElement("button", {type: "button", className: "btn btn-box-tool", "data-widget": "collapse", "data-toggle": "tooltip", title: "Collapse"}, React.createElement("i", {className: "fa fa-minus"})))), React.createElement("div", {className: "box-body table-responsive"}, React.createElement("table", {className: "table table-hover"}, React.createElement("thead", null, React.createElement("tr", null, React.createElement("td", null, "Item Id"), React.createElement("td", null, "Item Name"), React.createElement("td", null, "Measurement"), React.createElement("td", null, "Quantity"), React.createElement("td", null, "Amount"), React.createElement("td", null, "Discount"), React.createElement("td", null, "Line Total"), React.createElement("td", null))), React.createElement("tbody", null, lineItems, React.createElement("tr", null, React.createElement("td", null, React.createElement(SelectLineItem_1.default, {store: store, selected: -1, controlId: "optNewItemId"})), React.createElement("td", null, "Item Name"), React.createElement("td", null, React.createElement(SelectLineMeasurement_1.default, {store: store, selected: -1, controlId: "optNewMeasurementId"})), React.createElement("td", null, React.createElement("input", {type: "text", className: "form-control", id: "txtNewQuantity"})), React.createElement("td", null, React.createElement("input", {type: "text", className: "form-control", id: "txtNewAmount"})), React.createElement("td", null, React.createElement("input", {type: "text", className: "form-control", id: "txtNewDiscount"})), React.createElement("td", null), React.createElement("td", null, React.createElement("input", {type: "button", value: "Add", onClick: this.addLineItem}))))))));
+	    };
+	    PurchaseInvoiceLines = __decorate([
 	        mobx_react_1.observer
-	    ], PurchaseOrderLines);
-	    return PurchaseOrderLines;
+	    ], PurchaseInvoiceLines);
+	    return PurchaseInvoiceLines;
 	}(React.Component));
-	var PurchaseOrderTotals = (function (_super) {
-	    __extends(PurchaseOrderTotals, _super);
-	    function PurchaseOrderTotals() {
+	var PurchaseInvoiceTotals = (function (_super) {
+	    __extends(PurchaseInvoiceTotals, _super);
+	    function PurchaseInvoiceTotals() {
 	        _super.apply(this, arguments);
 	    }
-	    PurchaseOrderTotals.prototype.render = function () {
+	    PurchaseInvoiceTotals.prototype.render = function () {
 	        return (React.createElement("div", {className: "box"}, React.createElement("div", {className: "box-body"}, React.createElement("div", {className: "row"}, React.createElement("div", {className: "col-md-2"}, React.createElement("label", null, "Running Total: ")), React.createElement("div", {className: "col-md-2"}, 0), React.createElement("div", {className: "col-md-2"}, React.createElement("label", null, "Tax Total: ")), React.createElement("div", {className: "col-md-2"}, 0), React.createElement("div", {className: "col-md-2"}, React.createElement("label", null, "Grand Total: ")), React.createElement("div", {className: "col-md-2"}, store.grandTotal())))));
 	    };
-	    PurchaseOrderTotals = __decorate([
+	    PurchaseInvoiceTotals = __decorate([
 	        mobx_react_1.observer
-	    ], PurchaseOrderTotals);
-	    return PurchaseOrderTotals;
+	    ], PurchaseInvoiceTotals);
+	    return PurchaseInvoiceTotals;
 	}(React.Component));
-	var AddPurchaseOrder = (function (_super) {
-	    __extends(AddPurchaseOrder, _super);
-	    function AddPurchaseOrder() {
+	var AddPurchaseInvoice = (function (_super) {
+	    __extends(AddPurchaseInvoice, _super);
+	    function AddPurchaseInvoice() {
 	        _super.apply(this, arguments);
 	    }
-	    AddPurchaseOrder.prototype.render = function () {
-	        return (React.createElement("div", null, React.createElement(ValidationErrors, null), React.createElement(PurchaseOrderHeader, null), React.createElement(PurchaseOrderLines, null), React.createElement(PurchaseOrderTotals, null), React.createElement("div", null, React.createElement(SavePurchaseOrderButton, null), React.createElement(CancelPurchaseOrderButton, null))));
+	    AddPurchaseInvoice.prototype.render = function () {
+	        return (React.createElement("div", null, React.createElement(ValidationErrors, null), React.createElement(PurchaseInvoiceHeader, null), React.createElement(PurchaseInvoiceLines, null), React.createElement(PurchaseInvoiceTotals, null), React.createElement("div", null, React.createElement(SavePurchaseInvoiceButton, null), React.createElement(CancelPurchaseInvoiceButton, null))));
 	    };
-	    return AddPurchaseOrder;
+	    return AddPurchaseInvoice;
 	}(React.Component));
 	Object.defineProperty(exports, "__esModule", { value: true });
-	exports.default = AddPurchaseOrder;
-	ReactDOM.render(React.createElement(AddPurchaseOrder, null), document.getElementById("divAddPurchaseOrder"));
-	//# sourceMappingURL=AddPurchaseOrder.js.map
+	exports.default = AddPurchaseInvoice;
+	ReactDOM.render(React.createElement(AddPurchaseInvoice, null), document.getElementById("divPurchaseInvoice"));
+	//# sourceMappingURL=PurchaseInvoice.js.map
 
 /***/ },
 
@@ -4210,7 +4218,7 @@ webpackJsonp([3],{
 	            for (var i = 0; i < data.length; i++) {
 	                vendors.push(data[i]);
 	            }
-	        });
+	        }.bind(this));
 	    };
 	    CommonStore.prototype.loadItemsLookup = function () {
 	        var items = this.items;
@@ -4297,13 +4305,14 @@ webpackJsonp([3],{
 	    }
 	    SelectVendor.prototype.onChangeVendor = function (e) {
 	        this.props.store.changedVendor(e.target.value);
+	        console.log(this.props.store.purchaseInvoice.vendorId);
 	    };
 	    SelectVendor.prototype.render = function () {
 	        var options = [];
 	        this.props.store.commonStore.vendors.map(function (vendor) {
-	            return (options.push(React.createElement("option", {key: vendor.id, value: vendor.id}, " ", vendor.name, " ")));
+	            return (options.push(React.createElement("option", {key: vendor.id, value: vendor.id}, " ", vendor.name)));
 	        });
-	        return (React.createElement("select", {id: "optVendor", onChange: this.onChangeVendor.bind(this), className: "form-control select2"}, React.createElement("option", {key: -1, value: ""}), options));
+	        return (React.createElement("select", {id: "optVendor", value: this.props.selected, onChange: this.onChangeVendor.bind(this), className: "form-control select2"}, React.createElement("option", {key: -1}), options));
 	    };
 	    SelectVendor = __decorate([
 	        mobx_react_1.observer
@@ -4349,7 +4358,7 @@ webpackJsonp([3],{
 	        this.props.store.commonStore.paymentTerms.map(function (term) {
 	            return (options.push(React.createElement("option", {key: term.id, value: term.id}, " ", term.description, " ")));
 	        });
-	        return (React.createElement("select", {id: "optPaymentTerm", onChange: this.onChangePaymentTerm.bind(this), className: "form-control select2"}, React.createElement("option", {key: -1, value: ""}), options));
+	        return (React.createElement("select", {id: "optPaymentTerm", value: this.props.selected, onChange: this.onChangePaymentTerm.bind(this), className: "form-control select2"}, React.createElement("option", {key: -1, value: ""}), options));
 	    };
 	    SelectPaymentTerm = __decorate([
 	        mobx_react_1.observer
@@ -4396,7 +4405,7 @@ webpackJsonp([3],{
 	        this.props.store.commonStore.items.map(function (item) {
 	            return (options.push(React.createElement("option", {key: item.id, value: item.id}, " ", item.description, " ")));
 	        });
-	        return (React.createElement("select", {defaultValue: this.props.selected, id: this.props.controlId, onChange: this.onChangeItem.bind(this), className: "form-control select2"}, React.createElement("option", {key: -1, value: ""}), options));
+	        return (React.createElement("select", {value: this.props.selected, id: this.props.controlId, onChange: this.onChangeItem.bind(this), className: "form-control select2"}, React.createElement("option", {key: -1, value: ""}), options));
 	    };
 	    SelectLineItem = __decorate([
 	        mobx_react_1.observer
@@ -4443,7 +4452,7 @@ webpackJsonp([3],{
 	        this.props.store.commonStore.measurements.map(function (measurement) {
 	            return (options.push(React.createElement("option", {key: measurement.id, value: measurement.id}, " ", measurement.description, " ")));
 	        });
-	        return (React.createElement("select", {defaultValue: this.props.selected, id: this.props.controlId, onChange: this.onChangeMeasurement.bind(this), className: "form-control select2"}, React.createElement("option", {key: -1, value: ""}), options));
+	        return (React.createElement("select", {value: this.props.selected, id: this.props.controlId, onChange: this.onChangeMeasurement.bind(this), className: "form-control select2"}, React.createElement("option", {key: -1, value: ""}), options));
 	    };
 	    SelectLineMeasurement = __decorate([
 	        mobx_react_1.observer
@@ -4456,10 +4465,10 @@ webpackJsonp([3],{
 
 /***/ },
 
-/***/ 204:
-/*!******************************************************************************!*\
-  !*** ./wwwroot/libs/tsxbuild/Shared/Stores/Purchasing/PurchaseOrderStore.js ***!
-  \******************************************************************************/
+/***/ 201:
+/*!********************************************************************************!*\
+  !*** ./wwwroot/libs/tsxbuild/Shared/Stores/Purchasing/PurchaseInvoiceStore.js ***!
+  \********************************************************************************/
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -4472,50 +4481,74 @@ webpackJsonp([3],{
 	var mobx_1 = __webpack_require__(/*! mobx */ 169);
 	var axios = __webpack_require__(/*! axios */ 174);
 	var Config = __webpack_require__(/*! Config */ 193);
-	var PurchaseOrder_1 = __webpack_require__(/*! ./PurchaseOrder */ 205);
-	var PurchaseOrderLine_1 = __webpack_require__(/*! ./PurchaseOrderLine */ 206);
+	var PurchaseInvoice_1 = __webpack_require__(/*! ./PurchaseInvoice */ 202);
+	var PurchaseInvoiceLine_1 = __webpack_require__(/*! ./PurchaseInvoiceLine */ 203);
 	var CommonStore_1 = __webpack_require__(/*! ../Common/CommonStore */ 196);
 	var baseUrl = location.protocol
 	    + "//" + location.hostname
 	    + (location.port && ":" + location.port)
 	    + "/";
 	var PurchaseOrderStore = (function () {
-	    function PurchaseOrderStore() {
-	        this.purchaseOrder = new PurchaseOrder_1.default();
-	        mobx_1.extendObservable(this.purchaseOrder, {
-	            vendorId: this.purchaseOrder.vendorId,
-	            orderDate: this.purchaseOrder.orderDate,
-	            paymentTermId: this.purchaseOrder.paymentTermId,
-	            referenceNo: this.purchaseOrder.referenceNo,
-	            purchaseOrderLines: []
-	        });
+	    function PurchaseOrderStore(purchId, invoiceId) {
 	        this.commonStore = new CommonStore_1.default();
+	        this.purchaseInvoice = new PurchaseInvoice_1.default();
+	        mobx_1.extendObservable(this.purchaseInvoice, {
+	            vendorId: this.purchaseInvoice.vendorId,
+	            invoiceDate: this.purchaseInvoice.invoiceDate,
+	            paymentTermId: this.purchaseInvoice.paymentTermId,
+	            referenceNo: this.purchaseInvoice.referenceNo,
+	            purchaseInvoiceLines: []
+	        });
+	        if (purchId !== undefined) {
+	            axios.get(Config.apiUrl + "api/purchasing/purchaseorder?id=" + purchId)
+	                .then(function (result) {
+	                this.changedVendor(result.data.vendorId);
+	                this.changedInvoiceDate(result.data.orderDate);
+	                for (var i = 0; i < result.data.purchaseOrderLines.length; i++) {
+	                    this.addLineItem(result.data.purchaseOrderLines[i].itemId, result.data.purchaseOrderLines[i].measurementId, result.data.purchaseOrderLines[i].quantity, result.data.purchaseOrderLines[i].amount, result.data.purchaseOrderLines[i].discount);
+	                }
+	            }.bind(this))
+	                .catch(function (error) {
+	            }.bind(this));
+	        }
+	        else if (invoiceId !== undefined) {
+	            axios.get(Config.apiUrl + "api/purchasing/purchaseinvoice?id=" + invoiceId)
+	                .then(function (result) {
+	                this.changedVendor(result.data.vendorId);
+	                this.changedInvoiceDate(result.data.orderDate);
+	                for (var i = 0; i < result.data.purchaseInvoiceLines.length; i++) {
+	                    this.addLineItem(result.data.purchaseInvoiceLines[i].itemId, result.data.purchaseInvoiceLines[i].measurementId, result.data.purchaseInvoiceLines[i].quantity, result.data.purchaseInvoiceLines[i].amount, result.data.purchaseInvoiceLines[i].discount);
+	                }
+	            }.bind(this))
+	                .catch(function (error) {
+	            }.bind(this));
+	        }
 	    }
-	    PurchaseOrderStore.prototype.savePurchaseOrder = function () {
+	    PurchaseOrderStore.prototype.savePurchaseInvoice = function () {
 	        this.validationErrors = [];
-	        if (this.purchaseOrder.vendorId === undefined || this.purchaseOrder.vendorId === "")
+	        if (this.purchaseInvoice.vendorId === undefined)
 	            this.validationErrors.push("Vendor is required.");
-	        if (this.purchaseOrder.paymentTermId === undefined || this.purchaseOrder.paymentTermId === "")
+	        if (this.purchaseInvoice.paymentTermId === undefined)
 	            this.validationErrors.push("Payment term is required.");
-	        if (this.purchaseOrder.orderDate === undefined || this.purchaseOrder.orderDate === "")
+	        if (this.purchaseInvoice.invoiceDate === undefined)
 	            this.validationErrors.push("Date is required.");
-	        if (this.purchaseOrder.purchaseOrderLines === undefined || this.purchaseOrder.purchaseOrderLines.length < 1)
+	        if (this.purchaseInvoice.purchaseInvoiceLines === undefined || this.purchaseInvoice.purchaseInvoiceLines.length < 1)
 	            this.validationErrors.push("Enter at least 1 line item.");
-	        if (this.purchaseOrder.purchaseOrderLines !== undefined && this.purchaseOrder.purchaseOrderLines.length > 0) {
-	            for (var i = 0; i < this.purchaseOrder.purchaseOrderLines.length; i++) {
-	                if (this.purchaseOrder.purchaseOrderLines[i].itemId === undefined
-	                    || this.purchaseOrder.purchaseOrderLines[i].itemId === "")
+	        if (this.purchaseInvoice.purchaseInvoiceLines !== undefined && this.purchaseInvoice.purchaseInvoiceLines.length > 0) {
+	            for (var i = 0; i < this.purchaseInvoice.purchaseInvoiceLines.length; i++) {
+	                if (this.purchaseInvoice.purchaseInvoiceLines[i].itemId === undefined
+	                    || this.purchaseInvoice.purchaseInvoiceLines[i].itemId === "")
 	                    this.validationErrors.push("Item is required.");
-	                if (this.purchaseOrder.purchaseOrderLines[i].measurementId === undefined
-	                    || this.purchaseOrder.purchaseOrderLines[i].measurementId === "")
+	                if (this.purchaseInvoice.purchaseInvoiceLines[i].measurementId === undefined
+	                    || this.purchaseInvoice.purchaseInvoiceLines[i].measurementId === "")
 	                    this.validationErrors.push("Uom is required.");
-	                if (this.purchaseOrder.purchaseOrderLines[i].quantity === undefined
-	                    || this.purchaseOrder.purchaseOrderLines[i].quantity === ""
-	                    || this.purchaseOrder.purchaseOrderLines[i].quantity === 0)
+	                if (this.purchaseInvoice.purchaseInvoiceLines[i].quantity === undefined
+	                    || this.purchaseInvoice.purchaseInvoiceLines[i].quantity === ""
+	                    || this.purchaseInvoice.purchaseInvoiceLines[i].quantity === 0)
 	                    this.validationErrors.push("Quantity is required.");
-	                if (this.purchaseOrder.purchaseOrderLines[i].amount === undefined
-	                    || this.purchaseOrder.purchaseOrderLines[i].amount === ""
-	                    || this.purchaseOrder.purchaseOrderLines[i].amount === 0)
+	                if (this.purchaseInvoice.purchaseInvoiceLines[i].amount === undefined
+	                    || this.purchaseInvoice.purchaseInvoiceLines[i].amount === ""
+	                    || this.purchaseInvoice.purchaseInvoiceLines[i].amount === 0)
 	                    this.validationErrors.push("Amount is required.");
 	                if (this.lineTotal(i) === undefined
 	                    || this.lineTotal(i).toString() === "NaN"
@@ -4524,7 +4557,7 @@ webpackJsonp([3],{
 	            }
 	        }
 	        if (this.validationErrors.length === 0) {
-	            axios.post(Config.apiUrl + "api/purchasing/savepurchaseorder", JSON.stringify(this.purchaseOrder), {
+	            axios.post(Config.apiUrl + "api/purchasing/savepurchaseinvoice", JSON.stringify(this.purchaseInvoice), {
 	                headers: {
 	                    'Content-type': 'application/json'
 	                }
@@ -4539,35 +4572,32 @@ webpackJsonp([3],{
 	        }
 	    };
 	    PurchaseOrderStore.prototype.changedVendor = function (vendorId) {
-	        this.purchaseOrder.vendorId = vendorId;
+	        this.purchaseInvoice.vendorId = vendorId;
 	    };
-	    PurchaseOrderStore.prototype.changedPaymentTerm = function (paymentTermId) {
-	        this.purchaseOrder.paymentTermId = paymentTermId;
-	    };
-	    PurchaseOrderStore.prototype.changedOrderDate = function (date) {
-	        this.purchaseOrder.orderDate = date;
+	    PurchaseOrderStore.prototype.changedInvoiceDate = function (date) {
+	        this.purchaseInvoice.invoiceDate = date;
 	    };
 	    PurchaseOrderStore.prototype.addLineItem = function (itemId, measurementId, quantity, amount, discount) {
-	        var newLineItem = new PurchaseOrderLine_1.default(itemId, measurementId, quantity, amount, discount);
-	        this.purchaseOrder.purchaseOrderLines.push(mobx_1.extendObservable(newLineItem, newLineItem));
+	        var newLineItem = new PurchaseInvoiceLine_1.default(itemId, measurementId, quantity, amount, discount);
+	        this.purchaseInvoice.purchaseInvoiceLines.push(mobx_1.extendObservable(newLineItem, newLineItem));
 	    };
 	    PurchaseOrderStore.prototype.removeLineItem = function (row) {
-	        this.purchaseOrder.purchaseOrderLines.splice(row, 1);
+	        this.purchaseInvoice.purchaseInvoiceLines.splice(row, 1);
 	    };
 	    PurchaseOrderStore.prototype.updateLineItem = function (row, targetProperty, value) {
-	        if (this.purchaseOrder.purchaseOrderLines.length > 0)
-	            this.purchaseOrder.purchaseOrderLines[row][targetProperty] = value;
+	        if (this.purchaseInvoice.purchaseInvoiceLines.length > 0)
+	            this.purchaseInvoice.purchaseInvoiceLines[row][targetProperty] = value;
 	    };
 	    PurchaseOrderStore.prototype.grandTotal = function () {
 	        var sum = 0;
-	        for (var i = 0; i < this.purchaseOrder.purchaseOrderLines.length; i++) {
-	            var lineSum = this.purchaseOrder.purchaseOrderLines[i].quantity * this.purchaseOrder.purchaseOrderLines[i].amount;
+	        for (var i = 0; i < this.purchaseInvoice.purchaseInvoiceLines.length; i++) {
+	            var lineSum = this.purchaseInvoice.purchaseInvoiceLines[i].quantity * this.purchaseInvoice.purchaseInvoiceLines[i].amount;
 	            sum = sum + lineSum;
 	        }
 	        return sum;
 	    };
 	    PurchaseOrderStore.prototype.lineTotal = function (row) {
-	        var lineSum = this.purchaseOrder.purchaseOrderLines[row].quantity * this.purchaseOrder.purchaseOrderLines[row].amount;
+	        var lineSum = this.purchaseInvoice.purchaseInvoiceLines[row].quantity * this.purchaseInvoice.purchaseInvoiceLines[row].amount;
 	        return lineSum;
 	    };
 	    __decorate([
@@ -4577,51 +4607,61 @@ webpackJsonp([3],{
 	}());
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.default = PurchaseOrderStore;
-	//# sourceMappingURL=PurchaseOrderStore.js.map
+	//# sourceMappingURL=PurchaseInvoiceStore.js.map
 
 /***/ },
 
-/***/ 205:
-/*!*************************************************************************!*\
-  !*** ./wwwroot/libs/tsxbuild/Shared/Stores/Purchasing/PurchaseOrder.js ***!
-  \*************************************************************************/
+/***/ 202:
+/*!***************************************************************************!*\
+  !*** ./wwwroot/libs/tsxbuild/Shared/Stores/Purchasing/PurchaseInvoice.js ***!
+  \***************************************************************************/
 /***/ function(module, exports) {
 
 	"use strict";
-	var PurchaseOrder = (function () {
-	    function PurchaseOrder() {
-	        this.purchaseOrderLines = [];
+	var PurchaseInvoice = (function () {
+	    function PurchaseInvoice(id, vendorId, invoiceDate, paymentTermId, referenceNo) {
+	        if (id === void 0) { id = null; }
+	        if (vendorId === void 0) { vendorId = null; }
+	        if (invoiceDate === void 0) { invoiceDate = null; }
+	        if (paymentTermId === void 0) { paymentTermId = null; }
+	        if (referenceNo === void 0) { referenceNo = null; }
+	        this.purchaseInvoiceLines = [];
+	        this.id = id;
+	        this.vendorId = vendorId;
+	        this.invoiceDate = invoiceDate;
+	        this.paymentTermId = paymentTermId;
+	        this.referenceNo = referenceNo;
 	    }
-	    return PurchaseOrder;
+	    return PurchaseInvoice;
 	}());
 	Object.defineProperty(exports, "__esModule", { value: true });
-	exports.default = PurchaseOrder;
-	//# sourceMappingURL=PurchaseOrder.js.map
+	exports.default = PurchaseInvoice;
+	//# sourceMappingURL=PurchaseInvoice.js.map
 
 /***/ },
 
-/***/ 206:
-/*!*****************************************************************************!*\
-  !*** ./wwwroot/libs/tsxbuild/Shared/Stores/Purchasing/PurchaseOrderLine.js ***!
-  \*****************************************************************************/
+/***/ 203:
+/*!*******************************************************************************!*\
+  !*** ./wwwroot/libs/tsxbuild/Shared/Stores/Purchasing/PurchaseInvoiceLine.js ***!
+  \*******************************************************************************/
 /***/ function(module, exports) {
 
 	"use strict";
-	var PurchaseOrderLine = (function () {
-	    function PurchaseOrderLine(itemId, measurementId, quantity, amount, discount) {
+	var PurchaseInvoiceLine = (function () {
+	    function PurchaseInvoiceLine(itemId, measurementId, quantity, amount, discount) {
 	        this.itemId = itemId;
 	        this.measurementId = measurementId;
 	        this.quantity = quantity;
 	        this.amount = amount;
 	        this.discount = discount;
 	    }
-	    return PurchaseOrderLine;
+	    return PurchaseInvoiceLine;
 	}());
 	Object.defineProperty(exports, "__esModule", { value: true });
-	exports.default = PurchaseOrderLine;
-	//# sourceMappingURL=PurchaseOrderLine.js.map
+	exports.default = PurchaseInvoiceLine;
+	//# sourceMappingURL=PurchaseInvoiceLine.js.map
 
 /***/ }
 
 });
-//# sourceMappingURL=addpurchaseorder.chunk.js.map
+//# sourceMappingURL=purchaseinvoice.chunk.js.map
