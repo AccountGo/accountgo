@@ -9,12 +9,12 @@ var scriptsDir = path.resolve(__dirname, './wwwroot/libs/tsxbuild');
 var config = {
     entry: {
         home: scriptsDir + '/home' + '/home',
-        "sales/addsalesorder": scriptsDir + '/sales/addsalesorder',
-        "quotations/addsalesquotation": scriptsDir + '/quotations/addsalesquotation',
-        "sales/addsalesinvoice": scriptsDir + '/sales/addsalesinvoice',
-        "purchasing/addpurchaseorder": scriptsDir + '/purchasing/addpurchaseorder',
-        "purchasing/addpurchaseinvoice": scriptsDir + '/purchasing/addpurchaseinvoice',
-        "financials/addjournalentry": scriptsDir + '/financials/addjournalentry',
+        "sales/salesorder": scriptsDir + '/sales/salesorder',
+        "quotations/salesquotation": scriptsDir + '/quotations/salesquotation',
+        "sales/salesinvoice": scriptsDir + '/sales/salesinvoice',
+        "purchasing/purchaseorder": scriptsDir + '/purchasing/purchaseorder',
+        "purchasing/purchaseinvoice": scriptsDir + '/purchasing/purchaseinvoice',
+        "financials/journalentry": scriptsDir + '/financials/journalentry',
         vendor: ['react', 'react-dom']
     },
     output: {

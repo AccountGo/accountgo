@@ -107,5 +107,26 @@ namespace Api.Controllers
 
             return Ok(accountsDto.AsEnumerable());
         }
+
+        [HttpGet]
+        [Route("[action]")]
+        public IActionResult ItemCategories()
+        {
+            var itemcategories = _inventoryService.GetItemCategories();
+            return Ok(itemcategories.AsEnumerable());
+        }
+
+        [HttpGet]
+        [Route("[action]")]
+        public IActionResult CashBanks()
+        {
+            var banks = _financialService.GetCashAndBanks();
+            ICollection<Bank> cashbanksDto = new HashSet<Bank>();
+
+            foreach (var bank in banks)
+                cashbanksDto.Add(new Bank() { Id = bank.Id, Name = bank.Name });
+
+            return Ok(cashbanksDto);
+        }
     }
 }

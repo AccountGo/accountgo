@@ -43,5 +43,12 @@ namespace AccountGoWeb.Controllers
 
             return View();
         }
+
+        public IActionResult Quotation()
+        {
+            ViewBag.PageContentHeader = "Sales Quotation";
+
+            return View();
+        }
     }
 }

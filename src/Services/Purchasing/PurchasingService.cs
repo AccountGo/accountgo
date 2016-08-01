@@ -250,7 +250,10 @@ namespace Services.Purchasing
         public IEnumerable<Vendor> GetVendors()
         {
             System.Linq.Expressions.Expression<Func<Vendor, object>>[] includeProperties =
-                { p => p.Party, c => c.AccountsPayableAccount };
+                {
+                p => p.Party,
+                c => c.AccountsPayableAccount
+            };
 
             var vendors = _vendorRepo.GetAllIncluding(includeProperties);
 
@@ -259,13 +262,18 @@ namespace Services.Purchasing
 
         public Vendor GetVendorById(int id)
         {
-            return _vendorRepo.GetAllIncluding(p => p.Party).Where(v => v.Id == id).FirstOrDefault();
+            return _vendorRepo.GetAllIncluding(v => v.Party,
+                v => v.PrimaryContact,
+                v => v.PrimaryContact.Party)
+                .Where(v => v.Id == id)
+                .FirstOrDefault();
         }
 
         public IEnumerable<PurchaseOrderHeader> GetPurchaseOrders()
         {
             var query = _purchaseOrderRepo.GetAllIncluding(po => po.Vendor,
                 po => po.Vendor.Party,
+                po => po.PurchaseReceipts,
                 po => po.PurchaseOrderLines);
 
             return query.AsEnumerable();
@@ -273,12 +281,25 @@ namespace Services.Purchasing
 
         public PurchaseOrderHeader GetPurchaseOrderById(int id)
         {
-            return _purchaseOrderRepo.GetById(id);
+            var purchOrder = _purchaseOrderRepo.GetAllIncluding(po => po.Vendor,
+                po => po.Vendor.Party,
+                po => po.PurchaseOrderLines,
+                po => po.PurchaseReceipts)
+                .Where(po => po.Id == id)
+                .FirstOrDefault();
+
+            return purchOrder;
         }
 
         public PurchaseReceiptHeader GetPurchaseReceiptById(int id)
         {
-            return _purchaseReceiptRepo.GetById(id);
+            var purchReceipt = _purchaseReceiptRepo.GetAllIncluding(pr => pr.Vendor,
+                pr => pr.Vendor.Party,
+                pr => pr.PurchaseReceiptLines)
+                .Where(pr => pr.Id == id)
+                .FirstOrDefault();
+
+            return purchReceipt;
         }
 
         public void AddVendor(Vendor vendor)
@@ -299,16 +320,26 @@ namespace Services.Purchasing
 
         public IEnumerable<PurchaseInvoiceHeader> GetPurchaseInvoices()
         {
-            var query =_purchaseInvoiceRepo.GetAllIncluding(po => po.Vendor,
-                po => po.Vendor.Party,
-                po => po.PurchaseInvoiceLines);
+            var query =_purchaseInvoiceRepo.GetAllIncluding(inv => inv.Vendor,
+                inv => inv.Vendor.Party,
+                inv => inv.VendorPayments,
+                inv => inv.PurchaseInvoiceLines,
+                inv => inv.GeneralLedgerHeader,
+                inv => inv.GeneralLedgerHeader.GeneralLedgerLines);
 
             return query.AsEnumerable();
         }
 
         public PurchaseInvoiceHeader GetPurchaseInvoiceById(int id)
         {
-            return _purchaseInvoiceRepo.GetById(id);
+            var invoice = _purchaseInvoiceRepo.GetAllIncluding(inv => inv.Vendor,
+                inv => inv.Vendor.Party,
+                inv => inv.PurchaseInvoiceLines,
+                inv => inv.VendorPayments)
+                .Where(inv => inv.Id == id)
+                .FirstOrDefault();
+
+            return invoice;
         }
 
         public void SavePayment(int invoiceId, int vendorId, int accountId, decimal amount, DateTime date)

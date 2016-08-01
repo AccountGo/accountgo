@@ -1,7 +1,9 @@
 ﻿@model string
 
 <div>
-    <a class="btn btn-sm btn-default btn-flat" href="~/purchasing/addpurchaseinvoice"><i class="fa fa-plus"></i>Add</a>
+    <a href="~/purchasing/addpurchaseinvoice"><i class="fa fa-plus margin-a"></i>New Invoice</a>
+    <a href="~/purchasing/purchaseinvoice" id="linkViewInvoice" class="inactiveLink"><i class="fa fa-edit margin-a"></i>View</a>
+    <a href="~/purchasing/payment" id="linkMakePayment" class="inactiveLink"><i class="fa fa-tasks margin-a"></i>Make Payment</a>
 </div>
 <div>
     <div id="purchaseinvoices" class="ag-fresh" style="height: 400px;"></div>
@@ -10,17 +12,32 @@
     var columnDefs = [
         {headerName: "Invoice", field: "id", width: 50},
         {headerName: "Vendor Name", field: "vendorName", width: 350},
-        {headerName: "Invoiced Date", field: "invoiceDate", width: 100},
-        {headerName: "Amount", field: "Amount", width: 100}
+        {headerName: "Invoice Date", field: "invoiceDate", width: 100},
+        {headerName: "Amount", field: "amount", width: 100}
     ];
 
     var gridOptions = {
         columnDefs: columnDefs,
         rowData: @Html.Raw(Model),
-
         // PROPERTIES - simple boolean / string / number properties
-        rowSelection: 'multiple',
-     };
+        rowSelection: 'single',
+        onSelectionChanged: onSelectionChanged,
+    };
+
+    function onSelectionChanged() {
+        var selectedRows = gridOptions.api.getSelectedRows();
+        selectedRow = selectedRows[0];
+        
+        document.getElementById('linkMakePayment').setAttribute('href', 'payment/' + selectedRow.id);
+        document.getElementById('linkViewInvoice').setAttribute('href', 'purchaseinvoice?invoiceId=' + selectedRow.id);
+        
+        if(!selectedRow.isPaid)
+            document.getElementById('linkMakePayment').setAttribute('class', '');
+        else
+            document.getElementById('linkMakePayment').setAttribute('class', 'inactiveLink');
+
+        document.getElementById('linkViewInvoice').setAttribute('class', '');
+    }
 
     // wait for the document to be loaded, otherwise
     // ag-Grid will not find the div in the document.

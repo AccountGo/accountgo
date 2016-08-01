@@ -298,15 +298,24 @@ namespace Services.Sales
 
         public SalesInvoiceHeader GetSalesInvoiceById(int id)
         {
-            return _salesInvoiceRepo.GetById(id);
+            var invoice = _salesInvoiceRepo.GetAllIncluding(inv => inv.Customer,
+                inv => inv.Customer.Party,
+                inv => inv.SalesInvoiceLines)
+                .Where(inv => inv.Id == id)
+                .FirstOrDefault();
+
+            return invoice;
         }
 
         public SalesInvoiceHeader GetSalesInvoiceByNo(string no)
         {
-            var query = from invoice in _salesInvoiceRepo.Table
-                        where invoice.No == no
-                        select invoice;
-            return query.FirstOrDefault();
+            var invoice = _salesInvoiceRepo.GetAllIncluding(inv => inv.Customer,
+                inv => inv.Customer.Party,
+                inv => inv.SalesInvoiceLines)
+                .Where(inv => inv.No == no)
+                .FirstOrDefault();
+
+            return invoice;
         }
 
         public void UpdateSalesInvoice(SalesInvoiceHeader salesInvoice)
@@ -318,6 +327,7 @@ namespace Services.Sales
         {
             var query = _salesReceiptRepo.GetAllIncluding(s => s.Customer,
                 s => s.Customer.Party,
+                s => s.CustomerAllocations,
                 s => s.AccountToDebit,
                 s => s.GeneralLedgerHeader,
                 s => s.SalesReceiptLines);
@@ -327,7 +337,13 @@ namespace Services.Sales
 
         public SalesReceiptHeader GetSalesReceiptById(int id)
         {
-            return _salesReceiptRepo.GetById(id);
+            var receipt = _salesReceiptRepo.GetAllIncluding(r => r.Customer, 
+                r => r.CustomerAllocations,
+                r => r.SalesReceiptLines,
+                r => r.Customer.Party)
+                .Where(r => r.Id == id).FirstOrDefault();
+
+            return receipt;
         }
 
         public void UpdateSalesReceipt(SalesReceiptHeader salesReceipt)
@@ -347,8 +363,16 @@ namespace Services.Sales
 
         public Customer GetCustomerById(int id)
         {
-            System.Linq.Expressions.Expression<Func<Customer, object>>[] includeProperties =
-                { p => p.Party, c => c.AccountsReceivableAccount };
+            System.Linq.Expressions.Expression<Func<Customer, object>>[] includeProperties = {
+                p => p.Party,
+                c => c.AccountsReceivableAccount,
+                c => c.SalesInvoices,
+                c => c.CustomerAdvancesAccount,
+                c => c.SalesAccount,
+                c => c.PromptPaymentDiscountAccount,
+                c => c.PrimaryContact,
+                c => c.PrimaryContact.Party
+            };
 
             var customer = _customerRepo.GetAllIncluding(includeProperties)
                 .Where(c => c.Id == id).FirstOrDefault();
@@ -559,6 +583,26 @@ namespace Services.Sales
                 .GetAllIncluding(line => line.SalesQuoteLines, p => p.Customer.Party)
                 .AsEnumerable();
             return quotes;
+        }
+
+        public IEnumerable<SalesInvoiceHeader> GetCustomerInvoices(int customerId)
+        {
+            var invoices = _salesInvoiceRepo.GetAllIncluding(i => i.SalesInvoiceLines,
+                i => i.CustomerAllocations)
+                .Where(i => i.CustomerId == customerId);
+
+            return invoices;
+        }
+
+        public SalesQuoteHeader GetSalesQuotationById(int id)
+        {
+            var quotation = _salesQuoteRepo.GetAllIncluding(q => q.Customer,
+                q => q.Customer.Party,
+                q => q.SalesQuoteLines)
+                .Where(q => q.Id == id)
+                .FirstOrDefault();
+
+            return quotation;
         }
     }
 }

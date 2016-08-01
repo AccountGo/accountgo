@@ -1,17 +1,19 @@
 ﻿import SalesOrderLine from "./SalesOrderLine";
 
 interface ISalesOrder {
+    id;
     customerId;
     orderDate;
-    paymentTermid;
+    paymentTermId;
     referenceNo;
     salesOrderLines: SalesOrderLine[];
 }
 
 export default class SalesOrder implements ISalesOrder {
+    id: number;
     customerId: number;
     orderDate: Date;
-    paymentTermid: number;
+    paymentTermId: number;
     referenceNo: string;
     salesOrderLines: SalesOrderLine[] = [];
     //constructor(customerId, orderDate, paymentTermId, referenceNo) {

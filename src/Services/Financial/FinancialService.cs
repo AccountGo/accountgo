@@ -209,9 +209,11 @@ namespace Services.Financial
 
         public IEnumerable<JournalEntryHeader> GetJournalEntries()
         {
-            var query = from je in _journalEntryRepo.Table
-                        select je;
-            return query.AsEnumerable();
+            var journalEntries = _journalEntryRepo.GetAllIncluding(je => je.JournalEntryLines,
+                je => je.Party,
+                je => je.GeneralLedgerHeader);
+
+            return journalEntries;
         }
 
         public void AddJournalEntry(JournalEntryHeader journalEntry)
@@ -607,9 +609,24 @@ namespace Services.Financial
 
         public JournalEntryHeader GetJournalEntry(int id, bool fromGL = false)
         {
-            if(fromGL)
-                return _journalEntryRepo.Table.Where(je => je.GeneralLedgerHeaderId == id).FirstOrDefault();
-            return _journalEntryRepo.Table.Where(je => je.Id == id).FirstOrDefault();
+            if (fromGL)
+            {
+                var je = _journalEntryRepo.GetAllIncluding(j => j.GeneralLedgerHeader,
+                    j => j.JournalEntryLines,
+                    j => j.Party)
+                    .Where(j => j.GeneralLedgerHeaderId == id)
+                    .FirstOrDefault();
+                return je;
+            }
+            else
+            {
+                var je = _journalEntryRepo.GetAllIncluding(j => j.GeneralLedgerHeader,
+                    j => j.JournalEntryLines,
+                    j => j.Party)
+                    .Where(j => j.Id == id)
+                    .FirstOrDefault();
+                return je;
+            }
         }
 
         public void UpdateJournalEntry(JournalEntryHeader journalEntry, bool posted = false)

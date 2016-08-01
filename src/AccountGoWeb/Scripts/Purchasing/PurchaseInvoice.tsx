@@ -1,31 +1,55 @@
 ﻿import * as React from "react";
 import * as ReactDOM from "react-dom";
 import {observer} from "mobx-react";
-import * as d3 from "d3";
+
 import Config = require("Config");
 
-import SelectCustomer from "../Shared/Components/SelectCustomer";
+import SelectVendor from "../Shared/Components/SelectVendor";
 import SelectPaymentTerm from "../Shared/Components/SelectPaymentTerm";
 import SelectLineItem from "../Shared/Components/SelectLineItem";
 import SelectLineMeasurement from "../Shared/Components/SelectLineMeasurement";
 
-import SalesQuotationStore from "../Shared/Stores/Quotations/SalesQuotationStore";
+import PurchaseInvoiceStore from "../Shared/Stores/Purchasing/PurchaseInvoiceStore";
 
-let store = new SalesQuotationStore();
+let purchId = window.location.search.split("?purchId=")[1];
+let invoiceId = window.location.search.split("?invoiceId=")[1];
 
-class SaveQuotationButton extends React.Component<any, {}>{
-    saveNewSalesQuotation(e) {
-        store.saveNewQuotation();
+let store = new PurchaseInvoiceStore(purchId, invoiceId);
+
+@observer
+class ValidationErrors extends React.Component<any, {}>{
+    render() {
+        if (store.validationErrors !== undefined && store.validationErrors.length > 0) {
+            var errors = [];
+            store.validationErrors.map(function (item, index) {
+                errors.push(<li key={index}>{item}</li>);
+            });
+            return (
+                <div>
+                    <ul>
+                        {errors}
+                    </ul>
+                </div>
+
+            );
+        }
+        return null;
+    }
+}
+
+class SavePurchaseInvoiceButton extends React.Component<any, {}>{
+    saveNewPurchaseInvoice(e) {
+
     }
 
     render() {
         return (
-            <input type="button" value="Save" onClick={this.saveNewSalesQuotation.bind(this)} />
+            <input type="button" value="Save" onClick={this.saveNewPurchaseInvoice.bind(this)} />
             );
     }
 }
 
-class CancelQuotationButton extends React.Component<any, {}>{
+class CancelPurchaseInvoiceButton extends React.Component<any, {}>{
     render() {
         return (
             <input type="button" value="Cancel" />
@@ -34,15 +58,18 @@ class CancelQuotationButton extends React.Component<any, {}>{
 }
 
 @observer
-class SalesQuotationHeader extends React.Component<any, {}>{
-    onChangeQuotationDate(e) {
-        store.changedQuotationDate(e.target.value);
+class PurchaseInvoiceHeader extends React.Component<any, {}>{
+    onChangeInvoiceDate(e) {
+        store.changedInvoiceDate(e.target.value);
+    }
+    onChangeVendor(e) {
+        store.changedVendor(e.target.value);
     }
     render() {        
         return (
             <div className="box">
                 <div className="box-header with-border">
-                    <h3 className="box-title">Customer Information</h3>
+                    <h3 className="box-title">Vendor Information</h3>
                     <div className="box-tools pull-right">
                         <button type="button" className="btn btn-box-tool" data-widget="collapse" data-toggle="tooltip" title="Collapse">
                             <i className="fa fa-minus"></i>
@@ -52,18 +79,18 @@ class SalesQuotationHeader extends React.Component<any, {}>{
                 <div className="box-body">
                     <div className="col-sm-6">
                         <div className="row">
-                            <div className="col-sm-2">Customer</div>
-                            <div className="col-sm-10"><SelectCustomer store={store} /></div>
+                            <div className="col-sm-2">Vendor</div>
+                            <div className="col-sm-10"><SelectVendor store={store} selected={store.purchaseInvoice.vendorId} /></div>
                         </div>
                         <div className="row">
                             <div className="col-sm-2">Payment Term</div>
-                            <div className="col-sm-10"><SelectPaymentTerm store={store} /></div>
+                            <div className="col-sm-10"><SelectPaymentTerm store={store} selected={store.purchaseInvoice.paymentTermId} /></div>
                         </div>
                     </div>
                     <div className="col-md-6">
                         <div className="row">
                             <div className="col-sm-2">Date</div>
-                            <div className="col-sm-10"><input type="date" className="form-control pull-right" onChange={this.onChangeQuotationDate.bind(this) } defaultValue={store.salesQuotation.quotationDate} /></div>
+                            <div className="col-sm-10"><input type="date" className="form-control pull-right" onChange={this.onChangeInvoiceDate.bind(this) } value={store.purchaseInvoice.invoiceDate} /></div>                            
                         </div>
                         <div className="row">
                             <div className="col-sm-2">Reference no.</div>
@@ -77,7 +104,7 @@ class SalesQuotationHeader extends React.Component<any, {}>{
 }
 
 @observer
-class SalesQuotationLines extends React.Component<any, {}>{
+class PurchaseInvoiceLines extends React.Component<any, {}>{
     addLineItem() {
         var itemId, measurementId, quantity, amount, discount;
         itemId = (document.getElementById("optNewItemId") as HTMLInputElement).value;
@@ -86,7 +113,7 @@ class SalesQuotationLines extends React.Component<any, {}>{
         amount = (document.getElementById("txtNewAmount") as HTMLInputElement).value;
         discount = (document.getElementById("txtNewDiscount") as HTMLInputElement).value;
 
-        //console.log(`itemId: ${itemId} | measurementId: ${measurementId} | quantity: ${quantity} | amount: ${amount} | discount: ${discount}`);
+        console.log(`itemId: ${itemId} | measurementId: ${measurementId} | quantity: ${quantity} | amount: ${amount} | discount: ${discount}`);
         store.addLineItem(itemId, measurementId, quantity, amount, discount);
 
         (document.getElementById("txtNewQuantity") as HTMLInputElement).value = "1";
@@ -110,18 +137,22 @@ class SalesQuotationLines extends React.Component<any, {}>{
         store.updateLineItem(e.target.name, "discount", e.target.value);
     }
 
+    onChangeItem(e) {
+        store.updateLineItem(e.target.name, "itemId", e.target.value);
+    }
+
     render() {        
         var lineItems = [];
-        for (var i = 0; i < store.salesQuotation.salesQuotationLines.length; i++) {
+        for (var i = 0; i < store.purchaseInvoice.purchaseInvoiceLines.length; i++) {
             lineItems.push(
                 <tr key={i}>
-                    <td><SelectLineItem store={store} row={i} selected={store.salesQuotation.salesQuotationLines[i].itemId} /></td>
-                    <td>{store.salesQuotation.salesQuotationLines[i].itemId}</td>
-                    <td><SelectLineMeasurement row={i} store={store} selected={store.salesQuotation.salesQuotationLines[i].measurementId} /></td>
-                    <td><input className="form-control" type="text" name={i} value={store.salesQuotation.salesQuotationLines[i].quantity} onChange={this.onChangeQuantity.bind(this) } /></td>
-                    <td><input className="form-control" type="text" name={i} value={store.salesQuotation.salesQuotationLines[i].amount} onChange={this.onChangeAmount.bind(this) } /></td>
-                    <td><input className="form-control" type="text" name={i} value={store.salesQuotation.salesQuotationLines[i].discount} onChange={this.onChangeDiscount.bind(this) } /></td>
-                    <td>{store.lineTotal(i) }</td>
+                    <td><SelectLineItem store={store} row={i} selected={store.purchaseInvoice.purchaseInvoiceLines[i].itemId} /></td>
+                    <td><input type="text" className="form-control" name={i} value={store.purchaseInvoice.purchaseInvoiceLines[i].itemId} onChange={this.onChangeItem.bind(this) } /></td>
+                    <td><SelectLineMeasurement row={i} store={store} selected={store.purchaseInvoice.purchaseInvoiceLines[i].measurementId} /></td>
+                    <td><input type="text" className="form-control" name={i} value={store.purchaseInvoice.purchaseInvoiceLines[i].quantity} onChange={this.onChangeQuantity.bind(this)} /></td>
+                    <td><input type="text" className="form-control" name={i} value={store.purchaseInvoice.purchaseInvoiceLines[i].amount} onChange={this.onChangeAmount.bind(this) } /></td>
+                    <td><input type="text" className="form-control" name={i} value={store.purchaseInvoice.purchaseInvoiceLines[i].discount} onChange={this.onChangeDiscount.bind(this) } /></td>
+                    <td>{store.lineTotal(i)}</td>
                     <td><input type="button" name={i} value="Remove" onClick={this.onClickRemoveLineItem.bind(this) } /></td>
                 </tr>
             );
@@ -153,12 +184,12 @@ class SalesQuotationLines extends React.Component<any, {}>{
                         <tbody>
                             {lineItems}
                             <tr>
-                                <td><SelectLineItem store={store} controlId="optNewItemId" /></td>
+                                <td><SelectLineItem store={store} selected={-1} controlId="optNewItemId" /></td>
                                 <td>Item Name</td>
-                                <td><SelectLineMeasurement store={store} controlId="optNewMeasurementId" /></td>
-                                <td><input className="form-control" type="text" id="txtNewQuantity" /></td>
-                                <td><input className="form-control" type="text" id="txtNewAmount" /></td>
-                                <td><input className="form-control" type="text" id="txtNewDiscount" /></td>
+                                <td><SelectLineMeasurement store={store} selected={-1} controlId="optNewMeasurementId" /></td>
+                                <td><input type="text" className="form-control" id="txtNewQuantity" /></td>
+                                <td><input type="text" className="form-control" id="txtNewAmount" /></td>
+                                <td><input type="text" className="form-control" id="txtNewDiscount" /></td>
                                 <td></td>
                                 <td><input type="button" value="Add" onClick={this.addLineItem} /></td>
                             </tr>
@@ -171,7 +202,7 @@ class SalesQuotationLines extends React.Component<any, {}>{
 }
 
 @observer
-class SalesQuotationTotals extends React.Component<any, {}>{
+class PurchaseInvoiceTotals extends React.Component<any, {}>{
     render() {
         return (
             <div className="box">
@@ -182,7 +213,7 @@ class SalesQuotationTotals extends React.Component<any, {}>{
                         <div className="col-md-2"><label>Tax Total: </label></div>
                         <div className="col-md-2">{0}</div>
                         <div className="col-md-2"><label>Grand Total: </label></div>
-                        <div className="col-md-2">{store.grandTotal()}</div>
+                        <div className="col-md-2">{store.grandTotal() }</div>
                     </div>
                 </div>
             </div>
@@ -190,20 +221,21 @@ class SalesQuotationTotals extends React.Component<any, {}>{
     }
 }
 
-export default class AddSalesQuotation extends React.Component<any, {}> {
+export default class AddPurchaseInvoice extends React.Component<any, {}> {
     render() {
         return (
             <div>
-                <SalesQuotationHeader />
-                <SalesQuotationLines />
-                <SalesQuotationTotals />
+                <ValidationErrors />
+                <PurchaseInvoiceHeader />
+                <PurchaseInvoiceLines />
+                <PurchaseInvoiceTotals />
                 <div>
-                    <SaveQuotationButton />
-                    <CancelQuotationButton />
+                    <SavePurchaseInvoiceButton />
+                    <CancelPurchaseInvoiceButton />
                 </div>
             </div>
             );
     }
 }
 
-ReactDOM.render(<AddSalesQuotation />, document.getElementById("divAddSalesQuotation"));
+ReactDOM.render(<AddPurchaseInvoice />, document.getElementById("divPurchaseInvoice"));

@@ -11,6 +11,7 @@ namespace AccountGoWeb.Controllers
         public InventoryController(Microsoft.Extensions.Configuration.IConfiguration config)
         {
             _config = config;
+            Models.SelectListItemHelper._config = _config;
         }
 
         public async System.Threading.Tasks.Task<IActionResult> Items()
@@ -53,42 +54,92 @@ namespace AccountGoWeb.Controllers
             return View();
         }
 
-        public async System.Threading.Tasks.Task<IActionResult> Item(int id)
+        public IActionResult Item(int id = -1)
         {
-            ViewBag.PageContentHeader = "Item Card";
+            Item itemModel = null;
+            if (id == -1)
+            {
+                ViewBag.PageContentHeader = "Item Customer";
+                itemModel = new Item();
+                itemModel.No = new System.Random().Next(1, 99999).ToString(); // TODO: Replace with system generated numbering.
+            }
+            else
+            {
+                ViewBag.PageContentHeader = "Item Card";
+                itemModel = GetAsync<Item>("inventory/item?id=" + id).Result;
+            }
 
+            ViewBag.Accounts = Models.SelectListItemHelper.Accounts();
+            ViewBag.ItemTaxGroups = Models.SelectListItemHelper.ItemTaxGroups();
+            ViewBag.Measurements = Models.SelectListItemHelper.UnitOfMeasurements();
+            ViewBag.ItemCategories = Models.SelectListItemHelper.ItemCategories();
+
+            return View(itemModel);
+        }
+
+        public IActionResult SaveItem(Item itemModel)
+        {
+            if (ModelState.IsValid)
+            {
+                var serialize = Newtonsoft.Json.JsonConvert.SerializeObject(itemModel);
+                var content = new StringContent(serialize);
+                content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+
+                var response = PostAsync("inventory/saveitem", content);
+
+                return RedirectToAction("Items");
+            }
+            else
+            {
+                ViewBag.Accounts = Models.SelectListItemHelper.Accounts();
+                ViewBag.ItemTaxGroups = Models.SelectListItemHelper.ItemTaxGroups();
+                ViewBag.Measurements = Models.SelectListItemHelper.UnitOfMeasurements();
+                ViewBag.ItemCategories = Models.SelectListItemHelper.ItemCategories();
+            }
+
+            if (itemModel.Id == -1)
+                ViewBag.PageContentHeader = "New Item";
+            else
+                ViewBag.PageContentHeader = "Item Card";
+
+            return View("Item", itemModel);
+        }
+
+        #region Private methods
+        public async System.Threading.Tasks.Task<T> GetAsync<T>(string uri)
+        {
+            string responseJson = string.Empty;
             using (var client = new HttpClient())
             {
                 var baseUri = _config["ApiUrl"];
                 client.BaseAddress = new System.Uri(baseUri);
                 client.DefaultRequestHeaders.Accept.Clear();
-                var response = await client.GetAsync(baseUri + "inventory/item?id=" + id);
+                var response = await client.GetAsync(baseUri + uri);
                 if (response.IsSuccessStatusCode)
                 {
-                    var responseJson = await response.Content.ReadAsStringAsync();
-                    var model = Newtonsoft.Json.JsonConvert.DeserializeObject<Dto.Inventory.Item>(responseJson);
-                    return View(model);
+                    responseJson = await response.Content.ReadAsStringAsync();
                 }
             }
-            return View();
+            return Newtonsoft.Json.JsonConvert.DeserializeObject<T>(responseJson);
         }
 
-        public IActionResult AddItem()
+        public async System.Threading.Tasks.Task<string> PostAsync(string uri, StringContent data)
         {
-            ViewBag.PageContentHeader = "New Item";
+            string responseJson = string.Empty;
+            using (var client = new HttpClient())
+            {
+                var baseUri = _config["ApiUrl"];
+                client.BaseAddress = new System.Uri(baseUri);
+                client.DefaultRequestHeaders.Accept.Clear();
+                var response = await client.PostAsync(baseUri + uri, data);
+                if (response.IsSuccessStatusCode)
+                {
+                    responseJson = await response.Content.ReadAsStringAsync();
+                }
+            }
 
-            return View("Item", new Dto.Inventory.Item());
+            return Newtonsoft.Json.JsonConvert.DeserializeObject<string>(responseJson);
         }
-
-        [HttpPost]
-        public async System.Threading.Tasks.Task<IActionResult> Item(Item model)
-        {
-            if (model.Id == 0) // New item
-            { }
-            else
-            { }
-
-            return RedirectToAction("Items");
-        }
+        #endregion
     }
 }

@@ -1,12 +1,8 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace Dto.Financial
+﻿namespace Dto.Financial
 {
-    public class Bank
+    public class Bank : BaseDto
     {
+        public string Name { get; set; }
+        public string AccountNo {get;set;}
     }
 }

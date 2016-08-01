@@ -2,7 +2,7 @@
 {
     public class TaxGroupTax : BaseDto
     {
-        public virtual Tax Tax { get; set; }
-        public virtual TaxGroup TaxGroup { get; set; }
+        public int TaxId { get; set; }
+        public int TaxGroupId { get; set; }
     }
 }

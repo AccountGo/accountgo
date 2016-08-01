@@ -1,6 +1,5 @@
 ﻿import {observable, extendObservable, action} from 'mobx';
 import * as axios from "axios";
-import * as d3 from "d3";
 
 import Config = require("Config");
 
@@ -15,10 +14,12 @@ let baseUrl = location.protocol
     + "/";
 
 export default class SalesQuotationStore {
-    salesQuotation;
+    salesQuotation: SalesQuotation;
     commonStore;
+    @observable validationErrors;
 
-    constructor() {
+    constructor(quotationId) {
+        this.commonStore = new CommonStore();
         this.salesQuotation = new SalesQuotation();
         extendObservable(this.salesQuotation, {
             customerId: this.salesQuotation.customerId,
@@ -28,23 +29,72 @@ export default class SalesQuotationStore {
             salesQuotationLines: []
         });
 
-        this.commonStore = new CommonStore();
+        if (quotationId !== undefined) {
+            var result = axios.get(Config.apiUrl + "api/sales/quotation?id=" + quotationId);
+            result.then(function (result) {                
+                this.changedCustomer(result.data.customerId);
+                this.changedQuotationDate(result.data.quotationDate);
+                for (var i = 0; i < result.data.salesQuotationLines.length; i++) {
+                    this.addLineItem(
+                        result.data.salesQuotationLines[i].itemId,
+                        result.data.salesQuotationLines[i].measurementId,
+                        result.data.salesQuotationLines[i].quantity,
+                        result.data.salesQuotationLines[i].amount,
+                        result.data.salesQuotationLines[i].discount
+                    );
+                }
+                console.log(this.salesQuotation);
+            }.bind(this));
+        }
     }
 
     saveNewQuotation() {
-        console.log(JSON.stringify(this.salesQuotation));
-        axios.post(Config.apiUrl + "api/sales/addquotation", JSON.stringify(this.salesQuotation),
-            {
-                headers: {
-                    'Content-type': 'application/json'
-                }
-            })
-            .then(function (response) {
-                console.log(response);
-            })
-            .catch(function (error) {
-                console.log(error);
-            })
+        this.validationErrors = [];
+        if (this.salesQuotation.customerId === undefined)
+            this.validationErrors.push("Customer is required.");
+        if (this.salesQuotation.paymentTermId === undefined)
+            this.validationErrors.push("Payment term is required.");
+        if (this.salesQuotation.quotationDate === undefined)
+            this.validationErrors.push("Date is required.");
+        if (this.salesQuotation.salesQuotationLines === undefined || this.salesQuotation.salesQuotationLines.length < 1)
+            this.validationErrors.push("Enter at least 1 line item.");
+        if (this.salesQuotation.salesQuotationLines !== undefined && this.salesQuotation.salesQuotationLines.length > 0) {
+            for (var i = 0; i < this.salesQuotation.salesQuotationLines.length; i++) {
+                if (this.salesQuotation.salesQuotationLines[i].itemId === undefined
+                    || this.salesQuotation.salesQuotationLines[i].itemId === "")
+                    this.validationErrors.push("Item is required.");
+                if (this.salesQuotation.salesQuotationLines[i].measurementId === undefined
+                    || this.salesQuotation.salesQuotationLines[i].measurementId === "")
+                    this.validationErrors.push("Uom is required.");
+                if (this.salesQuotation.salesQuotationLines[i].quantity === undefined
+                    || this.salesQuotation.salesQuotationLines[i].quantity === ""
+                    || this.salesQuotation.salesQuotationLines[i].quantity === 0)
+                    this.validationErrors.push("Quantity is required.");
+                if (this.salesQuotation.salesQuotationLines[i].amount === undefined
+                    || this.salesQuotation.salesQuotationLines[i].amount === ""
+                    || this.salesQuotation.salesQuotationLines[i].amount === 0)
+                    this.validationErrors.push("Amount is required.");
+                if (this.lineTotal(i) === undefined
+                    || this.lineTotal(i).toString() === "NaN"
+                    || this.lineTotal(i) === 0)
+                    this.validationErrors.push("Invalid data.");
+            }
+        }
+
+        if (this.validationErrors.length === 0) {
+            axios.post(Config.apiUrl + "api/sales/savequotation", JSON.stringify(this.salesQuotation),
+                {
+                    headers: {
+                        'Content-type': 'application/json'
+                    }
+                })
+                .then(function (response) {
+                    console.log(response);
+                })
+                .catch(function (error) {
+                    console.log(error);
+                }.bind(this))
+        }
     }
 
     changedCustomer(custId) {
@@ -59,8 +109,8 @@ export default class SalesQuotationStore {
         this.salesQuotation.quotationDate = date;
     }
 
-    addLineItem(itemId, measurementId, quantity, amount, discount) {
-        var newLineItem = new SalesQuotationLine(itemId, measurementId, quantity, amount, discount);
+    addLineItem(id = 0, itemId, measurementId, quantity, amount, discount) {
+        var newLineItem = new SalesQuotationLine(id, itemId, measurementId, quantity, amount, discount);
         this.salesQuotation.salesQuotationLines.push(extendObservable(newLineItem, newLineItem));        
     }
 

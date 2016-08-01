@@ -1,7 +1,7 @@
 ﻿@model Dto.Inventory.Item
 
 <div class="col-md-9">
-    <form action="~/inventory/item" method="post">
+    <form action="~/inventory/saveitem" method="post">
         @Html.HiddenFor(m => m.Id)
         <div class="box">
             <div class="box-header with-border">
@@ -15,28 +15,76 @@
             <div class="box-body">
                 <div class="col-sm-6">
                     <div class="row">
-                        <div class="col-sm-2">Code</div>
-                        <div class="col-sm-10"><input asp-for="Code" class="form-control" type="text" placeholder="Code ..." /></div>
+                        <div class="col-sm-3">No</div>
+                        <div class="col-sm-9">@Model.No</div>
                     </div>
                     <div class="row">
-                        <div class="col-sm-2">Description</div>
-                        <div class="col-sm-10"><input asp-for="Description" class="form-control" type="text" placeholder="Description ..." /></div>
+                        <div class="col-sm-3">Code</div>
+                        <div class="col-sm-9"><input asp-for="Code" class="form-control" type="text" placeholder="Code ..." /></div>
+                    </div>
+                    <div class="row">
+                        <div class="col-sm-3">Description</div>
+                        <div class="col-sm-9"><input asp-for="Description" class="form-control" type="text" placeholder="Description ..." /></div>
                     </div>
                 </div>
                 <div class="col-sm-6">
                     <div class="row">
-                        <div class="col-sm-2">Category</div>
-                        <div class="col-sm-10">Category</div>
+                        <div class="col-sm-4">Smallest UOM</div>
+                        <div class="col-sm-8"><select class="form-control" asp-for="SmallestMeasurementId" asp-items="@ViewBag.Measurements"></select></div>
                     </div>
                     <div class="row">
-                        <div class="col-sm-2">Item Tax Group</div>
-                        <div class="col-sm-10">Code</div>
+                        <div class="col-sm-4">Category</div>
+                        <div class="col-sm-8"><select class="form-control" asp-for="ItemCategoryId" asp-items="@ViewBag.ItemCategories"></select></div>
+                    </div>
+                    <div class="row">
+                        <div class="col-sm-4">Item Tax Group</div>
+                        <div class="col-sm-8"><select class="form-control" asp-for="ItemTaxGroupId" asp-items="@ViewBag.ItemTaxGroups"></select></div>
                     </div>
                 </div>
             </div>
-            <!-- /.box-body -->
         </div>
-        <!-- /.box -->
+
+        <div class="box">
+            <div class="box-header with-border">
+                <h3 class="box-title">Pricing</h3>
+                <div class="box-tools pull-right">
+                    <button type="button" class="btn btn-box-tool" data-widget="collapse" data-toggle="tooltip" title="Collapse">
+                        <i class="fa fa-minus"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="box-body">
+                <div class="col-sm-6">
+                    <div class="row">
+                        <div class="col-sm-4">Sell Description</div>
+                        <div class="col-sm-8"><input asp-for="SellDescription" class="form-control" type="text" placeholder="Description ..." /></div>
+                    </div>
+                    <div class="row">
+                        <div class="col-sm-4">Sell Price</div>
+                        <div class="col-sm-8"><input asp-for="Price" class="form-control" type="text" placeholder="Price ..." /></div>
+                    </div>
+                    <div class="row">
+                        <div class="col-sm-4">Sell UOM</div>
+                        <div class="col-sm-8"><select class="form-control" asp-for="SellMeasurementId" asp-items="@ViewBag.Measurements"></select></div>
+                    </div>
+                </div>
+                <div class="col-sm-6">
+                    <div class="row">
+                        <div class="col-sm-4">Purchase Description</div>
+                        <div class="col-sm-8"><input asp-for="PurchaseDescription" class="form-control" type="text" placeholder="Description ..." /></div>
+                    </div>
+                    <div class="row">
+                        <div class="col-sm-4">Purchase Cost</div>
+                        <div class="col-sm-8"><input asp-for="Cost" class="form-control" type="text" placeholder="Cost ..." /></div>
+                    </div>
+                    <div class="row">
+                        <div class="col-sm-4">Purchase UOM</div>
+                        <div class="col-sm-8"><select class="form-control" asp-for="PurchaseMeasurementId" asp-items="@ViewBag.Measurements"></select></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="box">
             <div class="box-header with-border">
                 <h3 class="box-title">Invoicing</h3>
@@ -48,13 +96,31 @@
             </div>
             <div class="box-body">
                 <div class="col-sm-6">
+                    <div class="row">
+                        <div class="col-sm-4">Sales Account</div>
+                        <div class="col-sm-8"><select class="form-control" asp-for="SalesAccountId" asp-items="@ViewBag.Accounts"></select></div>
+                    </div>
+                    @*<div class="row">
+                        <div class="col-sm-4">Purchase Account</div>
+                        <div class="col-sm-8"><select class="form-control" asp-for="SalesAccountId" asp-items="@ViewBag.Accounts"></select></div>
+                    </div>*@
                 </div>
                 <div class="col-sm-6">
+                    <div class="row">
+                        <div class="col-sm-4">Adjustment</div>
+                        <div class="col-sm-8"><select class="form-control" asp-for="InventoryAdjustmentAccountId" asp-items="@ViewBag.Accounts"></select></div>
+                    </div>
+                    <div class="row">
+                        <div class="col-sm-4">Inventory Account</div>
+                        <div class="col-sm-8"><select class="form-control" asp-for="InventoryAccountId" asp-items="@ViewBag.Accounts"></select></div>
+                    </div>
+                    <div class="row">
+                        <div class="col-sm-4">Cost of Good Sold</div>
+                        <div class="col-sm-8"><select class="form-control" asp-for="CostOfGoodsSoldAccountId" asp-items="@ViewBag.Accounts"></select></div>
+                    </div>
                 </div>
             </div>
-            <!-- /.box-body -->
         </div>
-        <!-- /.box -->
         <div>
             <input class="btn btn-primary btn-flat" type="submit" value="Save" />
         </div>

@@ -1,7 +1,9 @@
 ﻿@model string
 
 <div>
-    <a href="~/quotations/addsalesquotation"><i class="fa fa-plus margin-a"></i>Add</a>
+    <a href="~/quotations/addsalesquotation"><i class="fa fa-plus margin-a"></i>New Quotation</a>
+    <a href="~/quotations/salesquotation" id="linkViewQuotation" class="inactiveLink"><i class="fa fa-edit margin-a"></i>View</a>
+    <a href="" id="linkNewOrder" class="inactiveLink"><i class="fa fa-plus margin-a"></i>New Order</a>
 </div>
 <div>
     <div id="quotations" class="ag-fresh"></div>
@@ -17,10 +19,21 @@
     var gridOptions = {
         columnDefs: columnDefs,
         rowData: @Html.Raw(Model),
-
         // PROPERTIES - simple boolean / string / number properties
-        rowSelection: 'multiple',
-     };
+        rowSelection: 'single',
+        onSelectionChanged: onSelectionChanged,
+    };
+
+    function onSelectionChanged() {
+        var selectedRows = gridOptions.api.getSelectedRows();
+        selectedRow = selectedRows[0];
+        
+        document.getElementById('linkViewQuotation').setAttribute('href', 'quotation?id=' + selectedRow.id);
+        document.getElementById('linkViewQuotation').setAttribute('class', '');
+
+        document.getElementById('linkNewOrder').setAttribute('href', '/sales/salesorder?quotationId=' + selectedRow.id);
+        document.getElementById('linkNewOrder').setAttribute('class', '');
+    }
 
     // wait for the document to be loaded, otherwise
     // ag-Grid will not find the div in the document.

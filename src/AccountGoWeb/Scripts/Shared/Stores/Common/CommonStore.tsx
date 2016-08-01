@@ -51,7 +51,7 @@ export default class CommonStore {
                 for (var i = 0; i < data.length; i++) {
                     vendors.push(data[i]);
                 }
-            });
+            }.bind(this));
     }
 
     loadItemsLookup() {

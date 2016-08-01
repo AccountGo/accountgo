@@ -99,7 +99,9 @@ desired effect
                                     </ul>
                                     <!-- /.menu -->
                                 </li>
-                                <li class="footer"><a href="#">See All Messages</a></li>
+                                <li class="footer">
+                                    <a href="#">See All Messages</a>
+                                </li>
                             </ul>
                         </li>
                         <!-- /.messages-menu -->
@@ -124,7 +126,9 @@ desired effect
                                         <!-- end notification -->
                                     </ul>
                                 </li>
-                                <li class="footer"><a href="#">View all</a></li>
+                                <li class="footer">
+                                    <a href="#">View all</a>
+                                </li>
                             </ul>
                         </li>
                         <!-- Tasks Menu -->
@@ -222,46 +226,46 @@ desired effect
             <section class="sidebar">
                 <!-- Sidebar user panel (optional) -->
                 @*<div class="user-panel">
-                    <div class="pull-left image">
-                        <img src="dist/img/user2-160x160.jpg" class="img-circle" alt="User Image">
-                    </div>
-                    <div class="pull-left info">
-                        <p>Alexander Pierce</p>
-                        <!-- Status -->
-                        <a href="#"><i class="fa fa-circle text-success"></i> Online</a>
-                    </div>
-                </div>*@
+                        <div class="pull-left image">
+                            <img src="dist/img/user2-160x160.jpg" class="img-circle" alt="User Image">
+                        </div>
+                        <div class="pull-left info">
+                            <p>Alexander Pierce</p>
+                            <!-- Status -->
+                            <a href="#"><i class="fa fa-circle text-success"></i> Online</a>
+                        </div>
+                    </div>*@
                 <!-- search form (Optional) -->
                 @*<form action="#" method="get" class="sidebar-form">
-                    <div class="input-group">
-                        <input type="text" name="q" class="form-control" placeholder="Search...">
-                        <span class="input-group-btn">
-                            <button type="submit" name="search" id="search-btn" class="btn btn-flat">
-                                <i class="fa fa-search"></i>
-                            </button>
-                        </span>
-                    </div>
-                </form>*@
+                        <div class="input-group">
+                            <input type="text" name="q" class="form-control" placeholder="Search...">
+                            <span class="input-group-btn">
+                                <button type="submit" name="search" id="search-btn" class="btn btn-flat">
+                                    <i class="fa fa-search"></i>
+                                </button>
+                            </span>
+                        </div>
+                    </form>*@
                 <!-- /.search form -->
                 <!-- Sidebar Menu -->
                 @*<ul class="sidebar-menu">
-                    <li class="header">HEADER</li>
-                    <!-- Optionally, you can add icons to the links -->
-                    <li class="active"><a href="#"><i class="fa fa-link"></i> <span>Link</span></a></li>
-                    <li><a href="#"><i class="fa fa-link"></i> <span>Another Link</span></a></li>
-                    <li class="treeview">
-                        <a href="#">
-                            <i class="fa fa-link"></i> <span>Multilevel</span>
-                            <span class="pull-right-container">
-                                <i class="fa fa-angle-left pull-right"></i>
-                            </span>
-                        </a>
-                        <ul class="treeview-menu">
-                            <li><a href="#">Link in level 2</a></li>
-                            <li><a href="#">Link in level 2</a></li>
-                        </ul>
-                    </li>
-                </ul>*@
+                        <li class="header">HEADER</li>
+                        <!-- Optionally, you can add icons to the links -->
+                        <li class="active"><a href="#"><i class="fa fa-link"></i> <span>Link</span></a></li>
+                        <li><a href="#"><i class="fa fa-link"></i> <span>Another Link</span></a></li>
+                        <li class="treeview">
+                            <a href="#">
+                                <i class="fa fa-link"></i> <span>Multilevel</span>
+                                <span class="pull-right-container">
+                                    <i class="fa fa-angle-left pull-right"></i>
+                                </span>
+                            </a>
+                            <ul class="treeview-menu">
+                                <li><a href="#">Link in level 2</a></li>
+                                <li><a href="#">Link in level 2</a></li>
+                            </ul>
+                        </li>
+                    </ul>*@
                 <ul class="sidebar-menu">
                     <li class="header">NAVIGATION</li>
                     <!-- Optionally, you can add icons to the links -->
@@ -340,6 +344,9 @@ desired effect
                                 <!--<a href="#">Taxes</a>-->
                                 <a href="~/financials/accounts">Accounts</a>
                             </li>
+                            <li>
+                                <a href="~/financials/banks">Banks</a>
+                            </li>
                         </ul>
                     </li>
                     <li class="treeview">
@@ -364,11 +371,11 @@ desired effect
                         <ul class="treeview-menu">
                             <li>
                                 <!--<a href="#">Company</a>-->
-                                <a href="#">Company</a>
+                                <a href="~/administration/company">Company</a>
                             </li>
                             <li>
                                 <!--<a href="#">Setup</a>-->
-                                <a href="#">Setup</a>
+                                <a href="~/administration/settings">Settings</a>
                             </li>
                         </ul>
                     </li>
@@ -386,14 +393,15 @@ desired effect
                     <small>@ViewBag.PageContentOptionalDescription</small>
                 </h1>
                 @*<ol class="breadcrumb">
-                    <li><a href="#"><i class="fa fa-dashboard"></i> Level</a></li>
-                    <li class="active">Here</li>
-                </ol>*@
+                        <li><a href="#"><i class="fa fa-dashboard"></i> Level</a></li>
+                        <li class="active">Here</li>
+                    </ol>*@
             </section>
             <!-- Main content -->
             <section class="content">
                 <!-- Your Page Content Here -->
                 @RenderBody()
+                <div class='clearfix'></div>
             </section>
             <!-- /.content -->
         </div>
@@ -402,7 +410,8 @@ desired effect
         <footer class="main-footer">
             <!-- To the right -->
             <div class="pull-right hidden-xs">
-                Powered by <a href="#">AccountGo</a>
+                Powered by
+                <a href="#">AccountGo</a>
             </div>
             <!-- Default to the left -->
             <strong>Copyright &copy; 2016 <a href="#">AccountGo</a>.</strong> All rights reserved.
@@ -411,8 +420,12 @@ desired effect
         <aside class="control-sidebar control-sidebar-dark">
             <!-- Create the tabs -->
             <ul class="nav nav-tabs nav-justified control-sidebar-tabs">
-                <li class="active"><a href="#control-sidebar-home-tab" data-toggle="tab"><i class="fa fa-home"></i></a></li>
-                <li><a href="#control-sidebar-settings-tab" data-toggle="tab"><i class="fa fa-gears"></i></a></li>
+                <li class="active">
+                    <a href="#control-sidebar-home-tab" data-toggle="tab"><i class="fa fa-home"></i></a>
+                </li>
+                <li>
+                    <a href="#control-sidebar-settings-tab" data-toggle="tab"><i class="fa fa-gears"></i></a>
+                </li>
             </ul>
             <!-- Tab panes -->
             <div class="tab-content">
@@ -478,7 +491,7 @@ desired effect
         <div class="control-sidebar-bg"></div>
     </div>
     <!-- ./wrapper -->
-    <!-- REQUIRED JS SCRIPTS -->    
+    <!-- REQUIRED JS SCRIPTS -->
     <!-- jQuery 2.2.0 -->
     <script src="~/plugins/jquery/dist/jquery.min.js"></script>
     <!-- Bootstrap 3.3.6 -->
@@ -499,5 +512,6 @@ desired effect
         });
     </script>
     <!--//END TODO-->
+    @RenderSection("scripts", required: false)
 </body>
 </html>

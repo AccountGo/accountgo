@@ -1,7 +1,7 @@
 ﻿@model string
 
 <div>
-    <a class="btn btn-sm btn-default btn-flat" href="~/sales/addcustomer">Add</a>
+    <a href="~/sales/customer"><i class="fa fa-plus margin-a"></i>New Customer</a>
 </div>
 <div>
     <div id="customers" class="ag-fresh" style="height: 400px;"></div>
@@ -18,9 +18,8 @@
     var gridOptions = {
         columnDefs: columnDefs,
         rowData: @Html.Raw(Model),
-
         // PROPERTIES - simple boolean / string / number properties
-        rowSelection: 'multiple',
+        rowSelection: 'single',
      };
 
     // wait for the document to be loaded, otherwise

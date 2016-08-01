@@ -1,7 +1,8 @@
 ﻿@model string
 
 <div>
-    <a class="btn btn-sm btn-default btn-flat" href="~/sales/addsalesinvoice">Add</a>
+    <a href="~/sales/addsalesinvoice"><i class="fa fa-plus margin-a"></i>New Invoice</a>
+    <a href="~/sales/salesinvoice" id="linkViewInvoice" class="inactiveLink"><i class="fa fa-edit margin-a"></i>View</a>
 </div>
 <div>
     <div id="salesinvoices" class="ag-fresh" style="height: 400px;"></div>
@@ -10,17 +11,25 @@
     var columnDefs = [
         {headerName: "Invoice", field: "id", width: 50},
         {headerName: "Customer Name", field: "customerName", width: 350},
-        {headerName: "Invoiced Date", field: "InvoiceDate", width: 100},
+        {headerName: "Invoiced Date", field: "invoiceDate", width: 100},
         {headerName: "Amount", field: "totalAmount", width: 100}
     ];
 
     var gridOptions = {
         columnDefs: columnDefs,
         rowData: @Html.Raw(Model),
-
         // PROPERTIES - simple boolean / string / number properties
-        rowSelection: 'multiple',
-     };
+        rowSelection: 'single',
+        onSelectionChanged: onSelectionChanged,
+    };
+
+    function onSelectionChanged() {
+        var selectedRows = gridOptions.api.getSelectedRows();
+        selectedRow = selectedRows[0];
+        
+        document.getElementById('linkViewInvoice').setAttribute('href', 'salesinvoice?invoiceId=' + selectedRow.id);
+        document.getElementById('linkViewInvoice').setAttribute('class', '');
+    }
 
     // wait for the document to be loaded, otherwise
     // ag-Grid will not find the div in the document.

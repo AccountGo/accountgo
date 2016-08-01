@@ -18,10 +18,10 @@ export default class JournalEntryStore {
     journalEntry;
     commonStore;
 
-    constructor() {
+    constructor(journalEntryId) {
+        this.commonStore = new CommonStore();
         this.journalEntry = new JournalEntry();
         extendObservable(this.journalEntry, {
-            id: this.journalEntry.id,
             voucherType: this.journalEntry.voucherType,
             journalDate: this.journalEntry.journalDate,
             referenceNo: this.journalEntry.referenceNo,
@@ -29,7 +29,18 @@ export default class JournalEntryStore {
             journalEntryLines: []
         });
 
-        this.commonStore = new CommonStore();
+        if (journalEntryId !== undefined)
+        {
+            var result = axios.get(Config.apiUrl + "api/financials/journalentry?id=" + journalEntryId);
+            result.then(function (result) {
+                this.changedJournalDate(result.data.journalDate);
+                this.changedVoucherType(result.data.voucherType);
+                for (var i = 0; i < result.data.journalEntryLines.length; i++) {
+                    var item = result.data.journalEntryLines[i];
+                    this.addLineItem(item.accountId, item.drcr, item.amount, item.memo);
+                }
+            }.bind(this));
+        }
     }
 
     saveNewJournalEntry() {

@@ -1,4 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using System.Collections.Generic;
+using System.Net.Http;
 
 namespace AccountGoWeb.Controllers
 {
@@ -14,6 +16,12 @@ namespace AccountGoWeb.Controllers
         public IActionResult AddJournalEntry()
         {
             ViewBag.PageContentHeader = "Add Journal Entry";
+            return View();
+        }
+
+        public IActionResult JournalEntry(int id)
+        {
+            ViewBag.PageContentHeader = "Journal Entry";
             return View();
         }
 
@@ -90,7 +98,7 @@ namespace AccountGoWeb.Controllers
                 if (response.IsSuccessStatusCode)
                 {
                     var responseJson = await response.Content.ReadAsStringAsync();
-                    var trialBalanceModel= Newtonsoft.Json.JsonConvert.DeserializeObject<System.Collections.Generic.List<Models.TrialBalance>>(responseJson);
+                    var trialBalanceModel = Newtonsoft.Json.JsonConvert.DeserializeObject<System.Collections.Generic.List<Models.TrialBalance>>(responseJson);
                     return View(trialBalanceModel);
                 }
             }
@@ -161,5 +169,33 @@ namespace AccountGoWeb.Controllers
             //var Dto = _financialService.IncomeStatement();
             //return View(Dto);
         }
+
+        public IActionResult Banks()
+        {
+            ViewBag.PageContentHeader = "Cash/Banks";
+
+            var banks = GetAsync<IEnumerable<Dto.Financial.Bank>>("financials/cashbanks").Result;
+
+            return View(banks);
+        }
+
+        #region Private methods
+        public async System.Threading.Tasks.Task<T> GetAsync<T>(string uri)
+        {
+            string responseJson = string.Empty;
+            using (var client = new HttpClient())
+            {
+                var baseUri = _config["ApiUrl"];
+                client.BaseAddress = new System.Uri(baseUri);
+                client.DefaultRequestHeaders.Accept.Clear();
+                var response = await client.GetAsync(baseUri + uri);
+                if (response.IsSuccessStatusCode)
+                {
+                    responseJson = await response.Content.ReadAsStringAsync();
+                }
+            }
+            return Newtonsoft.Json.JsonConvert.DeserializeObject<T>(responseJson);
+        }
+        #endregion
     }
 }

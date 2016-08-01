@@ -23,10 +23,29 @@ namespace Api.Controllers
 
         [HttpGet]
         [Route("[action]")]
+        public IActionResult CashBanks()
+        {
+            var cashAndBanks = _financialService.GetCashAndBanks();
+            var cashAndBanksDto = new List<Bank>();
+
+            foreach (var bank in cashAndBanks) {
+                cashAndBanksDto.Add(new Bank()
+                {
+                    Id = bank.Id,
+                    Name = bank.Name,
+                    AccountNo = bank.Number
+                });
+            }
+
+            return new ObjectResult(cashAndBanksDto);
+        }
+
+        [HttpGet]
+        [Route("[action]")]
         public IActionResult Accounts()
         {
             var accounts = _financialService.GetAccounts();
-            var accountsDto = new System.Collections.Generic.List<Dto.Financial.Account>();
+            var accountsDto = new List<Dto.Financial.Account>();
 
             foreach (var account in accounts)
             {
@@ -55,23 +74,70 @@ namespace Api.Controllers
         [Route("[action]")]
         public IActionResult JournalEntries()
         {
-            var journalEntries = _financialService.GetJournalEntryLines();
-            var Dto = new List<JournalEntryLine>();
-            foreach (var line in journalEntries)
+            var journalEntries = _financialService.GetJournalEntries();
+            var journalEntriesDto = new List<JournalEntry>();
+
+            foreach (var je in journalEntries) {
+                var journalEntryDto = new JournalEntry()
+                {
+                    Id = je.Id,
+                    JournalDate = je.Date,
+                    Memo = je.Memo,
+                    ReferenceNo = je.ReferenceNo,
+                    VoucherType = (int)je.VoucherType.GetValueOrDefault(),
+                    Posted = je.Posted
+                };
+
+                foreach (var line in je.JournalEntryLines) {
+                    var lineDto = new JournalEntryLine()
+                    {
+                        Id = line.Id,
+                        AccountId = line.AccountId,
+                        Amount = line.Amount,
+                        DrCr = line.DrCr.ToString(),
+                        Memo = line.Memo
+                    };
+
+                    journalEntryDto.JournalEntryLines.Add(lineDto);
+                }
+
+                journalEntriesDto.Add(journalEntryDto);
+            }
+
+            return new ObjectResult(journalEntriesDto);
+        }
+
+        [HttpGet]
+        [Route("[action]")]
+        public IActionResult JournalEntry(int id)
+        {
+            var je = _financialService.GetJournalEntry(id);
+
+            var journalEntryDto = new JournalEntry()
             {
-                Dto.Add(new JournalEntryLine()
+                Id = je.Id,
+                JournalDate = je.Date,
+                Memo = je.Memo,
+                ReferenceNo = je.ReferenceNo,
+                VoucherType = (int)je.VoucherType.GetValueOrDefault(),
+                Posted = je.Posted
+            };
+
+            foreach (var line in je.JournalEntryLines)
+            {
+                var lineDto = new JournalEntryLine()
                 {
                     Id = line.Id,
                     AccountId = line.AccountId,
-                    AccountCode = line.Account.AccountCode,
-                    AccountName = line.Account.AccountName,
-                    DrCr = (int)line.DrCr == 1 ? "Dr" : "Cr",
                     Amount = line.Amount,
-                    JournalHeaderId = line.JournalEntryHeaderId,
-                    GeneralLedgerHeaderId = line.JournalEntryHeader.GeneralLedgerHeaderId.HasValue ? line.JournalEntryHeader.GeneralLedgerHeaderId.Value : 0
-                });
+                    DrCr = line.DrCr.ToString(),
+                    Memo = line.Memo
+                };
+
+                journalEntryDto.JournalEntryLines.Add(lineDto);
             }
-            return new OkObjectResult(Dto.AsEnumerable());
+
+            return new ObjectResult(journalEntryDto);
         }
 
         [HttpPost]

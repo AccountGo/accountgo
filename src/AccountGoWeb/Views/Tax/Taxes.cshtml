@@ -1,77 +1,252 @@
-﻿@model string
+﻿@model AccountGoWeb.Models.TaxSystem.TaxSystemViewModel
+@using AccountGoWeb.Models;
 
-<div>
+<div class="nav-tabs-custom">
+    <ul class="nav nav-tabs">
+        <li class="active">
+            <a href="#tab_1" data-toggle="tab">Taxes</a>
+        </li>
+        <li>
+            <a href="#tab_2" data-toggle="tab">Tax Groups</a>
+        </li>
+        <li>
+            <a href="#tab_3" data-toggle="tab">Item Tax Groups</a>
+        </li>
+    </ul>
+    <div class="tab-content">
+        <div class="tab-pane active" id="tab_1">
+            <div id="taxes" class="box-body table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Code</th>
+                            <th>Name</th>
+                            <th>Rate (%)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var tax in Model.Taxes)
+                        {
+                            <tr>
+                                <td>@tax.TaxCode</td>
+                                <td>@tax.TaxName</td>
+                                <td>@tax.Rate</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="tab-pane" id="tab_2">
+            <div id="taxGroups" class="box-body table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Description</th>
+                            <th>Tax Applied To Shipping</th>
+                            <th>Active</th>
+                        </tr>
+                    </thead>
+                    <tbody data-bind="foreach: model.TaxGroups">
+                        <tr data-bind="click: $root.selectTaxGroup">
+                            <td>
+                                <input data-bind="value:Description" type="text"  readonly="readonly"/>
+                            </td>
+                            <td>
+                                <input data-bind="checked:TaxAppliedToShipping" type="checkbox" />
+                            </td>
+                            <td>
+                                <input data-bind="checked:IsActive" type="checkbox" />
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div data-bind="if:model.selectedTaxGroup">
+                Tax(es) included: <span data-bind="text: model.selectedTaxGroup().Taxes().length"></span>
+                <div id="taxGroupsIncludedTaxes" class="box-body table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Code</th>
+                                <th>Name</th>
+                                <th>Rate (%)</th>
+                            </tr>
+                        </thead>
+                        <tbody data-bind="foreach: model.selectedTaxGroup().Taxes()">
+                            <tr>
+                                <td><span data-bind="text: $root.taxDetail(TaxId()).TaxCode"></span></td>
+                                <td><span data-bind="text: $root.taxDetail(TaxId()).TaxName"></span></td>
+                                <td><span data-bind="text: $root.taxDetail(TaxId()).Rate"></span></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <div class="tab-pane" id="tab_3">
+            <div id="itemTaxGroups" class="box-body table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Fully Exempt</th>
+                        </tr>
+                    </thead>
+                    <tbody data-bind="foreach: model.ItemTaxGroups">
+                        <tr data-bind="click: $root.selectItemTaxGroup">
+                            <td>
+                                <input data-bind="value:Name" type="text" readonly="readonly" />
+                            </td>
+                            <td>
+                                <input data-bind="checked:IsFullyExempt" type="checkbox" />
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div data-bind="if:model.selectedItemTaxGroup">
+                Tax(es) included: <span data-bind="text: model.selectedItemTaxGroup().Taxes().length"></span>
+                <div id="itemTaxGroupsIncludedTaxes" class="box-body table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Code</th>
+                                <th>Name</th>
+                                <th>Rate (%)</th>
+                            </tr>
+                        </thead>
+                        <tbody data-bind="foreach: model.selectedItemTaxGroup().Taxes()">
+                            <tr>
+                                <td><span data-bind="text: $root.taxDetail(TaxId()).TaxCode"></span></td>
+                                <td><span data-bind="text: $root.taxDetail(TaxId()).TaxName"></span></td>
+                                <td><span data-bind="text: $root.taxDetail(TaxId()).Rate"></span></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
-<div>
-    <div id="taxes" class="ag-fresh" style="height: 200px;"></div>
-</div>
-<h3>Tax Group</h3>
-<div>
-    <div id="taxGroups" class="ag-fresh" style="height: 200px;"></div>
-</div>
-<h3>Item Tax Group</h3>
-<div>
-    <div id="itemTaxGroups" class="ag-fresh" style="height: 200px;"></div>
-</div>
-<script>
-    var Dto = @Html.Raw(Model);
+@section scripts{
+    <script type="text/javascript" src="~/plugins/knockout/build/output/knockout-latest.js"></script>
+    <script type="text/javascript" src="~/plugins/knockout-mapping/dist/knockout.mapping.js"></script>
+    <script>
+        function viewModel() {
+            var self = this;
 
-    var columnDefsTaxes = [
-    {headerName: "Tax", field: "id", width: 50},
-    {headerName: "Code", field: "taxCode", width: 100},
-    {headerName: "Name", field: "taxName", width: 350},
-    {headerName: "Rate", field: "rate", width: 100},
-    {headerName: "Active", field: "isActive", width: 100},
-    ];
+            self.model = ko.mapping.fromJS(@Html.Raw(Model.ToJson()));
 
-    var gridOptionsTaxes = {
-        columnDefs: columnDefsTaxes,
-        rowData: Dto.taxes,
-        // PROPERTIES
-        rowSelection: 'multiple',
-    };
+            self.model.selectedTaxGroup = ko.observable();
+            self.model.selectedItemTaxGroup = ko.observable();
 
-    // wait for the document to be loaded, otherwise
-    // ag-Grid will not find the div in the document.
-    document.addEventListener("DOMContentLoaded", function() {
-        var eGridDiv = document.querySelector('#taxes');
-        new agGrid.Grid(eGridDiv, gridOptionsTaxes);
-    });
+            self.selectTaxGroup = function (item) {
+                self.model.selectedTaxGroup(item);
+            };
 
-    var columnDefsTaxGroups = [
-    {headerName: "Tax Group", field: "id", width: 50},
-    {headerName: "Description", field: "description", width: 350},
-    {headerName: "Applied To Shippine", field: "isAppliedToShipping", width: 100},
-    {headerName: "Active", field: "isActive", width: 100},
+            self.selectItemTaxGroup = function (item) {
+                self.model.selectedItemTaxGroup(item);
+            };
+
+            self.taxDetail = function (taxid) {                
+                for (var i = 0; i < self.model.Taxes().length; i++) {
+                    if (taxid == self.model.Taxes()[i].Id()) {
+                        return self.model.Taxes()[i];
+                    }
+                }
+                return null;
+            }
+        }
+
+        ko.applyBindings(new viewModel());
+    </script>
+}
+
+@*
+    @model string
+    <div class="nav-tabs-custom">
+        <ul class="nav nav-tabs">
+            <li class="active"><a href="#tab_1" data-toggle="tab">Taxes</a></li>
+            <li><a href="#tab_2" data-toggle="tab">Tax Groups</a></li>
+            <li><a href="#tab_3" data-toggle="tab">Item Tax Groups</a></li>
+        </ul>
+        <div class="tab-content">
+            <div class="tab-pane active" id="tab_1">
+                <div id="taxes" class="ag-fresh"></div>
+            </div>
+            <!-- /.tab-pane -->
+            <div class="tab-pane" id="tab_2">
+                <div id="taxGroups" class="ag-fresh"></div>
+            </div>
+            <!-- /.tab-pane -->
+            <div class="tab-pane" id="tab_3">
+                <div id="itemTaxGroups" class="ag-fresh"></div>
+            </div>
+            <!-- /.tab-pane -->
+        </div>
+        <!-- /.tab-content -->
+    </div>
+    <script>
+        var Dto = @Html.Raw(Model);
+
+        var columnDefsTaxes = [
+        {headerName: "Tax", field: "id", width: 50},
+        {headerName: "Code", field: "taxCode", width: 100},
+        {headerName: "Name", field: "taxName", width: 350},
+        {headerName: "Rate", field: "rate", width: 100},
+        {headerName: "Active", field: "isActive", width: 100},
         ];
 
-    var gridOptionsTaxGroups = {
-        columnDefs: columnDefsTaxGroups,
-        rowData: Dto.taxGroups,
-        // PROPERTIES
-        rowSelection: 'multiple',
-    };
+        var gridOptionsTaxes = {
+            columnDefs: columnDefsTaxes,
+            rowData: Dto.taxes,
+            // PROPERTIES
+            rowSelection: 'multiple',
+        };
 
-    document.addEventListener("DOMContentLoaded", function() {
-        var eGridDiv = document.querySelector('#taxGroups');
-        new agGrid.Grid(eGridDiv, gridOptionsTaxGroups);
-    });
+        // wait for the document to be loaded, otherwise
+        // ag-Grid will not find the div in the document.
+        document.addEventListener("DOMContentLoaded", function() {
+            var eGridDiv = document.querySelector('#taxes');
+            new agGrid.Grid(eGridDiv, gridOptionsTaxes);
+        });
 
-    var columnDefsItemTaxGroups = [
-    {headerName: "Item Tax Group", field: "id", width: 50},
-    {headerName: "Name", field: "name", width: 350},
-    {headerName: "Is Fully Exempt", field: "isFullyExempt", width: 100},
+        var columnDefsTaxGroups = [
+        {headerName: "Tax Group", field: "id", width: 50},
+        {headerName: "Description", field: "description", width: 350},
+        {headerName: "Applied To Shippine", field: "isAppliedToShipping", width: 100},
+        {headerName: "Active", field: "isActive", width: 100},
         ];
 
-    var gridOptionsItemTaxGroups = {
-        columnDefs: columnDefsItemTaxGroups,
-        rowData: Dto.itemTaxGroups,
-        // PROPERTIES
-        rowSelection: 'multiple',
-    };
+        var gridOptionsTaxGroups = {
+            columnDefs: columnDefsTaxGroups,
+            rowData: Dto.taxGroups,
+            // PROPERTIES
+            rowSelection: 'multiple',
+        };
 
-    document.addEventListener("DOMContentLoaded", function() {
-        var eGridDiv = document.querySelector('#itemTaxGroups');
-        new agGrid.Grid(eGridDiv, gridOptionsItemTaxGroups);
-    });
-</script>
+        document.addEventListener("DOMContentLoaded", function() {
+            var eGridDiv = document.querySelector('#taxGroups');
+            new agGrid.Grid(eGridDiv, gridOptionsTaxGroups);
+        });
+
+        var columnDefsItemTaxGroups = [
+        {headerName: "Item Tax Group", field: "id", width: 50},
+        {headerName: "Name", field: "name", width: 350},
+        {headerName: "Is Fully Exempt", field: "isFullyExempt", width: 100},
+        ];
+
+        var gridOptionsItemTaxGroups = {
+            columnDefs: columnDefsItemTaxGroups,
+            rowData: Dto.itemTaxGroups,
+            // PROPERTIES
+            rowSelection: 'multiple',
+        };
+
+        document.addEventListener("DOMContentLoaded", function() {
+            var eGridDiv = document.querySelector('#itemTaxGroups');
+            new agGrid.Grid(eGridDiv, gridOptionsItemTaxGroups);
+        });
+    </script>
+*@
