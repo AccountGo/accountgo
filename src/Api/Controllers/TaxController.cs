@@ -16,6 +16,35 @@ namespace Api.Controllers
             _taxService = taxService;
         }
 
+        /// <summary>
+        /// Based on party type (e.g. Customer/Vendor), get the corresponding tax rates. 
+        /// Tax rates are intersection of tax group and item tax group
+        /// </summary>
+        /// <param name="itemId">Item</param>
+        /// <param name="partyId">Customer or Vendor</param>
+        /// <returns></returns>
+        [HttpGet]
+        [Route("[action]")]
+        public IActionResult GetTax(int itemId, int partyId)
+        {
+            var taxes = _taxService.GetIntersectionTaxes(itemId, partyId);
+            var taxesDto = new List<Tax>();
+
+            foreach (var tax in taxes) {
+                var taxDto = new Tax()
+                {
+                    Id = tax.Id,
+                    TaxCode = tax.TaxCode,
+                    TaxName = tax.TaxName,
+                    Rate = tax.Rate,
+                    IsActive = tax.IsActive
+                };
+                taxesDto.Add(taxDto);
+            }
+                        
+            return new ObjectResult(taxesDto);
+        }
+
         [HttpGet]
         [Route("[action]")]
         public IActionResult TaxGroups()

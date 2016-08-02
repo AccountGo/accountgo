@@ -20,7 +20,7 @@ namespace Dto.Financial
     public class JournalEntryLine : BaseDto
     {
         public int? AccountId { get; set; }
-        public string DrCr { get; set; }
+        public int DrCr { get; set; }
         public decimal? Amount { get; set; }
         public string Memo { get; set; }
     }

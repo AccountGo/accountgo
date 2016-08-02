@@ -3,6 +3,7 @@ import * as ReactDOM from "react-dom";
 import {observer} from "mobx-react";
 import * as d3 from "d3";
 import Config = require("Config");
+import {autorun} from 'mobx';
 
 import SelectCustomer from "../Shared/Components/SelectCustomer";
 import SelectPaymentTerm from "../Shared/Components/SelectPaymentTerm";
@@ -35,7 +36,6 @@ class ValidationErrors extends React.Component<any, {}>{
         return null;
     }
 }
-
 
 class SaveQuotationButton extends React.Component<any, {}>{
     saveNewSalesQuotation(e) {
@@ -115,7 +115,7 @@ class SalesQuotationLines extends React.Component<any, {}>{
 
         (document.getElementById("txtNewQuantity") as HTMLInputElement).value = "1";
         (document.getElementById("txtNewAmount") as HTMLInputElement).value = "0";
-        (document.getElementById("txtNewDiscount") as HTMLInputElement).value = "0";
+        (document.getElementById("txtNewDiscount") as HTMLInputElement).value = "";
     }
 
     onClickRemoveLineItem(e) {
@@ -145,7 +145,7 @@ class SalesQuotationLines extends React.Component<any, {}>{
                     <td><input className="form-control" type="text" name={i} value={store.salesQuotation.salesQuotationLines[i].quantity} onChange={this.onChangeQuantity.bind(this) } /></td>
                     <td><input className="form-control" type="text" name={i} value={store.salesQuotation.salesQuotationLines[i].amount} onChange={this.onChangeAmount.bind(this) } /></td>
                     <td><input className="form-control" type="text" name={i} value={store.salesQuotation.salesQuotationLines[i].discount} onChange={this.onChangeDiscount.bind(this) } /></td>
-                    <td>{store.lineTotal(i) }</td>
+                    <td>{store.getLineTotal(i)}</td>
                     <td><input type="button" name={i} value="Remove" onClick={this.onClickRemoveLineItem.bind(this) } /></td>
                 </tr>
             );
@@ -195,18 +195,18 @@ class SalesQuotationLines extends React.Component<any, {}>{
 }
 
 @observer
-class SalesQuotationTotals extends React.Component<any, {}>{
+class SalesQuotationTotals extends React.Component<any, {}>{    
     render() {
         return (
             <div className="box">
                 <div className="box-body">
                     <div className="row">
                         <div className="col-md-2"><label>Running Total: </label></div>
-                        <div className="col-md-2">{0}</div>
+                        <div className="col-md-2">{store.RTotal}</div>
                         <div className="col-md-2"><label>Tax Total: </label></div>
-                        <div className="col-md-2">{0}</div>
+                        <div className="col-md-2">{store.TTotal}</div>
                         <div className="col-md-2"><label>Grand Total: </label></div>
-                        <div className="col-md-2">{store.grandTotal()}</div>
+                        <div className="col-md-2">{store.GTotal}</div>
                     </div>
                 </div>
             </div>

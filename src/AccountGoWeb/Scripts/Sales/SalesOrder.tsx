@@ -145,7 +145,7 @@ class SalesOrderLines extends React.Component<any, {}>{
                     <td><input type="text" className="form-control" name={i} value={store.salesOrder.salesOrderLines[i].quantity} onChange={this.onChangeQuantity.bind(this)} /></td>
                     <td><input type="text" className="form-control" name={i} value={store.salesOrder.salesOrderLines[i].amount} onChange={this.onChangeAmount.bind(this) } /></td>
                     <td><input type="text" className="form-control" name={i} value={store.salesOrder.salesOrderLines[i].discount} onChange={this.onChangeDiscount.bind(this) } /></td>
-                    <td>{store.lineTotal(i)}</td>
+                    <td>{store.getLineTotal(i) }</td>
                     <td><input type="button" name={i} value="Remove" onClick={this.onClickRemoveLineItem.bind(this) } /></td>
                 </tr>
             );
@@ -202,11 +202,11 @@ class SalesOrderTotals extends React.Component<any, {}>{
                 <div className="box-body">
                     <div className="row">
                         <div className="col-md-2"><label>Running Total: </label></div>
-                        <div className="col-md-2">{0}</div>
+                        <div className="col-md-2">{store.RTotal}</div>
                         <div className="col-md-2"><label>Tax Total: </label></div>
-                        <div className="col-md-2">{0}</div>
+                        <div className="col-md-2">{store.TTotal}</div>
                         <div className="col-md-2"><label>Grand Total: </label></div>
-                        <div className="col-md-2">{store.grandTotal() }</div>
+                        <div className="col-md-2">{store.GTotal}</div>
                     </div>
                 </div>
             </div>

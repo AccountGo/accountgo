@@ -26,6 +26,7 @@ export default class JournalEntryStore {
             journalDate: this.journalEntry.journalDate,
             referenceNo: this.journalEntry.referenceNo,
             memo: this.journalEntry.memo,
+            posted: this.journalEntry.posted,
             journalEntryLines: []
         });
 
@@ -35,9 +36,10 @@ export default class JournalEntryStore {
             result.then(function (result) {
                 this.changedJournalDate(result.data.journalDate);
                 this.changedVoucherType(result.data.voucherType);
+                this.postJournal(result.data.posted);
                 for (var i = 0; i < result.data.journalEntryLines.length; i++) {
                     var item = result.data.journalEntryLines[i];
-                    this.addLineItem(item.accountId, item.drcr, item.amount, item.memo);
+                    this.addLineItem(item.accountId, item.drCr, item.amount, item.memo === null ? undefined : item.memo);
                 }
             }.bind(this));
         }
@@ -57,6 +59,10 @@ export default class JournalEntryStore {
             .catch(function (error) {
                 console.log(error);
             })
+    }
+
+    postJournal(post) {
+        this.journalEntry.posted = post;
     }
 
     addLineItem(accountId, drcr, amount, memo) {

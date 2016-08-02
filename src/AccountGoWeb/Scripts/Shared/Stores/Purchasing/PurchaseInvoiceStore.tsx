@@ -1,4 +1,4 @@
-﻿import {observable, extendObservable, action} from 'mobx';
+﻿import {observable, extendObservable, action, autorun, computed} from 'mobx';
 import * as axios from "axios";
 
 import Config = require("Config");
@@ -63,6 +63,34 @@ export default class PurchaseOrderStore {
                 .catch(function (error) {
                 }.bind(this));
         }
+
+        autorun(() => this.computeTotals());
+    }
+
+    @observable RTotal = 0;
+    @observable GTotal = 0;
+    @observable TTotal = 0;
+
+    async computeTotals() {
+        var rtotal = 0;
+        var ttotal = 0;
+        var gtotal = 0;
+
+        for (var i = 0; i < this.purchaseInvoice.purchaseInvoiceLines.length; i++) {
+            var lineItem = this.purchaseInvoice.purchaseInvoiceLines[i];
+            var lineSum = lineItem.quantity * lineItem.amount;
+            rtotal = rtotal + lineSum;
+            await axios.get(Config.apiUrl + "api/tax/gettax?itemId=" + lineItem.itemId + "&partyId=" + this.purchaseInvoice.vendorId)
+                .then(function (result) {
+                    if (result.data.length > 0) {
+                        ttotal = ttotal + this.commonStore.getPurhcaseLineTaxAmount(lineItem.quantity, lineItem.amount, lineItem.discount, result.data);
+                    }
+                }.bind(this));
+        }
+
+        this.RTotal = rtotal;
+        this.TTotal = ttotal;
+        this.GTotal = rtotal - ttotal;
     }
 
     savePurchaseInvoice() {
@@ -91,9 +119,9 @@ export default class PurchaseOrderStore {
                     || this.purchaseInvoice.purchaseInvoiceLines[i].amount === ""
                     || this.purchaseInvoice.purchaseInvoiceLines[i].amount === 0)
                     this.validationErrors.push("Amount is required.");
-                if (this.lineTotal(i) === undefined
-                    || this.lineTotal(i).toString() === "NaN"
-                    || this.lineTotal(i) === 0)
+                if (this.getLineTotal(i) === undefined
+                    || this.getLineTotal(i).toString() === "NaN"
+                    || this.getLineTotal(i) === 0)
                     this.validationErrors.push("Invalid data.");
             }
         }
@@ -135,19 +163,15 @@ export default class PurchaseOrderStore {
     updateLineItem(row, targetProperty, value) {
         if (this.purchaseInvoice.purchaseInvoiceLines.length > 0)
             this.purchaseInvoice.purchaseInvoiceLines[row][targetProperty] = value;
+
+        this.computeTotals();
     }
 
-    grandTotal() {
-        var sum = 0;
-        for (var i = 0; i < this.purchaseInvoice.purchaseInvoiceLines.length; i++) {
-            var lineSum = this.purchaseInvoice.purchaseInvoiceLines[i].quantity * this.purchaseInvoice.purchaseInvoiceLines[i].amount;
-            sum = sum + lineSum;
-        }
-        return sum;
-    }
-
-    lineTotal(row) {
-        var lineSum = this.purchaseInvoice.purchaseInvoiceLines[row].quantity * this.purchaseInvoice.purchaseInvoiceLines[row].amount;
+    getLineTotal(row) {
+        let lineSum = 0;
+        let lineItem = this.purchaseInvoice.purchaseInvoiceLines[row];
+        lineSum = (lineItem.quantity * lineItem.amount) - lineItem.discount;
         return lineSum;
     }
+
 }

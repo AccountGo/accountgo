@@ -1,5 +1,6 @@
-﻿import {observable, extendObservable, action} from 'mobx';
+﻿import {observable, extendObservable, action, autorun, computed} from 'mobx';
 import * as axios from "axios";
+import * as d3 from "d3";
 
 import Config = require("Config");
 
@@ -31,7 +32,7 @@ export default class SalesQuotationStore {
 
         if (quotationId !== undefined) {
             var result = axios.get(Config.apiUrl + "api/sales/quotation?id=" + quotationId);
-            result.then(function (result) {                
+            result.then(function (result) {
                 this.changedCustomer(result.data.customerId);
                 this.changedQuotationDate(result.data.quotationDate);
                 for (var i = 0; i < result.data.salesQuotationLines.length; i++) {
@@ -46,6 +47,34 @@ export default class SalesQuotationStore {
                 console.log(this.salesQuotation);
             }.bind(this));
         }
+
+        autorun(() => this.computeTotals());
+    }
+
+    @observable RTotal = 0;
+    @observable GTotal = 0;
+    @observable TTotal = 0;
+
+    async computeTotals() {
+        var rtotal = 0;
+        var ttotal = 0;
+        var gtotal = 0;
+
+        for (var i = 0; i < this.salesQuotation.salesQuotationLines.length; i++) {
+            var lineItem = this.salesQuotation.salesQuotationLines[i];
+            var lineSum = lineItem.quantity * lineItem.amount;
+            rtotal = rtotal + lineSum;
+            await axios.get(Config.apiUrl + "api/tax/gettax?itemId=" + lineItem.itemId + "&partyId=" + this.salesQuotation.customerId)
+                .then(function (result) {
+                    if (result.data.length > 0) {
+                        ttotal = ttotal + this.commonStore.getSalesLineTaxAmount(lineItem.quantity, lineItem.amount, lineItem.discount, result.data);
+                    }
+                }.bind(this));
+        }
+
+        this.RTotal = rtotal;
+        this.TTotal = ttotal;      
+        this.GTotal = rtotal - ttotal;
     }
 
     saveNewQuotation() {
@@ -60,40 +89,35 @@ export default class SalesQuotationStore {
             this.validationErrors.push("Enter at least 1 line item.");
         if (this.salesQuotation.salesQuotationLines !== undefined && this.salesQuotation.salesQuotationLines.length > 0) {
             for (var i = 0; i < this.salesQuotation.salesQuotationLines.length; i++) {
-                if (this.salesQuotation.salesQuotationLines[i].itemId === undefined
-                    || this.salesQuotation.salesQuotationLines[i].itemId === "")
+                if (this.salesQuotation.salesQuotationLines[i].itemId === undefined)
                     this.validationErrors.push("Item is required.");
-                if (this.salesQuotation.salesQuotationLines[i].measurementId === undefined
-                    || this.salesQuotation.salesQuotationLines[i].measurementId === "")
+                if (this.salesQuotation.salesQuotationLines[i].measurementId === undefined)
                     this.validationErrors.push("Uom is required.");
-                if (this.salesQuotation.salesQuotationLines[i].quantity === undefined
-                    || this.salesQuotation.salesQuotationLines[i].quantity === ""
-                    || this.salesQuotation.salesQuotationLines[i].quantity === 0)
+                if (this.salesQuotation.salesQuotationLines[i].quantity === undefined)
                     this.validationErrors.push("Quantity is required.");
-                if (this.salesQuotation.salesQuotationLines[i].amount === undefined
-                    || this.salesQuotation.salesQuotationLines[i].amount === ""
-                    || this.salesQuotation.salesQuotationLines[i].amount === 0)
+                if (this.salesQuotation.salesQuotationLines[i].amount === undefined)
                     this.validationErrors.push("Amount is required.");
-                if (this.lineTotal(i) === undefined
-                    || this.lineTotal(i).toString() === "NaN"
-                    || this.lineTotal(i) === 0)
+                if (this.getLineTotal(i) === undefined
+                    || this.getLineTotal(i).toString() === "NaN")
                     this.validationErrors.push("Invalid data.");
             }
         }
 
         if (this.validationErrors.length === 0) {
-            axios.post(Config.apiUrl + "api/sales/savequotation", JSON.stringify(this.salesQuotation),
+            var result = axios.post(Config.apiUrl + "api/sales/savequotation", JSON.stringify(this.salesQuotation),
                 {
-                    headers: {
+                    headers:
+                    {
                         'Content-type': 'application/json'
                     }
-                })
-                .then(function (response) {
-                    console.log(response);
-                })
-                .catch(function (error) {
-                    console.log(error);
-                }.bind(this))
+                }
+            );
+            result.then(function (response) {
+                console.log(response);
+            }.bind(this));
+            result.catch(function (error) {
+                console.log(error);
+            }.bind(this));
         }
     }
 
@@ -111,7 +135,7 @@ export default class SalesQuotationStore {
 
     addLineItem(id = 0, itemId, measurementId, quantity, amount, discount) {
         var newLineItem = new SalesQuotationLine(id, itemId, measurementId, quantity, amount, discount);
-        this.salesQuotation.salesQuotationLines.push(extendObservable(newLineItem, newLineItem));        
+        this.salesQuotation.salesQuotationLines.push(extendObservable(newLineItem, newLineItem));
     }
 
     removeLineItem(row) {
@@ -121,19 +145,14 @@ export default class SalesQuotationStore {
     updateLineItem(row, targetProperty, value) {
         if (this.salesQuotation.salesQuotationLines.length > 0)
             this.salesQuotation.salesQuotationLines[row][targetProperty] = value;
+
+        this.computeTotals();        
     }
 
-    grandTotal() {
-        var sum = 0;
-        for (var i = 0; i < this.salesQuotation.salesQuotationLines.length; i++) {
-            var lineSum = this.salesQuotation.salesQuotationLines[i].quantity * this.salesQuotation.salesQuotationLines[i].amount;
-            sum = sum + lineSum;
-        }
-        return sum;
-    }
-
-    lineTotal(row) {
-        var lineSum = this.salesQuotation.salesQuotationLines[row].quantity * this.salesQuotation.salesQuotationLines[row].amount;;
+    getLineTotal(row) {
+        let lineSum = 0;
+        let lineItem = this.salesQuotation.salesQuotationLines[row];
+        lineSum = (lineItem.quantity * lineItem.amount) - lineItem.discount;
         return lineSum;
     }
 }

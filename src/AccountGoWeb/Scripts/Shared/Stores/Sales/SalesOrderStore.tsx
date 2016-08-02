@@ -1,4 +1,4 @@
-﻿import {observable, extendObservable, action} from 'mobx';
+﻿import {observable, extendObservable, action, autorun, computed} from 'mobx';
 import * as axios from "axios";
 
 import Config = require("Config");
@@ -61,6 +61,34 @@ export default class SalesOrderStore {
                 }
             }.bind(this));
         }
+
+        autorun(() => this.computeTotals());
+    }
+
+    @observable RTotal = 0;
+    @observable GTotal = 0;
+    @observable TTotal = 0;
+
+    async computeTotals() {
+        var rtotal = 0;
+        var ttotal = 0;
+        var gtotal = 0;
+
+        for (var i = 0; i < this.salesOrder.salesOrderLines.length; i++) {
+            var lineItem = this.salesOrder.salesOrderLines[i];
+            var lineSum = lineItem.quantity * lineItem.amount;
+            rtotal = rtotal + lineSum;
+            await axios.get(Config.apiUrl + "api/tax/gettax?itemId=" + lineItem.itemId + "&partyId=" + this.salesOrder.customerId)
+                .then(function (result) {
+                    if (result.data.length > 0) {
+                        ttotal = ttotal + this.commonStore.getSalesLineTaxAmount(lineItem.quantity, lineItem.amount, lineItem.discount, result.data);
+                    }
+                }.bind(this));
+        }
+
+        this.RTotal = rtotal;
+        this.TTotal = ttotal;
+        this.GTotal = rtotal - ttotal;
     }
 
     saveNewSalesOrder() {
@@ -89,9 +117,9 @@ export default class SalesOrderStore {
                     || this.salesOrder.salesOrderLines[i].amount === ""
                     || this.salesOrder.salesOrderLines[i].amount === 0)
                     this.validationErrors.push("Amount is required.");
-                if (this.lineTotal(i) === undefined
-                    || this.lineTotal(i).toString() === "NaN"
-                    || this.lineTotal(i) === 0)
+                if (this.getLineTotal(i) === undefined
+                    || this.getLineTotal(i).toString() === "NaN"
+                    || this.getLineTotal(i) === 0)
                     this.validationErrors.push("Invalid data.");
             }
         }
@@ -132,19 +160,14 @@ export default class SalesOrderStore {
     updateLineItem(row, targetProperty, value) {
         if (this.salesOrder.salesOrderLines.length > 0)
             this.salesOrder.salesOrderLines[row][targetProperty] = value;
+
+        this.computeTotals();
     }
 
-    grandTotal() {
-        var sum = 0;
-        for (var i = 0; i < this.salesOrder.salesOrderLines.length; i++) {
-            var lineSum = this.salesOrder.salesOrderLines[i].quantity * this.salesOrder.salesOrderLines[i].amount;
-            sum = sum + lineSum;
-        }
-        return sum;
-    }
-
-    lineTotal(row) {
-        var lineSum = this.salesOrder.salesOrderLines[row].quantity * this.salesOrder.salesOrderLines[row].amount;;
+    getLineTotal(row) {
+        let lineSum = 0;
+        let lineItem = this.salesOrder.salesOrderLines[row];
+        lineSum = (lineItem.quantity * lineItem.amount) - lineItem.discount;
         return lineSum;
     }
 }

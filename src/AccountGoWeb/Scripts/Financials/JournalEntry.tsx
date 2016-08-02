@@ -20,7 +20,7 @@ class SaveJournalEntryButton extends React.Component<any, {}>{
     }
     render() {
         return (
-            <input type="button" value="Save" onClick={this.onClickSaveNewJournalEntry.bind(this)} />
+            <input type="button" value="Save" onClick={this.onClickSaveNewJournalEntry.bind(this) } />
         );
     }
 }
@@ -105,8 +105,8 @@ class JournalEntryLines extends React.Component<any, {}>{
                 <tr key={i}>
                     <td><SelectAccount store={store} row={i} selected={store.journalEntry.journalEntryLines[i].accountId} /></td>
                     <td><SelectDebitCredit store={store} row={i} selected={store.journalEntry.journalEntryLines[i].drcr} /></td>
-                    <td><input type="text" className="form-control" name={i} onChange={this.onChangeAmount.bind(this) } /></td>
-                    <td><input type="text" className="form-control" name={i} onChange={this.onChangeMemo.bind(this) } /></td>
+                    <td><input type="text" className="form-control" name={i} onChange={this.onChangeAmount.bind(this)} value={store.journalEntry.journalEntryLines[i].amount} /></td>
+                    <td><input type="text" className="form-control" name={i} onChange={this.onChangeMemo.bind(this) } value={store.journalEntry.journalEntryLines[i].memo} /></td>
                     <td><input type="button" name={i} value="Remove" onClick={this.onClickRemoveLineItem.bind(this) } /></td>
                 </tr>
             );

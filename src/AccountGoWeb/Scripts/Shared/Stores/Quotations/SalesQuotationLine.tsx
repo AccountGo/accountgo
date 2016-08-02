@@ -1,10 +1,10 @@
 ﻿export default class SalesQuotationLine {
-    id;
-    itemId;
-    measurementId;
-    quantity;
-    amount;
-    discount;
+    id: number;
+    itemId: number;
+    measurementId: number;
+    quantity: number;
+    amount: number;
+    discount: number;
 
     constructor(id = 0, itemId, measurementId, quantity, amount, discount) {
         this.id = id;

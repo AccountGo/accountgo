@@ -501,15 +501,16 @@ namespace Api.Controllers
         [Route("[action]")]
         public IActionResult SaveSalesOrder([FromBody]Dto.Sales.SalesOrder salesOrderDto)
         {
-            ModelState.AddModelError("", "Testing - sample errors.");
             if (!ModelState.IsValid)
+            {
                 return new BadRequestObjectResult(ModelState);
-
-            bool isNew = salesOrderDto.Id == 0;
-            Core.Domain.Sales.SalesOrderHeader salesOrder = null;
+            }
 
             try
             {
+                bool isNew = salesOrderDto.Id == 0;
+                Core.Domain.Sales.SalesOrderHeader salesOrder = null;
+
                 if (isNew)
                 {
                     salesOrder = new Core.Domain.Sales.SalesOrderHeader();
@@ -537,7 +538,7 @@ namespace Api.Controllers
 
         [HttpPost]
         [Route("[action]")]
-        public IActionResult SaveSalesInvoice([FromBody]Dto.Sales.SalesOrder salesInvoiceDto)
+        public IActionResult SaveSalesInvoice([FromBody]Dto.Sales.SalesInvoice salesInvoiceDto)
         {
             ModelState.AddModelError("", "Testing - sample errors.");
             if (!ModelState.IsValid)
@@ -577,6 +578,10 @@ namespace Api.Controllers
         [Route("[action]")]
         public IActionResult SaveQuotation([FromBody]Dto.Sales.SalesQuotation quotationDto)
         {
+            if (!ModelState.IsValid) {
+                return new ObjectResult(ModelState.Values);
+            }
+
             try
             {
                 var salesQuote = new Core.Domain.Sales.SalesQuoteHeader()
@@ -597,13 +602,14 @@ namespace Api.Controllers
                     salesQuote.SalesQuoteLines.Add(salesQuoteLine);
                 }
 
-                _salesService.AddSalesQuote(salesQuote);
+                //_salesService.AddSalesQuote(salesQuote);
 
-                return new ObjectResult(Ok());
+                return new OkObjectResult(Ok());
             }
             catch (Exception ex)
             {
-                return new ObjectResult(ex);
+                ModelState.AddModelError("ErrorMessage", ex.Message);
+                return new ObjectResult(ModelState.Values);
             }
         }
     }
