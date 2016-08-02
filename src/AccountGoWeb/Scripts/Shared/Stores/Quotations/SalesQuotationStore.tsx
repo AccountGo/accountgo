@@ -33,10 +33,12 @@ export default class SalesQuotationStore {
         if (quotationId !== undefined) {
             var result = axios.get(Config.apiUrl + "api/sales/quotation?id=" + quotationId);
             result.then(function (result) {
+                this.salesQuotation.id = result.data.id;
                 this.changedCustomer(result.data.customerId);
-                this.changedQuotationDate(result.data.quotationDate);
+                //this.changedQuotationDate(result.data.quotationDate);
                 for (var i = 0; i < result.data.salesQuotationLines.length; i++) {
                     this.addLineItem(
+                        result.data.salesQuotationLines[i].id,
                         result.data.salesQuotationLines[i].itemId,
                         result.data.salesQuotationLines[i].measurementId,
                         result.data.salesQuotationLines[i].quantity,
@@ -44,7 +46,6 @@ export default class SalesQuotationStore {
                         result.data.salesQuotationLines[i].discount
                     );
                 }
-                console.log(this.salesQuotation);
             }.bind(this));
         }
 
@@ -77,7 +78,30 @@ export default class SalesQuotationStore {
         this.GTotal = rtotal - ttotal;
     }
 
-    saveNewQuotation() {
+    async saveNewQuotation() {
+        if (this.validation()) {
+            if (this.validationErrors.length === 0) {
+                await axios.post(Config.apiUrl + "api/sales/savequotation", JSON.stringify(this.salesQuotation),
+                    {
+                        headers:
+                        {
+                            'Content-type': 'application/json'
+                        }
+                    }
+                )
+                    .then(function (response) {
+                        window.location.href = baseUrl + 'quotations';
+                    })
+                    .catch(function (error) {
+                        error.data.map(function (err) {
+                            this.validationErrors.push(err);
+                        }.bind(this));
+                    }.bind(this));
+            }
+        }
+    }
+
+    validation() {
         this.validationErrors = [];
         if (this.salesQuotation.customerId === undefined)
             this.validationErrors.push("Customer is required.");
@@ -103,22 +127,7 @@ export default class SalesQuotationStore {
             }
         }
 
-        if (this.validationErrors.length === 0) {
-            var result = axios.post(Config.apiUrl + "api/sales/savequotation", JSON.stringify(this.salesQuotation),
-                {
-                    headers:
-                    {
-                        'Content-type': 'application/json'
-                    }
-                }
-            );
-            result.then(function (response) {
-                console.log(response);
-            }.bind(this));
-            result.catch(function (error) {
-                console.log(error);
-            }.bind(this));
-        }
+        return this.validationErrors.length === 0;
     }
 
     changedCustomer(custId) {

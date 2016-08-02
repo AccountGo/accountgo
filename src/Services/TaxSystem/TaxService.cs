@@ -265,7 +265,7 @@ namespace Services.TaxSystem
                 .Where(p => p.Id == partyId)
                 .FirstOrDefault();
 
-            if (party.PartyType == PartyTypes.Customer)
+            if (party != null && party.PartyType == PartyTypes.Customer)
             {
                 Customer customer = _customerRepo.GetAllIncluding(c => c.TaxGroup,
                     c => c.TaxGroup.TaxGroupTax)
@@ -282,7 +282,7 @@ namespace Services.TaxSystem
 
                 partyTaxes = customer.TaxGroup.TaxGroupTax;
             }
-            else if (party.PartyType == PartyTypes.Vendor)
+            else if (party != null  && party.PartyType == PartyTypes.Vendor)
             {
                 Vendor vendor = _vendorRepo.GetAllIncluding(v => v.TaxGroup,
                     v => v.TaxGroup.TaxGroupTax)

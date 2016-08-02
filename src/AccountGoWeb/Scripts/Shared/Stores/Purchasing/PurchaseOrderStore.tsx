@@ -32,11 +32,14 @@ export default class PurchaseOrderStore {
         if (purchId !== undefined) {
             axios.get(Config.apiUrl + "api/purchasing/purchaseorder?id=" + purchId)
                 .then(function (result) {
-                    console.log(result);
+                    this.purchaseOrder.id = result.data.id;
+                    this.purchaseOrder.paymentTermId = result.data.paymentTermId;
                     this.changedVendor(result.data.vendorId);
-                    this.changedOrderDate(result.data.orderDate);
+                    //this.changedOrderDate(result.data.orderDate);
                     for (var i = 0; i < result.data.purchaseOrderLines.length; i++) {
-                        this.addLineItem(result.data.purchaseOrderLines[i].itemId,
+                        this.addLineItem(
+                            result.data.purchaseOrderLines[i].id,
+                            result.data.purchaseOrderLines[i].itemId,
                             result.data.purchaseOrderLines[i].measurementId,
                             result.data.purchaseOrderLines[i].quantity,
                             result.data.purchaseOrderLines[i].amount,
@@ -77,8 +80,26 @@ export default class PurchaseOrderStore {
         this.GTotal = rtotal - ttotal;
     }
 
-    savePurchaseOrder() {
-        //console.log(this.purchaseOrder);
+    async savePurchaseOrder() {
+        if (this.validation() && this.validationErrors.length === 0) {
+            await axios.post(Config.apiUrl + "api/purchasing/savepurchaseorder", JSON.stringify(this.purchaseOrder),
+                {
+                    headers: {
+                        'Content-type': 'application/json'
+                    }
+                })
+                .then(function (response) {
+                    window.location.href = baseUrl + 'purchasing/purchaseorders';
+                })
+                .catch(function (error) {
+                    error.data.map(function (err) {
+                        this.validationErrors.push(err);
+                    }.bind(this));
+                }.bind(this))
+        }
+    }
+
+    validation() {
         this.validationErrors = [];
         if (this.purchaseOrder.vendorId === undefined || this.purchaseOrder.vendorId === "")
             this.validationErrors.push("Vendor is required.");
@@ -111,21 +132,7 @@ export default class PurchaseOrderStore {
             }
         }
 
-        if (this.validationErrors.length === 0) {
-            axios.post(Config.apiUrl + "api/purchasing/savepurchaseorder", JSON.stringify(this.purchaseOrder),
-                {
-                    headers: {
-                        'Content-type': 'application/json'
-                    }
-                })
-                .then(function (response) {
-                    return;
-                })
-                .catch(function (error) {
-                    console.log(error);            
-                    this.validationErrors.push("An error occured on posting data. Please check the browser console for more details.");
-                }.bind(this))
-        }
+        return this.validationErrors.length === 0;
     }
 
     changedVendor(vendorId) {
@@ -140,8 +147,8 @@ export default class PurchaseOrderStore {
         this.purchaseOrder.orderDate = date;
     }
 
-    addLineItem(itemId, measurementId, quantity, amount, discount) {
-        var newLineItem = new PurchaseOrderLine(itemId, measurementId, quantity, amount, discount);
+    addLineItem(id = 0, itemId, measurementId, quantity, amount, discount) {
+        var newLineItem = new PurchaseOrderLine(id, itemId, measurementId, quantity, amount, discount);
         this.purchaseOrder.purchaseOrderLines.push(extendObservable(newLineItem, newLineItem));        
     }
 

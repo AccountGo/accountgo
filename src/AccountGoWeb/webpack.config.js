@@ -44,7 +44,7 @@ var config = {
                 apiUrl: "http://accountgo-dev-api.azurewebsites.net/"
             } :
             {
-                apiUrl: "http://accountgo-dev-api.azurewebsites.net/"
+                apiUrl: "http://localhost:5000/"
             })
     }
 };

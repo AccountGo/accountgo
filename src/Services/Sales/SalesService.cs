@@ -577,6 +577,11 @@ namespace Services.Sales
             _salesQuoteRepo.Insert(salesQuoteHeader);
         }
 
+        public void UpdateSalesQuote(SalesQuoteHeader salesQuoteHeader)
+        {
+            _salesQuoteRepo.Update(salesQuoteHeader);
+        }
+
         public IEnumerable<SalesQuoteHeader> GetSalesQuotes()
         {
             var quotes = _salesQuoteRepo

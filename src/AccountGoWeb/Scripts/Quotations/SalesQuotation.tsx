@@ -43,16 +43,27 @@ class SaveQuotationButton extends React.Component<any, {}>{
     }
 
     render() {
-        return (
-            <input type="button" value="Save" onClick={this.saveNewSalesQuotation.bind(this)} />
+        return (            
+                <input type="button" className="btn btn-primary btn-flat" value="Save" onClick={this.saveNewSalesQuotation.bind(this) } />                
             );
     }
 }
 
 class CancelQuotationButton extends React.Component<any, {}>{
+    cancelOnClick() {
+        let baseUrl = location.protocol
+            + "//" + location.hostname
+            + (location.port && ":" + location.port)
+            + "/";
+
+        window.location.href = baseUrl + 'quotations';
+    }
+    
     render() {
         return (
-            <input type="button" value="Cancel" />
+            <button type="button" className="btn btn-default btn-flat" onClick={ this.cancelOnClick.bind(this) }>
+                Close
+            </button>
         );
     }
 }
@@ -145,8 +156,8 @@ class SalesQuotationLines extends React.Component<any, {}>{
                     <td><input className="form-control" type="text" name={i} value={store.salesQuotation.salesQuotationLines[i].quantity} onChange={this.onChangeQuantity.bind(this) } /></td>
                     <td><input className="form-control" type="text" name={i} value={store.salesQuotation.salesQuotationLines[i].amount} onChange={this.onChangeAmount.bind(this) } /></td>
                     <td><input className="form-control" type="text" name={i} value={store.salesQuotation.salesQuotationLines[i].discount} onChange={this.onChangeDiscount.bind(this) } /></td>
-                    <td>{store.getLineTotal(i)}</td>
-                    <td><input type="button" name={i} value="Remove" onClick={this.onClickRemoveLineItem.bind(this) } /></td>
+                    <td>{store.getLineTotal(i) }</td>
+                    <td><i className="fa fa-fw fa-remove" name={i} onClick={this.onClickRemoveLineItem.bind(this) }></i></td>
                 </tr>
             );
         }
@@ -217,7 +228,7 @@ class SalesQuotationTotals extends React.Component<any, {}>{
 export default class SalesQuotation extends React.Component<any, {}> {
     render() {
         return (
-            <div>
+            <div>                
                 <ValidationErrors />
                 <SalesQuotationHeader />
                 <SalesQuotationLines />

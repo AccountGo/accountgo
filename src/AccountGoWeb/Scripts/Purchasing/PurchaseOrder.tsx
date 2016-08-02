@@ -15,6 +15,11 @@ let purchId = window.location.search.split("?purchId=")[1];
 
 let store = new PurchaseOrderStore(purchId);
 
+let baseUrl = location.protocol
+    + "//" + location.hostname
+    + (location.port && ":" + location.port)
+    + "/";
+
 @observer
 class ValidationErrors extends React.Component<any, {}>{
     render() {
@@ -43,15 +48,26 @@ class SavePurchaseOrderButton extends React.Component<any, {}>{
 
     render() {
         return (
-            <input type="button" value="Save" onClick={this.saveNewPurchaseOrder.bind(this)} />
+            <input type="button" className="btn btn-primary btn-flat" value="Save" onClick={this.saveNewPurchaseOrder.bind(this)} />
             );
     }
 }
 
 class CancelPurchaseOrderButton extends React.Component<any, {}>{
+    cancelOnClick() {
+        let baseUrl = location.protocol
+            + "//" + location.hostname
+            + (location.port && ":" + location.port)
+            + "/";
+
+        window.location.href = baseUrl + 'quotations';
+    }
+
     render() {
         return (
-            <input type="button" value="Cancel" />
+            <button type="button" className="btn btn-default btn-flat" onClick={ this.cancelOnClick.bind(this) }>
+                Close
+            </button>
         );
     }
 }
@@ -110,11 +126,11 @@ class PurchaseOrderLines extends React.Component<any, {}>{
         discount = (document.getElementById("txtNewDiscount") as HTMLInputElement).value;
 
         //console.log(`itemId: ${itemId} | measurementId: ${measurementId} | quantity: ${quantity} | amount: ${amount} | discount: ${discount}`);
-        store.addLineItem(itemId, measurementId, quantity, amount, discount);
+        store.addLineItem(0, itemId, measurementId, quantity, amount, discount);
 
         (document.getElementById("txtNewQuantity") as HTMLInputElement).value = "1";
         (document.getElementById("txtNewAmount") as HTMLInputElement).value = "0";
-        (document.getElementById("txtNewDiscount") as HTMLInputElement).value = "0";
+        (document.getElementById("txtNewDiscount") as HTMLInputElement).value = "";
     }
 
     onClickRemoveLineItem(e) {

@@ -30,7 +30,7 @@ namespace Api
         public void ConfigureServices(IServiceCollection services)
         {
             string connectionString = "";
-            connectionString = Configuration["Data:DefaultConnection:ConnectionString"];
+            connectionString = Configuration["Data:LocalConnection:ConnectionString"];
             //if (_hostingEnv.IsDevelopment())
             //    connectionString = Configuration["Data:LocalConnection:ConnectionString"];
             //else

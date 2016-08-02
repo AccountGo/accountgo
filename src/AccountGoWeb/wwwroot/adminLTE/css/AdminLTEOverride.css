@@ -27,3 +27,7 @@
    cursor: default;
    color:gray;
 }
+
+.pull-right{
+    float: right;
+}
