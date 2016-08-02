@@ -1,9 +1,9 @@
 ﻿export default class JournalEntryLine {
-    id;
-    accountId;
-    drcr;
-    amount;
-    memo;
+    id: number;
+    accountId: number;
+    drcr: number;
+    amount: number;
+    memo: string;
 
     constructor(accountId, drcr, amount, memo) {
         this.accountId = accountId;

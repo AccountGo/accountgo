@@ -1,5 +1,4 @@
-﻿using Dto.Common;
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using Services.Administration;
 using Services.Sales;
 using System;
@@ -121,38 +120,6 @@ namespace Api.Controllers
             }
         }
 
-        [HttpPost]
-        [Route("[action]")]
-        public IActionResult CreateCustomer([FromBody]Dto.Sales.CreateCustomer Dto)
-        {
-            try
-            {
-                var customer = new Core.Domain.Sales.Customer()
-                {
-                    Party = new Core.Domain.Party()
-                    {
-                        PartyType = Core.Domain.PartyTypes.Customer,
-                        Name = Dto.Name,
-                        Phone = Dto.Phone,
-                    },
-                };
-
-                _salesService.AddCustomer(customer);
-
-                var customerDto = new Dto.Sales.Customer();
-                customerDto.Id = customer.Id;
-                customerDto.No = customer.No;
-                customerDto.Name = customer.Party.Name;
-                customerDto.Phone = customer.Party.Phone;
-
-                return new ObjectResult(customerDto);
-            }
-            catch (Exception ex)
-            {
-                return new ObjectResult(ex);
-            }
-        }
-
         [HttpGet]
         [Route("[action]")]
         public IActionResult Customers()
@@ -198,10 +165,12 @@ namespace Api.Controllers
                 var salesOrderDto = new Dto.Sales.SalesOrder()
                 {
                     Id = salesOrder.Id,
+                    PaymentTermId = salesOrder.PaymentTermId,
                     CustomerId = salesOrder.CustomerId.Value,
                     CustomerNo = salesOrder.Customer.No,
                     CustomerName = salesOrder.Customer.Party.Name,
                     OrderDate = salesOrder.Date,
+                    ReferenceNo = salesOrder.ReferenceNo,
                     Amount = salesOrder.SalesOrderLines.Sum(l => l.Amount)
                 };
 
@@ -227,6 +196,8 @@ namespace Api.Controllers
                     CustomerName = _salesService.GetCustomerById(salesOrder.CustomerId.Value).Party.Name,
                     OrderDate = salesOrder.Date,
                     Amount = salesOrder.SalesOrderLines.Sum(l => l.Amount),
+                    PaymentTermId = salesOrder.PaymentTermId,
+                    ReferenceNo = salesOrder.ReferenceNo,
                     SalesOrderLines = new List<Dto.Sales.SalesOrderLine>()
                 };
 
@@ -307,11 +278,11 @@ namespace Api.Controllers
                 foreach (var line in salesorderDto.SalesOrderLines)
                 {
                     var salesOrderLine = new Core.Domain.Sales.SalesOrderLine();
-                    salesOrderLine.Amount = line.Amount;
-                    salesOrderLine.Discount = line.Discount;
-                    salesOrderLine.Quantity = line.Quantity;
-                    salesOrderLine.ItemId = line.ItemId;
-                    salesOrderLine.MeasurementId = line.MeasurementId;
+                    salesOrderLine.Amount = line.Amount.GetValueOrDefault();
+                    salesOrderLine.Discount = line.Discount.GetValueOrDefault();
+                    salesOrderLine.Quantity = line.Quantity.GetValueOrDefault();
+                    salesOrderLine.ItemId = line.ItemId.GetValueOrDefault();
+                    salesOrderLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
 
                     salesOrder.SalesOrderLines.Add(salesOrderLine);
                 }
@@ -501,15 +472,22 @@ namespace Api.Controllers
         [Route("[action]")]
         public IActionResult SaveSalesOrder([FromBody]Dto.Sales.SalesOrder salesOrderDto)
         {
-            ModelState.AddModelError("", "Testing - sample errors.");
-            if (!ModelState.IsValid)
-                return new BadRequestObjectResult(ModelState);
-
-            bool isNew = salesOrderDto.Id == 0;
-            Core.Domain.Sales.SalesOrderHeader salesOrder = null;
-
+            string[] errors = null;
             try
             {
+                if (!ModelState.IsValid)
+                {
+                    errors = new string[ModelState.ErrorCount];
+                    foreach (var val in ModelState.Values)
+                        for (int i = 0; i < ModelState.ErrorCount; i++)
+                            errors[i] = val.Errors[i].ErrorMessage;
+
+                    return new BadRequestObjectResult(errors);
+                }
+
+                bool isNew = salesOrderDto.Id == 0;
+                Core.Domain.Sales.SalesOrderHeader salesOrder = null;
+
                 if (isNew)
                 {
                     salesOrder = new Core.Domain.Sales.SalesOrderHeader();
@@ -519,35 +497,89 @@ namespace Api.Controllers
                     salesOrder = _salesService.GetSalesOrderById(salesOrderDto.Id);
                 }
 
+                salesOrder.CustomerId = salesOrderDto.CustomerId;
+                salesOrder.Date = salesOrderDto.OrderDate;
+                salesOrder.PaymentTermId = salesOrderDto.PaymentTermId;
+                salesOrder.ReferenceNo = salesOrderDto.ReferenceNo;
+
+                foreach (var line in salesOrderDto.SalesOrderLines)
+                {
+                    if (!isNew)
+                    {
+                        var existingLine = salesOrder.SalesOrderLines.Where(id => id.Id == line.Id).FirstOrDefault();
+                        if (salesOrder.SalesOrderLines.Where(id => id.Id == line.Id).FirstOrDefault() != null)
+                        {
+                            existingLine.Amount = line.Amount.GetValueOrDefault();
+                            existingLine.Discount = line.Discount.GetValueOrDefault();
+                            existingLine.Quantity = line.Quantity.GetValueOrDefault();
+                            existingLine.ItemId = line.ItemId.GetValueOrDefault();
+                            existingLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
+                        }
+                        else
+                        {
+                            var salesOrderLine = new Core.Domain.Sales.SalesOrderLine();
+                            salesOrderLine.Amount = line.Amount.GetValueOrDefault();
+                            salesOrderLine.Discount = line.Discount.GetValueOrDefault();
+                            salesOrderLine.Quantity = line.Quantity.GetValueOrDefault();
+                            salesOrderLine.ItemId = line.ItemId.GetValueOrDefault();
+                            salesOrderLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
+
+                            salesOrder.SalesOrderLines.Add(salesOrderLine);
+                        }
+                    }
+                    else
+                    {
+                        var salesOrderLine = new Core.Domain.Sales.SalesOrderLine();
+                        salesOrderLine.Amount = line.Amount.GetValueOrDefault();
+                        salesOrderLine.Discount = line.Discount.GetValueOrDefault();
+                        salesOrderLine.Quantity = line.Quantity.GetValueOrDefault();
+                        salesOrderLine.ItemId = line.ItemId.GetValueOrDefault();
+                        salesOrderLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
+
+                        salesOrder.SalesOrderLines.Add(salesOrderLine);
+                    }
+                }
+
                 if (isNew)
                 {
-                    //_salesService.AddSalesOrder(salesOrder, true);
+                    _salesService.AddSalesOrder(salesOrder, true);
                 }
                 else
                 {
-
+                    _salesService.UpdateSalesOrder(salesOrder);
                 }
+
+
                 return new OkObjectResult(Ok());
             }
             catch (Exception ex)
             {
-                return new ObjectResult(ex);
+                errors = new string[1] { ex.Message };
+                return new BadRequestObjectResult(errors);
             }
         }
 
         [HttpPost]
         [Route("[action]")]
-        public IActionResult SaveSalesInvoice([FromBody]Dto.Sales.SalesOrder salesInvoiceDto)
+        public IActionResult SaveSalesInvoice([FromBody]Dto.Sales.SalesInvoice salesInvoiceDto)
         {
-            ModelState.AddModelError("", "Testing - sample errors.");
-            if (!ModelState.IsValid)
-                return new BadRequestObjectResult(ModelState);
+            string[] errors = null;
 
-            bool isNew = salesInvoiceDto.Id == 0;
-            Core.Domain.Sales.SalesInvoiceHeader salesInvoice = null;
+            if (!ModelState.IsValid)
+            {
+                errors = new string[ModelState.ErrorCount];
+                foreach (var val in ModelState.Values)
+                    for (int i = 0; i < ModelState.ErrorCount; i++)
+                        errors[i] = val.Errors[i].ErrorMessage;
+
+                return new BadRequestObjectResult(errors);
+            }
 
             try
             {
+                bool isNew = salesInvoiceDto.Id == 0;
+                Core.Domain.Sales.SalesInvoiceHeader salesInvoice = null;
+
                 if (isNew)
                 {
                     salesInvoice = new Core.Domain.Sales.SalesInvoiceHeader();
@@ -557,19 +589,63 @@ namespace Api.Controllers
                     salesInvoice = _salesService.GetSalesInvoiceById(salesInvoiceDto.Id);
                 }
 
+                salesInvoice.CustomerId = salesInvoiceDto.CustomerId.GetValueOrDefault();
+                salesInvoice.Date = salesInvoiceDto.InvoiceDate;
+
+                foreach (var line in salesInvoiceDto.SalesInvoiceLines)
+                {
+                    if (!isNew)
+                    {
+                        var existingLine = salesInvoice.SalesInvoiceLines.Where(id => id.Id == line.Id).FirstOrDefault();
+                        if (salesInvoice.SalesInvoiceLines.Where(id => id.Id == line.Id).FirstOrDefault() != null)
+                        {
+                            existingLine.Amount = line.Amount.GetValueOrDefault();
+                            existingLine.Discount = line.Discount.GetValueOrDefault();
+                            existingLine.Quantity = line.Quantity.GetValueOrDefault();
+                            existingLine.ItemId = line.ItemId.GetValueOrDefault();
+                            existingLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
+                        }
+                        else
+                        {
+                            var salesInvoiceLine = new Core.Domain.Sales.SalesInvoiceLine();
+                            salesInvoiceLine.Amount = line.Amount.GetValueOrDefault();
+                            salesInvoiceLine.Discount = line.Discount.GetValueOrDefault();
+                            salesInvoiceLine.Quantity = line.Quantity.GetValueOrDefault();
+                            salesInvoiceLine.ItemId = line.ItemId.GetValueOrDefault();
+                            salesInvoiceLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
+
+                            salesInvoice.SalesInvoiceLines.Add(salesInvoiceLine);
+                        }
+                    }
+                    else
+                    {
+                        var salesInvoiceLine = new Core.Domain.Sales.SalesInvoiceLine();
+                        salesInvoiceLine.Amount = line.Amount.GetValueOrDefault();
+                        salesInvoiceLine.Discount = line.Discount.GetValueOrDefault();
+                        salesInvoiceLine.Quantity = line.Quantity.GetValueOrDefault();
+                        salesInvoiceLine.ItemId = line.ItemId.GetValueOrDefault();
+                        salesInvoiceLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
+
+                        salesInvoice.SalesInvoiceLines.Add(salesInvoiceLine);
+                    }
+                }
+
                 if (isNew)
                 {
-                    //_salesService.AddSalesOrder(salesOrder, true);
+                    //_salesService.AddSalesInvoice(salesInvoice, 0);
                 }
                 else
                 {
-
+                    //_salesService.UpdateSalesInvoice(salesInvoice);
                 }
+
+
                 return new OkObjectResult(Ok());
             }
             catch (Exception ex)
             {
-                return new ObjectResult(ex);
+                errors = new string[1] { ex.Message };
+                return new BadRequestObjectResult(errors);
             }
         }
 
@@ -577,33 +653,88 @@ namespace Api.Controllers
         [Route("[action]")]
         public IActionResult SaveQuotation([FromBody]Dto.Sales.SalesQuotation quotationDto)
         {
+            string[] errors = null;
+
+            if (!ModelState.IsValid) {
+                errors = new string[ModelState.ErrorCount];
+                foreach (var val in ModelState.Values)
+                    for (int i = 0; i < ModelState.ErrorCount; i++)
+                        errors[i] = val.Errors[i].ErrorMessage;
+
+                return new BadRequestObjectResult(errors);
+            }
+
             try
             {
-                var salesQuote = new Core.Domain.Sales.SalesQuoteHeader()
+                bool isNew = quotationDto.Id == 0;
+                Core.Domain.Sales.SalesQuoteHeader salesQuote = null;
+
+                if (isNew)
                 {
-                    CustomerId = quotationDto.CustomerId.GetValueOrDefault(),
-                    Date = quotationDto.QuotationDate,
-                };
+                    salesQuote = new Core.Domain.Sales.SalesQuoteHeader();
+                }
+                else
+                {
+                    salesQuote = _salesService.GetSalesQuotationById(quotationDto.Id);
+                }
+
+                salesQuote.CustomerId = quotationDto.CustomerId.GetValueOrDefault();
+                salesQuote.Date = quotationDto.QuotationDate;
 
                 foreach (var line in quotationDto.SalesQuotationLines)
                 {
-                    var salesQuoteLine = new Core.Domain.Sales.SalesQuoteLine();
-                    salesQuoteLine.Amount = line.Amount == null ? 0 : line.Amount.Value;
-                    salesQuoteLine.Discount = line.Discount == null ? 0 : line.Discount.Value;
-                    salesQuoteLine.Quantity = line.Quantity == null ? 0 : line.Quantity.Value;
-                    salesQuoteLine.ItemId = line.ItemId.GetValueOrDefault();
-                    salesQuoteLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
+                    if (!isNew)
+                    {
+                        var existingLine = salesQuote.SalesQuoteLines.Where(id => id.Id == line.Id).FirstOrDefault();
+                        if (salesQuote.SalesQuoteLines.Where(id => id.Id == line.Id).FirstOrDefault() != null)
+                        {
+                            existingLine.Amount = line.Amount == null ? 0 : line.Amount.Value;
+                            existingLine.Discount = line.Discount == null ? 0 : line.Discount.Value;
+                            existingLine.Quantity = line.Quantity == null ? 0 : line.Quantity.Value;
+                            existingLine.ItemId = line.ItemId.GetValueOrDefault();
+                            existingLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
+                        }
+                        else
+                        {
+                            var salesQuoteLine = new Core.Domain.Sales.SalesQuoteLine();
+                            salesQuoteLine.Amount = line.Amount == null ? 0 : line.Amount.Value;
+                            salesQuoteLine.Discount = line.Discount == null ? 0 : line.Discount.Value;
+                            salesQuoteLine.Quantity = line.Quantity == null ? 0 : line.Quantity.Value;
+                            salesQuoteLine.ItemId = line.ItemId.GetValueOrDefault();
+                            salesQuoteLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
 
-                    salesQuote.SalesQuoteLines.Add(salesQuoteLine);
+                            salesQuote.SalesQuoteLines.Add(salesQuoteLine);
+                        }                        
+                    }
+                    else
+                    {
+                        var salesQuoteLine = new Core.Domain.Sales.SalesQuoteLine();
+                        salesQuoteLine.Amount = line.Amount == null ? 0 : line.Amount.Value;
+                        salesQuoteLine.Discount = line.Discount == null ? 0 : line.Discount.Value;
+                        salesQuoteLine.Quantity = line.Quantity == null ? 0 : line.Quantity.Value;
+                        salesQuoteLine.ItemId = line.ItemId.GetValueOrDefault();
+                        salesQuoteLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
+
+                        salesQuote.SalesQuoteLines.Add(salesQuoteLine);
+                    }
+                }
+                                
+                if (isNew)
+                {
+                    _salesService.AddSalesQuote(salesQuote);
+                }
+                else
+                {
+                    _salesService.UpdateSalesQuote(salesQuote);
                 }
 
-                _salesService.AddSalesQuote(salesQuote);
 
-                return new ObjectResult(Ok());
+                return new OkObjectResult(Ok());
             }
             catch (Exception ex)
             {
-                return new ObjectResult(ex);
+                errors = new string[1] { ex.Message };
+                return new BadRequestObjectResult(errors);
             }
         }
     }

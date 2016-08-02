@@ -2,6 +2,7 @@
 
 <div>
     <a href="~/sales/customer"><i class="fa fa-plus margin-a"></i>New Customer</a>
+    <a href="~/sales/customer" id="linkViewCustomer" class="inactiveLink"><i class="fa fa-edit margin-a"></i>View</a>
 </div>
 <div>
     <div id="customers" class="ag-fresh" style="height: 400px;"></div>
@@ -20,7 +21,16 @@
         rowData: @Html.Raw(Model),
         // PROPERTIES - simple boolean / string / number properties
         rowSelection: 'single',
-     };
+        onSelectionChanged: onSelectionChanged,
+    };
+
+    function onSelectionChanged() {
+        var selectedRows = gridOptions.api.getSelectedRows();
+        selectedRow = selectedRows[0];
+        
+        document.getElementById('linkViewCustomer').setAttribute('href', 'customer/' + selectedRow.id);
+        document.getElementById('linkViewCustomer').setAttribute('class', '');
+    }
 
     // wait for the document to be loaded, otherwise
     // ag-Grid will not find the div in the document.

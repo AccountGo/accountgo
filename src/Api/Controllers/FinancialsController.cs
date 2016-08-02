@@ -94,7 +94,7 @@ namespace Api.Controllers
                         Id = line.Id,
                         AccountId = line.AccountId,
                         Amount = line.Amount,
-                        DrCr = line.DrCr.ToString(),
+                        DrCr = (int)line.DrCr,
                         Memo = line.Memo
                     };
 
@@ -130,7 +130,7 @@ namespace Api.Controllers
                     Id = line.Id,
                     AccountId = line.AccountId,
                     Amount = line.Amount,
-                    DrCr = line.DrCr.ToString(),
+                    DrCr = (int)line.DrCr,
                     Memo = line.Memo
                 };
 

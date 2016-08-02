@@ -85,37 +85,88 @@ namespace Api.Controllers
         [Route("[action]")]
         public IActionResult SavePurchaseOrder([FromBody]Dto.Purchasing.PurchaseOrder purchaseOrderDto)
         {
-            ModelState.AddModelError("", "Testing - sample errors.");
+            string[] errors = null;
+
             if (!ModelState.IsValid)
-                return new BadRequestObjectResult(ModelState);
-                        
-            bool isNew = purchaseOrderDto.Id == 0;
-            Core.Domain.Purchases.PurchaseOrderHeader purchOrder = null;
+            {
+                errors = new string[ModelState.ErrorCount];
+                foreach (var val in ModelState.Values)
+                    for (int i = 0; i < ModelState.ErrorCount; i++)
+                        errors[i] = val.Errors[i].ErrorMessage;
+
+                return new BadRequestObjectResult(errors);
+            }
 
             try
             {
+                bool isNew = purchaseOrderDto.Id == 0;
+                Core.Domain.Purchases.PurchaseOrderHeader purchaseOrder = null;
+
                 if (isNew)
                 {
-                    purchOrder = new Core.Domain.Purchases.PurchaseOrderHeader();
+                    purchaseOrder = new Core.Domain.Purchases.PurchaseOrderHeader();
                 }
                 else
                 {
-                    purchOrder = _purchasingService.GetPurchaseOrderById(purchaseOrderDto.Id);
+                    purchaseOrder = _purchasingService.GetPurchaseOrderById(purchaseOrderDto.Id);
+                }
+
+                purchaseOrder.VendorId = purchaseOrderDto.VendorId;
+                purchaseOrder.Date = purchaseOrderDto.OrderDate;
+
+                foreach (var line in purchaseOrderDto.PurchaseOrderLines)
+                {
+                    if (!isNew)
+                    {
+                        var existingLine = purchaseOrder.PurchaseOrderLines.Where(id => id.Id == line.Id).FirstOrDefault();
+                        if (purchaseOrder.PurchaseOrderLines.Where(id => id.Id == line.Id).FirstOrDefault() != null)
+                        {
+                            existingLine.Amount = line.Amount.GetValueOrDefault();
+                            existingLine.Discount = line.Discount.GetValueOrDefault();
+                            existingLine.Quantity = line.Quantity.GetValueOrDefault();
+                            existingLine.ItemId = line.ItemId.GetValueOrDefault();
+                            existingLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
+                        }
+                        else
+                        {
+                            var purchaseOrderLine = new Core.Domain.Purchases.PurchaseOrderLine();
+                            purchaseOrderLine.Amount = line.Amount.GetValueOrDefault();
+                            purchaseOrderLine.Discount = line.Discount.GetValueOrDefault();
+                            purchaseOrderLine.Quantity = line.Quantity.GetValueOrDefault();
+                            purchaseOrderLine.ItemId = line.ItemId.GetValueOrDefault();
+                            purchaseOrderLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
+
+                            purchaseOrder.PurchaseOrderLines.Add(purchaseOrderLine);
+                        }
+                    }
+                    else
+                    {
+                        var purchaseOrderLine = new Core.Domain.Purchases.PurchaseOrderLine();
+                        purchaseOrderLine.Amount = line.Amount.GetValueOrDefault();
+                        purchaseOrderLine.Discount = line.Discount.GetValueOrDefault();
+                        purchaseOrderLine.Quantity = line.Quantity.GetValueOrDefault();
+                        purchaseOrderLine.ItemId = line.ItemId.GetValueOrDefault();
+                        purchaseOrderLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
+
+                        purchaseOrder.PurchaseOrderLines.Add(purchaseOrderLine);
+                    }
                 }
 
                 if (isNew)
                 {
-                    //_purchasingService.AddPurchaseOrder(purchOrder, true);
+                    _purchasingService.AddPurchaseOrder(purchaseOrder, true);
                 }
                 else
                 {
-
+                    _purchasingService.UpdatePurchaseOrder(purchaseOrder);
                 }
+
                 return new OkObjectResult(Ok());
             }
             catch (Exception ex)
             {
-                return new ObjectResult(ex);
+                errors = new string[1] { ex.Message };
+                return new BadRequestObjectResult(errors);
             }
         }
 
@@ -181,36 +232,88 @@ namespace Api.Controllers
         [Route("[action]")]
         public IActionResult SavePurchaseInvoice([FromBody]Dto.Purchasing.PurchaseInvoice purchaseInvoiceDto)
         {
-            ModelState.AddModelError("", "Testing - sample errors.");
-            if (!ModelState.IsValid)
-                return new BadRequestObjectResult(ModelState);
+            string[] errors = null;
 
-            bool isNew = purchaseInvoiceDto.Id == 0;
-            Core.Domain.Purchases.PurchaseInvoiceHeader purchInvoice = null;
+            if (!ModelState.IsValid)
+            {
+                errors = new string[ModelState.ErrorCount];
+                foreach (var val in ModelState.Values)
+                    for (int i = 0; i < ModelState.ErrorCount; i++)
+                        errors[i] = val.Errors[i].ErrorMessage;
+
+                return new BadRequestObjectResult(errors);
+            }
 
             try
             {
+                bool isNew = purchaseInvoiceDto.Id == 0;
+                Core.Domain.Purchases.PurchaseInvoiceHeader purchaseInvoice = null;
+
                 if (isNew)
                 {
-                    purchInvoice = new Core.Domain.Purchases.PurchaseInvoiceHeader();
+                    purchaseInvoice = new Core.Domain.Purchases.PurchaseInvoiceHeader();
                 }
                 else
                 {
-                    purchInvoice = _purchasingService.GetPurchaseInvoiceById(purchaseInvoiceDto.Id);
+                    purchaseInvoice = _purchasingService.GetPurchaseInvoiceById(purchaseInvoiceDto.Id);
+                }
+
+                purchaseInvoice.VendorId = purchaseInvoiceDto.VendorId;
+                purchaseInvoice.Date = purchaseInvoiceDto.InvoiceDate;
+
+                foreach (var line in purchaseInvoiceDto.PurchaseInvoiceLines)
+                {
+                    if (!isNew)
+                    {
+                        var existingLine = purchaseInvoice.PurchaseInvoiceLines.Where(id => id.Id == line.Id).FirstOrDefault();
+                        if (purchaseInvoice.PurchaseInvoiceLines.Where(id => id.Id == line.Id).FirstOrDefault() != null)
+                        {
+                            existingLine.Amount = line.Amount.GetValueOrDefault();
+                            existingLine.Discount = line.Discount.GetValueOrDefault();
+                            existingLine.Quantity = line.Quantity.GetValueOrDefault();
+                            existingLine.ItemId = line.ItemId.GetValueOrDefault();
+                            existingLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
+                        }
+                        else
+                        {
+                            var purchaseOrderLine = new Core.Domain.Purchases.PurchaseInvoiceLine();
+                            purchaseOrderLine.Amount = line.Amount.GetValueOrDefault();
+                            purchaseOrderLine.Discount = line.Discount.GetValueOrDefault();
+                            purchaseOrderLine.Quantity = line.Quantity.GetValueOrDefault();
+                            purchaseOrderLine.ItemId = line.ItemId.GetValueOrDefault();
+                            purchaseOrderLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
+
+                            purchaseInvoice.PurchaseInvoiceLines.Add(purchaseOrderLine);
+                        }
+                    }
+                    else
+                    {
+                        var purchaseOrderLine = new Core.Domain.Purchases.PurchaseInvoiceLine();
+                        purchaseOrderLine.Amount = line.Amount.GetValueOrDefault();
+                        purchaseOrderLine.Discount = line.Discount.GetValueOrDefault();
+                        purchaseOrderLine.Quantity = line.Quantity.GetValueOrDefault();
+                        purchaseOrderLine.ItemId = line.ItemId.GetValueOrDefault();
+                        purchaseOrderLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
+
+                        purchaseInvoice.PurchaseInvoiceLines.Add(purchaseOrderLine);
+                    }
                 }
 
                 if (isNew)
                 {
-                    //_purchasingService.AddPurchaseOrder(purchOrder, true);
+                    _purchasingService.AddPurchaseInvoice(purchaseInvoice, 0);
                 }
                 else
                 {
-
+                    //_purchasingService.UpdatePurchaseOrder(purchaseOrder);
                 }
+
                 return new OkObjectResult(Ok());
             }
-            catch (Exception ex) {
-                return new ObjectResult(ex);
+            catch (Exception ex)
+            {
+                errors = new string[1] { ex.Message };
+                return new BadRequestObjectResult(errors);
             }
         }
 

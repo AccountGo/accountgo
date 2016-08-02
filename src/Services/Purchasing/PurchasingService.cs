@@ -200,6 +200,11 @@ namespace Services.Purchasing
                 _purchaseOrderRepo.Insert(purchaseOrder);
         }
 
+        public void UpdatePurchaseOrder(PurchaseOrderHeader purchaseOrder)
+        {
+            _purchaseOrderRepo.Update(purchaseOrder);
+        }
+
         public void AddPurchaseOrderReceipt(PurchaseReceiptHeader purchaseOrderReceipt)
         {
             var glLines = new List<GeneralLedgerLine>();

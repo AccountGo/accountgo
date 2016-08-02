@@ -6,5 +6,6 @@ export default class JournalEntry {
     journalDate: Date;
     referenceNo: string;
     memo: string;
+    posted: boolean;
     journalEntryLines: JournalEntryLine[] = [];
 }

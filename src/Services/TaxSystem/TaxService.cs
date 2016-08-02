@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Core.Domain.TaxSystem;
+using Core.Domain;
 
 namespace Services.TaxSystem
 {
@@ -14,16 +15,22 @@ namespace Services.TaxSystem
         private readonly IRepository<Item> _itemRepo;
         private readonly IRepository<Vendor> _vendorRepo;
         private readonly IRepository<Customer> _customerRepo;
+        private readonly IRepository<Party> _partyRepo;
         private readonly IRepository<Tax> _taxRepo;
-        private IRepository<TaxGroup> _taxGroupRepo;
-        private IRepository<ItemTaxGroup> _itemTaxGroupRep;
+        private readonly IRepository<TaxGroup> _taxGroupRepo;
+        private readonly IRepository<TaxGroupTax> _taxGroupTaxRepo;
+        private readonly IRepository<ItemTaxGroup> _itemTaxGroupRep;        
+        private readonly IRepository<ItemTaxGroupTax> _itemTaxGroupTaxRepo;
 
         public TaxService(IRepository<Vendor> vendorRepo,
             IRepository<Customer> customerRepo,
             IRepository<Item> itemRepo,
             IRepository<Tax> taxRepo,
             IRepository<TaxGroup> taxGroupRepo,
-            IRepository<ItemTaxGroup> itemTaxGroupRepo)
+            IRepository<TaxGroupTax> taxGroupTaxRepo,
+            IRepository<ItemTaxGroupTax> itemTaxGroupTaxRepo,
+            IRepository<ItemTaxGroup> itemTaxGroupRepo,
+            IRepository<Party> partyRepo)
         {
             _vendorRepo = vendorRepo;
             _customerRepo = customerRepo;
@@ -31,6 +38,9 @@ namespace Services.TaxSystem
             _taxRepo = taxRepo;
             _taxGroupRepo = taxGroupRepo;
             _itemTaxGroupRep = itemTaxGroupRepo;
+            _partyRepo = partyRepo;
+            _itemTaxGroupTaxRepo = itemTaxGroupTaxRepo;
+            _taxGroupTaxRepo = taxGroupTaxRepo;
         }
 
         public IEnumerable<Tax> GetTaxes(bool includeInActive = false)
@@ -151,14 +161,17 @@ namespace Services.TaxSystem
         /// <param name="partyId">Party Id</param>
         /// <param name="partyType">Type of party i.e. Customer / Vendor</param>
         /// <returns>Taxes</returns>
-        public IEnumerable<Tax> GetIntersectionTaxes(int itemId, int partyId, Core.Domain.PartyTypes partyType)
+        public IEnumerable<Tax> GetIntersectionTaxes(int itemId, int partyId, PartyTypes partyType)
         {
             ICollection<TaxGroupTax> partyTaxes = null;
             ICollection<ItemTaxGroupTax> itemTaxes = null;
             IEnumerable<Tax> taxes = new List<Tax>();
             object party = null;
 
-            var item = _itemRepo.GetById(itemId);
+            var item = _itemRepo.GetAllIncluding(i => i.ItemTaxGroup,
+                i => i.ItemTaxGroup.ItemTaxGroupTax)
+                .Where(i => i.Id == itemId)
+                .FirstOrDefault();
 
             if (item == null
                 || item.ItemTaxGroup == null
@@ -171,9 +184,12 @@ namespace Services.TaxSystem
 
             itemTaxes = item.ItemTaxGroup.ItemTaxGroupTax.Where(t => t.IsExempt == false).ToList();
 
-            if (partyType == Core.Domain.PartyTypes.Customer)
+            if (partyType == PartyTypes.Customer)
             {
-                party = _customerRepo.GetById(partyId);
+                party = _customerRepo.GetAllIncluding(c => c.TaxGroup,
+                    c => c.TaxGroup.TaxGroupTax)
+                    .Where(c => c.PartyId == partyId)
+                    .FirstOrDefault();
 
                 if (party == null
                     || ((Customer)party).TaxGroup == null
@@ -188,7 +204,10 @@ namespace Services.TaxSystem
             }
             else
             {
-                party = _vendorRepo.GetById(partyId);
+                party = _vendorRepo.GetAllIncluding(v => v.TaxGroup,
+                    v => v.TaxGroup.TaxGroupTax)
+                    .Where(v => v.PartyId == partyId)
+                    .FirstOrDefault();
 
                 if (party == null
                     || ((Vendor)party).TaxGroup == null
@@ -210,6 +229,101 @@ namespace Services.TaxSystem
                 return taxes;
 
             taxes = from t in intersectionTaxes select t.p.Tax;
+
+            return taxes;
+        }
+
+        /// <summary>
+        /// Get the applicable taxes as the intersection of item taxes and customer/vendor taxes.
+        /// </summary>
+        /// <param name="itemId">Item Id</param>
+        /// <param name="partyId">Party Id</param>
+        /// <returns>Taxes</returns>
+        public IEnumerable<Core.Domain.TaxSystem.Tax> GetIntersectionTaxes(int itemId, int partyId)
+        {
+            ICollection<TaxGroupTax> partyTaxes = null;
+            ICollection<ItemTaxGroupTax> itemTaxes = null;
+            IList<Tax> taxes = new List<Tax>();
+            Party party = null;
+
+            var item = _itemRepo.GetAllIncluding(i => i.ItemTaxGroup,
+                i => i.ItemTaxGroup.ItemTaxGroupTax)
+                .Where(i => i.Id == itemId)
+                .FirstOrDefault();
+                        
+            if (item == null
+                || item.ItemTaxGroup == null
+                || item.ItemTaxGroup.ItemTaxGroupTax == null
+                || item.ItemTaxGroup.ItemTaxGroupTax.Count == 0)
+            {            
+                return taxes; // no tax configuration
+            }
+
+            itemTaxes = item.ItemTaxGroup.ItemTaxGroupTax.Where(t => t.IsExempt == false).ToList();
+
+            party = _partyRepo.GetAllIncluding()
+                .Where(p => p.Id == partyId)
+                .FirstOrDefault();
+
+            if (party != null && party.PartyType == PartyTypes.Customer)
+            {
+                Customer customer = _customerRepo.GetAllIncluding(c => c.TaxGroup,
+                    c => c.TaxGroup.TaxGroupTax)
+                    .Where(c => c.PartyId == partyId)
+                    .FirstOrDefault();
+
+                if (customer == null
+                    || customer.TaxGroup == null
+                    || customer.TaxGroup.TaxGroupTax == null
+                    || customer.TaxGroup.TaxGroupTax.Count == 0)
+                {
+                    return taxes; // no tax configuration
+                }
+
+                partyTaxes = customer.TaxGroup.TaxGroupTax;
+            }
+            else if (party != null  && party.PartyType == PartyTypes.Vendor)
+            {
+                Vendor vendor = _vendorRepo.GetAllIncluding(v => v.TaxGroup,
+                    v => v.TaxGroup.TaxGroupTax)
+                    .Where(v => v.PartyId == partyId)
+                    .FirstOrDefault();
+
+                if (party == null
+                    || vendor.TaxGroup == null
+                    || vendor.TaxGroup.TaxGroupTax == null
+                    || vendor.TaxGroup.TaxGroupTax.Count == 0)
+                {
+                    return taxes; // no tax configuration
+                }
+
+                partyTaxes = vendor.TaxGroup.TaxGroupTax;
+            }
+            else
+            {
+                // undefined error.
+            }
+
+            //var intersectionTaxes = from p in partyTaxes
+            //                        join i in itemTaxes on p.TaxId equals i.TaxId
+            //                        select new { p, i };
+
+            //if (intersectionTaxes == null || intersectionTaxes.Count() == 0)
+            //    return taxes;
+
+            //taxes = from t in intersectionTaxes select t.p.Tax;
+
+            var allTaxes = _taxRepo.GetAllIncluding().ToList();
+
+            foreach(var p in partyTaxes)
+            {
+                foreach (var i in itemTaxes) {
+                    if (p.TaxId == i.TaxId) {
+                        taxes.Add(allTaxes.Where(t => t.Id == p.TaxId).FirstOrDefault());
+                        break;
+                    }
+                }
+            }
 
             return taxes;
         }

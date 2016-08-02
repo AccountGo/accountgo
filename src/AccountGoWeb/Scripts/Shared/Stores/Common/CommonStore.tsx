@@ -1,6 +1,5 @@
 ﻿import {observable, extendObservable, action} from 'mobx';
 import * as axios from "axios";
-import * as d3 from "d3";
 
 import Config = require("Config");
 
@@ -88,5 +87,30 @@ export default class CommonStore {
                     accounts.push(data[i]);
                 }
             });
+    }
+
+    getApplicableTaxes(itemId: number, partyId: number) {
+        var result = axios.get(Config.apiUrl + "api/tax/gettax?itemId=" + itemId + "&partyId=" + partyId);
+        result.then(function (result) {
+            return result.data;
+        });
+    }
+
+    getSalesLineTaxAmount(quantity: number, amount: number, discount: number = 0, taxes = []) {
+        let lineTaxTotal: number = 0;
+        amount = (amount * quantity) - discount;
+        taxes.map(function (tax) {
+            lineTaxTotal = lineTaxTotal + (amount - (amount / (1 + (tax.rate / 100))));
+        });
+        return parseFloat(lineTaxTotal.toFixed(2));
+    }
+
+    getPurhcaseLineTaxAmount(quantity: number, amount: number, discount: number = 0, taxes = []) {
+        let lineTaxTotal: number = 0;
+        amount = (amount * quantity) - discount;
+        taxes.map(function (tax) {
+            lineTaxTotal = lineTaxTotal + (amount - (amount / (1 + (tax.rate / 100))));
+        });
+        return parseFloat(lineTaxTotal.toFixed(2));
     }
 }

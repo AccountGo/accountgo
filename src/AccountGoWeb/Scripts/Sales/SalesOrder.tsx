@@ -16,6 +16,11 @@ let orderId = window.location.search.split("?orderId=")[1];
 
 let store = new SalesOrderStore(quotationId, orderId);
 
+let baseUrl = location.protocol
+    + "//" + location.hostname
+    + (location.port && ":" + location.port)
+    + "/";
+
 @observer
 class ValidationErrors extends React.Component<any, {}>{
     render() {
@@ -39,20 +44,31 @@ class ValidationErrors extends React.Component<any, {}>{
 
 class SaveOrderButton extends React.Component<any, {}>{
     saveNewSalesOrder(e) {
-
+        store.saveNewSalesOrder();
     }
 
     render() {
         return (
-            <input type="button" value="Save" onClick={this.saveNewSalesOrder.bind(this)} />
+            <input type="button" className="btn btn-primary btn-flat" value="Save" onClick={this.saveNewSalesOrder.bind(this)} />
             );
     }
 }
 
 class CancelOrderButton extends React.Component<any, {}>{
+    cancelOnClick() {
+        let baseUrl = location.protocol
+            + "//" + location.hostname
+            + (location.port && ":" + location.port)
+            + "/";
+
+        window.location.href = baseUrl + 'quotations';
+    }
+
     render() {
         return (
-            <input type="button" value="Cancel" />
+            <button type="button" className="btn btn-default btn-flat" onClick={ this.cancelOnClick.bind(this) }>
+                Close
+            </button>
         );
     }
 }
@@ -111,11 +127,11 @@ class SalesOrderLines extends React.Component<any, {}>{
         discount = (document.getElementById("txtNewDiscount") as HTMLInputElement).value;
 
         console.log(`itemId: ${itemId} | measurementId: ${measurementId} | quantity: ${quantity} | amount: ${amount} | discount: ${discount}`);
-        store.addLineItem(itemId, measurementId, quantity, amount, discount);
+        store.addLineItem(0, itemId, measurementId, quantity, amount, discount);
 
         (document.getElementById("txtNewQuantity") as HTMLInputElement).value = "1";
         (document.getElementById("txtNewAmount") as HTMLInputElement).value = "0";
-        (document.getElementById("txtNewDiscount") as HTMLInputElement).value = "0";
+        (document.getElementById("txtNewDiscount") as HTMLInputElement).value = "";
     }
 
     onClickRemoveLineItem(e) {
@@ -145,7 +161,7 @@ class SalesOrderLines extends React.Component<any, {}>{
                     <td><input type="text" className="form-control" name={i} value={store.salesOrder.salesOrderLines[i].quantity} onChange={this.onChangeQuantity.bind(this)} /></td>
                     <td><input type="text" className="form-control" name={i} value={store.salesOrder.salesOrderLines[i].amount} onChange={this.onChangeAmount.bind(this) } /></td>
                     <td><input type="text" className="form-control" name={i} value={store.salesOrder.salesOrderLines[i].discount} onChange={this.onChangeDiscount.bind(this) } /></td>
-                    <td>{store.lineTotal(i)}</td>
+                    <td>{store.getLineTotal(i) }</td>
                     <td><input type="button" name={i} value="Remove" onClick={this.onClickRemoveLineItem.bind(this) } /></td>
                 </tr>
             );
@@ -202,11 +218,11 @@ class SalesOrderTotals extends React.Component<any, {}>{
                 <div className="box-body">
                     <div className="row">
                         <div className="col-md-2"><label>Running Total: </label></div>
-                        <div className="col-md-2">{0}</div>
+                        <div className="col-md-2">{store.RTotal}</div>
                         <div className="col-md-2"><label>Tax Total: </label></div>
-                        <div className="col-md-2">{0}</div>
+                        <div className="col-md-2">{store.TTotal}</div>
                         <div className="col-md-2"><label>Grand Total: </label></div>
-                        <div className="col-md-2">{store.grandTotal() }</div>
+                        <div className="col-md-2">{store.GTotal}</div>
                     </div>
                 </div>
             </div>

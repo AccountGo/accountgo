@@ -18,7 +18,7 @@ export default class SelectLineItem extends React.Component<any, {}>{
 
         return (
             <select value={this.props.selected} id={this.props.controlId} onChange={this.onChangeItem.bind(this) } className="form-control select2">
-                <option key={ -1 } value=""></option>
+                <option key={ -1 }></option>
                 {options}
             </select>
         );

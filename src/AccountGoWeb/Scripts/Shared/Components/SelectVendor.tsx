@@ -5,7 +5,6 @@ import {observer} from "mobx-react";
 export default class SelectVendor extends React.Component<any, {}>{
     onChangeVendor(e) {
         this.props.store.changedVendor(e.target.value);
-        console.log(this.props.store.purchaseInvoice.vendorId); 
     }
     render() {
         var options = [];

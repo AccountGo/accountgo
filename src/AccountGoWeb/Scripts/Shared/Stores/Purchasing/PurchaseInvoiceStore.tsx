@@ -1,4 +1,4 @@
-﻿import {observable, extendObservable, action} from 'mobx';
+﻿import {observable, extendObservable, action, autorun, computed} from 'mobx';
 import * as axios from "axios";
 
 import Config = require("Config");
@@ -32,10 +32,14 @@ export default class PurchaseOrderStore {
         if (purchId !== undefined) {
             axios.get(Config.apiUrl + "api/purchasing/purchaseorder?id=" + purchId)
                 .then(function (result) {
+                    this.purchaseInvoice.id = result.data.id;
+                    this.purchaseInvoice.paymentTermId = result.data.paymentTermId;
                     this.changedVendor(result.data.vendorId);
-                    this.changedInvoiceDate(result.data.orderDate);
+                    //this.changedInvoiceDate(result.data.orderDate);
                     for (var i = 0; i < result.data.purchaseOrderLines.length; i++) {
-                        this.addLineItem(result.data.purchaseOrderLines[i].itemId,
+                        this.addLineItem(
+                            result.data.purchaseOrderLines[i].id,
+                            result.data.purchaseOrderLines[i].itemId,
                             result.data.purchaseOrderLines[i].measurementId,
                             result.data.purchaseOrderLines[i].quantity,
                             result.data.purchaseOrderLines[i].amount,
@@ -49,10 +53,14 @@ export default class PurchaseOrderStore {
         else if (invoiceId !== undefined) {
             axios.get(Config.apiUrl + "api/purchasing/purchaseinvoice?id=" + invoiceId)
                 .then(function (result) {
+                    this.purchaseInvoice.id = result.data.id;
+                    this.purchaseInvoice.paymentTermId = result.data.paymentTermId;
                     this.changedVendor(result.data.vendorId);
-                    this.changedInvoiceDate(result.data.orderDate);
+                    //this.changedInvoiceDate(result.data.orderDate);
                     for (var i = 0; i < result.data.purchaseInvoiceLines.length; i++) {
-                        this.addLineItem(result.data.purchaseInvoiceLines[i].itemId,
+                        this.addLineItem(
+                            result.data.purchaseInvoiceLines[i].id,
+                            result.data.purchaseInvoiceLines[i].itemId,
                             result.data.purchaseInvoiceLines[i].measurementId,
                             result.data.purchaseInvoiceLines[i].quantity,
                             result.data.purchaseInvoiceLines[i].amount,
@@ -63,9 +71,56 @@ export default class PurchaseOrderStore {
                 .catch(function (error) {
                 }.bind(this));
         }
+
+        autorun(() => this.computeTotals());
     }
 
-    savePurchaseInvoice() {
+    @observable RTotal = 0;
+    @observable GTotal = 0;
+    @observable TTotal = 0;
+
+    async computeTotals() {
+        var rtotal = 0;
+        var ttotal = 0;
+        var gtotal = 0;
+
+        for (var i = 0; i < this.purchaseInvoice.purchaseInvoiceLines.length; i++) {
+            var lineItem = this.purchaseInvoice.purchaseInvoiceLines[i];
+            var lineSum = lineItem.quantity * lineItem.amount;
+            rtotal = rtotal + lineSum;
+            await axios.get(Config.apiUrl + "api/tax/gettax?itemId=" + lineItem.itemId + "&partyId=" + this.purchaseInvoice.vendorId)
+                .then(function (result) {
+                    if (result.data.length > 0) {
+                        ttotal = ttotal + this.commonStore.getPurhcaseLineTaxAmount(lineItem.quantity, lineItem.amount, lineItem.discount, result.data);
+                    }
+                }.bind(this));
+        }
+
+        this.RTotal = rtotal;
+        this.TTotal = ttotal;
+        this.GTotal = rtotal - ttotal;
+    }
+
+    async savePurchaseInvoice() {
+        if (this.validation() && this.validationErrors.length === 0) {
+            await axios.post(Config.apiUrl + "api/purchasing/savepurchaseinvoice", JSON.stringify(this.purchaseInvoice),
+                {
+                    headers: {
+                        'Content-type': 'application/json'
+                    }
+                })
+                .then(function (response) {
+                    window.location.href = baseUrl + 'purchasing/purchaseinvoices';
+                })
+                .catch(function (error) {
+                    error.data.map(function (err) {
+                        this.validationErrors.push(err);
+                    }.bind(this));
+                }.bind(this))
+        }
+    }
+
+    validation() {
         this.validationErrors = [];
         if (this.purchaseInvoice.vendorId === undefined)
             this.validationErrors.push("Vendor is required.");
@@ -91,30 +146,15 @@ export default class PurchaseOrderStore {
                     || this.purchaseInvoice.purchaseInvoiceLines[i].amount === ""
                     || this.purchaseInvoice.purchaseInvoiceLines[i].amount === 0)
                     this.validationErrors.push("Amount is required.");
-                if (this.lineTotal(i) === undefined
-                    || this.lineTotal(i).toString() === "NaN"
-                    || this.lineTotal(i) === 0)
+                if (this.getLineTotal(i) === undefined
+                    || this.getLineTotal(i).toString() === "NaN"
+                    || this.getLineTotal(i) === 0)
                     this.validationErrors.push("Invalid data.");
             }
         }
 
-        if (this.validationErrors.length === 0) {
-            axios.post(Config.apiUrl + "api/purchasing/savepurchaseinvoice", JSON.stringify(this.purchaseInvoice),
-                {
-                    headers: {
-                        'Content-type': 'application/json'
-                    }
-                })
-                .then(function (response) {
-                    return;
-                })
-                .catch(function (error) {
-                    console.log(error);
-                    this.validationErrors.push("An error occured on posting data. Please check the browser console for more details.");
-                }.bind(this))
-        }
+        return this.validationErrors.length === 0;
     }
-
     changedVendor(vendorId) {
         this.purchaseInvoice.vendorId = vendorId;
     }
@@ -123,8 +163,8 @@ export default class PurchaseOrderStore {
         this.purchaseInvoice.invoiceDate = date;
     }
 
-    addLineItem(itemId, measurementId, quantity, amount, discount) {
-        var newLineItem = new PurchaseInvoiceLine(itemId, measurementId, quantity, amount, discount);
+    addLineItem(id = 0, itemId, measurementId, quantity, amount, discount) {
+        var newLineItem = new PurchaseInvoiceLine(id, itemId, measurementId, quantity, amount, discount);
         this.purchaseInvoice.purchaseInvoiceLines.push(extendObservable(newLineItem, newLineItem));        
     }
 
@@ -135,19 +175,14 @@ export default class PurchaseOrderStore {
     updateLineItem(row, targetProperty, value) {
         if (this.purchaseInvoice.purchaseInvoiceLines.length > 0)
             this.purchaseInvoice.purchaseInvoiceLines[row][targetProperty] = value;
+
+        this.computeTotals();
     }
 
-    grandTotal() {
-        var sum = 0;
-        for (var i = 0; i < this.purchaseInvoice.purchaseInvoiceLines.length; i++) {
-            var lineSum = this.purchaseInvoice.purchaseInvoiceLines[i].quantity * this.purchaseInvoice.purchaseInvoiceLines[i].amount;
-            sum = sum + lineSum;
-        }
-        return sum;
-    }
-
-    lineTotal(row) {
-        var lineSum = this.purchaseInvoice.purchaseInvoiceLines[row].quantity * this.purchaseInvoice.purchaseInvoiceLines[row].amount;
+    getLineTotal(row) {
+        let lineSum = 0;
+        let lineItem = this.purchaseInvoice.purchaseInvoiceLines[row];
+        lineSum = (lineItem.quantity * lineItem.amount) - lineItem.discount;
         return lineSum;
     }
 }
