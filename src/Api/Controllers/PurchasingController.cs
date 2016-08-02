@@ -158,7 +158,7 @@ namespace Api.Controllers
                 }
                 else
                 {
-                    //_purchasingService.UpdatePurchaseOrder(purchaseOrder);
+                    _purchasingService.UpdatePurchaseOrder(purchaseOrder);
                 }
 
                 return new OkObjectResult(Ok());

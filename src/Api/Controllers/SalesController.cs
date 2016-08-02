@@ -165,10 +165,12 @@ namespace Api.Controllers
                 var salesOrderDto = new Dto.Sales.SalesOrder()
                 {
                     Id = salesOrder.Id,
+                    PaymentTermId = salesOrder.PaymentTermId,
                     CustomerId = salesOrder.CustomerId.Value,
                     CustomerNo = salesOrder.Customer.No,
                     CustomerName = salesOrder.Customer.Party.Name,
                     OrderDate = salesOrder.Date,
+                    ReferenceNo = salesOrder.ReferenceNo,
                     Amount = salesOrder.SalesOrderLines.Sum(l => l.Amount)
                 };
 
@@ -194,6 +196,8 @@ namespace Api.Controllers
                     CustomerName = _salesService.GetCustomerById(salesOrder.CustomerId.Value).Party.Name,
                     OrderDate = salesOrder.Date,
                     Amount = salesOrder.SalesOrderLines.Sum(l => l.Amount),
+                    PaymentTermId = salesOrder.PaymentTermId,
+                    ReferenceNo = salesOrder.ReferenceNo,
                     SalesOrderLines = new List<Dto.Sales.SalesOrderLine>()
                 };
 
@@ -495,6 +499,8 @@ namespace Api.Controllers
 
                 salesOrder.CustomerId = salesOrderDto.CustomerId;
                 salesOrder.Date = salesOrderDto.OrderDate;
+                salesOrder.PaymentTermId = salesOrderDto.PaymentTermId;
+                salesOrder.ReferenceNo = salesOrderDto.ReferenceNo;
 
                 foreach (var line in salesOrderDto.SalesOrderLines)
                 {
@@ -536,11 +542,11 @@ namespace Api.Controllers
 
                 if (isNew)
                 {
-                    //_salesService.AddSalesOrder(salesOrder, true);
+                    _salesService.AddSalesOrder(salesOrder, true);
                 }
                 else
                 {
-                    //_salesService.UpdateSalesOrder(salesOrder);
+                    _salesService.UpdateSalesOrder(salesOrder);
                 }
 
 

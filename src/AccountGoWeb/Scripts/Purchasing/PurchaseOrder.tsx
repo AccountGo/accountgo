@@ -99,7 +99,7 @@ class PurchaseOrderHeader extends React.Component<any, {}>{
                             <div className="col-sm-10"><SelectPaymentTerm store={store} selected={store.purchaseOrder.paymentTermId} /></div>
                         </div>
                     </div>
-                    <div className="col-md-6">
+                    <div className="col-sm-6">
                         <div className="row">
                             <div className="col-sm-2">Date</div>
                             <div className="col-sm-10"><input type="date" className="form-control pull-right" onChange={this.onChangeOrderDate.bind(this) } value={store.purchaseOrder.orderDate} /></div>

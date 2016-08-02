@@ -33,7 +33,7 @@ export default class PurchaseOrderStore {
             axios.get(Config.apiUrl + "api/purchasing/purchaseorder?id=" + purchId)
                 .then(function (result) {
                     this.purchaseOrder.id = result.data.id;
-                    this.purchaseOrder.paymentTermId = result.data.paymentTermId;
+                    //this.purchaseOrder.paymentTermId = result.data.paymentTermId;
                     this.changedVendor(result.data.vendorId);
                     //this.changedOrderDate(result.data.orderDate);
                     for (var i = 0; i < result.data.purchaseOrderLines.length; i++) {
