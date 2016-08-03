@@ -182,7 +182,7 @@ namespace Web.Controllers
             invoiceHeader.Date = model.Date;
             invoiceHeader.ShippingHandlingCharge = 4;// model.ShippingHandlingCharge;
 
-            _salesService.AddSalesInvoice(invoiceHeader, model.SalesOrderId);
+            _salesService.AddSalesInvoice(invoiceHeader, null, model.SalesOrderId);
             return RedirectToAction("SalesInvoices");
         }
 
@@ -873,7 +873,7 @@ namespace Web.Controllers
 
             if (model.Id == 0)
             {
-                _salesService.AddSalesInvoice(invoice, null);
+                _salesService.AddSalesInvoice(invoice, null, null);
             }
             else
             {

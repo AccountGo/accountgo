@@ -13,12 +13,13 @@
         {headerName: "Order", field: "id", width: 50},
         {headerName: "Customer Name", field: "customerName", width: 350},
         {headerName: "Order Date", field: "orderDate", width: 100},
-        {headerName: "Amount", field: "totalAmount", width: 100}
+        {headerName: "Amount", field: "amount", width: 100}
     ];
 
     var gridOptions = {
         columnDefs: columnDefs,
         rowData: @Html.Raw(Model),
+        enableSorting: true,
         // PROPERTIES - simple boolean / string / number properties
         rowSelection: 'single',
         onSelectionChanged: onSelectionChanged,

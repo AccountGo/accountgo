@@ -32,7 +32,6 @@ export default class SalesOrderStore {
         if (quotationId !== undefined) {
             var result = axios.get(Config.apiUrl + "api/sales/quotation?id=" + quotationId);
             result.then(function (result) {
-                this.salesOrder.id = result.data.id;
                 this.changedCustomer(result.data.customerId);
                 this.salesOrder.paymentTermId = result.data.paymentTermId;
                 //this.changedOrderDate(result.data.quotationDate);

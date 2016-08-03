@@ -32,7 +32,7 @@ export default class SalesStore {
         if (orderId !== undefined) {
             var result = axios.get(Config.apiUrl + "api/sales/salesorder?id=" + orderId);
             result.then(function (result) {
-                this.salesInvoice.id = result.data.id;
+                this.salesInvoice.fromSalesOrderId = orderId;
                 this.changedCustomer(result.data.customerId);
                 this.salesInvoice.paymentTermId = result.data.paymentTermId;
                 for (var i = 0; i < result.data.salesOrderLines.length; i++) {

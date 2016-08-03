@@ -102,7 +102,7 @@ namespace Web.Controllers
             }
 
             foreach (var invoice in invoices)
-                _salesService.AddSalesInvoice(invoice, null);
+                _salesService.AddSalesInvoice(invoice, null, null);
 
             return RedirectToAction("SalesInvoices", "Sales");
         }

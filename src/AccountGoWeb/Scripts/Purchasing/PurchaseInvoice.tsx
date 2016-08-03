@@ -61,7 +61,7 @@ class CancelPurchaseInvoiceButton extends React.Component<any, {}>{
             + (location.port && ":" + location.port)
             + "/";
 
-        window.location.href = baseUrl + 'quotations';
+        window.location.href = baseUrl + 'purchasing/purchaseorders';
     }
 
     render() {
@@ -200,9 +200,9 @@ class PurchaseInvoiceLines extends React.Component<any, {}>{
                         <tbody>
                             {lineItems}
                             <tr>
-                                <td><SelectLineItem store={store} selected={-1} controlId="optNewItemId" /></td>
+                                <td><SelectLineItem store={store} controlId="optNewItemId" /></td>
                                 <td>Item Name</td>
-                                <td><SelectLineMeasurement store={store} selected={-1} controlId="optNewMeasurementId" /></td>
+                                <td><SelectLineMeasurement store={store} controlId="optNewMeasurementId" /></td>
                                 <td><input type="text" className="form-control" id="txtNewQuantity" /></td>
                                 <td><input type="text" className="form-control" id="txtNewAmount" /></td>
                                 <td><input type="text" className="form-control" id="txtNewDiscount" /></td>

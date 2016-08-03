@@ -61,7 +61,7 @@ class CancelInvoiceButton extends React.Component<any, {}>{
             + (location.port && ":" + location.port)
             + "/";
 
-        window.location.href = baseUrl + 'quotations';
+        window.location.href = baseUrl + 'sales/salesinvoices';
     }
 
     render() {
@@ -157,7 +157,7 @@ class SalesInvoiceLines extends React.Component<any, {}>{
                 <tr key={i}>
                     <td><SelectLineItem store={store} row={i} selected={store.salesInvoice.salesInvoiceLines[i].itemId} /></td>
                     <td>{store.salesInvoice.salesInvoiceLines[i].itemId}</td>
-                    <td><SelectLineMeasurement row={i} store={store} selected={store.salesInvoice.salesInvoiceLines[i].measurementId} />{store.salesInvoice.salesInvoiceLines[i].measurementId}</td>
+                    <td><SelectLineMeasurement row={i} store={store} selected={store.salesInvoice.salesInvoiceLines[i].measurementId} /></td>
                     <td><input type="text" className="form-control" name={i} value={store.salesInvoice.salesInvoiceLines[i].quantity} onChange={this.onChangeQuantity.bind(this)} /></td>
                     <td><input type="text" className="form-control" name={i} value={store.salesInvoice.salesInvoiceLines[i].amount} onChange={this.onChangeAmount.bind(this) } /></td>
                     <td><input type="text" className="form-control" name={i} value={store.salesInvoice.salesInvoiceLines[i].discount} onChange={this.onChangeDiscount.bind(this) } /></td>

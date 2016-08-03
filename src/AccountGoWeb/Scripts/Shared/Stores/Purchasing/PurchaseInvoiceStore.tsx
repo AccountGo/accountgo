@@ -32,7 +32,7 @@ export default class PurchaseOrderStore {
         if (purchId !== undefined) {
             axios.get(Config.apiUrl + "api/purchasing/purchaseorder?id=" + purchId)
                 .then(function (result) {
-                    this.purchaseInvoice.id = result.data.id;
+                    this.purchaseInvoice.purchaseOrderHeaderId = purchId;     
                     this.purchaseInvoice.paymentTermId = result.data.paymentTermId;
                     this.changedVendor(result.data.vendorId);
                     //this.changedInvoiceDate(result.data.orderDate);
@@ -155,10 +155,14 @@ export default class PurchaseOrderStore {
 
         return this.validationErrors.length === 0;
     }
+
     changedVendor(vendorId) {
         this.purchaseInvoice.vendorId = vendorId;
     }
 
+    changedPaymentTerm(paymentTermId) {
+        this.purchaseInvoice.paymentTermId = paymentTermId;
+    }
     changedInvoiceDate(date) {
         this.purchaseInvoice.invoiceDate = date;
     }

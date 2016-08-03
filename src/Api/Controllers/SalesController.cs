@@ -565,18 +565,18 @@ namespace Api.Controllers
         {
             string[] errors = null;
 
-            if (!ModelState.IsValid)
-            {
-                errors = new string[ModelState.ErrorCount];
-                foreach (var val in ModelState.Values)
-                    for (int i = 0; i < ModelState.ErrorCount; i++)
-                        errors[i] = val.Errors[i].ErrorMessage;
-
-                return new BadRequestObjectResult(errors);
-            }
-
             try
             {
+                if (!ModelState.IsValid)
+                {
+                    errors = new string[ModelState.ErrorCount];
+                    foreach (var val in ModelState.Values)
+                        for (int i = 0; i < ModelState.ErrorCount; i++)
+                            errors[i] = val.Errors[i].ErrorMessage;
+
+                    return new BadRequestObjectResult(errors);
+                }
+
                 bool isNew = salesInvoiceDto.Id == 0;
                 Core.Domain.Sales.SalesInvoiceHeader salesInvoice = null;
 
@@ -632,7 +632,7 @@ namespace Api.Controllers
 
                 if (isNew)
                 {
-                    //_salesService.AddSalesInvoice(salesInvoice, 0);
+                    _salesService.AddSalesInvoice(salesInvoice, null, salesInvoiceDto.FromSalesDeliveryId);
                 }
                 else
                 {
@@ -655,17 +655,18 @@ namespace Api.Controllers
         {
             string[] errors = null;
 
-            if (!ModelState.IsValid) {
-                errors = new string[ModelState.ErrorCount];
-                foreach (var val in ModelState.Values)
-                    for (int i = 0; i < ModelState.ErrorCount; i++)
-                        errors[i] = val.Errors[i].ErrorMessage;
-
-                return new BadRequestObjectResult(errors);
-            }
-
             try
             {
+                if (!ModelState.IsValid)
+                {
+                    errors = new string[ModelState.ErrorCount];
+                    foreach (var val in ModelState.Values)
+                        for (int i = 0; i < ModelState.ErrorCount; i++)
+                            errors[i] = val.Errors[i].ErrorMessage;
+
+                    return new BadRequestObjectResult(errors);
+                }
+
                 bool isNew = quotationDto.Id == 0;
                 Core.Domain.Sales.SalesQuoteHeader salesQuote = null;
 

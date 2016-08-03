@@ -496,7 +496,7 @@ namespace Services.Financial
 
             subTotalAmount = amountXquantity - discountAmount;
 
-            var intersectionTaxes = _taxService.GetIntersectionTaxes(itemId, vendorId, Core.Domain.PartyTypes.Vendor);
+            var intersectionTaxes = _taxService.GetIntersectionTaxes(itemId, vendorId, PartyTypes.Vendor);
 
             foreach (var tax in intersectionTaxes)
             {
@@ -518,8 +518,6 @@ namespace Services.Financial
         {
             decimal taxAmount = 0, amountXquantity = 0, discountAmount = 0, subTotalAmount = 0;
 
-            var item = _itemRepo.GetById(itemId);
-            var customer = _customerRepo.GetById(customerId);
             var taxes = new List<KeyValuePair<int, decimal>>();
 
             amountXquantity = amount * quantity;
@@ -529,7 +527,7 @@ namespace Services.Financial
 
             subTotalAmount = amountXquantity - discountAmount;
 
-            var intersectionTaxes = _taxService.GetIntersectionTaxes(itemId, customerId, Core.Domain.PartyTypes.Customer);
+            var intersectionTaxes = _taxService.GetIntersectionTaxes(itemId, customerId, PartyTypes.Customer);
 
             foreach (var tax in intersectionTaxes)
             {

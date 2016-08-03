@@ -7,4 +7,12 @@ export default class PurchaseOrder {
     paymentTermId: number;
     referenceNo: string;
     purchaseOrderLines: PurchaseOrderLine[] = [];
+
+    constructor(id = 0, vendorId = null, invoiceDate = null, paymentTermId = null, referenceNo = null) {
+        this.id = id;
+        this.vendorId = vendorId;
+        this.orderDate = invoiceDate;
+        this.paymentTermId = paymentTermId;
+        this.referenceNo = referenceNo;
+    }
 }

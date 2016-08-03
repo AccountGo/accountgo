@@ -301,7 +301,8 @@ namespace Api.Controllers
 
                 if (isNew)
                 {
-                    _purchasingService.AddPurchaseInvoice(purchaseInvoice, 0);
+                    purchaseInvoice.VendorInvoiceNo = purchaseInvoice.VendorId.GetValueOrDefault().ToString();
+                    _purchasingService.AddPurchaseInvoice(purchaseInvoice, purchaseInvoiceDto.PurchaseOrderHeaderId);
                 }
                 else
                 {
@@ -312,7 +313,7 @@ namespace Api.Controllers
             }
             catch (Exception ex)
             {
-                errors = new string[1] { ex.Message };
+                errors = new string[1] { ex.InnerException.Message };
                 return new BadRequestObjectResult(errors);
             }
         }

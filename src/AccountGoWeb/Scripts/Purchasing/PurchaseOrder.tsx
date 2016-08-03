@@ -60,7 +60,7 @@ class CancelPurchaseOrderButton extends React.Component<any, {}>{
             + (location.port && ":" + location.port)
             + "/";
 
-        window.location.href = baseUrl + 'quotations';
+        window.location.href = baseUrl + 'purchasing/purchaseorders';
     }
 
     render() {
