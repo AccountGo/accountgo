@@ -35,7 +35,7 @@ export default class PurchaseOrderStore {
                     this.purchaseOrder.id = result.data.id;
                     //this.purchaseOrder.paymentTermId = result.data.paymentTermId;
                     this.changedVendor(result.data.vendorId);
-                    //this.changedOrderDate(result.data.orderDate);
+                    this.purchaseOrder.orderDate = result.data.orderDate;
                     for (var i = 0; i < result.data.purchaseOrderLines.length; i++) {
                         this.addLineItem(
                             result.data.purchaseOrderLines[i].id,

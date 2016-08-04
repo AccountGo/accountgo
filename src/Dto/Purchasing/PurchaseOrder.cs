@@ -8,6 +8,7 @@ namespace Dto.Purchasing
         public int? PaymentTermId { get; set; }
         public int VendorId { get; set; }
         public string VendorName { get; set; }
+
         public DateTime OrderDate { get; set; }
         public decimal Amount { get; set; }
         public bool Completed { get; set; }

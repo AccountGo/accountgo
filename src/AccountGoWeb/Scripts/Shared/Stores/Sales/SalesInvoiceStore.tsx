@@ -14,7 +14,7 @@ let baseUrl = location.protocol
     + "/";
 
 export default class SalesStore {
-    salesInvoice: SalesInvoice;
+    salesInvoice;
     commonStore;
     @observable validationErrors;
 
@@ -35,6 +35,7 @@ export default class SalesStore {
                 this.salesInvoice.fromSalesOrderId = orderId;
                 this.changedCustomer(result.data.customerId);
                 this.salesInvoice.paymentTermId = result.data.paymentTermId;
+                this.salesInvoice.invoiceDate = result.data.orderDate;
                 for (var i = 0; i < result.data.salesOrderLines.length; i++) {
                     this.addLineItem(
                         result.data.salesOrderLines[i].id,
@@ -53,6 +54,7 @@ export default class SalesStore {
                 this.salesInvoice.id = result.data.id;
                 this.changedCustomer(result.data.customerId);
                 this.salesInvoice.paymentTermId = result.data.paymentTermId;
+                this.salesInvoice.invoiceDate = result.data.invoiceDate;
                 for (var i = 0; i < result.data.salesInvoiceLines.length; i++) {
                     this.addLineItem(
                         result.data.salesInvoiceLines[i].id,

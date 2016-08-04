@@ -14,7 +14,7 @@ let baseUrl = location.protocol
     + "/";
 
 export default class PurchaseOrderStore {
-    purchaseInvoice: PurchaseInvoice;
+    purchaseInvoice;
     commonStore;
     @observable validationErrors;
 
@@ -35,7 +35,7 @@ export default class PurchaseOrderStore {
                     this.purchaseInvoice.purchaseOrderHeaderId = purchId;     
                     this.purchaseInvoice.paymentTermId = result.data.paymentTermId;
                     this.changedVendor(result.data.vendorId);
-                    //this.changedInvoiceDate(result.data.orderDate);
+                    this.changedInvoiceDate(result.data.orderDate);
                     for (var i = 0; i < result.data.purchaseOrderLines.length; i++) {
                         this.addLineItem(
                             result.data.purchaseOrderLines[i].id,
@@ -56,7 +56,7 @@ export default class PurchaseOrderStore {
                     this.purchaseInvoice.id = result.data.id;
                     this.purchaseInvoice.paymentTermId = result.data.paymentTermId;
                     this.changedVendor(result.data.vendorId);
-                    //this.changedInvoiceDate(result.data.orderDate);
+                    this.changedInvoiceDate(result.data.orderDate);
                     for (var i = 0; i < result.data.purchaseInvoiceLines.length; i++) {
                         this.addLineItem(
                             result.data.purchaseInvoiceLines[i].id,

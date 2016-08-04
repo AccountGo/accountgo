@@ -102,8 +102,10 @@ class PurchaseOrderHeader extends React.Component<any, {}>{
                     <div className="col-sm-6">
                         <div className="row">
                             <div className="col-sm-2">Date</div>
-                            <div className="col-sm-10"><input type="date" className="form-control pull-right" onChange={this.onChangeOrderDate.bind(this) } value={store.purchaseOrder.orderDate} /></div>
-                        </div>
+                            <div className="col-sm-10">
+                                <input type="date" className="form-control pull-right" onChange={this.onChangeOrderDate.bind(this) } step={7}
+                                    value={store.purchaseOrder.orderDate !== undefined ? store.purchaseOrder.orderDate.substring(0, 10) : new Date(Date.now()).toISOString().substring(0, 10) } /></div>                            
+                        </div>                        
                         <div className="row">
                             <div className="col-sm-2">Reference no.</div>
                             <div className="col-sm-10"><input type="text" className="form-control" /></div>
