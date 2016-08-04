@@ -5,12 +5,10 @@ using Services.Inventory;
 using System.Collections.Generic;
 using System.Linq;
 
-// For more information on enabling Web API for empty projects, visit http://go.microsoft.com/fwlink/?LinkID=397860
-
 namespace Api.Controllers
 {
     [Route("api/[controller]")]
-    public class InventoryController : Controller
+    public class InventoryController : BaseController
     {
         private readonly IAdministrationService _adminService;
         private readonly IInventoryService _inventoryService;

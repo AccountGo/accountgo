@@ -4,7 +4,7 @@ using Microsoft.Extensions.Configuration;
 
 namespace AccountGoWeb.Controllers
 {
-    public class QuotationsController : Controller
+    public class QuotationsController : BaseController
     {
         private readonly IConfiguration _config;
 

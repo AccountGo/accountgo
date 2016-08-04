@@ -9,7 +9,7 @@ using System.Linq;
 namespace Api.Controllers
 {
     [Route("api/[controller]")]
-    public class FinancialsController : Controller
+    public class FinancialsController : BaseController
     {
         private readonly IAdministrationService _adminService;
         private readonly IFinancialService _financialService;
@@ -142,7 +142,7 @@ namespace Api.Controllers
 
         [HttpPost]
         [Route("[action]")]
-        public IActionResult AddJournalEntry([FromBody]JournalEntry journalEntryDto)
+        public IActionResult SaveJournalEntry([FromBody]JournalEntry journalEntryDto)
         {
             try
             {

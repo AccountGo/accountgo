@@ -190,10 +190,16 @@ namespace Services.Financial
             //var duplicateAccounts = glEntry.GeneralLedgerLines.GroupBy(gl => gl.AccountId).Where(gl => gl.Count() > 1);
             //if (duplicateAccounts.Count() > 0)
             //    throw new InvalidOperationException("Duplicate account id in a collection.");
+            
+            foreach (var line in glEntry.GeneralLedgerLines)
+            {
+                var account = _accountRepo.GetAllIncluding(a => a.ChildAccounts)
+                    .Where(a => a.Id == line.AccountId)
+                    .FirstOrDefault();
 
-            foreach (var account in glEntry.GeneralLedgerLines)
-                if (!_accountRepo.GetById(account.AccountId).CanPost())
+                if (!account.CanPost())
                     throw new InvalidOperationException("One of the account is not valid for posting");
+            }
 
             //if(!glEntry.ValidateAccountingEquation())
             //    throw new InvalidOperationException("One of the account not equal.");

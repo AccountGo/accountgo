@@ -1,4 +1,9 @@
-﻿.main-header > .navbar {
+﻿body {
+    font-family: 'Segoe UI', Verdana, Helvetica, sans-serif;
+    font-weight:normal;
+}
+
+.main-header > .navbar {
   -webkit-transition: none !important;
   -o-transition: none !important;
   transition: none !important;

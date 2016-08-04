@@ -14,7 +14,7 @@ using System.Linq;
 namespace Api.Controllers
 {
     [Route("api/[controller]")]
-    public class CommonController : Controller
+    public class CommonController : BaseController
     {
         private readonly ISalesService _salesService;
         private readonly IAdministrationService _administrationService;

@@ -44,7 +44,7 @@ class SaveQuotationButton extends React.Component<any, {}>{
 
     render() {
         return (            
-                <input type="button" className="btn btn-primary btn-flat" value="Save" onClick={this.saveNewSalesQuotation.bind(this) } />                
+            <input type="button" className="btn btn-sm btn-primary btn-flat pull-left" value="Save" onClick={this.saveNewSalesQuotation.bind(this) } />                
             );
     }
 }
@@ -61,7 +61,7 @@ class CancelQuotationButton extends React.Component<any, {}>{
     
     render() {
         return (
-            <button type="button" className="btn btn-default btn-flat" onClick={ this.cancelOnClick.bind(this) }>
+            <button type="button" className="btn btn-sm btn-default btn-flat pull-left" onClick={ this.cancelOnClick.bind(this) }>
                 Close
             </button>
         );
@@ -158,7 +158,11 @@ class SalesQuotationLines extends React.Component<any, {}>{
                     <td><input className="form-control" type="text" name={i} value={store.salesQuotation.salesQuotationLines[i].amount} onChange={this.onChangeAmount.bind(this) } /></td>
                     <td><input className="form-control" type="text" name={i} value={store.salesQuotation.salesQuotationLines[i].discount} onChange={this.onChangeDiscount.bind(this) } /></td>
                     <td>{store.getLineTotal(i) }</td>
-                    <td><i className="fa fa-fw fa-remove" name={i} onClick={this.onClickRemoveLineItem.bind(this) }></i></td>
+                    <td>
+                        <button type="button" className="btn btn-box-tool">
+                            <i className="fa fa-fw fa-times" name={i} onClick={this.onClickRemoveLineItem.bind(this) }></i>
+                        </button>
+                    </td>
                 </tr>
             );
         }
@@ -196,7 +200,11 @@ class SalesQuotationLines extends React.Component<any, {}>{
                                 <td><input className="form-control" type="text" id="txtNewAmount" /></td>
                                 <td><input className="form-control" type="text" id="txtNewDiscount" /></td>
                                 <td></td>
-                                <td><input type="button" value="Add" onClick={this.addLineItem} /></td>
+                                <td>
+                                    <button type="button" className="btn btn-box-tool">
+                                        <i className="fa fa-fw fa-check" name={i} onClick={this.addLineItem}></i>
+                                    </button>
+                                </td>
                             </tr>
                         </tbody>
                     </table>

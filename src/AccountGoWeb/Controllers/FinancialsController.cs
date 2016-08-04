@@ -4,7 +4,7 @@ using System.Net.Http;
 
 namespace AccountGoWeb.Controllers
 {
-    public class FinancialsController : Controller
+    public class FinancialsController : BaseController
     {
         private readonly Microsoft.Extensions.Configuration.IConfiguration _config;
 

@@ -8,7 +8,7 @@ using System.Collections.Generic;
 namespace Api.Controllers
 {
     [Route("api/[controller]")]
-    public class PurchasingController : Controller
+    public class PurchasingController : BaseController
     {
         private readonly IAdministrationService _adminService;
         private readonly IPurchasingService _purchasingService;

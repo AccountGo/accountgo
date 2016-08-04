@@ -17,6 +17,7 @@ let baseUrl = location.protocol
 export default class JournalEntryStore {
     journalEntry;
     commonStore;
+    @observable validationErrors;
 
     constructor(journalEntryId) {
         this.commonStore = new CommonStore();
@@ -37,28 +38,40 @@ export default class JournalEntryStore {
                 this.changedJournalDate(result.data.journalDate);
                 this.changedVoucherType(result.data.voucherType);
                 this.postJournal(result.data.posted);
+                this.journalEntry.memo = result.data.memo;
+                this.journalEntry.referenceNo = result.data.referenceNo;
                 for (var i = 0; i < result.data.journalEntryLines.length; i++) {
                     var item = result.data.journalEntryLines[i];
-                    this.addLineItem(item.accountId, item.drCr, item.amount, item.memo === null ? undefined : item.memo);
+                    this.addLineItem(item.accountId, item.drCr, item.amount, item.memo);
                 }
             }.bind(this));
         }
     }
 
-    saveNewJournalEntry() {
-        console.log(this.journalEntry);
-        axios.post(Config.apiUrl + "api/financials/addjournalentry", JSON.stringify(this.journalEntry),
-            {
-                headers: {
-                    'Content-type': 'application/json'
-                }
-            })
-            .then(function (response) {
-                console.log(response);
-            })
-            .catch(function (error) {
-                console.log(error);
-            })
+    async saveNewJournalEntry() {
+        if (this.validation() && this.validationErrors.length == 0) {
+            await axios.post(Config.apiUrl + "api/financials/savejournalentry", JSON.stringify(this.journalEntry),
+                {
+                    headers: {
+                        'Content-type': 'application/json'
+                    }
+                })
+                .then(function (response) {
+                    window.location.href = baseUrl + 'financials/journalentries';
+                })
+                .catch(function (error) {
+                    error.data.map(function (err) {
+                        this.validationErrors.push(err);
+                    }.bind(this));
+                }.bind(this))
+        }
+    }
+
+    validation()
+    {
+        this.validationErrors = [];
+
+        return this.validationErrors.length === 0;
     }
 
     postJournal(post) {

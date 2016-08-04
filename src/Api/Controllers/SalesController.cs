@@ -8,7 +8,7 @@ using System.Linq;
 namespace Api.Controllers
 {
     [Route("api/[controller]")]
-    public class SalesController : Controller
+    public class SalesController : BaseController
     {
         private readonly IAdministrationService _adminService;
         private readonly ISalesService _salesService;

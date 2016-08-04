@@ -4,7 +4,7 @@ using System.Net.Http;
 
 namespace AccountGoWeb.Controllers
 {
-    public class InventoryController : Controller
+    public class InventoryController : BaseController
     {
         private readonly Microsoft.Extensions.Configuration.IConfiguration _config;
 
