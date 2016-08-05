@@ -144,13 +144,80 @@ namespace Api.Controllers
         [Route("[action]")]
         public IActionResult SaveJournalEntry([FromBody]JournalEntry journalEntryDto)
         {
+            string[] errors = null;
+
             try
             {
-                return new ObjectResult(null);
+                if (!ModelState.IsValid)
+                {
+                    errors = new string[ModelState.ErrorCount];
+                    foreach (var val in ModelState.Values)
+                        for (int i = 0; i < ModelState.ErrorCount; i++)
+                            errors[i] = val.Errors[i].ErrorMessage;
+
+                    return new BadRequestObjectResult(errors);
+                }
+
+                bool isNew = journalEntryDto.Id == 0;
+                Core.Domain.Financials.JournalEntryHeader journalEntry = null;
+
+                if (isNew)
+                {
+                    journalEntry = new Core.Domain.Financials.JournalEntryHeader();
+                }
+                else
+                {
+                    journalEntry = _financialService.GetJournalEntry(journalEntryDto.Id, false);
+                }
+
+                foreach (var line in journalEntryDto.JournalEntryLines)
+                {
+                    if (!isNew)
+                    {
+                        var existingLine = journalEntry.JournalEntryLines.Where(j => j.Id == line.Id).FirstOrDefault();
+                        if (existingLine != null)
+                        {
+                            existingLine.AccountId = line.AccountId.GetValueOrDefault();
+                            existingLine.DrCr = (Core.Domain.DrOrCrSide)line.DrCr;
+                            existingLine.Amount = line.Amount.GetValueOrDefault();
+                            existingLine.Memo = line.Memo;
+                        }
+                        else
+                        {
+                            var journalLine = new Core.Domain.Financials.JournalEntryLine();
+                            journalLine.AccountId = line.AccountId.GetValueOrDefault();
+                            journalLine.DrCr = (Core.Domain.DrOrCrSide)line.DrCr;
+                            journalLine.Amount = line.Amount.GetValueOrDefault();
+                            journalLine.Memo = line.Memo;
+                            journalEntry.JournalEntryLines.Add(journalLine);
+                        }
+                    }
+                    else
+                    {
+                        var journalLine = new Core.Domain.Financials.JournalEntryLine();
+                        journalLine.AccountId = line.AccountId.GetValueOrDefault();
+                        journalLine.DrCr = (Core.Domain.DrOrCrSide)line.DrCr;
+                        journalLine.Amount = line.Amount.GetValueOrDefault();
+                        journalLine.Memo = line.Memo;
+                        journalEntry.JournalEntryLines.Add(journalLine);
+                    }
+
+                    if (isNew)
+                    {
+                        _financialService.AddJournalEntry(journalEntry);
+                    }
+                    else
+                    {
+                        _financialService.UpdateJournalEntry(journalEntry);
+                    }
+                }
+
+                return new OkObjectResult(Ok());
             }
             catch (Exception ex)
             {
-                return new ObjectResult(ex);
+                errors = new string[1] { ex.Message };
+                return new BadRequestObjectResult(errors);
             }
         }
 

@@ -1,6 +1,5 @@
 ﻿import {observable, extendObservable, action} from 'mobx';
 import * as axios from "axios";
-import * as d3 from "d3";
 
 import Config = require("Config");
 
@@ -35,11 +34,12 @@ export default class JournalEntryStore {
         {
             var result = axios.get(Config.apiUrl + "api/financials/journalentry?id=" + journalEntryId);
             result.then(function (result) {
-                this.changedJournalDate(result.data.journalDate);
-                this.changedVoucherType(result.data.voucherType);
-                this.postJournal(result.data.posted);
-                this.journalEntry.memo = result.data.memo;
-                this.journalEntry.referenceNo = result.data.referenceNo;
+                this.journalEntry.id = result.data.id;
+                this.journalEntry.posted = result.data.posted;
+                this.journalEntry.voucherType = result.data.voucherType;
+                this.journalEntry.date = result.data.journalDate;
+                this.journalEntry.memo = result.data.memo === null ? undefined : result.data.memo;
+                this.journalEntry.referenceNo = result.data.memo === null ? undefined : result.data.referenceNo;
                 for (var i = 0; i < result.data.journalEntryLines.length; i++) {
                     var item = result.data.journalEntryLines[i];
                     this.addLineItem(item.accountId, item.drCr, item.amount, item.memo);
@@ -70,7 +70,26 @@ export default class JournalEntryStore {
     validation()
     {
         this.validationErrors = [];
-
+        if (this.journalEntry.date === undefined)
+            this.validationErrors.push("Date is required.");
+        if (this.journalEntry.voucherType === undefined)
+            this.validationErrors.push("Voucher type is required.");
+        if (this.journalEntry.referenceNo === undefined)
+            this.validationErrors.push("Reference no is required.");
+        if (this.journalEntry.memo === undefined)
+            this.validationErrors.push("Memo no is required.");
+        if (this.journalEntry.journalEntryLines !== undefined && this.journalEntry.journalEntryLines.length > 0) {
+            for (var i = 0; i < this.journalEntry.journalEntryLines.length; i++) {
+                if (this.journalEntry.journalEntryLines[i].accountId === undefined)
+                    this.validationErrors.push("Account is required.");
+                if (this.journalEntry.journalEntryLines[i].drCr === undefined)
+                    this.validationErrors.push("DrCr is required.");
+                if (this.journalEntry.journalEntryLines[i].amount === undefined)
+                    this.validationErrors.push("Amount is required.");
+                if (this.journalEntry.journalEntryLines[i].memo === undefined)
+                    this.validationErrors.push("Memo is required.");
+            }
+        }
         return this.validationErrors.length === 0;
     }
 
@@ -94,6 +113,14 @@ export default class JournalEntryStore {
 
     changedJournalDate(date) {
         this.journalEntry.journalDate = date;
+    }
+
+    changedReferenceNo(refNo) {
+        this.journalEntry.referenceNo = refNo;
+    }
+
+    changedMemo(memo) {
+        this.journalEntry.memo = memo;
     }
 
     changedVoucherType(type) {

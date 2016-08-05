@@ -45,6 +45,7 @@ Demo site (new UI) : http://accountgo-dev.azurewebsites.net/
 
 
 ![accountgoweb](https://cloud.githubusercontent.com/assets/17961526/17132912/719f849c-5356-11e6-89da-aaddfcfe0ae1.png)
+![accountgoweb](https://cloud.githubusercontent.com/assets/17961526/17430653/0cf89cca-5b28-11e6-81dd-5f14695c8cfc.png)
 
 # Setup Develoment Environment
 In “Presentation” folder, there are three web projects. 
