@@ -4,7 +4,7 @@ using System.Net.Http;
 
 namespace AccountGoWeb.Controllers
 {
-    public class PurchasingController : Controller
+    public class PurchasingController : BaseController
     {
         private readonly IConfiguration _config;
 

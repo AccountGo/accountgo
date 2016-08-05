@@ -16,7 +16,7 @@ namespace Services.Sales
     {
         void AddSalesOrder(SalesOrderHeader salesOrder, bool toSave);
         void UpdateSalesOrder(SalesOrderHeader salesOrder);
-        void AddSalesInvoice(SalesInvoiceHeader salesInvoice, int? salesOrderId);
+        void AddSalesInvoice(SalesInvoiceHeader salesInvoice, int? salesDeliveryId, int? salesOrderId);
         void AddSalesReceipt(SalesReceiptHeader salesReceipt);
         void AddSalesReceiptNoInvoice(SalesReceiptHeader salesReceipt);
         void AddSalesDelivery(SalesDeliveryHeader salesDelivery, bool toSave);

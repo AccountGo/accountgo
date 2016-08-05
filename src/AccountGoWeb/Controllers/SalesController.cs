@@ -8,7 +8,7 @@ using System.Net.Http;
 
 namespace AccountGoWeb.Controllers
 {
-    public class SalesController : Controller
+    public class SalesController : BaseController
     {
         private readonly IConfiguration _config;
 

@@ -48,7 +48,7 @@ class SavePurchaseOrderButton extends React.Component<any, {}>{
 
     render() {
         return (
-            <input type="button" className="btn btn-primary btn-flat" value="Save" onClick={this.saveNewPurchaseOrder.bind(this)} />
+            <input type="button" className="btn btn-sm btn-primary btn-flat pull-left" value="Save" onClick={this.saveNewPurchaseOrder.bind(this)} />
             );
     }
 }
@@ -60,12 +60,12 @@ class CancelPurchaseOrderButton extends React.Component<any, {}>{
             + (location.port && ":" + location.port)
             + "/";
 
-        window.location.href = baseUrl + 'quotations';
+        window.location.href = baseUrl + 'purchasing/purchaseorders';
     }
 
     render() {
         return (
-            <button type="button" className="btn btn-default btn-flat" onClick={ this.cancelOnClick.bind(this) }>
+            <button type="button" className="btn btn-sm btn-default btn-flat pull-left" onClick={ this.cancelOnClick.bind(this) }>
                 Close
             </button>
         );
@@ -102,8 +102,10 @@ class PurchaseOrderHeader extends React.Component<any, {}>{
                     <div className="col-sm-6">
                         <div className="row">
                             <div className="col-sm-2">Date</div>
-                            <div className="col-sm-10"><input type="date" className="form-control pull-right" onChange={this.onChangeOrderDate.bind(this) } value={store.purchaseOrder.orderDate} /></div>
-                        </div>
+                            <div className="col-sm-10">
+                                <input type="date" className="form-control pull-right" onChange={this.onChangeOrderDate.bind(this) } step={7}
+                                    value={store.purchaseOrder.orderDate !== undefined ? store.purchaseOrder.orderDate.substring(0, 10) : new Date(Date.now()).toISOString().substring(0, 10) } /></div>                            
+                        </div>                        
                         <div className="row">
                             <div className="col-sm-2">Reference no.</div>
                             <div className="col-sm-10"><input type="text" className="form-control" /></div>
@@ -161,7 +163,11 @@ class PurchaseOrderLines extends React.Component<any, {}>{
                     <td><input type="text" className="form-control" name={i} value={store.purchaseOrder.purchaseOrderLines[i].amount} onChange={this.onChangeAmount.bind(this) } /></td>
                     <td><input type="text" className="form-control" name={i} value={store.purchaseOrder.purchaseOrderLines[i].discount} onChange={this.onChangeDiscount.bind(this) } /></td>
                     <td>{store.getLineTotal(i) }</td>
-                    <td><input type="button" name={i} value="Remove" onClick={this.onClickRemoveLineItem.bind(this) } /></td>
+                    <td>
+                        <button type="button" className="btn btn-box-tool">
+                            <i className="fa fa-fw fa-times" name={i} onClick={this.onClickRemoveLineItem.bind(this) }></i>
+                        </button>
+                    </td>
                 </tr>
             );
         }
@@ -199,7 +205,11 @@ class PurchaseOrderLines extends React.Component<any, {}>{
                                 <td><input className="form-control" type="text" id="txtNewAmount" /></td>
                                 <td><input className="form-control" type="text" id="txtNewDiscount" /></td>
                                 <td></td>
-                                <td><input type="button" value="Add" onClick={this.addLineItem} /></td>
+                                <td>
+                                    <button type="button" className="btn btn-box-tool">
+                                        <i className="fa fa-fw fa-check" name={i} onClick={this.addLineItem}></i>
+                                    </button>
+                                </td>
                             </tr>
                         </tbody>
                     </table>

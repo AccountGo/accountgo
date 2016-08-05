@@ -149,4 +149,13 @@ namespace Core.Domain
         Closed,
         Void
     }
+
+    public enum SalesOrderStatus
+    {
+        Draft,
+        Open,
+        Overdue,
+        Closed,
+        Void
+    }
 }

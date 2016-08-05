@@ -190,10 +190,16 @@ namespace Services.Financial
             //var duplicateAccounts = glEntry.GeneralLedgerLines.GroupBy(gl => gl.AccountId).Where(gl => gl.Count() > 1);
             //if (duplicateAccounts.Count() > 0)
             //    throw new InvalidOperationException("Duplicate account id in a collection.");
+            
+            foreach (var line in glEntry.GeneralLedgerLines)
+            {
+                var account = _accountRepo.GetAllIncluding(a => a.ChildAccounts)
+                    .Where(a => a.Id == line.AccountId)
+                    .FirstOrDefault();
 
-            foreach (var account in glEntry.GeneralLedgerLines)
-                if (!_accountRepo.GetById(account.AccountId).CanPost())
+                if (!account.CanPost())
                     throw new InvalidOperationException("One of the account is not valid for posting");
+            }
 
             //if(!glEntry.ValidateAccountingEquation())
             //    throw new InvalidOperationException("One of the account not equal.");
@@ -496,7 +502,7 @@ namespace Services.Financial
 
             subTotalAmount = amountXquantity - discountAmount;
 
-            var intersectionTaxes = _taxService.GetIntersectionTaxes(itemId, vendorId, Core.Domain.PartyTypes.Vendor);
+            var intersectionTaxes = _taxService.GetIntersectionTaxes(itemId, vendorId, PartyTypes.Vendor);
 
             foreach (var tax in intersectionTaxes)
             {
@@ -518,8 +524,6 @@ namespace Services.Financial
         {
             decimal taxAmount = 0, amountXquantity = 0, discountAmount = 0, subTotalAmount = 0;
 
-            var item = _itemRepo.GetById(itemId);
-            var customer = _customerRepo.GetById(customerId);
             var taxes = new List<KeyValuePair<int, decimal>>();
 
             amountXquantity = amount * quantity;
@@ -529,7 +533,7 @@ namespace Services.Financial
 
             subTotalAmount = amountXquantity - discountAmount;
 
-            var intersectionTaxes = _taxService.GetIntersectionTaxes(itemId, customerId, Core.Domain.PartyTypes.Customer);
+            var intersectionTaxes = _taxService.GetIntersectionTaxes(itemId, customerId, PartyTypes.Customer);
 
             foreach (var tax in intersectionTaxes)
             {

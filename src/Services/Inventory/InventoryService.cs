@@ -108,10 +108,18 @@ namespace Services.Inventory
 
         public Item GetItemById(int id)
         {
-            var query = from item in _itemRepo.Table
-                        where item.Id == id
-                        select item;
-            return query.FirstOrDefault();
+            var item = _itemRepo.GetAllIncluding(
+                i => i.CostOfGoodsSoldAccount,
+                i => i.InventoryAccount,
+                i => i.InventoryAdjustmentAccount,
+                i => i.SalesAccount,
+                i => i.ItemTaxGroup,
+                i => i.ItemCategory
+                )
+                .Where(i => i.Id == id)
+                .FirstOrDefault();
+            
+            return item;
         }
 
         public IEnumerable<Measurement> GetMeasurements()

@@ -112,7 +112,7 @@ namespace Services.Sales
             _salesOrderRepo.Update(salesOrder);
         }
 
-        public void AddSalesInvoice(SalesInvoiceHeader salesInvoice, int? salesDeliveryId)
+        public void AddSalesInvoice(SalesInvoiceHeader salesInvoice, int? salesDeliveryId, int? salesOrderId)
         {   
             decimal totalAmount = 0, totalDiscount = 0;
 
@@ -120,11 +120,11 @@ namespace Services.Sales
             var sales = new List<KeyValuePair<int, decimal>>();
 
             var glHeader = _financialService.CreateGeneralLedgerHeader(DocumentTypes.SalesInvoice, salesInvoice.Date, string.Empty);
-            var customer = _customerRepo.GetById(salesInvoice.CustomerId);
+            var customer = GetCustomerById(salesInvoice.CustomerId);
 
             foreach (var lineItem in salesInvoice.SalesInvoiceLines)
             {
-                var item = _itemRepo.GetById(lineItem.ItemId);
+                var item = _inventoryService.GetItemById(lineItem.ItemId);
 
                 var lineAmount = lineItem.Quantity * lineItem.Amount;
 
@@ -223,6 +223,7 @@ namespace Services.Sales
                     {
                         CustomerId = salesInvoice.CustomerId,
                         Date = salesInvoice.Date,
+                        SalesOrderHeaderId = salesOrderId
                     };
                     foreach(var line in salesInvoice.SalesInvoiceLines)
                     {
@@ -239,6 +240,7 @@ namespace Services.Sales
                     AddSalesDelivery(salesDelivery, false);
                     salesInvoice.SalesDeliveryHeader = salesDelivery;
                 }
+
                 _salesInvoiceRepo.Insert(salesInvoice);
             }
         }

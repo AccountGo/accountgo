@@ -165,7 +165,7 @@ namespace Services.TaxSystem
         {
             ICollection<TaxGroupTax> partyTaxes = null;
             ICollection<ItemTaxGroupTax> itemTaxes = null;
-            IEnumerable<Tax> taxes = new List<Tax>();
+            IList<Tax> taxes = new List<Tax>();
             object party = null;
 
             var item = _itemRepo.GetAllIncluding(i => i.ItemTaxGroup,
@@ -221,14 +221,28 @@ namespace Services.TaxSystem
                 partyTaxes = ((Vendor)party).TaxGroup.TaxGroupTax;
             }
 
-            var intersectionTaxes = from p in partyTaxes
-                         join i in itemTaxes on p.TaxId equals i.TaxId
-                         select new { p, i };
+            //var intersectionTaxes = from p in partyTaxes
+            //             join i in itemTaxes on p.TaxId equals i.TaxId
+            //             select new { p, i };
 
-            if (intersectionTaxes == null || intersectionTaxes.Count() == 0)
-                return taxes;
+            //if (intersectionTaxes == null || intersectionTaxes.Count() == 0)
+            //    return taxes;
 
-            taxes = from t in intersectionTaxes select t.p.Tax;
+            //taxes = from t in intersectionTaxes select t.p.Tax;
+
+            var allTaxes = _taxRepo.GetAllIncluding().ToList();
+
+            foreach (var p in partyTaxes)
+            {
+                foreach (var i in itemTaxes)
+                {
+                    if (p.TaxId == i.TaxId)
+                    {
+                        taxes.Add(allTaxes.Where(t => t.Id == p.TaxId).FirstOrDefault());
+                        break;
+                    }
+                }
+            }
 
             return taxes;
         }

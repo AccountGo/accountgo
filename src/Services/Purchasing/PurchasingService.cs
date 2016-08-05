@@ -86,7 +86,7 @@ namespace Services.Purchasing
                 };
                 foreach (var line in purchaseIvoice.PurchaseInvoiceLines)
                 {
-                    var item = _itemRepo.GetById(line.ItemId);
+                    var item = _inventoryService.GetItemById(line.ItemId);
 
                     po.PurchaseOrderLines.Add(new PurchaseOrderLine()
                     {
@@ -95,35 +95,33 @@ namespace Services.Purchasing
                         Quantity = line.Quantity,
                         Cost = item.Cost.Value,
                         Discount = line.Discount.HasValue ? line.Discount.Value : 0,
-                        Amount = item.Cost.Value * line.Quantity,
+                        Amount = line.Amount * line.Quantity,
                     });
                 }
                 purchaseIvoice.PurchaseOrders.Add(po);
+                //var poReceipt = new PurchaseReceiptHeader()
+                //{
+                //    Date = DateTime.Now,
+                //    VendorId = po.VendorId.Value,
+                //    PurchaseOrderHeaderId = po.Id,
+                //};
 
-                var poReceipt = new PurchaseReceiptHeader()
-                {
-                    Date = DateTime.Now,
-                    Vendor = po.Vendor,
-                    VendorId = po.VendorId.Value,
-                    PurchaseOrderHeaderId = po.Id,
-                };
+                //foreach (var line in purchaseIvoice.PurchaseInvoiceLines)
+                //{
+                //    poReceipt.PurchaseReceiptLines.Add(new PurchaseReceiptLine()
+                //    {
+                //        ItemId = line.ItemId,
+                //        MeasurementId = line.MeasurementId,
+                //        Quantity = line.Quantity,
+                //        ReceivedQuantity = (line.ReceivedQuantity.HasValue ? line.ReceivedQuantity.Value : 0),
+                //        Cost = line.Cost.Value,
+                //        Amount = line.Cost.Value * (line.ReceivedQuantity.HasValue ? line.ReceivedQuantity.Value : 0),
+                //    });
+                //}
 
-                foreach (var line in purchaseIvoice.PurchaseInvoiceLines)
-                {
-                    poReceipt.PurchaseReceiptLines.Add(new PurchaseReceiptLine()
-                    {
-                        ItemId = line.ItemId,
-                        MeasurementId = line.MeasurementId,
-                        Quantity = line.Quantity,
-                        ReceivedQuantity = (line.ReceivedQuantity.HasValue ? line.ReceivedQuantity.Value : 0),
-                        Cost = line.Cost.Value,
-                        Amount = line.Cost.Value * (line.ReceivedQuantity.HasValue ? line.ReceivedQuantity.Value : 0),
-                    });
-                }
+                //po.PurchaseReceipts.Add(poReceipt);
 
-                po.PurchaseReceipts.Add(poReceipt);
-
-                AddPurchaseOrderReceipt(poReceipt);
+                //AddPurchaseOrderReceipt(poReceipt);
             }
             #endregion
 
@@ -134,9 +132,9 @@ namespace Services.Purchasing
 
             foreach (var line in purchaseIvoice.PurchaseInvoiceLines)
             {
-                var lineTaxes = _financialService.ComputeInputTax(purchaseIvoice.VendorId.Value, line.ItemId, line.Quantity, line.Cost.Value, decimal.Zero);
+                var lineTaxes = _financialService.ComputeInputTax(purchaseIvoice.VendorId.GetValueOrDefault(), line.ItemId, line.Quantity, line.Amount, line.Discount.GetValueOrDefault());
 
-                var lineAmount = line.Quantity * line.Cost;
+                var lineAmount = line.Quantity * line.Amount;
 
                 var totalLineAmount = lineAmount + lineTaxes.Sum(t => t.Value);
 
@@ -144,6 +142,23 @@ namespace Services.Purchasing
                 
                 foreach (var t in lineTaxes)
                     taxes.Add(t);
+
+                var item = _inventoryService.GetItemById(line.ItemId);
+                decimal lineItemTotalAmountAfterTax = line.Amount - lineTaxes.Sum(t => t.Value);
+
+                GeneralLedgerLine debitInventory = _financialService.CreateGeneralLedgerLine(DrOrCrSide.Dr, item.InventoryAccount.Id, lineItemTotalAmountAfterTax);
+                glHeader.GeneralLedgerLines.Add(debitInventory);
+
+                GeneralLedgerLine creditGRNClearingAccount = _financialService.CreateGeneralLedgerLine(DrOrCrSide.Cr, GetGeneralLedgerSetting().GoodsReceiptNoteClearingAccountId.Value, lineItemTotalAmountAfterTax);
+                glHeader.GeneralLedgerLines.Add(creditGRNClearingAccount);
+
+                line.InventoryControlJournal = _inventoryService.CreateInventoryControlJournal(line.ItemId,
+                    line.MeasurementId,
+                    DocumentTypes.PurchaseReceipt,
+                    line.Quantity,
+                    null,
+                    line.Quantity * item.Cost,
+                    null);
             }
 
             if (taxes != null && taxes.Count > 0)
@@ -171,7 +186,7 @@ namespace Services.Purchasing
 
             }
 
-            Vendor vendor = _vendorRepo.GetById(purchaseIvoice.VendorId.Value);
+            Vendor vendor = GetVendorById(purchaseIvoice.VendorId.Value);
             var creditVendorAccount = _financialService.CreateGeneralLedgerLine(DrOrCrSide.Cr, vendor.AccountsPayableAccountId.Value, totalAmount);
             glHeader.GeneralLedgerLines.Add(creditVendorAccount);
 
@@ -185,10 +200,13 @@ namespace Services.Purchasing
                 purchaseIvoice.No = GetNextNumber(SequenceNumberTypes.PurchaseInvoice).ToString();
                 _purchaseInvoiceRepo.Insert(purchaseIvoice);
 
-                // TODO: Look for other way to update the purchase order's invoice header id field so that it shall be in a single transaction along with purchase invoice saving
-                var purchOrder = _purchaseOrderRepo.GetById(purchaseOrderId.Value);
-                purchOrder.PurchaseInvoiceHeaderId = purchaseIvoice.Id;
-                _purchaseOrderRepo.Update(purchOrder);
+                if (purchaseOrderId.HasValue)
+                {
+                    // TODO: Look for other way to update the purchase order's invoice header id field so that it shall be in a single transaction along with purchase invoice saving
+                    var purchOrder = GetPurchaseOrderById(purchaseOrderId.GetValueOrDefault());
+                    purchOrder.PurchaseInvoiceHeaderId = purchaseIvoice.Id;
+                    _purchaseOrderRepo.Update(purchOrder);
+                }
             }
         }
 
@@ -214,7 +232,7 @@ namespace Services.Purchasing
 
             foreach (var lineItem in purchaseOrderReceipt.PurchaseReceiptLines)
             {
-                var item = _itemRepo.GetById(lineItem.ItemId);
+                var item = _inventoryService.GetItemById(lineItem.ItemId);
                 decimal lineItemTotalAmountAfterTax = lineItem.Amount - lineItem.LineTaxAmount;
 
                 GeneralLedgerLine debitInventory = _financialService.CreateGeneralLedgerLine(DrOrCrSide.Dr, item.InventoryAccount.Id, lineItemTotalAmountAfterTax);
@@ -267,11 +285,24 @@ namespace Services.Purchasing
 
         public Vendor GetVendorById(int id)
         {
-            return _vendorRepo.GetAllIncluding(v => v.Party,
+            var vendor = _vendorRepo.GetAllIncluding(
+                v => v.Party,
                 v => v.PrimaryContact,
-                v => v.PrimaryContact.Party)
+                v => v.PrimaryContact.Party,                
+                v => v.PaymentTerm,
+                v => v.PurchaseAccount,
+                v => v.PurchaseDiscountAccount,
+                v => v.AccountsPayableAccount,
+                v => v.VendorPayments,
+                v => v.TaxGroup,
+                v => v.PurchaseInvoices,
+                v => v.PurchaseOrders,
+                v => v.PurchaseReceipts
+                )
                 .Where(v => v.Id == id)
                 .FirstOrDefault();
+
+            return vendor;
         }
 
         public IEnumerable<PurchaseOrderHeader> GetPurchaseOrders()

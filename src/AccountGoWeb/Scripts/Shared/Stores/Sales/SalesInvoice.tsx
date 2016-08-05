@@ -11,6 +11,7 @@
 
 export default class SalesInvoice {
     id: number;
+    fromSalesOrderId: any;
     customerId: number;
     invoiceDate: Date;
     paymentTermId: number;

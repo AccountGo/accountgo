@@ -8,4 +8,8 @@ export default class JournalEntry {
     memo: string;
     posted: boolean;
     journalEntryLines: JournalEntryLine[] = [];
+
+    constructor() {
+        this.posted = false;
+    }
 }

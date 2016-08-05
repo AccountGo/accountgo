@@ -2,7 +2,7 @@
 
 namespace AccountGoWeb.Controllers
 {
-    public class TaxController : Controller
+    public class TaxController : BaseController
     {
         private readonly Microsoft.Extensions.Configuration.IConfiguration _config;
 

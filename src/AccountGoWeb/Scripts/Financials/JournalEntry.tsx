@@ -20,15 +20,35 @@ class SaveJournalEntryButton extends React.Component<any, {}>{
     }
     render() {
         return (
-            <input type="button" value="Save" onClick={this.onClickSaveNewJournalEntry.bind(this) } />
+            <input type="button" className="btn btn-sm btn-primary btn-flat pull-left" value="Save" onClick={this.onClickSaveNewJournalEntry.bind(this) } />
         );
     }
 }
 
 class CancelJournalEntryButton extends React.Component<any, {}>{
+    cancelOnClick() {
+        let baseUrl = location.protocol
+            + "//" + location.hostname
+            + (location.port && ":" + location.port)
+            + "/";
+
+        window.location.href = baseUrl + 'financials/journalentries';
+    }
+
     render() {
         return (
-            <input type="button" value="Cancel" />
+            <input type="button" className="btn btn-sm btn-default btn-flat pull-left" value="Cancel" onClick={ this.cancelOnClick.bind(this) } />
+        );
+    }
+}
+
+class PostJournalEntryButton extends React.Component<any, {}>{
+    postOnClick(e) {
+    }
+
+    render() {
+        return (
+            <input type="button" className="btn btn-sm btn-danger btn-flat pull-right" value="Post" onClick={ this.postOnClick.bind(this) } />
         );
     }
 }
@@ -37,6 +57,14 @@ class CancelJournalEntryButton extends React.Component<any, {}>{
 class JournalEntryHeader extends React.Component<any, {}>{
     onChangeJournalDate(e) {
         store.changedJournalDate(e.target.value);
+    }
+    
+    onChangeReferenceNo(e) {
+        store.changedReferenceNo(e.target.value);
+    }
+
+    onChangeMemo(e) {
+        store.changedMemo(e.target.value);
     }
 
     render() {
@@ -54,7 +82,8 @@ class JournalEntryHeader extends React.Component<any, {}>{
                     <div className="col-sm-6">
                         <div className="row">
                             <div className="col-sm-3">Date</div>
-                            <div className="col-sm-9"><input type="date" className="form-control" id="newJournalDate" onChange={this.onChangeJournalDate.bind(this) } value={store.journalEntry.date} /></div>
+                            <div className="col-sm-9"><input type="date" className="form-control" id="newJournalDate" onChange={this.onChangeJournalDate.bind(this) }
+                                value={store.journalEntry.date !== undefined ? store.journalEntry.date.substring(0, 10) : new Date(Date.now()).toISOString().substring(0, 10) } /></div>
                         </div>
                         <div className="row">
                             <div className="col-sm-3">Voucher</div>
@@ -62,11 +91,17 @@ class JournalEntryHeader extends React.Component<any, {}>{
                         </div>
                         <div className="row">
                             <div className="col-sm-3">Reference no</div>
-                            <div className="col-sm-9"><input type="text" className="form-control" value={store.journalEntry.referenceNo} /></div>
+                            <div className="col-sm-9"><input type="text" className="form-control" value={store.journalEntry.referenceNo} onChange={this.onChangeReferenceNo.bind(this)} /></div>
                         </div>
                         <div className="row">
                             <div className="col-sm-3">Memo</div>
-                            <div className="col-sm-9"><input type="text" className="form-control" value={store.journalEntry.memo} /></div>
+                            <div className="col-sm-9"><input type="text" className="form-control" value={store.journalEntry.memo} onChange={this.onChangeMemo.bind(this) } /></div>
+                        </div>
+                    </div>
+                    <div className="col-sm-6">
+                        <div className="row">
+                            <div className="col-sm-2">Posted</div>
+                            <div className="col-sm-10"><input type="checkbox" readOnly checked={store.journalEntry.posted === true ? "checked" : ""} /></div>
                         </div>
                     </div>
                 </div>
@@ -105,9 +140,13 @@ class JournalEntryLines extends React.Component<any, {}>{
                 <tr key={i}>
                     <td><SelectAccount store={store} row={i} selected={store.journalEntry.journalEntryLines[i].accountId} /></td>
                     <td><SelectDebitCredit store={store} row={i} selected={store.journalEntry.journalEntryLines[i].drcr} /></td>
-                    <td><input type="text" className="form-control" name={i} onChange={this.onChangeAmount.bind(this)} value={store.journalEntry.journalEntryLines[i].amount} /></td>
-                    <td><input type="text" className="form-control" name={i} onChange={this.onChangeMemo.bind(this) } value={store.journalEntry.journalEntryLines[i].memo} /></td>
-                    <td><input type="button" name={i} value="Remove" onClick={this.onClickRemoveLineItem.bind(this) } /></td>
+                    <td><input type="text" className="form-control" name={i} onChange={this.onChangeAmount.bind(this) } value={store.journalEntry.journalEntryLines[i].amount} /></td>
+                    <td><input type="text" className="form-control" name={i} onChange={this.onChangeMemo.bind(this) } value={store.journalEntry.journalEntryLines[i].memo === null ? undefined : store.journalEntry.journalEntryLines[i].memo} /></td>
+                    <td>         
+                        <button type="button" className="btn btn-box-tool">
+                            <i className="fa fa-fw fa-times" name={i} onClick={this.onClickRemoveLineItem.bind(this) }></i> 
+                        </button>              
+                    </td>
                 </tr>
             );
         }
@@ -138,8 +177,12 @@ class JournalEntryLines extends React.Component<any, {}>{
                                 <td><SelectAccount store={store} controlId="optNewAccountId" /></td>
                                 <td><SelectDebitCredit store={store} controlId="optNewDebitCredit" /></td>
                                 <td><input type="text" className="form-control" id="txtNewAmount" /></td>                            
-                                <td><input type="text" className="form-control" id="txtNewMemo" /></td>                            
-                                <td><input type="button" value="Add" onClick={this.addLineItem} /></td>
+                                <td><input type="text" className="form-control" id="txtNewMemo" /></td>                      
+                                <td>
+                                    <button type="button" className="btn btn-box-tool">
+                                        <i className="fa fa-fw fa-check" name={i} onClick={this.addLineItem}></i>
+                                    </button>
+                                </td>
                             </tr>
                         </tbody>
                     </table>
@@ -158,6 +201,10 @@ export default class JournalEntry extends React.Component<any, {}> {
                 <div>
                     <SaveJournalEntryButton />
                     <CancelJournalEntryButton />
+                    <PostJournalEntryButton />
+                </div>
+                <div>
+                    <span>This form still under development.</span>
                 </div>
             </div>
         );

@@ -8,6 +8,8 @@ namespace Dto.Sales
         public int? CustomerId { get; set; }        
         public DateTime InvoiceDate { get; set; }
         public int? PaymentTermId { get; set; }
+        public int? FromSalesOrderId { get; set; }
+        public int? FromSalesDeliveryId { get; set; }
         public string CustomerName { get; set; }
         public decimal TotalAmount { get; set; }
         public decimal TotalAllocatedAmount { get; set; }

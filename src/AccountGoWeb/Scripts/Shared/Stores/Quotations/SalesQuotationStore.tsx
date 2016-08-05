@@ -15,7 +15,7 @@ let baseUrl = location.protocol
     + "/";
 
 export default class SalesQuotationStore {
-    salesQuotation: SalesQuotation;
+    salesQuotation;
     commonStore;
     @observable validationErrors;
 
@@ -35,7 +35,7 @@ export default class SalesQuotationStore {
             result.then(function (result) {
                 this.salesQuotation.id = result.data.id;
                 this.changedCustomer(result.data.customerId);
-                //this.changedQuotationDate(result.data.quotationDate);
+                this.changedQuotationDate(result.data.quotationDate);
                 for (var i = 0; i < result.data.salesQuotationLines.length; i++) {
                     this.addLineItem(
                         result.data.salesQuotationLines[i].id,

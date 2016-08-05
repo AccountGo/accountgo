@@ -14,7 +14,7 @@ let baseUrl = location.protocol
     + "/";
 
 export default class SalesOrderStore {
-    salesOrder: SalesOrder;
+    salesOrder;
     commonStore;
     @observable validationErrors;
 
@@ -32,10 +32,9 @@ export default class SalesOrderStore {
         if (quotationId !== undefined) {
             var result = axios.get(Config.apiUrl + "api/sales/quotation?id=" + quotationId);
             result.then(function (result) {
-                this.salesOrder.id = result.data.id;
                 this.changedCustomer(result.data.customerId);
                 this.salesOrder.paymentTermId = result.data.paymentTermId;
-                //this.changedOrderDate(result.data.quotationDate);
+                this.changedOrderDate(result.data.quotationDate);
                 for (var i = 0; i < result.data.salesQuotationLines.length; i++) {
                     this.addLineItem(
                         result.data.salesQuotationLines[i].id,
@@ -55,7 +54,7 @@ export default class SalesOrderStore {
                 this.salesOrder.id = result.data.id;
                 this.changedCustomer(result.data.customerId);
                 this.salesOrder.paymentTermId = result.data.paymentTermId;
-                //this.changedOrderDate(result.data.orderDate);
+                this.changedOrderDate(result.data.orderDate);
                 for (var i = 0; i < result.data.salesOrderLines.length; i++) {
                     this.addLineItem(
                         result.data.salesOrderLines[i].id,

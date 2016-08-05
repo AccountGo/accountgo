@@ -21,6 +21,7 @@
     var gridOptions = {
         columnDefs: columnDefs,
         rowData: @Html.Raw(Model),
+        enableSorting: true,
         // PROPERTIES - simple boolean / string / number properties
         rowSelection: 'single',
         onSelectionChanged: onSelectionChanged,
