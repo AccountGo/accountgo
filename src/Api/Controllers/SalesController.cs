@@ -69,6 +69,8 @@ namespace Api.Controllers
             customer.PaymentTermId = customerDto.PaymentTermId;
             customer.TaxGroupId = customerDto.TaxGroupId;
 
+          
+            
             if(isNew)
                 _salesService.AddCustomer(customer);
             else
@@ -313,8 +315,9 @@ namespace Api.Controllers
                     Id = quote.Id,
                     CustomerId = quote.CustomerId,
                     CustomerName = quote.Customer.Party.Name,
-                    PaymentTermId = quote.CustomerId,
-                    QuotationDate = quote.Date,                 
+                    PaymentTermId = quote.PaymentTermId,
+                    QuotationDate = quote.Date,      
+                    ReferenceNo = quote.ReferenceNo           
                 };
 
                 foreach (var line in quote.SalesQuoteLines) {
@@ -347,6 +350,8 @@ namespace Api.Controllers
                 CustomerId = quote.CustomerId,
                 CustomerName = quote.Customer.Party.Name,                
                 QuotationDate = quote.Date,
+                PaymentTermId = quote.PaymentTermId,
+                ReferenceNo = quote.ReferenceNo
             };
 
 
@@ -682,6 +687,8 @@ namespace Api.Controllers
                 salesQuote.CustomerId = quotationDto.CustomerId.GetValueOrDefault();
                 salesQuote.Date = quotationDto.QuotationDate;
 
+                salesQuote.ReferenceNo = quotationDto.ReferenceNo;
+                salesQuote.PaymentTermId = quotationDto.PaymentTermId;
                 foreach (var line in quotationDto.SalesQuotationLines)
                 {
                     if (!isNew)

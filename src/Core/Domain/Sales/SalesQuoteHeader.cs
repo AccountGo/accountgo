@@ -16,6 +16,8 @@ namespace Core.Domain.Sales
     public partial class SalesQuoteHeader : BaseEntity
     {
         public int CustomerId { get; set; }
+        public int? PaymentTermId { get; set; }
+        public string ReferenceNo { get; set; }
         public DateTime Date { get; set; }
         public virtual Customer Customer { get; set; }
         public virtual ICollection<SalesQuoteLine> SalesQuoteLines { get; set; }
