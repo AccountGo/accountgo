@@ -34,6 +34,8 @@ export default class SalesQuotationStore {
             var result = axios.get(Config.apiUrl + "api/sales/quotation?id=" + quotationId);
             result.then(function (result) {
                 this.salesQuotation.id = result.data.id;
+                this.salesQuotation.paymentTermId = result.data.paymentTermId;
+                this.salesQuotation.referenceNo = result.data.referenceNo;
                 this.changedCustomer(result.data.customerId);
                 this.changedQuotationDate(result.data.quotationDate);
                 for (var i = 0; i < result.data.salesQuotationLines.length; i++) {
@@ -141,7 +143,9 @@ export default class SalesQuotationStore {
     changedQuotationDate(date) {
         this.salesQuotation.quotationDate = date;
     }
-
+    changedReferenceNo(refNo) {
+        this.salesQuotation.referenceNo = refNo;
+    }
     addLineItem(id = 0, itemId, measurementId, quantity, amount, discount) {
         var newLineItem = new SalesQuotationLine(id, itemId, measurementId, quantity, amount, discount);
         this.salesQuotation.salesQuotationLines.push(extendObservable(newLineItem, newLineItem));
