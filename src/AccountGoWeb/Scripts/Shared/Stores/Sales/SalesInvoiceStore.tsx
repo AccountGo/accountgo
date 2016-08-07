@@ -84,7 +84,7 @@ export default class SalesStore {
             var lineItem = this.salesInvoice.salesInvoiceLines[i];
             var lineSum = lineItem.quantity * lineItem.amount;
             rtotal = rtotal + lineSum;
-            await axios.get(Config.apiUrl + "api/tax/gettax?itemId=" + lineItem.itemId + "&partyId=" + this.salesInvoice.customerId)
+            await axios.get(Config.apiUrl + "api/tax/gettax?itemId=" + lineItem.itemId + "&partyId=" + this.salesInvoice.customerId + "&type=1")
                 .then(function (result) {
                     if (result.data.length > 0) {
                         ttotal = ttotal + this.commonStore.getSalesLineTaxAmount(lineItem.quantity, lineItem.amount, lineItem.discount, result.data);
