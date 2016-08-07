@@ -10,6 +10,7 @@ export default class JournalEntry {
     journalEntryLines: JournalEntryLine[] = [];
 
     constructor() {
+        this.id = 0;
         this.posted = false;
     }
 }

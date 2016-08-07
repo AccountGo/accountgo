@@ -170,6 +170,11 @@ namespace Api.Controllers
                     journalEntry = _financialService.GetJournalEntry(journalEntryDto.Id, false);
                 }
 
+                journalEntry.Date = journalEntryDto.JournalDate;
+                journalEntry.VoucherType = (Core.Domain.JournalVoucherTypes)journalEntryDto.VoucherType.GetValueOrDefault();
+                journalEntry.ReferenceNo = journalEntryDto.ReferenceNo;
+                journalEntry.Memo = journalEntryDto.Memo;
+
                 foreach (var line in journalEntryDto.JournalEntryLines)
                 {
                     if (!isNew)
@@ -204,11 +209,11 @@ namespace Api.Controllers
 
                     if (isNew)
                     {
-                        _financialService.AddJournalEntry(journalEntry);
+                        //_financialService.AddJournalEntry(journalEntry);
                     }
                     else
                     {
-                        _financialService.UpdateJournalEntry(journalEntry);
+                        //_financialService.UpdateJournalEntry(journalEntry);
                     }
                 }
 

@@ -1,6 +1,7 @@
 ﻿import * as React from "react";
 import * as ReactDOM from "react-dom";
 import {observer} from "mobx-react";
+import {autorun} from 'mobx';
 import * as d3 from "d3";
 import Config = require("Config");
 
@@ -9,18 +10,42 @@ import SelectAccount from "../Shared/Components/SelectAccount";
 import SelectDebitCredit from "../Shared/Components/SelectDebitCredit";
 
 import JournalEntryStore from "../Shared/Stores/Financials/JournalEntryStore";
+import JournalEntryUIStore from "../Shared/Stores/Financials/JournalEntryUIStore";
 
 let journalEntryId = window.location.search.split("?id=")[1];
 
 let store = new JournalEntryStore(journalEntryId);
+let uiStore = new JournalEntryUIStore(store);
 
+@observer
+class ValidationErrors extends React.Component<any, {}>{
+    render() {
+        if (store.validationErrors !== undefined && store.validationErrors.length > 0) {
+            var errors = [];
+            store.validationErrors.map(function (item, index) {
+                errors.push(<li key={index}>{item}</li>);
+            });
+            return (
+                <div>
+                    <ul>
+                        {errors}
+                    </ul>
+                </div>
+
+            );
+        }
+        return null;
+    }
+}
+
+@observer
 class SaveJournalEntryButton extends React.Component<any, {}>{
     onClickSaveNewJournalEntry(e) {
         store.saveNewJournalEntry();
     }
     render() {
         return (
-            <input type="button" className="btn btn-sm btn-primary btn-flat pull-left" value="Save" onClick={this.onClickSaveNewJournalEntry.bind(this) } />
+            <input type="button" className={uiStore.isDirty ? "btn btn-sm btn-primary btn-flat pull-left" : "btn btn-sm btn-primary btn-flat pull-left disabled"} value="Save" onClick={this.onClickSaveNewJournalEntry.bind(this) } />
         );
     }
 }
@@ -42,13 +67,14 @@ class CancelJournalEntryButton extends React.Component<any, {}>{
     }
 }
 
+@observer
 class PostJournalEntryButton extends React.Component<any, {}>{
     postOnClick(e) {
     }
 
     render() {
         return (
-            <input type="button" className="btn btn-sm btn-danger btn-flat pull-right" value="Post" onClick={ this.postOnClick.bind(this) } />
+            <input type="button" value="Post" onClick={ this.postOnClick.bind(this) } className={uiStore.isDirty || store.journalEntry.id == 0 ? "btn btn-sm btn-danger btn-flat pull-right disabled" : "btn btn-sm btn-danger btn-flat pull-right"} />
         );
     }
 }
@@ -89,13 +115,13 @@ class JournalEntryHeader extends React.Component<any, {}>{
                             <div className="col-sm-3">Voucher</div>
                             <div className="col-sm-9"><SelectVoucherType store={store} controlId="optNewVoucherType" selected={store.journalEntry.voucherType} /></div>
                         </div>
-                        <div className="row">
+                        <div className="row">                            
                             <div className="col-sm-3">Reference no</div>
-                            <div className="col-sm-9"><input type="text" className="form-control" value={store.journalEntry.referenceNo} onChange={this.onChangeReferenceNo.bind(this)} /></div>
+                            <div className="col-sm-9"><input type="text" className="form-control" value={store.journalEntry.referenceNo || ''} /* || '' fix the issue about uncontrolled input warning when using React 15*/ onChange={this.onChangeReferenceNo.bind(this)} /></div>
                         </div>
                         <div className="row">
                             <div className="col-sm-3">Memo</div>
-                            <div className="col-sm-9"><input type="text" className="form-control" value={store.journalEntry.memo} onChange={this.onChangeMemo.bind(this) } /></div>
+                            <div className="col-sm-9"><input type="text" className="form-control" value={store.journalEntry.memo || ''} onChange={this.onChangeMemo.bind(this) } /></div>
                         </div>
                     </div>
                     <div className="col-sm-6">
@@ -141,7 +167,7 @@ class JournalEntryLines extends React.Component<any, {}>{
                     <td><SelectAccount store={store} row={i} selected={store.journalEntry.journalEntryLines[i].accountId} /></td>
                     <td><SelectDebitCredit store={store} row={i} selected={store.journalEntry.journalEntryLines[i].drcr} /></td>
                     <td><input type="text" className="form-control" name={i} onChange={this.onChangeAmount.bind(this) } value={store.journalEntry.journalEntryLines[i].amount} /></td>
-                    <td><input type="text" className="form-control" name={i} onChange={this.onChangeMemo.bind(this) } value={store.journalEntry.journalEntryLines[i].memo === null ? undefined : store.journalEntry.journalEntryLines[i].memo} /></td>
+                    <td><input type="text" className="form-control" name={i} onChange={this.onChangeMemo.bind(this) } value={store.journalEntry.journalEntryLines[i].memo || ''} /></td>
                     <td>         
                         <button type="button" className="btn btn-box-tool">
                             <i className="fa fa-fw fa-times" name={i} onClick={this.onClickRemoveLineItem.bind(this) }></i> 
@@ -192,10 +218,24 @@ class JournalEntryLines extends React.Component<any, {}>{
     }
 }
 
+@observer
 export default class JournalEntry extends React.Component<any, {}> {
+    componentDidMount() {
+        autorun(() => this.disableForm());
+    }
+
+    disableForm() {
+        if (store.journalEntry.posted) {
+            var nodes = document.getElementById("divJournalEntry").getElementsByTagName('*');
+            for (var i = 0; i < nodes.length; i++) {
+                nodes[i].setAttribute("disabled", "disabled");
+            }
+        }
+    }
+
     render() {
         return (
-            <div>
+            <div id="divJournalEntry">
                 <JournalEntryHeader />
                 <JournalEntryLines />
                 <div>

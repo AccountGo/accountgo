@@ -1,5 +1,6 @@
 ﻿import {observable, extendObservable, action} from 'mobx';
 import * as axios from "axios";
+import * as d3 from "d3";
 
 import Config = require("Config");
 
@@ -30,22 +31,29 @@ export default class JournalEntryStore {
             journalEntryLines: []
         });
 
-        if (journalEntryId !== undefined)
-        {
-            var result = axios.get(Config.apiUrl + "api/financials/journalentry?id=" + journalEntryId);
-            result.then(function (result) {
+        if (journalEntryId !== undefined) {
+            this.getJournalEntry(journalEntryId);
+        }
+    }
+
+    async getJournalEntry(journalEntryId) {
+        await axios.get(Config.apiUrl + "api/financials/journalentry?id=" + journalEntryId)
+            .then(function (result) {
                 this.journalEntry.id = result.data.id;
-                this.journalEntry.posted = result.data.posted;
+                
                 this.journalEntry.voucherType = result.data.voucherType;
                 this.journalEntry.date = result.data.journalDate;
                 this.journalEntry.memo = result.data.memo === null ? undefined : result.data.memo;
                 this.journalEntry.referenceNo = result.data.memo === null ? undefined : result.data.referenceNo;
+
                 for (var i = 0; i < result.data.journalEntryLines.length; i++) {
                     var item = result.data.journalEntryLines[i];
                     this.addLineItem(item.accountId, item.drCr, item.amount, item.memo);
                 }
+
+                this.journalEntry.posted = result.data.posted;
+
             }.bind(this));
-        }
     }
 
     async saveNewJournalEntry() {
@@ -78,6 +86,8 @@ export default class JournalEntryStore {
             this.validationErrors.push("Reference no is required.");
         if (this.journalEntry.memo === undefined)
             this.validationErrors.push("Memo no is required.");
+        if (this.journalEntry.journalEntryLines.length < 2)
+            this.validationErrors.push("You need at lest 2 journal entry lines for debit and credit.");
         if (this.journalEntry.journalEntryLines !== undefined && this.journalEntry.journalEntryLines.length > 0) {
             for (var i = 0; i < this.journalEntry.journalEntryLines.length; i++) {
                 if (this.journalEntry.journalEntryLines[i].accountId === undefined)
@@ -99,7 +109,7 @@ export default class JournalEntryStore {
 
     addLineItem(accountId, drcr, amount, memo) {
         var newLineItem = new JournalEntryLine(accountId, drcr, amount, memo);
-        this.journalEntry.journalEntryLines.push(extendObservable(newLineItem, newLineItem));    
+        this.journalEntry.journalEntryLines.push(extendObservable(newLineItem, newLineItem));
     }
 
     updateLineItem(row, targetProperty, value) {
