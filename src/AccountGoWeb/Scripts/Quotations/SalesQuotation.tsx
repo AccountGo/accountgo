@@ -108,7 +108,8 @@ class SalesQuotationHeader extends React.Component<any, {}>{
                         </div>
                         <div className="row">
                             <div className="col-sm-2">Reference no.</div>
-                            <div className="col-sm-10"><input type="text" className="form-control" value={store.salesQuotation.referenceNo || ''} onChange={this.onChangeReferenceNo.bind(this) }  /></div>                  
+                            <div className="col-sm-10"><input type="text" className="form-control"  value={store.salesQuotation.referenceNo || ''} onChange={this.onChangeReferenceNo.bind(this) }  /></div>
+                  
                         </div>
                     </div>
                 </div>
