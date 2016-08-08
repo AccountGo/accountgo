@@ -88,7 +88,7 @@ export default class PurchaseOrderStore {
             var lineItem = this.purchaseInvoice.purchaseInvoiceLines[i];
             var lineSum = lineItem.quantity * lineItem.amount;
             rtotal = rtotal + lineSum;
-            await axios.get(Config.apiUrl + "api/tax/gettax?itemId=" + lineItem.itemId + "&partyId=" + this.purchaseInvoice.vendorId)
+            await axios.get(Config.apiUrl + "api/tax/gettax?itemId=" + lineItem.itemId + "&partyId=" + this.purchaseInvoice.vendorId + "&type=2")
                 .then(function (result) {
                     if (result.data.length > 0) {
                         ttotal = ttotal + this.commonStore.getPurhcaseLineTaxAmount(lineItem.quantity, lineItem.amount, lineItem.discount, result.data);
