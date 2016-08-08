@@ -25,24 +25,35 @@ namespace Api.Controllers
         /// <returns></returns>
         [HttpGet]
         [Route("[action]")]
-        public IActionResult GetTax(int itemId, int partyId)
+        public IActionResult GetTax(int itemId, int partyId, int type = 0)
         {
-            var taxes = _taxService.GetIntersectionTaxes(itemId, partyId);
-            var taxesDto = new List<Tax>();
+            //var taxes = _taxService.GetIntersectionTaxes(itemId, partyId);
+            //var taxesDto = new List<Tax>();
 
-            foreach (var tax in taxes) {
-                var taxDto = new Tax()
-                {
-                    Id = tax.Id,
-                    TaxCode = tax.TaxCode,
-                    TaxName = tax.TaxName,
-                    Rate = tax.Rate,
-                    IsActive = tax.IsActive
-                };
-                taxesDto.Add(taxDto);
+            //foreach (var tax in taxes) {
+            //    var taxDto = new Tax()
+            //    {
+            //        Id = tax.Id,
+            //        TaxCode = tax.TaxCode,
+            //        TaxName = tax.TaxName,
+            //        Rate = tax.Rate,
+            //        IsActive = tax.IsActive
+            //    };
+            //    taxesDto.Add(taxDto);
+            //}
+
+            //return new ObjectResult(taxesDto);
+
+            if (type == 0)
+            {
+                return new BadRequestObjectResult("Type is zero.");
             }
-                        
-            return new ObjectResult(taxesDto);
+            else
+            {
+                var taxes = _taxService.GetIntersectionTaxes(itemId, partyId, (Core.Domain.PartyTypes)type);
+
+                return new ObjectResult(taxes);
+            }
         }
 
         [HttpGet]
@@ -171,5 +182,8 @@ namespace Api.Controllers
 
             return new ObjectResult(taxSystemDto);
         }
+
+       
+
     }
 }
