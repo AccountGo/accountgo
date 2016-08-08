@@ -15,12 +15,14 @@ let baseUrl = location.protocol
     + "/";
 
 export default class JournalEntryStore {
+    originalJournalEntry;
     journalEntry;
     commonStore;
     @observable validationErrors;
     @observable isDirty = false;
+    @observable initialized = false;
 
-    constructor(journalEntryId) {
+    constructor() {
         this.commonStore = new CommonStore();
         this.journalEntry = new JournalEntry();
         extendObservable(this.journalEntry, {
@@ -29,35 +31,37 @@ export default class JournalEntryStore {
             referenceNo: this.journalEntry.referenceNo,
             memo: this.journalEntry.memo,
             posted: this.journalEntry.posted,
-            journalEntryLines: []
+            journalEntryLines: this.journalEntry.journalEntryLines
         });
-
-        if (journalEntryId !== undefined) {
-            this.getJournalEntry(journalEntryId);
-        }
     }
 
-    changeIsDirty() {
-        this.isDirty = true;
+    changeIsDirty(dirty) {
+        this.isDirty = dirty;
     }
 
-    async getJournalEntry(journalEntryId) {
+    changeInitialized(initialized) {
+        this.initialized = initialized;
+    }
+
+    async getJournalEntry(journalEntryId: number) {
         await axios.get(Config.apiUrl + "api/financials/journalentry?id=" + journalEntryId)
             .then(function (result) {
-                this.journalEntry.id = result.data.id;                
-                this.journalEntry.voucherType = result.data.voucherType;
-                this.journalEntry.journalDate = result.data.journalDate;
-                this.journalEntry.memo = result.data.memo === null ? undefined : result.data.memo;
-                this.journalEntry.referenceNo = result.data.memo === null ? undefined : result.data.referenceNo;
 
                 for (var i = 0; i < result.data.journalEntryLines.length; i++) {
                     var item = result.data.journalEntryLines[i];
                     this.addLineItem(item.id, item.accountId, item.drCr, item.amount, item.memo);
                 }
 
+                this.journalEntry.id = result.data.id;                
+                this.journalEntry.voucherType = result.data.voucherType;
+                this.journalEntry.journalDate = result.data.journalDate;
+                this.journalEntry.memo = result.data.memo;
+                this.journalEntry.referenceNo = result.data.referenceNo;
                 this.journalEntry.posted = result.data.posted;
+                
+                this.originalJournalEntry = result.data;
 
-                this.isDirty = false;
+                this.initialized = true;
 
             }.bind(this));
     }
@@ -131,37 +135,30 @@ export default class JournalEntryStore {
     addLineItem(id = 0, accountId, drcr, amount, memo) {
         var newLineItem = new JournalEntryLine(id, accountId, drcr, amount, memo);
         this.journalEntry.journalEntryLines.push(extendObservable(newLineItem, newLineItem));
-        this.changeIsDirty();
     }
 
     updateLineItem(row, targetProperty, value) {
         if (this.journalEntry.journalEntryLines.length > 0)
             this.journalEntry.journalEntryLines[row][targetProperty] = value;
-        this.changeIsDirty();
     }
 
     removeLineItem(row) {
         this.journalEntry.journalEntryLines.splice(row, 1);
-        this.changeIsDirty();
     }
 
     changedJournalDate(date) {
         this.journalEntry.journalDate = date;
-        this.changeIsDirty();
     }
 
     changedReferenceNo(refNo) {
         this.journalEntry.referenceNo = refNo;
-        this.changeIsDirty();
     }
 
     changedMemo(memo) {
         this.journalEntry.memo = memo;
-        this.changeIsDirty();
     }
 
     changedVoucherType(type) {
         this.journalEntry.voucherType = type;
-        this.changeIsDirty();
     }
 }

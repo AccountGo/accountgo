@@ -14,7 +14,7 @@ import JournalEntryUIStore from "../Shared/Stores/Financials/JournalEntryUIStore
 
 let journalEntryId = window.location.search.split("?id=")[1];
 
-let store = new JournalEntryStore(journalEntryId);
+let store = new JournalEntryStore();
 let uiStore = new JournalEntryUIStore(store);
 
 @observer
@@ -222,16 +222,32 @@ class JournalEntryLines extends React.Component<any, {}>{
 @observer
 export default class JournalEntry extends React.Component<any, {}> {
     componentDidMount() {
-        autorun(() => this.disableForm());        
+        if (journalEntryId !== undefined) {
+            store.getJournalEntry(parseInt(journalEntryId));
+        }
+        else {
+            store.changeInitialized(true);
+            store.changeIsDirty(true);
+        }
+
+        autorun(() => this.trackchange());
     }
 
-    disableForm() {        
+    trackchange() {
         if (store.journalEntry.posted) {
             var nodes = document.getElementById("divJournalEntry").getElementsByTagName('*');
             for (var i = 0; i < nodes.length; i++) {
                 if (nodes[i].id === "btnCancel")
                     continue;
                 nodes[i].setAttribute("disabled", "disabled");
+            }
+        }
+
+        if (store.initialized && store.isDirty === false) {
+            if (store.journalEntry.referenceNo !== store.originalJournalEntry.referenceNo
+                || store.journalEntry.memo !== store.originalJournalEntry.memo)
+            {
+                store.changeIsDirty(true);
             }
         }
     }
