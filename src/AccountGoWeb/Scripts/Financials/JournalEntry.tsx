@@ -1,7 +1,7 @@
 ﻿import * as React from "react";
 import * as ReactDOM from "react-dom";
 import {observer} from "mobx-react";
-import {autorun} from 'mobx';
+import {autorun, reaction, toJS, intercept} from 'mobx';
 import * as d3 from "d3";
 import Config = require("Config");
 
@@ -45,7 +45,7 @@ class SaveJournalEntryButton extends React.Component<any, {}>{
     }
     render() {
         return (
-            <input type="button" className={uiStore.isDirty ? "btn btn-sm btn-primary btn-flat pull-left" : "btn btn-sm btn-primary btn-flat pull-left disabled"} value="Save" onClick={this.onClickSaveNewJournalEntry.bind(this) } />
+            <input type="button" className={store.isDirty ? "btn btn-sm btn-primary btn-flat pull-left" : "btn btn-sm btn-primary btn-flat pull-left disabled"} value="Save" onClick={this.onClickSaveNewJournalEntry.bind(this) } />
         );
     }
 }
@@ -62,7 +62,7 @@ class CancelJournalEntryButton extends React.Component<any, {}>{
 
     render() {
         return (
-            <input type="button" className="btn btn-sm btn-default btn-flat pull-left" value="Cancel" onClick={ this.cancelOnClick.bind(this) } />
+            <input type="button" className="btn btn-sm btn-default btn-flat pull-left" value="Cancel" onClick={ this.cancelOnClick.bind(this) } id="btnCancel" />
         );
     }
 }
@@ -74,7 +74,7 @@ class PostJournalEntryButton extends React.Component<any, {}>{
 
     render() {
         return (
-            <input type="button" value="Post" onClick={ this.postOnClick.bind(this) } className={uiStore.isDirty || store.journalEntry.id == 0 ? "btn btn-sm btn-danger btn-flat pull-right disabled" : "btn btn-sm btn-danger btn-flat pull-right"} />
+            <input type="button" value="Post" onClick={ this.postOnClick.bind(this) } className={store.isDirty || store.journalEntry.id == 0 ? "btn btn-sm btn-danger btn-flat pull-right disabled" : "btn btn-sm btn-danger btn-flat pull-right"} />
         );
     }
 }
@@ -221,13 +221,15 @@ class JournalEntryLines extends React.Component<any, {}>{
 @observer
 export default class JournalEntry extends React.Component<any, {}> {
     componentDidMount() {
-        autorun(() => this.disableForm());
+        autorun(() => this.disableForm());        
     }
 
-    disableForm() {
+    disableForm() {        
         if (store.journalEntry.posted) {
             var nodes = document.getElementById("divJournalEntry").getElementsByTagName('*');
             for (var i = 0; i < nodes.length; i++) {
+                if (nodes[i].id === "btnCancel")
+                    continue;
                 nodes[i].setAttribute("disabled", "disabled");
             }
         }

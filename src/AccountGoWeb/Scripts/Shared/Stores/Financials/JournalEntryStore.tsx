@@ -1,4 +1,4 @@
-﻿import {observable, extendObservable, action} from 'mobx';
+﻿import {observable, extendObservable, action, intercept, reaction} from 'mobx';
 import * as axios from "axios";
 import * as d3 from "d3";
 
@@ -18,6 +18,7 @@ export default class JournalEntryStore {
     journalEntry;
     commonStore;
     @observable validationErrors;
+    @observable isDirty = false;
 
     constructor(journalEntryId) {
         this.commonStore = new CommonStore();
@@ -36,6 +37,10 @@ export default class JournalEntryStore {
         }
     }
 
+    changeIsDirty() {
+        this.isDirty = true;
+    }
+
     async getJournalEntry(journalEntryId) {
         await axios.get(Config.apiUrl + "api/financials/journalentry?id=" + journalEntryId)
             .then(function (result) {
@@ -52,6 +57,8 @@ export default class JournalEntryStore {
                 }
 
                 this.journalEntry.posted = result.data.posted;
+
+                this.isDirty = false;
 
             }.bind(this));
     }
@@ -110,30 +117,37 @@ export default class JournalEntryStore {
     addLineItem(accountId, drcr, amount, memo) {
         var newLineItem = new JournalEntryLine(accountId, drcr, amount, memo);
         this.journalEntry.journalEntryLines.push(extendObservable(newLineItem, newLineItem));
+        this.changeIsDirty();
     }
 
     updateLineItem(row, targetProperty, value) {
         if (this.journalEntry.journalEntryLines.length > 0)
             this.journalEntry.journalEntryLines[row][targetProperty] = value;
+        this.changeIsDirty();
     }
 
     removeLineItem(row) {
         this.journalEntry.journalEntryLines.splice(row, 1);
+        this.changeIsDirty();
     }
 
     changedJournalDate(date) {
         this.journalEntry.journalDate = date;
+        this.changeIsDirty();
     }
 
     changedReferenceNo(refNo) {
         this.journalEntry.referenceNo = refNo;
+        this.changeIsDirty();
     }
 
     changedMemo(memo) {
         this.journalEntry.memo = memo;
+        this.changeIsDirty();
     }
 
     changedVoucherType(type) {
         this.journalEntry.voucherType = type;
+        this.changeIsDirty();
     }
 }
