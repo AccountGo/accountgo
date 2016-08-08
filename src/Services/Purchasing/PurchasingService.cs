@@ -402,5 +402,100 @@ namespace Services.Purchasing
                 _vendorPaymentRepo.Insert(payment);
             }
         }
+
+        public void SavePurchaseInvoice(PurchaseInvoiceHeader purchaseInvoice, PurchaseReceiptHeader purchaseReceipt)
+        {
+            if (purchaseInvoice.Id == 0)
+            {
+                // This should be in a single transaction.
+                _purchaseReceiptRepo.Insert(purchaseReceipt);
+                _purchaseInvoiceRepo.Insert(purchaseInvoice);
+            }
+            else
+            {
+                _purchaseInvoiceRepo.Update(purchaseInvoice);
+            }
+        }
+
+        public void PostPurchaseInvoice(int invoiceId)
+        {
+            var purchaseInvoice = GetPurchaseInvoiceById(invoiceId);
+
+            var glHeader = _financialService.CreateGeneralLedgerHeader(DocumentTypes.PurchaseInvoice, purchaseInvoice.Date, purchaseInvoice.Description);
+
+            decimal totalTaxAmount = 0, totalAmount = 0, totalDiscount = 0;
+            var taxes = new List<KeyValuePair<int, decimal>>();
+
+            foreach (var line in purchaseInvoice.PurchaseInvoiceLines)
+            {
+                var lineTaxes = _financialService.ComputeInputTax(purchaseInvoice.VendorId.GetValueOrDefault(), line.ItemId, line.Quantity, line.Amount, line.Discount.GetValueOrDefault());
+
+                var lineAmount = line.Quantity * line.Amount;
+
+                var totalLineAmount = lineAmount + lineTaxes.Sum(t => t.Value);
+
+                totalAmount += (decimal)totalLineAmount;
+
+                foreach (var t in lineTaxes)
+                    taxes.Add(t);
+
+                var item = _inventoryService.GetItemById(line.ItemId);
+                decimal lineItemTotalAmountAfterTax = line.Amount - lineTaxes.Sum(t => t.Value);
+
+                GeneralLedgerLine debitInventory = _financialService.CreateGeneralLedgerLine(DrOrCrSide.Dr, item.InventoryAccount.Id, lineItemTotalAmountAfterTax);
+                glHeader.GeneralLedgerLines.Add(debitInventory);
+
+                GeneralLedgerLine creditGRNClearingAccount = _financialService.CreateGeneralLedgerLine(DrOrCrSide.Cr, GetGeneralLedgerSetting().GoodsReceiptNoteClearingAccountId.Value, lineItemTotalAmountAfterTax);
+                glHeader.GeneralLedgerLines.Add(creditGRNClearingAccount);
+
+                line.InventoryControlJournal = _inventoryService.CreateInventoryControlJournal(line.ItemId,
+                    line.MeasurementId,
+                    DocumentTypes.PurchaseReceipt,
+                    line.Quantity,
+                    null,
+                    line.Quantity * item.Cost,
+                    null);
+            }
+
+            if (taxes != null && taxes.Count > 0)
+            {
+                var groupedTaxes = from t in taxes
+                                   group t by t.Key into grouped
+                                   select new
+                                   {
+                                       Key = grouped.Key,
+                                       Value = grouped.Sum(t => t.Value)
+                                   };
+
+                totalTaxAmount = taxes.Sum(t => t.Value);
+
+                foreach (var tax in groupedTaxes)
+                {
+                    var tx = _financialService.GetTaxes().Where(t => t.Id == tax.Key).FirstOrDefault();
+                    var debitPurchaseTaxAccount = _financialService.CreateGeneralLedgerLine(DrOrCrSide.Dr, tx.PurchasingAccountId.Value, tax.Value);
+                    glHeader.GeneralLedgerLines.Add(debitPurchaseTaxAccount);
+                }
+            }
+
+            if (totalDiscount > 0)
+            {
+
+            }
+
+            Vendor vendor = GetVendorById(purchaseInvoice.VendorId.Value);
+            var creditVendorAccount = _financialService.CreateGeneralLedgerLine(DrOrCrSide.Cr, vendor.AccountsPayableAccountId.Value, totalAmount);
+            glHeader.GeneralLedgerLines.Add(creditVendorAccount);
+
+            var debitGRNClearingAccount = _financialService.CreateGeneralLedgerLine(DrOrCrSide.Dr, GetGeneralLedgerSetting().GoodsReceiptNoteClearingAccountId.Value, totalAmount - totalTaxAmount);
+            glHeader.GeneralLedgerLines.Add(debitGRNClearingAccount);
+
+            if (_financialService.ValidateGeneralLedgerEntry(glHeader))
+            {
+                purchaseInvoice.GeneralLedgerHeader = glHeader;
+
+                purchaseInvoice.No = GetNextNumber(SequenceNumberTypes.PurchaseInvoice).ToString();
+                _purchaseInvoiceRepo.Update(purchaseInvoice);
+            }
+        }
     }
 }

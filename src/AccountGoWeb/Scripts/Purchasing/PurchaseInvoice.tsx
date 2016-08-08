@@ -74,6 +74,19 @@ class CancelPurchaseInvoiceButton extends React.Component<any, {}>{
 }
 
 @observer
+class PostButton extends React.Component<any, {}>{
+    postOnClick(e) {
+        store.postInvoice();
+    }
+
+    render() {
+        return (
+            <input type="button" value="Post" onClick={ this.postOnClick.bind(this) } className="btn btn-sm btn-danger btn-flat pull-right disabled" />
+        );
+    }
+}
+
+@observer
 class PurchaseInvoiceHeader extends React.Component<any, {}>{
     onChangeInvoiceDate(e) {
         store.changedInvoiceDate(e.target.value);
@@ -257,6 +270,7 @@ export default class AddPurchaseInvoice extends React.Component<any, {}> {
                 <div>
                     <SavePurchaseInvoiceButton />
                     <CancelPurchaseInvoiceButton />
+                    <PostButton />
                 </div>
             </div>
             );

@@ -230,40 +230,96 @@ namespace Api.Controllers
 
         [HttpPost]
         [Route("[action]")]
+        public IActionResult PostPurchaseInvoice([FromBody]Dto.Purchasing.PurchaseInvoice purchaseInvoiceDto)
+        {
+            string[] errors = null;
+
+            try
+            {
+                if (!ModelState.IsValid)
+                {
+                    errors = new string[ModelState.ErrorCount];
+                    foreach (var val in ModelState.Values)
+                        for (int i = 0; i < ModelState.ErrorCount; i++)
+                            errors[i] = val.Errors[i].ErrorMessage;
+
+                    return new BadRequestObjectResult(errors);
+                }
+
+                _purchasingService.PostPurchaseInvoice(purchaseInvoiceDto.Id);
+
+                return new ObjectResult(Ok());
+            }
+            catch(Exception ex)
+            {
+                errors = new string[1] { ex.InnerException.Message };
+                return new BadRequestObjectResult(errors);
+            }
+        }
+
+        [HttpPost]
+        [Route("[action]")]
         public IActionResult SavePurchaseInvoice([FromBody]Dto.Purchasing.PurchaseInvoice purchaseInvoiceDto)
         {
             string[] errors = null;
 
-            if (!ModelState.IsValid)
-            {
-                errors = new string[ModelState.ErrorCount];
-                foreach (var val in ModelState.Values)
-                    for (int i = 0; i < ModelState.ErrorCount; i++)
-                        errors[i] = val.Errors[i].ErrorMessage;
-
-                return new BadRequestObjectResult(errors);
-            }
-
             try
             {
+                if (!ModelState.IsValid)
+                {
+                    errors = new string[ModelState.ErrorCount];
+                    foreach (var val in ModelState.Values)
+                        for (int i = 0; i < ModelState.ErrorCount; i++)
+                            errors[i] = val.Errors[i].ErrorMessage;
+
+                    return new BadRequestObjectResult(errors);
+                }
+
                 bool isNew = purchaseInvoiceDto.Id == 0;
                 Core.Domain.Purchases.PurchaseInvoiceHeader purchaseInvoice = null;
+                Core.Domain.Purchases.PurchaseReceiptHeader purchaseReceipt = null;
 
                 if (isNew)
                 {
                     purchaseInvoice = new Core.Domain.Purchases.PurchaseInvoiceHeader();
+                    purchaseInvoice.VendorId = purchaseInvoiceDto.VendorId;
+                    purchaseInvoice.Date = purchaseInvoiceDto.InvoiceDate;
+                    purchaseInvoice.VendorInvoiceNo = purchaseInvoice.VendorId.GetValueOrDefault().ToString(); // TO BE REPLACE BY INVOICE NO FROM VENDOR
+
+                    purchaseReceipt = new Core.Domain.Purchases.PurchaseReceiptHeader();
+                    purchaseReceipt.VendorId = purchaseInvoiceDto.VendorId;
+                    purchaseReceipt.Date = purchaseInvoiceDto.InvoiceDate;
+
+                    foreach (var line in purchaseInvoiceDto.PurchaseInvoiceLines)
+                    {
+                        var purchaseInvoiceLine = new Core.Domain.Purchases.PurchaseInvoiceLine();
+                        purchaseInvoiceLine.Amount = line.Amount.GetValueOrDefault();
+                        purchaseInvoiceLine.Discount = line.Discount.GetValueOrDefault();
+                        purchaseInvoiceLine.Quantity = line.Quantity.GetValueOrDefault();
+                        purchaseInvoiceLine.ItemId = line.ItemId.GetValueOrDefault();
+                        purchaseInvoiceLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
+
+                        purchaseInvoice.PurchaseInvoiceLines.Add(purchaseInvoiceLine);
+
+                        var purchaseReceiptLine = new Core.Domain.Purchases.PurchaseReceiptLine();
+                        purchaseReceiptLine.Amount = line.Amount.GetValueOrDefault();
+                        purchaseReceiptLine.Discount = line.Discount.GetValueOrDefault();
+                        purchaseReceiptLine.Quantity = line.Quantity.GetValueOrDefault();
+                        purchaseReceiptLine.ItemId = line.ItemId.GetValueOrDefault();
+                        purchaseReceiptLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
+                        purchaseReceiptLine.ReceivedQuantity = line.Quantity.GetValueOrDefault();
+                        purchaseReceiptLine.PurchaseOrderLineId = line.Id; // This Id is also the PurchaseOrderLineId when you create purchase invoice directly from purchase order.
+                        purchaseReceipt.PurchaseReceiptLines.Add(purchaseReceiptLine);
+
+                        purchaseInvoiceLine.PurchaseReceiptLine = purchaseReceiptLine;
+                    }
                 }
                 else
                 {
                     purchaseInvoice = _purchasingService.GetPurchaseInvoiceById(purchaseInvoiceDto.Id);
-                }
+                    purchaseInvoice.Date = purchaseInvoiceDto.InvoiceDate;
 
-                purchaseInvoice.VendorId = purchaseInvoiceDto.VendorId;
-                purchaseInvoice.Date = purchaseInvoiceDto.InvoiceDate;
-
-                foreach (var line in purchaseInvoiceDto.PurchaseInvoiceLines)
-                {
-                    if (!isNew)
+                    foreach (var line in purchaseInvoiceDto.PurchaseInvoiceLines)
                     {
                         var existingLine = purchaseInvoice.PurchaseInvoiceLines.Where(id => id.Id == line.Id).FirstOrDefault();
                         if (purchaseInvoice.PurchaseInvoiceLines.Where(id => id.Id == line.Id).FirstOrDefault() != null)
@@ -273,41 +329,41 @@ namespace Api.Controllers
                             existingLine.Quantity = line.Quantity.GetValueOrDefault();
                             existingLine.ItemId = line.ItemId.GetValueOrDefault();
                             existingLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
+
+                            existingLine.PurchaseReceiptLine.Amount = line.Amount.GetValueOrDefault();
+                            existingLine.PurchaseReceiptLine.Discount = line.Discount.GetValueOrDefault();
+                            existingLine.PurchaseReceiptLine.Quantity = line.Quantity.GetValueOrDefault();
+                            existingLine.PurchaseReceiptLine.ItemId = line.ItemId.GetValueOrDefault();
+                            existingLine.PurchaseReceiptLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
+                            existingLine.PurchaseReceiptLine.ReceivedQuantity = line.Quantity.GetValueOrDefault();
                         }
                         else
                         {
-                            var purchaseOrderLine = new Core.Domain.Purchases.PurchaseInvoiceLine();
-                            purchaseOrderLine.Amount = line.Amount.GetValueOrDefault();
-                            purchaseOrderLine.Discount = line.Discount.GetValueOrDefault();
-                            purchaseOrderLine.Quantity = line.Quantity.GetValueOrDefault();
-                            purchaseOrderLine.ItemId = line.ItemId.GetValueOrDefault();
-                            purchaseOrderLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
+                            var purchaseInvoiceLine = new Core.Domain.Purchases.PurchaseInvoiceLine();
+                            purchaseInvoiceLine.Amount = line.Amount.GetValueOrDefault();
+                            purchaseInvoiceLine.Discount = line.Discount.GetValueOrDefault();
+                            purchaseInvoiceLine.Quantity = line.Quantity.GetValueOrDefault();
+                            purchaseInvoiceLine.ItemId = line.ItemId.GetValueOrDefault();
+                            purchaseInvoiceLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
 
-                            purchaseInvoice.PurchaseInvoiceLines.Add(purchaseOrderLine);
+                            purchaseInvoice.PurchaseInvoiceLines.Add(purchaseInvoiceLine);
+
+                            var purchaseReceiptLine = new Core.Domain.Purchases.PurchaseReceiptLine();
+                            purchaseReceiptLine.Amount = line.Amount.GetValueOrDefault();
+                            purchaseReceiptLine.Discount = line.Discount.GetValueOrDefault();
+                            purchaseReceiptLine.Quantity = line.Quantity.GetValueOrDefault();
+                            purchaseReceiptLine.ItemId = line.ItemId.GetValueOrDefault();
+                            purchaseReceiptLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
+                            purchaseReceiptLine.ReceivedQuantity = line.Quantity.GetValueOrDefault();
+                            
+                            purchaseReceipt.PurchaseReceiptLines.Add(purchaseReceiptLine);
+
+                            purchaseInvoiceLine.PurchaseReceiptLine = purchaseReceiptLine;
                         }
                     }
-                    else
-                    {
-                        var purchaseOrderLine = new Core.Domain.Purchases.PurchaseInvoiceLine();
-                        purchaseOrderLine.Amount = line.Amount.GetValueOrDefault();
-                        purchaseOrderLine.Discount = line.Discount.GetValueOrDefault();
-                        purchaseOrderLine.Quantity = line.Quantity.GetValueOrDefault();
-                        purchaseOrderLine.ItemId = line.ItemId.GetValueOrDefault();
-                        purchaseOrderLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
-
-                        purchaseInvoice.PurchaseInvoiceLines.Add(purchaseOrderLine);
-                    }
                 }
 
-                if (isNew)
-                {
-                    purchaseInvoice.VendorInvoiceNo = purchaseInvoice.VendorId.GetValueOrDefault().ToString();
-                    _purchasingService.AddPurchaseInvoice(purchaseInvoice, purchaseInvoiceDto.PurchaseOrderHeaderId);
-                }
-                else
-                {
-                    //_purchasingService.UpdatePurchaseOrder(purchaseOrder);
-                }
+                _purchasingService.SavePurchaseInvoice(purchaseInvoice, purchaseReceipt);
 
                 return new OkObjectResult(Ok());
             }

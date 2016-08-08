@@ -22,7 +22,7 @@ namespace Core.Domain.Purchases
         }
 
         public int VendorId { get; set; }
-        public int PurchaseOrderHeaderId { get; set; }
+        public int? PurchaseOrderHeaderId { get; set; }
         public int? GeneralLedgerHeaderId { get; set; }
         public DateTime Date { get; set; }
         public string No { get; set; }

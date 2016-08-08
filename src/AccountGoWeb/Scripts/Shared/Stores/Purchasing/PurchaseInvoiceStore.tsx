@@ -56,7 +56,7 @@ export default class PurchaseOrderStore {
                     this.purchaseInvoice.id = result.data.id;
                     this.purchaseInvoice.paymentTermId = result.data.paymentTermId;
                     this.changedVendor(result.data.vendorId);
-                    this.changedInvoiceDate(result.data.orderDate);
+                    this.changedInvoiceDate(result.data.invoiceDate);
                     for (var i = 0; i < result.data.purchaseInvoiceLines.length; i++) {
                         this.addLineItem(
                             result.data.purchaseInvoiceLines[i].id,
@@ -104,6 +104,25 @@ export default class PurchaseOrderStore {
     async savePurchaseInvoice() {
         if (this.validation() && this.validationErrors.length === 0) {
             await axios.post(Config.apiUrl + "api/purchasing/savepurchaseinvoice", JSON.stringify(this.purchaseInvoice),
+                {
+                    headers: {
+                        'Content-type': 'application/json'
+                    }
+                })
+                .then(function (response) {
+                    window.location.href = baseUrl + 'purchasing/purchaseinvoices';
+                })
+                .catch(function (error) {
+                    error.data.map(function (err) {
+                        this.validationErrors.push(err);
+                    }.bind(this));
+                }.bind(this))
+        }
+    }
+
+    async postInvoice() {
+        if (this.validation() && this.validationErrors.length === 0) {
+            await axios.post(Config.apiUrl + "api/purchasing/postpurchaseinvoice", JSON.stringify(this.purchaseInvoice),
                 {
                     headers: {
                         'Content-type': 'application/json'

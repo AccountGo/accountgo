@@ -52,6 +52,9 @@ namespace Core.Domain.Purchases
 
         public bool IsPaid()
         {
+            if (this.GeneralLedgerHeader == null)
+                return false;
+
             return this.GeneralLedgerHeader.GeneralLedgerLines.Where(dr => dr.DrCr == DrOrCrSide.Dr).Sum(l => l.Amount) == VendorPayments.Sum(a => a.Amount);
         }
     }

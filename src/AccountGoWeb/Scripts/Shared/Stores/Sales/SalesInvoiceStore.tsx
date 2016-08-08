@@ -116,6 +116,25 @@ export default class SalesStore {
         }
     }
 
+    async postInvoice() {
+        if (this.validation() && this.validationErrors.length === 0) {
+            await axios.post(Config.apiUrl + "api/sales/postsalesinvoice", JSON.stringify(this.salesInvoice),
+                {
+                    headers: {
+                        'Content-type': 'application/json'
+                    }
+                })
+                .then(function (response) {
+                    window.location.href = baseUrl + 'sales/salesinvoices';
+                })
+                .catch(function (error) {
+                    error.data.map(function (err) {
+                        this.validationErrors.push(err);
+                    }.bind(this));
+                }.bind(this))
+        }
+    }
+
     validation() {
         this.validationErrors = [];
         if (this.salesInvoice.customerId === undefined)

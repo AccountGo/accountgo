@@ -1,7 +1,7 @@
 ﻿CREATE TABLE [dbo].[PurchaseReceiptHeader] (
     [Id]                    INT            IDENTITY (1, 1) NOT NULL,
     [VendorId]              INT            NOT NULL,
-    [PurchaseOrderHeaderId] INT            NOT NULL,
+    [PurchaseOrderHeaderId] INT            NULL,
     [GeneralLedgerHeaderId] INT            NULL,
     [Date]                  DATETIME       NOT NULL,
     [No]                    NVARCHAR (MAX) NULL,
