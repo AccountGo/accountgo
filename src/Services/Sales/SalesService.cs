@@ -630,6 +630,9 @@ namespace Services.Sales
         {
             var salesInvoice = GetSalesInvoiceById(invoiceId);
 
+            if (salesInvoice.GeneralLedgerHeaderId.HasValue)
+                throw new Exception("Invoice is already posted. Update is not allowed.");
+
             decimal totalAmount = 0, totalDiscount = 0;
 
             var taxes = new List<KeyValuePair<int, decimal>>();

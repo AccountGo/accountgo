@@ -588,7 +588,7 @@ namespace Api.Controllers
             }
             catch(Exception ex)
             {
-                errors = new string[1] { ex.InnerException.Message };
+                errors = new string[1] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
                 return new BadRequestObjectResult(errors);
             }
         }
@@ -651,6 +651,10 @@ namespace Api.Controllers
                 else
                 {
                     salesInvoice = _salesService.GetSalesInvoiceById(salesInvoiceDto.Id);
+
+                    if (salesInvoice.GeneralLedgerHeaderId.HasValue)
+                        throw new Exception("Invoice is already posted. Update is not allowed.");
+
                     salesInvoice.Date = salesInvoiceDto.InvoiceDate;
 
                     foreach (var line in salesInvoiceDto.SalesInvoiceLines)
@@ -704,7 +708,7 @@ namespace Api.Controllers
             }
             catch (Exception ex)
             {
-                errors = new string[1] { ex.Message };
+                errors = new string[1] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
                 return new BadRequestObjectResult(errors);
             }
         }

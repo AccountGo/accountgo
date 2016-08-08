@@ -421,6 +421,9 @@ namespace Services.Purchasing
         {
             var purchaseInvoice = GetPurchaseInvoiceById(invoiceId);
 
+            if (purchaseInvoice.GeneralLedgerHeaderId.HasValue)
+                throw new Exception("Invoice is already posted. Update is not allowed.");
+
             var glHeader = _financialService.CreateGeneralLedgerHeader(DocumentTypes.PurchaseInvoice, purchaseInvoice.Date, purchaseInvoice.Description);
 
             decimal totalTaxAmount = 0, totalAmount = 0, totalDiscount = 0;
