@@ -142,6 +142,37 @@ namespace Api.Controllers
 
         [HttpPost]
         [Route("[action]")]
+        public IActionResult PostJournalEntry([FromBody]JournalEntry journalEntryDto)
+        {
+            string[] errors = null;
+
+            try
+            {
+                if (!ModelState.IsValid)
+                {
+                    errors = new string[ModelState.ErrorCount];
+                    foreach (var val in ModelState.Values)
+                        for (int i = 0; i < ModelState.ErrorCount; i++)
+                            errors[i] = val.Errors[i].ErrorMessage;
+
+                    return new BadRequestObjectResult(errors);
+                }
+
+                var je = _financialService.GetJournalEntry(journalEntryDto.Id, false);
+
+                _financialService.UpdateJournalEntry(je, true);
+
+                return new OkObjectResult(Ok());
+            }
+            catch (Exception ex)
+            {
+                errors = new string[1] { ex.Message };
+                return new BadRequestObjectResult(errors);
+            }
+        }
+
+        [HttpPost]
+        [Route("[action]")]
         public IActionResult SaveJournalEntry([FromBody]JournalEntry journalEntryDto)
         {
             string[] errors = null;
@@ -209,11 +240,11 @@ namespace Api.Controllers
 
                     if (isNew)
                     {
-                        //_financialService.AddJournalEntry(journalEntry);
+                        _financialService.AddJournalEntry(journalEntry);
                     }
                     else
                     {
-                        //_financialService.UpdateJournalEntry(journalEntry);
+                        _financialService.UpdateJournalEntry(journalEntry, false);
                     }
                 }
 
@@ -221,7 +252,7 @@ namespace Api.Controllers
             }
             catch (Exception ex)
             {
-                errors = new string[1] { ex.Message };
+                errors = new string[1] { ex.InnerException.Message };
                 return new BadRequestObjectResult(errors);
             }
         }

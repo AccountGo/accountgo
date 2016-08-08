@@ -42,9 +42,10 @@ namespace Api
 
             // Add framework services.
             services.AddMvc()
-                .AddJsonOptions(opts =>
+                .AddJsonOptions(options =>
                 {
-                    opts.SerializerSettings.ContractResolver = new Newtonsoft.Json.Serialization.CamelCasePropertyNamesContractResolver();
+                    options.SerializerSettings.ContractResolver = new Newtonsoft.Json.Serialization.CamelCasePropertyNamesContractResolver();
+                    options.SerializerSettings.ReferenceLoopHandling = Newtonsoft.Json.ReferenceLoopHandling.Ignore;
                 });
 
             //services.AddSwaggerGen();

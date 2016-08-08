@@ -70,6 +70,7 @@ class CancelJournalEntryButton extends React.Component<any, {}>{
 @observer
 class PostJournalEntryButton extends React.Component<any, {}>{
     postOnClick(e) {
+        store.postJournal();
     }
 
     render() {
@@ -109,7 +110,7 @@ class JournalEntryHeader extends React.Component<any, {}>{
                         <div className="row">
                             <div className="col-sm-3">Date</div>
                             <div className="col-sm-9"><input type="date" className="form-control" id="newJournalDate" onChange={this.onChangeJournalDate.bind(this) }
-                                value={store.journalEntry.date !== undefined ? store.journalEntry.date.substring(0, 10) : new Date(Date.now()).toISOString().substring(0, 10) } /></div>
+                                value={store.journalEntry.journalDate !== undefined ? store.journalEntry.journalDate.substring(0, 10) : new Date(Date.now()).toISOString().substring(0, 10) } /></div>
                         </div>
                         <div className="row">
                             <div className="col-sm-3">Voucher</div>
@@ -154,7 +155,7 @@ class JournalEntryLines extends React.Component<any, {}>{
         amount = (document.getElementById("txtNewAmount") as HTMLInputElement).value;
         memo = (document.getElementById("txtNewMemo") as HTMLInputElement).value;
 
-        store.addLineItem(accountId, drcr, amount, memo);
+        store.addLineItem(0, accountId, drcr, amount, memo);
         
         (document.getElementById("txtNewAmount") as HTMLInputElement).value = "0";
         (document.getElementById("txtNewMemo") as HTMLInputElement).value = "";
@@ -238,15 +239,13 @@ export default class JournalEntry extends React.Component<any, {}> {
     render() {
         return (
             <div id="divJournalEntry">
+                <ValidationErrors />
                 <JournalEntryHeader />
                 <JournalEntryLines />
                 <div>
                     <SaveJournalEntryButton />
                     <CancelJournalEntryButton />
                     <PostJournalEntryButton />
-                </div>
-                <div>
-                    <span>This form still under development.</span>
                 </div>
             </div>
         );

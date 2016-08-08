@@ -639,12 +639,12 @@ namespace Services.Financial
             {
                 journalEntry.Posted = posted;
 
-                if (journalEntry.GeneralLedgerHeaderId == 0)
+                if (journalEntry.GeneralLedgerHeaderId == null || journalEntry.GeneralLedgerHeaderId == 0)
                 {
                     var glEntry = new GeneralLedgerHeader()
                     {
                         Date = DateTime.Now,
-                        DocumentType = Core.Domain.DocumentTypes.JournalEntry,
+                        DocumentType = DocumentTypes.JournalEntry,
                         Description = journalEntry.Memo,
                     };
 
@@ -667,35 +667,6 @@ namespace Services.Financial
             }
 
             _journalEntryRepo.Update(journalEntry);
-
-            //var glEntry = _generalLedgerRepository.Table.Where(gl => gl.Id == journalEntry.GeneralLedgerHeaderId).FirstOrDefault();
-
-            //glEntry.Date = journalEntry.Date;
-
-            //foreach (var je in journalEntry.JournalEntryLines)
-            //{
-            //    if (glEntry.GeneralLedgerLines.Any(l => l.AccountId == je.AccountId))
-            //    {
-            //        var existingLine = glEntry.GeneralLedgerLines.Where(l => l.AccountId == je.AccountId).FirstOrDefault();
-            //        existingLine.Amount = je.Amount;
-            //        existingLine.DrCr = je.DrCr;
-            //    }
-            //    else
-            //    {
-            //        glEntry.GeneralLedgerLines.Add(new GeneralLedgerLine()
-            //        {
-            //            AccountId = je.AccountId,
-            //            DrCr = je.DrCr,
-            //            Amount = je.Amount,
-            //        });
-            //    }
-            //}
-
-            //if (ValidateGeneralLedgerEntry(glEntry) && glEntry.ValidateAccountingEquation())
-            //{
-            //    journalEntry.GeneralLedgerHeader = glEntry;
-            //    _journalEntryRepo.Update(journalEntry);
-            //}
         }
 
         public GeneralLedgerHeader GetGeneralLedgerHeader(int id)

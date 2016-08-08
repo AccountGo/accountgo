@@ -44,16 +44,15 @@ export default class JournalEntryStore {
     async getJournalEntry(journalEntryId) {
         await axios.get(Config.apiUrl + "api/financials/journalentry?id=" + journalEntryId)
             .then(function (result) {
-                this.journalEntry.id = result.data.id;
-                
+                this.journalEntry.id = result.data.id;                
                 this.journalEntry.voucherType = result.data.voucherType;
-                this.journalEntry.date = result.data.journalDate;
+                this.journalEntry.journalDate = result.data.journalDate;
                 this.journalEntry.memo = result.data.memo === null ? undefined : result.data.memo;
                 this.journalEntry.referenceNo = result.data.memo === null ? undefined : result.data.referenceNo;
 
                 for (var i = 0; i < result.data.journalEntryLines.length; i++) {
                     var item = result.data.journalEntryLines[i];
-                    this.addLineItem(item.accountId, item.drCr, item.amount, item.memo);
+                    this.addLineItem(item.id, item.accountId, item.drCr, item.amount, item.memo);
                 }
 
                 this.journalEntry.posted = result.data.posted;
@@ -85,7 +84,7 @@ export default class JournalEntryStore {
     validation()
     {
         this.validationErrors = [];
-        if (this.journalEntry.date === undefined)
+        if (this.journalEntry.journalDate === undefined)
             this.validationErrors.push("Date is required.");
         if (this.journalEntry.voucherType === undefined)
             this.validationErrors.push("Voucher type is required.");
@@ -99,7 +98,7 @@ export default class JournalEntryStore {
             for (var i = 0; i < this.journalEntry.journalEntryLines.length; i++) {
                 if (this.journalEntry.journalEntryLines[i].accountId === undefined)
                     this.validationErrors.push("Account is required.");
-                if (this.journalEntry.journalEntryLines[i].drCr === undefined)
+                if (this.journalEntry.journalEntryLines[i].drcr === undefined)
                     this.validationErrors.push("DrCr is required.");
                 if (this.journalEntry.journalEntryLines[i].amount === undefined)
                     this.validationErrors.push("Amount is required.");
@@ -110,12 +109,27 @@ export default class JournalEntryStore {
         return this.validationErrors.length === 0;
     }
 
-    postJournal(post) {
-        this.journalEntry.posted = post;
+    async postJournal() {
+        if (this.validation() && this.validationErrors.length == 0) {
+            await axios.post(Config.apiUrl + "api/financials/postjournalentry", JSON.stringify(this.journalEntry),
+                {
+                    headers: {
+                        'Content-type': 'application/json'
+                    }
+                })
+                .then(function (response) {
+                    window.location.href = baseUrl + 'financials/journalentries';
+                })
+                .catch(function (error) {
+                    error.data.map(function (err) {
+                        this.validationErrors.push(err);
+                    }.bind(this));
+                }.bind(this))
+        }
     }
 
-    addLineItem(accountId, drcr, amount, memo) {
-        var newLineItem = new JournalEntryLine(accountId, drcr, amount, memo);
+    addLineItem(id = 0, accountId, drcr, amount, memo) {
+        var newLineItem = new JournalEntryLine(id, accountId, drcr, amount, memo);
         this.journalEntry.journalEntryLines.push(extendObservable(newLineItem, newLineItem));
         this.changeIsDirty();
     }
