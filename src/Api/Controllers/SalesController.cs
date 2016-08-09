@@ -335,7 +335,7 @@ namespace Api.Controllers
                 quoteDtos.Add(quoteDto);
             }
 
-            return new ObjectResult(quoteDtos);
+            return new ObjectResult(quoteDtos.OrderBy(q => q.Id).Reverse());
         }
 
         [HttpGet]
