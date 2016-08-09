@@ -158,6 +158,15 @@ namespace Api.Controllers
                 }
                 else
                 {
+                    var deleted = (from line in purchaseOrder.PurchaseOrderLines
+                                   where !purchaseOrderDto.PurchaseOrderLines.Any(x => x.Id == line.Id)
+                                   select line).ToList();
+
+                    foreach (var line in deleted)
+                    {
+                        purchaseOrder.PurchaseOrderLines.Remove(line);
+                    }
+
                     _purchasingService.UpdatePurchaseOrder(purchaseOrder);
                 }
 

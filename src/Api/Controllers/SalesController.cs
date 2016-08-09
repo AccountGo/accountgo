@@ -500,6 +500,10 @@ namespace Api.Controllers
                 else
                 {
                     salesOrder = _salesService.GetSalesOrderById(salesOrderDto.Id);
+
+                    var deleted = from line in salesOrder.SalesOrderLines
+                                  where !salesOrderDto.SalesOrderLines.Any(x => x.Id == line.Id)
+                                  select line;
                 }
 
                 salesOrder.CustomerId = salesOrderDto.CustomerId;
@@ -551,6 +555,15 @@ namespace Api.Controllers
                 }
                 else
                 {
+                    var deleted = (from line in salesOrder.SalesOrderLines
+                                   where !salesOrderDto.SalesOrderLines.Any(x => x.Id == line.Id)
+                                   select line).ToList();
+
+                    foreach (var line in deleted)
+                    {
+                        salesOrder.SalesOrderLines.Remove(line);
+                    }
+
                     _salesService.UpdateSalesOrder(salesOrder);
                 }
 
@@ -765,6 +778,7 @@ namespace Api.Controllers
 
                 salesQuote.ReferenceNo = quotationDto.ReferenceNo;
                 salesQuote.PaymentTermId = quotationDto.PaymentTermId;
+
                 foreach (var line in quotationDto.SalesQuotationLines)
                 {
                     if (!isNew)
@@ -809,6 +823,15 @@ namespace Api.Controllers
                 }
                 else
                 {
+                    var deleted = (from line in salesQuote.SalesQuoteLines
+                                  where !quotationDto.SalesQuotationLines.Any(x => x.Id == line.Id)
+                                  select line).ToList();
+
+                    foreach (var line in deleted)
+                    {
+                        salesQuote.SalesQuoteLines.Remove(line);
+                    }
+
                     _salesService.UpdateSalesQuote(salesQuote);
                 }
 
@@ -817,7 +840,7 @@ namespace Api.Controllers
             }
             catch (Exception ex)
             {
-                errors = new string[1] { ex.Message };
+                errors = new string[1] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
                 return new BadRequestObjectResult(errors);
             }
         }

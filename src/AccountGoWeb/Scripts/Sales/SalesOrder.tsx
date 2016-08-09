@@ -135,8 +135,8 @@ class SalesOrderLines extends React.Component<any, {}>{
         (document.getElementById("txtNewDiscount") as HTMLInputElement).value = "";
     }
 
-    onClickRemoveLineItem(e) {
-        store.removeLineItem(e.target.name);
+    onClickRemoveLineItem(i, e) {
+        store.removeLineItem(i);
     }
 
     onChangeQuantity(e) {
@@ -164,8 +164,8 @@ class SalesOrderLines extends React.Component<any, {}>{
                     <td><input type="text" className="form-control" name={i} value={store.salesOrder.salesOrderLines[i].discount} onChange={this.onChangeDiscount.bind(this) } /></td>
                     <td>{store.getLineTotal(i) }</td>
                     <td>
-                        <button type="button" className="btn btn-box-tool">
-                            <i className="fa fa-fw fa-times" name={i} onClick={this.onClickRemoveLineItem.bind(this) }></i>
+                        <button type="button" className="btn btn-box-tool" onClick={this.onClickRemoveLineItem.bind(this, i) }>
+                            <i className="fa fa-fw fa-times"></i>
                         </button>
                     </td>
                 </tr>
