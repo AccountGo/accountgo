@@ -173,9 +173,9 @@ namespace Api.Controllers
                     CustomerName = salesOrder.Customer.Party.Name,
                     OrderDate = salesOrder.Date,
                     ReferenceNo = salesOrder.ReferenceNo,
-                    Amount = salesOrder.SalesOrderLines.Sum(l => l.Amount)
+                    Amount = salesOrder.SalesOrderLines.Sum(l => l.Amount),
+                  
                 };
-
                 salesOrdersDto.Add(salesOrderDto);
             }
 
@@ -203,6 +203,7 @@ namespace Api.Controllers
                     SalesOrderLines = new List<Dto.Sales.SalesOrderLine>()
                 };
 
+                //salesOrderDto.ReferenceNo = salesOrder.ReferenceNo;
                 foreach (var line in salesOrder.SalesOrderLines)
                 {
                     var lineDto = new Dto.Sales.SalesOrderLine();
@@ -241,9 +242,11 @@ namespace Api.Controllers
                     CustomerName = salesInvoice.Customer.Party.Name,
                     InvoiceDate = salesInvoice.Date,
                     TotalAmount = salesInvoice.SalesInvoiceLines.Sum(l => l.Amount),
-                    SalesInvoiceLines = new List<Dto.Sales.SalesInvoiceLine>()
+                    SalesInvoiceLines = new List<Dto.Sales.SalesInvoiceLine>(),
+                    PaymentTermId = salesInvoice.PaymentTermId,
+                    ReferenceNo = salesInvoice.ReferenceNo
                 };
-
+        
                 foreach (var line in salesInvoice.SalesInvoiceLines)
                 {
                     var lineDto = new Dto.Sales.SalesInvoiceLine();
@@ -634,6 +637,8 @@ namespace Api.Controllers
                     salesInvoice = new Core.Domain.Sales.SalesInvoiceHeader();
                     salesInvoice.CustomerId = salesInvoiceDto.CustomerId.GetValueOrDefault();
                     salesInvoice.Date = salesInvoiceDto.InvoiceDate;
+                    salesInvoice.PaymentTermId = salesInvoiceDto.PaymentTermId;
+                    salesInvoice.ReferenceNo = salesInvoiceDto.ReferenceNo;
 
                     salesDelivery = new Core.Domain.Sales.SalesDeliveryHeader();
                     salesDelivery.CustomerId = salesInvoiceDto.CustomerId.GetValueOrDefault();
@@ -689,6 +694,8 @@ namespace Api.Controllers
                         throw new Exception("Invoice is already posted. Update is not allowed.");
 
                     salesInvoice.Date = salesInvoiceDto.InvoiceDate;
+                    salesInvoice.PaymentTermId = salesInvoiceDto.PaymentTermId;
+                    salesInvoice.ReferenceNo = salesInvoiceDto.ReferenceNo;
 
                     foreach (var line in salesInvoiceDto.SalesInvoiceLines)
                     {
