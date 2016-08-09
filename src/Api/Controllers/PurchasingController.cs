@@ -60,6 +60,8 @@ namespace Api.Controllers
                 VendorName = purchaseOrder.Vendor.Party.Name,
                 OrderDate = purchaseOrder.Date,
                 Amount = purchaseOrder.PurchaseOrderLines.Sum(l => l.Amount),
+                PaymentTermId = purchaseOrder.PaymentTermId,
+                ReferenceNo = purchaseOrder.ReferenceNo,
                 //Completed = purchaseOrder.IsCompleted(),
             };
 
@@ -110,7 +112,8 @@ namespace Api.Controllers
                 {
                     purchaseOrder = _purchasingService.GetPurchaseOrderById(purchaseOrderDto.Id);
                 }
-
+                purchaseOrder.ReferenceNo = purchaseOrderDto.ReferenceNo;
+                purchaseOrder.PaymentTermId = purchaseOrderDto.PaymentTermId;
                 purchaseOrder.VendorId = purchaseOrderDto.VendorId;
                 purchaseOrder.Date = purchaseOrderDto.OrderDate;
 
@@ -216,7 +219,9 @@ namespace Api.Controllers
                 VendorId = invoice.VendorId.GetValueOrDefault(),
                 VendorName = invoice.Vendor.Party.Name,
                 InvoiceDate = invoice.Date,
-                Amount = invoice.PurchaseInvoiceLines.Sum(l => l.Amount)
+                Amount = invoice.PurchaseInvoiceLines.Sum(l => l.Amount),
+                ReferenceNo = invoice.ReferenceNo,
+                PaymentTermId = invoice.PaymentTermId
             };
 
             foreach (var item in invoice.PurchaseInvoiceLines)
@@ -295,6 +300,9 @@ namespace Api.Controllers
                     purchaseInvoice.VendorId = purchaseInvoiceDto.VendorId;
                     purchaseInvoice.Date = purchaseInvoiceDto.InvoiceDate;
                     purchaseInvoice.VendorInvoiceNo = purchaseInvoice.VendorId.GetValueOrDefault().ToString(); // TO BE REPLACE BY INVOICE NO FROM VENDOR
+
+                    purchaseInvoice.ReferenceNo = purchaseInvoiceDto.ReferenceNo;
+                    purchaseInvoice.PaymentTermId = purchaseInvoiceDto.PaymentTermId;
 
                     purchaseReceipt = new Core.Domain.Purchases.PurchaseReceiptHeader();
                     purchaseReceipt.VendorId = purchaseInvoiceDto.VendorId;

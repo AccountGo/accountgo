@@ -34,6 +34,7 @@ export default class PurchaseOrderStore {
                 .then(function (result) {
                     this.purchaseInvoice.purchaseOrderHeaderId = purchId;     
                     this.purchaseInvoice.paymentTermId = result.data.paymentTermId;
+                    this.purchaseInvoice.referenceNo = result.data.referenceNo;
                     this.changedVendor(result.data.vendorId);
                     this.changedInvoiceDate(result.data.orderDate);
                     for (var i = 0; i < result.data.purchaseOrderLines.length; i++) {
@@ -55,6 +56,7 @@ export default class PurchaseOrderStore {
                 .then(function (result) {
                     this.purchaseInvoice.id = result.data.id;
                     this.purchaseInvoice.paymentTermId = result.data.paymentTermId;
+                    this.purchaseInvoice.referenceNo = result.data.referenceNo;
                     this.changedVendor(result.data.vendorId);
                     this.changedInvoiceDate(result.data.invoiceDate);
                     for (var i = 0; i < result.data.purchaseInvoiceLines.length; i++) {
@@ -174,7 +176,9 @@ export default class PurchaseOrderStore {
 
         return this.validationErrors.length === 0;
     }
-
+    changedReferenceNo(refNo) {
+        this.purchaseInvoice.referenceNo = refNo;
+    }
     changedVendor(vendorId) {
         this.purchaseInvoice.vendorId = vendorId;
     }

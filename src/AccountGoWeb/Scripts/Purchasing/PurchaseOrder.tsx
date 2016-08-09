@@ -77,6 +77,9 @@ class PurchaseOrderHeader extends React.Component<any, {}>{
     onChangeOrderDate(e) {
         store.changedOrderDate(e.target.value);
     }
+    onChangeReferenceNo(e) {
+        store.changedReferenceNo(e.target.value);
+    }
     render() {        
         return (
             <div className="box">
@@ -108,7 +111,7 @@ class PurchaseOrderHeader extends React.Component<any, {}>{
                         </div>                        
                         <div className="row">
                             <div className="col-sm-2">Reference no.</div>
-                            <div className="col-sm-10"><input type="text" className="form-control" /></div>
+                            <div className="col-sm-10"><input type="text" className="form-control"  value={store.purchaseOrder.referenceNo || ''} onChange={this.onChangeReferenceNo.bind(this) }  /></div>
                         </div>
                     </div>
                 </div>

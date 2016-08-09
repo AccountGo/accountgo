@@ -12,6 +12,8 @@ namespace Dto.Purchasing
         public decimal Amount { get; set; }
         public bool IsPaid { get; set; }
         public int? FromPurchaseOrderId { get; set; }
+        public int? PaymentTermId { get; set; }
+        public string ReferenceNo { get; set; }
         public System.Collections.Generic.IList<PurchaseInvoiceLine> PurchaseInvoiceLines { get; set; }
 
         public PurchaseInvoice()
