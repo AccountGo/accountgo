@@ -6,9 +6,12 @@
     [Date]                   DATETIME        NOT NULL,
     [ShippingHandlingCharge] DECIMAL (18, 2) NOT NULL,
     [Status]                 INT             NOT NULL,
+    [PaymentTermId] INT NULL, 
+    [ReferenceNo] NVARCHAR(MAX) NULL, 
     CONSTRAINT [PK_dbo.SalesInvoiceHeader] PRIMARY KEY CLUSTERED ([Id] ASC),
     CONSTRAINT [FK_dbo.SalesInvoiceHeader_dbo.Customer_CustomerId] FOREIGN KEY ([CustomerId]) REFERENCES [dbo].[Customer] ([Id]),
-    CONSTRAINT [FK_dbo.SalesInvoiceHeader_dbo.GeneralLedgerHeader_GeneralLedgerHeaderId] FOREIGN KEY ([GeneralLedgerHeaderId]) REFERENCES [dbo].[GeneralLedgerHeader] ([Id]),
+    CONSTRAINT [FK_dbo.SalesInvoiceHeader_dbo.GeneralLedgerHeader_GeneralLedgerHeaderId] FOREIGN KEY ([GeneralLedgerHeaderId]) REFERENCES [dbo].[GeneralLedgerHeader] ([Id]), 
+    CONSTRAINT [FK_SalesInvoiceHeader_PaymentTerm] FOREIGN KEY ([PaymentTermId]) REFERENCES [dbo].[PaymentTerm]([Id]),
 );
 
 
