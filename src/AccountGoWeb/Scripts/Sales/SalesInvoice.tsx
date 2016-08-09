@@ -46,7 +46,9 @@ class SaveInvoiceButton extends React.Component<any, {}>{
     saveNewSalesInvoice(e) {
         store.saveNewSalesInvoice();
     }
-
+    onChangeReferenceNo(e) {
+        store.changedReferenceNo(e.target.value);
+    }
     render() {
         return (
             <input type="button" className="btn btn-sm btn-primary btn-flat pull-left" value="Save" onClick={this.saveNewSalesInvoice.bind(this)} />
@@ -91,6 +93,9 @@ class SalesInvoiceHeader extends React.Component<any, {}>{
     onChangeInvoiceDate(e) {
         store.changedInvoiceDate(e.target.value);
     }
+    onChangeReferenceNo(e) {
+        store.changedReferenceNo(e.target.value);
+    }
     render() {        
         return (
             <div className="box">
@@ -121,7 +126,7 @@ class SalesInvoiceHeader extends React.Component<any, {}>{
                         </div>
                         <div className="row">
                             <div className="col-sm-2">Reference no.</div>
-                            <div className="col-sm-10"><input type="text" className="form-control" /></div>
+                            <div className="col-sm-10"><input type="text" className="form-control"  value={store.salesInvoice.referenceNo || ''} onChange={this.onChangeReferenceNo.bind(this) }  /></div>
                         </div>
                     </div>
                 </div>

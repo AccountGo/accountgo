@@ -37,7 +37,8 @@ namespace Core.Domain.Sales
         [NotMapped]
         public virtual ICollection<SalesReceiptHeader> SalesReceipts { get; set; }
         public virtual ICollection<CustomerAllocation> CustomerAllocations { get; set; }
-
+        public int? PaymentTermId { get; set; }
+        public string ReferenceNo { get; set; }
         public decimal ComputeTotalTax()
         {
             decimal totalTax = 0;
