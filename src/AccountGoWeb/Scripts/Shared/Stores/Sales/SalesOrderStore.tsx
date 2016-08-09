@@ -34,6 +34,7 @@ export default class SalesOrderStore {
             result.then(function (result) {
                 this.changedCustomer(result.data.customerId);
                 this.salesOrder.paymentTermId = result.data.paymentTermId;
+                this.salesOrder.referenceNo = result.data.referenceNo;
                 this.changedOrderDate(result.data.quotationDate);
                 for (var i = 0; i < result.data.salesQuotationLines.length; i++) {
                     this.addLineItem(
@@ -54,6 +55,7 @@ export default class SalesOrderStore {
                 this.salesOrder.id = result.data.id;
                 this.changedCustomer(result.data.customerId);
                 this.salesOrder.paymentTermId = result.data.paymentTermId;
+                this.salesOrder.referenceNo = result.data.referenceNo;
                 this.changedOrderDate(result.data.orderDate);
                 for (var i = 0; i < result.data.salesOrderLines.length; i++) {
                     this.addLineItem(
