@@ -404,11 +404,13 @@ namespace Services.Purchasing
             }
         }
 
-        public void SavePurchaseInvoice(PurchaseInvoiceHeader purchaseInvoice, PurchaseReceiptHeader purchaseReceipt)
+        public void SavePurchaseInvoice(PurchaseInvoiceHeader purchaseInvoice, PurchaseReceiptHeader purchaseReceipt, PurchaseOrderHeader purchaseOrder)
         {
             if (purchaseInvoice.Id == 0)
             {
                 // This should be in a single transaction.
+                if (purchaseOrder != null)
+                    _purchaseOrderRepo.Insert(purchaseOrder);
                 _purchaseInvoiceRepo.Insert(purchaseInvoice);
                 _purchaseReceiptRepo.Insert(purchaseReceipt);                
             }

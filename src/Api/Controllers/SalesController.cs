@@ -338,7 +338,7 @@ namespace Api.Controllers
                 quoteDtos.Add(quoteDto);
             }
 
-            return new ObjectResult(quoteDtos);
+            return new ObjectResult(quoteDtos.OrderBy(q => q.Id).Reverse());
         }
 
         [HttpGet]
@@ -503,6 +503,10 @@ namespace Api.Controllers
                 else
                 {
                     salesOrder = _salesService.GetSalesOrderById(salesOrderDto.Id);
+
+                    var deleted = from line in salesOrder.SalesOrderLines
+                                  where !salesOrderDto.SalesOrderLines.Any(x => x.Id == line.Id)
+                                  select line;
                 }
 
                 salesOrder.CustomerId = salesOrderDto.CustomerId;
@@ -554,6 +558,15 @@ namespace Api.Controllers
                 }
                 else
                 {
+                    var deleted = (from line in salesOrder.SalesOrderLines
+                                   where !salesOrderDto.SalesOrderLines.Any(x => x.Id == line.Id)
+                                   select line).ToList();
+
+                    foreach (var line in deleted)
+                    {
+                        salesOrder.SalesOrderLines.Remove(line);
+                    }
+
                     _salesService.UpdateSalesOrder(salesOrder);
                 }
 
@@ -617,7 +630,8 @@ namespace Api.Controllers
                 bool isNew = salesInvoiceDto.Id == 0;
                 Core.Domain.Sales.SalesInvoiceHeader salesInvoice = null;
                 Core.Domain.Sales.SalesDeliveryHeader salesDelivery = null;
-              
+                Core.Domain.Sales.SalesOrderHeader salesOrder = null;
+
                 if (isNew)
                 {
                     salesInvoice = new Core.Domain.Sales.SalesInvoiceHeader();
@@ -630,16 +644,37 @@ namespace Api.Controllers
                     salesDelivery.CustomerId = salesInvoiceDto.CustomerId.GetValueOrDefault();
                     salesDelivery.Date = salesInvoiceDto.InvoiceDate;
 
+                    if (!salesInvoiceDto.FromSalesOrderId.HasValue)
+                    {
+                        salesOrder = new Core.Domain.Sales.SalesOrderHeader();
+                        salesOrder.Date = salesInvoiceDto.InvoiceDate;
+                        salesOrder.PaymentTermId = salesInvoiceDto.PaymentTermId;
+                        salesOrder.CustomerId = salesInvoiceDto.CustomerId;
+                    }
+
                     foreach (var line in salesInvoiceDto.SalesInvoiceLines)
                     {
                         var salesInvoiceLine = new Core.Domain.Sales.SalesInvoiceLine();
+                        salesInvoice.SalesInvoiceLines.Add(salesInvoiceLine);
                         salesInvoiceLine.Amount = line.Amount.GetValueOrDefault();
                         salesInvoiceLine.Discount = line.Discount.GetValueOrDefault();
                         salesInvoiceLine.Quantity = line.Quantity.GetValueOrDefault();
                         salesInvoiceLine.ItemId = line.ItemId.GetValueOrDefault();
                         salesInvoiceLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
-                        salesInvoiceLine.SalesOrderLineId = line.Id; // This Id is also the SalesOrderLineId when you create sales invoice directly from sales order.
-                        salesInvoice.SalesInvoiceLines.Add(salesInvoiceLine);
+
+                        if(line.Id != 0)
+                            salesInvoiceLine.SalesOrderLineId = line.Id; // This Id is also the SalesOrderLineId when you create sales invoice directly from sales order.
+                        else
+                        {
+                            var salesOrderLine = new Core.Domain.Sales.SalesOrderLine();
+                            salesOrder.SalesOrderLines.Add(salesOrderLine);
+                            salesOrderLine.Amount = line.Amount.GetValueOrDefault();
+                            salesOrderLine.Discount = line.Discount.GetValueOrDefault();
+                            salesOrderLine.Quantity = line.Quantity.GetValueOrDefault();
+                            salesOrderLine.ItemId = line.ItemId.GetValueOrDefault();
+                            salesOrderLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
+                            salesInvoiceLine.SalesOrderLine = salesOrderLine;
+                        }
 
                         var salesDeliveryLine = new Core.Domain.Sales.SalesDeliveryLine();
                         salesDeliveryLine.Price = line.Amount.GetValueOrDefault();
@@ -704,7 +739,7 @@ namespace Api.Controllers
                     }
                 }
 
-                _salesService.SaveSalesInvoice(salesInvoice, salesDelivery);
+                _salesService.SaveSalesInvoice(salesInvoice, salesDelivery, salesOrder);
 
                 return new OkObjectResult(Ok());
             }
@@ -750,6 +785,7 @@ namespace Api.Controllers
 
                 salesQuote.ReferenceNo = quotationDto.ReferenceNo;
                 salesQuote.PaymentTermId = quotationDto.PaymentTermId;
+
                 foreach (var line in quotationDto.SalesQuotationLines)
                 {
                     if (!isNew)
@@ -794,6 +830,15 @@ namespace Api.Controllers
                 }
                 else
                 {
+                    var deleted = (from line in salesQuote.SalesQuoteLines
+                                  where !quotationDto.SalesQuotationLines.Any(x => x.Id == line.Id)
+                                  select line).ToList();
+
+                    foreach (var line in deleted)
+                    {
+                        salesQuote.SalesQuoteLines.Remove(line);
+                    }
+
                     _salesService.UpdateSalesQuote(salesQuote);
                 }
 
@@ -802,7 +847,7 @@ namespace Api.Controllers
             }
             catch (Exception ex)
             {
-                errors = new string[1] { ex.Message };
+                errors = new string[1] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
                 return new BadRequestObjectResult(errors);
             }
         }

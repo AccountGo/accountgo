@@ -28,7 +28,7 @@ namespace Services.Purchasing
         IEnumerable<PurchaseInvoiceHeader> GetPurchaseInvoices();
         PurchaseInvoiceHeader GetPurchaseInvoiceById(int id);
         void SavePayment(int invoiceId, int vendorId, int accountId, decimal amount, DateTime date);
-        void SavePurchaseInvoice(PurchaseInvoiceHeader purchaseInvoice, PurchaseReceiptHeader purchaseReceipt);
+        void SavePurchaseInvoice(PurchaseInvoiceHeader purchaseInvoice, PurchaseReceiptHeader purchaseReceipt, PurchaseOrderHeader purchaseOrder);
         void PostPurchaseInvoice(int invoiceId);
     }
 }

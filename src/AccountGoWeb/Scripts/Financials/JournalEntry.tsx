@@ -145,8 +145,8 @@ class JournalEntryLines extends React.Component<any, {}>{
     onChangeMemo(e) {
         store.updateLineItem(e.target.name, "memo", e.target.value);
     }
-    onClickRemoveLineItem(e) {
-        store.removeLineItem(e.target.name);
+    onClickRemoveLineItem(i, e) {
+        store.removeLineItem(i);
     }
     addLineItem() {
         var accountId, drcr, amount, memo;
@@ -170,8 +170,8 @@ class JournalEntryLines extends React.Component<any, {}>{
                     <td><input type="text" className="form-control" name={i} onChange={this.onChangeAmount.bind(this) } value={store.journalEntry.journalEntryLines[i].amount} /></td>
                     <td><input type="text" className="form-control" name={i} onChange={this.onChangeMemo.bind(this) } value={store.journalEntry.journalEntryLines[i].memo || ''} /></td>
                     <td>         
-                        <button type="button" className="btn btn-box-tool">
-                            <i className="fa fa-fw fa-times" name={i} onClick={this.onClickRemoveLineItem.bind(this) }></i> 
+                        <button type="button" className="btn btn-box-tool" onClick={this.onClickRemoveLineItem.bind(this, i) }>>
+                            <i className="fa fa-fw fa-times"></i> 
                         </button>              
                     </td>
                 </tr>
