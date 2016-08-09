@@ -223,7 +223,7 @@ namespace Services.Sales
                     {
                         CustomerId = salesInvoice.CustomerId,
                         Date = salesInvoice.Date,
-                        SalesOrderHeaderId = salesOrderId
+                        //SalesOrderHeaderId = salesOrderId
                     };
                     foreach(var line in salesInvoice.SalesInvoiceLines)
                     {
@@ -238,7 +238,7 @@ namespace Services.Sales
                         });
                     }
                     AddSalesDelivery(salesDelivery, false);
-                    salesInvoice.SalesDeliveryHeader = salesDelivery;
+                    //salesInvoice.SalesDeliveryHeader = salesDelivery;
                 }
 
                 _salesInvoiceRepo.Insert(salesInvoice);
@@ -486,30 +486,30 @@ namespace Services.Sales
 
                 salesDelivery.No = GetNextNumber(SequenceNumberTypes.SalesDelivery).ToString();
 
-                if(!salesDelivery.SalesOrderHeaderId.HasValue)
-                {
-                    var salesOrder = new SalesOrderHeader()
-                    {
-                        CustomerId = salesDelivery.CustomerId,
-                        PaymentTermId = salesDelivery.PaymentTermId,
-                        Date = salesDelivery.Date,
-                        No = GetNextNumber(SequenceNumberTypes.SalesOrder).ToString(),
-                    };
+                //if(!salesDelivery.SalesOrderHeaderId.HasValue)
+                //{
+                //    var salesOrder = new SalesOrderHeader()
+                //    {
+                //        CustomerId = salesDelivery.CustomerId,
+                //        PaymentTermId = salesDelivery.PaymentTermId,
+                //        Date = salesDelivery.Date,
+                //        No = GetNextNumber(SequenceNumberTypes.SalesOrder).ToString(),
+                //    };
 
-                    foreach(var line in salesDelivery.SalesDeliveryLines)
-                    {
-                        var item = _inventoryService.GetItemById(line.ItemId.Value);
-                        salesOrder.SalesOrderLines.Add(new SalesOrderLine()
-                        {
-                            ItemId = item.Id,
-                            MeasurementId = line.MeasurementId.Value,
-                            Quantity = line.Quantity,
-                            Amount = item.Price.Value,
-                        });
-                    }
-                    AddSalesOrder(salesOrder, false);
-                    salesDelivery.SalesOrderHeader = salesOrder;
-                }
+                //    foreach(var line in salesDelivery.SalesDeliveryLines)
+                //    {
+                //        var item = _inventoryService.GetItemById(line.ItemId.Value);
+                //        salesOrder.SalesOrderLines.Add(new SalesOrderLine()
+                //        {
+                //            ItemId = item.Id,
+                //            MeasurementId = line.MeasurementId.Value,
+                //            Quantity = line.Quantity,
+                //            Amount = item.Price.Value,
+                //        });
+                //    }
+                    //AddSalesOrder(salesOrder, false);
+                    //salesDelivery.SalesOrderHeader = salesOrder;
+                //}
 
                 if (toSave)
                     _salesDeliveryRepo.Insert(salesDelivery);
@@ -617,8 +617,8 @@ namespace Services.Sales
             if (salesInvoice.Id == 0)
             {
                 // This should be in a single transaction.
-                _salesDeliveryRepo.Insert(salesDelivery);
                 _salesInvoiceRepo.Insert(salesInvoice);
+                _salesDeliveryRepo.Insert(salesDelivery);                
             }
             else
             {

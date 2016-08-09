@@ -35,7 +35,7 @@
         document.getElementById('linkCreateInvoice').setAttribute('href', 'addpurchaseinvoice?purchId=' + selectedRow.id);
         document.getElementById('linkViewOrder').setAttribute('href', 'purchaseorder?purchId=' + selectedRow.id);
         
-        if(selectedRow.purchaseInvoiceHeaderId === null){
+        if(selectedRow.purchaseInvoiceHeaderId === undefined){
             document.getElementById('linkCreateInvoice').setAttribute('class', '');
         }
         else{

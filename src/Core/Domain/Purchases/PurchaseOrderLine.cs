@@ -15,11 +15,11 @@ using System.Linq;
 namespace Core.Domain.Purchases
 {
     [Table("PurchaseOrderLine")]
-    public partial class PurchaseOrderLine : BaseEntity
+    public class PurchaseOrderLine : BaseEntity
     {
         public PurchaseOrderLine()
         {
-            PurchaseReceiptLines = new HashSet<PurchaseReceiptLine>();
+            //PurchaseReceiptLines = new HashSet<PurchaseReceiptLine>();
         }
 
         public int PurchaseOrderHeaderId { get; set; }
@@ -32,25 +32,24 @@ namespace Core.Domain.Purchases
         public virtual PurchaseOrderHeader PurhcaseOrderHeader { get; set; }
         public virtual Item Item { get; set; }
         public virtual Measurement Measurement { get; set; }
-
-        public virtual ICollection<PurchaseReceiptLine> PurchaseReceiptLines { get; set; }
+        //public virtual ICollection<PurchaseReceiptLine> PurchaseReceiptLines { get; set; }
 
         public decimal? GetReceivedQuantity()
         {
             decimal? qty = 0;
-            foreach (var stock in PurchaseReceiptLines)
-            {
-                qty += stock.InventoryControlJournal.INQty;
-            }
+            //foreach (var stock in PurchaseReceiptLines)
+            //{
+            //    qty += stock.InventoryControlJournal.INQty;
+            //}
             return qty;
         }
 
         public bool IsCompleted()
         {
             bool completed = false;
-            decimal totalReceiptAmount = PurchaseReceiptLines.Sum(d => d.Amount);
-            if (totalReceiptAmount == Amount)
-                completed = true;
+            //decimal totalReceiptAmount = PurchaseReceiptLines.Sum(d => d.Amount);
+            //if (totalReceiptAmount == Amount)
+            //    completed = true;
             return completed;
         }
     }

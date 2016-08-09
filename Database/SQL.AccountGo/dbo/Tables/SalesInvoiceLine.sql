@@ -4,18 +4,16 @@
     [ItemId]                    INT             NOT NULL,
     [MeasurementId]             INT             NOT NULL,
     [InventoryControlJournalId] INT             NULL,
-    [TaxId]                     INT             NULL,
     [Quantity]                  DECIMAL (18, 2) NOT NULL,
     [Discount]                  DECIMAL (18, 2) NOT NULL,
     [Amount]                    DECIMAL (18, 2) NOT NULL,
-	[SalesDeliveryLineId]      INT             NULL,
+	[SalesOrderLineId]      INT             NULL,
     CONSTRAINT [PK_dbo.SalesInvoiceLine] PRIMARY KEY CLUSTERED ([Id] ASC),
     CONSTRAINT [FK_dbo.SalesInvoiceLine_dbo.InventoryControlJournal_InventoryControlJournalId] FOREIGN KEY ([InventoryControlJournalId]) REFERENCES [dbo].[InventoryControlJournal] ([Id]),
-    CONSTRAINT [FK_dbo.SalesInvoiceLine_dbo.Item_ItemId] FOREIGN KEY ([ItemId]) REFERENCES [dbo].[Item] ([Id]) ON DELETE CASCADE,
-    CONSTRAINT [FK_dbo.SalesInvoiceLine_dbo.Measurement_MeasurementId] FOREIGN KEY ([MeasurementId]) REFERENCES [dbo].[Measurement] ([Id]) ON DELETE CASCADE,
-	CONSTRAINT [FK_dbo.SalesInvoiceLine_dbo.SalesDeliverLine_SalesDeliveryLineId] FOREIGN KEY ([SalesDeliveryLineId]) REFERENCES [dbo].[SalesDeliveryLine] ([Id]) ON DELETE CASCADE,
+    CONSTRAINT [FK_dbo.SalesInvoiceLine_dbo.Item_ItemId] FOREIGN KEY ([ItemId]) REFERENCES [dbo].[Item] ([Id]),
+    CONSTRAINT [FK_dbo.SalesInvoiceLine_dbo.Measurement_MeasurementId] FOREIGN KEY ([MeasurementId]) REFERENCES [dbo].[Measurement] ([Id]),
+	CONSTRAINT [FK_dbo.SalesInvoiceLine_dbo.SalesOrderLine_SalesOrderLineId] FOREIGN KEY ([SalesOrderLineId]) REFERENCES [dbo].[SalesOrderLine] ([Id]),
     CONSTRAINT [FK_dbo.SalesInvoiceLine_dbo.SalesInvoiceHeader_SalesInvoiceHeaderId] FOREIGN KEY ([SalesInvoiceHeaderId]) REFERENCES [dbo].[SalesInvoiceHeader] ([Id]) ON DELETE CASCADE,
-    CONSTRAINT [FK_dbo.SalesInvoiceLine_dbo.Tax_TaxId] FOREIGN KEY ([TaxId]) REFERENCES [dbo].[Tax] ([Id])
 );
 
 
@@ -39,7 +37,5 @@ CREATE NONCLUSTERED INDEX [IX_SalesInvoiceHeaderId]
     ON [dbo].[SalesInvoiceLine]([SalesInvoiceHeaderId] ASC);
 
 
-GO
-CREATE NONCLUSTERED INDEX [IX_TaxId]
-    ON [dbo].[SalesInvoiceLine]([TaxId] ASC);
+
 

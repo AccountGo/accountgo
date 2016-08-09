@@ -52,9 +52,9 @@ namespace Api.Data
         public virtual DbSet<Measurement> Measurements { get; set; }
         public virtual DbSet<PaymentTerm> PaymentTerms { get; set; }
         public virtual DbSet<PurchaseInvoiceHeader> PurchaseInvoiceHeaders { get; set; }
-        public virtual DbSet<PurchaseInvoiceLine> PurchaseInvoiceLines { get; set; }
-        public virtual DbSet<PurchaseOrderHeader> PurchaseOrderHeaders { get; set; }
+        public virtual DbSet<PurchaseInvoiceLine> PurchaseInvoiceLines { get; set; }        
         public virtual DbSet<PurchaseOrderLine> PurchaseOrderLines { get; set; }
+        public virtual DbSet<PurchaseOrderHeader> PurchaseOrderHeaders { get; set; }
         public virtual DbSet<PurchaseReceiptHeader> PurchaseReceiptHeaders { get; set; }
         public virtual DbSet<PurchaseReceiptLine> PurchaseReceiptLines { get; set; }
         public virtual DbSet<SalesDeliveryHeader> SalesDeliveryHeaders { get; set; }

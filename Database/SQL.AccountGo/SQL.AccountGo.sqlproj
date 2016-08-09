@@ -129,8 +129,4 @@
     <Build Include="dbo\Tables\MainContraAccount.sql" />
     <Build Include="dbo\Tables\Log.sql" />
   </ItemGroup>
-  <ItemGroup>
-    <None Include="SQL.AccountGo.Azure.publish.xml" />
-    <None Include="SQL.AccountGo.LocalDB.publish.xml" />
-  </ItemGroup>
 </Project>

@@ -9,12 +9,12 @@
     [Cost]                      DECIMAL (18, 2) NULL,
     [Discount]                  DECIMAL (18, 2) NULL,
     [Amount]                    DECIMAL (18, 2) NOT NULL,
-	[PurchaseReceiptLineId]		INT             NULL,
+	[PurchaseOrderLineId]		INT             NULL,
     CONSTRAINT [PK_dbo.PurchaseInvoiceLine] PRIMARY KEY CLUSTERED ([Id] ASC),
     CONSTRAINT [FK_dbo.PurchaseInvoiceLine_dbo.InventoryControlJournal_InventoryControlJournalId] FOREIGN KEY ([InventoryControlJournalId]) REFERENCES [dbo].[InventoryControlJournal] ([Id]),
-	CONSTRAINT [FK_dbo.PurchaseInvoiceLine_dbo.PurchaseReceiptLine_PurchaseReceiptLineId] FOREIGN KEY ([PurchaseReceiptLineId]) REFERENCES [dbo].[PurchaseReceiptLine] ([Id]),
-    CONSTRAINT [FK_dbo.PurchaseInvoiceLine_dbo.Item_ItemId] FOREIGN KEY ([ItemId]) REFERENCES [dbo].[Item] ([Id]) ON DELETE CASCADE,
-    CONSTRAINT [FK_dbo.PurchaseInvoiceLine_dbo.Measurement_MeasurementId] FOREIGN KEY ([MeasurementId]) REFERENCES [dbo].[Measurement] ([Id]) ON DELETE CASCADE,
+	CONSTRAINT [FK_dbo.PurchaseInvoiceLine_dbo.PurchaseOrderLine_PurchaseOrderLineId] FOREIGN KEY ([PurchaseOrderLineId]) REFERENCES [dbo].[PurchaseOrderLine] ([Id]),
+    CONSTRAINT [FK_dbo.PurchaseInvoiceLine_dbo.Item_ItemId] FOREIGN KEY ([ItemId]) REFERENCES [dbo].[Item] ([Id]),
+    CONSTRAINT [FK_dbo.PurchaseInvoiceLine_dbo.Measurement_MeasurementId] FOREIGN KEY ([MeasurementId]) REFERENCES [dbo].[Measurement] ([Id]),
     CONSTRAINT [FK_dbo.PurchaseInvoiceLine_dbo.PurchaseInvoiceHeader_PurchaseInvoiceHeaderId] FOREIGN KEY ([PurchaseInvoiceHeaderId]) REFERENCES [dbo].[PurchaseInvoiceHeader] ([Id]) ON DELETE CASCADE,
 );
 

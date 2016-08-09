@@ -16,7 +16,7 @@ namespace Core.Domain.Sales
     public partial class SalesDeliveryLine : BaseEntity
     {
         public int SalesDeliveryHeaderId { get; set; }
-        public int? SalesOrderLineId { get; set; }
+        public int? SalesInvoiceLineId { get; set; }
         public int? ItemId { get; set; }
         public int? MeasurementId { get; set; }
         public decimal Quantity { get; set; }
@@ -24,6 +24,7 @@ namespace Core.Domain.Sales
         public decimal Discount { get; set; }
 
         public virtual SalesDeliveryHeader SalesDeliveryHeader { get; set; }
+        public virtual SalesInvoiceLine SalesInvoiceLine { get; set; }
         public virtual Item Item { get; set; }
         public virtual Measurement Measurement { get; set; }
     }

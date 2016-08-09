@@ -31,12 +31,12 @@ namespace Api.Controllers
                 var purchaseOrderDto = new Dto.Purchasing.PurchaseOrder()
                 {
                     Id = purchaseOrder.Id,
-                    PurchaseInvoiceHeaderId = purchaseOrder.PurchaseInvoiceHeaderId,
+                    //PurchaseInvoiceHeaderId = purchaseOrder.PurchaseInvoiceHeaderId,
                     VendorId = purchaseOrder.VendorId.Value,
                     VendorName = purchaseOrder.Vendor.Party.Name,
                     OrderDate = purchaseOrder.Date,
                     Amount = purchaseOrder.PurchaseOrderLines.Sum(l => l.Amount),
-                    Completed = purchaseOrder.IsCompleted()
+                    //Completed = purchaseOrder.IsCompleted()
                 };
 
                 purchaseOrdersDto.Add(purchaseOrderDto);
@@ -55,12 +55,12 @@ namespace Api.Controllers
             purchaseOrderDto = new Dto.Purchasing.PurchaseOrder()
             {
                 Id = purchaseOrder.Id,
-                PurchaseInvoiceHeaderId = purchaseOrder.PurchaseInvoiceHeaderId,                
+                //PurchaseInvoiceHeaderId = purchaseOrder.PurchaseInvoiceHeaderId,                
                 VendorId = purchaseOrder.VendorId.Value,
                 VendorName = purchaseOrder.Vendor.Party.Name,
                 OrderDate = purchaseOrder.Date,
                 Amount = purchaseOrder.PurchaseOrderLines.Sum(l => l.Amount),
-                Completed = purchaseOrder.IsCompleted()
+                //Completed = purchaseOrder.IsCompleted(),
             };
 
             foreach(var item in purchaseOrder.PurchaseOrderLines)
@@ -165,7 +165,7 @@ namespace Api.Controllers
             }
             catch (Exception ex)
             {
-                errors = new string[1] { ex.Message };
+                errors = new string[1] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
                 return new BadRequestObjectResult(errors);
             }
         }
@@ -298,7 +298,7 @@ namespace Api.Controllers
                         purchaseInvoiceLine.Quantity = line.Quantity.GetValueOrDefault();
                         purchaseInvoiceLine.ItemId = line.ItemId.GetValueOrDefault();
                         purchaseInvoiceLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
-
+                        purchaseInvoiceLine.PurchaseOrderLineId = line.Id; // This Id is also the PurchaseOrderLineId when you create purchase invoice directly from purchase order.
                         purchaseInvoice.PurchaseInvoiceLines.Add(purchaseInvoiceLine);
 
                         var purchaseReceiptLine = new Core.Domain.Purchases.PurchaseReceiptLine();
@@ -308,10 +308,8 @@ namespace Api.Controllers
                         purchaseReceiptLine.ItemId = line.ItemId.GetValueOrDefault();
                         purchaseReceiptLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
                         purchaseReceiptLine.ReceivedQuantity = line.Quantity.GetValueOrDefault();
-                        purchaseReceiptLine.PurchaseOrderLineId = line.Id; // This Id is also the PurchaseOrderLineId when you create purchase invoice directly from purchase order.
+                        purchaseReceiptLine.PurchaseInvoiceLine = purchaseInvoiceLine;
                         purchaseReceipt.PurchaseReceiptLines.Add(purchaseReceiptLine);
-
-                        purchaseInvoiceLine.PurchaseReceiptLine = purchaseReceiptLine;
                     }
                 }
                 else
@@ -334,12 +332,12 @@ namespace Api.Controllers
                             existingLine.ItemId = line.ItemId.GetValueOrDefault();
                             existingLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
 
-                            existingLine.PurchaseReceiptLine.Amount = line.Amount.GetValueOrDefault();
-                            existingLine.PurchaseReceiptLine.Discount = line.Discount.GetValueOrDefault();
-                            existingLine.PurchaseReceiptLine.Quantity = line.Quantity.GetValueOrDefault();
-                            existingLine.PurchaseReceiptLine.ItemId = line.ItemId.GetValueOrDefault();
-                            existingLine.PurchaseReceiptLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
-                            existingLine.PurchaseReceiptLine.ReceivedQuantity = line.Quantity.GetValueOrDefault();
+                            //existingLine.PurchaseReceiptLine.Amount = line.Amount.GetValueOrDefault();
+                            //existingLine.PurchaseReceiptLine.Discount = line.Discount.GetValueOrDefault();
+                            //existingLine.PurchaseReceiptLine.Quantity = line.Quantity.GetValueOrDefault();
+                            //existingLine.PurchaseReceiptLine.ItemId = line.ItemId.GetValueOrDefault();
+                            //existingLine.PurchaseReceiptLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
+                            //existingLine.PurchaseReceiptLine.ReceivedQuantity = line.Quantity.GetValueOrDefault();
                         }
                         else
                         {
@@ -349,7 +347,7 @@ namespace Api.Controllers
                             purchaseInvoiceLine.Quantity = line.Quantity.GetValueOrDefault();
                             purchaseInvoiceLine.ItemId = line.ItemId.GetValueOrDefault();
                             purchaseInvoiceLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
-
+                            purchaseInvoiceLine.PurchaseOrderLineId = line.Id; // This Id is also the PurchaseOrderLineId when you create purchase invoice directly from purchase order.
                             purchaseInvoice.PurchaseInvoiceLines.Add(purchaseInvoiceLine);
 
                             var purchaseReceiptLine = new Core.Domain.Purchases.PurchaseReceiptLine();
@@ -359,10 +357,8 @@ namespace Api.Controllers
                             purchaseReceiptLine.ItemId = line.ItemId.GetValueOrDefault();
                             purchaseReceiptLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
                             purchaseReceiptLine.ReceivedQuantity = line.Quantity.GetValueOrDefault();
-                            
+                            purchaseReceiptLine.PurchaseInvoiceLine = purchaseInvoiceLine;
                             purchaseReceipt.PurchaseReceiptLines.Add(purchaseReceiptLine);
-
-                            purchaseInvoiceLine.PurchaseReceiptLine = purchaseReceiptLine;
                         }
                     }
                 }

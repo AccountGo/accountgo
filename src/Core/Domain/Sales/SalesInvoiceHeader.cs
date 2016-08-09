@@ -26,14 +26,12 @@ namespace Core.Domain.Sales
 
         public int CustomerId { get; set; }
         public int? GeneralLedgerHeaderId { get; set; }
-        public int? SalesDeliveryHeaderId { get; set; }
         public string No { get; set; }
         public DateTime Date { get; set; }
         public decimal ShippingHandlingCharge{ get; set; }
         public SalesInvoiceStatus Status { get; set; }
         public virtual Customer Customer { get; set; }
         public virtual GeneralLedgerHeader GeneralLedgerHeader { get; set; }
-        public virtual SalesDeliveryHeader SalesDeliveryHeader { get; set; }
 
         public virtual ICollection<SalesInvoiceLine> SalesInvoiceLines { get; set; }
         [NotMapped]

@@ -23,11 +23,10 @@ namespace Core.Domain.Sales
             SalesReceiptLines = new HashSet<SalesReceiptLine>();
         }
         public int SalesInvoiceHeaderId { get; set; }
-        public int? SalesDeliveryLineId { get; set; }
+        public int? SalesOrderLineId { get; set; }
         public int ItemId { get; set; }
         public int MeasurementId { get; set; }
         public int? InventoryControlJournalId { get; set; }
-        public int? TaxId { get; set; }
         public decimal Quantity { get; set; }
         public decimal Discount { get; set; }
         public decimal Amount { get; set; }
@@ -35,8 +34,7 @@ namespace Core.Domain.Sales
         public virtual Item Item { get; set; }
         public virtual Measurement Measurement { get; set; }
         public virtual InventoryControlJournal InventoryControlJournal { get; set; }
-        public virtual Tax Tax { get; set; }
-        public virtual SalesDeliveryLine SalesDeliveryLine { get; set; }
+        public virtual SalesOrderLine SalesOrderLine { get; set; }
         public virtual ICollection<SalesReceiptLine> SalesReceiptLines { get; set; }
 
         public decimal ComputeLineTaxAmount()
