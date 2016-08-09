@@ -6,9 +6,12 @@
     [No]                    NVARCHAR (MAX) NULL,
     [VendorInvoiceNo]       NVARCHAR (MAX) NOT NULL,
     [Description]           NVARCHAR (MAX) NULL,
+    [PaymentTermId] INT NULL, 
+    [ReferenceNo] NVARCHAR(MAX) NULL, 
     CONSTRAINT [PK_dbo.PurchaseInvoiceHeader] PRIMARY KEY CLUSTERED ([Id] ASC),
     CONSTRAINT [FK_dbo.PurchaseInvoiceHeader_dbo.GeneralLedgerHeader_GeneralLedgerHeaderId] FOREIGN KEY ([GeneralLedgerHeaderId]) REFERENCES [dbo].[GeneralLedgerHeader] ([Id]),
-    CONSTRAINT [FK_dbo.PurchaseInvoiceHeader_dbo.Vendor_VendorId] FOREIGN KEY ([VendorId]) REFERENCES [dbo].[Vendor] ([Id])
+    CONSTRAINT [FK_dbo.PurchaseInvoiceHeader_dbo.Vendor_VendorId] FOREIGN KEY ([VendorId]) REFERENCES [dbo].[Vendor] ([Id]),
+    CONSTRAINT [FK_dbo.PurchaseInvoiceHeader_dbo.PaymentTerm_PaymentTermId] FOREIGN KEY ([PaymentTermId]) REFERENCES [dbo].[PaymentTerm]([Id])
 );
 
 

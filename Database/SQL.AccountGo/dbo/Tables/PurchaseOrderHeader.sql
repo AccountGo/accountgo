@@ -5,8 +5,11 @@
     [Date]                    DATETIME       NOT NULL,
     [Description]             NVARCHAR (MAX) NULL,
     [PurchaseInvoiceHeaderId] INT NULL, 
+    [PaymentTermId] INT NULL, 
+    [ReferenceNo] NVARCHAR(MAX) NULL, 
     CONSTRAINT [PK_dbo.PurchaseOrderHeader] PRIMARY KEY CLUSTERED ([Id] ASC),
-    CONSTRAINT [FK_dbo.PurchaseOrderHeader_dbo.Vendor_VendorId] FOREIGN KEY ([VendorId]) REFERENCES [dbo].[Vendor] ([Id])
+    CONSTRAINT [FK_dbo.PurchaseOrderHeader_dbo.Vendor_VendorId] FOREIGN KEY ([VendorId]) REFERENCES [dbo].[Vendor] ([Id]), 
+    CONSTRAINT [FK_dbo.PurchaseOrderHeader_dbo.PaymentTerm_PaymentTermId] FOREIGN KEY ([PaymentTermId]) REFERENCES [dbo].[PaymentTerm]([Id])
 );
 
 

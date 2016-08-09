@@ -32,7 +32,10 @@ namespace Core.Domain.Purchases
         [Required]
         public string VendorInvoiceNo { get; set; }
         public string Description { get; set; }
+        public int? PaymentTermId { get; set; }
+        public string ReferenceNo { get; set; }
 
+        
         public virtual Vendor Vendor { get; set; }
         public virtual GeneralLedgerHeader GeneralLedgerHeader { get; set; }
 

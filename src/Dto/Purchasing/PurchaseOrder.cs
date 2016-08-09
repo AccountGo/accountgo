@@ -11,6 +11,8 @@ namespace Dto.Purchasing
         public DateTime OrderDate { get; set; }
         public decimal Amount { get; set; }
         public bool Completed { get; set; }
+        public string ReferenceNo { get; set; }
+        
         public System.Collections.Generic.IList<PurchaseOrderLine> PurchaseOrderLines { get; set; }
         public PurchaseOrder()
         {
