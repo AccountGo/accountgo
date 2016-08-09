@@ -49,9 +49,9 @@ namespace Web.Controllers
                     Date = po.Date,
                     Vendor = po.Vendor.No,
                     Amount = po.PurchaseOrderLines.Sum(e => e.Amount),
-                    Completed = po.IsCompleted(),
-                    Paid = po.IsPaid(),
-                    HasInvoiced = po.PurchaseInvoiceHeaderId.HasValue
+                    //Completed = po.IsCompleted(),
+                    //Paid = po.IsPaid(),
+                    //HasInvoiced = po.PurchaseInvoiceHeaderId.HasValue
                 });
             }
             return View(model);
@@ -204,7 +204,7 @@ namespace Web.Controllers
                 Date = DateTime.Now,
                 Vendor = po.Vendor,
                 VendorId = po.VendorId.Value,
-                PurchaseOrderHeaderId = po.Id,
+                //PurchaseOrderHeaderId = po.Id,
             };
 
             foreach (var receipt in model.PurchaseReceiptLines)
@@ -214,7 +214,7 @@ namespace Web.Controllers
 
                 poReceipt.PurchaseReceiptLines.Add(new PurchaseReceiptLine()
                 {
-                    PurchaseOrderLineId = receipt.PurchaseOrderLineId,
+                    //PurchaseOrderLineId = receipt.PurchaseOrderLineId,
                     ItemId = receipt.ItemId,
                     MeasurementId = receipt.UnitOfMeasurementId,
                     Quantity = receipt.Quantity,

@@ -188,7 +188,7 @@ namespace Services.TaxSystem
             {
                 party = _customerRepo.GetAllIncluding(c => c.TaxGroup,
                     c => c.TaxGroup.TaxGroupTax)
-                    .Where(c => c.PartyId == partyId)
+                    .Where(c => c.Id == partyId)
                     .FirstOrDefault();
 
                 if (party == null
@@ -206,7 +206,7 @@ namespace Services.TaxSystem
             {
                 party = _vendorRepo.GetAllIncluding(v => v.TaxGroup,
                     v => v.TaxGroup.TaxGroupTax)
-                    .Where(v => v.PartyId == partyId)
+                    .Where(v => v.Id == partyId)
                     .FirstOrDefault();
 
                 if (party == null

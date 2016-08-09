@@ -67,12 +67,12 @@
     <Compile Include="Domain\Items\ItemCategory.cs" />
     <Compile Include="Domain\Items\Measurement.cs" />
     <Compile Include="Domain\Log.cs" />
+    <Compile Include="Domain\Purchases\PurchaseOrderHeader.cs" />
     <Compile Include="Domain\TaxSystem\ItemTaxGroup.cs" />
     <Compile Include="Domain\Party.cs" />
     <Compile Include="Domain\PaymentTerm.cs" />
     <Compile Include="Domain\Purchases\PurchaseInvoiceHeader.cs" />
     <Compile Include="Domain\Purchases\PurchaseInvoiceLine.cs" />
-    <Compile Include="Domain\Purchases\PurchaseOrderHeader.cs" />
     <Compile Include="Domain\Purchases\PurchaseOrderLine.cs" />
     <Compile Include="Domain\Purchases\PurchaseReceiptHeader.cs" />
     <Compile Include="Domain\Purchases\PurchaseReceiptLine.cs" />

@@ -18,9 +18,8 @@ namespace Core.Domain.Purchases
     {
         public int PurchaseReceiptHeaderId { get; set; }
         public int ItemId { get; set; }
-        public int? TaxId { get; set; }
         public int? InventoryControlJournalId { get; set; }
-        public int? PurchaseOrderLineId { get; set; }
+        public int? PurchaseInvoiceLineId { get; set; }
         public int MeasurementId { get; set; }
         public decimal Quantity { get; set; }
         public decimal ReceivedQuantity { get; set; }
@@ -30,11 +29,10 @@ namespace Core.Domain.Purchases
         public virtual PurchaseReceiptHeader PurchaseReceiptHeader { get; set; }
         public virtual Item Item { get; set; }
         public virtual Measurement Measurement { get; set; }
-        public virtual Tax Tax { get; set; }
         public virtual InventoryControlJournal InventoryControlJournal { get; set; }
-        public virtual PurchaseOrderLine PurchaseOrderLine { get; set; }
+        public virtual PurchaseInvoiceLine PurchaseInvoiceLine { get; set; }
 
         [NotMapped]
-        public decimal LineTaxAmount { get { return Tax != null ? (Tax.Rate * Amount) : 0; } }
+        public decimal LineTaxAmount { get { return 0; } }
     }
 }

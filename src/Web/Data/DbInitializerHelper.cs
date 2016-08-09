@@ -420,13 +420,13 @@ namespace Data
 
             vat5.ItemTaxGroupTaxes.Add(new ItemTaxGroupTax()
             {
-                ItemTaxGroup = itemTaxGroupRegular,
+                ItemTaxGroup = itemTaxGroupRegularPreferenced,
                 IsExempt = false,
             });
 
             evat12.ItemTaxGroupTaxes.Add(new ItemTaxGroupTax()
             {
-                ItemTaxGroup = itemTaxGroupRegularPreferenced,
+                ItemTaxGroup = itemTaxGroupRegular,
                 IsExempt = false,
             });
 

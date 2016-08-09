@@ -169,7 +169,6 @@ namespace Web.Controllers
             {
                 var Item = _inventoryService.GetItemById(item.ItemId);
                 var invoiceDetail = new SalesInvoiceLine();
-                invoiceDetail.TaxId = Item.ItemTaxGroupId;
                 invoiceDetail.ItemId = item.ItemId;
                 invoiceDetail.MeasurementId = item.MeasurementId;
                 invoiceDetail.Quantity = item.Quantity;

@@ -204,7 +204,7 @@ namespace Services.Purchasing
                 {
                     // TODO: Look for other way to update the purchase order's invoice header id field so that it shall be in a single transaction along with purchase invoice saving
                     var purchOrder = GetPurchaseOrderById(purchaseOrderId.GetValueOrDefault());
-                    purchOrder.PurchaseInvoiceHeaderId = purchaseIvoice.Id;
+                    //purchOrder.PurchaseInvoiceHeaderId = purchaseIvoice.Id;
                     _purchaseOrderRepo.Update(purchOrder);
                 }
             }
@@ -294,10 +294,10 @@ namespace Services.Purchasing
                 v => v.PurchaseDiscountAccount,
                 v => v.AccountsPayableAccount,
                 v => v.VendorPayments,
-                v => v.TaxGroup,
-                v => v.PurchaseInvoices,
-                v => v.PurchaseOrders,
-                v => v.PurchaseReceipts
+                v => v.TaxGroup
+                //v => v.PurchaseInvoices,
+                //v => v.PurchaseOrders,
+                //v => v.PurchaseReceipts
                 )
                 .Where(v => v.Id == id)
                 .FirstOrDefault();
@@ -307,10 +307,11 @@ namespace Services.Purchasing
 
         public IEnumerable<PurchaseOrderHeader> GetPurchaseOrders()
         {
-            var query = _purchaseOrderRepo.GetAllIncluding(po => po.Vendor,
+            var query = _purchaseOrderRepo.GetAllIncluding(
+                po => po.Vendor,
                 po => po.Vendor.Party,
-                po => po.PurchaseReceipts,
-                po => po.PurchaseOrderLines);
+                po => po.PurchaseOrderLines
+                );
 
             return query.AsEnumerable();
         }
@@ -319,8 +320,8 @@ namespace Services.Purchasing
         {
             var purchOrder = _purchaseOrderRepo.GetAllIncluding(po => po.Vendor,
                 po => po.Vendor.Party,
-                po => po.PurchaseOrderLines,
-                po => po.PurchaseReceipts)
+                po => po.PurchaseOrderLines
+                )
                 .Where(po => po.Id == id)
                 .FirstOrDefault();
 
@@ -408,8 +409,8 @@ namespace Services.Purchasing
             if (purchaseInvoice.Id == 0)
             {
                 // This should be in a single transaction.
-                _purchaseReceiptRepo.Insert(purchaseReceipt);
                 _purchaseInvoiceRepo.Insert(purchaseInvoice);
+                _purchaseReceiptRepo.Insert(purchaseReceipt);                
             }
             else
             {

@@ -635,7 +635,7 @@ namespace Api.Controllers
                         salesInvoiceLine.Quantity = line.Quantity.GetValueOrDefault();
                         salesInvoiceLine.ItemId = line.ItemId.GetValueOrDefault();
                         salesInvoiceLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
-
+                        salesInvoiceLine.SalesOrderLineId = line.Id; // This Id is also the SalesOrderLineId when you create sales invoice directly from sales order.
                         salesInvoice.SalesInvoiceLines.Add(salesInvoiceLine);
 
                         var salesDeliveryLine = new Core.Domain.Sales.SalesDeliveryLine();
@@ -644,10 +644,8 @@ namespace Api.Controllers
                         salesDeliveryLine.Quantity = line.Quantity.GetValueOrDefault();
                         salesDeliveryLine.ItemId = line.ItemId.GetValueOrDefault();
                         salesDeliveryLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
-                        salesDeliveryLine.SalesOrderLineId = line.Id; // This Id is also the SalesOrderLineId when you create sales invoice directly from sales order.
+                        salesDeliveryLine.SalesInvoiceLine = salesInvoiceLine;
                         salesDelivery.SalesDeliveryLines.Add(salesDeliveryLine);
-
-                        salesInvoiceLine.SalesDeliveryLine = salesDeliveryLine;
                     }
                 }
                 else
@@ -670,24 +668,23 @@ namespace Api.Controllers
                             existingLine.ItemId = line.ItemId.GetValueOrDefault();
                             existingLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
 
-                            existingLine.SalesDeliveryLine.Price = line.Amount.GetValueOrDefault();
-                            existingLine.SalesDeliveryLine.Discount = line.Discount.GetValueOrDefault();
-                            existingLine.SalesDeliveryLine.Quantity = line.Quantity.GetValueOrDefault();
-                            existingLine.SalesDeliveryLine.ItemId = line.ItemId.GetValueOrDefault();
-                            existingLine.SalesDeliveryLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
+                            // Also modify the salesdelivery. find by salesinvoicelineid.
+                            //existingLine.SalesDeliveryLine.Price = line.Amount.GetValueOrDefault();
+                            //existingLine.SalesDeliveryLine.Discount = line.Discount.GetValueOrDefault();
+                            //existingLine.SalesDeliveryLine.Quantity = line.Quantity.GetValueOrDefault();
+                            //existingLine.SalesDeliveryLine.ItemId = line.ItemId.GetValueOrDefault();
+                            //existingLine.SalesDeliveryLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
                         }
                         else
                         {
-                            // New line items has been added to invoice. It has no SalesOrderLineId.
+                            //New line item has been added to invoice. It has no SalesOrderLineId.
                             var salesInvoiceLine = new Core.Domain.Sales.SalesInvoiceLine();
                             salesInvoiceLine.Amount = line.Amount.GetValueOrDefault();
                             salesInvoiceLine.Discount = line.Discount.GetValueOrDefault();
                             salesInvoiceLine.Quantity = line.Quantity.GetValueOrDefault();
                             salesInvoiceLine.ItemId = line.ItemId.GetValueOrDefault();
                             salesInvoiceLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
-
-                            salesInvoice.SalesInvoiceLines.Add(salesInvoiceLine);
-
+                            salesInvoiceLine.SalesOrderLineId = line.Id;
                             salesInvoice.SalesInvoiceLines.Add(salesInvoiceLine);
 
                             var salesDeliveryLine = new Core.Domain.Sales.SalesDeliveryLine();
@@ -696,10 +693,8 @@ namespace Api.Controllers
                             salesDeliveryLine.Quantity = line.Quantity.GetValueOrDefault();
                             salesDeliveryLine.ItemId = line.ItemId.GetValueOrDefault();
                             salesDeliveryLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
-
+                            salesDeliveryLine.SalesInvoiceLine = salesInvoiceLine;
                             salesDelivery.SalesDeliveryLines.Add(salesDeliveryLine);
-
-                            salesInvoiceLine.SalesDeliveryLine = salesDeliveryLine;
                         }
                     }
                 }

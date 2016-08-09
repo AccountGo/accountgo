@@ -7,8 +7,8 @@
     [Discount]           DECIMAL (18, 2) NOT NULL,
     [Amount]             DECIMAL (18, 2) NOT NULL,
     CONSTRAINT [PK_dbo.SalesQuoteLine] PRIMARY KEY CLUSTERED ([Id] ASC),
-    CONSTRAINT [FK_dbo.SalesQuoteLine_dbo.SalesQuoteHeader_SalesQuoteHeaderId] FOREIGN KEY ([SalesQuoteHeaderId]) REFERENCES [dbo].[SalesQuoteHeader] ([Id]) ON DELETE CASCADE,
-	CONSTRAINT [FK_dbo.SalesQuoteLine_dbo.Item_ItemId] FOREIGN KEY ([ItemId]) REFERENCES [dbo].[Item] ([Id]) ON DELETE CASCADE,
+    CONSTRAINT [FK_dbo.SalesQuoteLine_dbo.SalesQuoteHeader_SalesQuoteHeaderId] FOREIGN KEY ([SalesQuoteHeaderId]) REFERENCES [dbo].[SalesQuoteHeader] ([Id]),
+	CONSTRAINT [FK_dbo.SalesQuoteLine_dbo.Item_ItemId] FOREIGN KEY ([ItemId]) REFERENCES [dbo].[Item] ([Id]),
     CONSTRAINT [FK_dbo.SalesQuoteLine_dbo.Measurement_MeasurementId] FOREIGN KEY ([MeasurementId]) REFERENCES [dbo].[Measurement] ([Id]) ON DELETE CASCADE
 );
 
