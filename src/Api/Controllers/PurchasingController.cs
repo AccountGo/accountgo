@@ -278,6 +278,7 @@ namespace Api.Controllers
                 bool isNew = purchaseInvoiceDto.Id == 0;
                 Core.Domain.Purchases.PurchaseInvoiceHeader purchaseInvoice = null;
                 Core.Domain.Purchases.PurchaseReceiptHeader purchaseReceipt = null;
+                Core.Domain.Purchases.PurchaseOrderHeader purchaseOrder = null;
 
                 if (isNew)
                 {
@@ -290,16 +291,36 @@ namespace Api.Controllers
                     purchaseReceipt.VendorId = purchaseInvoiceDto.VendorId;
                     purchaseReceipt.Date = purchaseInvoiceDto.InvoiceDate;
 
+                    if (!purchaseInvoiceDto.FromPurchaseOrderId.HasValue)
+                    {
+                        purchaseOrder = new Core.Domain.Purchases.PurchaseOrderHeader();
+                        purchaseOrder.Date = purchaseInvoiceDto.InvoiceDate;                        
+                        purchaseOrder.VendorId = purchaseInvoiceDto.VendorId;
+                    }
+
                     foreach (var line in purchaseInvoiceDto.PurchaseInvoiceLines)
                     {
                         var purchaseInvoiceLine = new Core.Domain.Purchases.PurchaseInvoiceLine();
+                        purchaseInvoice.PurchaseInvoiceLines.Add(purchaseInvoiceLine);
                         purchaseInvoiceLine.Amount = line.Amount.GetValueOrDefault();
                         purchaseInvoiceLine.Discount = line.Discount.GetValueOrDefault();
                         purchaseInvoiceLine.Quantity = line.Quantity.GetValueOrDefault();
                         purchaseInvoiceLine.ItemId = line.ItemId.GetValueOrDefault();
                         purchaseInvoiceLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
-                        purchaseInvoiceLine.PurchaseOrderLineId = line.Id; // This Id is also the PurchaseOrderLineId when you create purchase invoice directly from purchase order.
-                        purchaseInvoice.PurchaseInvoiceLines.Add(purchaseInvoiceLine);
+
+                        if (line.Id != 0)
+                            purchaseInvoiceLine.PurchaseOrderLineId = line.Id; // This Id is also the PurchaseOrderLineId when you create purchase invoice directly from purchase order.
+                        else
+                        {
+                            var purchaseOrderLine = new Core.Domain.Purchases.PurchaseOrderLine();
+                            purchaseOrder.PurchaseOrderLines.Add(purchaseOrderLine);
+                            purchaseOrderLine.Amount = line.Amount.GetValueOrDefault();
+                            purchaseOrderLine.Discount = line.Discount.GetValueOrDefault();
+                            purchaseOrderLine.Quantity = line.Quantity.GetValueOrDefault();
+                            purchaseOrderLine.ItemId = line.ItemId.GetValueOrDefault();
+                            purchaseOrderLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
+                            purchaseInvoiceLine.PurchaseOrderLine = purchaseOrderLine;
+                        }
 
                         var purchaseReceiptLine = new Core.Domain.Purchases.PurchaseReceiptLine();
                         purchaseReceiptLine.Amount = line.Amount.GetValueOrDefault();
@@ -363,9 +384,9 @@ namespace Api.Controllers
                     }
                 }
 
-                _purchasingService.SavePurchaseInvoice(purchaseInvoice, purchaseReceipt);
+                _purchasingService.SavePurchaseInvoice(purchaseInvoice, purchaseReceipt, purchaseOrder);
 
-                return new OkObjectResult(Ok());
+                return new ObjectResult(Ok());
             }
             catch (Exception ex)
             {

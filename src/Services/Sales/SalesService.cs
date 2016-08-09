@@ -612,11 +612,13 @@ namespace Services.Sales
             return quotation;
         }
 
-        public void SaveSalesInvoice(SalesInvoiceHeader salesInvoice, SalesDeliveryHeader salesDelivery)
+        public void SaveSalesInvoice(SalesInvoiceHeader salesInvoice, SalesDeliveryHeader salesDelivery, SalesOrderHeader salesOrder)
         {
             if (salesInvoice.Id == 0)
             {
                 // This should be in a single transaction.
+                if (salesOrder != null)
+                    _salesOrderRepo.Insert(salesOrder);
                 _salesInvoiceRepo.Insert(salesInvoice);
                 _salesDeliveryRepo.Insert(salesDelivery);                
             }
