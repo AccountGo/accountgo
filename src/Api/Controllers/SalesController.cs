@@ -173,9 +173,10 @@ namespace Api.Controllers
                     CustomerName = salesOrder.Customer.Party.Name,
                     OrderDate = salesOrder.Date,
                     ReferenceNo = salesOrder.ReferenceNo,
-                    Amount = salesOrder.SalesOrderLines.Sum(l => l.Amount)
+                    Amount = salesOrder.SalesOrderLines.Sum(l => l.Amount),
+                  
                 };
-
+                salesOrderDto.ReferenceNo = salesOrder.ReferenceNo;
                 salesOrdersDto.Add(salesOrderDto);
             }
 
@@ -203,6 +204,7 @@ namespace Api.Controllers
                     SalesOrderLines = new List<Dto.Sales.SalesOrderLine>()
                 };
 
+                salesOrderDto.ReferenceNo = salesOrder.ReferenceNo;
                 foreach (var line in salesOrder.SalesOrderLines)
                 {
                     var lineDto = new Dto.Sales.SalesOrderLine();

@@ -147,7 +147,9 @@ export default class SalesOrderStore {
 
         return this.validationErrors.length === 0;
     }
-
+    changedReferenceNo(refNo) {
+        this.salesOrder.referenceNo = refNo;
+    }
     changedCustomer(custId) {
         this.salesOrder.customerId = custId;
     }
