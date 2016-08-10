@@ -115,5 +115,20 @@ namespace Api.Controllers
 
             return Ok(cashbanksDto);
         }
+
+        [HttpGet]
+        [Route("[action]")]
+        public IActionResult PostingAccounts()
+        {
+            var accounts = _financialService.GetAccounts()
+                .Where(a => a.ChildAccounts.Count == 0);
+
+            ICollection<Account> accountsDto = new HashSet<Account>();
+
+            foreach (var account in accounts)
+                accountsDto.Add(new Account() { Id = account.Id, AccountName = account.AccountName });
+
+            return Ok(accountsDto);
+        }
     }
 }
