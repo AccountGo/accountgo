@@ -3,38 +3,62 @@
 <div>
 </div>
 <div>
-    <div id="accounts" class="ag-blue" style="height: 400px;"></div>
+    <div id="accounts" class="ag-blue"></div>
 </div>
 <script>
     var columnDefs = [
-    {headerName: "Account", field: "id", width: 50},
-    {headerName: "Code", field: "accountCode", width: 100},
-    {headerName: "Name", field: "accountName", width: 350},
-    {headerName: "Description", field: "description", width: 250},
-    {headerName: "Cash", width: 100, cellRenderer: function(val) {
-        if(val.data.isCash)
-            return '<input type="checkbox" checked disabled />';
-        return '<input type="checkbox" disabled />';
-    }},
-    {headerName: "Balance", field: "balance", width: 100},
-    {headerName: "Debit", field: "debitBalance", width: 100},
-    {headerName: "Credit", field: "creditBalance", width: 100}
+        {headerName: "Group", cellRenderer: 'group'},
+        {headerName: "Account", field: "id", width: 50},
+        {headerName: "Code", field: "accountCode", width: 100},
+        {headerName: "Name", field: "accountName", width: 350},
+        {headerName: "Description", field: "description", width: 250},
+        {headerName: "Cash", width: 100, cellRenderer: function(val) {
+            if(val.data.isCash)
+                return '<input type="checkbox" checked disabled />';
+            return '<input type="checkbox" disabled />';
+        }},
+        {headerName: "Balance", field: "balance", width: 100},
+        {headerName: "Debit", field: "debitBalance", width: 100},
+        {headerName: "Credit", field: "creditBalance", width: 100}
     ];
 
     var gridOptions = {
         columnDefs: columnDefs,
         rowData: @Html.Raw(Model),
+        getNodeChildDetails: function(data) {
+            if (data.childAccounts.length > 0) {
+                return {
+                    group: true,
+                    children: data.childAccounts,
+                    key: data.accountName
+                };
+            } else {
+                return null;
+            }
+        },
+        icons: {
+            groupExpanded: '<i class="fa fa-minus-square-o"/>',
+            groupContracted: '<i class="fa fa-plus-square-o"/>'
+        },        
         // PROPERTIES
         rowSelection: 'single',
         enableFilter: true,
-        enableColResize: true
-
+        enableColResize: true,
     };
+
+    function autoSizeAll() {
+        var allColumnIds = [];
+        columnDefs.forEach( function(columnDef) {
+            allColumnIds.push(columnDef.field);
+        });
+        gridOptions.columnApi.autoSizeColumns(allColumnIds);
+    }
 
     // wait for the document to be loaded, otherwise
     // ag-Grid will not find the div in the document.
     document.addEventListener("DOMContentLoaded", function() {
         var eGridDiv = document.querySelector('#accounts');
         new agGrid.Grid(eGridDiv, gridOptions);
+        autoSizeAll();
     });
 </script>

@@ -5,6 +5,7 @@ using Services.Financial;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Newtonsoft.Json;
 
 namespace Api.Controllers
 {
@@ -44,14 +45,26 @@ namespace Api.Controllers
         [Route("[action]")]
         public IActionResult Accounts()
         {
-            var accounts = _financialService.GetAccounts();
-            var accountsDto = new List<Dto.Financial.Account>();
+            var accounts = _financialService.GetAccounts().ToList();
 
-            foreach (var account in accounts)
+            var accountTree = BuildAccountGrouping(accounts, null);
+
+            return new ObjectResult(accountTree);
+        }
+
+
+        private IEnumerable<Dto.Financial.Account> BuildAccountGrouping(IEnumerable<Core.Domain.Financials.Account> allAccounts,
+                                                  int? parentAccountId)
+        {
+            var accountTree = new List<Dto.Financial.Account>();
+            var childAccounts = allAccounts.Where(o => o.ParentAccountId == parentAccountId).ToList();
+
+            foreach (var account in childAccounts)
             {
                 var accountDto = new Dto.Financial.Account()
                 {
                     Id = account.Id,
+                    AccountClassId = account.AccountClassId,
                     ParentAccountId = account.ParentAccountId,
                     CompanyId = account.CompanyId,
                     AccountCode = account.AccountCode,
@@ -59,15 +72,16 @@ namespace Api.Controllers
                     Description = account.Description,
                     IsCash = account.IsCash,
                     IsContraAccount = account.IsContraAccount,
-                    Balance = account.Balance,
-                    DebitBalance = account.DebitBalance,
-                    CreditBalance = account.CreditBalance
+                    Balance = account.ChildAccounts.Sum(a => a.Balance),
+                    DebitBalance = account.ChildAccounts.Sum(a => a.DebitBalance),
+                    CreditBalance = account.ChildAccounts.Sum(a => a.CreditBalance)
                 };
-
-                accountsDto.Add(accountDto);
+                var children = BuildAccountGrouping(allAccounts, account.Id);
+                accountDto.ChildAccounts = children;
+                accountTree.Add(accountDto);
             }
 
-            return new ObjectResult(accountsDto);
+            return accountTree;
         }
 
         [HttpGet]
