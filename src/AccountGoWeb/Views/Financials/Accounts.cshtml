@@ -8,18 +8,34 @@
 <script>
     var columnDefs = [
         {headerName: "Group", cellRenderer: 'group'},
-        {headerName: "Account", field: "id", width: 50},
+        //{headerName: "Account", field: "id", width: 50},
         {headerName: "Code", field: "accountCode", width: 100},
-        {headerName: "Name", field: "accountName", width: 350},
+        {headerName: "Name", field: "accountName", width: 350, cellRenderer: function(val){
+            if(val.data.childAccounts.length > 0)
+                return "";
+            return val.data.accountName;
+        }},
         {headerName: "Description", field: "description", width: 250},
         {headerName: "Cash", width: 100, cellRenderer: function(val) {
             if(val.data.isCash)
                 return '<input type="checkbox" checked disabled />';
             return '<input type="checkbox" disabled />';
         }},
-        {headerName: "Balance", field: "balance", width: 100},
-        {headerName: "Debit", field: "debitBalance", width: 100},
-        {headerName: "Credit", field: "creditBalance", width: 100}
+        {headerName: "Balance", field: "balance", width: 100, cellRenderer: function(val){
+            if(val.data.childAccounts.length > 0)
+                return val.data.totalBalance;
+            return val.data.balance;
+        }},
+        {headerName: "Debit", field: "debitBalance", width: 100, cellRenderer: function(val){
+            if(val.data.childAccounts.length > 0)
+                return val.data.totalDebitBalance;
+            return val.data.debitBalance;
+        }},
+        {headerName: "Credit", field: "creditBalance", width: 100, cellRenderer: function(val){
+            if(val.data.childAccounts.length > 0)
+                return val.data.totalCreditBalance;
+            return val.data.creditBalance;
+        }}
     ];
 
     var gridOptions = {
