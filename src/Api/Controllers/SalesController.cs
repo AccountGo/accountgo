@@ -724,8 +724,16 @@ namespace Api.Controllers
                             salesInvoiceLine.Quantity = line.Quantity.GetValueOrDefault();
                             salesInvoiceLine.ItemId = line.ItemId.GetValueOrDefault();
                             salesInvoiceLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
-                            salesInvoiceLine.SalesOrderLineId = line.Id;
+                            if (line.Id != 0)
+                                salesInvoiceLine.SalesOrderLineId = line.Id; // This Id is also the SalesOrderLineId when you create sales invoice directly from sales order.
                             salesInvoice.SalesInvoiceLines.Add(salesInvoiceLine);
+
+                            if (salesDelivery == null)
+                            {
+                                salesDelivery = new Core.Domain.Sales.SalesDeliveryHeader();
+                                salesDelivery.CustomerId = salesInvoiceDto.CustomerId.GetValueOrDefault();
+                                salesDelivery.Date = salesInvoiceDto.InvoiceDate;
+                            }
 
                             var salesDeliveryLine = new Core.Domain.Sales.SalesDeliveryLine();
                             salesDeliveryLine.Price = line.Amount.GetValueOrDefault();
@@ -735,6 +743,28 @@ namespace Api.Controllers
                             salesDeliveryLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
                             salesDeliveryLine.SalesInvoiceLine = salesInvoiceLine;
                             salesDelivery.SalesDeliveryLines.Add(salesDeliveryLine);
+                        }
+                    }
+                }
+
+                if (!isNew)
+                {
+                    var deleted = (from line in salesInvoice.SalesInvoiceLines
+                                   where !salesInvoiceDto.SalesInvoiceLines.Any(x => x.Id == line.Id)
+                                   select line).ToList();
+
+                    foreach (var line in deleted)
+                    {
+                        salesInvoice.SalesInvoiceLines.Remove(line);
+
+                        if (salesDelivery != null)
+                        {
+                            var deliveryLine = salesDelivery.SalesDeliveryLines.ToList()
+                                .Where(s => s.SalesInvoiceLineId == line.Id)
+                                .FirstOrDefault();
+
+                            if (deliveryLine != null)
+                                salesDelivery.SalesDeliveryLines.Remove(deliveryLine);
                         }
                     }
                 }
