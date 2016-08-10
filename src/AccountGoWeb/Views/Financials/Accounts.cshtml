@@ -3,7 +3,7 @@
 <div>
 </div>
 <div>
-    <div id="accounts" class="ag-fresh" style="height: 400px;"></div>
+    <div id="accounts" class="ag-blue" style="height: 400px;"></div>
 </div>
 <script>
     var columnDefs = [
@@ -11,7 +11,11 @@
     {headerName: "Code", field: "accountCode", width: 100},
     {headerName: "Name", field: "accountName", width: 350},
     {headerName: "Description", field: "description", width: 250},
-    {headerName: "Cash", field: "isCash", width: 100},
+    {headerName: "Cash", width: 100, cellRenderer: function(val) {
+        if(val.data.isCash)
+            return '<input type="checkbox" checked disabled />';
+        return '<input type="checkbox" disabled />';
+    }},
     {headerName: "Balance", field: "balance", width: 100},
     {headerName: "Debit", field: "debitBalance", width: 100},
     {headerName: "Credit", field: "creditBalance", width: 100}
@@ -21,7 +25,10 @@
         columnDefs: columnDefs,
         rowData: @Html.Raw(Model),
         // PROPERTIES
-        rowSelection: 'multiple',
+        rowSelection: 'single',
+        enableFilter: true,
+        enableColResize: true
+
     };
 
     // wait for the document to be loaded, otherwise
