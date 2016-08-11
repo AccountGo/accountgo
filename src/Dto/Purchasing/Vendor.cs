@@ -12,13 +12,12 @@ namespace Dto.Purchasing
         public string Website { get; set; }
         public string Phone { get; set; }
         public string Fax { get; set; }
-
         public int? AccountsPayableAccountId { get; set; }
         public int? PurchaseAccountId { get; set; }
         public int? PurchaseDiscountAccountId { get; set; }
         public int? PaymentTermId { get; set; }
         public int? TaxGroupId { get; set; }
-
+        public decimal Balance { get; set; }
         public Contact PrimaryContact { get; set; }
 
         public Vendor()

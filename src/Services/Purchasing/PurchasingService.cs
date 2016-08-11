@@ -272,10 +272,19 @@ namespace Services.Purchasing
 
         public IEnumerable<Vendor> GetVendors()
         {
-            System.Linq.Expressions.Expression<Func<Vendor, object>>[] includeProperties =
-                {
-                p => p.Party,
-                c => c.AccountsPayableAccount
+            System.Linq.Expressions.Expression<Func<Vendor, object>>[] includeProperties = {
+                v => v.Party,
+                v => v.PrimaryContact,
+                v => v.PrimaryContact.Party,
+                v => v.PaymentTerm,
+                v => v.PurchaseAccount,
+                v => v.PurchaseDiscountAccount,
+                v => v.AccountsPayableAccount,
+                v => v.VendorPayments,
+                v => v.TaxGroup,
+                v => v.PurchaseInvoices,
+                v => v.PurchaseOrders,
+                v => v.PurchaseReceipts
             };
 
             var vendors = _vendorRepo.GetAllIncluding(includeProperties);
@@ -294,10 +303,10 @@ namespace Services.Purchasing
                 v => v.PurchaseDiscountAccount,
                 v => v.AccountsPayableAccount,
                 v => v.VendorPayments,
-                v => v.TaxGroup
-                //v => v.PurchaseInvoices,
-                //v => v.PurchaseOrders,
-                //v => v.PurchaseReceipts
+                v => v.TaxGroup,
+                v => v.PurchaseInvoices,
+                v => v.PurchaseOrders,
+                v => v.PurchaseReceipts
                 )
                 .Where(v => v.Id == id)
                 .FirstOrDefault();

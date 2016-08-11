@@ -54,7 +54,7 @@ namespace Core.Domain.Purchases
             decimal totalInvoicePayment = 0;
 
             foreach (var invoice in PurchaseInvoices)
-                totalInvoiceAmount += invoice.PurchaseInvoiceLines.Sum(a => a.Amount);
+                totalInvoiceAmount += invoice.PurchaseInvoiceLines.Sum(a => a.Amount * a.Quantity);
 
             foreach (var payment in VendorPayments)
                 totalInvoicePayment += payment.Amount;

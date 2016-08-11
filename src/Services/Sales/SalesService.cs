@@ -358,8 +358,19 @@ namespace Services.Sales
 
         public IEnumerable<Customer> GetCustomers()
         {
-            System.Linq.Expressions.Expression<Func<Customer, object>>[] includeProperties =
-                { p => p.Party, c => c.AccountsReceivableAccount };
+            System.Linq.Expressions.Expression<Func<Customer, object>>[] includeProperties = {
+                c => c.Party,
+                c => c.AccountsReceivableAccount,
+                c => c.SalesInvoices,
+                c => c.CustomerAdvancesAccount,
+                c => c.SalesAccount,
+                c => c.PromptPaymentDiscountAccount,
+                c => c.PrimaryContact,
+                c => c.PrimaryContact.Party,
+                c => c.SalesInvoices,
+                c => c.SalesReceipts,
+                c => c.SalesOrders,
+            };
 
             var customers = _customerRepo.GetAllIncluding(includeProperties);
 
@@ -369,14 +380,17 @@ namespace Services.Sales
         public Customer GetCustomerById(int id)
         {
             System.Linq.Expressions.Expression<Func<Customer, object>>[] includeProperties = {
-                p => p.Party,
+                c => c.Party,
                 c => c.AccountsReceivableAccount,
                 c => c.SalesInvoices,
                 c => c.CustomerAdvancesAccount,
                 c => c.SalesAccount,
                 c => c.PromptPaymentDiscountAccount,
                 c => c.PrimaryContact,
-                c => c.PrimaryContact.Party
+                c => c.PrimaryContact.Party,
+                c => c.SalesInvoices,
+                c => c.SalesReceipts,
+                c => c.SalesOrders,
             };
 
             var customer = _customerRepo.GetAllIncluding(includeProperties)

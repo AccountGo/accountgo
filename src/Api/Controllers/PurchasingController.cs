@@ -511,7 +511,8 @@ namespace Api.Controllers
                         Email = vendor.Party.Email,
                         Phone = vendor.Party.Phone,
                         Fax = vendor.Party.Fax,
-                        Website = vendor.Party.Website
+                        Website = vendor.Party.Website,
+                        Balance = vendor.GetBalance(),
                     };
 
                     vendorsDto.Add(vendorDto);

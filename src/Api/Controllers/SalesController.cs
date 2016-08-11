@@ -147,7 +147,7 @@ namespace Api.Controllers
                     customerDto.Website = customer.Party.Website;
                     customerDto.Phone = customer.Party.Phone;
                     customerDto.Fax = customer.Party.Fax;
-
+                    customerDto.Balance = customer.Balance;
                     customerDto.PrepaymentAccountId = customer.CustomerAdvancesAccountId;
 
                     customersDto.Add(customerDto);
