@@ -934,5 +934,67 @@ namespace Api.Controllers
                 return new BadRequestObjectResult(errors);
             }
         }
+
+        [HttpPost]
+        [Route("[action]")]
+        public IActionResult SaveAllocation([FromBody]dynamic allocationDto)
+        {
+            string[] errors = null;
+
+            try
+            {
+                if (!ModelState.IsValid)
+                {
+                    errors = new string[ModelState.ErrorCount];
+                    foreach (var val in ModelState.Values)
+                        for (int i = 0; i < ModelState.ErrorCount; i++)
+                            errors[i] = val.Errors[i].ErrorMessage;
+                    return new BadRequestObjectResult(errors);
+                }
+
+                foreach (var line in allocationDto.AllocationLines)
+                {
+                    decimal? amount = (decimal?)line.AmountToAllocate;
+                    if (amount.HasValue)
+                    {
+                        var allocation = new Core.Domain.Sales.CustomerAllocation();
+                        allocation.CustomerId = allocationDto.CustomerId;
+                        allocation.Date = allocationDto.Date;
+                        allocation.SalesInvoiceHeaderId = line.InvoiceId;
+                        allocation.SalesReceiptHeaderId = allocationDto.ReceiptId;
+                        allocation.Amount = amount.GetValueOrDefault();
+
+                        _salesService.SaveCustomerAllocation(allocation);
+                    }
+                }
+
+                //var bank = _financialService.GetCashAndBanks().Where(id => id.Id == (int)receiptDto.AccountToDebitId).FirstOrDefault();
+
+                //var salesReceipt = new Core.Domain.Sales.SalesReceiptHeader();
+                //salesReceipt.Date = receiptDto.ReceiptDate;
+                //salesReceipt.CustomerId = receiptDto.CustomerId;
+                //salesReceipt.AccountToDebitId = bank.AccountId;
+                //salesReceipt.Amount = receiptDto.Amount;
+
+                //var customer = _salesService.GetCustomerById((int)receiptDto.CustomerId);
+                //if (customer.CustomerAdvancesAccountId != (int)receiptDto.AccountToCreditId)
+                //    throw new Exception("Invalid account.");
+
+                //var salesReceiptLine = new Core.Domain.Sales.SalesReceiptLine();
+                //salesReceiptLine.AccountToCreditId = receiptDto.AccountToCreditId;
+                //salesReceiptLine.AmountPaid = receiptDto.Amount;
+
+                //salesReceipt.SalesReceiptLines.Add(salesReceiptLine);
+
+                //_salesService.AddSalesReceiptNoInvoice(salesReceipt);
+
+                return new ObjectResult(Ok());
+            }
+            catch (Exception ex)
+            {
+                errors = new string[1] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
+                return new BadRequestObjectResult(errors);
+            }
+        }
     }
 }

@@ -229,6 +229,9 @@ namespace AccountGoWeb.Controllers
 
             var receipt = GetAsync<Dto.Sales.SalesReceipt>("sales/salesreceipt?id=" + id).Result;
 
+            ViewBag.CustomerName = receipt.CustomerName;
+            ViewBag.ReceiptNo = receipt.ReceiptNo;
+
             model.CustomerId = receipt.CustomerId;
             model.ReceiptId = receipt.Id;
             model.Date = receipt.ReceiptDate;
@@ -257,12 +260,21 @@ namespace AccountGoWeb.Controllers
         {
             if (ModelState.IsValid)
             {
-                if (!model.IsValid()) {
-                    return View(model);
+                if (model.IsValid()) {
+                    var serialize = Newtonsoft.Json.JsonConvert.SerializeObject(model);
+                    var content = new StringContent(serialize);
+                    content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+                    var response = Post("sales/saveallocation", content);
+                    if (response.IsSuccessStatusCode)
+                        return RedirectToAction("salesreceipts");
                 }
             }
 
-            return RedirectToAction("salesreceipts");
+            var receipt = GetAsync<Dto.Sales.SalesReceipt>("sales/salesreceipt?id=" + model.ReceiptId).Result;
+            ViewBag.CustomerName = receipt.CustomerName;
+            ViewBag.ReceiptNo = receipt.ReceiptNo;
+
+            return View(model);
         }
 
         #region Private methods

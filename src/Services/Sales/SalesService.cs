@@ -302,6 +302,9 @@ namespace Services.Sales
         {
             var invoice = _salesInvoiceRepo.GetAllIncluding(inv => inv.Customer,
                 inv => inv.Customer.Party,
+                inv => inv.Customer.CustomerAdvancesAccount,
+                inv => inv.Customer.AccountsReceivableAccount,
+                inv => inv.CustomerAllocations,
                 inv => inv.SalesInvoiceLines)
                 .Where(inv => inv.Id == id)
                 .FirstOrDefault();
@@ -404,8 +407,8 @@ namespace Services.Sales
         {
             //Revenue recognition. Debit the customer advances (liability) account and credit the revenue account.
             //In case of allocation, credit the accounts receivable since sales account is already credited from invoice.
-            var invoice = _salesInvoiceRepo.GetById(allocation.SalesInvoiceHeaderId);
-            var receipt = _salesReceiptRepo.GetById(allocation.SalesReceiptHeaderId);
+            var invoice = GetSalesInvoiceById(allocation.SalesInvoiceHeaderId);
+            var receipt = GetSalesReceiptById(allocation.SalesReceiptHeaderId);
 
             var glHeader = _financialService.CreateGeneralLedgerHeader(Core.Domain.DocumentTypes.CustomerAllocation, allocation.Date, string.Empty);
 
