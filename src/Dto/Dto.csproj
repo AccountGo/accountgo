@@ -55,6 +55,7 @@
     <Compile Include="Financial\GeneralLedger.cs" />
     <Compile Include="Financial\JournalEntry.cs" />
     <Compile Include="Financial\PaymentTerm.cs" />
+    <Compile Include="Financial\TreeViewAccounts.cs" />
     <Compile Include="Inventory\InventoryControlJournal.cs" />
     <Compile Include="Inventory\Item.cs" />
     <Compile Include="Inventory\ItemCategory.cs" />

@@ -5,6 +5,7 @@ using Services.Financial;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Newtonsoft.Json;
 
 namespace Api.Controllers
 {
@@ -44,30 +45,11 @@ namespace Api.Controllers
         [Route("[action]")]
         public IActionResult Accounts()
         {
-            var accounts = _financialService.GetAccounts();
-            var accountsDto = new List<Dto.Financial.Account>();
+            var accounts = _financialService.GetAccounts().ToList();
 
-            foreach (var account in accounts)
-            {
-                var accountDto = new Dto.Financial.Account()
-                {
-                    Id = account.Id,
-                    ParentAccountId = account.ParentAccountId,
-                    CompanyId = account.CompanyId,
-                    AccountCode = account.AccountCode,
-                    AccountName = account.AccountName,
-                    Description = account.Description,
-                    IsCash = account.IsCash,
-                    IsContraAccount = account.IsContraAccount,
-                    Balance = account.Balance,
-                    DebitBalance = account.DebitBalance,
-                    CreditBalance = account.CreditBalance
-                };
+            var accountTree = BuildAccountGrouping(accounts, null);
 
-                accountsDto.Add(accountDto);
-            }
-
-            return new ObjectResult(accountsDto);
+            return new ObjectResult(accountTree);
         }
 
         [HttpGet]
@@ -309,5 +291,39 @@ namespace Api.Controllers
             var Dto = _financialService.IncomeStatement();
             return new ObjectResult(Dto);
         }
+
+        #region Private Methods
+        private IList<Dto.Financial.Account> BuildAccountGrouping(IList<Core.Domain.Financials.Account> allAccounts,
+                                          int? parentAccountId)
+        {
+            var accountTree = new List<Dto.Financial.Account>();
+            var childAccounts = allAccounts.Where(o => o.ParentAccountId == parentAccountId).ToList();
+
+            foreach (var account in childAccounts)
+            {
+                var accountDto = new Dto.Financial.Account()
+                {
+                    Id = account.Id,
+                    AccountClassId = account.AccountClassId,
+                    ParentAccountId = account.ParentAccountId,
+                    CompanyId = account.CompanyId,
+                    AccountCode = account.AccountCode,
+                    AccountName = account.AccountName,
+                    Description = account.Description,
+                    IsCash = account.IsCash,
+                    IsContraAccount = account.IsContraAccount,
+                    Balance = account.Balance,
+                    DebitBalance = account.DebitBalance,
+                    CreditBalance = account.CreditBalance
+                };
+                var children = BuildAccountGrouping(allAccounts, account.Id);
+                accountDto.ChildAccounts = children;
+                accountTree.Add(accountDto);
+            }
+
+            return accountTree;
+        }
+
+        #endregion
     }
 }

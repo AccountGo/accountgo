@@ -119,6 +119,7 @@ namespace AccountGoWeb.Controllers
             ViewBag.Customers = Models.SelectListItemHelper.Customers();
             ViewBag.DebitAccounts = Models.SelectListItemHelper.CashBanks();
             ViewBag.CreditAccounts = Models.SelectListItemHelper.Accounts();
+            ViewBag.CustomersDetail = Newtonsoft.Json.JsonConvert.SerializeObject(GetAsync<IEnumerable<Customer>>("sales/customers").Result);
 
             return View(model);
         }
@@ -128,16 +129,20 @@ namespace AccountGoWeb.Controllers
         {
             if (ModelState.IsValid)
             {
-                return RedirectToAction("salesreceipts");
+                var serialize = Newtonsoft.Json.JsonConvert.SerializeObject(model);
+                var content = new StringContent(serialize);
+                content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+                var response = Post("sales/savereceipt", content);
+                if(response.IsSuccessStatusCode)
+                    return RedirectToAction("salesreceipts");                
             }
-            else
-            {
-                ViewBag.PageContentHeader = "New Receipt";
 
-                ViewBag.Customers = Models.SelectListItemHelper.Customers();
-                ViewBag.DebitAccounts = Models.SelectListItemHelper.CashBanks();
-                ViewBag.CreditAccounts = Models.SelectListItemHelper.Accounts();
-            }
+            ViewBag.PageContentHeader = "New Receipt";
+
+            ViewBag.Customers = Models.SelectListItemHelper.Customers();
+            ViewBag.DebitAccounts = Models.SelectListItemHelper.CashBanks();
+            ViewBag.CreditAccounts = Models.SelectListItemHelper.Accounts();
+            ViewBag.CustomersDetail = Newtonsoft.Json.JsonConvert.SerializeObject(GetAsync<IEnumerable<Customer>>("sales/customers").Result);
 
             return View(model);
         }
@@ -294,6 +299,19 @@ namespace AccountGoWeb.Controllers
             }
 
             return Newtonsoft.Json.JsonConvert.DeserializeObject<string>(responseJson);
+        }
+
+        public HttpResponseMessage Post(string uri, StringContent data)
+        {
+            string responseJson = string.Empty;
+            using (var client = new HttpClient())
+            {
+                var baseUri = _config["ApiUrl"];
+                client.BaseAddress = new System.Uri(baseUri);
+                client.DefaultRequestHeaders.Accept.Clear();
+                var response = client.PostAsync(baseUri + uri, data);
+                return response.Result;
+            }
         }
         #endregion
     }

@@ -10,7 +10,7 @@ namespace AccountGoWeb.Models
 
         public static IEnumerable<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem> Accounts()
         {
-            var accounts = GetAsync<IEnumerable<Dto.Financial.Account>>("financials/accounts").Result;
+            var accounts = GetAsync<IEnumerable<Dto.Financial.Account>>("common/postingaccounts").Result;
 
             var selectAccounts = new HashSet<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>();
             selectAccounts.Add(new Microsoft.AspNetCore.Mvc.Rendering.SelectListItem() { Value = "", Text = "" });
