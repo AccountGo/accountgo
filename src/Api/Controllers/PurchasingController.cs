@@ -202,8 +202,10 @@ namespace Api.Controllers
                     VendorId = purchaseInvoice.VendorId.Value,
                     VendorName = purchaseInvoice.Vendor.Party.Name,
                     InvoiceDate = purchaseInvoice.Date,
-                    Amount = purchaseInvoice.PurchaseInvoiceLines.Sum(l => l.Amount),
-                    IsPaid = purchaseInvoice.IsPaid()
+                    Amount = purchaseInvoice.PurchaseInvoiceLines.Sum(l => l.Amount * l.Quantity),
+                    AmountPaid = purchaseInvoice.AmountPaid(),
+                    IsPaid = purchaseInvoice.IsPaid(),
+                    IsPosted = purchaseInvoice.GeneralLedgerHeader != null
                 };
 
                 purchaseInvoicesDto.Add(purchaseInvoiceDto);
@@ -216,20 +218,20 @@ namespace Api.Controllers
         [Route("[action]")]
         public IActionResult PurchaseInvoice(int id)
         {
-            var invoice = _purchasingService.GetPurchaseInvoiceById(id);
+            var purchaseInvoice = _purchasingService.GetPurchaseInvoiceById(id);
             var purchaseInvoiceDto = new Dto.Purchasing.PurchaseInvoice()
             {
-                Id = invoice.Id,
-                InvoiceNo = invoice.No,
-                VendorId = invoice.VendorId.GetValueOrDefault(),
-                VendorName = invoice.Vendor.Party.Name,
-                InvoiceDate = invoice.Date,
-                Amount = invoice.PurchaseInvoiceLines.Sum(l => l.Amount),
-                ReferenceNo = invoice.ReferenceNo,
-                PaymentTermId = invoice.PaymentTermId
+                Id = purchaseInvoice.Id,
+                VendorId = purchaseInvoice.VendorId.Value,
+                VendorName = purchaseInvoice.Vendor.Party.Name,
+                InvoiceDate = purchaseInvoice.Date,
+                Amount = purchaseInvoice.PurchaseInvoiceLines.Sum(l => l.Amount * l.Quantity),
+                AmountPaid = purchaseInvoice.AmountPaid(),
+                IsPaid = purchaseInvoice.IsPaid(),
+                IsPosted = purchaseInvoice.GeneralLedgerHeader != null
             };
 
-            foreach (var item in invoice.PurchaseInvoiceLines)
+            foreach (var item in purchaseInvoice.PurchaseInvoiceLines)
             {
                 var line = new Dto.Purchasing.PurchaseInvoiceLine()
                 {

@@ -32,7 +32,7 @@
         document.getElementById('linkMakePayment').setAttribute('href', 'payment/' + selectedRow.id);
         document.getElementById('linkViewInvoice').setAttribute('href', 'purchaseinvoice?invoiceId=' + selectedRow.id);
         
-        if(!selectedRow.isPaid)
+        if(!selectedRow.isPaid && selectedRow.isPosted)
             document.getElementById('linkMakePayment').setAttribute('class', '');
         else
             document.getElementById('linkMakePayment').setAttribute('class', 'inactiveLink');

@@ -55,10 +55,23 @@ namespace Core.Domain.Purchases
 
         public bool IsPaid()
         {
-            if (this.GeneralLedgerHeader == null)
-                return false;
+            if (VendorPayments != null && VendorPayments.Count > 0)
+            {
+                var paymentSum = VendorPayments.Sum(p => p.Amount);
+                if (paymentSum == PurchaseInvoiceLines.Sum(l => l.Amount * l.Quantity))
+                    return true;
+            }
+            return false;
+        }
 
-            return this.GeneralLedgerHeader.GeneralLedgerLines.Where(dr => dr.DrCr == DrOrCrSide.Dr).Sum(l => l.Amount) == VendorPayments.Sum(a => a.Amount);
+        public decimal AmountPaid()
+        {
+            if (VendorPayments != null && VendorPayments.Count > 0)
+            {
+                var paymentSum = VendorPayments.Sum(p => p.Amount);
+                return paymentSum;
+            }
+            return decimal.Zero;
         }
     }
 }

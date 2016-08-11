@@ -37,28 +37,41 @@
                         <div class="col-sm-8">
                             @Html.DisplayFor(m => m.InvoiceAmount)
                             @Html.HiddenFor(m => m.InvoiceAmount)
+                        </div>
                     </div>
-                </div>
-                <div class="row">
-                    <div class="col-sm-4">Amount to Pay</div>
-                    <div class="col-sm-8">
-                        <input asp-for="AmountToPay" class="form-control" type="text" placeholder="Amount ..." />
-                        <span asp-validation-for="AmountToPay" class="danger"></span>
+                    <div class="row">
+                        <div class="col-sm-4">Amount Paid</div>
+                        <div class="col-sm-8">
+                            @Html.DisplayFor(m => m.AmountPaid)
+                            @Html.HiddenFor(m => m.AmountPaid)
+                        </div>
                     </div>
-                </div>
-                <div class="row">
-                    <div class="col-sm-4">Account</div>
-                    <div class="col-sm-8">
-                        <select class="form-control" asp-for="AccountId" asp-items="@ViewBag.CashBanks"></select>
-                        <span asp-validation-for="AccountId" class="danger"></span>
-                        @Html.HiddenFor(m => m.AccountId)
+                    <div class="row">
+                        <div class="col-sm-4">Balance</div>
+                        <div class="col-sm-8">
+                            @Html.DisplayFor(m => m.Balance)
+                            @Html.HiddenFor(m => m.Balance)
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-sm-4">Amount to Pay</div>
+                        <div class="col-sm-8">
+                            <input asp-for="AmountToPay" class="form-control" type="text" placeholder="Amount ..." />
+                            <span asp-validation-for="AmountToPay" class="danger"></span>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-sm-4">Account</div>
+                        <div class="col-sm-8">
+                            <select class="form-control" asp-for="AccountId" asp-items="@ViewBag.CashBanks"></select>
+                            <span asp-validation-for="AccountId" class="danger"></span>
+                            @Html.HiddenFor(m => m.AccountId)
+                        </div>
                     </div>
                 </div>
             </div>
+            <div>
+                <input class="btn btn-sm btn-primary btn-flat pull-left" type="submit" value="Save" />
+            </div>
         </div>
-    </div>
-    <div>
-        <input class="btn btn-sm btn-primary btn-flat pull-left" type="submit" value="Save" />
-    </div>
-</div>
 </form>

@@ -170,6 +170,7 @@ namespace AccountGoWeb.Controllers
                 VendorId = invoice.VendorId,
                 VendorName = invoice.VendorName,
                 InvoiceAmount = invoice.Amount,
+                AmountPaid = invoice.AmountPaid,                
                 Date = invoice.InvoiceDate
             };
 
