@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Services.Administration;
+using Services.Financial;
 using Services.Sales;
 using System;
 using System.Collections.Generic;
@@ -12,12 +13,15 @@ namespace Api.Controllers
     {
         private readonly IAdministrationService _adminService;
         private readonly ISalesService _salesService;
+        private readonly IFinancialService _financialService;
 
         public SalesController(IAdministrationService adminService,
-            ISalesService salesService)
+            ISalesService salesService,
+            IFinancialService financialService)
         {
             _adminService = adminService;
             _salesService = salesService;
+            _financialService = financialService;
         }
 
         [HttpPost]
@@ -29,7 +33,7 @@ namespace Api.Controllers
 
             if (isNew)
             {
-                customer = new Core.Domain.Sales.Customer();                
+                customer = new Core.Domain.Sales.Customer();
 
                 customer.Party = new Core.Domain.Party()
                 {
@@ -41,8 +45,8 @@ namespace Api.Controllers
                     ContactType = Core.Domain.ContactTypes.Customer,
                     Party = new Core.Domain.Party() {
                         PartyType = Core.Domain.PartyTypes.Contact
-                    }                                   
-                };                
+                    }
+                };
             }
             else
             {
@@ -69,9 +73,9 @@ namespace Api.Controllers
             customer.PaymentTermId = customerDto.PaymentTermId;
             customer.TaxGroupId = customerDto.TaxGroupId;
 
-          
-            
-            if(isNew)
+
+
+            if (isNew)
                 _salesService.AddCustomer(customer);
             else
                 _salesService.UpdateCustomer(customer);
@@ -90,7 +94,7 @@ namespace Api.Controllers
                 var customerDto = new Dto.Sales.Customer()
                 {
                     Id = customer.Id,
-                    No = customer.No,                  
+                    No = customer.No,
                     AccountsReceivableId = customer.AccountsReceivableAccountId.GetValueOrDefault(),
                     SalesAccountId = customer.SalesAccountId.GetValueOrDefault(),
                     PrepaymentAccountId = customer.CustomerAdvancesAccountId.GetValueOrDefault(),
@@ -135,7 +139,7 @@ namespace Api.Controllers
                     var customerDto = new Dto.Sales.Customer()
                     {
                         Id = customer.Id,
-                        No = customer.No
+                        No = customer.No,
                     };
 
                     customerDto.Name = customer.Party.Name;
@@ -143,6 +147,8 @@ namespace Api.Controllers
                     customerDto.Website = customer.Party.Website;
                     customerDto.Phone = customer.Party.Phone;
                     customerDto.Fax = customer.Party.Fax;
+
+                    customerDto.PrepaymentAccountId = customer.CustomerAdvancesAccountId;
 
                     customersDto.Add(customerDto);
                 }
@@ -174,7 +180,7 @@ namespace Api.Controllers
                     OrderDate = salesOrder.Date,
                     ReferenceNo = salesOrder.ReferenceNo,
                     Amount = salesOrder.SalesOrderLines.Sum(l => l.Amount),
-                  
+
                 };
                 salesOrdersDto.Add(salesOrderDto);
             }
@@ -246,7 +252,7 @@ namespace Api.Controllers
                     PaymentTermId = salesInvoice.PaymentTermId,
                     ReferenceNo = salesInvoice.ReferenceNo
                 };
-        
+
                 foreach (var line in salesInvoice.SalesInvoiceLines)
                 {
                     var lineDto = new Dto.Sales.SalesInvoiceLine();
@@ -319,8 +325,8 @@ namespace Api.Controllers
                     CustomerId = quote.CustomerId,
                     CustomerName = quote.Customer.Party.Name,
                     PaymentTermId = quote.PaymentTermId,
-                    QuotationDate = quote.Date,      
-                    ReferenceNo = quote.ReferenceNo           
+                    QuotationDate = quote.Date,
+                    ReferenceNo = quote.ReferenceNo
                 };
 
                 foreach (var line in quote.SalesQuoteLines) {
@@ -351,7 +357,7 @@ namespace Api.Controllers
             {
                 Id = quote.Id,
                 CustomerId = quote.CustomerId,
-                CustomerName = quote.Customer.Party.Name,                
+                CustomerName = quote.Customer.Party.Name,
                 QuotationDate = quote.Date,
                 PaymentTermId = quote.PaymentTermId,
                 ReferenceNo = quote.ReferenceNo
@@ -602,7 +608,7 @@ namespace Api.Controllers
 
                 return new ObjectResult(Ok());
             }
-            catch(Exception ex)
+            catch (Exception ex)
             {
                 errors = new string[1] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
                 return new BadRequestObjectResult(errors);
@@ -662,7 +668,7 @@ namespace Api.Controllers
                         salesInvoiceLine.ItemId = line.ItemId.GetValueOrDefault();
                         salesInvoiceLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
 
-                        if(line.Id != 0)
+                        if (line.Id != 0)
                             salesInvoiceLine.SalesOrderLineId = line.Id; // This Id is also the SalesOrderLineId when you create sales invoice directly from sales order.
                         else
                         {
@@ -839,7 +845,7 @@ namespace Api.Controllers
                             salesQuoteLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
 
                             salesQuote.SalesQuoteLines.Add(salesQuoteLine);
-                        }                        
+                        }
                     }
                     else
                     {
@@ -853,7 +859,7 @@ namespace Api.Controllers
                         salesQuote.SalesQuoteLines.Add(salesQuoteLine);
                     }
                 }
-                                
+
                 if (isNew)
                 {
                     _salesService.AddSalesQuote(salesQuote);
@@ -861,8 +867,8 @@ namespace Api.Controllers
                 else
                 {
                     var deleted = (from line in salesQuote.SalesQuoteLines
-                                  where !quotationDto.SalesQuotationLines.Any(x => x.Id == line.Id)
-                                  select line).ToList();
+                                   where !quotationDto.SalesQuotationLines.Any(x => x.Id == line.Id)
+                                   select line).ToList();
 
                     foreach (var line in deleted)
                     {
@@ -876,6 +882,53 @@ namespace Api.Controllers
                 return new OkObjectResult(Ok());
             }
             catch (Exception ex)
+            {
+                errors = new string[1] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
+                return new BadRequestObjectResult(errors);
+            }
+        }
+
+        [HttpPost]
+        [Route("[action]")]
+        public IActionResult SaveReceipt([FromBody]dynamic receiptDto)
+        {
+            string[] errors = null;
+
+            try
+            {
+                if (!ModelState.IsValid)
+                {
+                    errors = new string[ModelState.ErrorCount];
+                    foreach (var val in ModelState.Values)
+                        for (int i = 0; i < ModelState.ErrorCount; i++)
+                            errors[i] = val.Errors[i].ErrorMessage;
+
+                    return new BadRequestObjectResult(errors);
+                }
+
+                var bank = _financialService.GetCashAndBanks().Where(id => id.Id == (int)receiptDto.AccountToDebitId).FirstOrDefault();
+
+                var salesReceipt = new Core.Domain.Sales.SalesReceiptHeader();
+                salesReceipt.Date = receiptDto.ReceiptDate;
+                salesReceipt.CustomerId = receiptDto.CustomerId;
+                salesReceipt.AccountToDebitId = bank.AccountId;
+                salesReceipt.Amount = receiptDto.Amount;
+
+                var customer = _salesService.GetCustomerById((int)receiptDto.CustomerId);
+                if (customer.CustomerAdvancesAccountId != (int)receiptDto.AccountToCreditId)
+                    throw new Exception("Invalid account.");
+
+                var salesReceiptLine = new Core.Domain.Sales.SalesReceiptLine();
+                salesReceiptLine.AccountToCreditId = receiptDto.AccountToCreditId;
+                salesReceiptLine.AmountPaid = receiptDto.Amount;
+
+                salesReceipt.SalesReceiptLines.Add(salesReceiptLine);
+
+                _salesService.AddSalesReceiptNoInvoice(salesReceipt);
+
+                return new ObjectResult(Ok());
+            }
+            catch(Exception ex)
             {
                 errors = new string[1] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
                 return new BadRequestObjectResult(errors);

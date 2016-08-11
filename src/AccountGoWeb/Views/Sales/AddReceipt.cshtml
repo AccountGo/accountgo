@@ -8,7 +8,7 @@
                 <div class="row">
                     <div class="col-sm-2">Customer</div>
                     <div class="col-sm-10">
-                        <select class="form-control" asp-for="CustomerId" asp-items="@ViewBag.Customers"></select>
+                        <select class="form-control" asp-for="CustomerId" asp-items="@ViewBag.Customers" id="optCustomer" onchange="customerOnChange();"></select>
                         <span asp-validation-for="CustomerId" class="danger"></span>
                     </div>
                 </div>
@@ -21,15 +21,16 @@
                 <div class="row">
                     <div class="col-sm-2">Debit</div>
                     <div class="col-sm-10">
-                        <select class="form-control" asp-for="DebitAccountId" asp-items="@ViewBag.DebitAccounts"></select>
-                        <span asp-validation-for="DebitAccountId" class="danger"></span>
+                        <select class="form-control" asp-for="AccountToDebitId" asp-items="@ViewBag.DebitAccounts"></select>
+                        <span asp-validation-for="AccountToDebitId" class="danger"></span>
                     </div>
                 </div>
                 <div class="row">
                     <div class="col-sm-2">Credit</div>
                     <div class="col-sm-10">
-                        <select class="form-control" asp-for="CreditAccountId" asp-items="@ViewBag.CreditAccounts"></select>
-                        <span asp-validation-for="CreditAccountId" class="danger"></span>
+                        <select class="form-control" asp-for="AccountToCreditId" id="optAccountToCreditId" asp-items="@ViewBag.CreditAccounts"></select>
+                        @Html.HiddenFor(m => m.AccountToCreditId)
+                        <span asp-validation-for="AccountToCreditId" class="danger"></span>
                     </div>
                 </div>
                 <div class="row">
@@ -46,3 +47,30 @@
         </div>
     </form>
 </div>
+@section scripts{
+    <script>
+        var customers = @Html.Raw(ViewBag.CustomersDetail);
+
+        function customerOnChange() {
+            var customerId = document.getElementById("optCustomer").value;
+            var element = document.getElementById("optAccountToCreditId");
+
+            for(var i = 0; i < customers.length; i++){
+                if(customerId === customers[i].Id.toString())
+                {
+                    var customer = customers[i];
+                    for(var i=0; i < element.options.length; i++)
+                    {
+                        if(element.options[i].value === customer.PrepaymentAccountId.toString()) {
+                            element.selectedIndex = i;
+                            document.getElementById("optAccountToCreditId").value = customer.PrepaymentAccountId;
+                            break;
+                        }
+                    }
+                }
+                else
+                    element.selectedIndex = element.options.length - element.options.length;
+            }
+        }
+    </script>
+}
