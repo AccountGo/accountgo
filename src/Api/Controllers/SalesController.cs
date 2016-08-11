@@ -921,6 +921,8 @@ namespace Api.Controllers
                 var salesReceiptLine = new Core.Domain.Sales.SalesReceiptLine();
                 salesReceiptLine.AccountToCreditId = receiptDto.AccountToCreditId;
                 salesReceiptLine.AmountPaid = receiptDto.Amount;
+                salesReceiptLine.Amount = receiptDto.Amount;
+                salesReceiptLine.Quantity = 1;
 
                 salesReceipt.SalesReceiptLines.Add(salesReceiptLine);
 

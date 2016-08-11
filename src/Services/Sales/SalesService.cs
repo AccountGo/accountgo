@@ -374,7 +374,20 @@ namespace Services.Sales
 
             var customers = _customerRepo.GetAllIncluding(includeProperties);
 
-            return customers.AsEnumerable();
+            foreach (var customer in customers)
+            {
+                foreach (var invoice in customer.SalesInvoices)
+                {
+                    invoice.SalesInvoiceLines = GetSalesInvoiceById(invoice.Id).SalesInvoiceLines;
+                }
+
+                foreach (var receipt in customer.SalesReceipts)
+                {
+                    receipt.SalesReceiptLines = GetSalesReceiptById(receipt.Id).SalesReceiptLines;
+                }
+            }
+
+            return customers;
         }
 
         public Customer GetCustomerById(int id)
@@ -395,6 +408,16 @@ namespace Services.Sales
 
             var customer = _customerRepo.GetAllIncluding(includeProperties)
                 .Where(c => c.Id == id).FirstOrDefault();
+
+            foreach (var invoice in customer.SalesInvoices)
+            {
+                invoice.SalesInvoiceLines = GetSalesInvoiceById(invoice.Id).SalesInvoiceLines;
+            }
+
+            foreach (var receipt in customer.SalesReceipts)
+            {
+                receipt.SalesReceiptLines = GetSalesReceiptById(receipt.Id).SalesReceiptLines;
+            }
 
             return customer;
         }

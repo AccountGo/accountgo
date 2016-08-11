@@ -289,7 +289,15 @@ namespace Services.Purchasing
 
             var vendors = _vendorRepo.GetAllIncluding(includeProperties);
 
-            return vendors.AsEnumerable();
+            foreach(var vendor in vendors)
+            {
+                foreach (var invoice in vendor.PurchaseInvoices)
+                {
+                    invoice.PurchaseInvoiceLines = GetPurchaseInvoiceById(invoice.Id).PurchaseInvoiceLines;
+                }
+            }
+
+            return vendors;
         }
 
         public Vendor GetVendorById(int id)
@@ -310,6 +318,11 @@ namespace Services.Purchasing
                 )
                 .Where(v => v.Id == id)
                 .FirstOrDefault();
+
+            foreach (var invoice in vendor.PurchaseInvoices)
+            {
+                invoice.PurchaseInvoiceLines = GetPurchaseInvoiceById(invoice.Id).PurchaseInvoiceLines;
+            }
 
             return vendor;
         }
