@@ -5,6 +5,7 @@
     [No]            NVARCHAR (MAX) NULL,
     [ReferenceNo]   NVARCHAR (MAX) NULL,
     [Date]          DATETIME       NOT NULL,
+    [Status] INT NULL, 
     CONSTRAINT [PK_dbo.SalesOrderHeader] PRIMARY KEY CLUSTERED ([Id] ASC),
     CONSTRAINT [FK_dbo.SalesOrderHeader_dbo.Customer_CustomerId] FOREIGN KEY ([CustomerId]) REFERENCES [dbo].[Customer] ([Id]),
     CONSTRAINT [FK_dbo.SalesOrderHeader_dbo.PaymentTerm_PaymentTermId] FOREIGN KEY ([PaymentTermId]) REFERENCES [dbo].[PaymentTerm] ([Id])
