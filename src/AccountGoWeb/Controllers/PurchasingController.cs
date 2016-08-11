@@ -183,13 +183,15 @@ namespace AccountGoWeb.Controllers
         {
             if (ModelState.IsValid)
             {
-                return RedirectToAction("PurchaseInvoices");
+                var serialize = Newtonsoft.Json.JsonConvert.SerializeObject(model);
+                var content = new StringContent(serialize);
+                content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+                var response = Post("purchasing/savepayment", content);
+                if (response.IsSuccessStatusCode)
+                    return RedirectToAction("purchaseinvoices");
             }
-            else
-            {
-                ViewBag.PageContentHeader = "Make Payment";
-                ViewBag.CashBanks = Models.SelectListItemHelper.CashBanks();
-            }
+            ViewBag.PageContentHeader = "Make Payment";
+            ViewBag.CashBanks = Models.SelectListItemHelper.CashBanks();
             return View(model);
         }
 
@@ -227,6 +229,19 @@ namespace AccountGoWeb.Controllers
             }
 
             return Newtonsoft.Json.JsonConvert.DeserializeObject<string>(responseJson);
+        }
+
+        public HttpResponseMessage Post(string uri, StringContent data)
+        {
+            string responseJson = string.Empty;
+            using (var client = new HttpClient())
+            {
+                var baseUri = _config["ApiUrl"];
+                client.BaseAddress = new System.Uri(baseUri);
+                client.DefaultRequestHeaders.Accept.Clear();
+                var response = client.PostAsync(baseUri + uri, data);
+                return response.Result;
+            }
         }
         #endregion
     }

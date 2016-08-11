@@ -4,6 +4,7 @@ using Services.Purchasing;
 using System;
 using System.Linq;
 using System.Collections.Generic;
+using Services.Financial;
 
 namespace Api.Controllers
 {
@@ -12,11 +13,15 @@ namespace Api.Controllers
     {
         private readonly IAdministrationService _adminService;
         private readonly IPurchasingService _purchasingService;
+        private readonly IFinancialService _financialService;
+
         public PurchasingController(IAdministrationService adminService,
-            IPurchasingService purchasingService)
+            IPurchasingService purchasingService,
+            IFinancialService financialService)
         {
             _adminService = adminService;
             _purchasingService = purchasingService;
+            _financialService = financialService;
         }
 
         [HttpGet]
@@ -558,6 +563,42 @@ namespace Api.Controllers
             catch (Exception ex)
             {
                 return new BadRequestObjectResult(ex);
+            }
+        }
+
+        [HttpPost]
+        [Route("[action]")]
+        public IActionResult SavePayment([FromBody]dynamic paymentDto)
+        {
+            string[] errors = null;
+
+            try
+            {
+                if (!ModelState.IsValid)
+                {
+                    errors = new string[ModelState.ErrorCount];
+                    foreach (var val in ModelState.Values)
+                        for (int i = 0; i < ModelState.ErrorCount; i++)
+                            errors[i] = val.Errors[i].ErrorMessage;
+
+                    return new BadRequestObjectResult(errors);
+                }
+
+                var bank = _financialService.GetCashAndBanks().Where(id => id.Id == (int)paymentDto.AccountId).FirstOrDefault();
+
+                _purchasingService.SavePayment(
+                    (int)paymentDto.InvoiceId, 
+                    (int)paymentDto.VendorId, 
+                    ((int?)bank.AccountId).GetValueOrDefault(), 
+                    (decimal)paymentDto.AmountToPay, 
+                    (DateTime)paymentDto.Date);
+
+                return new ObjectResult(Ok());
+            }
+            catch (Exception ex)
+            {
+                errors = new string[1] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
+                return new BadRequestObjectResult(errors);
             }
         }
     }
