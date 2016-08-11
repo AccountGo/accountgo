@@ -80,7 +80,7 @@ export default class CommonStore {
 
     loadAccountsLookup() {
         let accounts = this.accounts;
-        axios.get(Config.apiUrl + "api/common/accounts")
+        axios.get(Config.apiUrl + "api/common/postingaccounts")
             .then(function (result) {
                 const data = result.data as [];
                 for (var i = 0; i < data.length; i++) {

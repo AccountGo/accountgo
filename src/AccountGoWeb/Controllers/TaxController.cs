@@ -4,11 +4,9 @@ namespace AccountGoWeb.Controllers
 {
     public class TaxController : BaseController
     {
-        private readonly Microsoft.Extensions.Configuration.IConfiguration _config;
-
         public TaxController(Microsoft.Extensions.Configuration.IConfiguration config)
         {
-            _config = config;
+            _baseConfig = config;
         }
 
         public IActionResult Index() {
@@ -21,7 +19,7 @@ namespace AccountGoWeb.Controllers
 
             using (var client = new System.Net.Http.HttpClient())
             {
-                var baseUri = _config["ApiUrl"];
+                var baseUri = _baseConfig["ApiUrl"];
                 client.BaseAddress = new System.Uri(baseUri);
                 client.DefaultRequestHeaders.Accept.Clear();
                 var response = await client.GetAsync(baseUri + "tax/taxes");

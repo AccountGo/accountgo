@@ -1,15 +1,45 @@
-﻿<div class="col-sm-9">
-    <div class="box">
-        <div class="box-header with-border">
-            <h3 class="box-title">General</h3>
-            <div class="box-tools pull-right">
-                <button type="button" class="btn btn-box-tool" data-widget="collapse" data-toggle="tooltip" title="Collapse">
-                    <i class="fa fa-minus"></i>
-                </button>
+﻿@model Dto.Administration.Company
+
+<form action="~/administration/company" method="post">
+    <div class="col-sm-9">
+        <div class="box">
+            <div class="box-header with-border">
+                <h3 class="box-title">General</h3>
+                <div class="box-tools pull-right">
+                    <button type="button" class="btn btn-box-tool" data-widget="collapse" data-toggle="tooltip" title="Collapse">
+                        <i class="fa fa-minus"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="box-body">
+                <div class="col-sm-6">
+                    <div class="row">
+                        <div class="col-sm-2">Code</div>
+                        <div class="col-sm-10">
+                            <input asp-for="CompanyCode" class="form-control" type="text" placeholder="Code ..." />
+                            <span asp-validation-for="CompanyCode" class="danger"></span>
+                        </div>
+                        @Html.HiddenFor(m => m.Id)
+                    </div>
+                    <div class="row">
+                        <div class="col-sm-2">Name</div>
+                        <div class="col-sm-10">
+                            <input asp-for="Name" class="form-control" type="text" placeholder="Name ..." />
+                            <span asp-validation-for="Name" class="danger"></span>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-sm-2">Short Name</div>
+                        <div class="col-sm-10">
+                            <input asp-for="ShortName" class="form-control" type="text" placeholder="Short Name ..." />
+                            <span asp-validation-for="ShortName" class="danger"></span>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
-        <div class="box-body">
-            Start creating your amazing application!
+        <div>
+            <input class="btn btn-sm btn-primary btn-flat pull-left" type="submit" value="Save" />
         </div>
     </div>
-</div>
+</form>

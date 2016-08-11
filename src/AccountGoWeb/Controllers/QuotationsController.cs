@@ -6,10 +6,8 @@ namespace AccountGoWeb.Controllers
 {
     public class QuotationsController : BaseController
     {
-        private readonly IConfiguration _config;
-
         public QuotationsController(IConfiguration config) {
-            _config = config;
+            _baseConfig = config;
         }
 
         public IActionResult Index()
@@ -23,7 +21,7 @@ namespace AccountGoWeb.Controllers
 
             using (var client = new HttpClient())
             {
-                var baseUri = _config["ApiUrl"];
+                var baseUri = _baseConfig["ApiUrl"];
                 client.BaseAddress = new System.Uri(baseUri);
                 client.DefaultRequestHeaders.Accept.Clear();
                 var response = await client.GetAsync(baseUri + "sales/quotations");

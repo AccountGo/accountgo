@@ -968,26 +968,6 @@ namespace Api.Controllers
                     }
                 }
 
-                //var bank = _financialService.GetCashAndBanks().Where(id => id.Id == (int)receiptDto.AccountToDebitId).FirstOrDefault();
-
-                //var salesReceipt = new Core.Domain.Sales.SalesReceiptHeader();
-                //salesReceipt.Date = receiptDto.ReceiptDate;
-                //salesReceipt.CustomerId = receiptDto.CustomerId;
-                //salesReceipt.AccountToDebitId = bank.AccountId;
-                //salesReceipt.Amount = receiptDto.Amount;
-
-                //var customer = _salesService.GetCustomerById((int)receiptDto.CustomerId);
-                //if (customer.CustomerAdvancesAccountId != (int)receiptDto.AccountToCreditId)
-                //    throw new Exception("Invalid account.");
-
-                //var salesReceiptLine = new Core.Domain.Sales.SalesReceiptLine();
-                //salesReceiptLine.AccountToCreditId = receiptDto.AccountToCreditId;
-                //salesReceiptLine.AmountPaid = receiptDto.Amount;
-
-                //salesReceipt.SalesReceiptLines.Add(salesReceiptLine);
-
-                //_salesService.AddSalesReceiptNoInvoice(salesReceipt);
-
                 return new ObjectResult(Ok());
             }
             catch (Exception ex)

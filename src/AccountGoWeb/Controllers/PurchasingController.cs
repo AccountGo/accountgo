@@ -6,12 +6,10 @@ namespace AccountGoWeb.Controllers
 {
     public class PurchasingController : BaseController
     {
-        private readonly IConfiguration _config;
-
         public PurchasingController(IConfiguration config)
         {
-            _config = config;
-            Models.SelectListItemHelper._config = _config;
+            _baseConfig = config;
+            Models.SelectListItemHelper._config = config;
         }
 
         public IActionResult Index()
@@ -55,7 +53,7 @@ namespace AccountGoWeb.Controllers
             ViewBag.PageContentHeader = "Purchase Invoices";
             using (var client = new HttpClient())
             {
-                var baseUri = _config["ApiUrl"];
+                var baseUri = _baseConfig["ApiUrl"];
                 client.BaseAddress = new System.Uri(baseUri);
                 client.DefaultRequestHeaders.Accept.Clear();
                 var response = await client.GetAsync(baseUri + "purchasing/purchaseinvoices");
@@ -96,7 +94,7 @@ namespace AccountGoWeb.Controllers
             ViewBag.PageContentHeader = "Vendors";
             using (var client = new HttpClient())
             {
-                var baseUri = _config["ApiUrl"];
+                var baseUri = _baseConfig["ApiUrl"];
                 client.BaseAddress = new System.Uri(baseUri);
                 client.DefaultRequestHeaders.Accept.Clear();
                 var response = await client.GetAsync(baseUri + "purchasing/vendors");
@@ -195,55 +193,5 @@ namespace AccountGoWeb.Controllers
             ViewBag.CashBanks = Models.SelectListItemHelper.CashBanks();
             return View(model);
         }
-
-        #region Private methods
-        public async System.Threading.Tasks.Task<T> GetAsync<T>(string uri)
-        {
-            string responseJson = string.Empty;
-            using (var client = new HttpClient())
-            {
-                var baseUri = _config["ApiUrl"];
-                client.BaseAddress = new System.Uri(baseUri);
-                client.DefaultRequestHeaders.Accept.Clear();
-                var response = await client.GetAsync(baseUri + uri);
-                if (response.IsSuccessStatusCode)
-                {
-                    responseJson = await response.Content.ReadAsStringAsync();
-                }
-            }
-            return Newtonsoft.Json.JsonConvert.DeserializeObject<T>(responseJson);
-        }
-
-        public async System.Threading.Tasks.Task<string> PostAsync(string uri, StringContent data)
-        {
-            string responseJson = string.Empty;
-            using (var client = new HttpClient())
-            {
-                var baseUri = _config["ApiUrl"];
-                client.BaseAddress = new System.Uri(baseUri);
-                client.DefaultRequestHeaders.Accept.Clear();
-                var response = await client.PostAsync(baseUri + uri, data);
-                if (response.IsSuccessStatusCode)
-                {
-                    responseJson = await response.Content.ReadAsStringAsync();
-                }
-            }
-
-            return Newtonsoft.Json.JsonConvert.DeserializeObject<string>(responseJson);
-        }
-
-        public HttpResponseMessage Post(string uri, StringContent data)
-        {
-            string responseJson = string.Empty;
-            using (var client = new HttpClient())
-            {
-                var baseUri = _config["ApiUrl"];
-                client.BaseAddress = new System.Uri(baseUri);
-                client.DefaultRequestHeaders.Accept.Clear();
-                var response = client.PostAsync(baseUri + uri, data);
-                return response.Result;
-            }
-        }
-        #endregion
     }
 }
