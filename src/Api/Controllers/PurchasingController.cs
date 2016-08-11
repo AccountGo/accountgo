@@ -385,8 +385,16 @@ namespace Api.Controllers
                             purchaseInvoiceLine.Quantity = line.Quantity.GetValueOrDefault();
                             purchaseInvoiceLine.ItemId = line.ItemId.GetValueOrDefault();
                             purchaseInvoiceLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
-                            purchaseInvoiceLine.PurchaseOrderLineId = line.Id; // This Id is also the PurchaseOrderLineId when you create purchase invoice directly from purchase order.
+                            if (line.Id != 0)
+                                purchaseInvoiceLine.PurchaseOrderLineId = line.Id; // This Id is also the PurchaseOrderLineId when you create purchase invoice directly from purchase order.
                             purchaseInvoice.PurchaseInvoiceLines.Add(purchaseInvoiceLine);
+
+                            if (purchaseReceipt == null)
+                            {
+                                purchaseReceipt = new Core.Domain.Purchases.PurchaseReceiptHeader();
+                                purchaseReceipt.VendorId = purchaseInvoiceDto.VendorId;
+                                purchaseReceipt.Date = purchaseInvoiceDto.InvoiceDate;
+                            }
 
                             var purchaseReceiptLine = new Core.Domain.Purchases.PurchaseReceiptLine();
                             purchaseReceiptLine.Amount = line.Amount.GetValueOrDefault();
@@ -397,6 +405,28 @@ namespace Api.Controllers
                             purchaseReceiptLine.ReceivedQuantity = line.Quantity.GetValueOrDefault();
                             purchaseReceiptLine.PurchaseInvoiceLine = purchaseInvoiceLine;
                             purchaseReceipt.PurchaseReceiptLines.Add(purchaseReceiptLine);
+                        }
+                    }
+                }
+
+                if (!isNew)
+                {
+                    var deleted = (from line in purchaseInvoice.PurchaseInvoiceLines
+                                   where !purchaseInvoiceDto.PurchaseInvoiceLines.Any(x => x.Id == line.Id)
+                                   select line).ToList();
+
+                    foreach (var line in deleted)
+                    {
+                        purchaseInvoice.PurchaseInvoiceLines.Remove(line);
+
+                        if (purchaseReceipt != null)
+                        {
+                            var receiptLine = purchaseReceipt.PurchaseReceiptLines.ToList()
+                                .Where(r => r.PurchaseInvoiceLineId == line.Id)
+                                .FirstOrDefault();
+
+                            if (receiptLine != null)
+                                purchaseReceipt.PurchaseReceiptLines.Remove(receiptLine);
                         }
                     }
                 }

@@ -94,20 +94,7 @@ namespace Api.Controllers
 
             return new ObjectResult(vendorsDto);
         }
-
-        [HttpGet]
-        [Route("[action]")]
-        public IActionResult Accounts()
-        {
-            var accounts = _financialService.GetAccounts();
-            ICollection<SelectAccount> accountsDto = new HashSet<SelectAccount>();
-
-            foreach (var account in accounts)
-                accountsDto.Add(new SelectAccount() { Id = account.Id, AccountName = account.AccountName });
-
-            return Ok(accountsDto.AsEnumerable());
-        }
-
+        
         [HttpGet]
         [Route("[action]")]
         public IActionResult ItemCategories()
@@ -127,6 +114,21 @@ namespace Api.Controllers
                 cashbanksDto.Add(new Bank() { Id = bank.Id, Name = bank.Name });
 
             return Ok(cashbanksDto);
+        }
+
+        [HttpGet]
+        [Route("[action]")]
+        public IActionResult PostingAccounts()
+        {
+            var accounts = _financialService.GetAccounts()
+                .Where(a => a.ChildAccounts.Count == 0);
+
+            ICollection<Account> accountsDto = new HashSet<Account>();
+
+            foreach (var account in accounts)
+                accountsDto.Add(new Account() { Id = account.Id, AccountName = account.AccountName });
+
+            return Ok(accountsDto);
         }
     }
 }
