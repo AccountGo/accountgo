@@ -29,10 +29,18 @@
 
 .inactiveLink {
    pointer-events: none;
-   cursor: default;
+   opacity: 0.65;
+   filter: alpha(opacity=65);
    color:gray;
+   /*cursor: default;*/
 }
 
 .pull-right{
     float: right;
+}
+
+.disabled {
+  pointer-events: none;
+  opacity: 0.65;
+  filter: alpha(opacity=65);
 }
