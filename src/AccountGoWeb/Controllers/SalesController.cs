@@ -3,20 +3,16 @@ using Dto.Sales;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using System.Collections.Generic;
-using System.Linq;
 using System.Net.Http;
 
 namespace AccountGoWeb.Controllers
 {
     public class SalesController : BaseController
     {
-        private readonly IConfiguration _config;
-
         public SalesController(IConfiguration config)
         {
-            _config = config;
-
-            Models.SelectListItemHelper._config = _config;
+            _baseConfig = config;
+            Models.SelectListItemHelper._config = config;
         }
 
         public IActionResult Index()
@@ -29,7 +25,7 @@ namespace AccountGoWeb.Controllers
             ViewBag.PageContentHeader = "Sales Orders";
             using (var client = new HttpClient())
             {
-                var baseUri = _config["ApiUrl"];
+                var baseUri = _baseConfig["ApiUrl"];
                 client.BaseAddress = new System.Uri(baseUri);
                 client.DefaultRequestHeaders.Accept.Clear();
                 var response = await client.GetAsync(baseUri + "sales/salesorders");
@@ -72,7 +68,7 @@ namespace AccountGoWeb.Controllers
             ViewBag.PageContentHeader = "Sales Invoices";
             using (var client = new HttpClient())
             {
-                var baseUri = _config["ApiUrl"];
+                var baseUri = _baseConfig["ApiUrl"];
                 client.BaseAddress = new System.Uri(baseUri);
                 client.DefaultRequestHeaders.Accept.Clear();
                 var response = await client.GetAsync(baseUri + "sales/salesinvoices");
@@ -97,7 +93,7 @@ namespace AccountGoWeb.Controllers
             ViewBag.PageContentHeader = "Sales Receipts";
             using (var client = new HttpClient())
             {
-                var baseUri = _config["ApiUrl"];
+                var baseUri = _baseConfig["ApiUrl"];
                 client.BaseAddress = new System.Uri(baseUri);
                 client.DefaultRequestHeaders.Accept.Clear();
                 var response = await client.GetAsync(baseUri + "sales/salesreceipts");
@@ -153,7 +149,7 @@ namespace AccountGoWeb.Controllers
             ViewBag.PageContentHeader = "Customers";
             using (var client = new HttpClient())
             {
-                var baseUri = _config["ApiUrl"];
+                var baseUri = _baseConfig["ApiUrl"];
                 client.BaseAddress = new System.Uri(baseUri);
                 client.DefaultRequestHeaders.Accept.Clear();
                 var response = await client.GetAsync(baseUri + "sales/customers");
@@ -229,6 +225,9 @@ namespace AccountGoWeb.Controllers
 
             var receipt = GetAsync<Dto.Sales.SalesReceipt>("sales/salesreceipt?id=" + id).Result;
 
+            ViewBag.CustomerName = receipt.CustomerName;
+            ViewBag.ReceiptNo = receipt.ReceiptNo;
+
             model.CustomerId = receipt.CustomerId;
             model.ReceiptId = receipt.Id;
             model.Date = receipt.ReceiptDate;
@@ -257,62 +256,21 @@ namespace AccountGoWeb.Controllers
         {
             if (ModelState.IsValid)
             {
-                if (!model.IsValid()) {
-                    return View(model);
+                if (model.IsValid()) {
+                    var serialize = Newtonsoft.Json.JsonConvert.SerializeObject(model);
+                    var content = new StringContent(serialize);
+                    content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+                    var response = Post("sales/saveallocation", content);
+                    if (response.IsSuccessStatusCode)
+                        return RedirectToAction("salesreceipts");
                 }
             }
 
-            return RedirectToAction("salesreceipts");
-        }
+            var receipt = GetAsync<Dto.Sales.SalesReceipt>("sales/salesreceipt?id=" + model.ReceiptId).Result;
+            ViewBag.CustomerName = receipt.CustomerName;
+            ViewBag.ReceiptNo = receipt.ReceiptNo;
 
-        #region Private methods
-        public async System.Threading.Tasks.Task<T> GetAsync<T>(string uri)
-        {
-            string responseJson = string.Empty;
-            using (var client = new HttpClient())
-            {
-                var baseUri = _config["ApiUrl"];
-                client.BaseAddress = new System.Uri(baseUri);
-                client.DefaultRequestHeaders.Accept.Clear();
-                var response = await client.GetAsync(baseUri + uri);
-                if (response.IsSuccessStatusCode)
-                {
-                    responseJson = await response.Content.ReadAsStringAsync();
-                }
-            }
-            return Newtonsoft.Json.JsonConvert.DeserializeObject<T>(responseJson);
+            return View(model);
         }
-
-        public async System.Threading.Tasks.Task<string> PostAsync(string uri, StringContent data)
-        {
-            string responseJson = string.Empty;
-            using (var client = new HttpClient())
-            {
-                var baseUri = _config["ApiUrl"];
-                client.BaseAddress = new System.Uri(baseUri);
-                client.DefaultRequestHeaders.Accept.Clear();                                     
-                var response = await client.PostAsync(baseUri + uri, data);
-                if (response.IsSuccessStatusCode)
-                {
-                    responseJson = await response.Content.ReadAsStringAsync();
-                }
-            }
-
-            return Newtonsoft.Json.JsonConvert.DeserializeObject<string>(responseJson);
-        }
-
-        public HttpResponseMessage Post(string uri, StringContent data)
-        {
-            string responseJson = string.Empty;
-            using (var client = new HttpClient())
-            {
-                var baseUri = _config["ApiUrl"];
-                client.BaseAddress = new System.Uri(baseUri);
-                client.DefaultRequestHeaders.Accept.Clear();
-                var response = client.PostAsync(baseUri + uri, data);
-                return response.Result;
-            }
-        }
-        #endregion
     }
 }

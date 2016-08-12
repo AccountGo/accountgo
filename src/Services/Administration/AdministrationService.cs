@@ -109,5 +109,11 @@ namespace Services.Administration
                         select f;
             return query.ToList();
         }
+
+        public void SaveCompany(Company company)
+        {
+            if (company.Id == 0) { _company.Insert(company); }
+            else { _company.Update(company); }
+        }
     }
 }

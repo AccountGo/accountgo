@@ -6,11 +6,9 @@ namespace AccountGoWeb.Controllers
 {
     public class FinancialsController : BaseController
     {
-        private readonly Microsoft.Extensions.Configuration.IConfiguration _config;
-
         public FinancialsController(Microsoft.Extensions.Configuration.IConfiguration config)
         {
-            _config = config;
+            _baseConfig = config;
         }
 
         public IActionResult AddJournalEntry()
@@ -31,7 +29,7 @@ namespace AccountGoWeb.Controllers
 
             using (var client = new System.Net.Http.HttpClient())
             {
-                var baseUri = _config["ApiUrl"];
+                var baseUri = _baseConfig["ApiUrl"];
                 client.BaseAddress = new System.Uri(baseUri);
                 client.DefaultRequestHeaders.Accept.Clear();
                 var response = await client.GetAsync(baseUri + "financials/accounts");
@@ -51,7 +49,7 @@ namespace AccountGoWeb.Controllers
 
             using (var client = new System.Net.Http.HttpClient())
             {
-                var baseUri = _config["ApiUrl"];
+                var baseUri = _baseConfig["ApiUrl"];
                 client.BaseAddress = new System.Uri(baseUri);
                 client.DefaultRequestHeaders.Accept.Clear();
                 var response = await client.GetAsync(baseUri + "financials/journalentries");
@@ -71,7 +69,7 @@ namespace AccountGoWeb.Controllers
 
             using (var client = new System.Net.Http.HttpClient())
             {
-                var baseUri = _config["ApiUrl"];
+                var baseUri = _baseConfig["ApiUrl"];
                 client.BaseAddress = new System.Uri(baseUri);
                 client.DefaultRequestHeaders.Accept.Clear();
                 var response = await client.GetAsync(baseUri + "financials/generalledger");
@@ -91,7 +89,7 @@ namespace AccountGoWeb.Controllers
 
             using (var client = new System.Net.Http.HttpClient())
             {
-                var baseUri = _config["ApiUrl"];
+                var baseUri = _baseConfig["ApiUrl"];
                 client.BaseAddress = new System.Uri(baseUri);
                 client.DefaultRequestHeaders.Accept.Clear();
                 var response = await client.GetAsync(baseUri + "financials/trialbalance");
@@ -112,7 +110,7 @@ namespace AccountGoWeb.Controllers
 
             using (var client = new System.Net.Http.HttpClient())
             {
-                var baseUri = _config["ApiUrl"];
+                var baseUri = _baseConfig["ApiUrl"];
                 client.BaseAddress = new System.Uri(baseUri);
                 client.DefaultRequestHeaders.Accept.Clear();
                 var response = await client.GetAsync(baseUri + "financials/balancesheet");
@@ -153,7 +151,7 @@ namespace AccountGoWeb.Controllers
 
             using (var client = new System.Net.Http.HttpClient())
             {
-                var baseUri = _config["ApiUrl"];
+                var baseUri = _baseConfig["ApiUrl"];
                 client.BaseAddress = new System.Uri(baseUri);
                 client.DefaultRequestHeaders.Accept.Clear();
                 var response = await client.GetAsync(baseUri + "financials/incomestatement");
@@ -178,24 +176,5 @@ namespace AccountGoWeb.Controllers
 
             return View(banks);
         }
-
-        #region Private methods
-        public async System.Threading.Tasks.Task<T> GetAsync<T>(string uri)
-        {
-            string responseJson = string.Empty;
-            using (var client = new HttpClient())
-            {
-                var baseUri = _config["ApiUrl"];
-                client.BaseAddress = new System.Uri(baseUri);
-                client.DefaultRequestHeaders.Accept.Clear();
-                var response = await client.GetAsync(baseUri + uri);
-                if (response.IsSuccessStatusCode)
-                {
-                    responseJson = await response.Content.ReadAsStringAsync();
-                }
-            }
-            return Newtonsoft.Json.JsonConvert.DeserializeObject<T>(responseJson);
-        }
-        #endregion
     }
 }

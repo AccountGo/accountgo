@@ -19,8 +19,8 @@ namespace Dto.Sales
         public int? PrepaymentAccountId { get; set; }
         public int? SalesDiscountAccountId { get; set; }
         public int? TaxGroupId { get; set; }
-
         public int? PaymentTermId { get; set; }
+        public decimal Balance { get; set; }        
 
         public Contact PrimaryContact { get; set; }
         public IEnumerable<SalesInvoice> Invoices { get; set; }

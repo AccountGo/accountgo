@@ -1,6 +1,7 @@
 ﻿import * as React from "react";
 import * as ReactDOM from "react-dom";
 import {observer} from "mobx-react";
+import * as accounting from "accounting";
 
 import Config = require("Config");
 
@@ -250,11 +251,11 @@ class PurchaseInvoiceTotals extends React.Component<any, {}>{
                 <div className="box-body">
                     <div className="row">
                         <div className="col-md-2"><label>Running Total: </label></div>
-                        <div className="col-md-2">{store.RTotal}</div>
+                        <div className="col-md-2">{accounting.formatMoney(store.RTotal, { symbol: "", format: "%s%v" }) }</div>
                         <div className="col-md-2"><label>Tax Total: </label></div>
-                        <div className="col-md-2">{store.TTotal}</div>
+                        <div className="col-md-2">{accounting.formatMoney(store.TTotal, { symbol: "", format: "%s%v" }) }</div>
                         <div className="col-md-2"><label>Grand Total: </label></div>
-                        <div className="col-md-2">{store.GTotal}</div>
+                        <div className="col-md-2">{accounting.formatMoney(store.GTotal, { symbol: "", format: "%s%v" }) }</div>
                     </div>
                 </div>
             </div>

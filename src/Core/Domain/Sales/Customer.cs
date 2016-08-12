@@ -57,21 +57,35 @@ namespace Core.Domain.Sales
             decimal balance = 0;
             decimal totalInvoiceAmount = 0;
             decimal totalReceiptAmount = 0;
-            decimal totalAllocation = 0;
 
-            foreach (var header in SalesInvoices)
-            {
-                totalInvoiceAmount += header.ComputeTotalAmount();
-                totalAllocation += header.CustomerAllocations.Sum(a => a.Amount);
+            totalInvoiceAmount = SalesInvoices.Sum(i => i.SalesInvoiceLines.Sum(l => l.Amount * l.Quantity));
+            totalReceiptAmount = SalesReceipts.Sum(r => r.SalesReceiptLines.Sum(l => l.Amount.GetValueOrDefault() * l.Quantity.GetValueOrDefault()));
 
-                foreach (var receipt in header.SalesReceipts)
-                    foreach(var receiptLine in receipt.SalesReceiptLines)
-                        totalReceiptAmount += receiptLine.AmountPaid;
-            }
-
-            balance = (totalInvoiceAmount - totalReceiptAmount) - totalAllocation;
+            balance = totalInvoiceAmount - totalReceiptAmount;
 
             return balance;
         }
+            
+        //private decimal GetBalance()
+        //{
+        //    decimal balance = 0;
+        //    decimal totalInvoiceAmount = 0;
+        //    decimal totalReceiptAmount = 0;
+        //    decimal totalAllocation = 0;
+
+        //    foreach (var header in SalesInvoices)
+        //    {
+        //        totalInvoiceAmount += header.ComputeTotalAmount();
+        //        totalAllocation += header.CustomerAllocations.Sum(a => a.Amount);
+
+        //        foreach (var receipt in header.SalesReceipts)
+        //            foreach(var receiptLine in receipt.SalesReceiptLines)
+        //                totalReceiptAmount += receiptLine.AmountPaid;
+        //    }
+
+        //    balance = (totalInvoiceAmount - totalReceiptAmount) - totalAllocation;
+
+        //    return balance;
+        //}
     }
 }

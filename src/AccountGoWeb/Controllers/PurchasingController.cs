@@ -6,12 +6,10 @@ namespace AccountGoWeb.Controllers
 {
     public class PurchasingController : BaseController
     {
-        private readonly IConfiguration _config;
-
         public PurchasingController(IConfiguration config)
         {
-            _config = config;
-            Models.SelectListItemHelper._config = _config;
+            _baseConfig = config;
+            Models.SelectListItemHelper._config = config;
         }
 
         public IActionResult Index()
@@ -55,7 +53,7 @@ namespace AccountGoWeb.Controllers
             ViewBag.PageContentHeader = "Purchase Invoices";
             using (var client = new HttpClient())
             {
-                var baseUri = _config["ApiUrl"];
+                var baseUri = _baseConfig["ApiUrl"];
                 client.BaseAddress = new System.Uri(baseUri);
                 client.DefaultRequestHeaders.Accept.Clear();
                 var response = await client.GetAsync(baseUri + "purchasing/purchaseinvoices");
@@ -96,7 +94,7 @@ namespace AccountGoWeb.Controllers
             ViewBag.PageContentHeader = "Vendors";
             using (var client = new HttpClient())
             {
-                var baseUri = _config["ApiUrl"];
+                var baseUri = _baseConfig["ApiUrl"];
                 client.BaseAddress = new System.Uri(baseUri);
                 client.DefaultRequestHeaders.Accept.Clear();
                 var response = await client.GetAsync(baseUri + "purchasing/vendors");
@@ -170,6 +168,7 @@ namespace AccountGoWeb.Controllers
                 VendorId = invoice.VendorId,
                 VendorName = invoice.VendorName,
                 InvoiceAmount = invoice.Amount,
+                AmountPaid = invoice.AmountPaid,                
                 Date = invoice.InvoiceDate
             };
 
@@ -183,51 +182,16 @@ namespace AccountGoWeb.Controllers
         {
             if (ModelState.IsValid)
             {
-                return RedirectToAction("PurchaseInvoices");
+                var serialize = Newtonsoft.Json.JsonConvert.SerializeObject(model);
+                var content = new StringContent(serialize);
+                content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+                var response = Post("purchasing/savepayment", content);
+                if (response.IsSuccessStatusCode)
+                    return RedirectToAction("purchaseinvoices");
             }
-            else
-            {
-                ViewBag.PageContentHeader = "Make Payment";
-                ViewBag.CashBanks = Models.SelectListItemHelper.CashBanks();
-            }
+            ViewBag.PageContentHeader = "Make Payment";
+            ViewBag.CashBanks = Models.SelectListItemHelper.CashBanks();
             return View(model);
         }
-
-        #region Private methods
-        public async System.Threading.Tasks.Task<T> GetAsync<T>(string uri)
-        {
-            string responseJson = string.Empty;
-            using (var client = new HttpClient())
-            {
-                var baseUri = _config["ApiUrl"];
-                client.BaseAddress = new System.Uri(baseUri);
-                client.DefaultRequestHeaders.Accept.Clear();
-                var response = await client.GetAsync(baseUri + uri);
-                if (response.IsSuccessStatusCode)
-                {
-                    responseJson = await response.Content.ReadAsStringAsync();
-                }
-            }
-            return Newtonsoft.Json.JsonConvert.DeserializeObject<T>(responseJson);
-        }
-
-        public async System.Threading.Tasks.Task<string> PostAsync(string uri, StringContent data)
-        {
-            string responseJson = string.Empty;
-            using (var client = new HttpClient())
-            {
-                var baseUri = _config["ApiUrl"];
-                client.BaseAddress = new System.Uri(baseUri);
-                client.DefaultRequestHeaders.Accept.Clear();
-                var response = await client.PostAsync(baseUri + uri, data);
-                if (response.IsSuccessStatusCode)
-                {
-                    responseJson = await response.Content.ReadAsStringAsync();
-                }
-            }
-
-            return Newtonsoft.Json.JsonConvert.DeserializeObject<string>(responseJson);
-        }
-        #endregion
     }
 }

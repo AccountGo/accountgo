@@ -302,6 +302,9 @@ namespace Services.Sales
         {
             var invoice = _salesInvoiceRepo.GetAllIncluding(inv => inv.Customer,
                 inv => inv.Customer.Party,
+                inv => inv.Customer.CustomerAdvancesAccount,
+                inv => inv.Customer.AccountsReceivableAccount,
+                inv => inv.CustomerAllocations,
                 inv => inv.SalesInvoiceLines)
                 .Where(inv => inv.Id == id)
                 .FirstOrDefault();
@@ -355,29 +358,66 @@ namespace Services.Sales
 
         public IEnumerable<Customer> GetCustomers()
         {
-            System.Linq.Expressions.Expression<Func<Customer, object>>[] includeProperties =
-                { p => p.Party, c => c.AccountsReceivableAccount };
-
-            var customers = _customerRepo.GetAllIncluding(includeProperties);
-
-            return customers.AsEnumerable();
-        }
-
-        public Customer GetCustomerById(int id)
-        {
             System.Linq.Expressions.Expression<Func<Customer, object>>[] includeProperties = {
-                p => p.Party,
+                c => c.Party,
                 c => c.AccountsReceivableAccount,
                 c => c.SalesInvoices,
                 c => c.CustomerAdvancesAccount,
                 c => c.SalesAccount,
                 c => c.PromptPaymentDiscountAccount,
                 c => c.PrimaryContact,
-                c => c.PrimaryContact.Party
+                c => c.PrimaryContact.Party,
+                c => c.SalesInvoices,
+                c => c.SalesReceipts,
+                c => c.SalesOrders,
+            };
+
+            var customers = _customerRepo.GetAllIncluding(includeProperties);
+
+            foreach (var customer in customers)
+            {
+                foreach (var invoice in customer.SalesInvoices)
+                {
+                    invoice.SalesInvoiceLines = GetSalesInvoiceById(invoice.Id).SalesInvoiceLines;
+                }
+
+                foreach (var receipt in customer.SalesReceipts)
+                {
+                    receipt.SalesReceiptLines = GetSalesReceiptById(receipt.Id).SalesReceiptLines;
+                }
+            }
+
+            return customers;
+        }
+
+        public Customer GetCustomerById(int id)
+        {
+            System.Linq.Expressions.Expression<Func<Customer, object>>[] includeProperties = {
+                c => c.Party,
+                c => c.AccountsReceivableAccount,
+                c => c.SalesInvoices,
+                c => c.CustomerAdvancesAccount,
+                c => c.SalesAccount,
+                c => c.PromptPaymentDiscountAccount,
+                c => c.PrimaryContact,
+                c => c.PrimaryContact.Party,
+                c => c.SalesInvoices,
+                c => c.SalesReceipts,
+                c => c.SalesOrders,
             };
 
             var customer = _customerRepo.GetAllIncluding(includeProperties)
                 .Where(c => c.Id == id).FirstOrDefault();
+
+            foreach (var invoice in customer.SalesInvoices)
+            {
+                invoice.SalesInvoiceLines = GetSalesInvoiceById(invoice.Id).SalesInvoiceLines;
+            }
+
+            foreach (var receipt in customer.SalesReceipts)
+            {
+                receipt.SalesReceiptLines = GetSalesReceiptById(receipt.Id).SalesReceiptLines;
+            }
 
             return customer;
         }
@@ -404,8 +444,8 @@ namespace Services.Sales
         {
             //Revenue recognition. Debit the customer advances (liability) account and credit the revenue account.
             //In case of allocation, credit the accounts receivable since sales account is already credited from invoice.
-            var invoice = _salesInvoiceRepo.GetById(allocation.SalesInvoiceHeaderId);
-            var receipt = _salesReceiptRepo.GetById(allocation.SalesReceiptHeaderId);
+            var invoice = GetSalesInvoiceById(allocation.SalesInvoiceHeaderId);
+            var receipt = GetSalesReceiptById(allocation.SalesReceiptHeaderId);
 
             var glHeader = _financialService.CreateGeneralLedgerHeader(Core.Domain.DocumentTypes.CustomerAllocation, allocation.Date, string.Empty);
 

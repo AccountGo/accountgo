@@ -10,7 +10,9 @@ namespace Dto.Purchasing
         public string VendorName { get; set; }
         public DateTime InvoiceDate { get; set; }
         public decimal Amount { get; set; }
+        public decimal AmountPaid { get; set; }
         public bool IsPaid { get; set; }
+        public bool IsPosted { get; set; }
         public int? FromPurchaseOrderId { get; set; }
         public int? PaymentTermId { get; set; }
         public string ReferenceNo { get; set; }

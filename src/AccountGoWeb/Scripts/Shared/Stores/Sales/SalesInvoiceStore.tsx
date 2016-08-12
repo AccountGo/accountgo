@@ -84,8 +84,7 @@ export default class SalesStore {
 
         for (var i = 0; i < this.salesInvoice.salesInvoiceLines.length; i++) {
             var lineItem = this.salesInvoice.salesInvoiceLines[i];
-            var lineSum = lineItem.quantity * lineItem.amount;
-            rtotal = rtotal + lineSum;
+            rtotal = rtotal + this.getLineTotal(i);
             await axios.get(Config.apiUrl + "api/tax/gettax?itemId=" + lineItem.itemId + "&partyId=" + this.salesInvoice.customerId + "&type=1")
                 .then(function (result) {
                     if (result.data.length > 0) {
@@ -183,7 +182,7 @@ export default class SalesStore {
         this.salesInvoice.paymentTermId = termId;
     }
 
-    addLineItem(id = 0, itemId, measurementId, quantity, amount, discount) {
+    addLineItem(id, itemId, measurementId, quantity, amount, discount) {
         var newLineItem = new SalesInvoiceLine(id, itemId, measurementId, quantity, amount, discount);
         this.salesInvoice.salesInvoiceLines.push(extendObservable(newLineItem, newLineItem));        
     }

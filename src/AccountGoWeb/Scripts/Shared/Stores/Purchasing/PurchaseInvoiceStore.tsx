@@ -88,8 +88,7 @@ export default class PurchaseOrderStore {
 
         for (var i = 0; i < this.purchaseInvoice.purchaseInvoiceLines.length; i++) {
             var lineItem = this.purchaseInvoice.purchaseInvoiceLines[i];
-            var lineSum = lineItem.quantity * lineItem.amount;
-            rtotal = rtotal + lineSum;
+            rtotal = rtotal + this.getLineTotal(i);
             await axios.get(Config.apiUrl + "api/tax/gettax?itemId=" + lineItem.itemId + "&partyId=" + this.purchaseInvoice.vendorId + "&type=2")
                 .then(function (result) {
                     if (result.data.length > 0) {
@@ -190,7 +189,7 @@ export default class PurchaseOrderStore {
         this.purchaseInvoice.invoiceDate = date;
     }
 
-    addLineItem(id = 0, itemId, measurementId, quantity, amount, discount) {
+    addLineItem(id, itemId, measurementId, quantity, amount, discount) {
         var newLineItem = new PurchaseInvoiceLine(id, itemId, measurementId, quantity, amount, discount);
         this.purchaseInvoice.purchaseInvoiceLines.push(extendObservable(newLineItem, newLineItem));        
     }

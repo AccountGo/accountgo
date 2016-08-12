@@ -147,7 +147,7 @@ namespace Api.Controllers
                     customerDto.Website = customer.Party.Website;
                     customerDto.Phone = customer.Party.Phone;
                     customerDto.Fax = customer.Party.Fax;
-
+                    customerDto.Balance = customer.Balance;
                     customerDto.PrepaymentAccountId = customer.CustomerAdvancesAccountId;
 
                     customersDto.Add(customerDto);
@@ -921,6 +921,8 @@ namespace Api.Controllers
                 var salesReceiptLine = new Core.Domain.Sales.SalesReceiptLine();
                 salesReceiptLine.AccountToCreditId = receiptDto.AccountToCreditId;
                 salesReceiptLine.AmountPaid = receiptDto.Amount;
+                salesReceiptLine.Amount = receiptDto.Amount;
+                salesReceiptLine.Quantity = 1;
 
                 salesReceipt.SalesReceiptLines.Add(salesReceiptLine);
 
@@ -929,6 +931,48 @@ namespace Api.Controllers
                 return new ObjectResult(Ok());
             }
             catch(Exception ex)
+            {
+                errors = new string[1] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
+                return new BadRequestObjectResult(errors);
+            }
+        }
+
+        [HttpPost]
+        [Route("[action]")]
+        public IActionResult SaveAllocation([FromBody]dynamic allocationDto)
+        {
+            string[] errors = null;
+
+            try
+            {
+                if (!ModelState.IsValid)
+                {
+                    errors = new string[ModelState.ErrorCount];
+                    foreach (var val in ModelState.Values)
+                        for (int i = 0; i < ModelState.ErrorCount; i++)
+                            errors[i] = val.Errors[i].ErrorMessage;
+                    return new BadRequestObjectResult(errors);
+                }
+
+                foreach (var line in allocationDto.AllocationLines)
+                {
+                    decimal? amount = (decimal?)line.AmountToAllocate;
+                    if (amount.HasValue)
+                    {
+                        var allocation = new Core.Domain.Sales.CustomerAllocation();
+                        allocation.CustomerId = allocationDto.CustomerId;
+                        allocation.Date = allocationDto.Date;
+                        allocation.SalesInvoiceHeaderId = line.InvoiceId;
+                        allocation.SalesReceiptHeaderId = allocationDto.ReceiptId;
+                        allocation.Amount = amount.GetValueOrDefault();
+
+                        _salesService.SaveCustomerAllocation(allocation);
+                    }
+                }
+
+                return new ObjectResult(Ok());
+            }
+            catch (Exception ex)
             {
                 errors = new string[1] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
                 return new BadRequestObjectResult(errors);

@@ -80,7 +80,7 @@ export default class CommonStore {
 
     loadAccountsLookup() {
         let accounts = this.accounts;
-        axios.get(Config.apiUrl + "api/common/accounts")
+        axios.get(Config.apiUrl + "api/common/postingaccounts")
             .then(function (result) {
                 const data = result.data as [];
                 for (var i = 0; i < data.length; i++) {
@@ -96,21 +96,21 @@ export default class CommonStore {
         });
     }
 
-    getSalesLineTaxAmount(quantity: number, amount: number, discount: number = 0, taxes = []) {
-        let lineTaxTotal: number = 0;
+    getSalesLineTaxAmount(quantity: number, amount: number, discount: number, taxes: any) {
+        var lineTaxTotal = 0;
         amount = (amount * quantity) - discount;
         taxes.map(function (tax) {
             lineTaxTotal = lineTaxTotal + (amount - (amount / (1 + (tax.rate / 100))));
         });
-        return parseFloat(lineTaxTotal.toFixed(2));
+        return lineTaxTotal;
     }
 
-    getPurhcaseLineTaxAmount(quantity: number, amount: number, discount: number = 0, taxes = []) {
-        let lineTaxTotal: number = 0;
+    getPurhcaseLineTaxAmount(quantity: number, amount: number, discount: number, taxes: any) {
+        var lineTaxTotal = 0;
         amount = (amount * quantity) - discount;
         taxes.map(function (tax) {
             lineTaxTotal = lineTaxTotal + (amount - (amount / (1 + (tax.rate / 100))));
         });
-        return parseFloat(lineTaxTotal.toFixed(2));
+        return lineTaxTotal;
     }
 }

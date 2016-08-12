@@ -4,6 +4,7 @@ import {observer} from "mobx-react";
 import * as d3 from "d3";
 import Config = require("Config");
 import {autorun} from 'mobx';
+import * as accounting from "accounting";
 
 import SelectCustomer from "../Shared/Components/SelectCustomer";
 import SelectPaymentTerm from "../Shared/Components/SelectPaymentTerm";
@@ -228,11 +229,11 @@ class SalesQuotationTotals extends React.Component<any, {}>{
                 <div className="box-body">
                     <div className="row">
                         <div className="col-md-2"><label>Running Total: </label></div>
-                        <div className="col-md-2">{store.RTotal}</div>
+                        <div className="col-md-2">{accounting.formatMoney(store.RTotal, { symbol: "", format: "%s%v" }) }</div>
                         <div className="col-md-2"><label>Tax Total: </label></div>
-                        <div className="col-md-2">{store.TTotal}</div>
+                        <div className="col-md-2">{accounting.formatMoney(store.TTotal, { symbol: "", format: "%s%v" }) }</div>
                         <div className="col-md-2"><label>Grand Total: </label></div>
-                        <div className="col-md-2">{store.GTotal}</div>
+                        <div className="col-md-2">{accounting.formatMoney(store.GTotal, { symbol: "", format: "%s%v" }) }</div>
                     </div>
                 </div>
             </div>

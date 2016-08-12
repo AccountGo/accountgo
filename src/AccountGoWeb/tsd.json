@@ -16,6 +16,9 @@
     },
     "d3/d3.d.ts": {
       "commit": "77b1b1709315b03b9b1b67c589d599bebeeef2ee"
+    },
+    "accounting/accounting.d.ts": {
+      "commit": "90995d48413f4c53d9c43fce2b47eec44c7276da"
     }
   }
 }

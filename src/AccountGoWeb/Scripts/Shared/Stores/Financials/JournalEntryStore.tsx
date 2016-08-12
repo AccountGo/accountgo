@@ -132,7 +132,7 @@ export default class JournalEntryStore {
         }
     }
 
-    addLineItem(id = 0, accountId, drcr, amount, memo) {
+    addLineItem(id, accountId, drcr, amount, memo) {
         var newLineItem = new JournalEntryLine(id, accountId, drcr, amount, memo);
         this.journalEntry.journalEntryLines.push(extendObservable(newLineItem, newLineItem));
     }

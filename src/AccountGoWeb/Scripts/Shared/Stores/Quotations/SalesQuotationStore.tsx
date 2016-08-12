@@ -65,9 +65,7 @@ export default class SalesQuotationStore {
        
         for (var i = 0; i < this.salesQuotation.salesQuotationLines.length; i++) {
             var lineItem = this.salesQuotation.salesQuotationLines[i];
-            var lineSum = lineItem.quantity * lineItem.amount;
-            rtotal = rtotal + lineSum;
-
+            rtotal = rtotal + this.getLineTotal(i);
             await axios.get(Config.apiUrl + "api/tax/gettax?itemId=" + lineItem.itemId + "&partyId=" + this.salesQuotation.customerId + "&type=1")
                 .then(function (result) {
                     if (result.data.length > 0) {
@@ -147,7 +145,7 @@ export default class SalesQuotationStore {
     changedReferenceNo(refNo) {
         this.salesQuotation.referenceNo = refNo;
     }
-    addLineItem(id = 0, itemId, measurementId, quantity, amount, discount) {
+    addLineItem(id, itemId, measurementId, quantity, amount, discount) {
         var newLineItem = new SalesQuotationLine(id, itemId, measurementId, quantity, amount, discount);
         this.salesQuotation.salesQuotationLines.push(extendObservable(newLineItem, newLineItem));
     }

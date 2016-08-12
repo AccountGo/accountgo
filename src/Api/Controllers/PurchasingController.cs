@@ -4,6 +4,7 @@ using Services.Purchasing;
 using System;
 using System.Linq;
 using System.Collections.Generic;
+using Services.Financial;
 
 namespace Api.Controllers
 {
@@ -12,11 +13,15 @@ namespace Api.Controllers
     {
         private readonly IAdministrationService _adminService;
         private readonly IPurchasingService _purchasingService;
+        private readonly IFinancialService _financialService;
+
         public PurchasingController(IAdministrationService adminService,
-            IPurchasingService purchasingService)
+            IPurchasingService purchasingService,
+            IFinancialService financialService)
         {
             _adminService = adminService;
             _purchasingService = purchasingService;
+            _financialService = financialService;
         }
 
         [HttpGet]
@@ -197,8 +202,10 @@ namespace Api.Controllers
                     VendorId = purchaseInvoice.VendorId.Value,
                     VendorName = purchaseInvoice.Vendor.Party.Name,
                     InvoiceDate = purchaseInvoice.Date,
-                    Amount = purchaseInvoice.PurchaseInvoiceLines.Sum(l => l.Amount),
-                    IsPaid = purchaseInvoice.IsPaid()
+                    Amount = purchaseInvoice.PurchaseInvoiceLines.Sum(l => l.Amount * l.Quantity),
+                    AmountPaid = purchaseInvoice.AmountPaid(),
+                    IsPaid = purchaseInvoice.IsPaid(),
+                    IsPosted = purchaseInvoice.GeneralLedgerHeader != null
                 };
 
                 purchaseInvoicesDto.Add(purchaseInvoiceDto);
@@ -211,20 +218,20 @@ namespace Api.Controllers
         [Route("[action]")]
         public IActionResult PurchaseInvoice(int id)
         {
-            var invoice = _purchasingService.GetPurchaseInvoiceById(id);
+            var purchaseInvoice = _purchasingService.GetPurchaseInvoiceById(id);
             var purchaseInvoiceDto = new Dto.Purchasing.PurchaseInvoice()
             {
-                Id = invoice.Id,
-                InvoiceNo = invoice.No,
-                VendorId = invoice.VendorId.GetValueOrDefault(),
-                VendorName = invoice.Vendor.Party.Name,
-                InvoiceDate = invoice.Date,
-                Amount = invoice.PurchaseInvoiceLines.Sum(l => l.Amount),
-                ReferenceNo = invoice.ReferenceNo,
-                PaymentTermId = invoice.PaymentTermId
+                Id = purchaseInvoice.Id,
+                VendorId = purchaseInvoice.VendorId.Value,
+                VendorName = purchaseInvoice.Vendor.Party.Name,
+                InvoiceDate = purchaseInvoice.Date,
+                Amount = purchaseInvoice.PurchaseInvoiceLines.Sum(l => l.Amount * l.Quantity),
+                AmountPaid = purchaseInvoice.AmountPaid(),
+                IsPaid = purchaseInvoice.IsPaid(),
+                IsPosted = purchaseInvoice.GeneralLedgerHeader != null
             };
 
-            foreach (var item in invoice.PurchaseInvoiceLines)
+            foreach (var item in purchaseInvoice.PurchaseInvoiceLines)
             {
                 var line = new Dto.Purchasing.PurchaseInvoiceLine()
                 {
@@ -504,7 +511,8 @@ namespace Api.Controllers
                         Email = vendor.Party.Email,
                         Phone = vendor.Party.Phone,
                         Fax = vendor.Party.Fax,
-                        Website = vendor.Party.Website
+                        Website = vendor.Party.Website,
+                        Balance = vendor.GetBalance(),
                     };
 
                     vendorsDto.Add(vendorDto);
@@ -558,6 +566,42 @@ namespace Api.Controllers
             catch (Exception ex)
             {
                 return new BadRequestObjectResult(ex);
+            }
+        }
+
+        [HttpPost]
+        [Route("[action]")]
+        public IActionResult SavePayment([FromBody]dynamic paymentDto)
+        {
+            string[] errors = null;
+
+            try
+            {
+                if (!ModelState.IsValid)
+                {
+                    errors = new string[ModelState.ErrorCount];
+                    foreach (var val in ModelState.Values)
+                        for (int i = 0; i < ModelState.ErrorCount; i++)
+                            errors[i] = val.Errors[i].ErrorMessage;
+
+                    return new BadRequestObjectResult(errors);
+                }
+
+                var bank = _financialService.GetCashAndBanks().Where(id => id.Id == (int)paymentDto.AccountId).FirstOrDefault();
+
+                _purchasingService.SavePayment(
+                    (int)paymentDto.InvoiceId, 
+                    (int)paymentDto.VendorId, 
+                    ((int?)bank.AccountId).GetValueOrDefault(), 
+                    (decimal)paymentDto.AmountToPay, 
+                    (DateTime)paymentDto.Date);
+
+                return new ObjectResult(Ok());
+            }
+            catch (Exception ex)
+            {
+                errors = new string[1] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
+                return new BadRequestObjectResult(errors);
             }
         }
     }
