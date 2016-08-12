@@ -131,7 +131,7 @@ class SalesOrderLines extends React.Component<any, {}>{
         amount = (document.getElementById("txtNewAmount") as HTMLInputElement).value;
         discount = (document.getElementById("txtNewDiscount") as HTMLInputElement).value;
 
-        console.log(`itemId: ${itemId} | measurementId: ${measurementId} | quantity: ${quantity} | amount: ${amount} | discount: ${discount}`);
+        //console.log(`itemId: ${itemId} | measurementId: ${measurementId} | quantity: ${quantity} | amount: ${amount} | discount: ${discount}`);
         store.addLineItem(0, itemId, measurementId, quantity, amount, discount);
 
         (document.getElementById("txtNewQuantity") as HTMLInputElement).value = "1";
@@ -210,8 +210,8 @@ class SalesOrderLines extends React.Component<any, {}>{
                                 <td><input className="form-control" type="text" id="txtNewDiscount" /></td>
                                 <td></td>
                                 <td>
-                                    <button type="button" className="btn btn-box-tool">
-                                        <i className="fa fa-fw fa-check" name={i} onClick={this.addLineItem}></i>
+                                    <button type="button" className="btn btn-box-tool" onClick={this.addLineItem}>
+                                        <i className="fa fa-fw fa-check"></i>
                                     </button>
                                 </td>
                             </tr>
