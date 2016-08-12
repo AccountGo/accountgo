@@ -145,7 +145,7 @@ export default class SalesQuotationStore {
     changedReferenceNo(refNo) {
         this.salesQuotation.referenceNo = refNo;
     }
-    addLineItem(id = 0, itemId, measurementId, quantity, amount, discount) {
+    addLineItem(id, itemId, measurementId, quantity, amount, discount) {
         var newLineItem = new SalesQuotationLine(id, itemId, measurementId, quantity, amount, discount);
         this.salesQuotation.salesQuotationLines.push(extendObservable(newLineItem, newLineItem));
     }

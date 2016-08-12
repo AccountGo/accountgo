@@ -96,8 +96,8 @@ export default class CommonStore {
         });
     }
 
-    getSalesLineTaxAmount(quantity: number, amount: number, discount: number = 0, taxes = []) {
-        let lineTaxTotal: number = 0;
+    getSalesLineTaxAmount(quantity: number, amount: number, discount: number, taxes: any) {
+        var lineTaxTotal = 0;
         amount = (amount * quantity) - discount;
         taxes.map(function (tax) {
             lineTaxTotal = lineTaxTotal + (amount - (amount / (1 + (tax.rate / 100))));
@@ -105,8 +105,8 @@ export default class CommonStore {
         return lineTaxTotal;
     }
 
-    getPurhcaseLineTaxAmount(quantity: number, amount: number, discount: number = 0, taxes = []) {
-        let lineTaxTotal: number = 0;
+    getPurhcaseLineTaxAmount(quantity: number, amount: number, discount: number, taxes: any) {
+        var lineTaxTotal = 0;
         amount = (amount * quantity) - discount;
         taxes.map(function (tax) {
             lineTaxTotal = lineTaxTotal + (amount - (amount / (1 + (tax.rate / 100))));

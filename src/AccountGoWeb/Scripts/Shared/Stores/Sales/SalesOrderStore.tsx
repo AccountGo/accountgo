@@ -163,7 +163,7 @@ export default class SalesOrderStore {
         this.salesOrder.paymentTermId = termId;
     }
 
-    addLineItem(id = 0, itemId, measurementId, quantity, amount, discount) {
+    addLineItem(id, itemId, measurementId, quantity, amount, discount) {
         var newLineItem = new SalesOrderLine(id, itemId, measurementId, quantity, amount, discount);
         this.salesOrder.salesOrderLines.push(extendObservable(newLineItem, newLineItem));        
     }

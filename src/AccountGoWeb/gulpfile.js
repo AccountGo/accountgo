@@ -6,6 +6,7 @@ var destPath = './wwwroot/plugins/';
 gulp.task("libs", () => {
     gulp.src([
             'bootstrap/dist/**',
+            'bootstrap/less/**',
             'jquery/dist/**',
             'ag-grid/dist/**',
             'knockout/build/output/**',
