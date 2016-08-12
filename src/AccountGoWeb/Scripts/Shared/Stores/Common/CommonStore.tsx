@@ -102,7 +102,7 @@ export default class CommonStore {
         taxes.map(function (tax) {
             lineTaxTotal = lineTaxTotal + (amount - (amount / (1 + (tax.rate / 100))));
         });
-        return parseFloat(lineTaxTotal.toFixed(2));
+        return lineTaxTotal;
     }
 
     getPurhcaseLineTaxAmount(quantity: number, amount: number, discount: number = 0, taxes = []) {
@@ -111,6 +111,6 @@ export default class CommonStore {
         taxes.map(function (tax) {
             lineTaxTotal = lineTaxTotal + (amount - (amount / (1 + (tax.rate / 100))));
         });
-        return parseFloat(lineTaxTotal.toFixed(2));
+        return lineTaxTotal;
     }
 }

@@ -66,8 +66,7 @@ export default class PurchaseOrderStore {
 
         for (var i = 0; i < this.purchaseOrder.purchaseOrderLines.length; i++) {
             var lineItem = this.purchaseOrder.purchaseOrderLines[i];
-            var lineSum = lineItem.quantity * lineItem.amount;
-            rtotal = rtotal + lineSum;
+            rtotal = rtotal + this.getLineTotal(i);
             await axios.get(Config.apiUrl + "api/tax/gettax?itemId=" + lineItem.itemId + "&partyId=" + this.purchaseOrder.vendorId + "&type=2")
                 .then(function (result) {
                     if (result.data.length > 0) {

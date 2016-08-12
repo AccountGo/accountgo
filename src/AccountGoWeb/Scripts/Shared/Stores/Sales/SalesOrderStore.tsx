@@ -84,8 +84,7 @@ export default class SalesOrderStore {
 
         for (var i = 0; i < this.salesOrder.salesOrderLines.length; i++) {
             var lineItem = this.salesOrder.salesOrderLines[i];
-            var lineSum = lineItem.quantity * lineItem.amount;
-            rtotal = rtotal + lineSum;
+            rtotal = rtotal + this.getLineTotal(i);
             await axios.get(Config.apiUrl + "api/tax/gettax?itemId=" + lineItem.itemId + "&partyId=" + this.salesOrder.customerId + "&type=1")
                 .then(function (result) {
                     if (result.data.length > 0) {
