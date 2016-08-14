@@ -29,6 +29,8 @@ namespace Core.Domain.Sales
         public string No { get; set; }
         public DateTime Date { get; set; }
         public decimal ShippingHandlingCharge{ get; set; }
+        public int? PaymentTermId { get; set; }
+        public string ReferenceNo { get; set; }
         public SalesInvoiceStatus Status { get; set; }
         public virtual Customer Customer { get; set; }
         public virtual GeneralLedgerHeader GeneralLedgerHeader { get; set; }
@@ -37,8 +39,6 @@ namespace Core.Domain.Sales
         [NotMapped]
         public virtual ICollection<SalesReceiptHeader> SalesReceipts { get; set; }
         public virtual ICollection<CustomerAllocation> CustomerAllocations { get; set; }
-        public int? PaymentTermId { get; set; }
-        public string ReferenceNo { get; set; }
         public decimal ComputeTotalTax()
         {
             decimal totalTax = 0;

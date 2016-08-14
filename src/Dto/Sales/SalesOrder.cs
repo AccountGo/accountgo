@@ -12,6 +12,7 @@ namespace Dto.Sales
         public decimal? Amount { get; set; }
         public string CustomerNo { get; set; }
         public string CustomerName { get; set; }
+        public int Status { get; set; }
         public IList<SalesOrderLine> SalesOrderLines { get; set; }
 
         public SalesOrder()
