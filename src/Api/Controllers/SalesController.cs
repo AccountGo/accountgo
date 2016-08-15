@@ -181,7 +181,7 @@ namespace Api.Controllers
                     OrderDate = salesOrder.Date,
                     ReferenceNo = salesOrder.ReferenceNo,
                     Amount = salesOrder.SalesOrderLines.Sum(l => l.Amount),
-                    Status = salesOrder.Status
+                    Status = (int)salesOrder.Status
 
                 };
                 salesOrdersDto.Add(salesOrderDto);
@@ -507,7 +507,7 @@ namespace Api.Controllers
                 if (isNew)
                 {
                     salesOrder = new Core.Domain.Sales.SalesOrderHeader();
-                    salesOrder.Status = (int) SalesOrderStatus.Open;
+                    salesOrder.Status = SalesOrderStatus.Open;
                 }
                 else
                 {

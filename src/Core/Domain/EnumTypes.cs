@@ -72,18 +72,20 @@ namespace Core.Domain
         TransferEntries = 5,
     }
 
-    public enum PurchaseStatuses
+    public enum PurchaseOrderStatus
     {
-        Open,
+        Draft,
+        Open = 1,
         PartiallyReceived,
         FullReceived,
         Invoiced,
         Closed
     }
 
-    public enum PurchaseInvoiceStatuses
+    public enum PurchaseInvoiceStatus
     {
-        Open,
+        Draft,
+        Open = 1,
         Paid
     }
 
@@ -143,8 +145,8 @@ namespace Core.Domain
 
     public enum SalesInvoiceStatus
     {
-        //Draft,
-        Open,
+        Draft,
+        Open = 1,
         Overdue,
         Closed,
         Void
@@ -153,11 +155,20 @@ namespace Core.Domain
     public enum SalesOrderStatus
     {
         Draft,
-        Open,
+        Open = 1,
         Overdue,
         Closed,
         Void,
         PartiallyInvoiced,
         FullyInvoiced
+    }
+
+    public enum SalesQuoteStatus
+    {
+        Draft,
+        Open = 1,
+        Overdue,
+        Closed,
+        Void
     }
 }

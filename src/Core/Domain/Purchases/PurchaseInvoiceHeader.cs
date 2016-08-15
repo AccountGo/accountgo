@@ -34,8 +34,8 @@ namespace Core.Domain.Purchases
         public string Description { get; set; }
         public int? PaymentTermId { get; set; }
         public string ReferenceNo { get; set; }
+        public PurchaseInvoiceStatus Status { get; set; }
 
-        
         public virtual Vendor Vendor { get; set; }
         public virtual GeneralLedgerHeader GeneralLedgerHeader { get; set; }
 
