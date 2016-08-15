@@ -29,6 +29,8 @@ export default class PurchaseOrderStore {
             purchaseOrderLines: []
         });
 
+        autorun(() => this.computeTotals());
+
         if (purchId !== undefined) {
             axios.get(Config.apiUrl + "api/purchasing/purchaseorder?id=" + purchId)
                 .then(function (result) {
@@ -47,19 +49,18 @@ export default class PurchaseOrderStore {
                             result.data.purchaseOrderLines[i].discount
                         );
                     }
+                    this.computeTotals();
                 }.bind(this))
                 .catch(function (error) {
                 }.bind(this));
         }
-
-        autorun(() => this.computeTotals());
     }
 
     @observable RTotal = 0;
     @observable GTotal = 0;
     @observable TTotal = 0;
 
-    async computeTotals() {
+    computeTotals() {
         var rtotal = 0;
         var ttotal = 0;
         var gtotal = 0;
@@ -67,22 +68,21 @@ export default class PurchaseOrderStore {
         for (var i = 0; i < this.purchaseOrder.purchaseOrderLines.length; i++) {
             var lineItem = this.purchaseOrder.purchaseOrderLines[i];
             rtotal = rtotal + this.getLineTotal(i);
-            await axios.get(Config.apiUrl + "api/tax/gettax?itemId=" + lineItem.itemId + "&partyId=" + this.purchaseOrder.vendorId + "&type=2")
+            axios.get(Config.apiUrl + "api/tax/gettax?itemId=" + lineItem.itemId + "&partyId=" + this.purchaseOrder.vendorId + "&type=2")
                 .then(function (result) {
                     if (result.data.length > 0) {
                         ttotal = ttotal + this.commonStore.getPurhcaseLineTaxAmount(lineItem.quantity, lineItem.amount, lineItem.discount, result.data);
                     }
+                    this.TTotal = ttotal;
                 }.bind(this));
+            this.RTotal = rtotal;
+            this.GTotal = rtotal - ttotal;
         }
-
-        this.RTotal = rtotal;
-        this.TTotal = ttotal;
-        this.GTotal = rtotal - ttotal;
     }
 
-    async savePurchaseOrder() {
+    savePurchaseOrder() {
         if (this.validation() && this.validationErrors.length === 0) {
-            await axios.post(Config.apiUrl + "api/purchasing/savepurchaseorder", JSON.stringify(this.purchaseOrder),
+            axios.post(Config.apiUrl + "api/purchasing/savepurchaseorder", JSON.stringify(this.purchaseOrder),
                 {
                     headers: {
                         'Content-type': 'application/json'

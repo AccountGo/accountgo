@@ -30,6 +30,8 @@ export default class SalesQuotationStore {
             salesQuotationLines: []
         });
 
+        autorun(() => this.computeTotals());
+
         if (quotationId !== undefined) {
             var result = axios.get(Config.apiUrl + "api/sales/quotation?id=" + quotationId);
             result.then(function (result) {
@@ -48,17 +50,16 @@ export default class SalesQuotationStore {
                         result.data.salesQuotationLines[i].discount
                     );
                 }
+                this.computeTotals();
             }.bind(this));
         }
-
-        autorun(() => this.computeTotals());
     }
 
     @observable RTotal = 0;
     @observable GTotal = 0;
     @observable TTotal = 0;
 
-    async computeTotals() {
+    computeTotals() {
         var rtotal = 0;
         var ttotal = 0;
         var gtotal = 0;
@@ -66,23 +67,22 @@ export default class SalesQuotationStore {
         for (var i = 0; i < this.salesQuotation.salesQuotationLines.length; i++) {
             var lineItem = this.salesQuotation.salesQuotationLines[i];
             rtotal = rtotal + this.getLineTotal(i);
-            await axios.get(Config.apiUrl + "api/tax/gettax?itemId=" + lineItem.itemId + "&partyId=" + this.salesQuotation.customerId + "&type=1")
+            axios.get(Config.apiUrl + "api/tax/gettax?itemId=" + lineItem.itemId + "&partyId=" + this.salesQuotation.customerId + "&type=1")
                 .then(function (result) {
                     if (result.data.length > 0) {
                         ttotal = ttotal + this.commonStore.getSalesLineTaxAmount(lineItem.quantity, lineItem.amount, lineItem.discount, result.data);
-                    }
+                    }                    
+                    this.TTotal = ttotal;                    
                 }.bind(this));
+            this.RTotal = rtotal;
+            this.GTotal = rtotal - ttotal;
         }
-
-        this.RTotal = rtotal;
-        this.TTotal = ttotal;      
-        this.GTotal = rtotal - ttotal;
     }
 
-    async saveNewQuotation() {
+    saveNewQuotation() {
         if (this.validation()) {
             if (this.validationErrors.length === 0) {
-                await axios.post(Config.apiUrl + "api/sales/savequotation", JSON.stringify(this.salesQuotation),
+                axios.post(Config.apiUrl + "api/sales/savequotation", JSON.stringify(this.salesQuotation),
                     {
                         headers:
                         {

@@ -29,6 +29,8 @@ export default class SalesStore {
             salesInvoiceLines: []
         });
 
+        autorun(() => this.computeTotals());
+
         if (orderId !== undefined) {
             var result = axios.get(Config.apiUrl + "api/sales/salesorder?id=" + orderId);
             result.then(function (result) {
@@ -47,6 +49,7 @@ export default class SalesStore {
                         result.data.salesOrderLines[i].discount
                     );
                 }
+                this.computeTotals();
             }.bind(this));
         }
         else if (invoiceId !== undefined) {
@@ -67,17 +70,16 @@ export default class SalesStore {
                         result.data.salesInvoiceLines[i].discount
                     );
                 }
+                this.computeTotals();
             }.bind(this));
-        }
-
-        autorun(() => this.computeTotals());
+        }        
     }
 
     @observable RTotal = 0;
     @observable GTotal = 0;
     @observable TTotal = 0;
 
-    async computeTotals() {
+    computeTotals() {
         var rtotal = 0;
         var ttotal = 0;
         var gtotal = 0;
@@ -85,22 +87,21 @@ export default class SalesStore {
         for (var i = 0; i < this.salesInvoice.salesInvoiceLines.length; i++) {
             var lineItem = this.salesInvoice.salesInvoiceLines[i];
             rtotal = rtotal + this.getLineTotal(i);
-            await axios.get(Config.apiUrl + "api/tax/gettax?itemId=" + lineItem.itemId + "&partyId=" + this.salesInvoice.customerId + "&type=1")
+            axios.get(Config.apiUrl + "api/tax/gettax?itemId=" + lineItem.itemId + "&partyId=" + this.salesInvoice.customerId + "&type=1")
                 .then(function (result) {
                     if (result.data.length > 0) {
                         ttotal = ttotal + this.commonStore.getSalesLineTaxAmount(lineItem.quantity, lineItem.amount, lineItem.discount, result.data);
                     }
+                    this.TTotal = ttotal;
                 }.bind(this));
+            this.RTotal = rtotal;
+            this.GTotal = rtotal - ttotal;
         }
-
-        this.RTotal = rtotal;
-        this.TTotal = ttotal;
-        this.GTotal = rtotal - ttotal;
     }
 
-    async saveNewSalesInvoice() {
+    saveNewSalesInvoice() {
         if (this.validation() && this.validationErrors.length === 0) {
-            await axios.post(Config.apiUrl + "api/sales/savesalesinvoice", JSON.stringify(this.salesInvoice),
+            axios.post(Config.apiUrl + "api/sales/savesalesinvoice", JSON.stringify(this.salesInvoice),
                 {
                     headers: {
                         'Content-type': 'application/json'
@@ -117,9 +118,9 @@ export default class SalesStore {
         }
     }
 
-    async postInvoice() {
+    postInvoice() {
         if (this.validation() && this.validationErrors.length === 0) {
-            await axios.post(Config.apiUrl + "api/sales/postsalesinvoice", JSON.stringify(this.salesInvoice),
+            axios.post(Config.apiUrl + "api/sales/postsalesinvoice", JSON.stringify(this.salesInvoice),
                 {
                     headers: {
                         'Content-type': 'application/json'

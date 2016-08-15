@@ -210,8 +210,8 @@ class PurchaseOrderLines extends React.Component<any, {}>{
                                 <td><input className="form-control" type="text" id="txtNewDiscount" /></td>
                                 <td></td>
                                 <td>
-                                    <button type="button" className="btn btn-box-tool">
-                                        <i className="fa fa-fw fa-check" name={i} onClick={this.addLineItem}></i>
+                                    <button type="button" className="btn btn-box-tool" onClick={this.addLineItem}>
+                                        <i className="fa fa-fw fa-check"></i>
                                     </button>
                                 </td>
                             </tr>
