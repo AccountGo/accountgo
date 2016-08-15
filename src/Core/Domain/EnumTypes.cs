@@ -156,6 +156,8 @@ namespace Core.Domain
         Open,
         Overdue,
         Closed,
-        Void
+        Void,
+        PartiallyInvoiced,
+        FullyInvoiced
     }
 }

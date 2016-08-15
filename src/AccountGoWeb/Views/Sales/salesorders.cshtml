@@ -13,7 +13,8 @@
         {headerName: "Order", field: "id", width: 50},
         {headerName: "Customer Name", field: "customerName", width: 350},
         {headerName: "Order Date", field: "orderDate", width: 100},
-        {headerName: "Amount", field: "amount", width: 100}
+        {headerName: "Amount", field: "amount", width: 100},
+        {headerName: "Status", field: "status", hide: "true"}
     ];
 
     var gridOptions = {
@@ -34,6 +35,13 @@
 
         document.getElementById('linkNewInvoice').setAttribute('href', 'salesinvoice?orderId=' + selectedRow.id);
         document.getElementById('linkNewInvoice').setAttribute('class', '');
+
+        // If SalesOrderStatus is Fully Invoiced, disable New Invoice link
+        if(selectedRow.status == 6)
+        {
+            document.getElementById('linkNewInvoice').setAttribute('class', 'inactiveLink');
+
+        }
     }
 
     // wait for the document to be loaded, otherwise

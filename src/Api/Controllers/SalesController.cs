@@ -5,6 +5,7 @@ using Services.Sales;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Core.Domain;
 
 namespace Api.Controllers
 {
@@ -180,6 +181,7 @@ namespace Api.Controllers
                     OrderDate = salesOrder.Date,
                     ReferenceNo = salesOrder.ReferenceNo,
                     Amount = salesOrder.SalesOrderLines.Sum(l => l.Amount),
+                    Status = salesOrder.Status
 
                 };
                 salesOrdersDto.Add(salesOrderDto);
@@ -505,6 +507,7 @@ namespace Api.Controllers
                 if (isNew)
                 {
                     salesOrder = new Core.Domain.Sales.SalesOrderHeader();
+                    salesOrder.Status = (int) SalesOrderStatus.Open;
                 }
                 else
                 {
@@ -656,6 +659,7 @@ namespace Api.Controllers
                         salesOrder.Date = salesInvoiceDto.InvoiceDate;
                         salesOrder.PaymentTermId = salesInvoiceDto.PaymentTermId;
                         salesOrder.CustomerId = salesInvoiceDto.CustomerId;
+                        salesOrder.ReferenceNo = salesInvoiceDto.ReferenceNo;
                     }
 
                     foreach (var line in salesInvoiceDto.SalesInvoiceLines)

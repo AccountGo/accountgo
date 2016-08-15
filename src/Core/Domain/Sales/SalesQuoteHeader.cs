@@ -18,6 +18,8 @@ namespace Core.Domain.Sales
         public int CustomerId { get; set; }
         public int? PaymentTermId { get; set; }
         public string ReferenceNo { get; set; }
+        public string No { get; set; }
+        public int Status { get; set; }
         public DateTime Date { get; set; }
         public virtual Customer Customer { get; set; }
         public virtual ICollection<SalesQuoteLine> SalesQuoteLines { get; set; }

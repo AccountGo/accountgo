@@ -6,7 +6,7 @@
     [No]                    NVARCHAR (MAX)  NULL,
     [Date]                  DATETIME        NOT NULL,
     [Amount]                DECIMAL (18, 2) NOT NULL,
-    [Status] INT NULL, 
+    [Status] INT NOT NULL, 
     CONSTRAINT [PK_dbo.SalesReceiptHeader] PRIMARY KEY CLUSTERED ([Id] ASC),
     CONSTRAINT [FK_dbo.SalesReceiptHeader_dbo.Account_AccountToDebitId] FOREIGN KEY ([AccountToDebitId]) REFERENCES [dbo].[Account] ([Id]),
     CONSTRAINT [FK_dbo.SalesReceiptHeader_dbo.Customer_CustomerId] FOREIGN KEY ([CustomerId]) REFERENCES [dbo].[Customer] ([Id]),
