@@ -23,6 +23,6 @@ namespace Core.Domain.Sales
         public virtual SalesOrderHeader SalesOrderHeader { get; set; }
         public virtual Item Item { get; set; }
         public virtual Measurement Measurement { get; set; }
-        public virtual System.Collections.Generic.ICollection<SalesOrderLine> SalesOrderLines { get; set; }
+        public virtual System.Collections.Generic.ICollection<SalesInvoiceLine> SalesInvoiceLines { get; set; }
     }
 }
