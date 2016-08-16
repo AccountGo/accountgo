@@ -72,10 +72,10 @@ export default class SalesQuotationStore {
                     if (result.data.length > 0) {
                         ttotal = ttotal + this.commonStore.getSalesLineTaxAmount(lineItem.quantity, lineItem.amount, lineItem.discount, result.data);
                     }                    
-                    this.TTotal = ttotal;                    
+                    this.TTotal = ttotal;
+                    this.GTotal = rtotal - ttotal;
                 }.bind(this));
-            this.RTotal = rtotal;
-            this.GTotal = rtotal - ttotal;
+            this.RTotal = rtotal;            
         }
     }
 
