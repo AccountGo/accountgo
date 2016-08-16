@@ -43,6 +43,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Data\IRepository.cs" />
+    <Compile Include="Data\ISalesOrderRepository.cs" />
     <Compile Include="Domain\Address.cs" />
     <Compile Include="Domain\Auditing\AuditableAttribute.cs" />
     <Compile Include="Domain\Auditing\AuditableEntity.cs" />

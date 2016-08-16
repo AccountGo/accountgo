@@ -7,7 +7,6 @@
 //-----------------------------------------------------------------------
 
 using Core.Domain.Items;
-using System;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Core.Domain.Sales
@@ -24,5 +23,6 @@ namespace Core.Domain.Sales
         public virtual SalesOrderHeader SalesOrderHeader { get; set; }
         public virtual Item Item { get; set; }
         public virtual Measurement Measurement { get; set; }
+        public virtual System.Collections.Generic.ICollection<SalesOrderLine> SalesOrderLines { get; set; }
     }
 }
