@@ -5,7 +5,7 @@
     [No]                     NVARCHAR (MAX)  NULL,
     [Date]                   DATETIME        NOT NULL,
     [ShippingHandlingCharge] DECIMAL (18, 2) NOT NULL,
-    [Status]                 INT             NOT NULL,
+    [Status]                 INT             NULL,
     [PaymentTermId] INT NULL, 
     [ReferenceNo] NVARCHAR(MAX) NULL, 
     CONSTRAINT [PK_dbo.SalesInvoiceHeader] PRIMARY KEY CLUSTERED ([Id] ASC),

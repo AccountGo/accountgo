@@ -24,7 +24,7 @@ namespace Core.Domain.Sales
         public int? PaymentTermId { get; set; }
         public string No { get; set; }
         public string ReferenceNo { get; set; }
-        public int Status { get; set; }
+        public SalesOrderStatus Status { get; set; }
         public DateTime Date { get; set; }
         public virtual Customer Customer { get; set; }
         public virtual PaymentTerm PaymentTerm { get; set; }
