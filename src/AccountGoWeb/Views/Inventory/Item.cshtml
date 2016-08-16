@@ -20,11 +20,17 @@
                     </div>
                     <div class="row">
                         <div class="col-sm-3">Code</div>
-                        <div class="col-sm-9"><input asp-for="Code" class="form-control" type="text" placeholder="Code ..." /></div>
+                        <div class="col-sm-9">
+                            <input asp-for="Code" class="form-control" type="text" placeholder="Code ..." />
+                            <span asp-validation-for="Code" class="danger"></span>
+                        </div>
                     </div>
                     <div class="row">
                         <div class="col-sm-3">Description</div>
-                        <div class="col-sm-9"><input asp-for="Description" class="form-control" type="text" placeholder="Description ..." /></div>
+                        <div class="col-sm-9">
+                            <input asp-for="Description" class="form-control" type="text" placeholder="Description ..." />
+                            <span asp-validation-for="Description" class="danger"></span>
+                        </div>
                     </div>
                 </div>
                 <div class="col-sm-6">
@@ -101,9 +107,9 @@
                         <div class="col-sm-8"><select class="form-control" asp-for="SalesAccountId" asp-items="@ViewBag.Accounts"></select></div>
                     </div>
                     @*<div class="row">
-                        <div class="col-sm-4">Purchase Account</div>
-                        <div class="col-sm-8"><select class="form-control" asp-for="SalesAccountId" asp-items="@ViewBag.Accounts"></select></div>
-                    </div>*@
+                            <div class="col-sm-4">Purchase Account</div>
+                            <div class="col-sm-8"><select class="form-control" asp-for="SalesAccountId" asp-items="@ViewBag.Accounts"></select></div>
+                        </div>*@
                 </div>
                 <div class="col-sm-6">
                     <div class="row">
