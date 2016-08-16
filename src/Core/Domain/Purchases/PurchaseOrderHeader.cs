@@ -13,7 +13,7 @@ namespace Core.Domain.Purchases
         public string Description { get; set; }
         public int? PaymentTermId { get; set; }
         public string ReferenceNo { get; set; }
-        public PurchaseOrderStatus Status { get; set; }
+        public PurchaseOrderStatus? Status { get; set; }
         public virtual Vendor Vendor { get; set; }
         public virtual ICollection<PurchaseOrderLine> PurchaseOrderLines { get; set; }
 

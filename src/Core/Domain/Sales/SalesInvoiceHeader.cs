@@ -31,7 +31,7 @@ namespace Core.Domain.Sales
         public decimal ShippingHandlingCharge{ get; set; }
         public int? PaymentTermId { get; set; }
         public string ReferenceNo { get; set; }
-        public SalesInvoiceStatus Status { get; set; }
+        public SalesInvoiceStatus? Status { get; set; }
         public virtual Customer Customer { get; set; }
         public virtual GeneralLedgerHeader GeneralLedgerHeader { get; set; }
 
