@@ -40,6 +40,7 @@ namespace Services.Sales
         private readonly IRepository<Contact> _contactRepo;
         private readonly IRepository<TaxGroup> _taxGroupRepo;
         private readonly IRepository<SalesQuoteHeader> _salesQuoteRepo;
+        private readonly ISalesOrderRepository _salesOrderRepository;
 
         public SalesService(IFinancialService financialService,
             IInventoryService inventoryService,
@@ -57,7 +58,8 @@ namespace Services.Sales
             IRepository<GeneralLedgerSetting> generalLedgerSetting,
             IRepository<Contact> contactRepo,
             IRepository<TaxGroup> taxGroupRepo,
-            IRepository<SalesQuoteHeader> salesQuoteRepo)
+            IRepository<SalesQuoteHeader> salesQuoteRepo,
+            ISalesOrderRepository salesOrderRepository)
             : base(sequenceNumberRepo, generalLedgerSetting, paymentTermRepo, bankRepo)
         {
             _financialService = financialService;
@@ -77,6 +79,7 @@ namespace Services.Sales
             _contactRepo = contactRepo;
             _taxGroupRepo = taxGroupRepo;
             _salesQuoteRepo = salesQuoteRepo;
+            _salesOrderRepository = salesOrderRepository;
         }
 
         public void AddSalesOrder(SalesOrderHeader salesOrder, bool toSave)
@@ -558,11 +561,7 @@ namespace Services.Sales
 
         public IEnumerable<SalesOrderHeader> GetSalesOrders()
         {
-            var salesOrders = _salesOrderRepo.GetAllIncluding(so => so.Customer,
-                so => so.PaymentTerm,
-                so => so.SalesOrderLines,
-                so => so.Customer.Party);
-
+            var salesOrders = _salesOrderRepository.GetAllSalesOrders();
             return salesOrders;
         }
 
