@@ -35,10 +35,15 @@ namespace Api
             //    connectionString = Configuration["Data:LocalConnection:ConnectionString"];
             //else
             //    connectionString = Configuration["Data:DefaultConnection:ConnectionString"];
-
             services
                 .AddEntityFrameworkSqlServer()
-                .AddDbContext<Data.ApiDbContext>(options => options.UseSqlServer(connectionString));
+                .AddDbContext<Data.ApiDbContext>(options => options.UseSqlServer(connectionString))
+                .AddDbContext<Data.ApplicationIdentityDbContext>(options => options.UseSqlServer(connectionString));
+
+            services
+                .AddIdentity<Data.ApplicationUser, Microsoft.AspNetCore.Identity.EntityFrameworkCore.IdentityRole>()
+                .AddEntityFrameworkStores<Data.ApplicationIdentityDbContext>()
+                .AddDefaultTokenProviders();
 
             // Add framework services.
             services.AddMvc()
@@ -82,6 +87,7 @@ namespace Api
 
             app.UseCors("AllowAll");            
             app.UseStaticFiles();
+            app.UseIdentity();
             app.UseMvc();
             //app.UseSwaggerGen();
             //app.UseSwaggerUi();
