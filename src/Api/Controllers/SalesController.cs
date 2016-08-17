@@ -184,6 +184,20 @@ namespace Api.Controllers
                     Status = (int)salesOrder.Status.GetValueOrDefault()
 
                 };
+
+                //foreach (var salesOrderLine in salesOrder.SalesOrderLines)
+                //{
+                    
+                //    foreach (var salesInvoiceLine in salesOrderLine.SalesInvoiceLines)
+                //    {
+                //        if (salesInvoiceLine.SalesInvoiceHeader.Status == SalesInvoiceStatus.FullyInvoiced)
+                //        {
+                //            salesOrderDto.Status = (int)SalesOrderStatus.FullyInvoiced;
+                //        }
+                      
+                //    }
+                //}
+
                 salesOrdersDto.Add(salesOrderDto);
             }
 
@@ -778,6 +792,39 @@ namespace Api.Controllers
                         }
                     }
                 }
+
+                bool isFullyInvoiced = false;
+                if (salesInvoiceDto.FromSalesOrderId != null)
+                {
+                    salesOrder = _salesService.GetSalesOrderById((int) salesInvoiceDto.FromSalesOrderId);
+                    foreach (var salesOrderLine in salesOrder.SalesOrderLines)
+                    {
+                        foreach (var salesInvoiceLine in salesInvoice.SalesInvoiceLines)
+                        {
+                            if (salesOrderLine.ItemId == salesInvoiceLine.ItemId)
+                            {
+                                if (salesInvoiceLine.Quantity >= salesOrderLine.Quantity)
+                                {
+                                    isFullyInvoiced = true;
+                                   
+                                }
+                                else
+                                {
+                                    isFullyInvoiced = false;
+                                    break;
+                                }
+                  
+                            }
+                        }
+                    }
+
+                    if (isFullyInvoiced)
+                    {
+                        salesOrder.Status = SalesOrderStatus.FullyInvoiced;
+                        salesInvoice.Status = SalesInvoiceStatus.FullyInvoiced;
+                    }
+                }
+
 
                 _salesService.SaveSalesInvoice(salesInvoice, salesDelivery, salesOrder);
 
