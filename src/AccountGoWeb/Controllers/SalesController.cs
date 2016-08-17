@@ -237,7 +237,7 @@ namespace AccountGoWeb.Controllers
              var invoices = GetAsync<IEnumerable<Dto.Sales.SalesInvoice>>("sales/customerinvoices?id=" + receipt.CustomerId).Result;
 
             foreach (var invoice in invoices) {
-                if (invoice.TotalAllocatedAmount < invoice.TotalAmount)
+                if (invoice.Posted && invoice.TotalAllocatedAmount < invoice.TotalAmount)
                 {
                     model.AllocationLines.Add(new Models.Sales.AllocationLine()
                     {

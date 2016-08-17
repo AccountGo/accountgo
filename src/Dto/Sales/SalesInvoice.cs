@@ -14,6 +14,7 @@ namespace Dto.Sales
         public decimal TotalAmount { get; set; }
         public decimal TotalAllocatedAmount { get; set; }
         public string ReferenceNo { get; set; }
+        public bool Posted { get; set; }
 
         public IList<SalesInvoiceLine> SalesInvoiceLines { get; set; }
     }

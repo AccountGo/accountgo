@@ -470,7 +470,8 @@ namespace Api.Controllers
                         InvoiceDate = invoice.Date,
                         CustomerId = invoice.CustomerId,
                         TotalAmount = invoice.ComputeTotalAmount(),
-                        TotalAllocatedAmount = (decimal)invoice.CustomerAllocations.Sum(i => i.Amount)
+                        TotalAllocatedAmount = (decimal)invoice.CustomerAllocations.Sum(i => i.Amount),
+                        Posted = invoice.GeneralLedgerHeaderId.HasValue
                     };
 
                     invoicesDto.Add(invoiceDto);
