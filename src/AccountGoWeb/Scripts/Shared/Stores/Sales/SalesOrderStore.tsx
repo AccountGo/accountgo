@@ -92,9 +92,9 @@ export default class SalesOrderStore {
                         ttotal = ttotal + this.commonStore.getSalesLineTaxAmount(lineItem.quantity, lineItem.amount, lineItem.discount, result.data);
                     }
                     this.TTotal = ttotal;
+                    this.GTotal = rtotal - ttotal;
                 }.bind(this));
             this.RTotal = rtotal;
-            this.GTotal = rtotal - ttotal;
         }
     }
 

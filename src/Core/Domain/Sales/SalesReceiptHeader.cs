@@ -25,16 +25,14 @@ namespace Core.Domain.Sales
 
         public int CustomerId { get; set; }
         public int? GeneralLedgerHeaderId { get; set; }
-        public int? AccountToDebitId { get; set; }
-        //public int? SalesInvoiceHeaderId { get; set; }
+        public int? AccountToDebitId { get; set; }        
         public string No { get; set; }
         public DateTime Date { get; set; }
         public decimal Amount { get; set; }
+        public int? Status { get; set; }
         public virtual Customer Customer { get; set; }
         public virtual GeneralLedgerHeader GeneralLedgerHeader { get; set; }
         public virtual Account AccountToDebit { get; set; }
-        //public virtual SalesInvoiceHeader SalesInvoiceHeader { get; set; }
-
         public virtual ICollection<SalesReceiptLine> SalesReceiptLines { get; set; }
         public virtual ICollection<CustomerAllocation> CustomerAllocations { get; set; }
 

@@ -570,8 +570,8 @@ namespace Services.Sales
             var salesOrder = _salesOrderRepo.GetAllIncluding(lines => lines.SalesOrderLines,
                 c => c.Customer,
                 p => p.PaymentTerm)
-                .Where(o => o.Id == id).FirstOrDefault()
-                ;
+                .Where(o => o.Id == id)
+                .FirstOrDefault();
 
             foreach(var line in salesOrder.SalesOrderLines)
             {

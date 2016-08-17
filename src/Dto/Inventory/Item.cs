@@ -1,9 +1,13 @@
-﻿namespace Dto.Inventory
+﻿using System.ComponentModel.DataAnnotations;
+
+namespace Dto.Inventory
 {
     public class Item : BaseDto
     {
         public string No { get; set; }
+        [Required]
         public string Code { get; set; }
+        [Required]
         public string Description { get; set; }
         public string PurchaseDescription { get; set; }
         public string SellDescription { get; set; }

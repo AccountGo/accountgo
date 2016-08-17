@@ -5,6 +5,7 @@
     [GeneralLedgerHeaderId] INT            NULL,
     [No]                    NVARCHAR (MAX) NULL,
     [Date]                  DATETIME       NOT NULL,
+    [Status] INT NULL, 
     CONSTRAINT [PK_dbo.SalesDeliveryHeader] PRIMARY KEY CLUSTERED ([Id] ASC),
     CONSTRAINT [FK_dbo.SalesDeliveryHeader_dbo.Customer_CustomerId] FOREIGN KEY ([CustomerId]) REFERENCES [dbo].[Customer] ([Id]),
     CONSTRAINT [FK_dbo.SalesDeliveryHeader_dbo.GeneralLedgerHeader_GeneralLedgerHeaderId] FOREIGN KEY ([GeneralLedgerHeaderId]) REFERENCES [dbo].[GeneralLedgerHeader] ([Id]),

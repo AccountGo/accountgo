@@ -26,6 +26,7 @@ namespace Core.Domain.Sales
         public int? GeneralLedgerHeaderId { get; set; }
         public string No { get; set; }
         public DateTime Date { get; set; }
+        public int? Status { get; set; }
         public virtual PaymentTerm PaymentTerm { get; set; }
         public virtual Customer Customer { get; set; }
         public virtual GeneralLedgerHeader GeneralLedgerHeader { get; set; }

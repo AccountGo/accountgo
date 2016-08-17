@@ -181,7 +181,7 @@ namespace Api.Controllers
                     OrderDate = salesOrder.Date,
                     ReferenceNo = salesOrder.ReferenceNo,
                     Amount = salesOrder.SalesOrderLines.Sum(l => l.Amount),
-                    Status = (int)salesOrder.Status
+                    Status = (int)salesOrder.Status.GetValueOrDefault()
 
                 };
                 salesOrdersDto.Add(salesOrderDto);

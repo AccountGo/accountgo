@@ -87,18 +87,17 @@ namespace AccountGoWeb.Controllers
 
                 return RedirectToAction("Items");
             }
-            else
-            {
-                ViewBag.Accounts = Models.SelectListItemHelper.Accounts();
-                ViewBag.ItemTaxGroups = Models.SelectListItemHelper.ItemTaxGroups();
-                ViewBag.Measurements = Models.SelectListItemHelper.UnitOfMeasurements();
-                ViewBag.ItemCategories = Models.SelectListItemHelper.ItemCategories();
-            }
 
-            if (itemModel.Id == -1)
-                ViewBag.PageContentHeader = "New Item";
+            ViewBag.Accounts = Models.SelectListItemHelper.Accounts();
+            ViewBag.ItemTaxGroups = Models.SelectListItemHelper.ItemTaxGroups();
+            ViewBag.Measurements = Models.SelectListItemHelper.UnitOfMeasurements();
+            ViewBag.ItemCategories = Models.SelectListItemHelper.ItemCategories();
+
+
+            if (itemModel.Id > 0)
+                ViewBag.PageContentHeader = "Item Item";
             else
-                ViewBag.PageContentHeader = "Item Card";
+                ViewBag.PageContentHeader = "New Card";
 
             return View("Item", itemModel);
         }

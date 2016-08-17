@@ -17,7 +17,7 @@ namespace Api.Data
 
             var salesOrders = queryable
                 .Include(so => so.SalesOrderLines)
-                .ThenInclude(line => line.SalesOrderLines)
+                .ThenInclude(line => line.SalesInvoiceLines)
                 .Include(so => so.Customer)
                 .Include(so => so.Customer.Party);
 
