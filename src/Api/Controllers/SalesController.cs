@@ -169,25 +169,69 @@ namespace Api.Controllers
             var salesOrders = _salesService.GetSalesOrders();
             IList<Dto.Sales.SalesOrder> salesOrdersDto = new List<Dto.Sales.SalesOrder>();
 
-            foreach (var salesOrder in salesOrders)
+            try
             {
-                var salesOrderDto = new Dto.Sales.SalesOrder()
+                bool IsFullyInvoiced = false;
+                foreach (var salesOrder in salesOrders)
                 {
-                    Id = salesOrder.Id,
-                    PaymentTermId = salesOrder.PaymentTermId,
-                    CustomerId = salesOrder.CustomerId.Value,
-                    CustomerNo = salesOrder.Customer.No,
-                    CustomerName = salesOrder.Customer.Party.Name,
-                    OrderDate = salesOrder.Date,
-                    ReferenceNo = salesOrder.ReferenceNo,
-                    Amount = salesOrder.SalesOrderLines.Sum(l => l.Amount),
-                    Status = (int)salesOrder.Status.GetValueOrDefault()
+                    var salesOrderDto = new Dto.Sales.SalesOrder()
+                    {
+                        Id = salesOrder.Id,
+                        PaymentTermId = salesOrder.PaymentTermId,
+                        CustomerId = salesOrder.CustomerId.Value,
+                        CustomerNo = salesOrder.Customer.No,
+                        CustomerName = salesOrder.Customer.Party.Name,
+                        OrderDate = salesOrder.Date,
+                        ReferenceNo = salesOrder.ReferenceNo,
+                        Amount = salesOrder.SalesOrderLines.Sum(l => l.Amount),
+                        Status = (int)salesOrder.Status.GetValueOrDefault()
 
-                };
-                salesOrdersDto.Add(salesOrderDto);
+                    };
+
+                    foreach (var line in salesOrder.SalesOrderLines)
+                    {
+
+                        foreach (var salesInvoiceLine in line.SalesInvoiceLines)
+                        {
+                            if (line.ItemId == salesInvoiceLine.ItemId)
+                            {
+                                if (salesInvoiceLine.Quantity > line.Quantity)
+                                {
+                                    IsFullyInvoiced = true;
+                                    salesOrderDto.Status = (int)SalesOrderStatus.FullyInvoiced;
+                                    break;
+                                }
+                                else
+                                {
+                                    IsFullyInvoiced = false;
+
+                                }
+                            }
+                        }
+
+                        //var lineDto = new Dto.Sales.SalesOrderLine();
+                        //lineDto.Id = line.Id;
+                        //lineDto.Amount = line.Amount;
+                        //lineDto.Discount = line.Discount;
+                        //lineDto.Quantity = line.Quantity;
+                        //lineDto.ItemId = line.ItemId;
+                        //lineDto.MeasurementId = line.MeasurementId;
+
+
+                        //salesOrderDto.SalesOrderLines.Add(lineDto);
+
+
+                    }
+
+                    salesOrdersDto.Add(salesOrderDto);
+                }
+
+                return new ObjectResult(salesOrdersDto);
             }
-
-            return new ObjectResult(salesOrdersDto);
+            catch (Exception ex)
+            {
+                return new ObjectResult(ex);
+            }
         }
 
         [HttpGet]
@@ -641,6 +685,9 @@ namespace Api.Controllers
                 Core.Domain.Sales.SalesDeliveryHeader salesDelivery = null;
                 Core.Domain.Sales.SalesOrderHeader salesOrder = null;
 
+
+               
+
                 if (isNew)
                 {
                     salesInvoice = new Core.Domain.Sales.SalesInvoiceHeader();
@@ -778,6 +825,31 @@ namespace Api.Controllers
                         }
                     }
                 }
+
+                // TODO: check how to fill sales order object
+                //bool IsFullyInvoiced = true;
+
+                //foreach (var salesOrderLine in salesOrder.SalesOrderLines)
+                //{
+                //    foreach (var salesInvoiceLine in salesInvoice.SalesInvoiceLines)
+                //    {
+                //        if (salesOrderLine.ItemId == salesInvoiceLine.ItemId)
+                //        {
+                //            if (salesInvoiceLine.Quantity > salesOrderLine.Quantity)
+                //            {
+                //                IsFullyInvoiced = true;
+                //                salesInvoice.Status = SalesInvoiceStatus.FullyInvoiced;
+                //                break;
+                //            }
+                //            else
+                //            {
+                //                IsFullyInvoiced = false;
+
+                //            }
+                //        }
+                //    }
+
+                //}
 
                 _salesService.SaveSalesInvoice(salesInvoice, salesDelivery, salesOrder);
 

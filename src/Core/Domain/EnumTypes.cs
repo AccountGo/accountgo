@@ -149,7 +149,9 @@ namespace Core.Domain
         Open = 1,
         Overdue,
         Closed,
-        Void
+        Void,
+        PartiallyInvoiced,
+        FullyInvoiced
     }
 
     public enum SalesOrderStatus
