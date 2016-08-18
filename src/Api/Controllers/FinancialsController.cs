@@ -1,11 +1,10 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using Dto.Financial;
+﻿using Dto.Financial;
+using Microsoft.AspNetCore.Mvc;
 using Services.Administration;
 using Services.Financial;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Newtonsoft.Json;
 
 namespace Api.Controllers
 {
@@ -148,7 +147,7 @@ namespace Api.Controllers
             }
             catch (Exception ex)
             {
-                errors = new string[1] { ex.Message };
+                errors = new string[1] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
                 return new BadRequestObjectResult(errors);
             }
         }
@@ -170,6 +169,10 @@ namespace Api.Controllers
 
                     return new BadRequestObjectResult(errors);
                 }
+
+                var anyDuplicate = journalEntryDto.JournalEntryLines.GroupBy(x => x.AccountId).Any(g => g.Count() > 1);
+                if (anyDuplicate)
+                    throw new Exception("One or more journal entry lines has duplicate account.");
 
                 bool isNew = journalEntryDto.Id == 0;
                 Core.Domain.Financials.JournalEntryHeader journalEntry = null;
@@ -219,22 +222,22 @@ namespace Api.Controllers
                         journalLine.Memo = line.Memo;
                         journalEntry.JournalEntryLines.Add(journalLine);
                     }
+                }
 
-                    if (isNew)
-                    {
-                        _financialService.AddJournalEntry(journalEntry);
-                    }
-                    else
-                    {
-                        _financialService.UpdateJournalEntry(journalEntry, false);
-                    }
+                if (isNew)
+                {
+                    _financialService.AddJournalEntry(journalEntry);
+                }
+                else
+                {
+                    _financialService.UpdateJournalEntry(journalEntry, false);
                 }
 
                 return new OkObjectResult(Ok());
             }
             catch (Exception ex)
             {
-                errors = new string[1] { ex.InnerException.Message };
+                errors = new string[1] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
                 return new BadRequestObjectResult(errors);
             }
         }

@@ -170,7 +170,7 @@ class JournalEntryLines extends React.Component<any, {}>{
                     <td><input type="text" className="form-control" name={i} onChange={this.onChangeAmount.bind(this) } value={store.journalEntry.journalEntryLines[i].amount} /></td>
                     <td><input type="text" className="form-control" name={i} onChange={this.onChangeMemo.bind(this) } value={store.journalEntry.journalEntryLines[i].memo || ''} /></td>
                     <td>         
-                        <button type="button" className="btn btn-box-tool" onClick={this.onClickRemoveLineItem.bind(this, i) }>>
+                        <button type="button" className="btn btn-box-tool" onClick={this.onClickRemoveLineItem.bind(this, i) }>
                             <i className="fa fa-fw fa-times"></i> 
                         </button>              
                     </td>
@@ -206,8 +206,8 @@ class JournalEntryLines extends React.Component<any, {}>{
                                 <td><input type="text" className="form-control" id="txtNewAmount" /></td>                            
                                 <td><input type="text" className="form-control" id="txtNewMemo" /></td>                      
                                 <td>
-                                    <button type="button" className="btn btn-box-tool">
-                                        <i className="fa fa-fw fa-check" name={i} onClick={this.addLineItem}></i>
+                                    <button type="button" className="btn btn-box-tool" onClick={this.addLineItem}>
+                                        <i className="fa fa-fw fa-check"></i>
                                     </button>
                                 </td>
                             </tr>
