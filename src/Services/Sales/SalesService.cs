@@ -567,19 +567,26 @@ namespace Services.Sales
 
         public SalesOrderHeader GetSalesOrderById(int id)
         {
-            var salesOrder = _salesOrderRepo.GetAllIncluding(lines => lines.SalesOrderLines,
-                c => c.Customer,
-                p => p.PaymentTerm)
-                .Where(o => o.Id == id)
-                .FirstOrDefault();
+            //var salesOrder = _salesOrderRepo.GetAllIncluding(lines => lines.SalesOrderLines,
+            //    c => c.Customer,
+            //    p => p.PaymentTerm)
+            //    .Where(o => o.Id == id)
+            //    .FirstOrDefault();
 
-            foreach(var line in salesOrder.SalesOrderLines)
+            var salesOrder = GetSalesOrders().FirstOrDefault(o => o.Id == id);
+
+
+            if (salesOrder != null)
             {
-                line.Item = _itemRepo.GetById(line.ItemId);
-                line.Measurement = _measurementRepo.GetById(line.MeasurementId);
-            }
+                foreach (var line in salesOrder.SalesOrderLines)
+                {
+                    line.Item = _itemRepo.GetById(line.ItemId);
+                    line.Measurement = _measurementRepo.GetById(line.MeasurementId);
+                }
 
-            return salesOrder;
+                return salesOrder;
+            }
+            return null;
         }
 
         public SalesDeliveryHeader GetSalesDeliveryById(int id)
@@ -656,13 +663,23 @@ namespace Services.Sales
             if (salesInvoice.Id == 0)
             {
                 // This should be in a single transaction.
-                if (salesOrder != null)
+                if (salesOrder != null && salesOrder.Id == 0)
+                {
                     _salesOrderRepo.Insert(salesOrder);
-                _salesInvoiceRepo.Insert(salesInvoice);
-                _salesDeliveryRepo.Insert(salesDelivery);                
+                    _salesInvoiceRepo.Insert(salesInvoice);
+                    _salesDeliveryRepo.Insert(salesDelivery);
+                }
+                else
+                {
+                    _salesOrderRepo.Update(salesOrder);
+                    _salesInvoiceRepo.Insert(salesInvoice);
+                    _salesDeliveryRepo.Insert(salesDelivery);
+                }
             }
             else
             {
+                
+
                 _salesInvoiceRepo.Update(salesInvoice);
             }
         }
