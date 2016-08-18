@@ -804,49 +804,68 @@ namespace Api.Controllers
                     }
                 }
 
+                #region Checking of SaleInvoiceline if it is greater than or equal to salesorderline
                 bool isFullyInvoiced = false;
-                //if (salesInvoiceDto.FromSalesOrderId != null)
-                //{
+
+
+
                 if (salesOrder == null)
                 {
-                    salesOrder = _salesService.GetSalesOrderById((int)salesInvoiceDto.FromSalesOrderId);
+                    if (salesInvoiceDto.FromSalesOrderId != null)
+                        salesOrder = _salesService.GetSalesOrderById((int)salesInvoiceDto.FromSalesOrderId);
                 }
 
-                foreach (var salesOrderLine in salesOrder.SalesOrderLines)
+                foreach (var previouseSalesOrderLine in salesOrder.SalesOrderLines)
                 {
-                    foreach (var salesInvoiceLine in salesInvoice.SalesInvoiceLines)
+                    foreach (var previousSalesInvoiceLine in previouseSalesOrderLine.SalesInvoiceLines)
                     {
-                        if (salesOrderLine.ItemId == salesInvoiceLine.ItemId)
+                        var previousSalesInvoice = _salesService.GetSalesInvoiceById(previousSalesInvoiceLine.Id);
+                        if (previousSalesInvoice != null)
                         {
-                            if (salesInvoiceLine.Quantity >= salesOrderLine.Quantity)
+                            foreach (var additionalSalesInvoiceLine in previousSalesInvoice.SalesInvoiceLines)
                             {
-                                isFullyInvoiced = true;
+                                salesInvoice.SalesInvoiceLines.Add(additionalSalesInvoiceLine);
 
                             }
-                            else
-                            {
-                                isFullyInvoiced = false;
-                                //break;
-                            }
-
                         }
-                        else
+                    }
+
+                }
+                if (salesOrder != null)
+                {
+                    foreach (var salesOrderLine in salesOrder.SalesOrderLines)
+                    {
+                        foreach (var salesInvoiceLine in salesInvoice.SalesInvoiceLines)
                         {
-                            isFullyInvoiced = false;
+
+                            if (salesInvoiceLine.ItemId == salesOrderLine.ItemId)
+                            {
+                                if (salesInvoiceLine.Quantity >= salesOrderLine.Quantity)
+                                {
+
+                                    isFullyInvoiced = true;
+
+                                }
+                                else
+                                {
+                                    isFullyInvoiced = false;
+                                    break;
+                                }
+                            }
                         }
                     }
                 }
-                //}
+
 
                 if (isFullyInvoiced)
                 {
                     salesOrder.Status = SalesOrderStatus.FullyInvoiced;
-                    salesInvoice.Status = SalesInvoiceStatus.FullyInvoiced;
-                }
-               
+                } 
+                #endregion
 
 
                 _salesService.SaveSalesInvoice(salesInvoice, salesDelivery, salesOrder);
+                
 
                 return new OkObjectResult(Ok());
             }
