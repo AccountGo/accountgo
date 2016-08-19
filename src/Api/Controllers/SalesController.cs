@@ -6,6 +6,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Core.Domain;
+using Core.Domain.Sales;
+using Dto.Sales;
 
 namespace Api.Controllers
 {
@@ -169,25 +171,34 @@ namespace Api.Controllers
             var salesOrders = _salesService.GetSalesOrders();
             IList<Dto.Sales.SalesOrder> salesOrdersDto = new List<Dto.Sales.SalesOrder>();
 
-            foreach (var salesOrder in salesOrders)
+            try
             {
-                var salesOrderDto = new Dto.Sales.SalesOrder()
+                bool IsFullyInvoiced = false;
+                foreach (var salesOrder in salesOrders)
                 {
-                    Id = salesOrder.Id,
-                    PaymentTermId = salesOrder.PaymentTermId,
-                    CustomerId = salesOrder.CustomerId.Value,
-                    CustomerNo = salesOrder.Customer.No,
-                    CustomerName = salesOrder.Customer.Party.Name,
-                    OrderDate = salesOrder.Date,
-                    ReferenceNo = salesOrder.ReferenceNo,
-                    Amount = salesOrder.SalesOrderLines.Sum(l => l.Amount),
-                    Status = (int)salesOrder.Status.GetValueOrDefault()
+                    var salesOrderDto = new Dto.Sales.SalesOrder()
+                    {
+                        Id = salesOrder.Id,
+                        PaymentTermId = salesOrder.PaymentTermId,
+                        CustomerId = salesOrder.CustomerId.Value,
+                        CustomerNo = salesOrder.Customer.No,
+                        CustomerName = salesOrder.Customer.Party.Name,
+                        OrderDate = salesOrder.Date,
+                        ReferenceNo = salesOrder.ReferenceNo,
+                        Amount = salesOrder.SalesOrderLines.Sum(l => l.Amount),
+                        Status = (int)salesOrder.Status.GetValueOrDefault()
 
                 };
+
                 salesOrdersDto.Add(salesOrderDto);
             }
 
-            return new ObjectResult(salesOrdersDto);
+                return new ObjectResult(salesOrdersDto);
+            }
+            catch (Exception ex)
+            {
+                return new ObjectResult(ex);
+            }
         }
 
         [HttpGet]
@@ -642,6 +653,9 @@ namespace Api.Controllers
                 Core.Domain.Sales.SalesDeliveryHeader salesDelivery = null;
                 Core.Domain.Sales.SalesOrderHeader salesOrder = null;
 
+
+               
+
                 if (isNew)
                 {
                     salesInvoice = new Core.Domain.Sales.SalesInvoiceHeader();
@@ -661,30 +675,39 @@ namespace Api.Controllers
                         salesOrder.PaymentTermId = salesInvoiceDto.PaymentTermId;
                         salesOrder.CustomerId = salesInvoiceDto.CustomerId;
                         salesOrder.ReferenceNo = salesInvoiceDto.ReferenceNo;
+                        salesOrder.Status = SalesOrderStatus.FullyInvoiced;
                     }
 
                     foreach (var line in salesInvoiceDto.SalesInvoiceLines)
                     {
                         var salesInvoiceLine = new Core.Domain.Sales.SalesInvoiceLine();
-                        salesInvoice.SalesInvoiceLines.Add(salesInvoiceLine);
+                        
                         salesInvoiceLine.Amount = line.Amount.GetValueOrDefault();
                         salesInvoiceLine.Discount = line.Discount.GetValueOrDefault();
                         salesInvoiceLine.Quantity = line.Quantity.GetValueOrDefault();
                         salesInvoiceLine.ItemId = line.ItemId.GetValueOrDefault();
                         salesInvoiceLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
-
+                        salesInvoice.SalesInvoiceLines.Add(salesInvoiceLine);
                         if (line.Id != 0)
                             salesInvoiceLine.SalesOrderLineId = line.Id; // This Id is also the SalesOrderLineId when you create sales invoice directly from sales order.
                         else
                         {
                             var salesOrderLine = new Core.Domain.Sales.SalesOrderLine();
-                            salesOrder.SalesOrderLines.Add(salesOrderLine);
+                           
                             salesOrderLine.Amount = line.Amount.GetValueOrDefault();
                             salesOrderLine.Discount = line.Discount.GetValueOrDefault();
                             salesOrderLine.Quantity = line.Quantity.GetValueOrDefault();
                             salesOrderLine.ItemId = line.ItemId.GetValueOrDefault();
                             salesOrderLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
                             salesInvoiceLine.SalesOrderLine = salesOrderLine;
+                            if (salesOrder == null)
+                            {
+                                salesOrder = _salesService.GetSalesOrderById((int)salesInvoiceDto.FromSalesOrderId);
+                                salesOrder.SalesOrderLines.Add(salesOrderLine);
+                                _salesService.UpdateSalesOrder(salesOrder);
+                            }
+                            salesOrder.SalesOrderLines.Add(salesOrderLine);
+                            
                         }
 
                         var salesDeliveryLine = new Core.Domain.Sales.SalesDeliveryLine();
@@ -780,7 +803,14 @@ namespace Api.Controllers
                     }
                 }
 
+                #region Checking of SaleInvoiceline if it is greater than or equal to salesorderline
+                salesOrder = SetSalesOrderStatus(salesInvoiceDto, salesOrder, salesInvoice);
+
+                #endregion
+
+
                 _salesService.SaveSalesInvoice(salesInvoice, salesDelivery, salesOrder);
+                
 
                 return new OkObjectResult(Ok());
             }
@@ -789,6 +819,71 @@ namespace Api.Controllers
                 errors = new string[1] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
                 return new BadRequestObjectResult(errors);
             }
+        }
+
+        private SalesOrderHeader SetSalesOrderStatus(SalesInvoice salesInvoiceDto, SalesOrderHeader salesOrder,
+            SalesInvoiceHeader salesInvoice)
+        {
+            bool isFullyInvoiced = false;
+
+
+            if (salesInvoiceDto.FromSalesOrderId != null)
+            {
+                salesOrder = _salesService.GetSalesOrderById((int) salesInvoiceDto.FromSalesOrderId);
+            }
+
+            var salesInvoiceContainer = salesInvoice;
+            foreach (var previouseSalesOrderLine in salesOrder.SalesOrderLines)
+            {
+                foreach (var previousSalesInvoiceLine in previouseSalesOrderLine.SalesInvoiceLines)
+                {
+                    var previousSalesInvoice = _salesService.GetSalesInvoiceById(previousSalesInvoiceLine.SalesInvoiceHeaderId);
+                    if (previousSalesInvoice != null)
+                    {
+                        foreach (var additionalSalesInvoiceLine in previousSalesInvoice.SalesInvoiceLines)
+                        {
+                            if (!salesInvoiceContainer.SalesInvoiceLines.Contains(additionalSalesInvoiceLine))
+                            {
+                                salesInvoiceContainer.SalesInvoiceLines.Add(additionalSalesInvoiceLine);
+                            }
+                        }
+                    }
+                }
+            }
+            if (salesOrder != null)
+            {
+                if (salesOrder.SalesOrderLines.Count > salesInvoiceContainer.SalesInvoiceLines.Count)
+                {
+                    isFullyInvoiced = false;
+                }
+                else
+                {
+                    foreach (var salesOrderLine in salesOrder.SalesOrderLines.OrderByDescending(o => o.ItemId))
+                    {
+                        var salesInvoiceLine =
+                            salesInvoiceContainer.SalesInvoiceLines.FirstOrDefault(o => o.ItemId == salesOrderLine.ItemId);
+                        if (salesInvoiceLine != null)
+                        {
+                            if (salesInvoiceLine.Quantity >= salesOrderLine.Quantity)
+                            {
+                                isFullyInvoiced = true;
+                            }
+                            else
+                            {
+                                isFullyInvoiced = false;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
+
+            if (isFullyInvoiced)
+            {
+                salesOrder.Status = SalesOrderStatus.FullyInvoiced;
+            }
+            return salesOrder;
         }
 
         [HttpPost]
