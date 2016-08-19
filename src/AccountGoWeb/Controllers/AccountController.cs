@@ -10,12 +10,11 @@ using System.Threading.Tasks;
 
 namespace AccountGoWeb.Controllers
 {
-    public class AccountController : Controller
+    public class AccountController : BaseController
     {
-        private readonly IConfiguration _config;
         public AccountController(IConfiguration config)
         {
-            _config = config;
+            _baseConfig = config;
         }
 
         [HttpGet]
@@ -28,18 +27,19 @@ namespace AccountGoWeb.Controllers
 
         [HttpPost]
         [AllowAnonymous]
-        //[ValidateAntiForgeryToken]
         public async Task<IActionResult> SignIn(LoginViewModel model, string returnUrl = null)
         {
             ViewData["ReturnUrl"] = returnUrl;
 
             if (ModelState.IsValid)
             {
-                //var result = AcquireToken(model.Email, model.Password);                
-                //if (result.Result != null && result.Result.IsSuccessStatusCode)
+                var serialize = Newtonsoft.Json.JsonConvert.SerializeObject(model);
+                var content = new StringContent(serialize);
+                content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+                var response = Post("account/signin", content);
+                //var result = response.Content.ReadAsStringAsync();
 
-                //TODO: This is fake login. To be implemented later.
-
+                //TODO: This is fake login. read the result above.
                 var result = new HttpResponseMessage(System.Net.HttpStatusCode.OK);
                 if (result != null && result.IsSuccessStatusCode)
                 {
@@ -98,28 +98,28 @@ namespace AccountGoWeb.Controllers
             }
         }
 
-        private async Task<HttpResponseMessage> AcquireToken(string username, string password)
-        {
-            List<KeyValuePair<string, string>> body = new List<KeyValuePair<string, string>>();
-            body.Add(new KeyValuePair<string, string>("grant_type", "password"));
-            body.Add(new KeyValuePair<string, string>("scope", "openid"));
-            body.Add(new KeyValuePair<string, string>("resource", _config["Authentication:AzureAD:Resource"]));
-            body.Add(new KeyValuePair<string, string>("client_id", _config["Authentication:AzureAD:NativeAppClientId"]));
-            body.Add(new KeyValuePair<string, string>("username", username));
-            body.Add(new KeyValuePair<string, string>("password", password));
+        //private async Task<HttpResponseMessage> AcquireToken(string username, string password)
+        //{
+        //    List<KeyValuePair<string, string>> body = new List<KeyValuePair<string, string>>();
+        //    body.Add(new KeyValuePair<string, string>("grant_type", "password"));
+        //    body.Add(new KeyValuePair<string, string>("scope", "openid"));
+        //    body.Add(new KeyValuePair<string, string>("resource", _baseConfig["Authentication:AzureAD:Resource"]));
+        //    body.Add(new KeyValuePair<string, string>("client_id", _baseConfig["Authentication:AzureAD:NativeAppClientId"]));
+        //    body.Add(new KeyValuePair<string, string>("username", username));
+        //    body.Add(new KeyValuePair<string, string>("password", password));
 
-            string url = string.Format("https://login.microsoftonline.com/{0}/oauth2/token", _config["Authentication:AzureAD:TenantId"]);
-            HttpResponseMessage response = null;
-            using (HttpClient httpClient = new HttpClient())
-            {
-                HttpContent content = new FormUrlEncodedContent(body);
-                response = httpClient.PostAsync(url, content).Result;
-                if (response.IsSuccessStatusCode)
-                {
-                    Stream data = await response.Content.ReadAsStreamAsync();
-                }
-            }
-            return response;
-        }
+        //    string url = string.Format("https://login.microsoftonline.com/{0}/oauth2/token", _config["Authentication:AzureAD:TenantId"]);
+        //    HttpResponseMessage response = null;
+        //    using (HttpClient httpClient = new HttpClient())
+        //    {
+        //        HttpContent content = new FormUrlEncodedContent(body);
+        //        response = httpClient.PostAsync(url, content).Result;
+        //        if (response.IsSuccessStatusCode)
+        //        {
+        //            Stream data = await response.Content.ReadAsStreamAsync();
+        //        }
+        //    }
+        //    return response;
+        //}
     }
 }

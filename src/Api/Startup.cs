@@ -84,10 +84,10 @@ namespace Api
         {
             loggerFactory.AddConsole(Configuration.GetSection("Logging"));
             loggerFactory.AddDebug();
-
-            app.UseCors("AllowAll");            
+                      
             app.UseStaticFiles();
             app.UseIdentity();
+            app.UseCors("AllowAll");
             app.UseMvc();
             //app.UseSwaggerGen();
             //app.UseSwaggerUi();
