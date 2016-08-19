@@ -417,10 +417,12 @@ namespace Services.Purchasing
             glHeader.GeneralLedgerLines.Add(debit);
             glHeader.GeneralLedgerLines.Add(credit);
 
+            if (_financialService.GetAccount(accountId).Balance < amount)
+                throw new Exception("Not enough balance.");
+
             if(_financialService.ValidateGeneralLedgerEntry(glHeader))
             {
                 payment.GeneralLedgerHeader = glHeader;
-
                 payment.No = GetNextNumber(SequenceNumberTypes.VendorPayment).ToString();
                 _vendorPaymentRepo.Insert(payment);
             }

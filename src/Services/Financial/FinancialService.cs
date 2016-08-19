@@ -132,12 +132,28 @@ namespace Services.Financial
 
         public Account GetAccount(int id)
         {
-            return _accountRepo.Table.Where(a => a.Id == id).FirstOrDefault();
+            var account = _accountRepo.GetAllIncluding(a => a.GeneralLedgerLines,
+                a => a.AccountClass,
+                a => a.ChildAccounts,
+                a => a.ParentAccount,
+                a => a.Company)
+                .Where(a => a.Id == id)
+                .FirstOrDefault();
+
+            return account;
         }
 
         public Account GetAccountByAccountCode(string accountcode)
         {
-            return _accountRepo.Table.Where(a => a.AccountCode == accountcode).FirstOrDefault();
+            var account = _accountRepo.GetAllIncluding(a => a.GeneralLedgerLines,
+                a => a.AccountClass,
+                a => a.ChildAccounts,
+                a => a.ParentAccount,
+                a => a.Company)
+                .Where(a => a.AccountCode == accountcode)
+                .FirstOrDefault();
+
+            return account;
         }
 
         public IEnumerable<Tax> GetTaxes()
