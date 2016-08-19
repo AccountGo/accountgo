@@ -650,11 +650,7 @@ namespace Api.Controllers
 
                 bool isNew = salesInvoiceDto.Id == 0;
                 Core.Domain.Sales.SalesInvoiceHeader salesInvoice = null;
-                Core.Domain.Sales.SalesDeliveryHeader salesDelivery = null;
                 Core.Domain.Sales.SalesOrderHeader salesOrder = null;
-
-
-               
 
                 if (isNew)
                 {
@@ -663,10 +659,6 @@ namespace Api.Controllers
                     salesInvoice.Date = salesInvoiceDto.InvoiceDate;
                     salesInvoice.PaymentTermId = salesInvoiceDto.PaymentTermId;
                     salesInvoice.ReferenceNo = salesInvoiceDto.ReferenceNo;
-
-                    salesDelivery = new Core.Domain.Sales.SalesDeliveryHeader();
-                    salesDelivery.CustomerId = salesInvoiceDto.CustomerId.GetValueOrDefault();
-                    salesDelivery.Date = salesInvoiceDto.InvoiceDate;
 
                     if (!salesInvoiceDto.FromSalesOrderId.HasValue)
                     {
@@ -709,15 +701,6 @@ namespace Api.Controllers
                             salesOrder.SalesOrderLines.Add(salesOrderLine);
                             
                         }
-
-                        var salesDeliveryLine = new Core.Domain.Sales.SalesDeliveryLine();
-                        salesDeliveryLine.Price = line.Amount.GetValueOrDefault();
-                        salesDeliveryLine.Discount = line.Discount.GetValueOrDefault();
-                        salesDeliveryLine.Quantity = line.Quantity.GetValueOrDefault();
-                        salesDeliveryLine.ItemId = line.ItemId.GetValueOrDefault();
-                        salesDeliveryLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
-                        salesDeliveryLine.SalesInvoiceLine = salesInvoiceLine;
-                        salesDelivery.SalesDeliveryLines.Add(salesDeliveryLine);
                     }
                 }
                 else
@@ -741,13 +724,6 @@ namespace Api.Controllers
                             existingLine.Quantity = line.Quantity.GetValueOrDefault();
                             existingLine.ItemId = line.ItemId.GetValueOrDefault();
                             existingLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
-
-                            // Also modify the salesdelivery. find by salesinvoicelineid.
-                            //existingLine.SalesDeliveryLine.Price = line.Amount.GetValueOrDefault();
-                            //existingLine.SalesDeliveryLine.Discount = line.Discount.GetValueOrDefault();
-                            //existingLine.SalesDeliveryLine.Quantity = line.Quantity.GetValueOrDefault();
-                            //existingLine.SalesDeliveryLine.ItemId = line.ItemId.GetValueOrDefault();
-                            //existingLine.SalesDeliveryLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
                         }
                         else
                         {
@@ -761,22 +737,6 @@ namespace Api.Controllers
                             if (line.Id != 0)
                                 salesInvoiceLine.SalesOrderLineId = line.Id; // This Id is also the SalesOrderLineId when you create sales invoice directly from sales order.
                             salesInvoice.SalesInvoiceLines.Add(salesInvoiceLine);
-
-                            if (salesDelivery == null)
-                            {
-                                salesDelivery = new Core.Domain.Sales.SalesDeliveryHeader();
-                                salesDelivery.CustomerId = salesInvoiceDto.CustomerId.GetValueOrDefault();
-                                salesDelivery.Date = salesInvoiceDto.InvoiceDate;
-                            }
-
-                            var salesDeliveryLine = new Core.Domain.Sales.SalesDeliveryLine();
-                            salesDeliveryLine.Price = line.Amount.GetValueOrDefault();
-                            salesDeliveryLine.Discount = line.Discount.GetValueOrDefault();
-                            salesDeliveryLine.Quantity = line.Quantity.GetValueOrDefault();
-                            salesDeliveryLine.ItemId = line.ItemId.GetValueOrDefault();
-                            salesDeliveryLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
-                            salesDeliveryLine.SalesInvoiceLine = salesInvoiceLine;
-                            salesDelivery.SalesDeliveryLines.Add(salesDeliveryLine);
                         }
                     }
                 }
@@ -790,16 +750,6 @@ namespace Api.Controllers
                     foreach (var line in deleted)
                     {
                         salesInvoice.SalesInvoiceLines.Remove(line);
-
-                        if (salesDelivery != null)
-                        {
-                            var deliveryLine = salesDelivery.SalesDeliveryLines.ToList()
-                                .Where(s => s.SalesInvoiceLineId == line.Id)
-                                .FirstOrDefault();
-
-                            if (deliveryLine != null)
-                                salesDelivery.SalesDeliveryLines.Remove(deliveryLine);
-                        }
                     }
                 }
 
@@ -809,7 +759,7 @@ namespace Api.Controllers
                 #endregion
 
 
-                _salesService.SaveSalesInvoice(salesInvoice, salesDelivery, salesOrder);
+                _salesService.SaveSalesInvoice(salesInvoice, salesOrder);
                 
 
                 return new OkObjectResult(Ok());

@@ -658,7 +658,7 @@ namespace Services.Sales
             return quotation;
         }
 
-        public void SaveSalesInvoice(SalesInvoiceHeader salesInvoice, SalesDeliveryHeader salesDelivery, SalesOrderHeader salesOrder)
+        public void SaveSalesInvoice(SalesInvoiceHeader salesInvoice, SalesOrderHeader salesOrder)
         {
             if (salesInvoice.Id == 0)
             {
@@ -667,19 +667,15 @@ namespace Services.Sales
                 {
                     _salesOrderRepo.Insert(salesOrder);
                     _salesInvoiceRepo.Insert(salesInvoice);
-                    _salesDeliveryRepo.Insert(salesDelivery);
                 }
                 else
                 {
                     _salesOrderRepo.Update(salesOrder);
                     _salesInvoiceRepo.Insert(salesInvoice);
-                    _salesDeliveryRepo.Insert(salesDelivery);
                 }
             }
             else
             {
-                
-
                 _salesInvoiceRepo.Update(salesInvoice);
             }
         }
@@ -800,8 +796,11 @@ namespace Services.Sales
                 foreach (var line in salesInvoice.SalesInvoiceLines)
                 {
                     var item = _inventoryService.GetItemById(line.ItemId);
-                    debitAccounts.Add(new KeyValuePair<int, decimal>(item.CostOfGoodsSoldAccountId.Value, item.Cost.Value * line.Quantity));
-                    creditAccounts.Add(new KeyValuePair<int, decimal>(item.InventoryAccountId.Value, item.Cost.Value * line.Quantity));
+                    if (item.ItemCategory.ItemType == ItemTypes.Purchased)
+                    {
+                        debitAccounts.Add(new KeyValuePair<int, decimal>(item.CostOfGoodsSoldAccountId.Value, item.Cost.Value * line.Quantity));
+                        creditAccounts.Add(new KeyValuePair<int, decimal>(item.InventoryAccountId.Value, item.Cost.Value * line.Quantity));
+                    }
                 }
 
                 var groupedDebitAccounts = (from kvp in debitAccounts

@@ -298,7 +298,6 @@ namespace Api.Controllers
 
                 bool isNew = purchaseInvoiceDto.Id == 0;
                 Core.Domain.Purchases.PurchaseInvoiceHeader purchaseInvoice = null;
-                Core.Domain.Purchases.PurchaseReceiptHeader purchaseReceipt = null;
                 Core.Domain.Purchases.PurchaseOrderHeader purchaseOrder = null;
 
                 if (isNew)
@@ -310,10 +309,6 @@ namespace Api.Controllers
 
                     purchaseInvoice.ReferenceNo = purchaseInvoiceDto.ReferenceNo;
                     purchaseInvoice.PaymentTermId = purchaseInvoiceDto.PaymentTermId;
-
-                    purchaseReceipt = new Core.Domain.Purchases.PurchaseReceiptHeader();
-                    purchaseReceipt.VendorId = purchaseInvoiceDto.VendorId;
-                    purchaseReceipt.Date = purchaseInvoiceDto.InvoiceDate;
 
                     if (!purchaseInvoiceDto.FromPurchaseOrderId.HasValue)
                     {
@@ -345,16 +340,6 @@ namespace Api.Controllers
                             purchaseOrderLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
                             purchaseInvoiceLine.PurchaseOrderLine = purchaseOrderLine;
                         }
-
-                        var purchaseReceiptLine = new Core.Domain.Purchases.PurchaseReceiptLine();
-                        purchaseReceiptLine.Amount = line.Amount.GetValueOrDefault();
-                        purchaseReceiptLine.Discount = line.Discount.GetValueOrDefault();
-                        purchaseReceiptLine.Quantity = line.Quantity.GetValueOrDefault();
-                        purchaseReceiptLine.ItemId = line.ItemId.GetValueOrDefault();
-                        purchaseReceiptLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
-                        purchaseReceiptLine.ReceivedQuantity = line.Quantity.GetValueOrDefault();
-                        purchaseReceiptLine.PurchaseInvoiceLine = purchaseInvoiceLine;
-                        purchaseReceipt.PurchaseReceiptLines.Add(purchaseReceiptLine);
                     }
                 }
                 else
@@ -376,13 +361,6 @@ namespace Api.Controllers
                             existingLine.Quantity = line.Quantity.GetValueOrDefault();
                             existingLine.ItemId = line.ItemId.GetValueOrDefault();
                             existingLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
-
-                            //existingLine.PurchaseReceiptLine.Amount = line.Amount.GetValueOrDefault();
-                            //existingLine.PurchaseReceiptLine.Discount = line.Discount.GetValueOrDefault();
-                            //existingLine.PurchaseReceiptLine.Quantity = line.Quantity.GetValueOrDefault();
-                            //existingLine.PurchaseReceiptLine.ItemId = line.ItemId.GetValueOrDefault();
-                            //existingLine.PurchaseReceiptLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
-                            //existingLine.PurchaseReceiptLine.ReceivedQuantity = line.Quantity.GetValueOrDefault();
                         }
                         else
                         {
@@ -395,23 +373,6 @@ namespace Api.Controllers
                             if (line.Id != 0)
                                 purchaseInvoiceLine.PurchaseOrderLineId = line.Id; // This Id is also the PurchaseOrderLineId when you create purchase invoice directly from purchase order.
                             purchaseInvoice.PurchaseInvoiceLines.Add(purchaseInvoiceLine);
-
-                            if (purchaseReceipt == null)
-                            {
-                                purchaseReceipt = new Core.Domain.Purchases.PurchaseReceiptHeader();
-                                purchaseReceipt.VendorId = purchaseInvoiceDto.VendorId;
-                                purchaseReceipt.Date = purchaseInvoiceDto.InvoiceDate;
-                            }
-
-                            var purchaseReceiptLine = new Core.Domain.Purchases.PurchaseReceiptLine();
-                            purchaseReceiptLine.Amount = line.Amount.GetValueOrDefault();
-                            purchaseReceiptLine.Discount = line.Discount.GetValueOrDefault();
-                            purchaseReceiptLine.Quantity = line.Quantity.GetValueOrDefault();
-                            purchaseReceiptLine.ItemId = line.ItemId.GetValueOrDefault();
-                            purchaseReceiptLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
-                            purchaseReceiptLine.ReceivedQuantity = line.Quantity.GetValueOrDefault();
-                            purchaseReceiptLine.PurchaseInvoiceLine = purchaseInvoiceLine;
-                            purchaseReceipt.PurchaseReceiptLines.Add(purchaseReceiptLine);
                         }
                     }
                 }
@@ -425,20 +386,10 @@ namespace Api.Controllers
                     foreach (var line in deleted)
                     {
                         purchaseInvoice.PurchaseInvoiceLines.Remove(line);
-
-                        if (purchaseReceipt != null)
-                        {
-                            var receiptLine = purchaseReceipt.PurchaseReceiptLines.ToList()
-                                .Where(r => r.PurchaseInvoiceLineId == line.Id)
-                                .FirstOrDefault();
-
-                            if (receiptLine != null)
-                                purchaseReceipt.PurchaseReceiptLines.Remove(receiptLine);
-                        }
                     }
                 }
 
-                _purchasingService.SavePurchaseInvoice(purchaseInvoice, purchaseReceipt, purchaseOrder);
+                _purchasingService.SavePurchaseInvoice(purchaseInvoice, purchaseOrder);
 
                 return new ObjectResult(Ok());
             }
