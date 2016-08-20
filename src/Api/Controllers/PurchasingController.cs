@@ -36,13 +36,25 @@ namespace Api.Controllers
                 var purchaseOrderDto = new Dto.Purchasing.PurchaseOrder()
                 {
                     Id = purchaseOrder.Id,
-                    //PurchaseInvoiceHeaderId = purchaseOrder.PurchaseInvoiceHeaderId,
+                    No = purchaseOrder.No,
                     VendorId = purchaseOrder.VendorId.Value,
                     VendorName = purchaseOrder.Vendor.Party.Name,
                     OrderDate = purchaseOrder.Date,
-                    Amount = purchaseOrder.PurchaseOrderLines.Sum(l => l.Amount),
-                    //Completed = purchaseOrder.IsCompleted()
+                    ReferenceNo = purchaseOrder.ReferenceNo
                 };
+
+                foreach (var line in purchaseOrder.PurchaseOrderLines)
+                {
+                    var lineDto = new Dto.Purchasing.PurchaseOrderLine()
+                    {
+                        ItemId = line.ItemId,
+                        MeasurementId = line.MeasurementId,
+                        Quantity = line.Quantity,
+                        Amount = line.Amount,
+                        Discount = line.Discount
+                    };
+                    purchaseOrderDto.PurchaseOrderLines.Add(lineDto);
+                }
 
                 purchaseOrdersDto.Add(purchaseOrderDto);
             }
@@ -64,7 +76,6 @@ namespace Api.Controllers
                 VendorId = purchaseOrder.VendorId.Value,
                 VendorName = purchaseOrder.Vendor.Party.Name,
                 OrderDate = purchaseOrder.Date,
-                Amount = purchaseOrder.PurchaseOrderLines.Sum(l => l.Amount),
                 PaymentTermId = purchaseOrder.PaymentTermId,
                 ReferenceNo = purchaseOrder.ReferenceNo,
                 //Completed = purchaseOrder.IsCompleted(),
@@ -199,14 +210,29 @@ namespace Api.Controllers
                 var purchaseInvoiceDto = new Dto.Purchasing.PurchaseInvoice()
                 {
                     Id = purchaseInvoice.Id,
+                    No = purchaseInvoice.No,
                     VendorId = purchaseInvoice.VendorId.Value,
                     VendorName = purchaseInvoice.Vendor.Party.Name,
                     InvoiceDate = purchaseInvoice.Date,
-                    Amount = purchaseInvoice.PurchaseInvoiceLines.Sum(l => l.Amount * l.Quantity),
                     AmountPaid = purchaseInvoice.AmountPaid(),
                     IsPaid = purchaseInvoice.IsPaid(),
-                    IsPosted = purchaseInvoice.GeneralLedgerHeader != null
+                    IsPosted = purchaseInvoice.GeneralLedgerHeader != null,
+                    VendorInvoiceNo = purchaseInvoice.VendorInvoiceNo,
+                    ReferenceNo = purchaseInvoice.ReferenceNo
                 };
+
+                foreach (var line in purchaseInvoice.PurchaseInvoiceLines)
+                {
+                    var lineDto = new Dto.Purchasing.PurchaseInvoiceLine()
+                    {
+                        ItemId = line.ItemId,
+                        MeasurementId = line.MeasurementId,
+                        Quantity = line.Quantity,
+                        Amount = line.Amount,
+                        Discount = line.Discount
+                    };
+                    purchaseInvoiceDto.PurchaseInvoiceLines.Add(lineDto);
+                }
 
                 purchaseInvoicesDto.Add(purchaseInvoiceDto);
             }
@@ -225,7 +251,6 @@ namespace Api.Controllers
                 VendorId = purchaseInvoice.VendorId.Value,
                 VendorName = purchaseInvoice.Vendor.Party.Name,
                 InvoiceDate = purchaseInvoice.Date,
-                Amount = purchaseInvoice.PurchaseInvoiceLines.Sum(l => l.Amount * l.Quantity),
                 AmountPaid = purchaseInvoice.AmountPaid(),
                 IsPaid = purchaseInvoice.IsPaid(),
                 IsPosted = purchaseInvoice.GeneralLedgerHeader != null

@@ -368,7 +368,7 @@ namespace Services.Purchasing
             vendor.PurchaseDiscountAccountId = _accountRepo.Table.Where(a => a.AccountCode == "50400").FirstOrDefault().Id;
 
             //vendor.IsActive = true;
-
+            vendor.No = GetNextNumber(SequenceNumberTypes.Vendor).ToString();
             _vendorRepo.Insert(vendor);
         }
 
@@ -432,6 +432,7 @@ namespace Services.Purchasing
         {
             if (purchaseInvoice.Id == 0)
             {
+                purchaseInvoice.No = GetNextNumber(SequenceNumberTypes.PurchaseInvoice).ToString();
                 // This should be in a single transaction.
                 if (purchaseOrder != null)
                     _purchaseOrderRepo.Insert(purchaseOrder);

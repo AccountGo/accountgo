@@ -173,7 +173,6 @@ namespace Api.Controllers
 
             try
             {
-                bool IsFullyInvoiced = false;
                 foreach (var salesOrder in salesOrders)
                 {
                     var salesOrderDto = new Dto.Sales.SalesOrder()
@@ -185,12 +184,24 @@ namespace Api.Controllers
                         CustomerName = salesOrder.Customer.Party.Name,
                         OrderDate = salesOrder.Date,
                         ReferenceNo = salesOrder.ReferenceNo,
-                        Amount = salesOrder.SalesOrderLines.Sum(l => l.Amount),
-                        Status = (int)salesOrder.Status.GetValueOrDefault()
+                        Status = (int)salesOrder.Status.GetValueOrDefault(),
+                        No = salesOrder.No
+                    };
 
-                };
+                    foreach (var line in salesOrder.SalesOrderLines)
+                    {
+                        var lineDto = new Dto.Sales.SalesOrderLine()
+                        {
+                            ItemId = line.ItemId,
+                            MeasurementId = line.MeasurementId,
+                            Quantity = line.Quantity,
+                            Amount = line.Amount,
+                            Discount = line.Discount
+                        };
+                        salesOrderDto.SalesOrderLines.Add(lineDto);
+                    }
 
-                salesOrdersDto.Add(salesOrderDto);
+                    salesOrdersDto.Add(salesOrderDto);
             }
 
                 return new ObjectResult(salesOrdersDto);
@@ -216,13 +227,11 @@ namespace Api.Controllers
                     CustomerNo = salesOrder.Customer.No,
                     CustomerName = _salesService.GetCustomerById(salesOrder.CustomerId.Value).Party.Name,
                     OrderDate = salesOrder.Date,
-                    Amount = salesOrder.SalesOrderLines.Sum(l => l.Amount),
                     PaymentTermId = salesOrder.PaymentTermId,
                     ReferenceNo = salesOrder.ReferenceNo,
                     SalesOrderLines = new List<Dto.Sales.SalesOrderLine>()
                 };
-
-                //salesOrderDto.ReferenceNo = salesOrder.ReferenceNo;
+                
                 foreach (var line in salesOrder.SalesOrderLines)
                 {
                     var lineDto = new Dto.Sales.SalesOrderLine();
@@ -260,7 +269,6 @@ namespace Api.Controllers
                     CustomerId = salesInvoice.CustomerId,
                     CustomerName = salesInvoice.Customer.Party.Name,
                     InvoiceDate = salesInvoice.Date,
-                    TotalAmount = salesInvoice.SalesInvoiceLines.Sum(l => l.Amount),
                     SalesInvoiceLines = new List<Dto.Sales.SalesInvoiceLine>(),
                     PaymentTermId = salesInvoice.PaymentTermId,
                     ReferenceNo = salesInvoice.ReferenceNo
@@ -335,6 +343,7 @@ namespace Api.Controllers
                 var quoteDto = new Dto.Sales.SalesQuotation()
                 {
                     Id = quote.Id,
+                    No = quote.No,
                     CustomerId = quote.CustomerId,
                     CustomerName = quote.Customer.Party.Name,
                     PaymentTermId = quote.PaymentTermId,
@@ -406,11 +415,25 @@ namespace Api.Controllers
                 var salesInvoiceDto = new Dto.Sales.SalesInvoice()
                 {
                     Id = salesInvoice.Id,
+                    No = salesInvoice.No,
                     CustomerId = salesInvoice.CustomerId,
                     CustomerName = salesInvoice.Customer.Party.Name,
                     InvoiceDate = salesInvoice.Date,
-                    TotalAmount = salesInvoice.SalesInvoiceLines.Sum(l => l.Amount)
+                    ReferenceNo = salesInvoice.ReferenceNo
                 };
+
+                foreach (var line in salesInvoice.SalesInvoiceLines)
+                {
+                    var lineDto = new Dto.Sales.SalesInvoiceLine()
+                    {
+                        ItemId = line.ItemId,
+                        MeasurementId = line.MeasurementId,
+                        Quantity = line.Quantity,
+                        Amount = line.Amount,
+                        Discount = line.Discount
+                    };
+                    salesInvoiceDto.SalesInvoiceLines.Add(lineDto);
+                }
 
                 salesInvoicesDto.Add(salesInvoiceDto);
             }
@@ -457,7 +480,7 @@ namespace Api.Controllers
                 CustomerName = salesReceipt.Customer.Party.Name,
                 ReceiptDate = salesReceipt.Date,
                 Amount = salesReceipt.Amount,
-                RemainingAmountToAllocate = salesReceipt.AvailableAmountToAllocate
+                RemainingAmountToAllocate = salesReceipt.AvailableAmountToAllocate                        
             };
 
             return new ObjectResult(salesReceiptDto);
@@ -480,7 +503,6 @@ namespace Api.Controllers
                         Id = invoice.Id,
                         InvoiceDate = invoice.Date,
                         CustomerId = invoice.CustomerId,
-                        TotalAmount = invoice.ComputeTotalAmount(),
                         TotalAllocatedAmount = (decimal)invoice.CustomerAllocations.Sum(i => i.Amount),
                         Posted = invoice.GeneralLedgerHeaderId.HasValue
                     };

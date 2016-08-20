@@ -485,7 +485,7 @@ namespace Services.Sales
             customer.TaxGroupId = _taxGroupRepo.Table.Where(tg => tg.Description == "VAT").FirstOrDefault().Id;
 
             //customer.IsActive = true;
-
+            customer.No = GetNextNumber(SequenceNumberTypes.Customer).ToString();
             _customerRepo.Insert(customer);
         }
 
@@ -622,6 +622,7 @@ namespace Services.Sales
 
         public void AddSalesQuote(SalesQuoteHeader salesQuoteHeader)
         {
+            salesQuoteHeader.No = GetNextNumber(SequenceNumberTypes.SalesQuote).ToString();
             _salesQuoteRepo.Insert(salesQuoteHeader);
         }
 
@@ -662,10 +663,11 @@ namespace Services.Sales
         {
             if (salesInvoice.Id == 0)
             {
+                salesInvoice.No = GetNextNumber(SequenceNumberTypes.SalesInvoice).ToString();
                 // This should be in a single transaction.
                 if (salesOrder != null && salesOrder.Id == 0)
                 {
-                    _salesOrderRepo.Insert(salesOrder);
+                    _salesOrderRepo.Insert(salesOrder);                    
                     _salesInvoiceRepo.Insert(salesInvoice);
                 }
                 else
