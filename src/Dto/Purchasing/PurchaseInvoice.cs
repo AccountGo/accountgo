@@ -13,7 +13,7 @@ namespace Dto.Purchasing
         public decimal Amount { get { return GetTotalAmount(); } }
         public decimal AmountPaid { get; set; }
         public bool IsPaid { get; set; }
-        public bool IsPosted { get; set; }
+        public bool Posted { get; set; }
         public int? FromPurchaseOrderId { get; set; }
         public int? PaymentTermId { get; set; }
         public string ReferenceNo { get; set; }

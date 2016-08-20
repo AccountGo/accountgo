@@ -271,7 +271,8 @@ namespace Api.Controllers
                     InvoiceDate = salesInvoice.Date,
                     SalesInvoiceLines = new List<Dto.Sales.SalesInvoiceLine>(),
                     PaymentTermId = salesInvoice.PaymentTermId,
-                    ReferenceNo = salesInvoice.ReferenceNo
+                    ReferenceNo = salesInvoice.ReferenceNo,
+                    Posted = salesInvoice.GeneralLedgerHeaderId != null
                 };
 
                 foreach (var line in salesInvoice.SalesInvoiceLines)
@@ -419,7 +420,8 @@ namespace Api.Controllers
                     CustomerId = salesInvoice.CustomerId,
                     CustomerName = salesInvoice.Customer.Party.Name,
                     InvoiceDate = salesInvoice.Date,
-                    ReferenceNo = salesInvoice.ReferenceNo
+                    ReferenceNo = salesInvoice.ReferenceNo,
+                    Posted = salesInvoice.GeneralLedgerHeaderId != null
                 };
 
                 foreach (var line in salesInvoice.SalesInvoiceLines)

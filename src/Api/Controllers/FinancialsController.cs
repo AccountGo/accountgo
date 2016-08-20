@@ -195,7 +195,10 @@ namespace Api.Controllers
                 {
                     if (!isNew)
                     {
-                        var existingLine = journalEntry.JournalEntryLines.Where(j => j.Id == line.Id).FirstOrDefault();
+                        var existingLine = journalEntry.JournalEntryLines
+                            .Where(j => j.Id == line.Id && line.Id != 0)
+                            .FirstOrDefault();
+
                         if (existingLine != null)
                         {
                             existingLine.AccountId = line.AccountId.GetValueOrDefault();

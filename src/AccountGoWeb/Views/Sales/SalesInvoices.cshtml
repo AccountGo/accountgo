@@ -13,7 +13,12 @@
         {headerName: "Customer Name", field: "customerName", width: 350},
         {headerName: "Invoiced Date", field: "invoiceDate", width: 100},
         {headerName: "Amount", field: "amount", width: 100},
-        {headerName: "Ref no", field: "referenceNo", width: 100}
+        {headerName: "Ref no", field: "referenceNo", width: 100},
+        {headerName: "Posted", width: 100, cellRenderer: function(val) {
+            if(val.data.posted)
+                return '<input type="checkbox" checked disabled />';
+            return '<input type="checkbox" disabled />';
+        }},
     ];
 
     var gridOptions = {

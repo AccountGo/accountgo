@@ -46,12 +46,11 @@ export default class JournalEntryStore {
     getJournalEntry(journalEntryId: number) {
         axios.get(Config.apiUrl + "api/financials/journalentry?id=" + journalEntryId)
             .then(function (result) {
-
+                console.log(result);
                 for (var i = 0; i < result.data.journalEntryLines.length; i++) {
                     var item = result.data.journalEntryLines[i];
                     this.addLineItem(item.id, item.accountId, item.drCr, item.amount, item.memo);
                 }
-
                 this.journalEntry.id = result.data.id;                
                 this.journalEntry.voucherType = result.data.voucherType;
                 this.journalEntry.journalDate = result.data.journalDate;

@@ -26,6 +26,7 @@ export default class SalesStore {
             invoiceDate: this.salesInvoice.invoiceDate,
             paymentTermId: this.salesInvoice.paymentTermId,
             referenceNo: this.salesInvoice.referenceNo,
+            posted: this.salesInvoice.posted,
             salesInvoiceLines: []
         });
 
@@ -60,6 +61,7 @@ export default class SalesStore {
                 this.salesInvoice.paymentTermId = result.data.paymentTermId;
                 this.salesInvoice.referenceNo = result.data.referenceNo;
                 this.salesInvoice.invoiceDate = result.data.invoiceDate;
+                this.salesInvoice.posted = result.data.posted;
                 for (var i = 0; i < result.data.salesInvoiceLines.length; i++) {
                     this.addLineItem(
                         result.data.salesInvoiceLines[i].id,

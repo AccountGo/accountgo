@@ -221,9 +221,10 @@ class JournalEntryLines extends React.Component<any, {}>{
 
 @observer
 export default class JournalEntry extends React.Component<any, {}> {
-    componentDidMount() {
+    componentDidMount() {        
         if (journalEntryId !== undefined) {
             store.getJournalEntry(parseInt(journalEntryId));
+            console.log(journalEntryId);
         }
         else {
             store.changeInitialized(true);
