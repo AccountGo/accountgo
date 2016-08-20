@@ -23,16 +23,12 @@
   transition: none !important;
 }
 
-.margin-a{
-    margin: 2px;
-}
-
 .inactiveLink {
    pointer-events: none;
    opacity: 0.65;
    filter: alpha(opacity=65);
    color:gray;
-   /*cursor: default;*/
+   cursor: default;
 }
 
 .pull-right{

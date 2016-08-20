@@ -1,9 +1,18 @@
 ﻿@model string
 
 <div>
-    <a href="~/quotations/addsalesquotation"><i class="fa fa-plus margin-a"></i>New Quotation</a>
-    <a href="~/quotations/salesquotation" id="linkViewQuotation" class="inactiveLink"><i class="fa fa-edit margin-a"></i>View</a>
-    <a href="" id="linkNewOrder" class="inactiveLink"><i class="fa fa-plus margin-a"></i>New Order</a>
+    <a href="~/quotations/addsalesquotation" class="btn">
+        <i class="fa fa-plus"></i>
+        New Quotation
+    </a>
+    <a href="~/quotations/salesquotation" id="linkViewQuotation" class="btn inactiveLink">
+        <i class="fa fa-edit"></i>
+        View
+    </a>
+    <a href="" id="linkNewOrder" class="btn inactiveLink">
+        <i class="fa fa-plus"></i>
+        New Order
+    </a>
 </div>
 <div>
     <div id="quotations" class="ag-fresh"></div>
@@ -29,12 +38,12 @@
     function onSelectionChanged() {
         var selectedRows = gridOptions.api.getSelectedRows();
         selectedRow = selectedRows[0];
-        
+
         document.getElementById('linkViewQuotation').setAttribute('href', 'quotation?id=' + selectedRow.id);
-        document.getElementById('linkViewQuotation').setAttribute('class', '');
+        document.getElementById('linkViewQuotation').setAttribute('class', 'btn');
 
         document.getElementById('linkNewOrder').setAttribute('href', '/sales/salesorder?quotationId=' + selectedRow.id);
-        document.getElementById('linkNewOrder').setAttribute('class', '');
+        document.getElementById('linkNewOrder').setAttribute('class', 'btn');
     }
 
     // wait for the document to be loaded, otherwise

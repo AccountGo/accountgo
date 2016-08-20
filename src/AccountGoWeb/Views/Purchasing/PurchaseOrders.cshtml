@@ -1,10 +1,18 @@
 ﻿@model string
 
 <div>
-    <a href="~/purchasing/addpurchaseorder"><i class="fa fa-plus margin-a"></i>New Order</a>
-    <a href="~/purchasing/purchaseorder" id="linkViewOrder" class="inactiveLink"><i class="fa fa-edit margin-a"></i>View</a>
-    @*<a href="~/purchasing/receipt" id="linkNewReceipt" class=""><i class="fa fa-plus margin-a"></i>New Receipt</a>*@    
-    <a href="~/purchasing/addpurchaseinvoice" id="linkCreateInvoice" class="inactiveLink"><i class="fa fa-plus margin-a"></i>Create Invoice</a>    
+    <a href="~/purchasing/addpurchaseorder" class="btn">
+        <i class="fa fa-plus"></i>
+        New Order
+    </a>
+    <a href="~/purchasing/purchaseorder" id="linkViewOrder" class="btn inactiveLink">
+        <i class="fa fa-edit"></i>
+        View
+    </a>
+    <a href="~/purchasing/addpurchaseinvoice" id="linkCreateInvoice" class="btn inactiveLink">
+        <i class="fa fa-plus"></i>
+        Create Invoice
+    </a>
 </div>
 <div>
     <div id="purchaseorders" class="ag-fresh" style="height: 400px;"></div>
@@ -25,24 +33,24 @@
         // PROPERTIES - simple boolean / string / number properties
         rowSelection: 'single',
         onSelectionChanged: onSelectionChanged,
-     };
+    };
 
     function onSelectionChanged() {
         var selectedRows = gridOptions.api.getSelectedRows();
         selectedRow = selectedRows[0];
-        
+
         //document.getElementById('linkNewReceipt').setAttribute('href', 'addreceipt?purchId=' + selectedRow.id);
         document.getElementById('linkCreateInvoice').setAttribute('href', 'addpurchaseinvoice?purchId=' + selectedRow.id);
         document.getElementById('linkViewOrder').setAttribute('href', 'purchaseorder?purchId=' + selectedRow.id);
-        
+
         if(selectedRow.purchaseInvoiceHeaderId === undefined){
-            document.getElementById('linkCreateInvoice').setAttribute('class', '');
+            document.getElementById('linkCreateInvoice').setAttribute('class', 'btn');
         }
         else{
-            document.getElementById('linkCreateInvoice').setAttribute('class', 'inactiveLink');
+            document.getElementById('linkCreateInvoice').setAttribute('class', 'btn inactiveLink');
         }
 
-        document.getElementById('linkViewOrder').setAttribute('class', '');
+        document.getElementById('linkViewOrder').setAttribute('class', 'btn');
 
         //if(selectedRow.completed)
         //{

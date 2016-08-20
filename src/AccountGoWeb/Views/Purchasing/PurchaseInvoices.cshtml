@@ -1,9 +1,18 @@
 ﻿@model string
 
 <div>
-    <a href="~/purchasing/addpurchaseinvoice"><i class="fa fa-plus margin-a"></i>New Invoice</a>
-    <a href="~/purchasing/purchaseinvoice" id="linkViewInvoice" class="inactiveLink"><i class="fa fa-edit margin-a"></i>View</a>
-    <a href="~/purchasing/payment" id="linkMakePayment" class="inactiveLink"><i class="fa fa-tasks margin-a"></i>Make Payment</a>
+    <a href="~/purchasing/addpurchaseinvoice" class="btn">
+        <i class="fa fa-plus margin-a"></i>
+        New Invoice
+    </a>
+    <a href="~/purchasing/purchaseinvoice" id="linkViewInvoice" class="btn inactiveLink">
+        <i class="fa fa-edit margin-a"></i>
+        View
+    </a>
+    <a href="~/purchasing/payment" id="linkMakePayment" class="btn inactiveLink">
+        <i class="fa fa-tasks margin-a"></i>
+        Make Payment
+    </a>
 </div>
 <div>
     <div id="purchaseinvoices" class="ag-fresh" style="height: 400px;"></div>
@@ -34,16 +43,16 @@
     function onSelectionChanged() {
         var selectedRows = gridOptions.api.getSelectedRows();
         selectedRow = selectedRows[0];
-        
+
         document.getElementById('linkMakePayment').setAttribute('href', 'payment/' + selectedRow.id);
         document.getElementById('linkViewInvoice').setAttribute('href', 'purchaseinvoice?invoiceId=' + selectedRow.id);
-        
-        if(!selectedRow.isPaid && selectedRow.isPosted)
-            document.getElementById('linkMakePayment').setAttribute('class', '');
-        else
-            document.getElementById('linkMakePayment').setAttribute('class', 'inactiveLink');
 
-        document.getElementById('linkViewInvoice').setAttribute('class', '');
+        if(!selectedRow.isPaid && selectedRow.posted)
+            document.getElementById('linkMakePayment').setAttribute('class', 'btn');
+        else
+            document.getElementById('linkMakePayment').setAttribute('class', 'btn inactiveLink');
+
+        document.getElementById('linkViewInvoice').setAttribute('class', 'btn');
     }
 
     // wait for the document to be loaded, otherwise

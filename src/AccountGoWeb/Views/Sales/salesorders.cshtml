@@ -1,9 +1,18 @@
 ﻿@model string
 
 <div>
-    <a href="~/sales/addsalesorder"><i class="fa fa-plus margin-a"></i>New Order</a>
-    <a href="~/sales/salesorder" id="linkViewOrder" class="inactiveLink"><i class="fa fa-edit margin-a"></i>View</a>
-    <a href="~/sales/salesinvoice" id="linkNewInvoice" class="inactiveLink"><i class="fa fa-plus margin-a"></i>Create Invoice</a>
+    <a href="~/sales/addsalesorder" class="btn">
+        <i class="fa fa-plus"></i>
+        New Order
+    </a>
+    <a href="~/sales/salesorder" id="linkViewOrder" class="btn inactiveLink">
+        <i class="fa fa-edit"></i>
+        View
+    </a>
+    <a href="~/sales/salesinvoice" id="linkNewInvoice" class="btn inactiveLink">
+        <i class="fa fa-plus"></i>
+        Create Invoice
+    </a>
 </div>
 <div>
     <div id="salesorders" class="ag-fresh" style="height: 400px;"></div>
@@ -30,17 +39,17 @@
     function onSelectionChanged() {
         var selectedRows = gridOptions.api.getSelectedRows();
         selectedRow = selectedRows[0];
-        
+
         document.getElementById('linkViewOrder').setAttribute('href', 'salesorder?orderId=' + selectedRow.id);
-        document.getElementById('linkViewOrder').setAttribute('class', '');
+        document.getElementById('linkViewOrder').setAttribute('class', 'btn');
 
         document.getElementById('linkNewInvoice').setAttribute('href', 'salesinvoice?orderId=' + selectedRow.id);
-        document.getElementById('linkNewInvoice').setAttribute('class', '');
+        document.getElementById('linkNewInvoice').setAttribute('class', 'btn');
 
         // If SalesOrderStatus is Fully Invoiced, disable New Invoice link
         if(selectedRow.status == 6)
         {
-            document.getElementById('linkNewInvoice').setAttribute('class', 'inactiveLink');
+            document.getElementById('linkNewInvoice').setAttribute('class', 'btn inactiveLink');
 
         }
     }
