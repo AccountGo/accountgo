@@ -21,6 +21,7 @@ export default class JournalEntryStore {
     @observable validationErrors;
     @observable isDirty = false;
     @observable initialized = false;
+    @observable editMode = false;
 
     constructor() {
         this.commonStore = new CommonStore();
@@ -31,8 +32,15 @@ export default class JournalEntryStore {
             referenceNo: this.journalEntry.referenceNo,
             memo: this.journalEntry.memo,
             posted: this.journalEntry.posted,
+            readyForPosting: this.journalEntry.readyForPosting,
             journalEntryLines: this.journalEntry.journalEntryLines
         });
+
+        let journalEntryId = window.location.search.split("?id=")[1];
+        if (journalEntryId !== undefined)
+            this.getJournalEntry(parseInt(journalEntryId))
+        else
+            this.changedEditMode(true);
     }
 
     changeIsDirty(dirty) {
@@ -46,7 +54,6 @@ export default class JournalEntryStore {
     getJournalEntry(journalEntryId: number) {
         axios.get(Config.apiUrl + "api/financials/journalentry?id=" + journalEntryId)
             .then(function (result) {
-                console.log(result);
                 for (var i = 0; i < result.data.journalEntryLines.length; i++) {
                     var item = result.data.journalEntryLines[i];
                     this.addLineItem(item.id, item.accountId, item.drCr, item.amount, item.memo);
@@ -57,11 +64,12 @@ export default class JournalEntryStore {
                 this.journalEntry.memo = result.data.memo;
                 this.journalEntry.referenceNo = result.data.referenceNo;
                 this.journalEntry.posted = result.data.posted;
-                
-                this.originalJournalEntry = result.data;
+                this.journalEntry.readyForPosting = result.data.readyForPosting;
 
-                this.initialized = true;
-
+                var nodes = document.getElementById("divJournalEntryForm").getElementsByTagName('*');
+                for (var i = 0; i < nodes.length; i++) {
+                    nodes[i].className += " disabledControl";
+                }
             }.bind(this));
     }
 
@@ -159,5 +167,9 @@ export default class JournalEntryStore {
 
     changedVoucherType(type) {
         this.journalEntry.voucherType = type;
+    }
+
+    changedEditMode(editMode) {
+        this.editMode = editMode;
     }
 }

@@ -9,6 +9,7 @@ namespace Dto.Financial
         public string ReferenceNo { get; set; }
         public string Memo { get; set; }
         public bool? Posted { get; set; }
+        public bool? ReadyForPosting { get; set; }
         public decimal? debitAmount { get { return GetDebitAmount(); } }
         public decimal? creditAmount { get { return GetCreditAmount(); } }
         public System.Collections.Generic.IList<JournalEntryLine> JournalEntryLines { get; set; }

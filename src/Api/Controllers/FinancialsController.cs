@@ -118,6 +118,14 @@ namespace Api.Controllers
                 journalEntryDto.JournalEntryLines.Add(lineDto);
             }
 
+            // is this journal entry ready for posting?
+            if (!journalEntryDto.Posted.GetValueOrDefault()
+                && journalEntryDto.JournalEntryLines.Count >= 2
+                && (journalEntryDto.debitAmount == journalEntryDto.creditAmount))
+            {
+                journalEntryDto.ReadyForPosting = true;
+            }
+
             return new ObjectResult(journalEntryDto);
         }
 
