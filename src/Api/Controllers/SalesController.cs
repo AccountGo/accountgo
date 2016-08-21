@@ -550,10 +550,6 @@ namespace Api.Controllers
                 else
                 {
                     salesOrder = _salesService.GetSalesOrderById(salesOrderDto.Id);
-
-                    var deleted = from line in salesOrder.SalesOrderLines
-                                  where !salesOrderDto.SalesOrderLines.Any(x => x.Id == line.Id)
-                                  select line;
                 }
 
                 salesOrder.CustomerId = salesOrderDto.CustomerId;
@@ -608,6 +604,12 @@ namespace Api.Controllers
                     var deleted = (from line in salesOrder.SalesOrderLines
                                    where !salesOrderDto.SalesOrderLines.Any(x => x.Id == line.Id)
                                    select line).ToList();
+
+                    foreach (var line in deleted)
+                    {
+                        if (line.SalesInvoiceLines.Count() > 0)
+                            throw new Exception("The line cannot be deleted. An invoice line is created from the item.");
+                    }
 
                     foreach (var line in deleted)
                     {

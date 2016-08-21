@@ -185,6 +185,12 @@ namespace Api.Controllers
 
                     foreach (var line in deleted)
                     {
+                        if (line.PurchaseInvoiceLines.Count() > 0)
+                            throw new Exception("The line cannot be deleted. An invoice line is created from the item.");
+                    }
+
+                    foreach (var line in deleted)
+                    {
                         purchaseOrder.PurchaseOrderLines.Remove(line);
                     }
 
