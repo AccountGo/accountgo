@@ -41,11 +41,13 @@ export default class PurchaseOrderStore {
                     this.changedVendor(result.data.vendorId);
                     this.changedInvoiceDate(result.data.orderDate);
                     for (var i = 0; i < result.data.purchaseOrderLines.length; i++) {
+                        if (result.data.purchaseOrderLines[i].remainingQtyToInvoice == 0)
+                            continue;
                         this.addLineItem(
                             result.data.purchaseOrderLines[i].id,
                             result.data.purchaseOrderLines[i].itemId,
                             result.data.purchaseOrderLines[i].measurementId,
-                            result.data.purchaseOrderLines[i].quantity,
+                            result.data.purchaseOrderLines[i].remainingQtyToInvoice,
                             result.data.purchaseOrderLines[i].amount,
                             result.data.purchaseOrderLines[i].discount
                         );

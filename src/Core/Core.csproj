@@ -42,6 +42,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Data\IPurchaseOrderRepository.cs" />
     <Compile Include="Data\IRepository.cs" />
     <Compile Include="Data\ISalesOrderRepository.cs" />
     <Compile Include="Domain\Address.cs" />

@@ -24,6 +24,7 @@
         {headerName: "Order Date", field: "orderDate", width: 100},
         {headerName: "Amount", field: "amount", width: 100},
         {headerName: "Ref no", field: "referenceNo", width: 100},
+        {headerName: "Status", field: "status", width: 100}
     ];
 
     var gridOptions = {
@@ -51,6 +52,13 @@
         }
 
         document.getElementById('linkViewOrder').setAttribute('class', 'btn');
+
+        // If SalesOrderStatus is Fully Invoiced, disable New Invoice link
+        if(selectedRow.status == 3)
+        {
+            document.getElementById('linkCreateInvoice').setAttribute('class', 'btn inactiveLink');
+
+        }
 
         //if(selectedRow.completed)
         //{

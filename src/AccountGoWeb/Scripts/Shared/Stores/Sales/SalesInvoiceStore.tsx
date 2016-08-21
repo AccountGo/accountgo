@@ -41,11 +41,13 @@ export default class SalesStore {
                 this.salesInvoice.referenceNo = result.data.referenceNo;
                 this.salesInvoice.invoiceDate = result.data.orderDate;
                 for (var i = 0; i < result.data.salesOrderLines.length; i++) {
+                    if (result.data.salesOrderLines[i].remainingQtyToInvoice == 0)
+                        continue;
                     this.addLineItem(
                         result.data.salesOrderLines[i].id,
                         result.data.salesOrderLines[i].itemId,
                         result.data.salesOrderLines[i].measurementId,
-                        result.data.salesOrderLines[i].quantity,
+                        result.data.salesOrderLines[i].remainingQtyToInvoice,
                         result.data.salesOrderLines[i].amount,
                         result.data.salesOrderLines[i].discount
                     );

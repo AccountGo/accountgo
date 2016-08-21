@@ -36,6 +36,7 @@ namespace Services.Sales
         IEnumerable<SalesDeliveryHeader> GetSalesDeliveries();
         IEnumerable<SalesOrderHeader> GetSalesOrders();
         SalesOrderHeader GetSalesOrderById(int id);
+        SalesOrderLine GetSalesOrderLineById(int id);
         SalesDeliveryHeader GetSalesDeliveryById(int id);
         IEnumerable<Contact> GetContacts();
         int SaveContact(Contact contact);

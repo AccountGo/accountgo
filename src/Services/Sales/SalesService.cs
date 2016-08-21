@@ -26,6 +26,7 @@ namespace Services.Sales
         private readonly IInventoryService _inventoryService;
 
         private readonly IRepository<SalesOrderHeader> _salesOrderRepo;
+        private readonly IRepository<SalesOrderLine> _salesOrderLineRepo;
         private readonly IRepository<SalesInvoiceHeader> _salesInvoiceRepo;
         private readonly IRepository<SalesReceiptHeader> _salesReceiptRepo;
         private readonly IRepository<Customer> _customerRepo;
@@ -45,6 +46,7 @@ namespace Services.Sales
         public SalesService(IFinancialService financialService,
             IInventoryService inventoryService,
             IRepository<SalesOrderHeader> salesOrderRepo,
+            IRepository<SalesOrderLine> salesOrderLineRepo,
             IRepository<SalesInvoiceHeader> salesInvoiceRepo,
             IRepository<SalesReceiptHeader> salesReceiptRepo,
             IRepository<Customer> customerRepo,
@@ -80,6 +82,7 @@ namespace Services.Sales
             _taxGroupRepo = taxGroupRepo;
             _salesQuoteRepo = salesQuoteRepo;
             _salesOrderRepository = salesOrderRepository;
+            _salesOrderLineRepo = salesOrderLineRepo;
         }
 
         public void AddSalesOrder(SalesOrderHeader salesOrder, bool toSave)
@@ -567,14 +570,7 @@ namespace Services.Sales
 
         public SalesOrderHeader GetSalesOrderById(int id)
         {
-            //var salesOrder = _salesOrderRepo.GetAllIncluding(lines => lines.SalesOrderLines,
-            //    c => c.Customer,
-            //    p => p.PaymentTerm)
-            //    .Where(o => o.Id == id)
-            //    .FirstOrDefault();
-
             var salesOrder = GetSalesOrders().FirstOrDefault(o => o.Id == id);
-
 
             if (salesOrder != null)
             {
@@ -587,6 +583,18 @@ namespace Services.Sales
                 return salesOrder;
             }
             return null;
+        }
+
+        public SalesOrderLine GetSalesOrderLineById(int id)
+        {
+            var salesOrderLine = _salesOrderLineRepo.GetAllIncluding(
+                line => line.SalesOrderHeader,
+                line => line.SalesOrderHeader.SalesOrderLines
+                )
+                .Where(line => line.Id == id)
+                .FirstOrDefault();
+
+            return salesOrderLine;
         }
 
         public SalesDeliveryHeader GetSalesDeliveryById(int id)
@@ -661,24 +669,58 @@ namespace Services.Sales
 
         public void SaveSalesInvoice(SalesInvoiceHeader salesInvoice, SalesOrderHeader salesOrder)
         {
-            if (salesInvoice.Id == 0)
+            // This method should be in a single transaction. when one fails, roll back all changes.
+            try
             {
-                salesInvoice.No = GetNextNumber(SequenceNumberTypes.SalesInvoice).ToString();
-                // This should be in a single transaction.
-                if (salesOrder != null && salesOrder.Id == 0)
+                // is there any new order line item? save it first. otherwise, saving invoice will fail.
+                if (salesOrder != null && salesOrder.SalesOrderLines.Where(id => id.Id == 0).Count() > 0)
                 {
-                    _salesOrderRepo.Insert(salesOrder);                    
+                    if (salesOrder.Id == 0)
+                    {
+                        salesOrder.No = GetNextNumber(SequenceNumberTypes.SalesOrder).ToString();
+                        _salesOrderRepo.Insert(salesOrder);
+                    }
+                    else
+                    {
+                        _salesOrderRepo.Update(salesOrder);
+                    }
+                }
+
+                if (salesInvoice.Id == 0)
+                {
+                    salesInvoice.No = GetNextNumber(SequenceNumberTypes.SalesInvoice).ToString();
                     _salesInvoiceRepo.Insert(salesInvoice);
                 }
                 else
                 {
+                    _salesInvoiceRepo.Update(salesInvoice);
+                }
+
+                // update the sales order status
+                if(salesOrder == null)
+                {
+                    // get the first order line
+                    salesOrder = GetSalesOrderLineById(salesInvoice.SalesInvoiceLines.FirstOrDefault().SalesOrderLineId.GetValueOrDefault()).SalesOrderHeader;                    
+                }
+                // if all orderline has no remaining qty to invoice, set the status to fullyinvoice
+                bool hasRemainingQtyToInvoice = false;
+                foreach (var line in salesOrder.SalesOrderLines)
+                {
+                    if (line.GetRemainingQtyToInvoice() > 0)
+                    {
+                        hasRemainingQtyToInvoice = true;
+                        break;
+                    }
+                }
+                if (!hasRemainingQtyToInvoice)
+                {
+                    salesOrder.Status = SalesOrderStatus.FullyInvoiced;
                     _salesOrderRepo.Update(salesOrder);
-                    _salesInvoiceRepo.Insert(salesInvoice);
                 }
             }
-            else
+            catch (Exception ex)
             {
-                _salesInvoiceRepo.Update(salesInvoice);
+                throw ex;
             }
         }
 

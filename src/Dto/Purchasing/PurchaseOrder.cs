@@ -13,7 +13,8 @@ namespace Dto.Purchasing
         public decimal Amount { get { return GetTotalAmount(); } }
         public bool Completed { get; set; }
         public string ReferenceNo { get; set; }
-        
+        public int Status { get; set; }
+
         public System.Collections.Generic.IList<PurchaseOrderLine> PurchaseOrderLines { get; set; }
         public PurchaseOrder()
         {
@@ -47,5 +48,6 @@ namespace Dto.Purchasing
         public decimal? Quantity { get; set; }
         public decimal? Amount { get; set; }
         public decimal? Discount { get; set; }
+        public decimal? RemainingQtyToInvoice { get; set; }
     }
 }

@@ -22,6 +22,7 @@ namespace Services.Purchasing
         Vendor GetVendorById(int id);
         IEnumerable<PurchaseOrderHeader> GetPurchaseOrders();
         PurchaseOrderHeader GetPurchaseOrderById(int id);
+        PurchaseOrderLine GetPurchaseOrderLineById(int id);
         PurchaseReceiptHeader GetPurchaseReceiptById(int id);
         void AddVendor(Vendor vendor);
         void UpdateVendor(Vendor vendor);

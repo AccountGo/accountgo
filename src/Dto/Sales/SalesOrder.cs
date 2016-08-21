@@ -51,5 +51,6 @@ namespace Dto.Sales
         public string MeasurementDescription { get; set; }
         public string ItemNo { get; set; }
         public string ItemDescription { get; set; }
+        public decimal? RemainingQtyToInvoice { get; set; }
     }
 }

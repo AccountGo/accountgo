@@ -196,13 +196,14 @@ namespace Api.Controllers
                             MeasurementId = line.MeasurementId,
                             Quantity = line.Quantity,
                             Amount = line.Amount,
-                            Discount = line.Discount
+                            Discount = line.Discount,
+                            RemainingQtyToInvoice = line.GetRemainingQtyToInvoice()
                         };
                         salesOrderDto.SalesOrderLines.Add(lineDto);
                     }
 
                     salesOrdersDto.Add(salesOrderDto);
-            }
+                }
 
                 return new ObjectResult(salesOrdersDto);
             }
@@ -243,6 +244,7 @@ namespace Api.Controllers
                     lineDto.ItemDescription = line.Item.Description;
                     lineDto.MeasurementId = line.MeasurementId;
                     lineDto.MeasurementDescription = line.Measurement.Description;
+                    lineDto.RemainingQtyToInvoice = line.GetRemainingQtyToInvoice();
 
                     salesOrderDto.SalesOrderLines.Add(lineDto);
                 }
@@ -676,14 +678,10 @@ namespace Api.Controllers
                 Core.Domain.Sales.SalesInvoiceHeader salesInvoice = null;
                 Core.Domain.Sales.SalesOrderHeader salesOrder = null;
 
+                // Creating a new invoice
                 if (isNew)
                 {
-                    salesInvoice = new Core.Domain.Sales.SalesInvoiceHeader();
-                    salesInvoice.CustomerId = salesInvoiceDto.CustomerId.GetValueOrDefault();
-                    salesInvoice.Date = salesInvoiceDto.InvoiceDate;
-                    salesInvoice.PaymentTermId = salesInvoiceDto.PaymentTermId;
-                    salesInvoice.ReferenceNo = salesInvoiceDto.ReferenceNo;
-
+                    // if fromsalesorderid has NO value, then create automatically a new sales order.
                     if (!salesInvoiceDto.FromSalesOrderId.HasValue)
                     {
                         salesOrder = new Core.Domain.Sales.SalesOrderHeader();
@@ -693,6 +691,18 @@ namespace Api.Controllers
                         salesOrder.ReferenceNo = salesInvoiceDto.ReferenceNo;
                         salesOrder.Status = SalesOrderStatus.FullyInvoiced;
                     }
+                    else
+                    {
+                        // else,  your invoice is created from existing (open) sales order.
+                        salesOrder = _salesService.GetSalesOrderById(salesInvoiceDto.FromSalesOrderId.GetValueOrDefault());
+                    }
+
+                    // populate invoice header
+                    salesInvoice = new Core.Domain.Sales.SalesInvoiceHeader();
+                    salesInvoice.CustomerId = salesInvoiceDto.CustomerId.GetValueOrDefault();
+                    salesInvoice.Date = salesInvoiceDto.InvoiceDate;
+                    salesInvoice.PaymentTermId = salesInvoiceDto.PaymentTermId;
+                    salesInvoice.ReferenceNo = salesInvoiceDto.ReferenceNo;
 
                     foreach (var line in salesInvoiceDto.SalesInvoiceLines)
                     {
@@ -704,31 +714,31 @@ namespace Api.Controllers
                         salesInvoiceLine.ItemId = line.ItemId.GetValueOrDefault();
                         salesInvoiceLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
                         salesInvoice.SalesInvoiceLines.Add(salesInvoiceLine);
+
+                        // line.Id here is referring to SalesOrderLineId. It is pre-populated when you create a new sales invoice from sales order.
                         if (line.Id != 0)
-                            salesInvoiceLine.SalesOrderLineId = line.Id; // This Id is also the SalesOrderLineId when you create sales invoice directly from sales order.
+                        {
+                            salesInvoiceLine.SalesOrderLineId = line.Id;
+                        }
                         else
                         {
+                            // if you reach here, this line item is newly added to invoice which is not originally in sales order. create correspondin orderline and add to sales order.
                             var salesOrderLine = new Core.Domain.Sales.SalesOrderLine();
-                           
                             salesOrderLine.Amount = line.Amount.GetValueOrDefault();
                             salesOrderLine.Discount = line.Discount.GetValueOrDefault();
                             salesOrderLine.Quantity = line.Quantity.GetValueOrDefault();
                             salesOrderLine.ItemId = line.ItemId.GetValueOrDefault();
                             salesOrderLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
                             salesInvoiceLine.SalesOrderLine = salesOrderLine;
-                            if (salesOrder == null)
-                            {
-                                salesOrder = _salesService.GetSalesOrderById((int)salesInvoiceDto.FromSalesOrderId);
-                                salesOrder.SalesOrderLines.Add(salesOrderLine);
-                                _salesService.UpdateSalesOrder(salesOrder);
-                            }
-                            salesOrder.SalesOrderLines.Add(salesOrderLine);
-                            
+                            salesOrder.SalesOrderLines.Add(salesOrderLine);                            
+
+                            salesInvoiceLine.SalesOrderLine = salesOrderLine; // map invoice line to newly added orderline
                         }
                     }
                 }
                 else
                 {
+                    // if you reach here, you are updating existing invoice.
                     salesInvoice = _salesService.GetSalesInvoiceById(salesInvoiceDto.Id);
 
                     if (salesInvoice.GeneralLedgerHeaderId.HasValue)
@@ -751,16 +761,37 @@ namespace Api.Controllers
                         }
                         else
                         {
-                            //New line item has been added to invoice. It has no SalesOrderLineId.
+                            //if you reach here, this line item is newly added to invoice. also, it has no SalesOrderLineId.
                             var salesInvoiceLine = new Core.Domain.Sales.SalesInvoiceLine();
                             salesInvoiceLine.Amount = line.Amount.GetValueOrDefault();
                             salesInvoiceLine.Discount = line.Discount.GetValueOrDefault();
                             salesInvoiceLine.Quantity = line.Quantity.GetValueOrDefault();
                             salesInvoiceLine.ItemId = line.ItemId.GetValueOrDefault();
                             salesInvoiceLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
-                            if (line.Id != 0)
-                                salesInvoiceLine.SalesOrderLineId = line.Id; // This Id is also the SalesOrderLineId when you create sales invoice directly from sales order.
                             salesInvoice.SalesInvoiceLines.Add(salesInvoiceLine);
+
+                            // add a new order line.
+                            var salesOrderLine = new Core.Domain.Sales.SalesOrderLine();
+                            salesOrderLine.Amount = line.Amount.GetValueOrDefault();
+                            salesOrderLine.Discount = line.Discount.GetValueOrDefault();
+                            salesOrderLine.Quantity = line.Quantity.GetValueOrDefault();
+                            salesOrderLine.ItemId = line.ItemId.GetValueOrDefault();
+                            salesOrderLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
+
+                            // but on what order should the new orderline be added?
+                            // note: each invoice is map to one and only one sales order. it can't be done that invoice lines came from multiple sales orders.
+                            // with this rule, we are sure that all invoice lines are contained in the same sales order.
+                            // therefore, we could just pick the first line, get the salesorderlineid, then get the salesorderheader.
+
+                            // you will retrieve salesorder one time.
+                            if(salesOrder == null)
+                            {
+                                // use the last value of existingLine
+                                salesOrder = _salesService.GetSalesOrderLineById(existingLine.SalesOrderLine.SalesOrderHeaderId).SalesOrderHeader;
+                                salesOrder.SalesOrderLines.Add(salesOrderLine);
+                            }                            
+
+                            salesInvoiceLine.SalesOrderLine = salesOrderLine; // map invoice line to newly added orderline
                         }
                     }
                 }
@@ -777,14 +808,7 @@ namespace Api.Controllers
                     }
                 }
 
-                #region Checking of SaleInvoiceline if it is greater than or equal to salesorderline
-                salesOrder = SetSalesOrderStatus(salesInvoiceDto, salesOrder, salesInvoice);
-
-                #endregion
-
-
                 _salesService.SaveSalesInvoice(salesInvoice, salesOrder);
-                
 
                 return new OkObjectResult(Ok());
             }
