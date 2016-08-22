@@ -44,8 +44,8 @@ namespace Web.Models.ViewModels.Purchases
                     UnitOfMeasurementId = line.MeasurementId,
                     Quantity = line.Quantity,
                     Cost = line.Cost,
-                    ReceiptQuantity = line.GetReceivedQuantity(),
-                    IsCompleted = line.IsCompleted()
+                    //ReceiptQuantity = line.GetReceivedQuantity(),
+                    //IsCompleted = line.IsCompleted()
                 });
             }
         }

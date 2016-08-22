@@ -26,6 +26,7 @@ namespace Services.Purchasing
         private readonly IInventoryService _inventoryService;
 
         private readonly IRepository<PurchaseOrderHeader> _purchaseOrderRepo;
+        private readonly IRepository<PurchaseOrderLine> _purchaseOrderLineRepo;
         private readonly IRepository<PurchaseInvoiceHeader> _purchaseInvoiceRepo;
         private readonly IRepository<PurchaseReceiptHeader> _purchaseReceiptRepo;
         private readonly IRepository<Vendor> _vendorRepo;
@@ -37,10 +38,12 @@ namespace Services.Purchasing
         private readonly IRepository<GeneralLedgerSetting> _generalLedgerSettingRepo;
         private readonly IRepository<PaymentTerm> _paymentTermRepo;
         private readonly IRepository<Bank> _bankRepo;
+        private readonly IPurchaseOrderRepository _purchaseOrderHeaderRepository;
 
         public PurchasingService(IFinancialService financialService,
             IInventoryService inventoryService,
             IRepository<PurchaseOrderHeader> purchaseOrderRepo,
+            IRepository<PurchaseOrderLine> purchaseOrderLineRepo,
             IRepository<PurchaseInvoiceHeader> purchaseInvoiceRepo,
             IRepository<PurchaseReceiptHeader> purchaseReceiptRepo,
             IRepository<Vendor> vendorRepo,
@@ -51,13 +54,15 @@ namespace Services.Purchasing
             IRepository<VendorPayment> vendorPaymentRepo,
             IRepository<GeneralLedgerSetting> generalLedgerSettingRepo,
             IRepository<PaymentTerm> paymentTermRepo,
-            IRepository<Bank> bankRepo
+            IRepository<Bank> bankRepo,
+            IPurchaseOrderRepository purchaseOrderHeaderRepository
             )
             : base(sequenceNumberRepo, generalLedgerSettingRepo, paymentTermRepo, bankRepo)
         {
             _financialService = financialService;
             _inventoryService = inventoryService;
             _purchaseOrderRepo = purchaseOrderRepo;
+            _purchaseOrderLineRepo = purchaseOrderLineRepo;
             _purchaseInvoiceRepo = purchaseInvoiceRepo;
             _purchaseReceiptRepo = purchaseReceiptRepo;
             _vendorRepo = vendorRepo;
@@ -69,6 +74,7 @@ namespace Services.Purchasing
             _generalLedgerSettingRepo = generalLedgerSettingRepo;
             _paymentTermRepo = paymentTermRepo;
             _bankRepo = bankRepo;
+            _purchaseOrderHeaderRepository = purchaseOrderHeaderRepository;
         }
 
         public void AddPurchaseInvoice(PurchaseInvoiceHeader purchaseIvoice, int? purchaseOrderId)
@@ -329,25 +335,29 @@ namespace Services.Purchasing
 
         public IEnumerable<PurchaseOrderHeader> GetPurchaseOrders()
         {
-            var query = _purchaseOrderRepo.GetAllIncluding(
-                po => po.Vendor,
-                po => po.Vendor.Party,
-                po => po.PurchaseOrderLines
-                );
-
-            return query.AsEnumerable();
+            var query = _purchaseOrderHeaderRepository.GetAllPurchaseOrders();
+            return query;
         }
 
         public PurchaseOrderHeader GetPurchaseOrderById(int id)
         {
-            var purchOrder = _purchaseOrderRepo.GetAllIncluding(po => po.Vendor,
-                po => po.Vendor.Party,
-                po => po.PurchaseOrderLines
-                )
+            var purchOrder = GetPurchaseOrders()
                 .Where(po => po.Id == id)
                 .FirstOrDefault();
 
             return purchOrder;
+        }
+
+        public PurchaseOrderLine GetPurchaseOrderLineById(int id)
+        {
+            var purchaseOrderLine = _purchaseOrderLineRepo.GetAllIncluding(
+                line => line.PurhcaseOrderHeader,
+                line => line.PurhcaseOrderHeader.PurchaseOrderLines
+                )
+                .Where(line => line.Id == id)
+                .FirstOrDefault();
+
+            return purchaseOrderLine;
         }
 
         public PurchaseReceiptHeader GetPurchaseReceiptById(int id)
@@ -368,7 +378,7 @@ namespace Services.Purchasing
             vendor.PurchaseDiscountAccountId = _accountRepo.Table.Where(a => a.AccountCode == "50400").FirstOrDefault().Id;
 
             //vendor.IsActive = true;
-
+            vendor.No = GetNextNumber(SequenceNumberTypes.Vendor).ToString();
             _vendorRepo.Insert(vendor);
         }
 
@@ -428,19 +438,60 @@ namespace Services.Purchasing
             }
         }
 
-        public void SavePurchaseInvoice(PurchaseInvoiceHeader purchaseInvoice, PurchaseReceiptHeader purchaseReceipt, PurchaseOrderHeader purchaseOrder)
+        public void SavePurchaseInvoice(PurchaseInvoiceHeader purchaseInvoice, PurchaseOrderHeader purchaseOrder)
         {
-            if (purchaseInvoice.Id == 0)
+            // This method should be in a single transaction. when one fails, roll back all changes.
+            try
             {
-                // This should be in a single transaction.
-                if (purchaseOrder != null)
-                    _purchaseOrderRepo.Insert(purchaseOrder);
-                _purchaseInvoiceRepo.Insert(purchaseInvoice);
-                _purchaseReceiptRepo.Insert(purchaseReceipt);                
+                // is there any new order line item? save it first. otherwise, saving invoice will fail.
+                if (purchaseOrder != null && purchaseOrder.PurchaseOrderLines.Where(id => id.Id == 0).Count() > 0)
+                {
+                    if (purchaseOrder.Id == 0)
+                    {
+                        purchaseOrder.No = GetNextNumber(SequenceNumberTypes.SalesOrder).ToString();
+                        _purchaseOrderRepo.Insert(purchaseOrder);
+                    }
+                    else
+                    {
+                        _purchaseOrderRepo.Update(purchaseOrder);
+                    }
+                }
+
+                if (purchaseInvoice.Id == 0)
+                {
+                    purchaseInvoice.No = GetNextNumber(SequenceNumberTypes.SalesInvoice).ToString();
+                    _purchaseInvoiceRepo.Insert(purchaseInvoice);
+                }
+                else
+                {
+                    _purchaseInvoiceRepo.Update(purchaseInvoice);
+                }
+
+                // update the purchase order status
+                if (purchaseOrder == null)
+                {
+                    // get the first order line
+                    purchaseOrder = GetPurchaseOrderLineById(purchaseInvoice.PurchaseInvoiceLines.FirstOrDefault().PurchaseOrderLineId.GetValueOrDefault()).PurhcaseOrderHeader;
+                }
+                // if all orderline has no remaining qty to invoice, set the status to fullyinvoice
+                bool hasRemainingQtyToInvoice = false;
+                foreach (var line in purchaseOrder.PurchaseOrderLines)
+                {
+                    if (line.GetRemainingQtyToInvoice() > 0)
+                    {
+                        hasRemainingQtyToInvoice = true;
+                        break;
+                    }
+                }
+                if (!hasRemainingQtyToInvoice)
+                {
+                    purchaseOrder.Status = PurchaseOrderStatus.FullReceived;
+                    _purchaseOrderRepo.Update(purchaseOrder);
+                }
             }
-            else
+            catch (Exception ex)
             {
-                _purchaseInvoiceRepo.Update(purchaseInvoice);
+                throw ex;
             }
         }
 

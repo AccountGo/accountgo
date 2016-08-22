@@ -12,8 +12,6 @@ import SelectDebitCredit from "../Shared/Components/SelectDebitCredit";
 import JournalEntryStore from "../Shared/Stores/Financials/JournalEntryStore";
 import JournalEntryUIStore from "../Shared/Stores/Financials/JournalEntryUIStore";
 
-let journalEntryId = window.location.search.split("?id=")[1];
-
 let store = new JournalEntryStore();
 let uiStore = new JournalEntryUIStore(store);
 
@@ -31,10 +29,33 @@ class ValidationErrors extends React.Component<any, {}>{
                         {errors}
                     </ul>
                 </div>
-
             );
         }
         return null;
+    }
+}
+
+@observer
+class EditButton extends React.Component<any, {}>{
+    onClickEditButton() {
+        // Remove " disabledControl" from current className
+        var nodes = document.getElementById("divJournalEntryForm").getElementsByTagName('*');
+        for (var i = 0; i < nodes.length; i++) {
+            var subStringLength = nodes[i].className.length - " disabledControl".length;
+            nodes[i].className = nodes[i].className.substring(0, subStringLength);
+        }
+        store.changedEditMode(true)
+    }
+    render() {
+        return (
+            <a href="#" id="linkEdit" onClick={this.onClickEditButton}
+                className={!store.journalEntry.posted && !store.editMode
+                    ? "btn"
+                    : "btn inactiveLink"}>
+                <i className="fa fa-edit"></i>
+                Edit
+            </a>
+        );
     }
 }
 
@@ -45,7 +66,11 @@ class SaveJournalEntryButton extends React.Component<any, {}>{
     }
     render() {
         return (
-            <input type="button" className={store.isDirty ? "btn btn-sm btn-primary btn-flat pull-left" : "btn btn-sm btn-primary btn-flat pull-left disabled"} value="Save" onClick={this.onClickSaveNewJournalEntry.bind(this) } />
+            <input type="button" value="Save" onClick={this.onClickSaveNewJournalEntry.bind(this) }
+                className={!store.journalEntry.posted && store.editMode
+                    ? "btn btn-sm btn-primary btn-flat pull-left"
+                    : "btn btn-sm btn-primary btn-flat pull-left inactiveLink"}
+                />
         );
     }
 }
@@ -62,7 +87,8 @@ class CancelJournalEntryButton extends React.Component<any, {}>{
 
     render() {
         return (
-            <input type="button" className="btn btn-sm btn-default btn-flat pull-left" value="Cancel" onClick={ this.cancelOnClick.bind(this) } id="btnCancel" />
+            <input type="button" onClick={ this.cancelOnClick.bind(this) } id="btnCancel"
+                className="btn btn-sm btn-default btn-flat pull-left" value="Cancel" />
         );
     }
 }
@@ -75,7 +101,10 @@ class PostJournalEntryButton extends React.Component<any, {}>{
 
     render() {
         return (
-            <input type="button" value="Post" onClick={ this.postOnClick.bind(this) } className={store.isDirty || store.journalEntry.id == 0 ? "btn btn-sm btn-danger btn-flat pull-right disabled" : "btn btn-sm btn-danger btn-flat pull-right"} />
+            <input type="button" value="Post" onClick={ this.postOnClick.bind(this) }
+                className={!store.journalEntry.posted && store.journalEntry.readyForPosting && !store.editMode
+                    ? "btn btn-sm btn-primary btn-flat btn-danger pull-right"
+                    : "btn btn-sm btn-primary btn-flat btn-danger pull-right inactiveLink"} />
         );
     }
 }
@@ -221,44 +250,18 @@ class JournalEntryLines extends React.Component<any, {}>{
 
 @observer
 export default class JournalEntry extends React.Component<any, {}> {
-    componentDidMount() {
-        if (journalEntryId !== undefined) {
-            store.getJournalEntry(parseInt(journalEntryId));
-        }
-        else {
-            store.changeInitialized(true);
-            store.changeIsDirty(true);
-        }
-
-        autorun(() => this.trackchange());
-    }
-
-    trackchange() {
-        if (store.journalEntry.posted) {
-            var nodes = document.getElementById("divJournalEntry").getElementsByTagName('*');
-            for (var i = 0; i < nodes.length; i++) {
-                if (nodes[i].id === "btnCancel")
-                    continue;
-                nodes[i].setAttribute("disabled", "disabled");
-            }
-        }
-
-        if (store.initialized && store.isDirty === false) {
-            if (store.journalEntry.referenceNo !== store.originalJournalEntry.referenceNo
-                || store.journalEntry.memo !== store.originalJournalEntry.memo)
-            {
-                store.changeIsDirty(true);
-            }
-        }
-    }
-
     render() {
         return (
-            <div id="divJournalEntry">
-                <ValidationErrors />
-                <JournalEntryHeader />
-                <JournalEntryLines />
-                <div>
+            <div>
+                <div id="divActionsTop">
+                    <EditButton />
+                </div>
+                <div id="divJournalEntryForm">
+                    <ValidationErrors />
+                    <JournalEntryHeader />
+                    <JournalEntryLines />
+                </div>
+                <div id="divActionsBottom">
                     <SaveJournalEntryButton />
                     <CancelJournalEntryButton />
                     <PostJournalEntryButton />

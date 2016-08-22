@@ -67,7 +67,9 @@ namespace Api
             // generic repository
             services.AddScoped(typeof(Core.Data.IRepository<>), typeof(Data.EfRepository<>));
 
+            // custom repositories
             services.AddScoped(typeof(Core.Data.ISalesOrderRepository), typeof(Data.SalesOrderRepository));
+            services.AddScoped(typeof(Core.Data.IPurchaseOrderRepository), typeof(Data.PurchaseOrderRepository));
 
             // domain services
             services.AddScoped(typeof(Services.Sales.ISalesService), typeof(Services.Sales.SalesService));

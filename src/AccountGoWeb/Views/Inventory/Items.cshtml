@@ -1,8 +1,14 @@
 ﻿@model string
 
 <div>
-    <a href="~/inventory/item"><i class="fa fa-plus margin-a"></i>New Item</a>
-    <a href="~/inventory/item" id="linkViewItem" class="inactiveLink"><i class="fa fa-edit margin-a"></i>View</a>
+    <a href="~/inventory/item" class="btn">
+        <i class="fa fa-plus"></i>
+        New Item
+    </a>
+    <a href="~/inventory/item" id="linkViewItem" class="btn inactiveLink">
+        <i class="fa fa-edit"></i>
+        View
+    </a>
 </div>
 <div>
     <div id="items" class="ag-fresh" style="height: 400px;"></div>
@@ -31,9 +37,9 @@
     function onSelectionChanged() {
         var selectedRows = gridOptions.api.getSelectedRows();
         selectedRow = selectedRows[0];
-        
+
         document.getElementById('linkViewItem').setAttribute('href', 'item/' + selectedRow.id);
-        document.getElementById('linkViewItem').setAttribute('class', '');
+        document.getElementById('linkViewItem').setAttribute('class', 'btn');
     }
 
     // wait for the document to be loaded, otherwise

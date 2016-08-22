@@ -13,6 +13,7 @@ namespace Dto.Sales
         public string AccountToDebit { get; set; }
         public int GeneralLedgerHederId { get; set; }
         public DateTime ReceiptDate { get; set; }
+        public string ReferenceNo { get; set; }
     }
 
     public class SalesReceiptLine : BaseDto

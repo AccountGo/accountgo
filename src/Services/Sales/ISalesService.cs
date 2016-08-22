@@ -36,6 +36,7 @@ namespace Services.Sales
         IEnumerable<SalesDeliveryHeader> GetSalesDeliveries();
         IEnumerable<SalesOrderHeader> GetSalesOrders();
         SalesOrderHeader GetSalesOrderById(int id);
+        SalesOrderLine GetSalesOrderLineById(int id);
         SalesDeliveryHeader GetSalesDeliveryById(int id);
         IEnumerable<Contact> GetContacts();
         int SaveContact(Contact contact);
@@ -46,7 +47,7 @@ namespace Services.Sales
         IEnumerable<SalesQuoteHeader> GetSalesQuotes();
         IEnumerable<SalesInvoiceHeader> GetCustomerInvoices(int customerId);
         SalesQuoteHeader GetSalesQuotationById(int id);
-        void SaveSalesInvoice(SalesInvoiceHeader salesInvoice, SalesDeliveryHeader salesDelivery, SalesOrderHeader salesOrder);
+        void SaveSalesInvoice(SalesInvoiceHeader salesInvoice, SalesOrderHeader salesOrder);
         void PostSalesInvoice(int invoiceId);
     }
 }

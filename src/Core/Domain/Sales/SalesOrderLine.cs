@@ -8,6 +8,7 @@
 
 using Core.Domain.Items;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Linq;
 
 namespace Core.Domain.Sales
 {
@@ -24,5 +25,16 @@ namespace Core.Domain.Sales
         public virtual Item Item { get; set; }
         public virtual Measurement Measurement { get; set; }
         public virtual System.Collections.Generic.ICollection<SalesInvoiceLine> SalesInvoiceLines { get; set; }
+
+        public SalesOrderLine()
+        {
+            SalesInvoiceLines = new System.Collections.Generic.HashSet<SalesInvoiceLine>();
+        }
+
+        public decimal GetRemainingQtyToInvoice()
+        {
+            decimal invoiced = SalesInvoiceLines.Sum(l => l.Quantity);
+            return Quantity - invoiced;
+        }
     }
 }
