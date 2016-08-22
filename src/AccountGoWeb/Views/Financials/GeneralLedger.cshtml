@@ -10,18 +10,16 @@
 
     var columnDefs = [
     {headerName: "Group", cellRenderer: 'group'},
-    //{headerName: "Account", field: "id", width: 50},
-    {headerName: "GL", field: "id", width: 100, callRenderer : function (val) {
-        return val.data.id == 0 || val.data.id  ? '' : val.data.GL;
-    }},
+    //{headerName: "GL", field: "id", width: 100, callRenderer : function (val) {
+    //    return val.data.id == 0 || val.data.id  ? '' : val.data.GL;
+    //}},
     {headerName: "Account", field: "accountName", width: 350, cellRenderer: function(val){
  
         if(val.data.length > 0)
             return "";
         return val.data.accountName;
     }},
-    {headerName: "Transaction No", field: "transactionNo", width: 100},
-
+    //{headerName: "Transaction No", field: "transactionNo", width: 100},
     {headerName: "Date", field: "date", width: 250, cellRenderer: function(val){
         if(val.data.length > 0)
             return val.data.date;
@@ -49,7 +47,7 @@
                 return {
                     group: true,
                     children: data.childMasterGeneralLedger,
-                    key: data.groupId
+                    key: "Transaction no #" + data.groupId
                 };
             } else {
                 return null;
@@ -80,6 +78,6 @@
     document.addEventListener("DOMContentLoaded", function() {
         var eGridDiv = document.querySelector('#masterGL');
         new agGrid.Grid(eGridDiv, gridOptions);
-        autoSizeAll();
+        //autoSizeAll();
     });
 </script>
