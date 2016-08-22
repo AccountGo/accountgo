@@ -244,13 +244,18 @@ namespace Api.Controllers
 
         [HttpGet]
         [Route("[action]")]
-        public IActionResult GeneralLedger(DateTime? from = default(DateTime?),
+        public ActionResult GeneralLedger(DateTime? from = default(DateTime?),
             DateTime? to = default(DateTime?),
             string accountCode = null,
             int? transactionNo = null)
         {
             var Dto = _financialService.MasterGeneralLedger(from, to, accountCode, transactionNo);
-            return new OkObjectResult(Dto.AsEnumerable());
+
+            //goi
+            var generalLedgerTree = BuildMasterGeneralLedger(Dto);
+
+            return new ObjectResult(generalLedgerTree);
+ 
         }
 
         [HttpGet]
@@ -326,6 +331,52 @@ namespace Api.Controllers
 
             return accountTree;
         }
+
+
+        private IList<Dto.Financial.MasterGeneralLedger> BuildMasterGeneralLedger(ICollection<Services.Financial.MasterGeneralLedger> allLedger)
+        {
+            var ledgerTree = new List<Dto.Financial.MasterGeneralLedger>();
+
+ 
+            var parentLedger = allLedger.Select(a => a.TransactionNo).Distinct();
+            var childLedgers = new List<Dto.Financial.MasterGeneralLedger>();
+            parentLedger.ToList().ForEach(a =>
+            {
+                var childrenLedger = allLedger.Where(x => x.TransactionNo == a);
+
+                var secondChild = new Dto.Financial.MasterGeneralLedger();
+                var thirdChildren = new List<Dto.Financial.MasterGeneralLedger>();
+                secondChild.GroupId = a;
+                secondChild.TransactionNo = null;
+                secondChild.Credit = null;
+                secondChild.Debit = null;
+                secondChild.Date = null;
+                foreach (var ledger in childrenLedger)
+                {
+                        var thirdChild = new Dto.Financial.MasterGeneralLedger();
+                        thirdChild.Id = ledger.Id;
+                        thirdChild.TransactionNo = ledger.TransactionNo;
+                        thirdChild.AccountId = ledger.AccountId;
+                        thirdChild.AccountName = ledger.AccountName;
+                        thirdChild.AccountCode = ledger.AccountCode;
+                        thirdChild.CurrencyId = ledger.CurrencyId;
+                        thirdChild.Date = ledger.Date;
+                        thirdChild.Debit = ledger.Debit;
+                        thirdChild.Credit = ledger.Credit;
+                        thirdChildren.Add(thirdChild);
+                        secondChild.ChildMasterGeneralLedger = thirdChildren;                    
+                }
+
+                childLedgers.Add(secondChild);
+
+
+            });
+
+            return childLedgers;
+        }
+
+
+
 
         #endregion
     }
