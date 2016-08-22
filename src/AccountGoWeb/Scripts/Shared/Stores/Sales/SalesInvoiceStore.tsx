@@ -17,6 +17,7 @@ export default class SalesStore {
     salesInvoice;
     commonStore;
     @observable validationErrors;
+    @observable editMode = false;
 
     constructor(orderId, invoiceId) {
         this.commonStore = new CommonStore();
@@ -30,16 +31,13 @@ export default class SalesStore {
             salesInvoiceLines: []
         });
 
+
         autorun(() => this.computeTotals());
 
         if (orderId !== undefined) {
             var result = axios.get(Config.apiUrl + "api/sales/salesorder?id=" + orderId);
-            result.then(function (result) {
-                this.salesInvoice.fromSalesOrderId = orderId;
-                this.changedCustomer(result.data.customerId);
-                this.salesInvoice.paymentTermId = result.data.paymentTermId;
-                this.salesInvoice.referenceNo = result.data.referenceNo;
-                this.salesInvoice.invoiceDate = result.data.orderDate;
+            result.then(function(result) {
+
                 for (var i = 0; i < result.data.salesOrderLines.length; i++) {
                     if (result.data.salesOrderLines[i].remainingQtyToInvoice == 0)
                         continue;
@@ -52,17 +50,18 @@ export default class SalesStore {
                         result.data.salesOrderLines[i].discount
                     );
                 }
+                this.salesInvoice.fromSalesOrderId = orderId;
+                this.changedCustomer(result.data.customerId);
+                this.salesInvoice.paymentTermId = result.data.paymentTermId;
+                this.salesInvoice.referenceNo = result.data.referenceNo;
+                this.salesInvoice.invoiceDate = result.data.orderDate;
                 this.computeTotals();
 
-                var nodes = document.getElementById("divSalesInvoice").getElementsByTagName('*');
-                for (var i = 0; i < nodes.length; i++) {
-                    nodes[i].className += " disabledControl";
-                }
+
             }.bind(this));
-        }
-        else if (invoiceId !== undefined) {
+        } else if (invoiceId !== undefined) {
             var result = axios.get(Config.apiUrl + "api/sales/salesinvoice?id=" + invoiceId);
-            result.then(function (result) {
+            result.then(function(result) {
                 this.salesInvoice.id = result.data.id;
                 this.changedCustomer(result.data.customerId);
                 this.salesInvoice.paymentTermId = result.data.paymentTermId;
@@ -80,9 +79,17 @@ export default class SalesStore {
                     );
                 }
                 this.computeTotals();
+
+                var nodes = document.getElementById("divSalesInvoiceForm").getElementsByTagName('*');
+                for (var i = 0; i < nodes.length; i++) {
+                    nodes[i].className += " disabledControl";
+                }
             }.bind(this));
-        }        
+        } else {
+            this.changedEditMode(true);
+        }
     }
+
 
     @observable RTotal = 0;
     @observable GTotal = 0;
@@ -213,5 +220,9 @@ export default class SalesStore {
         let lineItem = this.salesInvoice.salesInvoiceLines[row];
         lineSum = (lineItem.quantity * lineItem.amount) - lineItem.discount;
         return lineSum;
+    }
+
+    changedEditMode(editMode) {
+        this.editMode = editMode;
     }
 }

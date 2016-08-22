@@ -42,6 +42,29 @@ class ValidationErrors extends React.Component<any, {}>{
         return null;
     }
 }
+@observer
+class EditButton extends React.Component<any, {}>{
+    onClickEditButton() {
+        // Remove " disabledControl" from current className
+        var nodes = document.getElementById("divSalesInvoiceForm").getElementsByTagName('*');
+        for (var i = 0; i < nodes.length; i++) {
+            var subStringLength = nodes[i].className.length - " disabledControl".length;
+            nodes[i].className = nodes[i].className.substring(0, subStringLength);
+        }
+        store.changedEditMode(true)
+    }
+    render() {
+        return (
+            <a href="#" id="linkEdit" onClick={this.onClickEditButton}
+                className={!store.salesInvoice.posted && !store.editMode
+                    ? "btn"
+                    : "btn inactiveLink"}>
+                <i className="fa fa-edit"></i>
+                Edit
+            </a>
+        );
+    }
+}
 
 class SaveInvoiceButton extends React.Component<any, {}>{
     saveNewSalesInvoice(e) {
@@ -52,7 +75,11 @@ class SaveInvoiceButton extends React.Component<any, {}>{
     }
     render() {
         return (
-            <input type="button" className="btn btn-sm btn-primary btn-flat pull-left" value="Save" onClick={this.saveNewSalesInvoice.bind(this)} />
+            <input type="button" value="Save" onClick={this.saveNewSalesInvoice.bind(this) }
+                className={!store.salesInvoice.posted && !store.editMode
+                    ? "btn btn-sm btn-primary btn-flat pull-left"
+                    : "btn btn-sm btn-primary btn-flat pull-left inactiveLink"}
+                />
             );
     }
 }
@@ -84,7 +111,10 @@ class PostButton extends React.Component<any, {}>{
 
     render() {
         return (
-            <input type="button" value="Post" onClick={ this.postOnClick.bind(this) } className="btn btn-sm btn-danger btn-flat pull-right disabled" />
+            <input type="button" value="Post" onClick={ this.postOnClick.bind(this) }
+                className={!store.salesInvoice.posted && !store.editMode
+                    ? "btn btn-sm btn-primary btn-flat btn-danger pull-right"
+                    : "btn btn-sm btn-primary btn-flat btn-danger pull-right inactiveLink"} />
         );
     }
 }
@@ -262,11 +292,16 @@ export default class SalesInvoice extends React.Component<any, {}> {
     render() {
         return (
             <div>
-                <ValidationErrors />
-                <SalesInvoiceHeader />
-                <SalesInvoiceLines />
-                <SalesInvoiceTotals />
-                <div>
+                <div id="divActionsTop">
+                    <EditButton />
+                </div>
+                <div id="divSalesInvoiceForm">
+                    <ValidationErrors />
+                    <SalesInvoiceHeader />
+                    <SalesInvoiceLines />
+                    <SalesInvoiceTotals />
+                </div>
+                <div id="divActionsBottom">
                     <SaveInvoiceButton />
                     <CancelInvoiceButton />
                     <PostButton />
