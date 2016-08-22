@@ -1,8 +1,14 @@
 ﻿@model string
 
 <div>
-    <a href="~/sales/addreceipt"><i class="fa fa-plus margin-a"></i>New Receipt</a>
-    <a href="~/sales/allocate/" id="linkAllocate" class="inactiveLink"><i class="fa fa-tasks margin-a"></i>Allocate</a>
+    <a href="~/sales/addreceipt" class="btn">
+        <i class="fa fa-plus"></i>
+        New Receipt
+    </a>
+    <a href="~/sales/allocate/" id="linkAllocate" class="btn inactiveLink">
+        <i class="fa fa-tasks"></i>
+        Allocate
+    </a>
 </div>
 <div>
     <div id="receipts" class="ag-fresh" style="height: 400px;"></div>
@@ -27,18 +33,18 @@
         // PROPERTIES - simple boolean / string / number properties
         rowSelection: 'single',
         onSelectionChanged: onSelectionChanged,
-     };
+    };
 
     function onSelectionChanged() {
         var selectedRows = gridOptions.api.getSelectedRows();
         selectedRow = selectedRows[0];
-        
+
         document.getElementById('linkAllocate').setAttribute('href', 'allocate/' + selectedRow.id);
-        
+
         if(selectedRow.remainingAmountToAllocate > 0)
-            document.getElementById('linkAllocate').setAttribute('class', '');
+            document.getElementById('linkAllocate').setAttribute('class', 'btn');
         else
-            document.getElementById('linkAllocate').setAttribute('class', 'inactiveLink');
+            document.getElementById('linkAllocate').setAttribute('class', 'btn inactiveLink');
     }
 
     // wait for the document to be loaded, otherwise

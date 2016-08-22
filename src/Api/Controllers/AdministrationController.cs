@@ -1,6 +1,10 @@
 ﻿using Dto.Administration;
 using Microsoft.AspNetCore.Mvc;
 using Services.Administration;
+using Services.Financial;
+using Services.Inventory;
+using Services.Purchasing;
+using Services.Sales;
 using System;
 
 namespace Api.Controllers
@@ -9,10 +13,46 @@ namespace Api.Controllers
     public class AdministrationController : BaseController
     {
         private readonly IAdministrationService _adminService;
+        private readonly IFinancialService _financialService;
+        private readonly ISalesService _salesService;
+        private readonly IPurchasingService _purchasingService;
+        private readonly IInventoryService _inventoryService;
 
-        public AdministrationController(IAdministrationService adminService)
+        public AdministrationController(IAdministrationService adminService,
+            IFinancialService financialService,
+            ISalesService salesService,
+            IPurchasingService purchasingService,
+            IInventoryService inventoryService)
         {
             _adminService = adminService;
+            _financialService = financialService;
+            _salesService = salesService;
+            _purchasingService = purchasingService;
+            _inventoryService = inventoryService;
+        }
+
+        [HttpGet]
+        [Route("[action]")]
+        public IActionResult InitializedCompany()
+        {
+            if(!_adminService.IsSystemInitialized())
+            {
+                try
+                {
+                    if (_adminService.GetDefaultCompany() == null)
+                    {
+                        var company = new Company()
+                        {
+                            Name = "Financial Solutions Inc.",
+                            CompanyCode = "100",
+                            ShortName = "FSI",
+                        };
+                    }
+                }
+                catch { }
+            }
+
+            return new ObjectResult(Ok());
         }
 
         [HttpGet]

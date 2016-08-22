@@ -26,6 +26,7 @@ export default class SalesStore {
             invoiceDate: this.salesInvoice.invoiceDate,
             paymentTermId: this.salesInvoice.paymentTermId,
             referenceNo: this.salesInvoice.referenceNo,
+            posted: this.salesInvoice.posted,
             salesInvoiceLines: []
         });
 
@@ -40,11 +41,13 @@ export default class SalesStore {
                 this.salesInvoice.referenceNo = result.data.referenceNo;
                 this.salesInvoice.invoiceDate = result.data.orderDate;
                 for (var i = 0; i < result.data.salesOrderLines.length; i++) {
+                    if (result.data.salesOrderLines[i].remainingQtyToInvoice == 0)
+                        continue;
                     this.addLineItem(
                         result.data.salesOrderLines[i].id,
                         result.data.salesOrderLines[i].itemId,
                         result.data.salesOrderLines[i].measurementId,
-                        result.data.salesOrderLines[i].quantity,
+                        result.data.salesOrderLines[i].remainingQtyToInvoice,
                         result.data.salesOrderLines[i].amount,
                         result.data.salesOrderLines[i].discount
                     );
@@ -60,6 +63,7 @@ export default class SalesStore {
                 this.salesInvoice.paymentTermId = result.data.paymentTermId;
                 this.salesInvoice.referenceNo = result.data.referenceNo;
                 this.salesInvoice.invoiceDate = result.data.invoiceDate;
+                this.salesInvoice.posted = result.data.posted;
                 for (var i = 0; i < result.data.salesInvoiceLines.length; i++) {
                     this.addLineItem(
                         result.data.salesInvoiceLines[i].id,

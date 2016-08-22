@@ -23,24 +23,19 @@
   transition: none !important;
 }
 
-.margin-a{
-    margin: 2px;
-}
-
 .inactiveLink {
    pointer-events: none;
    opacity: 0.65;
    filter: alpha(opacity=65);
-   color:gray;
-   /*cursor: default;*/
+   color:#cabfbf;   
 }
 
 .pull-right{
     float: right;
 }
 
-.disabled {
-  pointer-events: none;
-  opacity: 0.65;
-  filter: alpha(opacity=65);
+.disabledControl {
+   pointer-events: none;
+   opacity: 0.95;
+   filter: alpha(opacity=65);
 }

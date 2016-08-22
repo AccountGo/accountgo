@@ -1,19 +1,34 @@
 ﻿@model string
 
 <div>
-    <a href="~/purchasing/addpurchaseinvoice"><i class="fa fa-plus margin-a"></i>New Invoice</a>
-    <a href="~/purchasing/purchaseinvoice" id="linkViewInvoice" class="inactiveLink"><i class="fa fa-edit margin-a"></i>View</a>
-    <a href="~/purchasing/payment" id="linkMakePayment" class="inactiveLink"><i class="fa fa-tasks margin-a"></i>Make Payment</a>
+    <a href="~/purchasing/addpurchaseinvoice" class="btn">
+        <i class="fa fa-plus margin-a"></i>
+        New Invoice
+    </a>
+    <a href="~/purchasing/purchaseinvoice" id="linkViewInvoice" class="btn inactiveLink">
+        <i class="fa fa-edit margin-a"></i>
+        View
+    </a>
+    <a href="~/purchasing/payment" id="linkMakePayment" class="btn inactiveLink">
+        <i class="fa fa-tasks margin-a"></i>
+        Make Payment
+    </a>
 </div>
 <div>
     <div id="purchaseinvoices" class="ag-fresh" style="height: 400px;"></div>
 </div>
 <script>
     var columnDefs = [
-        {headerName: "Invoice", field: "id", width: 50},
+        {headerName: "No", field: "no", width: 50},
         {headerName: "Vendor Name", field: "vendorName", width: 350},
         {headerName: "Invoice Date", field: "invoiceDate", width: 100},
-        {headerName: "Amount", field: "amount", width: 100}
+        {headerName: "Amount", field: "amount", width: 100},
+        {headerName: "Ref no", field: "referenceNo", width: 100},
+        {headerName: "Posted", width: 100, cellRenderer: function(val) {
+            if(val.data.posted)
+                return '<input type="checkbox" checked disabled />';
+            return '<input type="checkbox" disabled />';
+        }},
     ];
 
     var gridOptions = {
@@ -28,16 +43,16 @@
     function onSelectionChanged() {
         var selectedRows = gridOptions.api.getSelectedRows();
         selectedRow = selectedRows[0];
-        
+
         document.getElementById('linkMakePayment').setAttribute('href', 'payment/' + selectedRow.id);
         document.getElementById('linkViewInvoice').setAttribute('href', 'purchaseinvoice?invoiceId=' + selectedRow.id);
-        
-        if(!selectedRow.isPaid && selectedRow.isPosted)
-            document.getElementById('linkMakePayment').setAttribute('class', '');
-        else
-            document.getElementById('linkMakePayment').setAttribute('class', 'inactiveLink');
 
-        document.getElementById('linkViewInvoice').setAttribute('class', '');
+        if(!selectedRow.isPaid && selectedRow.posted)
+            document.getElementById('linkMakePayment').setAttribute('class', 'btn');
+        else
+            document.getElementById('linkMakePayment').setAttribute('class', 'btn inactiveLink');
+
+        document.getElementById('linkViewInvoice').setAttribute('class', 'btn');
     }
 
     // wait for the document to be loaded, otherwise

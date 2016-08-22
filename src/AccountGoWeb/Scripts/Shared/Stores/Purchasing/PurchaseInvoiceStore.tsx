@@ -26,6 +26,7 @@ export default class PurchaseOrderStore {
             invoiceDate: this.purchaseInvoice.invoiceDate,
             paymentTermId: this.purchaseInvoice.paymentTermId,
             referenceNo: this.purchaseInvoice.referenceNo,
+            posted: this.purchaseInvoice.posted,
             purchaseInvoiceLines: []
         });
 
@@ -34,17 +35,19 @@ export default class PurchaseOrderStore {
         if (purchId !== undefined) {
             axios.get(Config.apiUrl + "api/purchasing/purchaseorder?id=" + purchId)
                 .then(function (result) {
-                    this.purchaseInvoice.purchaseOrderHeaderId = purchId;     
+                    this.purchaseInvoice.fromPurchaseOrderId = purchId;     
                     this.purchaseInvoice.paymentTermId = result.data.paymentTermId;
                     this.purchaseInvoice.referenceNo = result.data.referenceNo;
                     this.changedVendor(result.data.vendorId);
                     this.changedInvoiceDate(result.data.orderDate);
                     for (var i = 0; i < result.data.purchaseOrderLines.length; i++) {
+                        if (result.data.purchaseOrderLines[i].remainingQtyToInvoice == 0)
+                            continue;
                         this.addLineItem(
                             result.data.purchaseOrderLines[i].id,
                             result.data.purchaseOrderLines[i].itemId,
                             result.data.purchaseOrderLines[i].measurementId,
-                            result.data.purchaseOrderLines[i].quantity,
+                            result.data.purchaseOrderLines[i].remainingQtyToInvoice,
                             result.data.purchaseOrderLines[i].amount,
                             result.data.purchaseOrderLines[i].discount
                         );
@@ -62,6 +65,7 @@ export default class PurchaseOrderStore {
                     this.purchaseInvoice.referenceNo = result.data.referenceNo;
                     this.changedVendor(result.data.vendorId);
                     this.changedInvoiceDate(result.data.invoiceDate);
+                    this.purchaseInvoice.posted = result.data.posted;
                     for (var i = 0; i < result.data.purchaseInvoiceLines.length; i++) {
                         this.addLineItem(
                             result.data.purchaseInvoiceLines[i].id,

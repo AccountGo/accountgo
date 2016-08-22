@@ -22,13 +22,14 @@ namespace Services.Purchasing
         Vendor GetVendorById(int id);
         IEnumerable<PurchaseOrderHeader> GetPurchaseOrders();
         PurchaseOrderHeader GetPurchaseOrderById(int id);
+        PurchaseOrderLine GetPurchaseOrderLineById(int id);
         PurchaseReceiptHeader GetPurchaseReceiptById(int id);
         void AddVendor(Vendor vendor);
         void UpdateVendor(Vendor vendor);
         IEnumerable<PurchaseInvoiceHeader> GetPurchaseInvoices();
         PurchaseInvoiceHeader GetPurchaseInvoiceById(int id);
         void SavePayment(int invoiceId, int vendorId, int accountId, decimal amount, DateTime date);
-        void SavePurchaseInvoice(PurchaseInvoiceHeader purchaseInvoice, PurchaseReceiptHeader purchaseReceipt, PurchaseOrderHeader purchaseOrder);
+        void SavePurchaseInvoice(PurchaseInvoiceHeader purchaseInvoice, PurchaseOrderHeader purchaseOrder);
         void PostPurchaseInvoice(int invoiceId);
     }
 }

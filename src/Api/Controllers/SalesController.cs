@@ -6,6 +6,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Core.Domain;
+using Core.Domain.Sales;
+using Dto.Sales;
 
 namespace Api.Controllers
 {
@@ -169,25 +171,46 @@ namespace Api.Controllers
             var salesOrders = _salesService.GetSalesOrders();
             IList<Dto.Sales.SalesOrder> salesOrdersDto = new List<Dto.Sales.SalesOrder>();
 
-            foreach (var salesOrder in salesOrders)
+            try
             {
-                var salesOrderDto = new Dto.Sales.SalesOrder()
+                foreach (var salesOrder in salesOrders)
                 {
-                    Id = salesOrder.Id,
-                    PaymentTermId = salesOrder.PaymentTermId,
-                    CustomerId = salesOrder.CustomerId.Value,
-                    CustomerNo = salesOrder.Customer.No,
-                    CustomerName = salesOrder.Customer.Party.Name,
-                    OrderDate = salesOrder.Date,
-                    ReferenceNo = salesOrder.ReferenceNo,
-                    Amount = salesOrder.SalesOrderLines.Sum(l => l.Amount),
-                    Status = (int)salesOrder.Status.GetValueOrDefault()
+                    var salesOrderDto = new Dto.Sales.SalesOrder()
+                    {
+                        Id = salesOrder.Id,
+                        PaymentTermId = salesOrder.PaymentTermId,
+                        CustomerId = salesOrder.CustomerId.Value,
+                        CustomerNo = salesOrder.Customer.No,
+                        CustomerName = salesOrder.Customer.Party.Name,
+                        OrderDate = salesOrder.Date,
+                        ReferenceNo = salesOrder.ReferenceNo,
+                        Status = (int)salesOrder.Status.GetValueOrDefault(),
+                        No = salesOrder.No
+                    };
 
-                };
-                salesOrdersDto.Add(salesOrderDto);
+                    foreach (var line in salesOrder.SalesOrderLines)
+                    {
+                        var lineDto = new Dto.Sales.SalesOrderLine()
+                        {
+                            ItemId = line.ItemId,
+                            MeasurementId = line.MeasurementId,
+                            Quantity = line.Quantity,
+                            Amount = line.Amount,
+                            Discount = line.Discount,
+                            RemainingQtyToInvoice = line.GetRemainingQtyToInvoice()
+                        };
+                        salesOrderDto.SalesOrderLines.Add(lineDto);
+                    }
+
+                    salesOrdersDto.Add(salesOrderDto);
+                }
+
+                return new ObjectResult(salesOrdersDto);
             }
-
-            return new ObjectResult(salesOrdersDto);
+            catch (Exception ex)
+            {
+                return new ObjectResult(ex);
+            }
         }
 
         [HttpGet]
@@ -205,13 +228,11 @@ namespace Api.Controllers
                     CustomerNo = salesOrder.Customer.No,
                     CustomerName = _salesService.GetCustomerById(salesOrder.CustomerId.Value).Party.Name,
                     OrderDate = salesOrder.Date,
-                    Amount = salesOrder.SalesOrderLines.Sum(l => l.Amount),
                     PaymentTermId = salesOrder.PaymentTermId,
                     ReferenceNo = salesOrder.ReferenceNo,
                     SalesOrderLines = new List<Dto.Sales.SalesOrderLine>()
                 };
-
-                //salesOrderDto.ReferenceNo = salesOrder.ReferenceNo;
+                
                 foreach (var line in salesOrder.SalesOrderLines)
                 {
                     var lineDto = new Dto.Sales.SalesOrderLine();
@@ -223,6 +244,7 @@ namespace Api.Controllers
                     lineDto.ItemDescription = line.Item.Description;
                     lineDto.MeasurementId = line.MeasurementId;
                     lineDto.MeasurementDescription = line.Measurement.Description;
+                    lineDto.RemainingQtyToInvoice = line.GetRemainingQtyToInvoice();
 
                     salesOrderDto.SalesOrderLines.Add(lineDto);
                 }
@@ -249,10 +271,10 @@ namespace Api.Controllers
                     CustomerId = salesInvoice.CustomerId,
                     CustomerName = salesInvoice.Customer.Party.Name,
                     InvoiceDate = salesInvoice.Date,
-                    TotalAmount = salesInvoice.SalesInvoiceLines.Sum(l => l.Amount),
                     SalesInvoiceLines = new List<Dto.Sales.SalesInvoiceLine>(),
                     PaymentTermId = salesInvoice.PaymentTermId,
-                    ReferenceNo = salesInvoice.ReferenceNo
+                    ReferenceNo = salesInvoice.ReferenceNo,
+                    Posted = salesInvoice.GeneralLedgerHeaderId != null
                 };
 
                 foreach (var line in salesInvoice.SalesInvoiceLines)
@@ -324,6 +346,7 @@ namespace Api.Controllers
                 var quoteDto = new Dto.Sales.SalesQuotation()
                 {
                     Id = quote.Id,
+                    No = quote.No,
                     CustomerId = quote.CustomerId,
                     CustomerName = quote.Customer.Party.Name,
                     PaymentTermId = quote.PaymentTermId,
@@ -395,11 +418,26 @@ namespace Api.Controllers
                 var salesInvoiceDto = new Dto.Sales.SalesInvoice()
                 {
                     Id = salesInvoice.Id,
+                    No = salesInvoice.No,
                     CustomerId = salesInvoice.CustomerId,
                     CustomerName = salesInvoice.Customer.Party.Name,
                     InvoiceDate = salesInvoice.Date,
-                    TotalAmount = salesInvoice.SalesInvoiceLines.Sum(l => l.Amount)
+                    ReferenceNo = salesInvoice.ReferenceNo,
+                    Posted = salesInvoice.GeneralLedgerHeaderId != null
                 };
+
+                foreach (var line in salesInvoice.SalesInvoiceLines)
+                {
+                    var lineDto = new Dto.Sales.SalesInvoiceLine()
+                    {
+                        ItemId = line.ItemId,
+                        MeasurementId = line.MeasurementId,
+                        Quantity = line.Quantity,
+                        Amount = line.Amount,
+                        Discount = line.Discount
+                    };
+                    salesInvoiceDto.SalesInvoiceLines.Add(lineDto);
+                }
 
                 salesInvoicesDto.Add(salesInvoiceDto);
             }
@@ -446,7 +484,7 @@ namespace Api.Controllers
                 CustomerName = salesReceipt.Customer.Party.Name,
                 ReceiptDate = salesReceipt.Date,
                 Amount = salesReceipt.Amount,
-                RemainingAmountToAllocate = salesReceipt.AvailableAmountToAllocate
+                RemainingAmountToAllocate = salesReceipt.AvailableAmountToAllocate                        
             };
 
             return new ObjectResult(salesReceiptDto);
@@ -469,7 +507,6 @@ namespace Api.Controllers
                         Id = invoice.Id,
                         InvoiceDate = invoice.Date,
                         CustomerId = invoice.CustomerId,
-                        TotalAmount = invoice.ComputeTotalAmount(),
                         TotalAllocatedAmount = (decimal)invoice.CustomerAllocations.Sum(i => i.Amount),
                         Posted = invoice.GeneralLedgerHeaderId.HasValue
                     };
@@ -513,10 +550,6 @@ namespace Api.Controllers
                 else
                 {
                     salesOrder = _salesService.GetSalesOrderById(salesOrderDto.Id);
-
-                    var deleted = from line in salesOrder.SalesOrderLines
-                                  where !salesOrderDto.SalesOrderLines.Any(x => x.Id == line.Id)
-                                  select line;
                 }
 
                 salesOrder.CustomerId = salesOrderDto.CustomerId;
@@ -571,6 +604,12 @@ namespace Api.Controllers
                     var deleted = (from line in salesOrder.SalesOrderLines
                                    where !salesOrderDto.SalesOrderLines.Any(x => x.Id == line.Id)
                                    select line).ToList();
+
+                    foreach (var line in deleted)
+                    {
+                        if (line.SalesInvoiceLines.Count() > 0)
+                            throw new Exception("The line cannot be deleted. An invoice line is created from the item.");
+                    }
 
                     foreach (var line in deleted)
                     {
@@ -639,21 +678,12 @@ namespace Api.Controllers
 
                 bool isNew = salesInvoiceDto.Id == 0;
                 Core.Domain.Sales.SalesInvoiceHeader salesInvoice = null;
-                Core.Domain.Sales.SalesDeliveryHeader salesDelivery = null;
                 Core.Domain.Sales.SalesOrderHeader salesOrder = null;
 
+                // Creating a new invoice
                 if (isNew)
                 {
-                    salesInvoice = new Core.Domain.Sales.SalesInvoiceHeader();
-                    salesInvoice.CustomerId = salesInvoiceDto.CustomerId.GetValueOrDefault();
-                    salesInvoice.Date = salesInvoiceDto.InvoiceDate;
-                    salesInvoice.PaymentTermId = salesInvoiceDto.PaymentTermId;
-                    salesInvoice.ReferenceNo = salesInvoiceDto.ReferenceNo;
-
-                    salesDelivery = new Core.Domain.Sales.SalesDeliveryHeader();
-                    salesDelivery.CustomerId = salesInvoiceDto.CustomerId.GetValueOrDefault();
-                    salesDelivery.Date = salesInvoiceDto.InvoiceDate;
-
+                    // if fromsalesorderid has NO value, then create automatically a new sales order.
                     if (!salesInvoiceDto.FromSalesOrderId.HasValue)
                     {
                         salesOrder = new Core.Domain.Sales.SalesOrderHeader();
@@ -661,44 +691,56 @@ namespace Api.Controllers
                         salesOrder.PaymentTermId = salesInvoiceDto.PaymentTermId;
                         salesOrder.CustomerId = salesInvoiceDto.CustomerId;
                         salesOrder.ReferenceNo = salesInvoiceDto.ReferenceNo;
+                        salesOrder.Status = SalesOrderStatus.FullyInvoiced;
                     }
+                    else
+                    {
+                        // else,  your invoice is created from existing (open) sales order.
+                        salesOrder = _salesService.GetSalesOrderById(salesInvoiceDto.FromSalesOrderId.GetValueOrDefault());
+                    }
+
+                    // populate invoice header
+                    salesInvoice = new Core.Domain.Sales.SalesInvoiceHeader();
+                    salesInvoice.CustomerId = salesInvoiceDto.CustomerId.GetValueOrDefault();
+                    salesInvoice.Date = salesInvoiceDto.InvoiceDate;
+                    salesInvoice.PaymentTermId = salesInvoiceDto.PaymentTermId;
+                    salesInvoice.ReferenceNo = salesInvoiceDto.ReferenceNo;
 
                     foreach (var line in salesInvoiceDto.SalesInvoiceLines)
                     {
                         var salesInvoiceLine = new Core.Domain.Sales.SalesInvoiceLine();
-                        salesInvoice.SalesInvoiceLines.Add(salesInvoiceLine);
+                        
                         salesInvoiceLine.Amount = line.Amount.GetValueOrDefault();
                         salesInvoiceLine.Discount = line.Discount.GetValueOrDefault();
                         salesInvoiceLine.Quantity = line.Quantity.GetValueOrDefault();
                         salesInvoiceLine.ItemId = line.ItemId.GetValueOrDefault();
                         salesInvoiceLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
+                        salesInvoice.SalesInvoiceLines.Add(salesInvoiceLine);
 
+                        // line.Id here is referring to SalesOrderLineId. It is pre-populated when you create a new sales invoice from sales order.
                         if (line.Id != 0)
-                            salesInvoiceLine.SalesOrderLineId = line.Id; // This Id is also the SalesOrderLineId when you create sales invoice directly from sales order.
+                        {
+                            salesInvoiceLine.SalesOrderLineId = line.Id;
+                        }
                         else
                         {
+                            // if you reach here, this line item is newly added to invoice which is not originally in sales order. create correspondin orderline and add to sales order.
                             var salesOrderLine = new Core.Domain.Sales.SalesOrderLine();
-                            salesOrder.SalesOrderLines.Add(salesOrderLine);
                             salesOrderLine.Amount = line.Amount.GetValueOrDefault();
                             salesOrderLine.Discount = line.Discount.GetValueOrDefault();
                             salesOrderLine.Quantity = line.Quantity.GetValueOrDefault();
                             salesOrderLine.ItemId = line.ItemId.GetValueOrDefault();
                             salesOrderLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
                             salesInvoiceLine.SalesOrderLine = salesOrderLine;
-                        }
+                            salesOrder.SalesOrderLines.Add(salesOrderLine);                            
 
-                        var salesDeliveryLine = new Core.Domain.Sales.SalesDeliveryLine();
-                        salesDeliveryLine.Price = line.Amount.GetValueOrDefault();
-                        salesDeliveryLine.Discount = line.Discount.GetValueOrDefault();
-                        salesDeliveryLine.Quantity = line.Quantity.GetValueOrDefault();
-                        salesDeliveryLine.ItemId = line.ItemId.GetValueOrDefault();
-                        salesDeliveryLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
-                        salesDeliveryLine.SalesInvoiceLine = salesInvoiceLine;
-                        salesDelivery.SalesDeliveryLines.Add(salesDeliveryLine);
+                            salesInvoiceLine.SalesOrderLine = salesOrderLine; // map invoice line to newly added orderline
+                        }
                     }
                 }
                 else
                 {
+                    // if you reach here, you are updating existing invoice.
                     salesInvoice = _salesService.GetSalesInvoiceById(salesInvoiceDto.Id);
 
                     if (salesInvoice.GeneralLedgerHeaderId.HasValue)
@@ -718,42 +760,40 @@ namespace Api.Controllers
                             existingLine.Quantity = line.Quantity.GetValueOrDefault();
                             existingLine.ItemId = line.ItemId.GetValueOrDefault();
                             existingLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
-
-                            // Also modify the salesdelivery. find by salesinvoicelineid.
-                            //existingLine.SalesDeliveryLine.Price = line.Amount.GetValueOrDefault();
-                            //existingLine.SalesDeliveryLine.Discount = line.Discount.GetValueOrDefault();
-                            //existingLine.SalesDeliveryLine.Quantity = line.Quantity.GetValueOrDefault();
-                            //existingLine.SalesDeliveryLine.ItemId = line.ItemId.GetValueOrDefault();
-                            //existingLine.SalesDeliveryLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
                         }
                         else
                         {
-                            //New line item has been added to invoice. It has no SalesOrderLineId.
+                            //if you reach here, this line item is newly added to invoice. also, it has no SalesOrderLineId.
                             var salesInvoiceLine = new Core.Domain.Sales.SalesInvoiceLine();
                             salesInvoiceLine.Amount = line.Amount.GetValueOrDefault();
                             salesInvoiceLine.Discount = line.Discount.GetValueOrDefault();
                             salesInvoiceLine.Quantity = line.Quantity.GetValueOrDefault();
                             salesInvoiceLine.ItemId = line.ItemId.GetValueOrDefault();
                             salesInvoiceLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
-                            if (line.Id != 0)
-                                salesInvoiceLine.SalesOrderLineId = line.Id; // This Id is also the SalesOrderLineId when you create sales invoice directly from sales order.
                             salesInvoice.SalesInvoiceLines.Add(salesInvoiceLine);
 
-                            if (salesDelivery == null)
-                            {
-                                salesDelivery = new Core.Domain.Sales.SalesDeliveryHeader();
-                                salesDelivery.CustomerId = salesInvoiceDto.CustomerId.GetValueOrDefault();
-                                salesDelivery.Date = salesInvoiceDto.InvoiceDate;
-                            }
+                            // add a new order line.
+                            var salesOrderLine = new Core.Domain.Sales.SalesOrderLine();
+                            salesOrderLine.Amount = line.Amount.GetValueOrDefault();
+                            salesOrderLine.Discount = line.Discount.GetValueOrDefault();
+                            salesOrderLine.Quantity = line.Quantity.GetValueOrDefault();
+                            salesOrderLine.ItemId = line.ItemId.GetValueOrDefault();
+                            salesOrderLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
 
-                            var salesDeliveryLine = new Core.Domain.Sales.SalesDeliveryLine();
-                            salesDeliveryLine.Price = line.Amount.GetValueOrDefault();
-                            salesDeliveryLine.Discount = line.Discount.GetValueOrDefault();
-                            salesDeliveryLine.Quantity = line.Quantity.GetValueOrDefault();
-                            salesDeliveryLine.ItemId = line.ItemId.GetValueOrDefault();
-                            salesDeliveryLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
-                            salesDeliveryLine.SalesInvoiceLine = salesInvoiceLine;
-                            salesDelivery.SalesDeliveryLines.Add(salesDeliveryLine);
+                            // but on what order should the new orderline be added?
+                            // note: each invoice is map to one and only one sales order. it can't be done that invoice lines came from multiple sales orders.
+                            // with this rule, we are sure that all invoice lines are contained in the same sales order.
+                            // therefore, we could just pick the first line, get the salesorderlineid, then get the salesorderheader.
+
+                            // you will retrieve salesorder one time.
+                            if(salesOrder == null)
+                            {
+                                // use the last value of existingLine
+                                salesOrder = _salesService.GetSalesOrderLineById(existingLine.SalesOrderLine.SalesOrderHeaderId).SalesOrderHeader;
+                                salesOrder.SalesOrderLines.Add(salesOrderLine);
+                            }                            
+
+                            salesInvoiceLine.SalesOrderLine = salesOrderLine; // map invoice line to newly added orderline
                         }
                     }
                 }
@@ -767,20 +807,10 @@ namespace Api.Controllers
                     foreach (var line in deleted)
                     {
                         salesInvoice.SalesInvoiceLines.Remove(line);
-
-                        if (salesDelivery != null)
-                        {
-                            var deliveryLine = salesDelivery.SalesDeliveryLines.ToList()
-                                .Where(s => s.SalesInvoiceLineId == line.Id)
-                                .FirstOrDefault();
-
-                            if (deliveryLine != null)
-                                salesDelivery.SalesDeliveryLines.Remove(deliveryLine);
-                        }
                     }
                 }
 
-                _salesService.SaveSalesInvoice(salesInvoice, salesDelivery, salesOrder);
+                _salesService.SaveSalesInvoice(salesInvoice, salesOrder);
 
                 return new OkObjectResult(Ok());
             }
@@ -789,6 +819,71 @@ namespace Api.Controllers
                 errors = new string[1] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
                 return new BadRequestObjectResult(errors);
             }
+        }
+
+        private SalesOrderHeader SetSalesOrderStatus(SalesInvoice salesInvoiceDto, SalesOrderHeader salesOrder,
+            SalesInvoiceHeader salesInvoice)
+        {
+            bool isFullyInvoiced = false;
+
+
+            if (salesInvoiceDto.FromSalesOrderId != null)
+            {
+                salesOrder = _salesService.GetSalesOrderById((int) salesInvoiceDto.FromSalesOrderId);
+            }
+
+            var salesInvoiceContainer = salesInvoice;
+            foreach (var previouseSalesOrderLine in salesOrder.SalesOrderLines)
+            {
+                foreach (var previousSalesInvoiceLine in previouseSalesOrderLine.SalesInvoiceLines)
+                {
+                    var previousSalesInvoice = _salesService.GetSalesInvoiceById(previousSalesInvoiceLine.SalesInvoiceHeaderId);
+                    if (previousSalesInvoice != null)
+                    {
+                        foreach (var additionalSalesInvoiceLine in previousSalesInvoice.SalesInvoiceLines)
+                        {
+                            if (!salesInvoiceContainer.SalesInvoiceLines.Contains(additionalSalesInvoiceLine))
+                            {
+                                salesInvoiceContainer.SalesInvoiceLines.Add(additionalSalesInvoiceLine);
+                            }
+                        }
+                    }
+                }
+            }
+            if (salesOrder != null)
+            {
+                if (salesOrder.SalesOrderLines.Count > salesInvoiceContainer.SalesInvoiceLines.Count)
+                {
+                    isFullyInvoiced = false;
+                }
+                else
+                {
+                    foreach (var salesOrderLine in salesOrder.SalesOrderLines.OrderByDescending(o => o.ItemId))
+                    {
+                        var salesInvoiceLine =
+                            salesInvoiceContainer.SalesInvoiceLines.FirstOrDefault(o => o.ItemId == salesOrderLine.ItemId);
+                        if (salesInvoiceLine != null)
+                        {
+                            if (salesInvoiceLine.Quantity >= salesOrderLine.Quantity)
+                            {
+                                isFullyInvoiced = true;
+                            }
+                            else
+                            {
+                                isFullyInvoiced = false;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
+
+            if (isFullyInvoiced)
+            {
+                salesOrder.Status = SalesOrderStatus.FullyInvoiced;
+            }
+            return salesOrder;
         }
 
         [HttpPost]

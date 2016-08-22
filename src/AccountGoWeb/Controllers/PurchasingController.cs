@@ -164,7 +164,7 @@ namespace AccountGoWeb.Controllers
             var model = new Models.Purchasing.Payment()
             {
                 InvoiceId = invoice.Id,
-                InvoiceNo = invoice.InvoiceNo,
+                InvoiceNo = invoice.No,
                 VendorId = invoice.VendorId,
                 VendorName = invoice.VendorName,
                 InvoiceAmount = invoice.Amount,

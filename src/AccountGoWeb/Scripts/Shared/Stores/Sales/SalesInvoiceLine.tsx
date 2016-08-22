@@ -5,6 +5,7 @@
     quantity: number;
     amount: number;
     discount: number;
+    remainingQtyToInvoice: number;
 
     constructor(id, itemId, measurementId, quantity, amount, discount) {
         this.id = id;
@@ -13,5 +14,6 @@
         this.quantity = quantity;
         this.amount = amount;
         this.discount = discount;
+        this.remainingQtyToInvoice = quantity;
     }
 }
