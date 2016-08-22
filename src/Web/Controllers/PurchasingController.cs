@@ -250,7 +250,7 @@ namespace Web.Controllers
                         Quantity = line.Quantity,
                         Cost = line.Cost,
                         TotalLineCost = line.Cost * line.Quantity,
-                        ReceivedQuantity = line.GetReceivedQuantity().Value
+                        //ReceivedQuantity = line.GetReceivedQuantity().Value
                     });
                 }
             }

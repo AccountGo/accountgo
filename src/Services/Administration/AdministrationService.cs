@@ -26,6 +26,7 @@ namespace Services.Administration
         private readonly IRepository<GeneralLedgerSetting> _genetalLedgerSetting;
         private readonly IRepository<Tax> _taxRepo;
         private readonly IRepository<Company> _company;
+        private readonly IRepository<Account> _accountRepo;
 
         public AdministrationService(IRepository<FinancialYear> fiscalYearRepo,
             IRepository<TaxGroup> taxGroupRepo,
@@ -34,7 +35,9 @@ namespace Services.Administration
             IRepository<Bank> bankRepo,
             IRepository<Tax> taxRepo,
             IRepository<GeneralLedgerSetting> generalLedgerSetting,
-            IRepository<Company> company = null)
+            IRepository<Account> accountRepo,
+            IRepository<Company> company = null
+            )
             : base(null, generalLedgerSetting, paymentTermRepo, bankRepo)
         {
             _fiscalYearRepo = fiscalYearRepo;
@@ -45,6 +48,7 @@ namespace Services.Administration
             _genetalLedgerSetting = generalLedgerSetting;
             _taxRepo = taxRepo;
             _company = company;
+            _accountRepo = accountRepo;
         }
 
         public ICollection<Tax> GetAllTaxes(bool includeInActive)
@@ -114,6 +118,19 @@ namespace Services.Administration
         {
             if (company.Id == 0) { _company.Insert(company); }
             else { _company.Update(company); }
+        }
+
+        public bool IsSystemInitialized()
+        {
+            bool initialized = true;
+
+            if (_company.Table.FirstOrDefault() == null)
+                return false;
+
+            if (_accountRepo.Table.AsEnumerable().Count() < 6)
+                return false;
+
+            return initialized;
         }
     }
 }

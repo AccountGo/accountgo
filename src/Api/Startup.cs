@@ -67,7 +67,9 @@ namespace Api
             // generic repository
             services.AddScoped(typeof(Core.Data.IRepository<>), typeof(Data.EfRepository<>));
 
+            // custom repositories
             services.AddScoped(typeof(Core.Data.ISalesOrderRepository), typeof(Data.SalesOrderRepository));
+            services.AddScoped(typeof(Core.Data.IPurchaseOrderRepository), typeof(Data.PurchaseOrderRepository));
 
             // domain services
             services.AddScoped(typeof(Services.Sales.ISalesService), typeof(Services.Sales.SalesService));
@@ -84,10 +86,10 @@ namespace Api
         {
             loggerFactory.AddConsole(Configuration.GetSection("Logging"));
             loggerFactory.AddDebug();
-
-            app.UseCors("AllowAll");            
+                      
             app.UseStaticFiles();
             app.UseIdentity();
+            app.UseCors("AllowAll");
             app.UseMvc();
             //app.UseSwaggerGen();
             //app.UseSwaggerUi();

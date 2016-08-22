@@ -5,6 +5,7 @@ namespace Dto.Sales
 {
     public class SalesQuotation : BaseDto
     {
+        public string No { get; set; }
         public int? CustomerId { get; set; }
         public string CustomerName { get; set; }
         public DateTime QuotationDate { get; set; }

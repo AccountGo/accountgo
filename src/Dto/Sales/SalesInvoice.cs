@@ -5,18 +5,42 @@ namespace Dto.Sales
 {
     public class SalesInvoice : BaseDto
     {
+        public string No { get; set; }
         public int? CustomerId { get; set; }        
         public DateTime InvoiceDate { get; set; }
         public int? PaymentTermId { get; set; }
         public int? FromSalesOrderId { get; set; }
         public int? FromSalesDeliveryId { get; set; }
         public string CustomerName { get; set; }
-        public decimal TotalAmount { get; set; }
+        public decimal Amount { get { return GetTotalAmount(); } }
         public decimal TotalAllocatedAmount { get; set; }
         public string ReferenceNo { get; set; }
         public bool Posted { get; set; }
-
         public IList<SalesInvoiceLine> SalesInvoiceLines { get; set; }
+
+        public SalesInvoice()
+        {
+            SalesInvoiceLines = new List<SalesInvoiceLine>();
+        }
+
+        private decimal GetTotalAmount()
+        {
+            return GetTotalAmountLessTax();
+        }
+
+        private decimal GetTotalAmountLessTax()
+        {
+            decimal total = 0;
+            foreach (var line in SalesInvoiceLines)
+            {
+                decimal quantityXamount = (line.Amount.Value * line.Quantity.Value);
+                decimal discount = 0;
+                if (line.Discount.HasValue)
+                    discount = (line.Discount.Value / 100) > 0 ? (quantityXamount * (line.Discount.Value / 100)) : 0;
+                total += ((line.Amount.Value * line.Quantity.Value) - discount);
+            }
+            return total;
+        }
     }
 
     public class SalesInvoiceLine : BaseDto

@@ -1,8 +1,14 @@
 ﻿@model string
 
 <div>
-    <a href="~/financials/addjournalentry"><i class="fa fa-plus margin-a"></i>New</a>
-    <a href="~/financials/journalentry" id="linkViewJournalEntry" class="inactiveLink"><i class="fa fa-edit margin-a"></i>View</a>
+    <a href="~/financials/addjournalentry" class="btn">
+        <i class="fa fa-plus"></i>
+        New
+    </a>
+    <a href="~/financials/journalentry" id="linkViewJournalEntry" class="btn inactiveLink">
+        <i class="fa fa-edit"></i>
+        View
+    </a>
 </div>
 <div>
     <div id="journalentries" class="ag-fresh" style="height: 400px;"></div>
@@ -11,7 +17,8 @@
     var columnDefs = [
     {headerName: "Journal", field: "id", width: 50},
     {headerName: "Voucher Type", field: "voucherType", width: 50},
-    {headerName: "Amount", field: "amount", width: 50},
+    {headerName: "Debit", field: "debitAmount", width: 50},
+    {headerName: "Credit", field: "creditAmount", width: 50},
     {headerName: "Date", field: "journalDate", width: 100},
     {headerName: "Reference No", field: "referenceNo", width: 50},
     {headerName: "Posted", field: "posted", width: 100, },
@@ -29,9 +36,9 @@
     function onSelectionChanged() {
         var selectedRows = gridOptions.api.getSelectedRows();
         selectedRow = selectedRows[0];
-        
+
         document.getElementById('linkViewJournalEntry').setAttribute('href', 'journalentry?id=' + selectedRow.id);
-        document.getElementById('linkViewJournalEntry').setAttribute('class', '');
+        document.getElementById('linkViewJournalEntry').setAttribute('class', 'btn');
     }
 
     // wait for the document to be loaded, otherwise

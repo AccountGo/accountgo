@@ -118,6 +118,14 @@ namespace Api.Controllers
                 journalEntryDto.JournalEntryLines.Add(lineDto);
             }
 
+            // is this journal entry ready for posting?
+            if (!journalEntryDto.Posted.GetValueOrDefault()
+                && journalEntryDto.JournalEntryLines.Count >= 2
+                && (journalEntryDto.debitAmount == journalEntryDto.creditAmount))
+            {
+                journalEntryDto.ReadyForPosting = true;
+            }
+
             return new ObjectResult(journalEntryDto);
         }
 
@@ -195,7 +203,10 @@ namespace Api.Controllers
                 {
                     if (!isNew)
                     {
-                        var existingLine = journalEntry.JournalEntryLines.Where(j => j.Id == line.Id).FirstOrDefault();
+                        var existingLine = journalEntry.JournalEntryLines
+                            .Where(j => j.Id == line.Id && line.Id != 0)
+                            .FirstOrDefault();
+
                         if (existingLine != null)
                         {
                             existingLine.AccountId = line.AccountId.GetValueOrDefault();

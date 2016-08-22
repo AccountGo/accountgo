@@ -32,7 +32,7 @@ namespace Data
                     if (string.IsNullOrEmpty(_filename))
                         _filename = AppDomain.CurrentDomain.BaseDirectory + "/App_Data/coa.csv";
 
-                    DbInitializerHelper.InsertAdminUser();
+                    //DbInitializerHelper.InsertAdminUser();
 
                     if (_context.Users.Count() == 0)
                         DbInitializerHelper.InitialUserAndSecurityModel();

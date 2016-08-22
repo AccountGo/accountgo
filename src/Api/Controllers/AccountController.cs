@@ -1,134 +1,70 @@
 ﻿using Api.Data;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
 
 namespace Api.Controllers
 {
-    public class AccountController : Controller
+    [Route("api/[controller]")]
+    public class AccountController : BaseController
     {
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly SignInManager<ApplicationUser> _signInManager;
 
-        public AccountController(UserManager<ApplicationUser> userManager,
-            SignInManager<ApplicationUser> signInManager)
+        public AccountController(
+            UserManager<ApplicationUser> userManager,
+            SignInManager<ApplicationUser> signInManager
+            )
         {
             _userManager = userManager;
-            _signInManager = signInManager;
+            _signInManager = signInManager;            
         }
-        
-        //[HttpGet]
-        //[AllowAnonymous]
-        //public IActionResult Register(string returnUrl = null)
-        //{
-        //    ViewData["ReturnUrl"] = returnUrl;
-        //    return View();
-        //}
-        
-        //[HttpPost]
-        //[AllowAnonymous]
-        //[ValidateAntiForgeryToken]
-        //public async Task<IActionResult> Register(RegisterViewModel model, string returnUrl = null)
-        //{
-        //    ViewData["ReturnUrl"] = returnUrl;
-        //    if (ModelState.IsValid)
-        //    {
-        //        var user = new ApplicationUser { UserName = model.Email, Email = model.Email };
-        //        var result = await _userManager.CreateAsync(user, model.Password);
-        //        if (result.Succeeded)
-        //        {
-        //            // For more information on how to enable account confirmation and password reset please visit http://go.microsoft.com/fwlink/?LinkID=532713
-        //            // Send an email with this link
-        //            //var code = await _userManager.GenerateEmailConfirmationTokenAsync(user);
-        //            //var callbackUrl = Url.Action("ConfirmEmail", "Account", new { userId = user.Id, code = code }, protocol: HttpContext.Request.Scheme);
-        //            //await _emailSender.SendEmailAsync(model.Email, "Confirm your account",
-        //            //    $"Please confirm your account by clicking this link: <a href='{callbackUrl}'>link</a>");
-        //            await _signInManager.SignInAsync(user, isPersistent: false);
-        //            //_logger.LogInformation(3, "User created a new account with password.");
-        //            return RedirectToLocal(returnUrl);
-        //        }
-        //        //AddErrors(result);
-        //    }
 
-        //    // If we got this far, something failed, redisplay form
-        //    return View(model);
-        //}
+        [HttpPost]
+        [Route("[action]")]
+        public async System.Threading.Tasks.Task<IActionResult> SignIn([FromBody]dynamic loginViewModel)
+        {
+            if (loginViewModel == null)
+            {
+                throw new System.ArgumentNullException(nameof(loginViewModel));
+            }
 
-        //[HttpGet]
-        //[AllowAnonymous]
-        //public IActionResult SignIn(string returnUrl = null)
-        //{
-        //    ViewData["ReturnUrl"] = returnUrl;
-        //    return View();
-        //}
+            //var error = await _signInManager.PreSignInCheck(user);
+            //if (error != null)
+            //{
+            //    return error;
+            //}
 
-        //[HttpPost]
-        //[AllowAnonymous]
-        //[ValidateAntiForgeryToken]
-        //public async Task<IActionResult> SignIn(LoginViewModel model, string returnUrl = null)
-        //{
-        //    ViewData["ReturnUrl"] = returnUrl;
+            //if (await IsLockedOut(user))
+            //{
+            //    return await LockedOut(user);
+            //}
+            string password = loginViewModel.Password;
+            string username = loginViewModel.Email;
 
-        //    if (ModelState.IsValid)
-        //    {
-        //        //var result = AcquireToken(model.Email, model.Password);
-        //        var result = await _signInManager.PasswordSignInAsync(model.Email, model.Password, model.RememberMe, lockoutOnFailure: false);
+            var user = await _userManager.FindByNameAsync(username);
+                       
+            if (await _userManager.CheckPasswordAsync(user, password))
+            {
+                //await ResetLockout(user);
+                //return SignInResult.Success;
+                return new ObjectResult(_userManager.FindByEmailAsync(user.Email));
+            }
 
-        //        if (result.Succeeded)
-        //        {
-        //            //var claims = new List<Claim>();
-        //            //claims.Add(new Claim(ClaimTypes.IsPersistent, model.RememberMe.ToString()));
-        //            //claims.Add(new Claim(ClaimTypes.Role, "Administrator"));
-        //            //claims.Add(new Claim(ClaimTypes.NameIdentifier, model.Email));
-        //            //claims.Add(new Claim(ClaimTypes.Email, model.Email));
-                    
-        //            //var identity = new ClaimsIdentity(claims, "AuthCookie");
-                    
-        //            //ClaimsPrincipal principal = new ClaimsPrincipal(new[] { identity });
-        //            //HttpContext.User = principal;
+            //Logger.LogWarning(2, "User {userId} failed to provide the correct password.", await UserManager.GetUserIdAsync(user));
 
-        //            //await HttpContext.Authentication.SignInAsync("AuthCookie", principal, new Microsoft.AspNetCore.Http.Authentication.AuthenticationProperties { IsPersistent = model.RememberMe });
-
-        //            return RedirectToLocal(returnUrl);
-        //        }
-        //        else
-        //        {
-        //            ModelState.AddModelError(string.Empty, "Invalid login attempt.");
-        //            return View(model);
-        //        }
-        //    }
-
-        //    // If we got this far, something failed, redisplay form
-        //    return View(model);
-        //}
-
-        //public async Task<IActionResult> SignOut()
-        //{
-        //    //await HttpContext.Authentication.SignOutAsync("AuthCookie");
-        //    //return SignedOut();
-        //    await _signInManager.SignOutAsync();
-        //    return RedirectToAction(nameof(HomeController.Index), "Home");
-        //}
-
-        //public IActionResult SignedOut()
-        //{
-        //    if (HttpContext.User.Identity.IsAuthenticated)
-        //    {
-        //        return RedirectToAction(nameof(HomeController.Index), "Home");
-        //    }
-
-        //    return View();
-        //}
-
-        //private IActionResult RedirectToLocal(string returnUrl)
-        //{
-        //    if (Url.IsLocalUrl(returnUrl))
-        //    {
-        //        return Redirect(returnUrl);
-        //    }
-        //    else
-        //    {
-        //        return RedirectToAction(nameof(HomeController.Index), "Home");
-        //    }
-        //}
+            //if (_userManager.SupportsUserLockout && lockoutOnFailure)
+            //{
+            //    // If lockout is requested, increment access failed count which might lock out the user
+            //    await _userManager.AccessFailedAsync(user);
+            //    if (await _userManager.IsLockedOutAsync(user))
+            //    {
+            //        return await LockedOut(user);
+            //    }
+            //}
+            //return SignInResult.Failed;
+            // If we got this far, something failed, redisplay form
+            return new BadRequestObjectResult(Microsoft.AspNetCore.Identity.SignInResult.Failed);
+        }
     }
 }

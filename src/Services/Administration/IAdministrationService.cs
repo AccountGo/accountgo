@@ -26,5 +26,6 @@ namespace Services.Administration
         ICollection<PaymentTerm> GetPaymentTerms();
         ICollection<FinancialYear> GetFinancialYears();
         void SaveCompany(Company company);
+        bool IsSystemInitialized();
     }
 }
