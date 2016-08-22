@@ -53,6 +53,11 @@ export default class SalesStore {
                     );
                 }
                 this.computeTotals();
+
+                var nodes = document.getElementById("divSalesInvoice").getElementsByTagName('*');
+                for (var i = 0; i < nodes.length; i++) {
+                    nodes[i].className += " disabledControl";
+                }
             }.bind(this));
         }
         else if (invoiceId !== undefined) {
