@@ -9,4 +9,10 @@ export default class PurchaseInvoice {
     referenceNo: string;
     posted: boolean;
     purchaseInvoiceLines: PurchaseInvoiceLine[] = [];
+
+    constructor() {
+        this.id = 0;
+        this.posted = false;
+
+    }
 }

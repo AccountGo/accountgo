@@ -17,6 +17,7 @@ export default class PurchaseOrderStore {
     purchaseInvoice;
     commonStore;
     @observable validationErrors;
+    @observable editMode = false;
 
     constructor(purchId: any, invoiceId: any) {        
         this.commonStore = new CommonStore();
@@ -35,11 +36,7 @@ export default class PurchaseOrderStore {
         if (purchId !== undefined) {
             axios.get(Config.apiUrl + "api/purchasing/purchaseorder?id=" + purchId)
                 .then(function (result) {
-                    this.purchaseInvoice.fromPurchaseOrderId = purchId;     
-                    this.purchaseInvoice.paymentTermId = result.data.paymentTermId;
-                    this.purchaseInvoice.referenceNo = result.data.referenceNo;
-                    this.changedVendor(result.data.vendorId);
-                    this.changedInvoiceDate(result.data.orderDate);
+                   
                     for (var i = 0; i < result.data.purchaseOrderLines.length; i++) {
                         if (result.data.purchaseOrderLines[i].remainingQtyToInvoice == 0)
                             continue;
@@ -52,7 +49,14 @@ export default class PurchaseOrderStore {
                             result.data.purchaseOrderLines[i].discount
                         );
                     }
+
+                    this.purchaseInvoice.fromPurchaseOrderId = purchId;
+                    this.purchaseInvoice.paymentTermId = result.data.paymentTermId;
+                    this.purchaseInvoice.referenceNo = result.data.referenceNo;
+                    this.changedVendor(result.data.vendorId);
+                    this.changedInvoiceDate(result.data.orderDate);
                     this.computeTotals();
+
                 }.bind(this))
                 .catch(function (error) {
                 }.bind(this));
@@ -60,12 +64,7 @@ export default class PurchaseOrderStore {
         else if (invoiceId !== undefined) {
             axios.get(Config.apiUrl + "api/purchasing/purchaseinvoice?id=" + invoiceId)
                 .then(function (result) {
-                    this.purchaseInvoice.id = result.data.id;
-                    this.purchaseInvoice.paymentTermId = result.data.paymentTermId;
-                    this.purchaseInvoice.referenceNo = result.data.referenceNo;
-                    this.changedVendor(result.data.vendorId);
-                    this.changedInvoiceDate(result.data.invoiceDate);
-                    this.purchaseInvoice.posted = result.data.posted;
+                   
                     for (var i = 0; i < result.data.purchaseInvoiceLines.length; i++) {
                         this.addLineItem(
                             result.data.purchaseInvoiceLines[i].id,
@@ -76,11 +75,29 @@ export default class PurchaseOrderStore {
                             result.data.purchaseInvoiceLines[i].discount
                         );
                     }
+
+                    this.purchaseInvoice.id = result.data.id;
+                    this.purchaseInvoice.paymentTermId = result.data.paymentTermId;
+                    this.purchaseInvoice.referenceNo = result.data.referenceNo;
+                    this.changedVendor(result.data.vendorId);
+                    this.changedInvoiceDate(result.data.invoiceDate);
+                    this.purchaseInvoice.posted = result.data.posted;
                     this.computeTotals();
+
+
+                    var nodes = document.getElementById("divPurchaseInvoiceForm").getElementsByTagName('*');
+                    for (var i = 0; i < nodes.length; i++) {
+                        nodes[i].className += " disabledControl";
+                    }
                 }.bind(this))
                 .catch(function (error) {
                 }.bind(this));
+
+           
         }
+        else {
+            this.changedEditMode(true);
+        } 
     }
 
     @observable RTotal = 0;
@@ -215,5 +232,9 @@ export default class PurchaseOrderStore {
         let lineItem = this.purchaseInvoice.purchaseInvoiceLines[row];
         lineSum = (lineItem.quantity * lineItem.amount) - lineItem.discount;
         return lineSum;
+    }
+
+    changedEditMode(editMode) {
+        this.editMode = editMode;
     }
 }
