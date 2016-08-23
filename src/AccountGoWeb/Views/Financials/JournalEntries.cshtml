@@ -21,7 +21,11 @@
     {headerName: "Credit", field: "creditAmount", width: 50},
     {headerName: "Date", field: "journalDate", width: 100},
     {headerName: "Reference No", field: "referenceNo", width: 50},
-    {headerName: "Posted", field: "posted", width: 100, },
+    {headerName: "Posted", width: 100, cellRenderer: function(val) {
+        if(val.data.posted)
+            return '<input type="checkbox" checked disabled />';
+        return '<input type="checkbox" disabled />';
+    }},
     {headerName: "Memo", field: "memo", width: 350}
     ];
 
