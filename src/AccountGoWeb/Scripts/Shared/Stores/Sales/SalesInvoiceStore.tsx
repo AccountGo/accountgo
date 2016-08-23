@@ -85,9 +85,11 @@ export default class SalesStore {
                     nodes[i].className += " disabledControl";
                 }
             }.bind(this));
-        } else {
-            this.changedEditMode(true);
-        }
+        } 
+
+
+      
+           
     }
 
 

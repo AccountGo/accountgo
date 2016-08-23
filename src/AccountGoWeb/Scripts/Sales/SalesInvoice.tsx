@@ -66,6 +66,7 @@ class EditButton extends React.Component<any, {}>{
     }
 }
 
+@observer
 class SaveInvoiceButton extends React.Component<any, {}>{
     saveNewSalesInvoice(e) {
         store.saveNewSalesInvoice();
@@ -76,7 +77,7 @@ class SaveInvoiceButton extends React.Component<any, {}>{
     render() {
         return (
             <input type="button" value="Save" onClick={this.saveNewSalesInvoice.bind(this) }
-                className={!store.salesInvoice.posted && !store.editMode
+                className={!store.salesInvoice.posted && store.editMode
                     ? "btn btn-sm btn-primary btn-flat pull-left"
                     : "btn btn-sm btn-primary btn-flat pull-left inactiveLink"}
                 />
@@ -112,7 +113,7 @@ class PostButton extends React.Component<any, {}>{
     render() {
         return (
             <input type="button" value="Post" onClick={ this.postOnClick.bind(this) }
-                className={!store.salesInvoice.posted && !store.editMode
+                className={!store.salesInvoice.posted && store.editMode
                     ? "btn btn-sm btn-primary btn-flat btn-danger pull-right"
                     : "btn btn-sm btn-primary btn-flat btn-danger pull-right inactiveLink"} />
         );
@@ -288,6 +289,7 @@ class SalesInvoiceTotals extends React.Component<any, {}>{
     }
 }
 
+@observer
 export default class SalesInvoice extends React.Component<any, {}> {
     render() {
         return (

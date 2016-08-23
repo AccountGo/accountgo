@@ -9,4 +9,10 @@ export default class SalesInvoice {
     referenceNo: string;
     posted: boolean;
     salesInvoiceLines: SalesInvoiceLine[] = [];
+
+    constructor() {
+        this.id = 0;
+        this.posted = false;
+   
+    }
 }
