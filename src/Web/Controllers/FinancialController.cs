@@ -389,7 +389,7 @@ namespace Web.Controllers
             glSetting.SalesDiscountAccountId = model.SalesDiscountAccountId;
             glSetting.ShippingChargeAccountId = model.ShippingChargeAccountId;
             glSetting.GoodsReceiptNoteClearingAccountId = model.GoodsReceiptNoteClearingAccountId;
-            _financialService.UpdateGeneralLedgerSetting(glSetting);
+            _financialService.SaveGeneralLedgerSetting(glSetting);
             return View(model);
         }
 

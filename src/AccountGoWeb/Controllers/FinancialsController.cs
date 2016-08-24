@@ -43,6 +43,22 @@ namespace AccountGoWeb.Controllers
             return View();
         }
 
+        public async System.Threading.Tasks.Task<IActionResult> Account(int? id = null)
+        {
+            Dto.Financial.Account accountModel = null;
+            if (id == null)
+            {
+                accountModel = new Dto.Financial.Account();
+            }
+            else
+            {
+                accountModel = await GetAsync<Dto.Financial.Account>("financials/account?id=" + id);
+            }
+
+            ViewBag.PageContentHeader = "Account";
+            return View(accountModel);
+        }
+
         public async System.Threading.Tasks.Task<IActionResult> JournalEntries()
         {
             ViewBag.PageContentHeader = "Journal Entries";

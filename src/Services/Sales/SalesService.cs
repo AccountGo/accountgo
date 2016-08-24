@@ -487,7 +487,6 @@ namespace Services.Sales
             customer.SalesDiscountAccountId = accountSalesDiscount != null ? (int?)accountSalesDiscount.Id : null;
             customer.TaxGroupId = _taxGroupRepo.Table.Where(tg => tg.Description == "VAT").FirstOrDefault().Id;
 
-            //customer.IsActive = true;
             customer.No = GetNextNumber(SequenceNumberTypes.Customer).ToString();
             _customerRepo.Insert(customer);
         }

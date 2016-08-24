@@ -377,7 +377,6 @@ namespace Services.Purchasing
             vendor.PurchaseAccountId = _accountRepo.Table.Where(a => a.AccountCode == "50200").FirstOrDefault().Id;
             vendor.PurchaseDiscountAccountId = _accountRepo.Table.Where(a => a.AccountCode == "50400").FirstOrDefault().Id;
 
-            //vendor.IsActive = true;
             vendor.No = GetNextNumber(SequenceNumberTypes.Vendor).ToString();
             _vendorRepo.Insert(vendor);
         }

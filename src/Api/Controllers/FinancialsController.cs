@@ -51,6 +51,31 @@ namespace Api.Controllers
             return new ObjectResult(accountTree);
         }
 
+        [Route("[action]")]
+        public IActionResult Account(int id)
+        {
+            var account = _financialService.GetAccount(id);
+
+            var accountDto = new Dto.Financial.Account()
+            {
+                Id = account.Id,
+                AccountClassId = account.AccountClassId,
+                ParentAccountId = account.ParentAccountId,
+                CompanyId = account.CompanyId,
+                AccountCode = account.AccountCode,
+                AccountName = account.AccountName,
+                Description = account.Description,
+                IsCash = account.IsCash,
+                IsContraAccount = account.IsContraAccount,
+                Balance = account.Balance,
+                DebitBalance = account.DebitBalance,
+                CreditBalance = account.CreditBalance
+            };
+
+            return new ObjectResult(accountDto);
+        }
+
+
         [HttpGet]
         [Route("[action]")]
         public IActionResult JournalEntries()

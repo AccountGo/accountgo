@@ -36,7 +36,7 @@ namespace Services.Financial
         List<KeyValuePair<int, decimal>> ComputeInputTax(int vendorId, int itemId, decimal quantity, decimal amount, decimal discount);
         List<KeyValuePair<int, decimal>> ComputeOutputTax(int customerId, int itemId, decimal quantity, decimal amount, decimal discount);
         GeneralLedgerSetting GetGeneralLedgerSetting(int? companyId = null);
-        void UpdateGeneralLedgerSetting(GeneralLedgerSetting setting);
+        void SaveGeneralLedgerSetting(GeneralLedgerSetting setting);
         void AddMainContraAccountSetting(int masterAccountId, int contraAccountId);
         void UpdateAccount(Account account);
         JournalEntryHeader GetJournalEntry(int id, bool fromGL = false);
@@ -46,5 +46,8 @@ namespace Services.Financial
         Account GetAccount(int id);
         void AddAccount(Account account);
         JournalEntryHeader CloseAccountingPeriod();
+        void SaveAccountClasses(IList<AccountClass> accountClasses);
+        void SaveFinancialYear(FinancialYear financialYear);
+        void SavePaymentTerm(PaymentTerm paymentTerm);
     }
 }
