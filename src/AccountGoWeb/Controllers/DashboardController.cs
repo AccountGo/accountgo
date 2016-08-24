@@ -3,20 +3,22 @@ using Microsoft.Extensions.Configuration;
 
 namespace AccountGoWeb.Controllers
 {
-    [Microsoft.AspNetCore.Authorization.Authorize]
-    public class HomeController : BaseController
+    public class DashboardController : BaseController
     {
-
-        public HomeController(IConfiguration config)
+        public DashboardController(IConfiguration config)
         {
             _baseConfig = config;
             Models.SelectListItemHelper._config = config;
         }
+        // GET: /<controller>/
         public IActionResult Index()
         {
-            ViewBag.PageContentHeader = "Dashboard";
+            return View();
+        }
+
+        public IActionResult MonthlySales()
+        {
             ViewBag.ApiMontlySales = _baseConfig["ApiUrl"] + "sales/getmonthlysales";
- 
             return View();
         }
     }
