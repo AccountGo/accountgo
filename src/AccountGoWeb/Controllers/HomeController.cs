@@ -1,6 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
-using System.Net.Http;
 
 namespace AccountGoWeb.Controllers
 {
@@ -18,24 +17,6 @@ namespace AccountGoWeb.Controllers
             ViewBag.PageContentHeader = "Dashboard";
             ViewBag.ApiMontlySales = _baseConfig["ApiUrl"] + "sales/getmonthlysales";
  
-            return View();
-        }
-
-        public async System.Threading.Tasks.Task<IActionResult> GetMonthlySales()
-        {
-            ViewBag.PageContentHeader = "Customers";
-            using (var client = new HttpClient())
-            {
-                var baseUri = _baseConfig["ApiUrl"];
-                client.BaseAddress = new System.Uri(baseUri);
-                client.DefaultRequestHeaders.Accept.Clear();
-                var response = await client.GetAsync(baseUri + "SALES/GetMonthlySales");
-                if (response.IsSuccessStatusCode)
-                {
-                    var responseJson = await response.Content.ReadAsStringAsync();
-                    return View(model: responseJson);
-                }
-            }
             return View();
         }
     }

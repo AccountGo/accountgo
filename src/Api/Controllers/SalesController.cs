@@ -1088,7 +1088,7 @@ namespace Api.Controllers
         [Route("[action]")]
         public IActionResult GetMonthlySales()
         {
-            var salesOrders = _salesService.GetSalesInvoices(); //.Where(a => a.GeneralLedgerHeaderId != null);
+            var salesOrders = _salesService.GetSalesInvoices().Where(a => a.GeneralLedgerHeaderId != null);
 
             IList<Dto.Sales.MonthlySales> monthlySalesDto = new List<Dto.Sales.MonthlySales>();
 
@@ -1096,16 +1096,14 @@ namespace Api.Controllers
 
             foreach (var item in salesOrders)
             {
-
                 foreach (var line in item.SalesInvoiceLines)
                 {
                     var dtoSales = new MonthlySales();
                     dtoSales.Month = item.Date.Month.ToString();
-                    dtoSales.Amount = line.Amount;
+                    dtoSales.Amount = line.Amount * line.Quantity;
                     monthlySalesDto.Add(dtoSales);
                 }
             }
-
 
             var totalSales = monthlySalesDto.ToList().GroupBy(a => a.Month)
             .Select(ms => new MonthlySales
@@ -1113,7 +1111,6 @@ namespace Api.Controllers
                 Month = ms.First().Month,
                 Amount = ms.Sum(x => x.Amount),
             }).ToList();
-
 
             for (int i = 1; i <= DateTime.Now.Month; i++)
             {
@@ -1124,10 +1121,7 @@ namespace Api.Controllers
                 finalmonthlySalesDto.Add(sales);
             }
 
-
             return Json(finalmonthlySalesDto);
-
-
         }
 
     }
