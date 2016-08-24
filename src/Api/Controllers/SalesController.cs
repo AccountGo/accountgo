@@ -293,6 +293,12 @@ namespace Api.Controllers
                     salesOrderDto.SalesInvoiceLines.Add(lineDto);
                 }
 
+                // is this journal entry ready for posting?
+                if (!salesOrderDto.Posted && salesOrderDto.SalesInvoiceLines.Count >= 1)
+                {
+                    salesOrderDto.ReadyForPosting = true;
+                }
+
                 return new ObjectResult(salesOrderDto);
             }
             catch (Exception ex)

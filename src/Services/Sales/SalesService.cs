@@ -695,31 +695,38 @@ namespace Services.Sales
                     _salesInvoiceRepo.Update(salesInvoice);
                 }
 
-                // update the sales order status
-                if(salesOrder == null)
-                {
-                    // get the first order line
-                    salesOrder = GetSalesOrderLineById(salesInvoice.SalesInvoiceLines.FirstOrDefault().SalesOrderLineId.GetValueOrDefault()).SalesOrderHeader;                    
-                }
-                // if all orderline has no remaining qty to invoice, set the status to fullyinvoice
-                bool hasRemainingQtyToInvoice = false;
-                foreach (var line in salesOrder.SalesOrderLines)
-                {
-                    if (line.GetRemainingQtyToInvoice() > 0)
-                    {
-                        hasRemainingQtyToInvoice = true;
-                        break;
-                    }
-                }
-                if (!hasRemainingQtyToInvoice)
-                {
-                    salesOrder.Status = SalesOrderStatus.FullyInvoiced;
-                    _salesOrderRepo.Update(salesOrder);
-                }
+                UpdateSalesOrderStatus(salesInvoice, salesOrder);
             }
             catch (Exception ex)
             {
                 throw ex;
+            }
+        }
+
+        private void UpdateSalesOrderStatus(SalesInvoiceHeader salesInvoice, SalesOrderHeader salesOrder)
+        {
+            // update the sales order status
+            if (salesOrder == null)
+            {
+                // get the first order line
+                salesOrder =
+                    GetSalesOrderLineById(salesInvoice.SalesInvoiceLines.FirstOrDefault().SalesOrderLineId.GetValueOrDefault())
+                        .SalesOrderHeader;
+            }
+            // if all orderline has no remaining qty to invoice, set the status to fullyinvoice
+            bool hasRemainingQtyToInvoice = false;
+            foreach (var line in salesOrder.SalesOrderLines)
+            {
+                if (line.GetRemainingQtyToInvoice() > 0)
+                {
+                    hasRemainingQtyToInvoice = true;
+                    break;
+                }
+            }
+            if (!hasRemainingQtyToInvoice)
+            {
+                salesOrder.Status = SalesOrderStatus.FullyInvoiced;
+                _salesOrderRepo.Update(salesOrder);
             }
         }
 

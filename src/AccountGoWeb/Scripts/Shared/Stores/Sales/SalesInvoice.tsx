@@ -8,5 +8,13 @@ export default class SalesInvoice {
     paymentTermId: number;
     referenceNo: string;
     posted: boolean;
+    readyForPosting: boolean;
     salesInvoiceLines: SalesInvoiceLine[] = [];
+
+    constructor() {
+        this.id = 0;
+        this.posted = false;
+        this.readyForPosting = false;
+   
+    }
 }
