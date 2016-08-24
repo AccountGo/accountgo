@@ -57,7 +57,6 @@ export default class PurchaseOrderStore {
                     this.changedVendor(result.data.vendorId);
                     this.changedInvoiceDate(result.data.orderDate);
                     this.computeTotals();
-
                     this.changedEditMode(true);
                 }.bind(this))
                 .catch(function (error) {
@@ -87,7 +86,6 @@ export default class PurchaseOrderStore {
                     this.purchaseInvoice.readyForPosting = result.data.readyForPosting;
                     this.computeTotals();
 
-
                     var nodes = document.getElementById("divPurchaseInvoiceForm").getElementsByTagName('*');
                     for (var i = 0; i < nodes.length; i++) {
                         nodes[i].className += " disabledControl";
@@ -95,10 +93,9 @@ export default class PurchaseOrderStore {
                 }.bind(this))
                 .catch(function (error) {
                 }.bind(this));
-
-           
         }
-   
+        else
+            this.changedEditMode(true);   
     }
 
     @observable RTotal = 0;

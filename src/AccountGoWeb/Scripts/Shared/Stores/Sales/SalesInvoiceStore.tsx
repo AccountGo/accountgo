@@ -19,7 +19,6 @@ export default class SalesStore {
     @observable validationErrors;
     @observable editMode = false;
 
-
     constructor(orderId, invoiceId) {
         this.commonStore = new CommonStore();
         this.salesInvoice = new SalesInvoice();
@@ -32,7 +31,6 @@ export default class SalesStore {
             readyForPosting: this.salesInvoice.readyForPosting,
             salesInvoiceLines: []
         });
-
 
         autorun(() => this.computeTotals());
 
@@ -90,13 +88,9 @@ export default class SalesStore {
                 }
             }.bind(this));
         }
- 
-
-
-      
-           
+        else
+            this.changedEditMode(true);           
     }
-
 
     @observable RTotal = 0;
     @observable GTotal = 0;
