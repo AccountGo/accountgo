@@ -68,6 +68,7 @@
     <Compile Include="Purchasing\Vendor.cs" />
     <Compile Include="Sales\CreateCustomer.cs" />
     <Compile Include="Sales\Customer.cs" />
+    <Compile Include="Sales\MonthlySales.cs" />
     <Compile Include="Sales\SalesDelivery.cs" />
     <Compile Include="Sales\SalesInvoice.cs" />
     <Compile Include="Sales\SalesOrder.cs" />

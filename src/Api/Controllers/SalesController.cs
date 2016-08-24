@@ -46,7 +46,8 @@ namespace Api.Controllers
                 customer.PrimaryContact = new Core.Domain.Contact()
                 {
                     ContactType = Core.Domain.ContactTypes.Customer,
-                    Party = new Core.Domain.Party() {
+                    Party = new Core.Domain.Party()
+                    {
                         PartyType = Core.Domain.PartyTypes.Contact
                     }
                 };
@@ -111,7 +112,8 @@ namespace Api.Controllers
                 customerDto.Phone = customer.Party.Phone;
                 customerDto.Fax = customer.Party.Fax;
 
-                if (customer.PrimaryContact != null) {
+                if (customer.PrimaryContact != null)
+                {
                     customerDto.PrimaryContact.FirstName = customer.PrimaryContact.FirstName;
                     customerDto.PrimaryContact.LastName = customer.PrimaryContact.LastName;
                     customerDto.PrimaryContact.Party.Email = customer.PrimaryContact.Party.Email;
@@ -170,6 +172,7 @@ namespace Api.Controllers
         {
             var salesOrders = _salesService.GetSalesOrders();
             IList<Dto.Sales.SalesOrder> salesOrdersDto = new List<Dto.Sales.SalesOrder>();
+        
 
             try
             {
@@ -232,7 +235,7 @@ namespace Api.Controllers
                     ReferenceNo = salesOrder.ReferenceNo,
                     SalesOrderLines = new List<Dto.Sales.SalesOrderLine>()
                 };
-                
+
                 foreach (var line in salesOrder.SalesOrderLines)
                 {
                     var lineDto = new Dto.Sales.SalesOrderLine();
@@ -342,7 +345,8 @@ namespace Api.Controllers
 
             var quoteDtos = new List<Dto.Sales.SalesQuotation>();
 
-            foreach (var quote in quotes) {
+            foreach (var quote in quotes)
+            {
                 var quoteDto = new Dto.Sales.SalesQuotation()
                 {
                     Id = quote.Id,
@@ -354,7 +358,8 @@ namespace Api.Controllers
                     ReferenceNo = quote.ReferenceNo
                 };
 
-                foreach (var line in quote.SalesQuoteLines) {
+                foreach (var line in quote.SalesQuoteLines)
+                {
                     var lineDto = new Dto.Sales.SalesQuotationLine()
                     {
                         ItemId = line.ItemId,
@@ -484,7 +489,7 @@ namespace Api.Controllers
                 CustomerName = salesReceipt.Customer.Party.Name,
                 ReceiptDate = salesReceipt.Date,
                 Amount = salesReceipt.Amount,
-                RemainingAmountToAllocate = salesReceipt.AvailableAmountToAllocate                        
+                RemainingAmountToAllocate = salesReceipt.AvailableAmountToAllocate
             };
 
             return new ObjectResult(salesReceiptDto);
@@ -709,7 +714,7 @@ namespace Api.Controllers
                     foreach (var line in salesInvoiceDto.SalesInvoiceLines)
                     {
                         var salesInvoiceLine = new Core.Domain.Sales.SalesInvoiceLine();
-                        
+
                         salesInvoiceLine.Amount = line.Amount.GetValueOrDefault();
                         salesInvoiceLine.Discount = line.Discount.GetValueOrDefault();
                         salesInvoiceLine.Quantity = line.Quantity.GetValueOrDefault();
@@ -732,7 +737,7 @@ namespace Api.Controllers
                             salesOrderLine.ItemId = line.ItemId.GetValueOrDefault();
                             salesOrderLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
                             salesInvoiceLine.SalesOrderLine = salesOrderLine;
-                            salesOrder.SalesOrderLines.Add(salesOrderLine);                            
+                            salesOrder.SalesOrderLines.Add(salesOrderLine);
 
                             salesInvoiceLine.SalesOrderLine = salesOrderLine; // map invoice line to newly added orderline
                         }
@@ -786,12 +791,12 @@ namespace Api.Controllers
                             // therefore, we could just pick the first line, get the salesorderlineid, then get the salesorderheader.
 
                             // you will retrieve salesorder one time.
-                            if(salesOrder == null)
+                            if (salesOrder == null)
                             {
                                 // use the last value of existingLine
                                 salesOrder = _salesService.GetSalesOrderLineById(existingLine.SalesOrderLine.SalesOrderHeaderId).SalesOrderHeader;
                                 salesOrder.SalesOrderLines.Add(salesOrderLine);
-                            }                            
+                            }
 
                             salesInvoiceLine.SalesOrderLine = salesOrderLine; // map invoice line to newly added orderline
                         }
@@ -829,7 +834,7 @@ namespace Api.Controllers
 
             if (salesInvoiceDto.FromSalesOrderId != null)
             {
-                salesOrder = _salesService.GetSalesOrderById((int) salesInvoiceDto.FromSalesOrderId);
+                salesOrder = _salesService.GetSalesOrderById((int)salesInvoiceDto.FromSalesOrderId);
             }
 
             var salesInvoiceContainer = salesInvoice;
@@ -1030,7 +1035,7 @@ namespace Api.Controllers
 
                 return new ObjectResult(Ok());
             }
-            catch(Exception ex)
+            catch (Exception ex)
             {
                 errors = new string[1] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
                 return new BadRequestObjectResult(errors);
@@ -1078,5 +1083,52 @@ namespace Api.Controllers
                 return new BadRequestObjectResult(errors);
             }
         }
+
+        [HttpGet]
+        [Route("[action]")]
+        public IActionResult GetMonthlySales()
+        {
+            var salesOrders = _salesService.GetSalesInvoices(); //.Where(a => a.GeneralLedgerHeaderId != null);
+
+            IList<Dto.Sales.MonthlySales> monthlySalesDto = new List<Dto.Sales.MonthlySales>();
+
+            IList<Dto.Sales.MonthlySales> finalmonthlySalesDto = new List<Dto.Sales.MonthlySales>();
+
+            foreach (var item in salesOrders)
+            {
+
+                foreach (var line in item.SalesInvoiceLines)
+                {
+                    var dtoSales = new MonthlySales();
+                    dtoSales.Month = item.Date.Month.ToString();
+                    dtoSales.Amount = line.Amount;
+                    monthlySalesDto.Add(dtoSales);
+                }
+            }
+
+
+            var totalSales = monthlySalesDto.ToList().GroupBy(a => a.Month)
+            .Select(ms => new MonthlySales
+            {
+                Month = ms.First().Month,
+                Amount = ms.Sum(x => x.Amount),
+            }).ToList();
+
+
+            for (int i = 1; i <= DateTime.Now.Month; i++)
+            {
+                var sales = new MonthlySales();
+                var month = i + "/1/" + DateTime.Now.Year;
+                sales.Month = Convert.ToDateTime(month).ToString("MMMMM");
+                sales.Amount = totalSales.Where(a => a.Month == i.ToString()).Select(x => x.Amount).FirstOrDefault();
+                finalmonthlySalesDto.Add(sales);
+            }
+
+
+            return Json(finalmonthlySalesDto);
+
+
+        }
+
     }
 }
