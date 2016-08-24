@@ -115,11 +115,16 @@ namespace AccountGoWeb.Controllers
                 var serialize = Newtonsoft.Json.JsonConvert.SerializeObject(model);
                 var content = new StringContent(serialize);
                 content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
-                var response = Post("account/addnewuser", content);
-                var result = response.Content.ReadAsStringAsync();
+                HttpResponseMessage responseAddNewUser = Post("account/addnewuser", content);
+                Newtonsoft.Json.Linq.JObject resultAddNewUser = Newtonsoft.Json.Linq.JObject.Parse(responseAddNewUser.Content.ReadAsStringAsync().Result);
 
-                var responseInitialized = Get("administration/initializedcompany");
-                result = response.Content.ReadAsStringAsync();
+                HttpResponseMessage responseInitialized = null;
+                Newtonsoft.Json.Linq.JObject resultInitialized = null;
+                if ((bool)resultAddNewUser["succeeded"])
+                {
+                    responseInitialized = Get("administration/initializedcompany");
+                    resultInitialized = Newtonsoft.Json.Linq.JObject.Parse((responseInitialized.Content.ReadAsStringAsync().Result));
+                }
             }
             return View(model);
         }
