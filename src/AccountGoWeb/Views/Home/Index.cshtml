@@ -1,10 +1,7 @@
-﻿
-
-
-<body>
+﻿<body>
     <div class="row">
     <div class="col-md-6"><canvas width="500" height="250"></canvas></div>
-    <div class="col-md-6">.col-md-6</div>
+    <div class="col-md-6"></div>
     </div>
     <div class="row">
         <div class="col-md-6"></div>
@@ -15,7 +12,7 @@
  
  <script>
      var canvas = document.querySelector("canvas"),
-    context = canvas.getContext("2d");
+         context = canvas.getContext("2d");
 
      var margin = { top: 20, right: 20, bottom: 30, left: 40 },
          width = canvas.width - margin.left - margin.right,
@@ -29,16 +26,15 @@
          .rangeRound([height, 0]);
 
      context.translate(margin.left, margin.top);
- 
 
-     d3.json("http://localhost:5000/api/sales/GetMonthlySales", function (data) {
-         
+     d3.json("@ViewBag.ApiMontlySales", function (data) {
+
          data.forEach(function (d) {
              d.month = d.month;
              d.amount = +d.amount;
          });
-      
-  
+
+
          x.domain(data.map(function (d) { return d.month; }));
          y.domain([0, d3.max(data, function (d) { return d.amount; })]);
 
@@ -90,33 +86,20 @@
          context.font = "bold 10px sans-serif";
          context.fillText("amount", -10, 10);
          context.restore();
-
-                  context.strokeStyle = "black";
+         context.strokeStyle = "black";
          context.stroke();
- 
-
-
          context.fillStyle = "steelblue";
-         data.forEach(function (d) {
- 
- 
-               context.fillText(d.amount, x(d.month) + 35 ,  y(d.amount) -10, height - y(d.amount));
-               context.fillRect(x(d.month), y(d.amount), x.bandwidth(), height - y(d.amount));
-               context.font = "bold 10px arial";                             
-         });
-
- 
-
-
          context.strokeStyle = "black";
          context.stroke();
          context.font = "bold 13px sans-serif";
-         context.fillText("Monthly Sales", 250, canvas.height -260);
- 
-     });
+         context.fillText("Monthly Sales", 250, canvas.height - 260);
 
- 
-   
+         data.forEach(function (d) {
+             context.fillText(d.amount, x(d.month) + 35, y(d.amount) - 10, height - y(d.amount));
+             context.fillRect(x(d.month), y(d.amount), x.bandwidth(), height - y(d.amount));
+             context.font = "bold 10px arial";
+         });
+     });
 
  </script>
 </body>
