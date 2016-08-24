@@ -10,7 +10,8 @@ gulp.task("libs", () => {
             'jquery/dist/**',
             'ag-grid/dist/**',
             'knockout/build/output/**',
-            'knockout-mapping/dist/**'
+            'knockout-mapping/dist/**',
+            'd3/build/**'
     ],
     {
         cwd: "node_modules/**"
