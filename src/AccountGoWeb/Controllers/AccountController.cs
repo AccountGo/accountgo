@@ -3,7 +3,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using System.Collections.Generic;
-using System.IO;
 using System.Net.Http;
 using System.Security.Claims;
 using System.Threading.Tasks;
@@ -98,28 +97,31 @@ namespace AccountGoWeb.Controllers
             }
         }
 
-        //private async Task<HttpResponseMessage> AcquireToken(string username, string password)
-        //{
-        //    List<KeyValuePair<string, string>> body = new List<KeyValuePair<string, string>>();
-        //    body.Add(new KeyValuePair<string, string>("grant_type", "password"));
-        //    body.Add(new KeyValuePair<string, string>("scope", "openid"));
-        //    body.Add(new KeyValuePair<string, string>("resource", _baseConfig["Authentication:AzureAD:Resource"]));
-        //    body.Add(new KeyValuePair<string, string>("client_id", _baseConfig["Authentication:AzureAD:NativeAppClientId"]));
-        //    body.Add(new KeyValuePair<string, string>("username", username));
-        //    body.Add(new KeyValuePair<string, string>("password", password));
+        [HttpGet]
+        [AllowAnonymous]
+        public IActionResult Register(string returnUrl = null)
+        {
+            ViewData["ReturnUrl"] = returnUrl;
+            return View();
+        }
 
-        //    string url = string.Format("https://login.microsoftonline.com/{0}/oauth2/token", _config["Authentication:AzureAD:TenantId"]);
-        //    HttpResponseMessage response = null;
-        //    using (HttpClient httpClient = new HttpClient())
-        //    {
-        //        HttpContent content = new FormUrlEncodedContent(body);
-        //        response = httpClient.PostAsync(url, content).Result;
-        //        if (response.IsSuccessStatusCode)
-        //        {
-        //            Stream data = await response.Content.ReadAsStreamAsync();
-        //        }
-        //    }
-        //    return response;
-        //}
+        [HttpPost]
+        [AllowAnonymous]
+        public IActionResult Register(RegisterViewModel model, string returnUrl = null)
+        {
+            ViewData["ReturnUrl"] = returnUrl;
+            if (ModelState.IsValid)
+            {
+                var serialize = Newtonsoft.Json.JsonConvert.SerializeObject(model);
+                var content = new StringContent(serialize);
+                content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+                var response = Post("account/addnewuser", content);
+                var result = response.Content.ReadAsStringAsync();
+
+                var responseInitialized = Get("administration/initializedcompany");
+                result = response.Content.ReadAsStringAsync();
+            }
+            return View(model);
+        }
     }
 }

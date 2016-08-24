@@ -66,5 +66,29 @@ namespace Api.Controllers
             // If we got this far, something failed, redisplay form
             return new BadRequestObjectResult(Microsoft.AspNetCore.Identity.SignInResult.Failed);
         }
+
+        [HttpPost]
+        [Route("[action]")]
+        public async System.Threading.Tasks.Task<IActionResult> AddNewUser([FromBody]dynamic registerViewModel)
+        {
+            try
+            {
+                if (registerViewModel == null)
+                {
+                    throw new System.ArgumentNullException(nameof(registerViewModel));
+                }
+
+                string password = registerViewModel.Password;
+                string username = registerViewModel.Email;
+
+                var user = new ApplicationUser { UserName = username, Email = username };
+                var result = await _userManager.CreateAsync(user, password);
+
+                return new ObjectResult(Microsoft.AspNetCore.Identity.SignInResult.Success);
+            }
+            catch { }
+
+            return new BadRequestObjectResult(Microsoft.AspNetCore.Identity.SignInResult.Failed);
+        }
     }
 }

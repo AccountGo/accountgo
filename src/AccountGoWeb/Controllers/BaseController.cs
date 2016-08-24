@@ -25,6 +25,19 @@ namespace AccountGoWeb.Controllers
             return Newtonsoft.Json.JsonConvert.DeserializeObject<T>(responseJson);
         }
 
+        protected HttpResponseMessage Get(string uri)
+        {
+            string responseJson = string.Empty;
+            using (var client = new HttpClient())
+            {
+                var baseUri = _baseConfig["ApiUrl"];
+                client.BaseAddress = new System.Uri(baseUri);
+                client.DefaultRequestHeaders.Accept.Clear();
+                var response = client.GetAsync(baseUri + uri);
+                return response.Result;
+            }
+        }
+
         protected async System.Threading.Tasks.Task<string> PostAsync(string uri, StringContent data)
         {
             string responseJson = string.Empty;

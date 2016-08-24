@@ -1,7 +1,7 @@
 ﻿@model AccountGoWeb.Models.Sales.Allocate
 
-<div class="col-md-9">
-    <form action="~/sales/allocate" method="post">
+<form action="~/sales/allocate" method="post">
+    <div class="col-md-9">
         <div class="box">
             <div class="box-header with-border">
                 <h3 class="box-title">General</h3>
@@ -95,9 +95,9 @@
                 </div>
             </div>
         </div>
-        <div>
-            <input class="btn btn-sm btn-primary btn-flat pull-left" type="submit" value="Save" />
-        </div>
-    </form>
-
-</div>
+    </div>
+    <div class="col-md-9">
+        <input id="btnSave" class="btn btn-sm btn-primary btn-flat pull-left" type="submit" value="Save" />
+        <a href="~/sales/salesreceipts" class="btn btn-sm btn-default btn-flat pull-left">Close</a>
+    </div>
+</form>

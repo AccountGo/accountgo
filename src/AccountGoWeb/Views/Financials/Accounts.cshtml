@@ -8,8 +8,9 @@
 <script>
     var columnDefs = [
         {headerName: "Group", cellRenderer: 'group'},
-        //{headerName: "Account", field: "id", width: 50},
-        {headerName: "Code", field: "accountCode", width: 100},
+        {headerName: "Code", width: 100, cellRenderer: function(val){
+            return "<a href='account/" + val.data.id + "'>" + val.data.accountCode + "</a>";
+        }},
         {headerName: "Name", field: "accountName", width: 350, cellRenderer: function(val){
             if(val.data.childAccounts.length > 0)
                 return "";

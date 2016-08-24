@@ -19,7 +19,6 @@
             return "";
         return val.data.accountName;
     }},
-    //{headerName: "Transaction No", field: "transactionNo", width: 100},
     {headerName: "Date", field: "date", width: 250, cellRenderer: function(val){
         if(val.data.length > 0)
             return val.data.date;
@@ -47,7 +46,7 @@
                 return {
                     group: true,
                     children: data.childMasterGeneralLedger,
-                    key: "Transaction no #" + data.groupId
+                    key: "Transaction #" + data.groupId
                 };
             } else {
                 return null;

@@ -1,0 +1,77 @@
+﻿@model Dto.Financial.Account
+
+<form>
+    <div id="divAccountCard">
+        <div class="col-sm-9">
+            <div class="box">
+                <div class="box-header with-border">
+                    <h3 class="box-title">General</h3>
+                    <div class="box-tools pull-right">
+                        <button type="button" class="btn btn-box-tool" data-widget="collapse" data-toggle="tooltip" title="Collapse">
+                            <i class="fa fa-minus"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="box-body">
+                    <div class="col-sm-6">
+                        <div class="row">
+                            @Html.HiddenFor(m => m.Id)
+                            <div class="col-sm-2">Account Code</div>
+                            <div class="col-sm-10">
+                                <input asp-for="AccountCode" class="form-control" type="text" placeholder="Account code ..." />
+                                <span asp-validation-for="AccountCode" class="danger"></span>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-sm-2">Account Name</div>
+                            <div class="col-sm-10">
+                                <input asp-for="AccountName" class="form-control" type="text" placeholder="Account name ..." />
+                                <span asp-validation-for="AccountName" class="danger"></span>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-sm-2">Description</div>
+                            <div class="col-sm-10">
+                                <input asp-for="Description" class="form-control" type="text" placeholder="Description ..." />
+                                <span asp-validation-for="Description" class="danger"></span>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-sm-2">Balance</div>
+                            <div class="col-sm-10">
+                                @Model.Balance
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-sm-6">
+                        <div class="row">
+                            <div class="col-sm-2">Cash</div>
+                            <div class="col-sm-10">
+                                <input asp-for="IsCash" type="checkbox" value="@Model.IsCash" />
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-sm-2">Contra</div>
+                            <div class="col-sm-10">
+                                <input asp-for="IsContraAccount" type="checkbox" value="@Model.IsContraAccount" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-9">
+        <a href="~/financials/accounts" class="btn btn-sm btn-default btn-flat pull-left">Close</a>
+    </div>
+</form>
+@section scripts{
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            var nodes = document.getElementById("divAccountCard").getElementsByTagName('*');
+            for (var i = 0; i < nodes.length; i++) {
+                nodes[i].className = nodes[i].className + " disabledControl";
+            }
+        });
+    </script>
+}
