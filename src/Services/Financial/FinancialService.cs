@@ -28,6 +28,7 @@ namespace Services.Financial
 
         private readonly IRepository<GeneralLedgerHeader> _generalLedgerRepository;
         private readonly IRepository<Account> _accountRepo;
+        private readonly IRepository<AccountClass> _accountClassRepo;
         private readonly IRepository<Tax> _taxRepo;
         private readonly IRepository<JournalEntryHeader> _journalEntryRepo;
         private readonly IRepository<JournalEntryLine> _journalEntryLineRepo;
@@ -49,6 +50,7 @@ namespace Services.Financial
             IRepository<GeneralLedgerHeader> generalLedgerRepository,
             IRepository<GeneralLedgerLine> generalLedgerLineRepository,
             IRepository<Account> accountRepo,
+            IRepository<AccountClass> accountClassRepo,
             IRepository<Tax> taxRepo,
             IRepository<JournalEntryHeader> journalEntryRepo,
             IRepository<JournalEntryLine> journalEntryLineRepo,
@@ -70,6 +72,7 @@ namespace Services.Financial
             _taxService = taxService;
             _generalLedgerRepository = generalLedgerRepository;
             _accountRepo = accountRepo;
+            _accountClassRepo = accountClassRepo;
             _taxRepo = taxRepo;
             _journalEntryRepo = journalEntryRepo;
             _journalEntryLineRepo = journalEntryLineRepo;
@@ -571,9 +574,12 @@ namespace Services.Financial
             return glSetting;
         }
 
-        public void UpdateGeneralLedgerSetting(GeneralLedgerSetting setting)
+        public void SaveGeneralLedgerSetting(GeneralLedgerSetting setting)
         {
-            _glSettingRepo.Update(setting);
+            if (setting.Id == 0)
+                _glSettingRepo.Insert(setting);
+            else
+                _glSettingRepo.Update(setting);
         }
 
         public void AddMainContraAccountSetting(int mainAccountId, int contraAccountId)
@@ -733,6 +739,33 @@ namespace Services.Financial
             journalEntry.VoucherType = JournalVoucherTypes.ClosingEntries;
 
             return journalEntry;
+        }
+
+        public void SaveAccountClasses(IList<AccountClass> accountClasses)
+        {
+            foreach(var accountClass in accountClasses)
+            {
+                if (accountClass.Id == 0)
+                    _accountClassRepo.Insert(accountClass);
+                else
+                    _accountClassRepo.Update(accountClass);
+            }
+        }
+
+        public void SaveFinancialYear(FinancialYear financialYear)
+        {
+            if (financialYear.Id == 0)
+                _fiscalYearRepo.Insert(financialYear);
+            else
+                _fiscalYearRepo.Update(financialYear);
+        }
+
+        public void SavePaymentTerm(PaymentTerm paymentTerm)
+        {
+            if (paymentTerm.Id == 0)
+                _paymentTermRepo.Insert(paymentTerm);
+            else
+                _paymentTermRepo.Update(paymentTerm);
         }
     }
 }
