@@ -16,7 +16,7 @@
         @foreach (var asset in Model.Where(a => a.AccountClassId == 1))
         {
             <tr>
-                <td>@Html.ActionLink((string)string.Format("{0}", asset.AccountCode), "EditAccount", new { id = asset.AccountId })</td>
+                <td>@Html.ActionLink((string)string.Format("{0}", asset.AccountCode), "account", new { id = asset.AccountId })</td>
                 <td>@asset.AccountName</td>
                 <td style="text-align: right">@asset.Amount</td>
             </tr>
@@ -37,7 +37,7 @@
         @foreach (var liability in Model.Where(a => a.AccountClassId == 2))
         {
             <tr>
-                <td>@Html.ActionLink((string)string.Format("{0}", liability.AccountCode), "EditAccount", new { id = liability.AccountId })</td>
+                <td>@Html.ActionLink((string)string.Format("{0}", liability.AccountCode), "account", new { id = liability.AccountId })</td>
                 <td>@liability.AccountName</td>
                 <td style="text-align: right">@liability.Amount</td>
             </tr>
@@ -58,7 +58,7 @@
         @foreach (var equity in Model.Where(a => a.AccountClassId == 3))
         {
             <tr>
-                <td>@Html.ActionLink((string)string.Format("{0}", equity.AccountCode), "EditAccount", new { id = equity.AccountId })</td>
+                <td>@Html.ActionLink((string)string.Format("{0}", equity.AccountCode), "account", new { id = equity.AccountId })</td>
                 <td>@equity.AccountName</td>
                 <td style="text-align: right">@equity.Amount</td>
             </tr>

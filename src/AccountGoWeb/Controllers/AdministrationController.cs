@@ -1,4 +1,5 @@
-﻿using Dto.Administration;
+﻿using AccountGoWeb.Models.Financial;
+using Dto.Administration;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using System.Net.Http;
@@ -9,6 +10,7 @@ namespace AccountGoWeb.Controllers
     {
         public AdministrationController(IConfiguration config) {
             _baseConfig = config;
+            Models.SelectListItemHelper._config = config;
         }        
 
         public IActionResult Company()
@@ -39,7 +41,21 @@ namespace AccountGoWeb.Controllers
 
         public IActionResult Settings()
         {
+            ViewBag.PageContentHeader = "Setup and Configuration";
+            ViewBag.Accounts = Models.SelectListItemHelper.Accounts();
             return View();
+        }
+
+        [HttpPost]
+        public IActionResult SaveSettings(GeneralLedgerSetting model)
+        {
+            if(ModelState.IsValid)
+            {
+
+            }
+            ViewBag.Accounts = Models.SelectListItemHelper.Accounts();
+            ViewBag.PageContentHeader = "Setup and Configuration";
+            return RedirectToAction(nameof(AdministrationController.Settings));
         }
     }
 }

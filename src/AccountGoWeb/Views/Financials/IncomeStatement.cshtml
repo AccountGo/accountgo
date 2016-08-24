@@ -20,7 +20,7 @@
         @foreach (var asset in Model.Where(a => a.IsExpense == false))
         {
             <tr>
-                <td>@Html.ActionLink((string)string.Format("{0}", asset.AccountCode), "EditAccount", new { id = asset.AccountId })</td>
+                <td>@Html.ActionLink((string)string.Format("{0}", asset.AccountCode), "account", new { id = asset.AccountId })</td>
                 <td>@asset.AccountName</td>
                 <td style="text-align: right">@asset.Amount</td>
             </tr>
@@ -41,7 +41,7 @@
         @foreach (var asset in Model.Where(a => a.IsExpense == true))
         {
             <tr>
-                <td>@Html.ActionLink((string)string.Format("{0}", asset.AccountCode), "EditAccount", new { id = asset.AccountId })</td>
+                <td>@Html.ActionLink((string)string.Format("{0}", asset.AccountCode), "account", new { id = asset.AccountId })</td>
                 <td>@asset.AccountName</td>
                 <td style="text-align: right">@asset.Amount</td>
             </tr>
