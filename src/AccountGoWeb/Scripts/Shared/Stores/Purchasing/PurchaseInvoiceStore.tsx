@@ -28,6 +28,7 @@ export default class PurchaseOrderStore {
             paymentTermId: this.purchaseInvoice.paymentTermId,
             referenceNo: this.purchaseInvoice.referenceNo,
             posted: this.purchaseInvoice.posted,
+            readyForPosting: this.purchaseInvoice.readyForPosting,
             purchaseInvoiceLines: []
         });
 
@@ -57,6 +58,7 @@ export default class PurchaseOrderStore {
                     this.changedInvoiceDate(result.data.orderDate);
                     this.computeTotals();
 
+                    this.changedEditMode(true);
                 }.bind(this))
                 .catch(function (error) {
                 }.bind(this));
@@ -82,6 +84,7 @@ export default class PurchaseOrderStore {
                     this.changedVendor(result.data.vendorId);
                     this.changedInvoiceDate(result.data.invoiceDate);
                     this.purchaseInvoice.posted = result.data.posted;
+                    this.purchaseInvoice.readyForPosting = result.data.readyForPosting;
                     this.computeTotals();
 
 
@@ -95,9 +98,7 @@ export default class PurchaseOrderStore {
 
            
         }
-        else {
-            this.changedEditMode(true);
-        } 
+   
     }
 
     @observable RTotal = 0;

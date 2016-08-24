@@ -56,7 +56,7 @@ class EditButton extends React.Component<any, {}>{
     render() {
         return (
             <a href="#" id="linkEdit" onClick={this.onClickEditButton}
-                className={!store.salesInvoice.posted && !store.editMode
+                className={!store.salesInvoice.posted && !store.editMode 
                     ? "btn"
                     : "btn inactiveLink"}>
                 <i className="fa fa-edit"></i>
@@ -77,7 +77,7 @@ class SaveInvoiceButton extends React.Component<any, {}>{
     render() {
         return (
             <input type="button" value="Save" onClick={this.saveNewSalesInvoice.bind(this) }
-                className={!store.salesInvoice.posted && store.editMode
+                className={!store.salesInvoice.posted && store.editMode 
                     ? "btn btn-sm btn-primary btn-flat pull-left"
                     : "btn btn-sm btn-primary btn-flat pull-left inactiveLink"}
                 />
@@ -109,11 +109,12 @@ class PostButton extends React.Component<any, {}>{
     postOnClick(e) {
         store.postInvoice();
     }
-
+  
     render() {
         return (
+        
             <input type="button" value="Post" onClick={ this.postOnClick.bind(this) }
-                className={!store.salesInvoice.posted && store.editMode
+                className={!store.salesInvoice.posted && store.salesInvoice.readyForPosting && !store.editMode 
                     ? "btn btn-sm btn-primary btn-flat btn-danger pull-right"
                     : "btn btn-sm btn-primary btn-flat btn-danger pull-right inactiveLink"} />
         );

@@ -112,7 +112,7 @@ class PostButton extends React.Component<any, {}>{
     render() {
         return (
             <input type="button" value="Post" onClick={ this.postOnClick.bind(this) }
-                className={!store.purchaseInvoice.posted && store.editMode
+                className={!store.purchaseInvoice.posted && !store.editMode && store.purchaseInvoice.readyForPosting
                     ? "btn btn-sm btn-primary btn-flat btn-danger pull-right"
                     : "btn btn-sm btn-primary btn-flat btn-danger pull-right inactiveLink"} />
         );

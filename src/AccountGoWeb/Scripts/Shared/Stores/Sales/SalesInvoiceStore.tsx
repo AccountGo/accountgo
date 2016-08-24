@@ -19,6 +19,7 @@ export default class SalesStore {
     @observable validationErrors;
     @observable editMode = false;
 
+
     constructor(orderId, invoiceId) {
         this.commonStore = new CommonStore();
         this.salesInvoice = new SalesInvoice();
@@ -28,6 +29,7 @@ export default class SalesStore {
             paymentTermId: this.salesInvoice.paymentTermId,
             referenceNo: this.salesInvoice.referenceNo,
             posted: this.salesInvoice.posted,
+            readyForPosting: this.salesInvoice.readyForPosting,
             salesInvoiceLines: []
         });
 
@@ -56,18 +58,12 @@ export default class SalesStore {
                 this.salesInvoice.referenceNo = result.data.referenceNo;
                 this.salesInvoice.invoiceDate = result.data.orderDate;
                 this.computeTotals();
-
+                this.changedEditMode(true);
 
             }.bind(this));
         } else if (invoiceId !== undefined) {
             var result = axios.get(Config.apiUrl + "api/sales/salesinvoice?id=" + invoiceId);
             result.then(function(result) {
-                this.salesInvoice.id = result.data.id;
-                this.changedCustomer(result.data.customerId);
-                this.salesInvoice.paymentTermId = result.data.paymentTermId;
-                this.salesInvoice.referenceNo = result.data.referenceNo;
-                this.salesInvoice.invoiceDate = result.data.invoiceDate;
-                this.salesInvoice.posted = result.data.posted;
                 for (var i = 0; i < result.data.salesInvoiceLines.length; i++) {
                     this.addLineItem(
                         result.data.salesInvoiceLines[i].id,
@@ -78,6 +74,14 @@ export default class SalesStore {
                         result.data.salesInvoiceLines[i].discount
                     );
                 }
+
+                this.salesInvoice.id = result.data.id;
+                this.changedCustomer(result.data.customerId);
+                this.salesInvoice.paymentTermId = result.data.paymentTermId;
+                this.salesInvoice.referenceNo = result.data.referenceNo;
+                this.salesInvoice.invoiceDate = result.data.invoiceDate;
+                this.salesInvoice.posted = result.data.posted;
+                this.salesInvoice.readyForPosting = result.data.readyForPosting;
                 this.computeTotals();
 
                 var nodes = document.getElementById("divSalesInvoiceForm").getElementsByTagName('*');
@@ -85,9 +89,8 @@ export default class SalesStore {
                     nodes[i].className += " disabledControl";
                 }
             }.bind(this));
-        } else {
-            this.changedEditMode(true);
-        } 
+        }
+ 
 
 
       
