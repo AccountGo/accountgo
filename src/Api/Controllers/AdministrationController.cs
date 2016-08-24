@@ -37,12 +37,20 @@ namespace Api.Controllers
         [Route("[action]")]
         public IActionResult InitializedCompany()
         {
-            if(!_adminService.IsSystemInitialized())
+            string[] errors = null;
+            try
             {
-                InitializedData();
+                if (!_adminService.IsSystemInitialized())
+                {
+                    InitializedData();
+                }
+                return new ObjectResult(Ok());
             }
-
-            return new ObjectResult(Ok());
+            catch (Exception ex)
+            {
+                errors = new string[1] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
+                return new BadRequestObjectResult(errors);
+            }            
         }
 
         [HttpGet]
@@ -122,7 +130,87 @@ namespace Api.Controllers
                         CompanyCode = "100",
                         ShortName = "FSI",
                     };
-                }
+                    _adminService.SaveCompany(company);
+                }                
+
+                //2.Chart of accounts/account classes
+                IList<Core.Domain.Financials.AccountClass> accountClasses = new List<Core.Domain.Financials.AccountClass>();
+                if(_financialService.GetAccounts().Count() < 1)
+                {
+                    string[,] values = LoadCsv(Resource.ResourceManager.GetString("coa").Split(';')[0]);
+                    List<Core.Domain.Financials.Account> accounts = new List<Core.Domain.Financials.Account>();
+
+                    for (int i = 1; i < (values.Length / 8); i++)
+                    {
+                        Core.Domain.Financials.Account account = new Core.Domain.Financials.Account();
+                        account.AccountCode = values[i, 0].ToString();
+                        account.AccountName = values[i, 1].ToString();
+                        account.AccountClassId = int.Parse(values[i, 3].ToString());
+                        account.IsCash = bool.Parse(values[i, 5].ToString());
+                        account.IsContraAccount = bool.Parse(values[i, 4].ToString());
+
+                        if (values[i, 7].ToString() == "DR")
+                            account.DrOrCrSide = Core.Domain.DrOrCrSide.Dr;
+                        else if (values[i, 7].ToString() == "CR")
+                            account.DrOrCrSide = Core.Domain.DrOrCrSide.Cr;
+                        else
+                            account.DrOrCrSide = Core.Domain.DrOrCrSide.NA;
+
+                        account.CompanyId = 1;
+                        accounts.Add(account);
+                    }
+
+                    for (int i = 1; i < (values.Length / 8); i++)
+                    {
+                        string accountCode = values[i, 0].ToString();
+                        string parentAccountCode = values[i, 2].ToString();
+
+                        var account = accounts.Where(a => a.AccountCode == accountCode).FirstOrDefault();
+                        var parentAccount = accounts.Where(a => a.AccountCode == parentAccountCode).FirstOrDefault();
+                        if (parentAccount != null)
+                            account.ParentAccount = parentAccount;
+                    }
+                    
+                    var assetClass = new Core.Domain.Financials.AccountClass() { Name = "Assets", NormalBalance = "Dr" };
+                    var liabilitiesClass = new Core.Domain.Financials.AccountClass() { Name = "Liabilities", NormalBalance = "Cr" };
+                    var equityClass = new Core.Domain.Financials.AccountClass() { Name = "Equity", NormalBalance = "Cr" };
+                    var revenueClass = new Core.Domain.Financials.AccountClass() { Name = "Revenue", NormalBalance = "Cr" };
+                    var expenseClass = new Core.Domain.Financials.AccountClass() { Name = "Expense", NormalBalance = "Dr" };
+                    var temporaryClass = new Core.Domain.Financials.AccountClass() { Name = "Temporary", NormalBalance = "NA" };
+
+                    accountClasses.Add(assetClass);
+                    accountClasses.Add(liabilitiesClass);
+                    accountClasses.Add(equityClass);
+                    accountClasses.Add(revenueClass);
+                    accountClasses.Add(expenseClass);
+                    accountClasses.Add(temporaryClass);
+
+                    foreach (var account in accounts)
+                    {
+                        switch (account.AccountClassId)
+                        {
+                            case 1:
+                                assetClass.Accounts.Add(account);
+                                break;
+                            case 2:
+                                liabilitiesClass.Accounts.Add(account);
+                                break;
+                            case 3:
+                                equityClass.Accounts.Add(account);
+                                break;
+                            case 4:
+                                revenueClass.Accounts.Add(account);
+                                break;
+                            case 5:
+                                expenseClass.Accounts.Add(account);
+                                break;
+                            case 6:
+                                temporaryClass.Accounts.Add(account);
+                                break;
+                        }
+                    }
+                    _financialService.SaveAccountClasses(accountClasses);
+                }                
 
                 //3.Financial year
                 Core.Domain.Financials.FinancialYear financialYear = null;
@@ -136,7 +224,8 @@ namespace Api.Controllers
                         EndDate = new DateTime(2016, 12, 31),
                         IsActive = true
                     };
-                }
+                    _financialService.SaveFinancialYear(financialYear);
+                }                
 
                 //4.Payment terms
                 IList<Core.Domain.PaymentTerm> paymentTerms = new List<Core.Domain.PaymentTerm>();
@@ -162,7 +251,13 @@ namespace Api.Controllers
                         PaymentType = Core.Domain.PaymentTypes.Cash,
                         IsActive = true,
                     });
+
+                    foreach(var p in paymentTerms)
+                    {
+                        _financialService.SavePaymentTerm(p);
+                    }
                 }
+                
 
                 //5.GL setting
                 Core.Domain.Financials.GeneralLedgerSetting glSetting = null;
@@ -176,9 +271,11 @@ namespace Api.Controllers
                         SalesDiscountAccount = _financialService.GetAccountByAccountCode("40400"),
                     };
                 }
+                _financialService.SaveGeneralLedgerSetting(glSetting);
 
                 //6.Tax
-                if(_financialService.GetTaxes().Count() < 1)
+                IList<Core.Domain.TaxSystem.Tax> taxes = new List<Core.Domain.TaxSystem.Tax>();
+                if (_financialService.GetTaxes().Count() < 1)
                 {
                     var salesTaxAccount = _financialService.GetAccountByAccountCode("20300");
                     var purchaseTaxAccount = _financialService.GetAccountByAccountCode("50700");
@@ -222,12 +319,6 @@ namespace Api.Controllers
                         SalesAccountId = salesTaxAccount.Id,
                         PurchasingAccountId = purchaseTaxAccount.Id,
                     };
-
-                    IList<Core.Domain.TaxSystem.Tax> taxes = new List<Core.Domain.TaxSystem.Tax>();
-                    taxes.Add(vat5);
-                    taxes.Add(vat10);
-                    taxes.Add(evat12);
-                    taxes.Add(exportTax1);
 
                     var taxGroupVAT = new Core.Domain.TaxSystem.TaxGroup()
                     {
@@ -289,17 +380,26 @@ namespace Api.Controllers
                         ItemTaxGroup = itemTaxGroupRegular,
                         IsExempt = false,
                     });
+
+                    taxes.Add(vat5);
+                    taxes.Add(vat10);
+                    taxes.Add(evat12);
+                    taxes.Add(exportTax1);
+
+                    foreach(var tax in taxes)
+                    {
+                        _adminService.AddNewTax(tax);
+                    }
                 }
 
-                if(_purchasingService.GetVendors().Count() < 1)
+                Core.Domain.Purchases.Vendor vendor = new Core.Domain.Purchases.Vendor();
+                if (_purchasingService.GetVendors().Count() < 1)
                 {
                     Core.Domain.Party vendorParty = new Core.Domain.Party();
                     vendorParty.Name = "ABC Sample Supplier";
                     vendorParty.PartyType = Core.Domain.PartyTypes.Vendor;
                     vendorParty.IsActive = true;
-
-                    Core.Domain.Purchases.Vendor vendor = new Core.Domain.Purchases.Vendor();
-                    vendor.No = "0001";
+                    
                     vendor.AccountsPayableAccountId = _financialService.GetAccountByAccountCode("20110").Id;
                     vendor.PurchaseAccountId = _financialService.GetAccountByAccountCode("50200").Id;
                     vendor.PurchaseDiscountAccountId = _financialService.GetAccountByAccountCode("50400").Id;
@@ -315,9 +415,12 @@ namespace Api.Controllers
                     primaryContact.Party.PartyType = Core.Domain.PartyTypes.Contact;
 
                     vendor.PrimaryContact = primaryContact;
-                }
+
+                    _purchasingService.AddVendor(vendor);
+                }                
 
                 //8.Customer
+                Core.Domain.Sales.Customer customer = new Core.Domain.Sales.Customer();
                 if (_salesService.GetCustomers().Count() < 1)
                 {
                     var accountAR = _financialService.GetAccountByAccountCode("10120");
@@ -330,8 +433,6 @@ namespace Api.Controllers
                     customerParty.PartyType = Core.Domain.PartyTypes.Customer;
                     customerParty.IsActive = true;
 
-                    Core.Domain.Sales.Customer customer = new Core.Domain.Sales.Customer();
-                    customer.No = "0001";
                     customer.AccountsReceivableAccountId = accountAR != null ? (int?)accountAR.Id : null;
                     customer.SalesAccountId = accountSales != null ? (int?)accountSales.Id : null;
                     customer.CustomerAdvancesAccountId = accountAdvances != null ? (int?)accountAdvances.Id : null;
@@ -349,12 +450,13 @@ namespace Api.Controllers
                     primaryContact.Party.PartyType = Core.Domain.PartyTypes.Contact;
 
                     customer.PrimaryContact = primaryContact;
-                }
+
+                    _salesService.AddCustomer(customer);
+                }                
 
                 // 9.Items
                 IList<Core.Domain.Items.Measurement> measurements = new List<Core.Domain.Items.Measurement>();
                 IList<Core.Domain.Items.ItemCategory> categories = new List<Core.Domain.Items.ItemCategory>();
-                IList<Core.Domain.Items.Item> items = new List<Core.Domain.Items.Item>();
 
                 if (_inventoryService.GetAllItems().Count() < 1)
                 {
@@ -362,6 +464,11 @@ namespace Api.Controllers
                     measurements.Add(new Core.Domain.Items.Measurement() { Code = "PK", Description = "Pack" });
                     measurements.Add(new Core.Domain.Items.Measurement() { Code = "MO", Description = "Monthly" });
                     measurements.Add(new Core.Domain.Items.Measurement() { Code = "HR", Description = "Hour" });
+
+                    foreach(var m in measurements)
+                    {
+                        _inventoryService.SaveMeasurement(m);
+                    }
 
                     // Accounts = Sales A/C (40100), Inventory (10800), COGS (50300), Inv Adjustment (50500), Item Assm Cost (10900)
                     var sales = _financialService.GetAccountByAccountCode("40100");
@@ -475,11 +582,49 @@ namespace Api.Controllers
                         CostOfGoodsSoldAccount = cogs,
                         AssemblyAccount = assemblyCost,
                     });
-                }
 
-                //_adminService.SaveCompany(company);
+                    foreach(var c in categories)
+                    {
+                        _inventoryService.SaveItemCategory(c);
+                    }
+                }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                throw ex;               
+            }
+            System.Diagnostics.Debug.Write("Completed");
+        }
+
+        private string[,] LoadCsv(string filename)
+        {
+            // Get the file's text.
+            string whole_file = System.IO.File.ReadAllText(filename);
+
+            // Split into lines.
+            whole_file = whole_file.Replace('\n', '\r');
+            string[] lines = whole_file.Split(new char[] { '\r' },
+                StringSplitOptions.RemoveEmptyEntries);
+
+            // See how many rows and columns there are.
+            int num_rows = lines.Length;
+            int num_cols = lines[0].Split(',').Length;
+
+            // Allocate the data array.
+            string[,] values = new string[num_rows, num_cols];
+
+            // Load the array.
+            for (int r = 0; r < num_rows; r++)
+            {
+                string[] line_r = lines[r].Split(',');
+                for (int c = 0; c < num_cols; c++)
+                {
+                    values[r, c] = line_r[c];
+                }
+            }
+
+            // Return the values.
+            return values;
         }
     }
 }

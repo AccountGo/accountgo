@@ -154,5 +154,27 @@ namespace Services.Inventory
                         select item;
             return query.FirstOrDefault();
         }
+
+        public void SaveMeasurement(Measurement measurement)
+        {
+            if (measurement.Id == 0)
+                _measurementRepo.Insert(measurement);
+            else
+                _measurementRepo.Update(measurement);
+        }
+
+        public void SaveItemCategory(ItemCategory itemCategory)
+        {
+            foreach(var item in itemCategory.Items)
+            {
+                if (item.Id == 0)
+                    item.No = GetNextNumber(SequenceNumberTypes.Item).ToString();
+            }
+
+            if (itemCategory.Id == 0)
+                _itemCategoryRepo.Insert(itemCategory);
+            else
+                _itemCategoryRepo.Update(itemCategory);
+        }
     }
 }
