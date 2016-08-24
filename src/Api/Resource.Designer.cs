@@ -8,7 +8,7 @@
 // </auto-generated>
 //------------------------------------------------------------------------------
 
-namespace AccountGoWeb {
+namespace Api {
     using System;
     using System.Reflection;
     
@@ -38,7 +38,7 @@ namespace AccountGoWeb {
         public static global::System.Resources.ResourceManager ResourceManager {
             get {
                 if (object.ReferenceEquals(resourceMan, null)) {
-                    global::System.Resources.ResourceManager temp = new global::System.Resources.ResourceManager("AccountGoWeb.Resource", typeof(Resource).GetTypeInfo().Assembly);
+                    global::System.Resources.ResourceManager temp = new global::System.Resources.ResourceManager("Api.Resource", typeof(Resource).GetTypeInfo().Assembly);
                     resourceMan = temp;
                 }
                 return resourceMan;
@@ -56,6 +56,24 @@ namespace AccountGoWeb {
             }
             set {
                 resourceCulture = value;
+            }
+        }
+        
+        /// <summary>
+        ///    Looks up a localized string similar to  AccountCode,AccountName,ParentAccountCode,AccountClass,ContraAccount,Cash,Company,Sign
+        ///10000,Assets,,1,FALSE,FALSE,100,DR
+        ///10100,Current Assets,10000,1,FALSE,FALSE,100,DR
+        ///10110,Cash in Hand and in Bank,10100,1,FALSE,TRUE,100,DR
+        ///10111,Regular Checking Account,10110,1,FALSE,FALSE,100,DR
+        ///10112,Savings Account,10110,1,FALSE,FALSE,100,DR
+        ///10113,Cash in Hand A/C,10110,1,FALSE,FALSE,100,DR
+        ///10120,Accounts Receivable,10100,1,FALSE,FALSE,100,DR
+        ///10130,Other Receivables,10100,1,FALSE,FALSE,100,DR
+        ///10121,Allowance [rest of string was truncated]&quot;;.
+        /// </summary>
+        public static string coa {
+            get {
+                return ResourceManager.GetString("coa", resourceCulture);
             }
         }
     }

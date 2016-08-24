@@ -32,5 +32,7 @@ namespace Services.Inventory
         Measurement GetMeasurementById(int id);
         IEnumerable<ItemCategory> GetItemCategories();
         IEnumerable<InventoryControlJournal> GetInventoryControlJournals();
+        void SaveMeasurement(Measurement measurement);
+        void SaveItemCategory(ItemCategory itemCategory);
     }
 }
