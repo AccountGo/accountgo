@@ -1,7 +1,6 @@
 ﻿using Api.Data;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Configuration;
 
 namespace Api.Controllers
 {
@@ -71,6 +70,7 @@ namespace Api.Controllers
         [Route("[action]")]
         public async System.Threading.Tasks.Task<IActionResult> AddNewUser([FromBody]dynamic registerViewModel)
         {
+            string[] errors = null;
             try
             {
                 if (registerViewModel == null)
@@ -83,12 +83,25 @@ namespace Api.Controllers
 
                 var user = new ApplicationUser { UserName = username, Email = username };
                 var result = await _userManager.CreateAsync(user, password);
-
-                return new ObjectResult(Microsoft.AspNetCore.Identity.SignInResult.Success);
+                if (result.Succeeded)
+                {
+                    //user = await _userManager.FindByNameAsync(username);
+                    //if (await _userManager.CheckPasswordAsync(user, password))
+                    //{
+                    //    return new ObjectResult(_userManager.FindByEmailAsync(user.Email));
+                    //}
+                    return new ObjectResult(result);
+                }
+                else
+                {
+                    return new BadRequestObjectResult(result);
+                }
             }
-            catch { }
-
-            return new BadRequestObjectResult(Microsoft.AspNetCore.Identity.SignInResult.Failed);
+            catch(System.Exception ex)
+            {
+                errors = new string[1] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
+                return new BadRequestObjectResult(errors);
+            }
         }
     }
 }
