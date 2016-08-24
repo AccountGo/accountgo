@@ -21,7 +21,7 @@ namespace AccountGoWeb.Controllers
         public IActionResult SignIn(string returnUrl = null)
         {
             ViewData["ReturnUrl"] = returnUrl;
-            return View(new LoginViewModel() { Email = "admin@accountgo.ph", Password = "Laco4447" });
+            return View(new LoginViewModel() { Email = "admin@accountgo.ph", Password = "P@ssword1" });
         }
 
         [HttpPost]
@@ -35,12 +35,10 @@ namespace AccountGoWeb.Controllers
                 var serialize = Newtonsoft.Json.JsonConvert.SerializeObject(model);
                 var content = new StringContent(serialize);
                 content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
-                var response = Post("account/signin", content);
-                //var result = response.Content.ReadAsStringAsync();
+                HttpResponseMessage responseSignIn = Post("account/signin", content);
+                Newtonsoft.Json.Linq.JObject resultSignIn = Newtonsoft.Json.Linq.JObject.Parse(responseSignIn.Content.ReadAsStringAsync().Result);
 
-                //TODO: This is fake login. read the result above.
-                var result = new HttpResponseMessage(System.Net.HttpStatusCode.OK);
-                if (result != null && result.IsSuccessStatusCode)
+                if (resultSignIn["result"] != null)
                 {
                     var claims = new List<Claim>();
                     claims.Add(new Claim(ClaimTypes.IsPersistent, model.RememberMe.ToString()));
