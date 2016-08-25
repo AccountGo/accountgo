@@ -138,6 +138,10 @@ export default class SalesStore {
         }
     }
 
+    printInvoice() {
+        console.log("Print Invoice");
+    }
+
     postInvoice() {
         if (this.validation() && this.validationErrors.length === 0) {
             axios.post(Config.apiUrl + "api/sales/postsalesinvoice", JSON.stringify(this.salesInvoice),
