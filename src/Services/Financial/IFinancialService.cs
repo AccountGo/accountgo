@@ -49,5 +49,6 @@ namespace Services.Financial
         void SaveAccountClasses(IList<AccountClass> accountClasses);
         void SaveFinancialYear(FinancialYear financialYear);
         void SavePaymentTerm(PaymentTerm paymentTerm);
+        void SaveBank(Bank bank);
     }
 }

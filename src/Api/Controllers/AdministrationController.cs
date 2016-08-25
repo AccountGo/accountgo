@@ -117,6 +117,7 @@ namespace Api.Controllers
              * 7.Vendor
              * 8.Customer
              * 9.Items
+             * 10.Banks
              */
             try
             {
@@ -587,6 +588,37 @@ namespace Api.Controllers
                     {
                         _inventoryService.SaveItemCategory(c);
                     }
+                }
+
+                //10.Banks
+                IList<Core.Domain.Financials.Bank> banks = new List<Core.Domain.Financials.Bank>();
+                if(_financialService.GetCashAndBanks().Count() < 1)
+                {
+                    var bank = new Core.Domain.Financials.Bank()
+                    {
+                        AccountId = _financialService.GetAccountByAccountCode("10111").Id,
+                        Name = "General Fund",
+                        Type = Core.Domain.BankTypes.CheckingAccount,
+                        BankName = "GFB",
+                        Number = "1234567890",
+                        Address = "123 Main St.",
+                        IsDefault = true,
+                        IsActive = true,
+                    };
+                    banks.Add(bank);
+
+                    bank = new Core.Domain.Financials.Bank()
+                    {
+                        AccountId = _financialService.GetAccountByAccountCode("10113").Id,
+                        Name = "Petty Cash Account",
+                        Type = Core.Domain.BankTypes.CashAccount,
+                        IsDefault = false,
+                        IsActive = true,
+                    };
+                    banks.Add(bank);
+
+                    foreach (var b in banks)
+                        _financialService.SaveBank(b);
                 }
             }
             catch (Exception ex)
