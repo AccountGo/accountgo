@@ -64,18 +64,17 @@ On your first run, if you successfully Publish Database\SQL.AccountGo you will g
 1. Create your first user. registration page is hidden but you can go directly from your browser. (e.g. http://localhost/account/register)
 2. Set password like 'P@ssword1'. More than 6 chars, 1 Caps, 1 special, 1 number. Note: Currently, even successfully register a new user, it will not inform you. Just try to login using your newly created user. This registratio page is temporary.
 3. After successful user registration, the system automatically runs data initialization of the following.
-            /*
-             * 1.Company
-             * 2.Chart of accounts/account classes
-             * 3.Financial year
-             * 4.Payment terms
-             * 5.GL setting
-             * 6.Tax
-             * 7.Vendor
-             * 8.Customer
-             * 9.Items
-             * 10.Banks
-             */
+- Company
+- Chart of accounts/account classes
+- Financial year
+- Payment terms
+- GL setting
+- Tax
+- Vendor
+- Customer
+- Items
+- Banks
+             
 
 # Help Wanted
 Wether you are a Developer, Consultant, Accountant, QA, Marketing expert, Project Manager we can all be part of this great and promising project.

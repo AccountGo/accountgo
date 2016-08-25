@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
+using System;
 using System.Collections.Generic;
 using System.Net.Http;
 using System.Security.Claims;
@@ -108,21 +109,35 @@ namespace AccountGoWeb.Controllers
         public IActionResult Register(RegisterViewModel model, string returnUrl = null)
         {
             ViewData["ReturnUrl"] = returnUrl;
-            if (ModelState.IsValid)
+            try
             {
-                var serialize = Newtonsoft.Json.JsonConvert.SerializeObject(model);
-                var content = new StringContent(serialize);
-                content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
-                HttpResponseMessage responseAddNewUser = Post("account/addnewuser", content);
-                Newtonsoft.Json.Linq.JObject resultAddNewUser = Newtonsoft.Json.Linq.JObject.Parse(responseAddNewUser.Content.ReadAsStringAsync().Result);
-
-                HttpResponseMessage responseInitialized = null;
-                Newtonsoft.Json.Linq.JObject resultInitialized = null;
-                if ((bool)resultAddNewUser["succeeded"])
+                if (ModelState.IsValid)
                 {
-                    responseInitialized = Get("administration/initializedcompany");
-                    resultInitialized = Newtonsoft.Json.Linq.JObject.Parse((responseInitialized.Content.ReadAsStringAsync().Result));
+                    var serialize = Newtonsoft.Json.JsonConvert.SerializeObject(model);
+                    var content = new StringContent(serialize);
+                    content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+                    HttpResponseMessage responseAddNewUser = Post("account/addnewuser", content);
+                    Newtonsoft.Json.Linq.JObject resultAddNewUser = Newtonsoft.Json.Linq.JObject.Parse(responseAddNewUser.Content.ReadAsStringAsync().Result);
+
+                    HttpResponseMessage responseInitialized = null;
+                    Newtonsoft.Json.Linq.JObject resultInitialized = null;
+                    if ((bool)resultAddNewUser["succeeded"])
+                    {
+                        responseInitialized = Get("administration/initializedcompany");
+                        resultInitialized = Newtonsoft.Json.Linq.JObject.Parse((responseInitialized.Content.ReadAsStringAsync().Result));
+                        return RedirectToAction(nameof(AccountController.SignIn), "Account");
+                    }
+                    else
+                    {
+                        ModelState.AddModelError(string.Empty, resultAddNewUser["errors"][0]["description"].ToString());
+                        return View(model);
+                    }
                 }
+            }
+            catch(Exception ex)
+            {
+                ModelState.AddModelError(string.Empty, "Please check if your database is ready/published." + ": " + ex.Message);
+                return View(model);
             }
             return View(model);
         }
