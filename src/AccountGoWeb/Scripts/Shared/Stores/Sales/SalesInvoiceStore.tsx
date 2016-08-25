@@ -90,11 +90,8 @@ export default class SalesStore {
                 }
             }.bind(this));
         }
- 
-
-
-      
-           
+        else
+            this.changedEditMode(true);           
     }
 
 

@@ -767,5 +767,13 @@ namespace Services.Financial
             else
                 _paymentTermRepo.Update(paymentTerm);
         }
+
+        public void SaveBank(Bank bank)
+        {
+            if (bank.Id == 0)
+                _bankRepo.Insert(bank);
+            else
+                _bankRepo.Update(bank);
+        }
     }
 }
