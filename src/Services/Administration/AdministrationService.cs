@@ -13,6 +13,7 @@ using Core.Domain;
 using Core.Domain.Financials;
 using System;
 using Core.Domain.TaxSystem;
+using Core.Domain.Security;
 
 namespace Services.Administration
 {
@@ -27,6 +28,7 @@ namespace Services.Administration
         private readonly IRepository<Tax> _taxRepo;
         private readonly IRepository<Company> _company;
         private readonly IRepository<Account> _accountRepo;
+        private readonly ISecurityRepository _securityRepository;
 
         public AdministrationService(IRepository<FinancialYear> fiscalYearRepo,
             IRepository<TaxGroup> taxGroupRepo,
@@ -36,6 +38,7 @@ namespace Services.Administration
             IRepository<Tax> taxRepo,
             IRepository<GeneralLedgerSetting> generalLedgerSetting,
             IRepository<Account> accountRepo,
+            ISecurityRepository securityRepository,
             IRepository<Company> company = null
             )
             : base(null, generalLedgerSetting, paymentTermRepo, bankRepo)
@@ -49,6 +52,7 @@ namespace Services.Administration
             _taxRepo = taxRepo;
             _company = company;
             _accountRepo = accountRepo;
+            _securityRepository = securityRepository;
         }
 
         public ICollection<Tax> GetAllTaxes(bool includeInActive)
@@ -131,6 +135,16 @@ namespace Services.Administration
                 return false;
 
             return initialized;
+        }
+
+        public void SaveUser(User user)
+        {
+            _securityRepository.AddUser(user);
+        }
+
+        public User GetUser(string username)
+        {
+            return _securityRepository.GetUser(username);
         }
     }
 }

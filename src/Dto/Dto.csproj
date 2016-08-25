@@ -74,6 +74,7 @@
     <Compile Include="Sales\SalesOrder.cs" />
     <Compile Include="Sales\SalesQuotation.cs" />
     <Compile Include="Sales\SalesReceipt.cs" />
+    <Compile Include="Security\User.cs" />
     <Compile Include="TaxSystem\ItemTaxGroup.cs" />
     <Compile Include="TaxSystem\ItemTaxGroupTax.cs" />
     <Compile Include="TaxSystem\Tax.cs" />

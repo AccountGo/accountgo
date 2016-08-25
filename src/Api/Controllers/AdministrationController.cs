@@ -63,6 +63,23 @@ namespace Api.Controllers
                 return new ObjectResult(_adminService.GetDefaultCompany());
         }
 
+        [HttpGet]
+        [Route("[action]")]
+        public IActionResult GetUser(string username)
+        {
+            var user = _adminService.GetUser(username);
+            Dto.Security.User userDto = new Dto.Security.User();
+
+            if (user != null)
+            {
+                userDto.Id = user.Id;
+                userDto.FirstName = user.Firstname;
+                userDto.LastName = user.Lastname;
+            }
+
+            return new ObjectResult(userDto);
+        }
+
         [HttpPost]
         [Route("[action]")]
         public IActionResult SaveCompany([FromBody]Company companyDto)

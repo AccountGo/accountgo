@@ -1,6 +1,7 @@
 ﻿using Api.Data;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Services.Administration;
 
 namespace Api.Controllers
 {
@@ -9,14 +10,17 @@ namespace Api.Controllers
     {
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly SignInManager<ApplicationUser> _signInManager;
+        private readonly IAdministrationService _administrationService;
 
         public AccountController(
             UserManager<ApplicationUser> userManager,
-            SignInManager<ApplicationUser> signInManager
+            SignInManager<ApplicationUser> signInManager,
+            IAdministrationService administrationService
             )
         {
             _userManager = userManager;
-            _signInManager = signInManager;            
+            _signInManager = signInManager;
+            _administrationService = administrationService;
         }
 
         [HttpPost]
@@ -85,11 +89,11 @@ namespace Api.Controllers
                 var result = await _userManager.CreateAsync(user, password);
                 if (result.Succeeded)
                 {
-                    //user = await _userManager.FindByNameAsync(username);
-                    //if (await _userManager.CheckPasswordAsync(user, password))
-                    //{
-                    //    return new ObjectResult(_userManager.FindByEmailAsync(user.Email));
-                    //}
+                    Core.Domain.Security.User newUser = new Core.Domain.Security.User();
+                    newUser.EmailAddress = username;
+                    newUser.UserName = username;
+                    _administrationService.SaveUser(newUser);
+
                     return new ObjectResult(result);
                 }
                 else
