@@ -278,7 +278,11 @@ namespace Api.Controllers
 
                 purchaseInvoiceDto.PurchaseInvoiceLines.Add(line);
             }
-
+            // is this journal entry ready for posting?
+            if (!purchaseInvoiceDto.Posted && purchaseInvoiceDto.PurchaseInvoiceLines.Count >= 1)
+            {
+                purchaseInvoiceDto.ReadyForPosting = true;
+            }
             return new ObjectResult(purchaseInvoiceDto);
         }
 

@@ -466,31 +466,39 @@ namespace Services.Purchasing
                     _purchaseInvoiceRepo.Update(purchaseInvoice);
                 }
 
-                // update the purchase order status
-                if (purchaseOrder == null)
-                {
-                    // get the first order line
-                    purchaseOrder = GetPurchaseOrderLineById(purchaseInvoice.PurchaseInvoiceLines.FirstOrDefault().PurchaseOrderLineId.GetValueOrDefault()).PurhcaseOrderHeader;
-                }
-                // if all orderline has no remaining qty to invoice, set the status to fullyinvoice
-                bool hasRemainingQtyToInvoice = false;
-                foreach (var line in purchaseOrder.PurchaseOrderLines)
-                {
-                    if (line.GetRemainingQtyToInvoice() > 0)
-                    {
-                        hasRemainingQtyToInvoice = true;
-                        break;
-                    }
-                }
-                if (!hasRemainingQtyToInvoice)
-                {
-                    purchaseOrder.Status = PurchaseOrderStatus.FullReceived;
-                    _purchaseOrderRepo.Update(purchaseOrder);
-                }
+                UpdatePurchaseOrderStatus(purchaseInvoice, purchaseOrder);
             }
             catch (Exception ex)
             {
                 throw ex;
+            }
+        }
+
+        private void UpdatePurchaseOrderStatus(PurchaseInvoiceHeader purchaseInvoice, PurchaseOrderHeader purchaseOrder)
+        {
+            // update the purchase order status
+            if (purchaseOrder == null)
+            {
+                // get the first order line
+                purchaseOrder =
+                    GetPurchaseOrderLineById(
+                        purchaseInvoice.PurchaseInvoiceLines.FirstOrDefault().PurchaseOrderLineId.GetValueOrDefault())
+                        .PurhcaseOrderHeader;
+            }
+            // if all orderline has no remaining qty to invoice, set the status to fullyinvoice
+            bool hasRemainingQtyToInvoice = false;
+            foreach (var line in purchaseOrder.PurchaseOrderLines)
+            {
+                if (line.GetRemainingQtyToInvoice() > 0)
+                {
+                    hasRemainingQtyToInvoice = true;
+                    break;
+                }
+            }
+            if (!hasRemainingQtyToInvoice)
+            {
+                purchaseOrder.Status = PurchaseOrderStatus.FullReceived;
+                _purchaseOrderRepo.Update(purchaseOrder);
             }
         }
 

@@ -43,6 +43,31 @@ class ValidationErrors extends React.Component<any, {}>{
     }
 }
 
+@observer
+class EditButton extends React.Component<any, {}>{
+    onClickEditButton() {
+        // Remove " disabledControl" from current className
+        var nodes = document.getElementById("divPurchaseInvoiceForm").getElementsByTagName('*');
+        for (var i = 0; i < nodes.length; i++) {
+            var subStringLength = nodes[i].className.length - " disabledControl".length;
+            nodes[i].className = nodes[i].className.substring(0, subStringLength);
+        }
+        store.changedEditMode(true);
+    }
+    render() {
+        return (
+            <a href="#" id="linkEdit" onClick={this.onClickEditButton}
+                className={!store.purchaseInvoice.posted && !store.editMode
+                    ? "btn"
+                    : "btn inactiveLink"}>
+                <i className="fa fa-edit"></i>
+                Edit
+            </a>
+        );
+    }
+}
+
+@observer
 class SavePurchaseInvoiceButton extends React.Component<any, {}>{
     saveNewPurchaseInvoice(e) {
         store.savePurchaseInvoice();
@@ -50,8 +75,12 @@ class SavePurchaseInvoiceButton extends React.Component<any, {}>{
 
     render() {
         return (
-            <input type="button" className="btn btn-sm btn-primary btn-flat pull-left" value="Save" onClick={this.saveNewPurchaseInvoice.bind(this)} />
-            );
+            <input type="button" value="Save" onClick={this.saveNewPurchaseInvoice.bind(this) }
+                className={!store.purchaseInvoice.posted && store.editMode
+                    ? "btn btn-sm btn-primary btn-flat pull-left"
+                    : "btn btn-sm btn-primary btn-flat pull-left inactiveLink"}
+                />
+        );
     }
 }
 
@@ -82,7 +111,10 @@ class PostButton extends React.Component<any, {}>{
 
     render() {
         return (
-            <input type="button" value="Post" onClick={ this.postOnClick.bind(this) } className="btn btn-sm btn-danger btn-flat pull-right disabled" />
+            <input type="button" value="Post" onClick={ this.postOnClick.bind(this) }
+                className={!store.purchaseInvoice.posted && !store.editMode && store.purchaseInvoice.readyForPosting
+                    ? "btn btn-sm btn-primary btn-flat btn-danger pull-right"
+                    : "btn btn-sm btn-primary btn-flat btn-danger pull-right inactiveLink"} />
         );
     }
 }
@@ -263,15 +295,21 @@ class PurchaseInvoiceTotals extends React.Component<any, {}>{
     }
 }
 
-export default class AddPurchaseInvoice extends React.Component<any, {}> {
+@observer
+export default class PurchaseInvoice extends React.Component<any, {}> {
     render() {
         return (
             <div>
-                <ValidationErrors />
-                <PurchaseInvoiceHeader />
-                <PurchaseInvoiceLines />
-                <PurchaseInvoiceTotals />
-                <div>
+                <div id="divActionsTop">
+                    <EditButton />
+                </div>
+                <div id="divPurchaseInvoiceForm">
+                    <ValidationErrors />
+                    <PurchaseInvoiceHeader />
+                    <PurchaseInvoiceLines />
+                    <PurchaseInvoiceTotals />
+                </div>
+                <div id="divActionsBottom">
                     <SavePurchaseInvoiceButton />
                     <CancelPurchaseInvoiceButton />
                     <PostButton />
@@ -281,4 +319,4 @@ export default class AddPurchaseInvoice extends React.Component<any, {}> {
     }
 }
 
-ReactDOM.render(<AddPurchaseInvoice />, document.getElementById("divPurchaseInvoice"));
+ReactDOM.render(<PurchaseInvoice />, document.getElementById("divPurchaseInvoice"));
