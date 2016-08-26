@@ -34,6 +34,8 @@
         "Services": {
           "target": "project"
         }
+      },
+      "frameworkAssemblies": {
       }
     }
   },

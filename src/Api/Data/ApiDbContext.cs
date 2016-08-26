@@ -7,6 +7,7 @@ using Core.Domain.Sales;
 using Core.Domain.Security;
 using Core.Domain.TaxSystem;
 using Microsoft.EntityFrameworkCore;
+using System.Linq;
 
 namespace Api.Data
 {
@@ -80,5 +81,68 @@ namespace Api.Data
         public virtual DbSet<Vendor> Vendors { get; set; }
         public virtual DbSet<VendorPayment> VendorPayments { get; set; }
         public virtual DbSet<Party> Parties { get; set; }
+
+        public override int SaveChanges()
+        {
+            SaveAuditLog();
+
+            var ret = base.SaveChanges();
+
+            UpdateAuditLogRecordId();
+
+            return ret;
+        }
+
+        #region Audit Logs
+        private void SaveAuditLog()
+        {
+            string username = System.Threading.Thread.CurrentPrincipal.Identity.Name;
+
+            if (string.IsNullOrEmpty(username))
+            {
+                var dbEntityEntries = ChangeTracker.Entries().ToList()
+                    .Where(p => p.State == EntityState.Modified || p.State == EntityState.Added || p.State == EntityState.Deleted);
+
+                foreach (var dbEntityEntry in dbEntityEntries)
+                {
+                    try
+                    {
+                        var auditLogs = AuditLogHelper.GetChangesForAuditLog(dbEntityEntry, username, this);
+                        foreach (var auditlog in auditLogs)
+                            if (auditlog != null)
+                                AuditLogs.Add(auditlog);
+                    }
+                    catch
+                    {
+                        continue;
+                    }
+                }
+            }
+        }
+
+        private void UpdateAuditLogRecordId()
+        {
+            foreach (var entity in AuditLogHelper.addedEntities)
+            {
+                if (ChangeTracker.Entries().ToList().Contains(entity.Value))
+                {
+                    string keyName = entity.Value.Entity
+                        .GetType()
+                        .GetProperties()
+                        .Single(p => p.GetCustomAttributes(typeof(System.ComponentModel.DataAnnotations.KeyAttribute), false).Count() > 0).Name;
+
+                    string recid = entity.Value.Property(keyName).CurrentValue.ToString();
+
+                    var auditLog = this.AuditLogs.FirstOrDefault(log => log.AuditEventDateUTC == entity.Key);
+
+                    if (auditLog != null)
+                    {
+                        auditLog.RecordId = recid;
+                        base.SaveChanges();
+                    }
+                }
+            }
+        }
+        #endregion
     }
 }
