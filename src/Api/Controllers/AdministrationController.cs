@@ -69,6 +69,32 @@ namespace Api.Controllers
 
         [HttpGet]
         [Route("[action]")]
+        public IActionResult AuditLogs()
+        {
+            var auditLogs = _adminService.AuditLogs();
+            var auditLogsDto = new List<AuditLog>();
+
+            foreach(var log in auditLogs)
+            {
+                auditLogsDto.Add(new AuditLog()
+                {
+                    Id = log.Id,
+                    UserName = log.UserName,
+                    AuditEventDateUTC = log.AuditEventDateUTC,
+                    AuditEventType = log.AuditEventType,
+                    TableName = log.TableName,
+                    RecordId = log.RecordId,
+                    FieldName = log.FieldName,
+                    OriginalValue = log.OriginalValue,
+                    NewValue = log.NewValue
+                });
+            }
+
+            return new ObjectResult(auditLogs);
+        }
+
+        [HttpGet]
+        [Route("[action]")]
         public IActionResult GetUser(string username)
         {
             var user = _securityService.GetUser(username);

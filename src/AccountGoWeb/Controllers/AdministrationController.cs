@@ -65,5 +65,14 @@ namespace AccountGoWeb.Controllers
             ViewBag.PageContentHeader = "Users";
             return View();
         }
+
+        [Microsoft.AspNetCore.Authorization.Authorize(Roles = "SystemAdministrators")]
+        public async System.Threading.Tasks.Task<IActionResult> AuditLogs()
+        {
+            var auditLogs = await GetAsync<System.Collections.Generic.IEnumerable<AuditLog>>("administration/auditlogs");
+
+            ViewBag.PageContentHeader = "Audit Logs";
+            return View(model:auditLogs);
+        }
     }
 }

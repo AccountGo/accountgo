@@ -11,6 +11,7 @@ using Core.Domain;
 using Core.Domain.TaxSystem;
 using Core.Domain.Financials;
 using Core.Domain.Security;
+using Core.Domain.Auditing;
 
 namespace Services.Administration
 {
@@ -30,5 +31,6 @@ namespace Services.Administration
         bool IsSystemInitialized();
         void SaveUser(User user);
         User GetUser(string username);
+        IEnumerable<AuditLog> AuditLogs();
     }
 }
