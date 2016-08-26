@@ -97,5 +97,22 @@ namespace AccountGoWeb.Controllers
             }
             return false;
         }
+
+        protected string GetCurrentUserName()
+        {
+            if (HttpContext.User.Identity.IsAuthenticated)
+            {
+                var claimsEnumerator = HttpContext.User.Claims.GetEnumerator();
+                while (claimsEnumerator.MoveNext())
+                {
+                    var current = claimsEnumerator.Current;
+                    if (current.Type == System.Security.Claims.ClaimTypes.Email)
+                    {
+                        return current.Value;
+                    }
+                }
+            }
+            return string.Empty;
+        }
     }
 }

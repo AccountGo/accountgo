@@ -79,6 +79,7 @@
     <Compile Include="Security\Permission.cs" />
     <Compile Include="Security\Role.cs" />
     <Compile Include="Security\User.cs" />
+    <Compile Include="Singleton.cs" />
     <Compile Include="TaxSystem\ItemTaxGroup.cs" />
     <Compile Include="TaxSystem\ItemTaxGroupTax.cs" />
     <Compile Include="TaxSystem\Tax.cs" />

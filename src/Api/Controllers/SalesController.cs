@@ -76,8 +76,7 @@ namespace Api.Controllers
             customer.SalesDiscountAccountId = customerDto.SalesDiscountAccountId;
             customer.PaymentTermId = customerDto.PaymentTermId;
             customer.TaxGroupId = customerDto.TaxGroupId;
-
-
+            customer.ModifiedBy = customerDto.ModifiedBy;
 
             if (isNew)
                 _salesService.AddCustomer(customer);

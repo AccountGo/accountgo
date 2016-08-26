@@ -96,7 +96,7 @@ namespace Api.Data
         #region Audit Logs
         private void SaveAuditLog()
         {
-            string username = System.Threading.Thread.CurrentPrincipal.Identity.Name;
+            string username = string.Empty;
 
             if (string.IsNullOrEmpty(username))
             {
