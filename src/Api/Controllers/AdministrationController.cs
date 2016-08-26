@@ -5,9 +5,10 @@ using Services.Financial;
 using Services.Inventory;
 using Services.Purchasing;
 using Services.Sales;
+using Services.Security;
 using System;
-using System.Linq;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Api.Controllers
 {
@@ -19,18 +20,21 @@ namespace Api.Controllers
         private readonly ISalesService _salesService;
         private readonly IPurchasingService _purchasingService;
         private readonly IInventoryService _inventoryService;
+        private readonly ISecurityService _securityService;
 
         public AdministrationController(IAdministrationService adminService,
             IFinancialService financialService,
             ISalesService salesService,
             IPurchasingService purchasingService,
-            IInventoryService inventoryService)
+            IInventoryService inventoryService,
+            ISecurityService securityService)
         {
             _adminService = adminService;
             _financialService = financialService;
             _salesService = salesService;
             _purchasingService = purchasingService;
             _inventoryService = inventoryService;
+            _securityService = securityService;
         }
 
         [HttpGet]
@@ -67,14 +71,38 @@ namespace Api.Controllers
         [Route("[action]")]
         public IActionResult GetUser(string username)
         {
-            var user = _adminService.GetUser(username);
-            Dto.Security.User userDto = new Dto.Security.User();
+            var user = _securityService.GetUser(username);
+            var userDto = new Dto.Security.User();
+            userDto.Id = user.Id;
+            userDto.FirstName = user.Firstname;
+            userDto.LastName = user.Lastname;
+            userDto.UserName = user.UserName;
+            userDto.Email = user.EmailAddress;
 
-            if (user != null)
+            foreach (var role in user.Roles)
             {
-                userDto.Id = user.Id;
-                userDto.FirstName = user.Firstname;
-                userDto.LastName = user.Lastname;
+                var roleDto = new Dto.Security.Role()
+                {
+                    Id = role.SecurityRoleId,
+                    Name = role.SecurityRole.Name,
+                    SysAdmin = role.SecurityRole.SysAdmin
+                };
+
+                userDto.Roles.Add(roleDto);
+
+                foreach (var permission in role.SecurityRole.Permissions)
+                {
+                    var permissionDto = new Dto.Security.Permission()
+                    {
+                        Id = permission.SecurityPermissionId,
+                        Name = permission.SecurityPermission.Name,
+                        Group = new Dto.Security.Group()
+                        {
+                            Name = permission.SecurityPermission.Group.Name
+                        }
+                    };
+                    roleDto.Permissions.Add(permissionDto);
+                }
             }
 
             return new ObjectResult(userDto);
@@ -135,6 +163,7 @@ namespace Api.Controllers
              * 8.Customer
              * 9.Items
              * 10.Banks
+             * 11.Security Roles
              */
             try
             {
@@ -636,6 +665,13 @@ namespace Api.Controllers
 
                     foreach (var b in banks)
                         _financialService.SaveBank(b);
+                }
+
+                //11.Security Roles
+                if(_securityService.GetAllSecurityRole().Count() < 1)
+                {
+                    _securityService.AddRole("SystemAdministrators");
+                    _securityService.AddRole("GeneralUsers");
                 }
             }
             catch (Exception ex)

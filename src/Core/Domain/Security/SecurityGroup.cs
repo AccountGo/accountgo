@@ -9,8 +9,8 @@ namespace Core.Domain.Security
     {
         //[Key]
         //public int SecurityGroupId { get; set; }
-        public string GroupName { get; set; }
-
+        public string Name { get; set; }
+        public string DisplayName { get; set; }
         public virtual ICollection<SecurityPermission> Permissions { get; set; }
 
         public SecurityGroup()

@@ -45,15 +45,25 @@ namespace AccountGoWeb.Controllers
 
                     var claims = new List<Claim>();
                     claims.Add(new Claim(ClaimTypes.IsPersistent, model.RememberMe.ToString()));
-                    claims.Add(new Claim(ClaimTypes.Role, "Administrator"));
-                    claims.Add(new Claim(ClaimTypes.NameIdentifier, model.Email));
-                    claims.Add(new Claim(ClaimTypes.Email, model.Email));
-                    claims.Add(new Claim(ClaimTypes.GivenName, user.FirstName));
-                    claims.Add(new Claim(ClaimTypes.Surname, user.LastName));
-                    claims.Add(new Claim(ClaimTypes.Name, user.FirstName + " " + user.LastName));
+                    claims.Add(new Claim(ClaimTypes.NameIdentifier, user.Email));
+                    claims.Add(new Claim(ClaimTypes.Email, user.Email));
+
+                    string firstName = user.FirstName != null ? user.FirstName : "";
+                    string lastName = user.LastName != null ? user.LastName : "";
+
+                    claims.Add(new Claim(ClaimTypes.GivenName, firstName));
+                    claims.Add(new Claim(ClaimTypes.Surname, lastName));
+                    claims.Add(new Claim(ClaimTypes.Name, firstName + " " + lastName));
+
+                    foreach(var role in user.Roles)
+                        claims.Add(new Claim(ClaimTypes.Role, role.Name));
+
+                    claims.Add(new Claim(ClaimTypes.UserData, Newtonsoft.Json.JsonConvert.SerializeObject(user)));
+
                     var identity = new ClaimsIdentity(claims, "AuthCookie");
 
                     ClaimsPrincipal principal = new ClaimsPrincipal(new[] { identity });
+
                     HttpContext.User = principal;
 
                     await HttpContext.Authentication.SignInAsync("AuthCookie", principal, new Microsoft.AspNetCore.Http.Authentication.AuthenticationProperties { IsPersistent = model.RememberMe });
@@ -87,17 +97,9 @@ namespace AccountGoWeb.Controllers
 
             return View();
         }
-
-        private IActionResult RedirectToLocal(string returnUrl)
+        public IActionResult Unauthorize()
         {
-            if (Url.IsLocalUrl(returnUrl))
-            {
-                return Redirect(returnUrl);
-            }
-            else
-            {
-                return RedirectToAction(nameof(HomeController.Index), "Home");
-            }
+            return View();
         }
 
         [HttpGet]
@@ -145,5 +147,19 @@ namespace AccountGoWeb.Controllers
             }
             return View(model);
         }
+
+        #region Private Methods
+        private IActionResult RedirectToLocal(string returnUrl)
+        {
+            if (Url.IsLocalUrl(returnUrl))
+            {
+                return Redirect(returnUrl);
+            }
+            else
+            {
+                return RedirectToAction(nameof(HomeController.Index), "Home");
+            }
+        }
+        #endregion
     }
 }

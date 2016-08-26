@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Linq;
+using Microsoft.EntityFrameworkCore;
 using Core.Data;
 using Core.Domain.Security;
 
@@ -35,7 +36,11 @@ namespace Api.Data.Repositories
 
         public User GetUser(string username)
         {
-            return _context.Users.Where(u => u.UserName == username)
+            return _context.Users
+                .Include(u => u.Roles)
+                .ThenInclude(u => u.SecurityRole.Permissions)
+                .ThenInclude(u => u.SecurityPermission.Group)
+                .Where(u => u.UserName == username)
                 .FirstOrDefault();
         }
     }

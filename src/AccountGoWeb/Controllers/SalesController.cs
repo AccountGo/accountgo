@@ -7,6 +7,7 @@ using System.Net.Http;
 
 namespace AccountGoWeb.Controllers
 {
+    [Microsoft.AspNetCore.Authorization.Authorize]
     public class SalesController : BaseController
     {
         public SalesController(IConfiguration config)

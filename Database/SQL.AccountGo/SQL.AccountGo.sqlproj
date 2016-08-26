@@ -131,4 +131,7 @@
     <Build Include="dbo\Tables\AspNetRoleClaims.sql" />
     <Build Include="dbo\Tables\AspNetUserTokens.sql" />
   </ItemGroup>
+  <ItemGroup>
+    <RefactorLog Include="SQL.AccountGo.refactorlog" />
+  </ItemGroup>
 </Project>

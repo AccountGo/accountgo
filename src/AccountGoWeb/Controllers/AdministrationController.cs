@@ -6,6 +6,7 @@ using System.Net.Http;
 
 namespace AccountGoWeb.Controllers
 {
+    [Microsoft.AspNetCore.Authorization.Authorize]
     public class AdministrationController : BaseController
     {
         public AdministrationController(IConfiguration config) {
@@ -56,6 +57,13 @@ namespace AccountGoWeb.Controllers
             ViewBag.Accounts = Models.SelectListItemHelper.Accounts();
             ViewBag.PageContentHeader = "Setup and Configuration";
             return RedirectToAction(nameof(AdministrationController.Settings));
+        }
+
+        [Microsoft.AspNetCore.Authorization.Authorize(Roles = "SystemAdministrators")]
+        public IActionResult Users()
+        {
+            ViewBag.PageContentHeader = "Users";
+            return View();
         }
     }
 }

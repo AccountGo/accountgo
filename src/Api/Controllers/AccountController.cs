@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Services.Administration;
+using Services.Security;
 
 namespace Api.Controllers
 {
@@ -11,16 +12,19 @@ namespace Api.Controllers
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly SignInManager<ApplicationUser> _signInManager;
         private readonly IAdministrationService _administrationService;
+        private readonly ISecurityService _securityService;
 
         public AccountController(
             UserManager<ApplicationUser> userManager,
             SignInManager<ApplicationUser> signInManager,
-            IAdministrationService administrationService
+            IAdministrationService administrationService,
+            ISecurityService securityService
             )
         {
             _userManager = userManager;
             _signInManager = signInManager;
             _administrationService = administrationService;
+            _securityService = securityService;
         }
 
         [HttpPost]
@@ -31,7 +35,6 @@ namespace Api.Controllers
             {
                 throw new System.ArgumentNullException(nameof(loginViewModel));
             }
-
             //var error = await _signInManager.PreSignInCheck(user);
             //if (error != null)
             //{
@@ -45,13 +48,12 @@ namespace Api.Controllers
             string password = loginViewModel.Password;
             string username = loginViewModel.Email;
 
-            var user = await _userManager.FindByNameAsync(username);
+            var applicationUser = await _userManager.FindByNameAsync(username);
                        
-            if (await _userManager.CheckPasswordAsync(user, password))
+            if (await _userManager.CheckPasswordAsync(applicationUser, password))
             {
                 //await ResetLockout(user);
-                //return SignInResult.Success;
-                return new ObjectResult(_userManager.FindByEmailAsync(user.Email));
+                return new ObjectResult(_userManager.FindByEmailAsync(applicationUser.Email));
             }
 
             //Logger.LogWarning(2, "User {userId} failed to provide the correct password.", await UserManager.GetUserIdAsync(user));

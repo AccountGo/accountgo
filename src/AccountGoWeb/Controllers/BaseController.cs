@@ -68,5 +68,34 @@ namespace AccountGoWeb.Controllers
                 return response.Result;
             }
         }
+
+        protected bool HasPermission(string permission)
+        {
+            if (HttpContext.User.Identity.IsAuthenticated)
+            {
+                System.Collections.Generic.IList<string> permissions = new System.Collections.Generic.List<string>();
+
+                var claimsEnumerator = HttpContext.User.Claims.GetEnumerator();
+                while(claimsEnumerator.MoveNext())
+                {
+                    var current = claimsEnumerator.Current;
+                    if (current.Type == System.Security.Claims.ClaimTypes.UserData)
+                    {
+                        Newtonsoft.Json.Linq.JObject userData = Newtonsoft.Json.Linq.JObject.Parse(current.Value);
+                        foreach(var r in userData["Roles"])
+                        {
+                            foreach(var p in r["Permissions"])
+                            {
+                                permissions.Add(p["Name"].ToString());
+                            }
+                        }
+                    }
+                }
+
+                if (permissions.Contains(permission))
+                    return true;
+            }
+            return false;
+        }
     }
 }
