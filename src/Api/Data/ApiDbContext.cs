@@ -98,24 +98,22 @@ namespace Api.Data
         {
             string username = string.Empty;
 
-            if (string.IsNullOrEmpty(username))
-            {
-                var dbEntityEntries = ChangeTracker.Entries().ToList()
-                    .Where(p => p.State == EntityState.Modified || p.State == EntityState.Added || p.State == EntityState.Deleted);
+            var dbEntityEntries = ChangeTracker.Entries().ToList()
+                .Where(p => p.State == EntityState.Modified || p.State == EntityState.Added || p.State == EntityState.Deleted);
 
-                foreach (var dbEntityEntry in dbEntityEntries)
+            foreach (var dbEntityEntry in dbEntityEntries)
+            {
+                try
                 {
-                    try
-                    {
-                        var auditLogs = AuditLogHelper.GetChangesForAuditLog(dbEntityEntry, username, this);
-                        foreach (var auditlog in auditLogs)
-                            if (auditlog != null)
-                                AuditLogs.Add(auditlog);
-                    }
-                    catch
-                    {
-                        continue;
-                    }
+                    username = ((BaseEntity)dbEntityEntry.Entity).ModifiedBy;
+                    var auditLogs = AuditLogHelper.GetChangesForAuditLog(dbEntityEntry, username);
+                    foreach (var auditlog in auditLogs)
+                        if (auditlog != null)
+                            AuditLogs.Add(auditlog);
+                }
+                catch
+                {
+                    continue;
                 }
             }
         }

@@ -46,6 +46,8 @@ namespace AccountGoWeb.Controllers
                 var baseUri = _baseConfig["ApiUrl"];
                 client.BaseAddress = new System.Uri(baseUri);
                 client.DefaultRequestHeaders.Accept.Clear();
+                client.DefaultRequestHeaders.Add("UserName", GetCurrentUserName());
+
                 var response = await client.PostAsync(baseUri + uri, data);
                 if (response.IsSuccessStatusCode)
                 {
@@ -64,6 +66,9 @@ namespace AccountGoWeb.Controllers
                 var baseUri = _baseConfig["ApiUrl"];
                 client.BaseAddress = new System.Uri(baseUri);
                 client.DefaultRequestHeaders.Accept.Clear();
+                client.DefaultRequestHeaders.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
+                client.DefaultRequestHeaders.Add("UserName", GetCurrentUserName());
+
                 var response = client.PostAsync(baseUri + uri, data);
                 return response.Result;
             }

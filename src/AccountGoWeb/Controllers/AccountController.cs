@@ -68,8 +68,6 @@ namespace AccountGoWeb.Controllers
 
                     await HttpContext.Authentication.SignInAsync("AuthCookie", principal, new Microsoft.AspNetCore.Http.Authentication.AuthenticationProperties { IsPersistent = model.RememberMe });
 
-                    Dto.Singleton.Instance.UserName = model.Email;
-
                     return RedirectToLocal(returnUrl);
                 }
                 else
