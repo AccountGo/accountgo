@@ -6,7 +6,6 @@ namespace AccountGoWeb.Controllers
     [Microsoft.AspNetCore.Authorization.Authorize]
     public class HomeController : BaseController
     {
-
         public HomeController(IConfiguration config)
         {
             _baseConfig = config;
@@ -16,7 +15,6 @@ namespace AccountGoWeb.Controllers
         {
             ViewBag.PageContentHeader = "Dashboard";
             ViewBag.ApiMontlySales = _baseConfig["ApiUrl"] + "sales/getmonthlysales";
- 
             return View();
         }
     }

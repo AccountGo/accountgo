@@ -37,7 +37,7 @@ namespace Web.ControllersApi.Administration
             returnList = (from e in securityRole
                           select new SecurityRoleModel()
                           {
-                              RoleName = e.RoleName,
+                              RoleName = e.Name,
                               SecurityRoleId = e.Id,
                               SysAdmin = e.SysAdmin,
                               HasUsers = e.Users.Count > 0 ? true : false
@@ -99,7 +99,7 @@ namespace Web.ControllersApi.Administration
             returnList = (from e in securityGroup
                           select new SecurityGroupModel()
                           {
-                              Name = e.GroupName,
+                              Name = e.Name,
                               SecurityGroupId = e.Id,
                               SecurityRoleId = securityRoleId,
                               SecurityPermission = (from r in e.Permissions
@@ -177,7 +177,7 @@ namespace Web.ControllersApi.Administration
             returnItem.Message = "Successfully Saved!";
             try
             {
-                _securityService.AddRole(roleName, roleId);
+                _securityService.AddRole(roleName);
             }
             catch (Exception e)
             {

@@ -36,8 +36,8 @@ namespace AccountGoWeb
             var options = new CookieAuthenticationOptions()
             {
                 AuthenticationScheme = "AuthCookie",
-                LoginPath = new Microsoft.AspNetCore.Http.PathString("/account/signin/"),
-                AccessDeniedPath = new Microsoft.AspNetCore.Http.PathString("/account/unauthorized/"),
+                LoginPath = new Microsoft.AspNetCore.Http.PathString("/account/signin"),
+                AccessDeniedPath = new Microsoft.AspNetCore.Http.PathString("/account/unauthorize"),
                 AutomaticAuthenticate = true,
                 AutomaticChallenge = true
             };

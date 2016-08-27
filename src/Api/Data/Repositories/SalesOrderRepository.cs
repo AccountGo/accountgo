@@ -9,7 +9,7 @@ namespace Api.Data
     {
         public SalesOrderRepository(ApiDbContext context) : base(context)
         {
-        }        
+        }
 
         public IQueryable<SalesOrderHeader> GetAllSalesOrders()
         {

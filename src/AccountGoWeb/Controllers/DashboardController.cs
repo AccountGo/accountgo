@@ -3,6 +3,7 @@ using Microsoft.Extensions.Configuration;
 
 namespace AccountGoWeb.Controllers
 {
+    [Microsoft.AspNetCore.Authorization.Authorize]
     public class DashboardController : BaseController
     {
         public DashboardController(IConfiguration config)

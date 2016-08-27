@@ -30,7 +30,7 @@ namespace Services.Security
         List<int> GetPermissionByRoleId(int securityRoleId);
         //void RemoveRolePermission(int roleId);
         IEnumerable<User> GetAllUser();
-        void AddRole(string roleName,int roleId);
+        void AddRole(string roleName, int roleId = 0);
         void DeleteRole(int roleId);
         void AddUser(string username, string email, string firstname, string lastname);
     }

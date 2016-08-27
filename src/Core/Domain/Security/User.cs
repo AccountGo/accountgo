@@ -27,7 +27,7 @@ namespace Core.Domain.Security
             if (this.Roles.Count > 0)
             {
                 foreach (var role in Roles)
-                    if (role.SecurityRole.RoleName == "Administrator")
+                    if (role.SecurityRole.Name == "Administrator")
                     {
                         isSysAdmin = true;
                         break;

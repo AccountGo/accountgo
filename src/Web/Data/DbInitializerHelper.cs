@@ -106,16 +106,16 @@ namespace Data
         {
             var securityGroups = new List<SecurityGroup>();
 
-            securityGroups.Add(new SecurityGroup() { GroupName = "Sales" });
-            securityGroups.Add(new SecurityGroup() { GroupName = "Purchasing" });
-            securityGroups.Add(new SecurityGroup() { GroupName = "Items" });
-            securityGroups.Add(new SecurityGroup() { GroupName = "Financials" });
-            securityGroups.Add(new SecurityGroup() { GroupName = "Administration" });
+            securityGroups.Add(new SecurityGroup() { Name = "Sales" });
+            securityGroups.Add(new SecurityGroup() { Name = "Purchasing" });
+            securityGroups.Add(new SecurityGroup() { Name = "Items" });
+            securityGroups.Add(new SecurityGroup() { Name = "Financials" });
+            securityGroups.Add(new SecurityGroup() { Name = "Administration" });
 
             var securityRoles = new List<SecurityRole>();
 
-            securityRoles.Add(new SecurityRole() { RoleName = "Administrators" });
-            securityRoles.Add(new SecurityRole() { RoleName = "Users" });
+            securityRoles.Add(new SecurityRole() { Name = "Administrators" });
+            securityRoles.Add(new SecurityRole() { Name = "Users" });
 
             var user = new User() { Lastname = "System", Firstname = "Administrator", UserName = "admin", EmailAddress = "admin@email.com" };
 

@@ -70,6 +70,7 @@ namespace Api
             // custom repositories
             services.AddScoped(typeof(Core.Data.ISalesOrderRepository), typeof(Data.SalesOrderRepository));
             services.AddScoped(typeof(Core.Data.IPurchaseOrderRepository), typeof(Data.PurchaseOrderRepository));
+            services.AddScoped(typeof(Core.Data.ISecurityRepository), typeof(Data.Repositories.SecurityRepository));
 
             // domain services
             services.AddScoped(typeof(Services.Sales.ISalesService), typeof(Services.Sales.SalesService));

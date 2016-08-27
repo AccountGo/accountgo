@@ -1,6 +1,6 @@
 ﻿CREATE TABLE [dbo].[SecurityPermission] (
 	[Id] INT IDENTITY(1,1) NOT NULL,
-    [PermissionName] NVARCHAR(100) NULL,
+    [Name] NVARCHAR(100) NULL,
 	[DisplayName] NVARCHAR(100) NULL,
     [SecurityGroupId] INT NULL
 	CONSTRAINT [PK_SecurityPermission] PRIMARY KEY CLUSTERED ([Id] ASC), 

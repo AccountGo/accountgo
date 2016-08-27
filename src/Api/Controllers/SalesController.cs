@@ -76,8 +76,7 @@ namespace Api.Controllers
             customer.SalesDiscountAccountId = customerDto.SalesDiscountAccountId;
             customer.PaymentTermId = customerDto.PaymentTermId;
             customer.TaxGroupId = customerDto.TaxGroupId;
-
-
+            customer.ModifiedBy = GetUserNameFromRequestHeader();
 
             if (isNew)
                 _salesService.AddCustomer(customer);
@@ -830,71 +829,6 @@ namespace Api.Controllers
                 errors = new string[1] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
                 return new BadRequestObjectResult(errors);
             }
-        }
-
-        private SalesOrderHeader SetSalesOrderStatus(SalesInvoice salesInvoiceDto, SalesOrderHeader salesOrder,
-            SalesInvoiceHeader salesInvoice)
-        {
-            bool isFullyInvoiced = false;
-
-
-            if (salesInvoiceDto.FromSalesOrderId != null)
-            {
-                salesOrder = _salesService.GetSalesOrderById((int)salesInvoiceDto.FromSalesOrderId);
-            }
-
-            var salesInvoiceContainer = salesInvoice;
-            foreach (var previouseSalesOrderLine in salesOrder.SalesOrderLines)
-            {
-                foreach (var previousSalesInvoiceLine in previouseSalesOrderLine.SalesInvoiceLines)
-                {
-                    var previousSalesInvoice = _salesService.GetSalesInvoiceById(previousSalesInvoiceLine.SalesInvoiceHeaderId);
-                    if (previousSalesInvoice != null)
-                    {
-                        foreach (var additionalSalesInvoiceLine in previousSalesInvoice.SalesInvoiceLines)
-                        {
-                            if (!salesInvoiceContainer.SalesInvoiceLines.Contains(additionalSalesInvoiceLine))
-                            {
-                                salesInvoiceContainer.SalesInvoiceLines.Add(additionalSalesInvoiceLine);
-                            }
-                        }
-                    }
-                }
-            }
-            if (salesOrder != null)
-            {
-                if (salesOrder.SalesOrderLines.Count > salesInvoiceContainer.SalesInvoiceLines.Count)
-                {
-                    isFullyInvoiced = false;
-                }
-                else
-                {
-                    foreach (var salesOrderLine in salesOrder.SalesOrderLines.OrderByDescending(o => o.ItemId))
-                    {
-                        var salesInvoiceLine =
-                            salesInvoiceContainer.SalesInvoiceLines.FirstOrDefault(o => o.ItemId == salesOrderLine.ItemId);
-                        if (salesInvoiceLine != null)
-                        {
-                            if (salesInvoiceLine.Quantity >= salesOrderLine.Quantity)
-                            {
-                                isFullyInvoiced = true;
-                            }
-                            else
-                            {
-                                isFullyInvoiced = false;
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
-
-
-            if (isFullyInvoiced)
-            {
-                salesOrder.Status = SalesOrderStatus.FullyInvoiced;
-            }
-            return salesOrder;
         }
 
         [HttpPost]

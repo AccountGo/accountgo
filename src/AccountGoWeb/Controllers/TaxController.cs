@@ -2,6 +2,7 @@
 
 namespace AccountGoWeb.Controllers
 {
+    [Microsoft.AspNetCore.Authorization.Authorize]
     public class TaxController : BaseController
     {
         public TaxController(Microsoft.Extensions.Configuration.IConfiguration config)

@@ -74,41 +74,41 @@ desired effect
                     <ul class="nav navbar-nav">
                         <!-- Messages: style can be found in dropdown.less-->
                         @*<li class="dropdown messages-menu">
-                            <!-- Menu toggle button -->
-                            <a href="#" class="dropdown-toggle" data-toggle="dropdown">
-                                <i class="fa fa-envelope-o"></i>
-                                <span class="label label-success">4</span>
-                            </a>
-                            <ul class="dropdown-menu">
-                                <li class="header">You have 4 messages</li>
-                                <li>
-                                    <!-- inner menu: contains the messages -->
-                                    <ul class="menu">
-                                        <li>
-                                            <!-- start message -->
-                                            <a href="#">
-                                                <div class="pull-left">
-                                                    <!-- User Image -->
-                                                    <img src="~/adminLTE/img/user2-160x160.png" class="img-circle" alt="User Image">
-                                                </div>
-                                                <!-- Message title and timestamp -->
-                                                <h4>
-                                                    Support Team
-                                                    <small><i class="fa fa-clock-o"></i> 5 mins</small>
-                                                </h4>
-                                                <!-- The message -->
-                                                <p>Why not buy a new awesome theme?</p>
-                                            </a>
-                                        </li>
-                                        <!-- end message -->
-                                    </ul>
-                                    <!-- /.menu -->
-                                </li>
-                                <li class="footer">
-                                    <a href="#">See All Messages</a>
-                                </li>
-                            </ul>
-                        </li>*@
+                                <!-- Menu toggle button -->
+                                <a href="#" class="dropdown-toggle" data-toggle="dropdown">
+                                    <i class="fa fa-envelope-o"></i>
+                                    <span class="label label-success">4</span>
+                                </a>
+                                <ul class="dropdown-menu">
+                                    <li class="header">You have 4 messages</li>
+                                    <li>
+                                        <!-- inner menu: contains the messages -->
+                                        <ul class="menu">
+                                            <li>
+                                                <!-- start message -->
+                                                <a href="#">
+                                                    <div class="pull-left">
+                                                        <!-- User Image -->
+                                                        <img src="~/adminLTE/img/user2-160x160.png" class="img-circle" alt="User Image">
+                                                    </div>
+                                                    <!-- Message title and timestamp -->
+                                                    <h4>
+                                                        Support Team
+                                                        <small><i class="fa fa-clock-o"></i> 5 mins</small>
+                                                    </h4>
+                                                    <!-- The message -->
+                                                    <p>Why not buy a new awesome theme?</p>
+                                                </a>
+                                            </li>
+                                            <!-- end message -->
+                                        </ul>
+                                        <!-- /.menu -->
+                                    </li>
+                                    <li class="footer">
+                                        <a href="#">See All Messages</a>
+                                    </li>
+                                </ul>
+                            </li>*@
                         <!-- /.messages-menu -->
                         <!-- Notifications Menu -->
                         <li class="dropdown notifications-menu">
@@ -180,7 +180,7 @@ desired effect
                                 <!-- The user image in the navbar-->
                                 <img src="~/adminLTE/img/user2-160x160.png" class="user-image" alt="User Image">
                                 <!-- hidden-xs hides the username on small devices so only the image appears. -->
-                                <span class="hidden-xs">Marvin Perez</span>
+                                <span class="hidden-xs">@User.Identity.Name</span>
                             </a>
                             <ul class="dropdown-menu">
                                 <!-- The user image in the menu -->
@@ -192,8 +192,8 @@ desired effect
                                     </p>
                                 </li>
                                 <!-- Menu Body -->
-                                <li class="user-body">
-                                    <div class="row">
+                                @*<li class="user-body">*@
+                                @*<div class="row">
                                         <div class="col-xs-4 text-center">
                                             <a href="#">Followers</a>
                                         </div>
@@ -203,9 +203,9 @@ desired effect
                                         <div class="col-xs-4 text-center">
                                             <a href="#">Friends</a>
                                         </div>
-                                    </div>
-                                    <!-- /.row -->
-                                </li>
+                                    </div>*@
+                                <!-- /.row -->
+                                @*</li>*@
                                 <!-- Menu Footer-->
                                 <li class="user-footer">
                                     <div class="pull-left">
@@ -372,7 +372,7 @@ desired effect
                         </ul>
                     </li>
                     <li class="treeview">
-                        <a href="#"><i class="fa fa-gear"></i> <span>Administration</span> <i class="fa fa-angle-left pull-right"></i></a>
+                        <a href="#"><i class="fa fa-group"></i> <span>Organization Settings</span> <i class="fa fa-angle-left pull-right"></i></a>
                         <ul class="treeview-menu">
                             <li>
                                 <!--<a href="#">Company</a>-->
@@ -382,6 +382,29 @@ desired effect
                                 <!--<a href="#">Setup</a>-->
                                 <a href="~/administration/settings">Settings</a>
                             </li>
+                        </ul>
+                    </li>
+                    <li class="treeview">
+                        <a href="#"><i class="fa fa-desktop"></i> <span>System Administration</span> <i class="fa fa-angle-left pull-right"></i></a>
+                        <ul class="treeview-menu">
+                            @if (User.IsInRole("SystemAdministrators"))
+                            {
+                                <li>
+                                    <a href="#">Security
+                                        <span class="pull-right-container">
+                                            <i class="fa fa-angle-left pull-right"></i>
+                                        </span>
+                                    </a>
+                                    <ul class="treeview-menu menu-open" style="display: block;">
+                                        <li><a href="~/administration/users">Users</a></li>
+                                        <li><a href="~/administration/roles">Roles</a></li>
+                                        <li><a href="~/administration/groups">Groups</a></li>
+                                    </ul>
+                                </li>
+                                <li>
+                                    <a href="~/administration/auditlogs">Audit Logs</a>
+                                </li>
+                            }
                         </ul>
                     </li>
                 </ul>
@@ -417,7 +440,7 @@ desired effect
             <div class="pull-right hidden-xs">
                 Powered by
                 <a href="#">AccountGo</a>
-            </div>            
+            </div>
             <!-- Default to the left -->
             <strong>Copyright &copy; 2016 <a href="#">AccountGo</a>.</strong> All rights reserved.
             <iframe src="https://ghbtns.com/github-btn.html?user=marvinvperez&repo=accountgo&type=fork&count=true" frameborder="0" scrolling="0" width="170px" height="20px"></iframe>

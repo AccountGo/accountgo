@@ -101,8 +101,16 @@ namespace Services.Inventory
 
         public IEnumerable<Item> GetAllItems()
         {
-            var query = from item in _itemRepo.Table select item;
-            var items = query.ToList();
+            var items = _itemRepo.GetAllIncluding(
+                i => i.CostOfGoodsSoldAccount,
+                i => i.InventoryAccount,
+                i => i.InventoryAdjustmentAccount,
+                i => i.SalesAccount,
+                i => i.ItemTaxGroup,
+                i => i.ItemCategory,
+                i => i.InventoryControlJournals
+                );
+
             return items;
         }
 
@@ -114,7 +122,8 @@ namespace Services.Inventory
                 i => i.InventoryAdjustmentAccount,
                 i => i.SalesAccount,
                 i => i.ItemTaxGroup,
-                i => i.ItemCategory
+                i => i.ItemCategory,
+                i => i.InventoryControlJournals
                 )
                 .Where(i => i.Id == id)
                 .FirstOrDefault();

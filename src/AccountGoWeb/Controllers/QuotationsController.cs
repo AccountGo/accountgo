@@ -4,6 +4,7 @@ using Microsoft.Extensions.Configuration;
 
 namespace AccountGoWeb.Controllers
 {
+    [Microsoft.AspNetCore.Authorization.Authorize]
     public class QuotationsController : BaseController
     {
         public QuotationsController(IConfiguration config) {
