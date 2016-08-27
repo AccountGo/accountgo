@@ -1,1 +1,73 @@
-﻿
+﻿@model IEnumerable<Dto.Security.User>
+@using AccountGoWeb.Models;
+<div>
+    <a href="~/administration/user" class="btn inactiveLink">
+        <i class="fa fa-plus"></i>
+        New User
+    </a>
+    <a href="~/administration/user" id="linkViewUser" class="btn inactiveLink">
+        <i class="fa fa-edit"></i>
+        View
+    </a>
+</div>
+<div class="col-sm-9">
+    <div id="users" class="ag-blue" style="height: 400px;"></div>
+</div>
+<div class="col-sm-3">
+    <div class="box">
+        <div class="box-header with-border">
+            <h3 class="box-title">Roles</h3>
+            <div class="box-tools pull-right">
+                <button type="button" class="btn btn-box-tool" data-widget="collapse" data-toggle="tooltip" title="Collapse">
+                    <i class="fa fa-minus"></i>
+                </button>
+            </div>
+        </div>
+        <div class="box-body">
+            <div id="divRoles">
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+    var columnDefs = [
+    {headerName: "Username", field: "UserName", width: 200},
+    {headerName: "First Name", field: "FirstName", width: 200},
+    {headerName: "Last Name", field: "LastName", width: 200},
+    {headerName: "Email", field: "Email", width: 200},
+    ];
+
+    var gridOptions = {
+        columnDefs: columnDefs,
+        rowData: @Html.Raw(Model.ToJson()),
+        // PROPERTIES
+        rowSelection: 'single',
+        enableFilter: true,
+        enableColResize: true,
+        onSelectionChanged: onSelectionChanged,
+    };
+
+    function onSelectionChanged() {
+        var selectedRows = gridOptions.api.getSelectedRows();
+        selectedRow = selectedRows[0];
+
+        var data = @Html.Raw(Model.ToJson());     
+        var divRoles = document.getElementById("divRoles");
+        var li = "";
+        for(var i = 0; i < data.length; i++){
+            if(data[i].Id == selectedRow.Id){
+                for(var n = 0; n < data[i].Roles.length; n++){
+                    li += "<li>" + data[i].Roles[n].DisplayName + "</li>";                    
+                }
+            }
+        }
+        divRoles.innerHTML = "<ul>" + li + "</ul>";
+    }
+
+    // wait for the document to be loaded, otherwise
+    // ag-Grid will not find the div in the document.
+    document.addEventListener("DOMContentLoaded", function() {
+        var eGridDiv = document.querySelector('#users');
+        new agGrid.Grid(eGridDiv, gridOptions);
+    });
+</script>

@@ -1,0 +1,55 @@
+﻿@model IEnumerable<Dto.Security.Group>
+@using AccountGoWeb.Models;
+<div class="col-sm-3">
+    <div class="box">
+        <div class="box-header with-border">
+            <h3 class="box-title">Groups</h3>
+            <div class="box-tools pull-right">
+                <button type="button" class="btn btn-box-tool" data-widget="collapse" data-toggle="tooltip" title="Collapse">
+                    <i class="fa fa-minus"></i>
+                </button>
+            </div>
+        </div>
+        <div class="box-body">
+            <div id="divRoles">
+                <table>
+                    @foreach (var role in Model)
+                    {
+                        <tr>
+                            <td>@role.DisplayName</td>
+                        </tr>
+                    }
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="col-sm-9">
+    <div id="permissions" class="ag-blue" style="height: 400px;"></div>
+</div>
+<script>
+    function onSelectionChanged() {
+    }
+
+    var columnDefs = [{ headerName: "Name", field: "Name", width: 200 },
+    { headerName: "Display Name", field: "DisplayName", width: 200 },
+    { headerName: "Group", field: "Group.Name", width: 200 },
+    ];
+
+    var gridOptions = {
+        columnDefs: columnDefs,
+        rowData: null,
+        // PROPERTIES
+        rowSelection: 'single',
+        enableFilter: true,
+        enableColResize: true,
+        onSelectionChanged: onSelectionChanged,
+    };
+
+    // wait for the document to be loaded, otherwise
+    // ag-Grid will not find the div in the document.
+    document.addEventListener("DOMContentLoaded", function () {
+        var eGridDiv = document.querySelector('#permissions');
+        new agGrid.Grid(eGridDiv, gridOptions);
+    });
+</script>

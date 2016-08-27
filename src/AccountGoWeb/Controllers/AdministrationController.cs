@@ -1,5 +1,6 @@
 ﻿using AccountGoWeb.Models.Financial;
 using Dto.Administration;
+using Dto.Security;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using System.Net.Http;
@@ -60,10 +61,27 @@ namespace AccountGoWeb.Controllers
         }
 
         [Microsoft.AspNetCore.Authorization.Authorize(Roles = "SystemAdministrators")]
-        public IActionResult Users()
+        public async System.Threading.Tasks.Task<IActionResult> Users()
         {
+            var users = await GetAsync<System.Collections.Generic.IEnumerable<User>>("administration/users");
             ViewBag.PageContentHeader = "Users";
-            return View();
+            return View(users);
+        }
+
+        [Microsoft.AspNetCore.Authorization.Authorize(Roles = "SystemAdministrators")]
+        public async System.Threading.Tasks.Task<IActionResult> Roles()
+        {
+            var roles = await GetAsync<System.Collections.Generic.IEnumerable<Role>>("administration/roles");
+            ViewBag.PageContentHeader = "Security Roles";
+            return View(roles);
+        }
+
+        [Microsoft.AspNetCore.Authorization.Authorize(Roles = "SystemAdministrators")]
+        public async System.Threading.Tasks.Task<IActionResult> Groups()
+        {
+            var groups = await GetAsync<System.Collections.Generic.IEnumerable<Group>>("administration/groups");
+            ViewBag.PageContentHeader = "Security Groups";
+            return View(groups);
         }
 
         [Microsoft.AspNetCore.Authorization.Authorize(Roles = "SystemAdministrators")]
