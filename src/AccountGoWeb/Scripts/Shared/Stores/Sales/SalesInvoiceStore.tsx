@@ -139,7 +139,7 @@ export default class SalesStore {
     }
 
     printInvoice() {
-        console.log("Print Invoice");
+        window.open(baseUrl + 'sales/salesinvoicepdf?id=' + this.salesInvoice.id, "_blank", "toolbar=no,scrollbars=yes,resizable=yes,top=200,left=500,width=800,height=600");
     }
 
     postInvoice() {

@@ -272,5 +272,13 @@ namespace AccountGoWeb.Controllers
 
             return View(model);
         }
+
+        public IActionResult SalesInvoicePdf(int id)
+        {
+            var invoice = GetAsync<Dto.Sales.SalesInvoice>("sales/salesinvoice?id=" + id).Result;
+
+            ViewBag.ReferenceNo = invoice.ReferenceNo;
+            return View();
+        }
     }
 }

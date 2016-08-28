@@ -23,6 +23,7 @@
     "ag-grid-react": "latest",
     "knockout": "latest",
     "knockout-mapping": "latest",
-    "accounting": "^0.4.1"
+    "accounting": "^0.4.1",
+    "jspdf": "latest"
   }
 }
