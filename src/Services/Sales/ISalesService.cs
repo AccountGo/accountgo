@@ -39,7 +39,7 @@ namespace Services.Sales
         SalesOrderLine GetSalesOrderLineById(int id);
         SalesDeliveryHeader GetSalesDeliveryById(int id);
         IEnumerable<Contact> GetContacts();
-        int SaveContact(Contact contact);
+        void SaveContact(Contact contact);
         ICollection<SalesInvoiceHeader> GetSalesInvoicesByCustomerId(int customerId, SalesInvoiceStatus status);
         ICollection<CustomerAllocation> GetCustomerAllocations(int customerId);
         void AddSalesQuote(SalesQuoteHeader salesQuoteHeader);
@@ -49,5 +49,6 @@ namespace Services.Sales
         SalesQuoteHeader GetSalesQuotationById(int id);
         void SaveSalesInvoice(SalesInvoiceHeader salesInvoice, SalesOrderHeader salesOrder);
         void PostSalesInvoice(int invoiceId);
+        Contact GetContacyById(int id);
     }
 }

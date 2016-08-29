@@ -1,0 +1,17 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Operations Version="1.0" xmlns="http://schemas.microsoft.com/sqlserver/dac/Serialization/2012/02">
+  <Operation Name="Rename Refactor" Key="0f901809-9513-4224-879a-f08da95b3723" ChangeDateTime="08/25/2016 16:14:45">
+    <Property Name="ElementName" Value="[dbo].[FK_VendorContact_ToTable]" />
+    <Property Name="ElementType" Value="SqlForeignKeyConstraint" />
+    <Property Name="ParentElementName" Value="[dbo].[VendorContact]" />
+    <Property Name="ParentElementType" Value="SqlTable" />
+    <Property Name="NewName" Value="[FK_dbo]" />
+  </Operation>
+  <Operation Name="Rename Refactor" Key="6328e09c-cb01-4667-8711-b53c1e96b44e" ChangeDateTime="08/25/2016 16:15:21">
+    <Property Name="ElementName" Value="[dbo].[FK_dbo]" />
+    <Property Name="ElementType" Value="SqlForeignKeyConstraint" />
+    <Property Name="ParentElementName" Value="[dbo].[VendorContact]" />
+    <Property Name="ParentElementType" Value="SqlTable" />
+    <Property Name="NewName" Value="[FK_dbo.VendorContact_dbo.Vendor_Id]" />
+  </Operation>
+</Operations>
