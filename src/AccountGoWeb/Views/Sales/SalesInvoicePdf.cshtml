@@ -1,4 +1,5 @@
-﻿<!DOCTYPE html>
+﻿@model Dto.Sales.SalesInvoice
+
 <!--
 This is a starter template page. Use this page to start your new project from
 scratch. This page gets rid of all links and provides the needed markup only.
@@ -15,7 +16,7 @@ scratch. This page gets rid of all links and provides the needed markup only.
         var pdf = new jsPDF('p', 'pt', 'letter');
         // source can be HTML-formatted string, or a reference
         // to an actual DOM element from which the text will be scraped.
-        source = $('#divSalesInvoiceForm')[0];
+        source = $('#content')[0];
 
         // we support special element handlers. Register them with jQuery-style
         // ID selector for either ID or node name. ("#iAmID", "div", "span" etc.)
@@ -53,57 +54,103 @@ scratch. This page gets rid of all links and provides the needed markup only.
 </script>
 <a href="javascript:demoFromHTML()" class="button">Run Code</a>
 <div id="content">
-    <div id="divSalesInvoiceForm"><!-- react-empty: 7 -->
-        <div class="box disabledControl">
-            ref: @ViewBag.ReferenceNo;
-            <div class="box-header with-border disabledControl">
-                <h3 class="box-title disabledControl">Customer Information</h3>
-                <div class="box-tools pull-right disabledControl"><button type="button" class="btn btn-box-tool disabledControl" data-widget="collapse" data-toggle="tooltip" title="Collapse"><i class="fa fa-minus disabledControl"></i></button>
-                </div>
-            </div>
-            <div class="box-body disabledControl">
-                <div class="col-md-6 disabledControl">
-                    <div class="row disabledControl">
-                        <div class="col-sm-2 disabledControl">Customer</div>
-                        <div class="col-sm-10 disabledControl"><select id="optCustomer" class="form-control select2 disabledControl"><option value="" class=" disabledControl"></option><option value="1"> ABC Customer </option><option value="2"> Lance Customer </option></select>
-                        </div>
-                    </div>
-                    <div class="row disabledControl">
-                        <div class="col-sm-2 disabledControl">Payment Term</div>
-                        <div class="col-sm-10 disabledControl"><select id="optPaymentTerm" class="form-control select2 disabledControl"><option value="" class=" disabledControl"></option><option value="1" class=" disabledControl"> Payment due within 10 days </option><option value="2" class=" disabledControl"> Due 15th Of the Following Month </option><option value="3" class=" disabledControl"> Cash Only </option></select>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-6 disabledControl">
-                    <div class="row disabledControl">
-                        <div class="col-sm-2 disabledControl">Date</div>
-                        <div class="col-sm-10 disabledControl"><input type="date" class="form-control pull-right disabledControl">
-                        </div>
-                    </div>
-                    <div class="row disabledControl">
-                        <div class="col-sm-2 disabledControl">Reference no.</div>
-                        <div class="col-sm-10 disabledControl"><input type="text" class="form-control disabledControl">
-                        </div>
-                    </div>
-                </div>
+    <div class="box-body">
+        <div class="col-sm-6">
+            <div class="row">
+                <div class="col-sm-2">Customer Name:</div>
+                <div class="col-sm-10">@Model.CustomerName</div>
+
             </div>
         </div>
-        <div class="box disabledControl">
-            <div class="box-header with-border disabledControl">
+    </div>
+    <div class="box-body">
+        <div class="col-sm-6">
+            <div class="row">
 
-                <h3 class="box-title disabledControl">Line Items</h3>
-                <div class="box-tools pull-right disabledControl"><button type="button" class="btn btn-box-tool disabledControl" data-widget="collapse" data-toggle="tooltip" title="Collapse"><i class="fa fa-minus disabledControl"></i></button>
-                </div>
+
+                <tbody>
+                    @foreach (var item in Model.SalesInvoiceLines)
+            {
+                        <th>
+                            @Html.DisplayFor(model => item.ItemId)
+                        </th>
+                        <th>
+                            @Html.DisplayFor(model => item.Quantity)
+                        </th>
+                        @*<tr>
+
+                                <td>
+                                    @Html.LabelFor(titem => item.ItemId)
+                                </td>
+
+
+                                <td>
+                                    @Html.LabelFor(titem => item.MeasurementId)
+                                </td>
+
+
+                                <td>
+                                    @Html.LabelFor(titem => item.Quantity)
+                                </td>
+
+
+                                <td>
+                                    @Html.LabelFor(titem => item.Discount)
+                                </td>
+
+
+                                <td>
+                                    @Html.LabelFor(titem => item.Amount)
+                                </td>
+
+
+                                <td>
+                                    @Html.LabelFor(titem => item.ItemNo)
+                                </td>
+
+
+                                <td>
+                                    @Html.LabelFor(titem => item.ItemDescription)
+                                </td>
+                            </tr>
+
+                            <tr>
+
+                                <td>
+                                    @Html.DisplayFor(titem => item.ItemId)
+                                </td>
+
+                                <td>
+                                    @Html.DisplayFor(titem => item.MeasurementId)
+                                </td>
+
+                                <td>
+                                    @Html.DisplayFor(titem => item.Quantity)
+                                </td>
+
+                                <td>
+                                    @Html.DisplayFor(titem => item.Discount)
+                                </td>
+
+                                <td>
+                                    @Html.DisplayFor(titem => item.Amount)
+                                </td>
+
+                                <td>
+                                    @Html.DisplayFor(titem => item.ItemNo)
+                                </td>
+
+                                <td>
+                                    @Html.DisplayFor(titem => item.ItemDescription)
+                                </td>
+                            </tr>*@
+                    }
+                </tbody>
             </div>
-            <div class="box-body table-responsive disabledControl">
-                <table class="table table-hover disabledControl"><thead class=" disabledControl">
-                    <tr class=" disabledControl"><td class=" disabledControl">Item Id</td>
-                        <td class=" disabledControl">Item Name</td>
-                        <td class=" disabledControl">Measurement</td>
-                        <td class=" disabledControl">Quantity</td>
-                        <td class=" disabledControl">Amount</td>
-                        <td class=" disabledControl">Discount</td>
-                    <td class=" disabledControl">Line Total</td><td class=" disabledControl"></td></tr>
-                    </thead><tbody class=" disabledControl"><tr class=" disabledControl"><td class=" disabledControl"><select class="form-control select2 disabledControl"><option class=" disabledControl"></option><option value="1" class=" disabledControl"> HOA Dues </option><option value="2" class=" disabledControl"> Car Sticker </option><option value="3" class=" disabledControl"> Optical Mouse </option></select></td><td class=" disabledControl">1</td><td class=" disabledControl"><select class="form-control select2 disabledControl"><option class=" disabledControl"></option><option value="1" class=" disabledControl"> Each </option><option value="2" class=" disabledControl"> Pack </option><option value="3" class=" disabledControl"> Monthly </option><option value="4" class=" disabledControl"> Hour </option></select></td><td class=" disabledControl"><input type="text" class="form-control disabledControl" name="0"></td><td class=" disabledControl"><input type="text" class="form-control disabledControl" name="0"></td><td class=" disabledControl"><input type="text" class="form-control disabledControl" name="0"></td><td class=" disabledControl">150</td><td class=" disabledControl"><button type="button" class="btn btn-box-tool disabledControl"><i class="fa fa-fw fa-times disabledControl"></i></button></td></tr><tr class=" disabledControl"><td class=" disabledControl"><select id="optNewItemId" class="form-control select2 disabledControl"><option class=" disabledControl"></option><option value="1" class=" disabledControl"> HOA Dues </option><option value="2" class=" disabledControl"> Car Sticker </option><option value="3" class=" disabledControl"> Optical Mouse </option></select></td><td class=" disabledControl">Item Name</td><td class=" disabledControl"><select id="optNewMeasurementId" class="form-control select2 disabledControl"><option class=" disabledControl"></option><option value="1" class=" disabledControl"> Each </option><option value="2" class=" disabledControl"> Pack </option><option value="3" class=" disabledControl"> Monthly </option><option value="4" class=" disabledControl"> Hour </option></select></td><td class=" disabledControl"><input type="text" class="form-control disabledControl" id="txtNewQuantity"></td><td class=" disabledControl"><input type="text" class="form-control disabledControl" id="txtNewAmount"></td><td class=" disabledControl"><input type="text" class="form-control disabledControl" id="txtNewDiscount"></td><td class=" disabledControl"></td><td class=" disabledControl"><button type="button" class="btn btn-box-tool disabledControl"><i class="fa fa-fw fa-check disabledControl"></i></button></td></tr></tbody></table>
-            </div></div><div class="box disabledControl"><div class="box-body disabledControl"><div class="row disabledControl"><div class="col-md-2 disabledControl"><label class=" disabledControl">Running Total: </label></div><div class="col-md-2 disabledControl">150.00</div><div class="col-md-2 disabledControl"><label class=" disabledControl">Tax Total: </label></div><div class="col-md-2 disabledControl">0.00</div><div class="col-md-2 disabledControl"><label class=" disabledControl">Grand Total: </label></div><div class="col-md-2 disabledControl">150.00</div></div></div></div></div>
+        </div>
+
+
+
+
+    </div>
 </div>

@@ -1064,5 +1064,54 @@ namespace Api.Controllers
             return Json(finalmonthlySalesDto);
         }
 
+
+
+        [HttpGet]
+        [Route("[action]")]
+        public IActionResult SalesInvoiceForPrinting(int id)
+        {
+            try
+            {
+                var salesInvoice = _salesService.GetSalesInvoiceById(id);
+
+                var salesOrderDto = new Dto.Sales.SalesInvoice()
+                {
+                    Id = salesInvoice.Id,
+                    CustomerId = salesInvoice.CustomerId,
+                    CustomerName = salesInvoice.Customer.Party.Name,
+                    InvoiceDate = salesInvoice.Date,
+                    SalesInvoiceLines = new List<Dto.Sales.SalesInvoiceLine>(),
+                    PaymentTermId = salesInvoice.PaymentTermId,
+                    ReferenceNo = salesInvoice.ReferenceNo,
+                    Posted = salesInvoice.GeneralLedgerHeaderId != null
+                };
+
+                foreach (var line in salesInvoice.SalesInvoiceLines)
+                {
+                    var lineDto = new Dto.Sales.SalesInvoiceLine();
+                    lineDto.Id = line.Id;
+                    lineDto.Amount = line.Amount;
+                    lineDto.Discount = line.Discount;
+                    lineDto.Quantity = line.Quantity;
+                    lineDto.ItemId = line.ItemId;
+                    lineDto.MeasurementId = line.MeasurementId;
+
+                    salesOrderDto.SalesInvoiceLines.Add(lineDto);
+                }
+
+                // is this journal entry ready for posting?
+                if (!salesOrderDto.Posted && salesOrderDto.SalesInvoiceLines.Count >= 1)
+                {
+                    salesOrderDto.ReadyForPosting = true;
+                }
+
+                return new ObjectResult(salesOrderDto);
+            }
+            catch (Exception ex)
+            {
+                return new ObjectResult(ex);
+            }
+        }
+
     }
 }

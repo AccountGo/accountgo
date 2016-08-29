@@ -275,10 +275,14 @@ namespace AccountGoWeb.Controllers
 
         public IActionResult SalesInvoicePdf(int id)
         {
-            var invoice = GetAsync<Dto.Sales.SalesInvoice>("sales/salesinvoice?id=" + id).Result;
+            var invoice = GetAsync<Dto.Sales.SalesInvoice>("sales/salesinvoiceforprinting?id=" + id).Result;
+            SalesInvoice salesInvoiceModel = new SalesInvoice();
+            salesInvoiceModel.ReferenceNo = invoice.ReferenceNo;
+            salesInvoiceModel.No = invoice.No;
 
-            ViewBag.ReferenceNo = invoice.ReferenceNo;
-            return View();
+            salesInvoiceModel.CustomerName = invoice.CustomerName;
+            salesInvoiceModel.SalesInvoiceLines = invoice.SalesInvoiceLines;
+            return View(salesInvoiceModel);
         }
     }
 }
