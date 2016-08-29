@@ -1,13 +1,15 @@
 ﻿using Dto.Administration;
+using Dto.Security;
 using Microsoft.AspNetCore.Mvc;
 using Services.Administration;
 using Services.Financial;
 using Services.Inventory;
 using Services.Purchasing;
 using Services.Sales;
+using Services.Security;
 using System;
-using System.Linq;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Api.Controllers
 {
@@ -19,18 +21,21 @@ namespace Api.Controllers
         private readonly ISalesService _salesService;
         private readonly IPurchasingService _purchasingService;
         private readonly IInventoryService _inventoryService;
+        private readonly ISecurityService _securityService;
 
         public AdministrationController(IAdministrationService adminService,
             IFinancialService financialService,
             ISalesService salesService,
             IPurchasingService purchasingService,
-            IInventoryService inventoryService)
+            IInventoryService inventoryService,
+            ISecurityService securityService)
         {
             _adminService = adminService;
             _financialService = financialService;
             _salesService = salesService;
             _purchasingService = purchasingService;
             _inventoryService = inventoryService;
+            _securityService = securityService;
         }
 
         [HttpGet]
@@ -61,6 +66,177 @@ namespace Api.Controllers
                 return new ObjectResult(_adminService.GetDefaultCompany());
             else
                 return new ObjectResult(_adminService.GetDefaultCompany());
+        }
+
+        [HttpGet]
+        [Route("[action]")]
+        public IActionResult AuditLogs()
+        {
+            var auditLogs = _adminService.AuditLogs();
+            var auditLogsDto = new List<AuditLog>();
+
+            foreach(var log in auditLogs)
+            {
+                auditLogsDto.Add(new AuditLog()
+                {
+                    Id = log.Id,
+                    UserName = log.UserName,
+                    AuditEventDateUTC = log.AuditEventDateUTC,
+                    AuditEventType = log.AuditEventType,
+                    TableName = log.TableName,
+                    RecordId = log.RecordId,
+                    FieldName = log.FieldName,
+                    OriginalValue = log.OriginalValue,
+                    NewValue = log.NewValue
+                });
+            }
+
+            return new ObjectResult(auditLogs);
+        }
+
+        [HttpGet]
+        [Route("[action]")]
+        public IActionResult Users()
+        {
+            var users = _securityService.GetAllUser();
+            var usersDto = new List<User>();
+
+            foreach (var user in users)
+            {
+                var userDto = new User()
+                {
+                    Id = user.Id,
+                    FirstName = user.Firstname,
+                    LastName = user.Lastname,
+                    Email = user.EmailAddress,
+                    UserName = user.UserName
+                };
+
+                foreach(var role in user.Roles)
+                {
+                    var roleDto = new Role()
+                    {
+                        Id = role.Id,
+                        Name = role.SecurityRole.Name,
+                        DisplayName = role.SecurityRole.DisplayName
+                    };
+
+                    userDto.Roles.Add(roleDto);
+                }
+
+                usersDto.Add(userDto);
+            }
+
+            return new ObjectResult(usersDto);
+        }
+
+        [HttpGet]
+        [Route("[action]")]
+        public IActionResult Roles()
+        {
+            var roles = _securityService.GetAllSecurityRole();
+            var rolesDto = new List<Role>();
+
+            foreach (var role in roles)
+            {
+                var roleDto = new Role()
+                {
+                    Id = role.Id,
+                    Name = role.Name,
+                    DisplayName = role.DisplayName
+                };
+
+                foreach (var permission in role.Permissions)
+                {
+                    var permissionDto = new Permission()
+                    {
+                        Id = permission.Id,
+                        Name = permission.SecurityPermission.Name,      
+                        DisplayName = permission.SecurityPermission.DisplayName                  
+                    };
+
+                    roleDto.Permissions.Add(permissionDto);
+                }
+
+                rolesDto.Add(roleDto);
+            }
+
+            return new ObjectResult(rolesDto);
+        }
+
+        [HttpGet]
+        [Route("[action]")]
+        public IActionResult Groups()
+        {
+            var groups = _securityService.GetAllSecurityGroup();
+            var groupsDto = new List<Group>();
+
+            foreach (var group in groups)
+            {
+                var groupDto = new Group()
+                {
+                    Id = group.Id,
+                    Name = group.Name,
+                    DisplayName = group.DisplayName
+                };
+
+                foreach (var permission in group.Permissions)
+                {
+                    var permissionDto = new Permission()
+                    {
+                        Id = permission.Id,
+                        Name = permission.Name,
+                        DisplayName = permission.DisplayName
+                    };
+
+                    groupDto.Permissions.Add(permissionDto);
+                }
+
+                groupsDto.Add(groupDto);
+            }
+
+            return new ObjectResult(groupsDto);
+        }
+
+        [HttpGet]
+        [Route("[action]")]
+        public IActionResult GetUser(string username)
+        {
+            var user = _securityService.GetUser(username);
+            var userDto = new Dto.Security.User();
+            userDto.Id = user.Id;
+            userDto.FirstName = user.Firstname;
+            userDto.LastName = user.Lastname;
+            userDto.UserName = user.UserName;
+            userDto.Email = user.EmailAddress;
+
+            foreach (var role in user.Roles)
+            {
+                var roleDto = new Dto.Security.Role()
+                {
+                    Id = role.SecurityRoleId,
+                    Name = role.SecurityRole.Name,
+                    SysAdmin = role.SecurityRole.SysAdmin
+                };
+
+                userDto.Roles.Add(roleDto);
+
+                foreach (var permission in role.SecurityRole.Permissions)
+                {
+                    var permissionDto = new Dto.Security.Permission()
+                    {
+                        Id = permission.SecurityPermissionId,
+                        Name = permission.SecurityPermission.Name,
+                        Group = new Dto.Security.Group()
+                        {
+                            Name = permission.SecurityPermission.Group.Name
+                        }
+                    };
+                    roleDto.Permissions.Add(permissionDto);
+                }
+            }
+
+            return new ObjectResult(userDto);
         }
 
         [HttpPost]
@@ -118,6 +294,7 @@ namespace Api.Controllers
              * 8.Customer
              * 9.Items
              * 10.Banks
+             * 11.Security Roles
              */
             try
             {
@@ -619,6 +796,13 @@ namespace Api.Controllers
 
                     foreach (var b in banks)
                         _financialService.SaveBank(b);
+                }
+
+                //11.Security Roles
+                if(_securityService.GetAllSecurityRole().Count() < 1)
+                {
+                    _securityService.AddRole("SystemAdministrators");
+                    _securityService.AddRole("GeneralUsers");
                 }
             }
             catch (Exception ex)

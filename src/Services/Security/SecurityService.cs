@@ -7,14 +7,16 @@ namespace Services.Security
 {
     public class SecurityService : ISecurityService
     {
-        IRepository<User> _userRepo;
-        IRepository<SecurityRole> _securityRoleRepo;
-        IRepository<SecurityPermission> _securityPermissionRepo;
-        IRepository<SecurityGroup> _securityGroupRepo;
-        IRepository<SecurityUserRole> _securityUserRoleRepo;
-        IRepository<SecurityRolePermission> _securityRolePermissionRepo;
+        private readonly IRepository<User> _userRepo;
+        private readonly IRepository<SecurityRole> _securityRoleRepo;
+        private readonly IRepository<SecurityPermission> _securityPermissionRepo;
+        private readonly IRepository<SecurityGroup> _securityGroupRepo;
+        private readonly IRepository<SecurityUserRole> _securityUserRoleRepo;
+        private readonly IRepository<SecurityRolePermission> _securityRolePermissionRepo;
+        private readonly ISecurityRepository _securityRepository;
 
-        public SecurityService(IRepository<User> userRepo = null,
+        public SecurityService(ISecurityRepository securityRepository = null,
+            IRepository<User> userRepo = null,
             IRepository<SecurityRole> securityRoleRepo = null,
             IRepository<SecurityPermission> securityPermissionRepo = null,
             IRepository<SecurityGroup> securityGroupRepo = null,
@@ -27,6 +29,7 @@ namespace Services.Security
             _securityGroupRepo = securityGroupRepo;
             _securityUserRoleRepo = securityUserRoleRepo;
             _securityRolePermissionRepo = securityRolePermissionRepo;
+            _securityRepository = securityRepository;
         }
 
         public IEnumerable<SecurityRolePermission> GetPermissionsForRole(string rolename)
@@ -57,17 +60,19 @@ namespace Services.Security
 
         public IEnumerable<SecurityRole> GetAllSecurityRole()
         {
-            return _securityRoleRepo.Table.AsEnumerable();
+            return _securityRepository.GetAllRoles();
         }
 
         public User GetUser(string username)
         {
-            return _userRepo.Table.ToList().Where(u => u.UserName == username).FirstOrDefault();
+            var user = _securityRepository.GetUser(username);
+
+            return user;
         }
 
         public SecurityRole GetRole(string rolename)
         {
-            return _securityRoleRepo.Table.Where(r => r.RoleName == rolename).FirstOrDefault();
+            return _securityRoleRepo.Table.Where(r => r.Name == rolename).FirstOrDefault();
         }
 
         public bool CheckPermission(string permissionName, string username)
@@ -78,7 +83,7 @@ namespace Services.Security
 
             foreach (var role in user.Roles)
             {
-                if (role.SecurityRole.Permissions.Where(p => p.SecurityPermission != null && p.SecurityPermission.PermissionName == permissionName).FirstOrDefault() != null)
+                if (role.SecurityRole.Permissions.Where(p => p.SecurityPermission != null && p.SecurityPermission.Name == permissionName).FirstOrDefault() != null)
                 {
                     hasPermission = true;
                     break;
@@ -134,7 +139,7 @@ namespace Services.Security
             if (user.IsSysAdmin())
             {
                 var permissionsSysAdmin = from p in _securityPermissionRepo.Table.ToList()
-                                  select p.PermissionName;
+                                  select p.Name;
 
                 return permissionsSysAdmin;
             }
@@ -144,14 +149,14 @@ namespace Services.Security
             var permissions = roles.SelectMany(r => r.SecurityRole.Permissions).ToList().AsQueryable();
 
             var all = from p in permissions
-                   select p.SecurityPermission.PermissionName;
+                   select p.SecurityPermission.Name;
 
             return all;
         }
 
         public IEnumerable<SecurityGroup> GetAllSecurityGroup()
         {
-            return _securityGroupRepo.Table.AsEnumerable();
+            return _securityRepository.GetAllGroups();
         }
 
         public List<int> GetPermissionByRoleId(int securityRoleId)
@@ -168,15 +173,17 @@ namespace Services.Security
 
         public IEnumerable<User> GetAllUser()
         {
-            return _userRepo.Table.AsEnumerable();
+            var users = _securityRepository.GetAllUsers();
+
+            return users;
         }
 
-        public void AddRole(string roleName, int roleId)
+        public void AddRole(string roleName, int roleId = 0)
         {
             if(roleId > 0)
             {
                 var entity = _securityRoleRepo.GetById(roleId);
-                entity.RoleName = roleName;
+                entity.Name = roleName;
 
                 _securityRoleRepo.Update(entity);
             }
@@ -184,8 +191,7 @@ namespace Services.Security
             {
                 var role = new SecurityRole()
                 {
-                    RoleName = roleName,
-                    SysAdmin = false
+                    Name = roleName,
                 };
 
                 _securityRoleRepo.Insert(role);

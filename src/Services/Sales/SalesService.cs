@@ -749,10 +749,10 @@ namespace Services.Sales
             {
                 var item = _inventoryService.GetItemById(lineItem.ItemId);
 
-                var lineAmount = lineItem.Quantity * lineItem.Amount;
-
                 if (!item.GLAccountsValidated())
                     throw new Exception("Item is not correctly setup for financial transaction. Please check if GL accounts are all set.");
+
+                var lineAmount = lineItem.Quantity * lineItem.Amount;
 
                 var lineDiscountAmount = (lineItem.Discount / 100) * lineAmount;
                 totalDiscount += lineDiscountAmount;
