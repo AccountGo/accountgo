@@ -42,6 +42,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Administration\AuditLog.cs" />
     <Compile Include="Administration\Company.cs" />
     <Compile Include="BaseModel.cs" />
     <Compile Include="Common\Address.cs" />
@@ -74,6 +75,10 @@
     <Compile Include="Sales\SalesOrder.cs" />
     <Compile Include="Sales\SalesQuotation.cs" />
     <Compile Include="Sales\SalesReceipt.cs" />
+    <Compile Include="Security\Group.cs" />
+    <Compile Include="Security\Permission.cs" />
+    <Compile Include="Security\Role.cs" />
+    <Compile Include="Security\User.cs" />
     <Compile Include="TaxSystem\ItemTaxGroup.cs" />
     <Compile Include="TaxSystem\ItemTaxGroupTax.cs" />
     <Compile Include="TaxSystem\Tax.cs" />

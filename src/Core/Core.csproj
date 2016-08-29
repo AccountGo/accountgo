@@ -45,6 +45,7 @@
     <Compile Include="Data\IPurchaseOrderRepository.cs" />
     <Compile Include="Data\IRepository.cs" />
     <Compile Include="Data\ISalesOrderRepository.cs" />
+    <Compile Include="Data\ISecurityRepository.cs" />
     <Compile Include="Domain\Address.cs" />
     <Compile Include="Domain\Auditing\AuditableAttribute.cs" />
     <Compile Include="Domain\Auditing\AuditableEntity.cs" />

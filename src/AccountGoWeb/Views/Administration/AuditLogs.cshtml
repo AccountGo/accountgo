@@ -1,0 +1,33 @@
+﻿@model IEnumerable<Dto.Administration.AuditLog>
+@using AccountGoWeb.Models;
+<div>
+    <div id="auditlogs" class="ag-blue" style="height: 400px;"></div>
+</div>
+<script>
+    var columnDefs = [
+    {headerName: "Username", field: "UserName", width: 100},
+    {headerName: "Date", field: "AuditEventDateUTC", width: 100},
+    {headerName: "Type", field: "AuditEventType", width: 75},
+    {headerName: "Table Name", field: "TableName", width: 150},
+    {headerName: "Record Id", field: "RecordId", width: 75},
+    {headerName: "Field Name", field: "FieldName", width: 150},
+    {headerName: "Original Value", field: "OriginalValue", width: 150},
+    {headerName: "New Value", field: "NewValue", width: 150}
+    ];
+
+    var gridOptions = {
+        columnDefs: columnDefs,
+        rowData: @Html.Raw(Model.ToJson()),
+        // PROPERTIES
+        rowSelection: 'single',
+        enableFilter: true,
+        enableColResize: true,
+    };
+
+    // wait for the document to be loaded, otherwise
+    // ag-Grid will not find the div in the document.
+    document.addEventListener("DOMContentLoaded", function() {
+        var eGridDiv = document.querySelector('#auditlogs');
+        new agGrid.Grid(eGridDiv, gridOptions);
+    });
+</script>

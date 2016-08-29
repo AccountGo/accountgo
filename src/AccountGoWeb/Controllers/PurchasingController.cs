@@ -4,6 +4,7 @@ using System.Net.Http;
 
 namespace AccountGoWeb.Controllers
 {
+    [Microsoft.AspNetCore.Authorization.Authorize]
     public class PurchasingController : BaseController
     {
         public PurchasingController(IConfiguration config)
