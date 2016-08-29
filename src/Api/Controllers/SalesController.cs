@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Core.Domain;
 using Core.Domain.Sales;
+using Services.Inventory;
 using Dto.Sales;
 
 namespace Api.Controllers
@@ -17,14 +18,15 @@ namespace Api.Controllers
         private readonly IAdministrationService _adminService;
         private readonly ISalesService _salesService;
         private readonly IFinancialService _financialService;
-
+        private readonly IInventoryService _inventoryService;
         public SalesController(IAdministrationService adminService,
             ISalesService salesService,
-            IFinancialService financialService)
+            IFinancialService financialService, IInventoryService inventoryService)
         {
             _adminService = adminService;
             _salesService = salesService;
             _financialService = financialService;
+            _inventoryService = inventoryService;
         }
 
         [HttpPost]
@@ -1073,7 +1075,8 @@ namespace Api.Controllers
             try
             {
                 var salesInvoice = _salesService.GetSalesInvoiceById(id);
-
+     
+                //var items = _salesService.Ge
                 var salesOrderDto = new Dto.Sales.SalesInvoice()
                 {
                     Id = salesInvoice.Id,
@@ -1083,7 +1086,8 @@ namespace Api.Controllers
                     SalesInvoiceLines = new List<Dto.Sales.SalesInvoiceLine>(),
                     PaymentTermId = salesInvoice.PaymentTermId,
                     ReferenceNo = salesInvoice.ReferenceNo,
-                    Posted = salesInvoice.GeneralLedgerHeaderId != null
+                    Posted = salesInvoice.GeneralLedgerHeaderId != null,
+                    CompanyName = _adminService.GetDefaultCompany().Name
                 };
 
                 foreach (var line in salesInvoice.SalesInvoiceLines)
@@ -1095,7 +1099,8 @@ namespace Api.Controllers
                     lineDto.Quantity = line.Quantity;
                     lineDto.ItemId = line.ItemId;
                     lineDto.MeasurementId = line.MeasurementId;
-
+                    lineDto.ItemDescription = _inventoryService.GetItemById(line.ItemId).Description;
+         
                     salesOrderDto.SalesInvoiceLines.Add(lineDto);
                 }
 

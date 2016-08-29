@@ -52,105 +52,69 @@ scratch. This page gets rid of all links and provides the needed markup only.
             }, margins);
     }
 </script>
-<a href="javascript:demoFromHTML()" class="button">Run Code</a>
+<a href="javascript:demoFromHTML()" class="button">Download</a>
 <div id="content">
     <div class="box-body">
-        <div class="col-sm-6">
+        <div class="col-sm-2">
             <div class="row">
-                <div class="col-sm-2">Customer Name:</div>
-                <div class="col-sm-10">@Model.CustomerName</div>
-
+                <div class="col-sm-1">From</div>
+            </div>
+            <div class="row">
+                <div class="col-sm-8">@Model.CompanyName</div>
+            </div>
+            <div class="row">
+                <div class="col-sm-2">Address</div>
             </div>
         </div>
-    </div>
-    <div class="box-body">
-        <div class="col-sm-6">
+
+        <div class="col-sm-2">
             <div class="row">
+                <div class="col-sm-1">To</div>
+            </div>
+            <div class="row">
+                <div class="col-sm-8">@Model.CustomerName</div>
+            </div>
+            <div class="row">
+                <div class="col-sm-2">Adress</div>
+            </div>
+        </div>
+
+      
+    </div>
 
 
-                <tbody>
-                    @foreach (var item in Model.SalesInvoiceLines)
+    <table class="table">
+
+        <thead>
+        <tr>
+            <th>Quantity</th>
+            <th>Product</th>
+            <th>Serial #</th>
+            <th>Description</th>
+            <th>Subtotal</th>
+        </tr>
+        </thead>
+        <tbody>
+            @foreach (var item in Model.SalesInvoiceLines)
             {
-                        <th>
-                            @Html.DisplayFor(model => item.ItemId)
-                        </th>
-                        <th>
-                            @Html.DisplayFor(model => item.Quantity)
-                        </th>
-                        @*<tr>
-
-                                <td>
-                                    @Html.LabelFor(titem => item.ItemId)
-                                </td>
-
-
-                                <td>
-                                    @Html.LabelFor(titem => item.MeasurementId)
-                                </td>
-
-
-                                <td>
-                                    @Html.LabelFor(titem => item.Quantity)
-                                </td>
-
-
-                                <td>
-                                    @Html.LabelFor(titem => item.Discount)
-                                </td>
-
-
-                                <td>
-                                    @Html.LabelFor(titem => item.Amount)
-                                </td>
-
-
-                                <td>
-                                    @Html.LabelFor(titem => item.ItemNo)
-                                </td>
-
-
-                                <td>
-                                    @Html.LabelFor(titem => item.ItemDescription)
-                                </td>
-                            </tr>
-
-                            <tr>
-
-                                <td>
-                                    @Html.DisplayFor(titem => item.ItemId)
-                                </td>
-
-                                <td>
-                                    @Html.DisplayFor(titem => item.MeasurementId)
-                                </td>
-
-                                <td>
-                                    @Html.DisplayFor(titem => item.Quantity)
-                                </td>
-
-                                <td>
-                                    @Html.DisplayFor(titem => item.Discount)
-                                </td>
-
-                                <td>
-                                    @Html.DisplayFor(titem => item.Amount)
-                                </td>
-
-                                <td>
-                                    @Html.DisplayFor(titem => item.ItemNo)
-                                </td>
-
-                                <td>
-                                    @Html.DisplayFor(titem => item.ItemDescription)
-                                </td>
-                            </tr>*@
-                    }
-                </tbody>
+                <tr>
+                    <td>
+                        @Html.DisplayFor(model => item.Quantity)
+                    </td>
+                    <td>
+                        @Html.DisplayFor(model => item.ItemDescription)
+                    </td>
+                    <td>
+                        Serial
+                    </td>
+                    <td>
+                        @Html.DisplayFor(model => item.ItemDescription)
+                    </td>
+                    <td>
+                        @Html.DisplayFor(model => item.Amount)
+                    </td>
+                </tr>
+            }
+                    </tbody>
+                </table>
             </div>
-        </div>
-
-
-
-
-    </div>
-</div>

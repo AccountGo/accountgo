@@ -17,6 +17,7 @@ namespace Dto.Sales
         public string ReferenceNo { get; set; }
         public bool Posted { get; set; }
         public bool? ReadyForPosting { get; set; }
+        public string CompanyName { get; set; }
         public IList<SalesInvoiceLine> SalesInvoiceLines { get; set; }
 
         public SalesInvoice()

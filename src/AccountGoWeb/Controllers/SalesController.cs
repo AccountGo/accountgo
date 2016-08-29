@@ -280,6 +280,9 @@ namespace AccountGoWeb.Controllers
             salesInvoiceModel.ReferenceNo = invoice.ReferenceNo;
             salesInvoiceModel.No = invoice.No;
 
+            salesInvoiceModel.CompanyName = invoice.CompanyName;
+
+
             salesInvoiceModel.CustomerName = invoice.CustomerName;
             salesInvoiceModel.SalesInvoiceLines = invoice.SalesInvoiceLines;
             return View(salesInvoiceModel);
