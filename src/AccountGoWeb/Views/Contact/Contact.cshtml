@@ -1,0 +1,80 @@
+﻿@model Dto.Common.Contact
+
+<div>
+    <a href="#" id="linkEdit" class="btn" onclick="onClickEditButton();">
+        <i class="fa fa-edit"></i>
+        Edit
+    </a>
+</div>
+<form action="~/contact/savecontact" method="post">
+    <div class="box" id="divContactCard">
+        @Html.HiddenFor(m => m.Id)
+        <div class="box-header with-border">
+            <h3 class="box-title">Contact</h3>
+            <div class="box-tools pull-right">
+                <button type="button" class="btn btn-box-tool" data-widget="collapse" data-toggle="tooltip" title="Collapse">
+                    <i class="fa fa-minus"></i>
+                </button>
+            </div>
+        </div>
+        <div class="box-body">
+            <div class="col-sm-6">
+                <div class="row">
+                    <div class="col-sm-4">First Name</div>
+                    <div class="col-sm-8">
+                        <input asp-for="FirstName" class="form-control" type="text" placeholder="First Name ..." />
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-sm-4">Last Name</div>
+                    <div class="col-sm-8">
+                        <input asp-for="LastName" class="form-control" type="text" placeholder="Last Name ..." />
+                    </div>
+                </div>
+            </div>
+            <div class="col-sm-6">
+                <div class="row">
+                    <div class="col-sm-4">Phone</div>
+                    <div class="col-sm-8">
+                        <input asp-for="Party.Phone" class="form-control" type="text" placeholder="Phone ..." />
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-sm-4">Fax</div>
+                    <div class="col-sm-8">
+                        <input asp-for="Party.Fax" class="form-control" type="text" placeholder="Fax ..." />
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-sm-4">Website</div>
+                    <div class="col-sm-8">
+                        <input asp-for="Party.Website" class="form-control" type="text" placeholder="Website ..." />
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-sm-4">Email</div>
+                    <div class="col-sm-8">
+                        <input asp-for="Party.Email" class="form-control" type="text" placeholder="Email ..." />
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-9">
+        <input id="btnSave" class="btn btn-sm btn-primary btn-flat pull-left disabledControl" type="submit" value="Save" />
+        <a href="~/sales/customers" class="btn btn-sm btn-default btn-flat pull-left">Close</a>
+    </div>
+ </form>
+
+
+    @section scripts{
+        <script src="~/js/custom.js" type="text/javascript"></script>
+        <script>
+            setFormDisabled("divContactCard");
+            function onClickEditButton() {
+                document.getElementById("linkEdit").className = document.getElementById("linkEdit").className + " disabledControl";
+                document.getElementById("btnSave").className = "btn btn-sm btn-primary btn-flat pull-left";
+                setFormEnabled("divContactCard");
+            }
+        </script>
+    }

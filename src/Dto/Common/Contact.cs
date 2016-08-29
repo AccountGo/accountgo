@@ -6,6 +6,7 @@
         public string LastName { get; set; }
         public Party Party { get; set; }
 
+        public string MiddleName { get; set; }
         public Contact() {
             Party = new Party();
         }
