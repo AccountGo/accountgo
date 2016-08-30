@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 
 namespace Dto.Sales
@@ -18,8 +19,9 @@ namespace Dto.Sales
         public bool Posted { get; set; }
         public bool? ReadyForPosting { get; set; }
         public string CompanyName { get; set; }
-        public IList<SalesInvoiceLine> SalesInvoiceLines { get; set; }
 
+        public IList<SalesInvoiceLine> SalesInvoiceLines { get; set; }
+        public decimal? TotalTax { get; set; }
         public SalesInvoice()
         {
             SalesInvoiceLines = new List<SalesInvoiceLine>();

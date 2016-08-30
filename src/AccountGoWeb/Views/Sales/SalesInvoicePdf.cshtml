@@ -12,7 +12,7 @@ scratch. This page gets rid of all links and provides the needed markup only.
         $("#main-sidebar").remove();
     });
 
-    function demoFromHTML() {
+    function fromHTML() {
         var pdf = new jsPDF('p', 'pt', 'letter');
         // source can be HTML-formatted string, or a reference
         // to an actual DOM element from which the text will be scraped.
@@ -52,95 +52,105 @@ scratch. This page gets rid of all links and provides the needed markup only.
             }, margins);
     }
 </script>
-<a href="javascript:demoFromHTML()" class="button">Download</a>
+<a href="javascript:fromHTML()" class="button">Download</a>
 <div id="content">
-    @*<div class="box-body">
-        <div class="col-sm-2">
-            <div class="row">
-                <div class="col-sm-1">From</div>
-            </div>
-            <div class="row">
-                <div class="col-sm-8">@Model.CompanyName</div>
-            </div>
-            <div class="row">
-                <div class="col-sm-2">Address</div>
-            </div>
-        </div>
-
-        <div class="col-sm-2">
-            <div class="row">
-                <div class="col-sm-1">To</div>
-            </div>
-            <div class="row">
-                <div class="col-sm-8">@Model.CustomerName</div>
-            </div>
-            <div class="row">
-                <div class="col-sm-2">Adress</div>
-            </div>
-        </div>
-
-      
-    </div>*@
-    <table class="table">
+    <table class="table" style="text-align: left">
         <thead>
-        <tr>
-            <td>
-                From
-            </td>
+            <tr>
+                <td style="text-align: left">
+                    From
+                </td>
 
-            <td>
-                From
-            </td>
-        </tr>
+                <td style="text-align: left">
+                    From
+                </td>
+            </tr>
         <tr>
-            <td>
+            <td style="text-align: left">
                 @Model.CompanyName
             </td>
-            <td>
+            <td style="text-align: left">
                 @Model.CustomerName
             </td>
         </tr>
-
-          
+            <tr>
+                <td colspan="20">
+                   
+                </td>
+                <td colspan="20">
+                   
+                </td>
+            </tr>
         </thead>
 
     </table>
 
 
 
+    <table class="table">
 
-        <table class="table">
+        <thead>
+        <tr>
+            <th>Quantity</th>
+            <th>Product</th>
+            <th>Serial #</th>
+            <th>Description</th>
+            <th>Subtotal</th>
+        </tr>
+        </thead>
+        <tbody>
+        @foreach (var item in Model.SalesInvoiceLines)
+        {
+            <tr>
+                <td>
+                    @Html.DisplayFor(model => item.Quantity)
+                </td>
+                <td>
+                    @Html.DisplayFor(model => item.ItemDescription)
+                </td>
+                <td>
+                    Serial
+                </td>
+                <td>
+                    @Html.DisplayFor(model => item.ItemDescription)
+                </td>
+                <td>
+                    @Html.DisplayFor(model => item.Amount)
+                </td>
+            </tr>
+        }
+        </tbody>
+    </table>
 
-            <thead>
-                <tr>
-                    <th>Quantity</th>
-                    <th>Product</th>
-                    <th>Serial #</th>
-                    <th>Description</th>
-                    <th>Subtotal</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var item in Model.SalesInvoiceLines)
-            {
-                    <tr>
-                        <td>
-                            @Html.DisplayFor(model => item.Quantity)
-                        </td>
-                        <td>
-                            @Html.DisplayFor(model => item.ItemDescription)
-                        </td>
-                        <td>
-                            Serial
-                        </td>
-                        <td>
-                            @Html.DisplayFor(model => item.ItemDescription)
-                        </td>
-                        <td>
-                            @Html.DisplayFor(model => item.Amount)
-                        </td>
-                    </tr>
-                }
-            </tbody>
-        </table>
+    <table class="table" style="text-align: right">
+        <thead>
+            <tr>
+                <td  style="text-align: right">
+                    SubTotal
+                </td>
+
+                <td  style="text-align: left">
+                    @Model.Amount
+                </td>
+            </tr>
+            <tr>
+                <td style="text-align: right">
+                    Tax
+                </td>
+                <td style="text-align: left">
+                    @Model.TotalTax
+                </td>
+            </tr>
+
+            <tr>
+                <td style="text-align: right">
+                    Total
+                </td>
+                <td style="text-align: left">
+                    @Model.Amount
+                </td>
+            </tr>
+        </thead>
+
+    </table>
 </div>

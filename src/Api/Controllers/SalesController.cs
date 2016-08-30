@@ -9,6 +9,7 @@ using Core.Domain;
 using Core.Domain.Sales;
 using Services.Inventory;
 using Dto.Sales;
+using Services.TaxSystem;
 
 namespace Api.Controllers
 {
@@ -19,14 +20,16 @@ namespace Api.Controllers
         private readonly ISalesService _salesService;
         private readonly IFinancialService _financialService;
         private readonly IInventoryService _inventoryService;
+        private readonly ITaxService _taxService;
         public SalesController(IAdministrationService adminService,
             ISalesService salesService,
-            IFinancialService financialService, IInventoryService inventoryService)
+            IFinancialService financialService, IInventoryService inventoryService, ITaxService taxService)
         {
             _adminService = adminService;
             _salesService = salesService;
             _financialService = financialService;
             _inventoryService = inventoryService;
+            _taxService = taxService;
         }
 
         [HttpPost]
@@ -1077,7 +1080,7 @@ namespace Api.Controllers
                 var salesInvoice = _salesService.GetSalesInvoiceById(id);
      
                 //var items = _salesService.Ge
-                var salesOrderDto = new Dto.Sales.SalesInvoice()
+                var salesInvoiceDto = new Dto.Sales.SalesInvoice()
                 {
                     Id = salesInvoice.Id,
                     CustomerId = salesInvoice.CustomerId,
@@ -1090,27 +1093,30 @@ namespace Api.Controllers
                     CompanyName = _adminService.GetDefaultCompany().Name
                 };
 
+                decimal? totalTax = 0;
                 foreach (var line in salesInvoice.SalesInvoiceLines)
                 {
                     var lineDto = new Dto.Sales.SalesInvoiceLine();
+
                     lineDto.Id = line.Id;
                     lineDto.Amount = line.Amount;
                     lineDto.Discount = line.Discount;
                     lineDto.Quantity = line.Quantity;
                     lineDto.ItemId = line.ItemId;
                     lineDto.MeasurementId = line.MeasurementId;
+                    
                     lineDto.ItemDescription = _inventoryService.GetItemById(line.ItemId).Description;
-         
-                    salesOrderDto.SalesInvoiceLines.Add(lineDto);
-                }
+                    //totalTax += line.ComputeLineTaxAmount();
 
-                // is this journal entry ready for posting?
-                if (!salesOrderDto.Posted && salesOrderDto.SalesInvoiceLines.Count >= 1)
-                {
-                    salesOrderDto.ReadyForPosting = true;
+                    if (_taxService != null)
+                        totalTax += _taxService.GetIntersectionTaxes(line.ItemId, salesInvoice.CustomerId, salesInvoice.Customer.Party.PartyType).FirstOrDefault().Rate;
+                    salesInvoiceDto.SalesInvoiceLines.Add(lineDto);
                 }
+                salesInvoiceDto.TotalTax = totalTax;
+              
 
-                return new ObjectResult(salesOrderDto);
+
+                return new ObjectResult(salesInvoiceDto);
             }
             catch (Exception ex)
             {
