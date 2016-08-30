@@ -48,13 +48,13 @@ scratch. This page gets rid of all links and provides the needed markup only.
             function(dispose) {
                 // dispose: object with X, Y of the last line add to the PDF
                 //          this allow the insertion of new lines after html
-                pdf.save('Test.pdf');
+                pdf.save('Invoice.pdf');
             }, margins);
     }
 </script>
 <a href="javascript:demoFromHTML()" class="button">Download</a>
 <div id="content">
-    <div class="box-body">
+    @*<div class="box-body">
         <div class="col-sm-2">
             <div class="row">
                 <div class="col-sm-1">From</div>
@@ -80,41 +80,67 @@ scratch. This page gets rid of all links and provides the needed markup only.
         </div>
 
       
-    </div>
-
-
+    </div>*@
     <table class="table">
-
         <thead>
         <tr>
-            <th>Quantity</th>
-            <th>Product</th>
-            <th>Serial #</th>
-            <th>Description</th>
-            <th>Subtotal</th>
+            <td>
+                From
+            </td>
+
+            <td>
+                From
+            </td>
         </tr>
+        <tr>
+            <td>
+                @Model.CompanyName
+            </td>
+            <td>
+                @Model.CustomerName
+            </td>
+        </tr>
+
+          
         </thead>
-        <tbody>
-            @foreach (var item in Model.SalesInvoiceLines)
-            {
+
+    </table>
+
+
+
+
+        <table class="table">
+
+            <thead>
                 <tr>
-                    <td>
-                        @Html.DisplayFor(model => item.Quantity)
-                    </td>
-                    <td>
-                        @Html.DisplayFor(model => item.ItemDescription)
-                    </td>
-                    <td>
-                        Serial
-                    </td>
-                    <td>
-                        @Html.DisplayFor(model => item.ItemDescription)
-                    </td>
-                    <td>
-                        @Html.DisplayFor(model => item.Amount)
-                    </td>
+                    <th>Quantity</th>
+                    <th>Product</th>
+                    <th>Serial #</th>
+                    <th>Description</th>
+                    <th>Subtotal</th>
                 </tr>
-            }
-                    </tbody>
-                </table>
-            </div>
+            </thead>
+            <tbody>
+                @foreach (var item in Model.SalesInvoiceLines)
+            {
+                    <tr>
+                        <td>
+                            @Html.DisplayFor(model => item.Quantity)
+                        </td>
+                        <td>
+                            @Html.DisplayFor(model => item.ItemDescription)
+                        </td>
+                        <td>
+                            Serial
+                        </td>
+                        <td>
+                            @Html.DisplayFor(model => item.ItemDescription)
+                        </td>
+                        <td>
+                            @Html.DisplayFor(model => item.Amount)
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+</div>
