@@ -372,7 +372,7 @@ desired effect
                         </ul>
                     </li>
                     <li class="treeview">
-                        <a href="#"><i class="fa fa-gear"></i> <span>Administration</span> <i class="fa fa-angle-left pull-right"></i></a>
+                        <a href="#"><i class="fa fa-group"></i> <span>Organization Settings</span> <i class="fa fa-angle-left pull-right"></i></a>
                         <ul class="treeview-menu">
                             <li>
                                 <!--<a href="#">Company</a>-->
@@ -382,10 +382,27 @@ desired effect
                                 <!--<a href="#">Setup</a>-->
                                 <a href="~/administration/settings">Settings</a>
                             </li>
+                        </ul>
+                    </li>
+                    <li class="treeview">
+                        <a href="#"><i class="fa fa-desktop"></i> <span>System Administration</span> <i class="fa fa-angle-left pull-right"></i></a>
+                        <ul class="treeview-menu">
                             @if (User.IsInRole("SystemAdministrators"))
                             {
                                 <li>
-                                    <a href="~/administration/users">Users</a>
+                                    <a href="#">Security
+                                        <span class="pull-right-container">
+                                            <i class="fa fa-angle-left pull-right"></i>
+                                        </span>
+                                    </a>
+                                    <ul class="treeview-menu menu-open" style="display: block;">
+                                        <li><a href="~/administration/users">Users</a></li>
+                                        <li><a href="~/administration/roles">Roles</a></li>
+                                        <li><a href="~/administration/groups">Groups</a></li>
+                                    </ul>
+                                </li>
+                                <li>
+                                    <a href="~/administration/auditlogs">Audit Logs</a>
                                 </li>
                             }
                         </ul>

@@ -3,6 +3,7 @@ using System.Linq;
 using Microsoft.EntityFrameworkCore;
 using Core.Data;
 using Core.Domain.Security;
+using System.Collections.Generic;
 
 namespace Api.Data.Repositories
 {
@@ -42,6 +43,33 @@ namespace Api.Data.Repositories
                 .ThenInclude(u => u.SecurityPermission.Group)
                 .Where(u => u.UserName == username)
                 .FirstOrDefault();
+        }
+
+        public IEnumerable<User> GetAllUsers()
+        {
+            var users = _context.Users.Include(u => u.Roles)
+                .ThenInclude(u => u.SecurityRole.Permissions)
+                .ThenInclude(u => u.SecurityPermission.Group);
+
+            return users;
+        }
+
+        public IEnumerable<SecurityRole> GetAllRoles()
+        {
+            var roles = _context.SecurityRoles.Include(r => r.Permissions)
+                .ThenInclude(r => r.SecurityPermission.RolePermissions)
+                .ThenInclude(r => r.SecurityPermission.Group);
+
+            return roles;
+        }
+
+        public IEnumerable<SecurityGroup> GetAllGroups()
+        {
+            var groups = _context.SecurityGroups.Include(g => g.Permissions)
+                .ThenInclude(g => g.RolePermissions)
+                .ThenInclude(g => g.SecurityPermission);
+
+            return groups;
         }
     }
 }

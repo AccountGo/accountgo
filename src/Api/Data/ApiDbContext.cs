@@ -96,26 +96,24 @@ namespace Api.Data
         #region Audit Logs
         private void SaveAuditLog()
         {
-            string username = System.Threading.Thread.CurrentPrincipal.Identity.Name;
+            string username = string.Empty;
 
-            if (string.IsNullOrEmpty(username))
+            var dbEntityEntries = ChangeTracker.Entries().ToList()
+                .Where(p => p.State == EntityState.Modified || p.State == EntityState.Added || p.State == EntityState.Deleted);
+
+            foreach (var dbEntityEntry in dbEntityEntries)
             {
-                var dbEntityEntries = ChangeTracker.Entries().ToList()
-                    .Where(p => p.State == EntityState.Modified || p.State == EntityState.Added || p.State == EntityState.Deleted);
-
-                foreach (var dbEntityEntry in dbEntityEntries)
+                try
                 {
-                    try
-                    {
-                        var auditLogs = AuditLogHelper.GetChangesForAuditLog(dbEntityEntry, username, this);
-                        foreach (var auditlog in auditLogs)
-                            if (auditlog != null)
-                                AuditLogs.Add(auditlog);
-                    }
-                    catch
-                    {
-                        continue;
-                    }
+                    username = ((BaseEntity)dbEntityEntry.Entity).ModifiedBy;
+                    var auditLogs = AuditLogHelper.GetChangesForAuditLog(dbEntityEntry, username);
+                    foreach (var auditlog in auditLogs)
+                        if (auditlog != null)
+                            AuditLogs.Add(auditlog);
+                }
+                catch
+                {
+                    continue;
                 }
             }
         }

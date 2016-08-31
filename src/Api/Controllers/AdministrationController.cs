@@ -1,4 +1,5 @@
 ﻿using Dto.Administration;
+using Dto.Security;
 using Microsoft.AspNetCore.Mvc;
 using Services.Administration;
 using Services.Financial;
@@ -65,6 +66,136 @@ namespace Api.Controllers
                 return new ObjectResult(_adminService.GetDefaultCompany());
             else
                 return new ObjectResult(_adminService.GetDefaultCompany());
+        }
+
+        [HttpGet]
+        [Route("[action]")]
+        public IActionResult AuditLogs()
+        {
+            var auditLogs = _adminService.AuditLogs();
+            var auditLogsDto = new List<AuditLog>();
+
+            foreach(var log in auditLogs)
+            {
+                auditLogsDto.Add(new AuditLog()
+                {
+                    Id = log.Id,
+                    UserName = log.UserName,
+                    AuditEventDateUTC = log.AuditEventDateUTC,
+                    AuditEventType = log.AuditEventType,
+                    TableName = log.TableName,
+                    RecordId = log.RecordId,
+                    FieldName = log.FieldName,
+                    OriginalValue = log.OriginalValue,
+                    NewValue = log.NewValue
+                });
+            }
+
+            return new ObjectResult(auditLogs);
+        }
+
+        [HttpGet]
+        [Route("[action]")]
+        public IActionResult Users()
+        {
+            var users = _securityService.GetAllUser();
+            var usersDto = new List<User>();
+
+            foreach (var user in users)
+            {
+                var userDto = new User()
+                {
+                    Id = user.Id,
+                    FirstName = user.Firstname,
+                    LastName = user.Lastname,
+                    Email = user.EmailAddress,
+                    UserName = user.UserName
+                };
+
+                foreach(var role in user.Roles)
+                {
+                    var roleDto = new Role()
+                    {
+                        Id = role.Id,
+                        Name = role.SecurityRole.Name,
+                        DisplayName = role.SecurityRole.DisplayName
+                    };
+
+                    userDto.Roles.Add(roleDto);
+                }
+
+                usersDto.Add(userDto);
+            }
+
+            return new ObjectResult(usersDto);
+        }
+
+        [HttpGet]
+        [Route("[action]")]
+        public IActionResult Roles()
+        {
+            var roles = _securityService.GetAllSecurityRole();
+            var rolesDto = new List<Role>();
+
+            foreach (var role in roles)
+            {
+                var roleDto = new Role()
+                {
+                    Id = role.Id,
+                    Name = role.Name,
+                    DisplayName = role.DisplayName
+                };
+
+                foreach (var permission in role.Permissions)
+                {
+                    var permissionDto = new Permission()
+                    {
+                        Id = permission.Id,
+                        Name = permission.SecurityPermission.Name,      
+                        DisplayName = permission.SecurityPermission.DisplayName                  
+                    };
+
+                    roleDto.Permissions.Add(permissionDto);
+                }
+
+                rolesDto.Add(roleDto);
+            }
+
+            return new ObjectResult(rolesDto);
+        }
+
+        [HttpGet]
+        [Route("[action]")]
+        public IActionResult Groups()
+        {
+            var groups = _securityService.GetAllSecurityGroup();
+            var groupsDto = new List<Group>();
+
+            foreach (var group in groups)
+            {
+                var groupDto = new Group()
+                {
+                    Id = group.Id,
+                    Name = group.Name,
+                    DisplayName = group.DisplayName
+                };
+
+                foreach (var permission in group.Permissions)
+                {
+                    var permissionDto = new Permission()
+                    {
+                        Id = permission.Id,
+                        Name = permission.Name,
+                        DisplayName = permission.DisplayName
+                    };
+
+                    groupDto.Permissions.Add(permissionDto);
+                }
+
+                groupsDto.Add(groupDto);
+            }
+
+            return new ObjectResult(groupsDto);
         }
 
         [HttpGet]

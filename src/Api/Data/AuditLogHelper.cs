@@ -11,14 +11,12 @@ namespace Api.Data
 {
     public class AuditLogHelper
     {
-        static ApiDbContext _context;
         static AuditableEntity _auditableEntity = null;
 
         public static IDictionary<DateTime, EntityEntry> addedEntities = new Dictionary<DateTime, EntityEntry>();
 
-        public static List<AuditLog> GetChangesForAuditLog(EntityEntry dbEntry, string username, ApiDbContext context)
+        public static List<AuditLog> GetChangesForAuditLog(EntityEntry dbEntry, string username)
         {
-            _context = context;
             var result = new List<AuditLog>();
 
             // Get the Table() attribute, if one exists
@@ -41,7 +39,7 @@ namespace Api.Data
 
             if (!isSchemaExt)
             {
-                FillAuditableEntityAndAttributes(tableName);
+                FillAuditableEntityAndAttributes(dbEntry);
             }
 
             try
@@ -58,7 +56,7 @@ namespace Api.Data
                     {
                         string dbEntryObject = ObjectFieldsValues(dbEntry);
 
-                        var auditLog = CreateAuditLog("",
+                        var auditLog = CreateAuditLog(username,
                             changeTime,
                             AuditEventTypes.Added,
                             tableName,
@@ -78,7 +76,7 @@ namespace Api.Data
                     {
                         string dbEntryObject = ObjectFieldsValues(dbEntry);
 
-                        var auditLog = CreateAuditLog("",
+                        var auditLog = CreateAuditLog(username,
                             changeTime,
                             AuditEventTypes.Deleted,
                             tableName,
@@ -103,7 +101,7 @@ namespace Api.Data
 
                             if (!Equals(property.CurrentValue, property.OriginalValue))
                             {
-                                var auditLog = CreateAuditLog("", 
+                                var auditLog = CreateAuditLog(username, 
                                     changeTime, 
                                     AuditEventTypes.Modified, 
                                     tableName, 
@@ -181,11 +179,15 @@ namespace Api.Data
             return record;
         }
 
-        private static void FillAuditableEntityAndAttributes(string entityName)
+        private static void FillAuditableEntityAndAttributes(EntityEntry dbEntry)
         {
-           _auditableEntity = _context.AuditableEntities
+            Type entryType = dbEntry.Entity.GetType();
+            TableAttribute tableAttr = entryType.GetCustomAttributes(typeof(TableAttribute), false).SingleOrDefault() as TableAttribute;
+            string tableName = tableAttr != null ? tableAttr.Name : dbEntry.Entity.GetType().Name;
+
+            _auditableEntity = ((ApiDbContext)dbEntry.Context).AuditableEntities
                 .Include(a => a.AuditableAttributes)
-                .FirstOrDefault(e => e.EntityName == entityName);
+                .FirstOrDefault(e => e.EntityName == tableName);
         }
         #endregion
     }

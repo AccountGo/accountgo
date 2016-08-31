@@ -14,6 +14,7 @@ using Core.Domain.Financials;
 using System;
 using Core.Domain.TaxSystem;
 using Core.Domain.Security;
+using Core.Domain.Auditing;
 
 namespace Services.Administration
 {
@@ -28,6 +29,7 @@ namespace Services.Administration
         private readonly IRepository<Tax> _taxRepo;
         private readonly IRepository<Company> _company;
         private readonly IRepository<Account> _accountRepo;
+        private readonly IRepository<AuditLog> _auditLogRepo;
         private readonly ISecurityRepository _securityRepository;
 
         public AdministrationService(IRepository<FinancialYear> fiscalYearRepo,
@@ -38,6 +40,7 @@ namespace Services.Administration
             IRepository<Tax> taxRepo,
             IRepository<GeneralLedgerSetting> generalLedgerSetting,
             IRepository<Account> accountRepo,
+            IRepository<AuditLog> auditLogRepo,
             ISecurityRepository securityRepository,
             IRepository<Company> company = null
             )
@@ -52,6 +55,7 @@ namespace Services.Administration
             _taxRepo = taxRepo;
             _company = company;
             _accountRepo = accountRepo;
+            _auditLogRepo = auditLogRepo;
             _securityRepository = securityRepository;
         }
 
@@ -145,6 +149,11 @@ namespace Services.Administration
         public User GetUser(string username)
         {
             return _securityRepository.GetUser(username);
+        }
+
+        public IEnumerable<AuditLog> AuditLogs()
+        {
+            return _auditLogRepo.Table.AsEnumerable();
         }
     }
 }

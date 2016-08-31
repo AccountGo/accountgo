@@ -60,7 +60,7 @@ namespace Services.Security
 
         public IEnumerable<SecurityRole> GetAllSecurityRole()
         {
-            return _securityRoleRepo.Table.AsEnumerable();
+            return _securityRepository.GetAllRoles();
         }
 
         public User GetUser(string username)
@@ -156,7 +156,7 @@ namespace Services.Security
 
         public IEnumerable<SecurityGroup> GetAllSecurityGroup()
         {
-            return _securityGroupRepo.Table.AsEnumerable();
+            return _securityRepository.GetAllGroups();
         }
 
         public List<int> GetPermissionByRoleId(int securityRoleId)
@@ -173,7 +173,9 @@ namespace Services.Security
 
         public IEnumerable<User> GetAllUser()
         {
-            return _userRepo.Table.AsEnumerable();
+            var users = _securityRepository.GetAllUsers();
+
+            return users;
         }
 
         public void AddRole(string roleName, int roleId = 0)

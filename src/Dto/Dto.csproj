@@ -42,6 +42,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Administration\AuditLog.cs" />
     <Compile Include="Administration\Company.cs" />
     <Compile Include="BaseModel.cs" />
     <Compile Include="Common\Address.cs" />

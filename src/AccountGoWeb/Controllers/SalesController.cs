@@ -192,7 +192,6 @@ namespace AccountGoWeb.Controllers
                 var serialize = Newtonsoft.Json.JsonConvert.SerializeObject(customerModel);
                 var content = new StringContent(serialize);
                 content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
-                
                 var response = PostAsync("sales/savecustomer", content);
 
                 return RedirectToAction("Customers");
