@@ -143,6 +143,11 @@ namespace Services.Administration
 
         public void SaveUser(User user)
         {
+            var standardRole = _securityRepository.GetAllRoles().Where(r => r.Name == "GeneralUsers").FirstOrDefault();
+            var securityUserRole = new SecurityUserRole();
+            securityUserRole.SecurityRole = standardRole;
+            securityUserRole.User = user;
+            user.Roles.Add(securityUserRole);
             _securityRepository.AddUser(user);
         }
 

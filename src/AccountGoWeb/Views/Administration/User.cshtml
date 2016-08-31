@@ -1,0 +1,73 @@
+﻿@model AccountGoWeb.Models.Account.RegisterViewModel
+@{
+    ViewData["Title"] = "Add User";
+}
+
+<form asp-controller="administration" asp-action="user" method="post">
+    <div class="col-md-9">
+        <div class="box">
+            <div class="box-header with-border">
+                <h3 class="box-title">General</h3>
+                <div class="box-tools pull-right">
+                    <button type="button" class="btn btn-box-tool" data-widget="collapse" data-toggle="tooltip" title="Collapse">
+                        <i class="fa fa-minus"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="box-body">
+                <div class="col-sm-6">
+                    <div asp-validation-summary="All" class="text-danger"></div>
+                    <div class="row">
+                        <div class="col-sm-4">
+                            First Name
+                        </div>
+                        <div class="col-sm-8">
+                            <input asp-for="FirstName" class="form-control" />
+                            <span asp-validation-for="FirstName" class="text-danger"></span>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-sm-4">
+                            Last Name
+                        </div>
+                        <div class="col-sm-8">
+                            <input asp-for="LastName" class="form-control" />
+                            <span asp-validation-for="LastName" class="text-danger"></span>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-sm-4">
+                            Email
+                        </div>
+                        <div class="col-sm-8">
+                            <input asp-for="Email" class="form-control" />
+                            <span asp-validation-for="Email" class="text-danger"></span>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-sm-4">
+                            Password
+                        </div>
+                        <div class="col-md-8">
+                            <input asp-for="Password" class="form-control" />
+                            <span asp-validation-for="Password" class="text-danger"></span>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-sm-4">
+                            Confirm Password
+                        </div>
+                        <div class="col-md-8">
+                            <input asp-for="ConfirmPassword" class="form-control" />
+                            <span asp-validation-for="ConfirmPassword" class="text-danger"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-9">
+        <input id="btnSave" class="btn btn-sm btn-primary btn-flat pull-left" type="submit" value="Save" />
+        <a href="~/administration/users" class="btn btn-sm btn-default btn-flat pull-left">Close</a>
+    </div>
+</form>
