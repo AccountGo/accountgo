@@ -39,14 +39,14 @@ namespace Api.Controllers
             var contactsDto = new List<Dto.Common.Contact>();
 
             foreach (var contact in customerContact.Select(a => a.Contact).ToList())
-                contactsDto.Add(new Dto.Common.Contact() { Id = contact.Id, FirstName = contact.FirstName, LastName = contact.LastName });
+                contactsDto.Add(new Dto.Common.Contact() { Id = contact.Id, FirstName = contact.FirstName, LastName = contact.LastName, CustomerId = customerId });
 
             return Ok(contactsDto.AsEnumerable());
         }
 
         [HttpGet]
         [Route("[action]")]
-        public IActionResult Contact(int id)
+        public IActionResult Contact(int id, int customerId)
         {
             var contact = _salesService.GetContacyById(id);
 
@@ -58,7 +58,7 @@ namespace Api.Controllers
             partyDto.Phone = contact.Party.Phone;
             partyDto.Website = contact.Party.Website;
             partyDto.Id = contact.Party.Id;
-
+            contactDto.CustomerId = customerId;
             contactDto.FirstName = contact.FirstName;
             contactDto.LastName = contact.LastName;
             contactDto.Id = contact.Id;

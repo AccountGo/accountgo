@@ -48,13 +48,41 @@ namespace AccountGoWeb.Controllers
             return View();
         }
 
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="id">contact id</param>
+        /// <param name="partyId">Id of customer or the vendor</param>
+        /// <param name="partyType">type of party holding the contact (e.g customer or vendor type)</param>
+        /// <returns></returns>
+        public IActionResult Contact(int id = 0, int partyId = 0, int partyType = 0)
+        {
+            Contact contact = null;
+
+            if (id == 0) // creating new contact
+            {
+                ViewBag.PageContentHeader = "New Contact";
+                contact = new Contact();
+                // contact.Party is for contact itself. 
+                // contact.HoldingPartyId is the id of the customer/or vendor. this is the partyId parameter
+                // contact.HoldingPartyType is the type of the holding party, 1 = customer, 2 = vendor
+            }
+            else // editing existing contact
+            {
+                ViewBag.PageContentHeader = "Contact Card";
+                contact = GetAsync<Contact>("contact/contact?id=" + id).Result;
+            }
+
+            return View(contact);
+        }
+
         public IActionResult Contact(int id, int customerId, int vendorId)
         {
              Contact contact = null;
 
             if (id > 0)
             {
-                contact = GetAsync<Contact>("contact/contact?id=" + id).Result;
+                contact = GetAsync<Contact>("contact/contact?id=" + id + "&customerId=" + customerId).Result;
             }
             else
             {
