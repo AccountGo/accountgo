@@ -1,156 +1,191 @@
-﻿@model Dto.Sales.SalesInvoice
+﻿ @{
+    Layout = "";
+}
+
+@model Dto.Sales.SalesInvoice
 
 <!--
 This is a starter template page. Use this page to start your new project from
 scratch. This page gets rid of all links and provides the needed markup only.
 -->
+
+<link rel="stylesheet" href="~/plugins/bootstrap/dist/css/bootstrap.min.css">
+<!-- Font Awesome -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.5.0/css/font-awesome.min.css">
+<!-- Ionicons -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/ionicons/2.0.1/css/ionicons.min.css">
+<!-- Theme style -->
+<link rel="stylesheet" href="~/adminLTE/css/AdminLTE.css">
+<!-- AdminLTE Skins. We have chosen the skin-blue for this starter
+      page. However, you can choose any other skin. Make sure you
+      apply the skin class to the body tag so the changes take effect.
+-->
+<link rel="stylesheet" href="~/adminLTE/css/skins/_all-skins.min.css">
+<link rel="stylesheet" href="~/adminLTE/css/AdminLTEOverride.css">
 <script src="~/plugins/jspdf/dist/jspdf.min.js"></script>
 <script src="~/plugins/jquery/dist/jquery.js"></script>
 <script src="~/plugins/bootstrap/dist/js/bootstrap.min.js"></script>
+<script src="~/js/html2canvas.js"></script>
 <script>
-    $(document).ready(function () {
-        $("#main-sidebar").remove();
-    });
 
     function fromHTML() {
         var pdf = new jsPDF('p', 'pt', 'letter');
-        // source can be HTML-formatted string, or a reference
-        // to an actual DOM element from which the text will be scraped.
-        source = $('#content')[0];
+        pdf.align = 'center';
+        pdf.addHTML($('#content')[0], function() {
+            pdf.save('Invoice.pdf');
+        }
+)};
+            //var pdf = new jsPDF('p', 'pt', 'letter');
+            //// source can be HTML-formatted string, or a reference
+            //// to an actual DOM element from which the text will be scraped.
+            //source = $('#content')[0];
 
-        // we support special element handlers. Register them with jQuery-style
-        // ID selector for either ID or node name. ("#iAmID", "div", "span" etc.)
-        // There is no support for any other type of selectors
-        // (class, of compound) at this time.
-        specialElementHandlers = {
-            // element with id of "bypass" - jQuery style selector
-            '#bypassme': function(element, renderer) {
-                // true = "handled elsewhere, bypass text extraction"
-                return true
-            }
-        };
-        margins = {
-            top: 80,
-            bottom: 60,
-            left: 40,
-            width: 522
-        };
-        // all coords and widths are in jsPDF instance's declared units
-        // 'inches' in this case
-        pdf.fromHTML(
-            source, // HTML string or DOM elem ref.
-            margins.left, // x coord
-            margins.top, {
-                // y coord
-                'width': margins.width, // max width of content on PDF
-                'elementHandlers': specialElementHandlers
-            },
-            function(dispose) {
-                // dispose: object with X, Y of the last line add to the PDF
-                //          this allow the insertion of new lines after html
-                pdf.save('Invoice.pdf');
-            }, margins);
-    }
+            //// we support special element handlers. Register them with jQuery-style
+            //// ID selector for either ID or node name. ("#iAmID", "div", "span" etc.)
+            //// There is no support for any other type of selectors
+            //// (class, of compound) at this time.
+            //specialElementHandlers = {
+            //    // element with id of "bypass" - jQuery style selector
+            //    '#bypassme': function(element, renderer) {
+            //        // true = "handled elsewhere, bypass text extraction"
+            //        return true
+            //    }
+            //};
+            //margins = {
+            //    top: 80,
+            //    bottom: 60,
+            //    left: 40,
+            //    width: 522
+            //};
+            //// all coords and widths are in jsPDF instance's declared units
+            //// 'inches' in this case
+            //pdf.fromHTML(
+            //    source, // HTML string or DOM elem ref.
+            //    margins.left, // x coord
+            //    margins.top, {
+            //        // y coord
+            //        'width': margins.width, // max width of content on PDF
+            //        'elementHandlers': specialElementHandlers
+            //    },
+            //    function(dispose) {
+            //        // dispose: object with X, Y of the last line add to the PDF
+            //        //          this allow the insertion of new lines after html
+            //        pdf.save('Invoice.pdf');
+            //    }, margins);
+  
 </script>
 <a href="javascript:fromHTML()" class="button">Download</a>
 <div id="content">
-    <table class="table" style="text-align: left">
-        <thead>
-            <tr>
-                <td style="text-align: left">
-                    From
-                </td>
+    <section class="invoice">
+        <!-- title row -->
+        <div class="row">
+            <div class="col-xs-12">
+                <h2 class="page-header">
+                    <i class="fa fa-globe"></i> @Model.CompanyName
+                    <small class="pull-right">Date: 2/10/2014</small>
+                </h2>
+            </div>
+            <!-- /.col -->
+        </div>
+        <!-- info row -->
+        <div class="row invoice-info">
+            <div class="col-sm-4 invoice-col">
+                From
+                <address>
+                    <strong>@Model.CompanyName</strong><br>
+                </address>
+            </div>
+            <!-- /.col -->
+            <div class="col-sm-4 invoice-col">
+                To
+                <address>
+                    <strong>@Model.CustomerName</strong><br>
+                    @Model.CustomerEmail
+                </address>
+            </div>
+            <!-- /.col -->
+            <div class="col-sm-4 invoice-col">
+             
+            </div>
+            <!-- /.col -->
+        </div>
+        <!-- /.row -->
+        <!-- Table row -->
+        <div class="row">
+            <div class="col-xs-12 table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Quantity</th>
+                            <th>Product</th>
+                            <th>Serial #</th>
+                            <th>Description</th>
+                            <th>Subtotal</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in Model.SalesInvoiceLines)
+                        {
+                            <tr>
+                                <td>
+                                    @Html.DisplayFor(model => item.Quantity)
+                                </td>
+                                <td>
+                                    @Html.DisplayFor(model => item.ItemDescription)
+                                </td>
+                                <td>
+                                    Serial
+                                </td>
+                                <td>
+                                    @Html.DisplayFor(model => item.ItemDescription)
+                                </td>
+                                <td>
+                                    @Html.DisplayFor(model => item.Amount)
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <!-- /.col -->
+        </div>
+        <!-- /.row -->
 
-                <td style="text-align: left">
-                    From
-                </td>
-            </tr>
-        <tr>
-            <td style="text-align: left">
-                @Model.CompanyName
-            </td>
-            <td style="text-align: left">
-                @Model.CustomerName
-            </td>
-        </tr>
-            <tr>
-                <td colspan="20">
-                   
-                </td>
-                <td colspan="20">
-                   
-                </td>
-            </tr>
-        </thead>
+        <div class="row">
+   
 
-    </table>
+            <!-- /.col -->
+            <div class="col-xs-8">
+                <p class="lead">Amount Due 2/22/2014</p>
 
+                <div class="table-responsive">
+                    <table class="table">
+                        <tbody>
+                            <tr>
+                                <th style="width:50%">Subtotal:</th>
+                                <td>$@Model.Amount</td>
+                            </tr>
+                            <tr>
+                                <th>Tax (9.3%)</th>
+                                <td>$@Model.TotalTax</td>
+                            </tr>
 
-
-    <table class="table">
-
-        <thead>
-        <tr>
-            <th>Quantity</th>
-            <th>Product</th>
-            <th>Serial #</th>
-            <th>Description</th>
-            <th>Subtotal</th>
-        </tr>
-        </thead>
-        <tbody>
-        @foreach (var item in Model.SalesInvoiceLines)
-        {
-            <tr>
-                <td>
-                    @Html.DisplayFor(model => item.Quantity)
-                </td>
-                <td>
-                    @Html.DisplayFor(model => item.ItemDescription)
-                </td>
-                <td>
-                    Serial
-                </td>
-                <td>
-                    @Html.DisplayFor(model => item.ItemDescription)
-                </td>
-                <td>
-                    @Html.DisplayFor(model => item.Amount)
-                </td>
-            </tr>
-        }
-        </tbody>
-    </table>
-
-    <table class="table" style="text-align: right">
-        <thead>
-            <tr>
-                <td  style="text-align: right">
-                    SubTotal
-                </td>
-
-                <td  style="text-align: left">
-                    @Model.Amount
-                </td>
-            </tr>
-            <tr>
-                <td style="text-align: right">
-                    Tax
-                </td>
-                <td style="text-align: left">
-                    @Model.TotalTax
-                </td>
-            </tr>
-
-            <tr>
-                <td style="text-align: right">
-                    Total
-                </td>
-                <td style="text-align: left">
-                    @Model.Amount
-                </td>
-            </tr>
-        </thead>
-
-    </table>
+                            <tr>
+                                <th>Total:</th>
+                                <td>$@Model.TotalAmountAfterTax</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <!-- /.col -->
+        </div>
+        <!-- /.row -->
+        <!-- this row will not appear when printing -->
+        <div class="row no-print">
+            <div class="col-xs-12">
+               
+            </div>
+        </div>
+    </section>
 </div>

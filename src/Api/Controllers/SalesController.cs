@@ -1085,12 +1085,14 @@ namespace Api.Controllers
                     Id = salesInvoice.Id,
                     CustomerId = salesInvoice.CustomerId,
                     CustomerName = salesInvoice.Customer.Party.Name,
+                    CustomerEmail = salesInvoice.Customer.Party.Email,
                     InvoiceDate = salesInvoice.Date,
                     SalesInvoiceLines = new List<Dto.Sales.SalesInvoiceLine>(),
                     PaymentTermId = salesInvoice.PaymentTermId,
                     ReferenceNo = salesInvoice.ReferenceNo,
                     Posted = salesInvoice.GeneralLedgerHeaderId != null,
                     CompanyName = _adminService.GetDefaultCompany().Name
+                 
                 };
 
                 decimal? totalTax = 0;
@@ -1107,13 +1109,20 @@ namespace Api.Controllers
                     
                     lineDto.ItemDescription = _inventoryService.GetItemById(line.ItemId).Description;
                     //totalTax += line.ComputeLineTaxAmount();
+                    //GetSalesLineTaxAmount(int quantity, decimal amount, decimal discount, IEnumerable < Tax > taxes)
 
                     if (_taxService != null)
-                        totalTax += _taxService.GetIntersectionTaxes(line.ItemId, salesInvoice.CustomerId, salesInvoice.Customer.Party.PartyType).FirstOrDefault().Rate;
+                    {
+                        var taxes = _taxService.GetIntersectionTaxes(line.ItemId, salesInvoice.CustomerId,
+                            salesInvoice.Customer.Party.PartyType);
+
+                        totalTax += _taxService.GetSalesLineTaxAmount(line.Quantity, line.Amount, line.Discount, taxes);
+
+                    }
                     salesInvoiceDto.SalesInvoiceLines.Add(lineDto);
                 }
                 salesInvoiceDto.TotalTax = totalTax;
-              
+                salesInvoiceDto.TotalAmountAfterTax = (salesInvoiceDto.Amount - salesInvoiceDto.TotalTax);
 
 
                 return new ObjectResult(salesInvoiceDto);

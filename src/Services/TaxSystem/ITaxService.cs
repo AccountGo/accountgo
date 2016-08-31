@@ -11,6 +11,7 @@ namespace Services.TaxSystem
         IEnumerable<Core.Domain.TaxSystem.ItemTaxGroup> GetItemTaxGroups();
         IEnumerable<Core.Domain.TaxSystem.Tax> GetIntersectionTaxes(int itemId, int partyId, Core.Domain.PartyTypes partyType);
         IEnumerable<Core.Domain.TaxSystem.Tax> GetIntersectionTaxes(int itemId, int partyId);
+        decimal GetSalesLineTaxAmount(decimal quantity, decimal amount, decimal discount, IEnumerable<Core.Domain.TaxSystem.Tax> taxes);
         List<KeyValuePair<int, decimal>> GetPurchaseTaxes(int vendorId, IEnumerable<PurchaseInvoiceLine> purchaseInvoiceLines);
         List<KeyValuePair<int, decimal>> GetPurchaseTaxes(int vendorId, int itemId, decimal quantity, decimal amount, decimal discount);
         List<KeyValuePair<int, decimal>> GetSalesTaxes(int customerId, IEnumerable<SalesInvoiceLine> salesInvoiceLines);
