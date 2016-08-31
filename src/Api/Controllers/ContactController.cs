@@ -22,14 +22,23 @@ namespace Api.Controllers
 
         [HttpGet]
         [Route("[action]")]
-        public IActionResult Contacts()
+        public IActionResult Contacts(int customerId)
         {
-            var contacts = _salesService.GetContacts();
+            var customer = _salesService.GetCustomerById(customerId);
+
+            //var customerContact = customer.CustomerContact;
+
+            var customerContact = customer.CustomerContact;
+
+            //var contacts = _salesService.GetContacts();//.Where(a => customerContact.Select(x => x.ContactId).Contains(a.Id));
+       
+
+
 
             //ICollection<ContactDto> contactsDto = new HashSet<ContactDto>();
             var contactsDto = new List<Dto.Common.Contact>();
 
-            foreach (var contact in contacts)
+            foreach (var contact in customerContact.Select(a => a.Contact).ToList())
                 contactsDto.Add(new Dto.Common.Contact() { Id = contact.Id, FirstName = contact.FirstName, LastName = contact.LastName });
 
             return Ok(contactsDto.AsEnumerable());
@@ -68,16 +77,20 @@ namespace Api.Controllers
             string[] errors = null;
             try
             {
+                Core.Domain.Contact contact = null;
 
-                var contact = new Core.Domain.Contact();
-                var party = new Core.Domain.Party();
 
-                if (contact.Id == 0)
+                if (model.Id == 0)
                 {
+                    contact = new Core.Domain.Contact();
                     contact.Party = new Core.Domain.Party()
                     {
                         PartyType = Core.Domain.PartyTypes.Customer,
                     };
+                }
+                else
+                {
+                    contact = _salesService.GetContacyById(model.Id);
                 }
                 //Contact
                 contact.Id = model.Id;
@@ -91,7 +104,30 @@ namespace Api.Controllers
                 contact.Party.Email = model.Party.Email;
                 contact.Party.Phone = model.Party.Phone;
 
-                _salesService.SaveContact(contact);
+                if (contact.Id > 0)
+                {
+                    _salesService.SaveContact(contact);
+                    //_salesService.UpdateContact(contact);
+                }
+                else
+                {
+                    var customer = _salesService.GetCustomerById(model.CustomerId);
+
+                    if (customer.PrimaryContact == null)
+                    {
+                        customer.PrimaryContact = contact;
+                    }
+
+                    var customerContact = new Core.Domain.CustomerContact();
+                    customerContact.Contact = contact;
+                    customerContact.CustomerId = customer.Id;                    
+                    customer.CustomerContact.Add(customerContact);      
+                    _salesService.UpdateCustomer(customer);
+
+
+                }
+
+
 
 
                 return new ObjectResult(Ok());

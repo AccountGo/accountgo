@@ -50,5 +50,6 @@ namespace Services.Sales
         void SaveSalesInvoice(SalesInvoiceHeader salesInvoice, SalesOrderHeader salesOrder);
         void PostSalesInvoice(int invoiceId);
         Contact GetContacyById(int id);
+        CustomerContact GetCustomerContact(int id);
     }
 }
