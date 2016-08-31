@@ -376,6 +376,7 @@ namespace Services.Sales
                 c => c.SalesInvoices,
                 c => c.SalesReceipts,
                 c => c.SalesOrders,
+                c => c.TaxGroup,
             };
 
             var customers = _customerRepo.GetAllIncluding(includeProperties);
@@ -409,7 +410,7 @@ namespace Services.Sales
                 c => c.PrimaryContact.Party,
                 c => c.SalesInvoices,
                 c => c.SalesReceipts,
-                c => c.SalesOrders,
+                c => c.SalesOrders
             };
 
             var customer = _customerRepo.GetAllIncluding(includeProperties)
