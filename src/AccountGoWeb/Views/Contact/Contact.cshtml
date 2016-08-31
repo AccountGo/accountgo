@@ -5,10 +5,15 @@
         <i class="fa fa-edit"></i>
         Edit
     </a>
+
 </div>
 <form action="~/contact/savecontact" method="post">
     <div class="box" id="divContactCard">
         @Html.HiddenFor(m => m.Id)
+        @Html.HiddenFor(m => m.CustomerId)
+        @Html.HiddenFor(m => m.VendorId)
+
+
         <div class="box-header with-border">
             <h3 class="box-title">Contact</h3>
             <div class="box-tools pull-right">
@@ -23,12 +28,14 @@
                     <div class="col-sm-4">First Name</div>
                     <div class="col-sm-8">
                         <input asp-for="FirstName" class="form-control" type="text" placeholder="First Name ..." />
+                        <span asp-validation-for="FirstName" class="danger"></span>
                     </div>
                 </div>
                 <div class="row">
                     <div class="col-sm-4">Last Name</div>
                     <div class="col-sm-8">
                         <input asp-for="LastName" class="form-control" type="text" placeholder="Last Name ..." />
+                        <span asp-validation-for="LastName" class="danger"></span>
                     </div>
                 </div>
             </div>

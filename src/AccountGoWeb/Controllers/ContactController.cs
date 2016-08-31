@@ -25,18 +25,8 @@ namespace AccountGoWeb.Controllers
         {
             return View();
         }
-
-
-        //public async System.Threading.Tasks.Task<IActionResult> Contacts()
-        //{
-        //    ViewBag.PageContentHeader = "Customers";
-        //     _baseConfig["ApiUrl"] + "sales/getmonthlysales";
-        //    var response = await GetAsync(baseUri + "SALES/GetMonthlySales");
-        //    return View();
-        //}
-
  
-        public async System.Threading.Tasks.Task<IActionResult> Contacts()
+        public async System.Threading.Tasks.Task<IActionResult> Contacts(int id)
         {
             ViewBag.PageContentHeader = "Contacts";
 
@@ -48,7 +38,7 @@ namespace AccountGoWeb.Controllers
                 var baseUri = _baseConfig["ApiUrl"];
                 client.BaseAddress = new System.Uri(baseUri);
                 client.DefaultRequestHeaders.Accept.Clear();
-                var response = await client.GetAsync(baseUri + "contact/contacts");
+                var response = await client.GetAsync(baseUri + "contact/contacts?customerId=" + id);
                 if (response.IsSuccessStatusCode)
                 {
                     var responseJson = await response.Content.ReadAsStringAsync();
@@ -58,7 +48,7 @@ namespace AccountGoWeb.Controllers
             return View();
         }
 
-        public IActionResult Contact(int id)
+        public IActionResult Contact(int id, int customerId, int vendorId)
         {
              Contact contact = null;
 
@@ -69,6 +59,8 @@ namespace AccountGoWeb.Controllers
             else
             {
                 contact = new Contact();
+                contact.CustomerId = customerId;
+                contact.VendorId = vendorId;
             }
 
 
@@ -85,9 +77,8 @@ namespace AccountGoWeb.Controllers
 
                 var response = PostAsync("contact/savecontact", content);
 
-                return RedirectToAction("Contacts");
+                return RedirectToAction("Contacts/" + contactModel.CustomerId);
             }
-
             return View("Contact", contactModel);
         }
     }

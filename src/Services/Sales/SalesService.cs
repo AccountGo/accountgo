@@ -30,6 +30,8 @@ namespace Services.Sales
         private readonly IRepository<SalesInvoiceHeader> _salesInvoiceRepo;
         private readonly IRepository<SalesReceiptHeader> _salesReceiptRepo;
         private readonly IRepository<Customer> _customerRepo;
+        private readonly IRepository<CustomerContact> _customerContactRepo;
+        private readonly IRepository<VendorContact> _vendorContactRepo;
         private readonly IRepository<Account> _accountRepo;
         private readonly IRepository<Item> _itemRepo;
         private readonly IRepository<Measurement> _measurementRepo;
@@ -61,7 +63,9 @@ namespace Services.Sales
             IRepository<Contact> contactRepo,
             IRepository<TaxGroup> taxGroupRepo,
             IRepository<SalesQuoteHeader> salesQuoteRepo,
-            ISalesOrderRepository salesOrderRepository)
+            ISalesOrderRepository salesOrderRepository,
+            IRepository<CustomerContact> customerContactRepo,
+            IRepository<VendorContact> vendorContactRepo)
             : base(sequenceNumberRepo, generalLedgerSetting, paymentTermRepo, bankRepo)
         {
             _financialService = financialService;
@@ -83,6 +87,8 @@ namespace Services.Sales
             _salesQuoteRepo = salesQuoteRepo;
             _salesOrderRepository = salesOrderRepository;
             _salesOrderLineRepo = salesOrderLineRepo;
+            _customerContactRepo = customerContactRepo;
+            _vendorContactRepo = vendorContactRepo;
         }
 
         public void AddSalesOrder(SalesOrderHeader salesOrder, bool toSave)
@@ -410,10 +416,17 @@ namespace Services.Sales
                 c => c.SalesInvoices,
                 c => c.SalesReceipts,
                 c => c.SalesOrders,
+                c => c.CustomerContact
             };
 
             var customer = _customerRepo.GetAllIncluding(includeProperties)
                 .Where(c => c.Id == id).FirstOrDefault();
+
+            foreach (var customerContact in customer.CustomerContact)
+            {
+                var contact = GetContacyById(customerContact.ContactId);
+                customerContact.Contact = contact;
+            }
 
             foreach (var invoice in customer.SalesInvoices)
             {
@@ -899,7 +912,7 @@ namespace Services.Sales
                 }
             }
         }
-
+        
         public Contact GetContacyById(int id)
         {
  
@@ -910,5 +923,13 @@ namespace Services.Sales
 
             return contact;
         }
+
+        public CustomerContact GetCustomerContact(int id)
+        {
+           return _customerContactRepo.GetById(id);
+
+
+        }
+ 
     }
 }
