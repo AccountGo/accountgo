@@ -19,6 +19,8 @@ namespace Dto.Common
 
         public int CustomerId { get; set; }
         public int VendorId { get; set; }
+        public int HoldingPartyType { get; set; } //this is 1 or 2     Customer = 1,Vendor = 2,
+        public int HoldingPartyId { get; set; } // id for customerId or VendorId    
 
         public Contact() {
             Party = new Party();

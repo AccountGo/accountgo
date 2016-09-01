@@ -38,6 +38,7 @@ namespace Services.Purchasing
         private readonly IRepository<GeneralLedgerSetting> _generalLedgerSettingRepo;
         private readonly IRepository<PaymentTerm> _paymentTermRepo;
         private readonly IRepository<Bank> _bankRepo;
+        private readonly IRepository<Contact> _contactRepo;
         private readonly IPurchaseOrderRepository _purchaseOrderHeaderRepository;
 
         public PurchasingService(IFinancialService financialService,
@@ -55,6 +56,7 @@ namespace Services.Purchasing
             IRepository<GeneralLedgerSetting> generalLedgerSettingRepo,
             IRepository<PaymentTerm> paymentTermRepo,
             IRepository<Bank> bankRepo,
+            IRepository<Contact> contactRepo,
             IPurchaseOrderRepository purchaseOrderHeaderRepository
             )
             : base(sequenceNumberRepo, generalLedgerSettingRepo, paymentTermRepo, bankRepo)
@@ -75,6 +77,7 @@ namespace Services.Purchasing
             _paymentTermRepo = paymentTermRepo;
             _bankRepo = bankRepo;
             _purchaseOrderHeaderRepository = purchaseOrderHeaderRepository;
+            _contactRepo = contactRepo;
         }
 
         public void AddPurchaseInvoice(PurchaseInvoiceHeader purchaseIvoice, int? purchaseOrderId)
@@ -320,7 +323,8 @@ namespace Services.Purchasing
                 v => v.TaxGroup,
                 v => v.PurchaseInvoices,
                 v => v.PurchaseOrders,
-                v => v.PurchaseReceipts
+                v => v.PurchaseReceipts,
+                v => v.VendorContact
                 )
                 .Where(v => v.Id == id)
                 .FirstOrDefault();
@@ -328,6 +332,12 @@ namespace Services.Purchasing
             foreach (var invoice in vendor.PurchaseInvoices)
             {
                 invoice.PurchaseInvoiceLines = GetPurchaseInvoiceById(invoice.Id).PurchaseInvoiceLines;
+            }
+
+            foreach (var vendorContact in vendor.VendorContact)
+            {
+                var contact = GetContacyById(vendorContact.ContactId);
+                vendorContact.Contact = contact;
             }
 
             return vendor;
@@ -595,5 +605,15 @@ namespace Services.Purchasing
                 _purchaseInvoiceRepo.Update(purchaseInvoice);
             }
         }
+
+        public Contact GetContacyById(int id)
+        {
+
+            var contact = _contactRepo.GetAllIncluding(q => q.Party)
+                .Where(q => q.Id == id)
+                .FirstOrDefault();
+            return contact;
+        }
+
     }
 }

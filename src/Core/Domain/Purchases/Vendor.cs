@@ -46,7 +46,7 @@ namespace Core.Domain.Purchases
         public virtual ICollection<PurchaseReceiptHeader> PurchaseReceipts { get; set; }
         public virtual ICollection<PurchaseInvoiceHeader> PurchaseInvoices { get; set; }
         public virtual ICollection<VendorPayment> VendorPayments { get; set; }
-
+        public virtual IList<VendorContact> VendorContact { get; set; }
         public decimal GetBalance()
         {
             decimal balance = 0;

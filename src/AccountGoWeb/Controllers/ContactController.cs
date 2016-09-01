@@ -26,7 +26,7 @@ namespace AccountGoWeb.Controllers
             return View();
         }
  
-        public async System.Threading.Tasks.Task<IActionResult> Contacts(int id)
+        public async System.Threading.Tasks.Task<IActionResult> Contacts(int partyId = 0, int partyType = 0)
         {
             ViewBag.PageContentHeader = "Contacts";
 
@@ -37,8 +37,8 @@ namespace AccountGoWeb.Controllers
             {
                 var baseUri = _baseConfig["ApiUrl"];
                 client.BaseAddress = new System.Uri(baseUri);
-                client.DefaultRequestHeaders.Accept.Clear();
-                var response = await client.GetAsync(baseUri + "contact/contacts?customerId=" + id);
+                client.DefaultRequestHeaders.Accept.Clear(); 
+                var response = await client.GetAsync(baseUri + "contact/contacts?partyId=" + partyId + "&partyType=" + partyType);
                 if (response.IsSuccessStatusCode)
                 {
                     var responseJson = await response.Content.ReadAsStringAsync();
@@ -63,6 +63,8 @@ namespace AccountGoWeb.Controllers
             {
                 ViewBag.PageContentHeader = "New Contact";
                 contact = new Contact();
+                contact.HoldingPartyType = partyType;
+                contact.HoldingPartyId = partyId;
                 // contact.Party is for contact itself. 
                 // contact.HoldingPartyId is the id of the customer/or vendor. this is the partyId parameter
                 // contact.HoldingPartyType is the type of the holding party, 1 = customer, 2 = vendor
@@ -70,30 +72,30 @@ namespace AccountGoWeb.Controllers
             else // editing existing contact
             {
                 ViewBag.PageContentHeader = "Contact Card";
-                contact = GetAsync<Contact>("contact/contact?id=" + id).Result;
+                contact = GetAsync<Contact>("contact/contact?id=" + id + "&partyId=" + partyId + "&partyType=" + partyType).Result;
             }
 
             return View(contact);
         }
 
-        public IActionResult Contact(int id, int customerId, int vendorId)
-        {
-             Contact contact = null;
+        //public IActionResult Contact(int id, int customerId, int vendorId)
+        //{
+        //     Contact contact = null;
 
-            if (id > 0)
-            {
-                contact = GetAsync<Contact>("contact/contact?id=" + id + "&customerId=" + customerId).Result;
-            }
-            else
-            {
-                contact = new Contact();
-                contact.CustomerId = customerId;
-                contact.VendorId = vendorId;
-            }
+        //    if (id > 0)
+        //    {
+        //        contact = GetAsync<Contact>("contact/contact?id=" + id + "&customerId=" + customerId).Result;
+        //    }
+        //    else
+        //    {
+        //        contact = new Contact();
+        //        contact.CustomerId = customerId;
+        //        contact.VendorId = vendorId;
+        //    }
 
 
-            return View(contact);
-        }
+        //    return View(contact);
+        //}
 
         public IActionResult SaveContact(Contact contactModel)
         {
@@ -104,8 +106,8 @@ namespace AccountGoWeb.Controllers
                 content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
 
                 var response = PostAsync("contact/savecontact", content);
-
-                return RedirectToAction("Contacts/" + contactModel.CustomerId);
+                return RedirectToAction("Contacts", new { partyId = contactModel.HoldingPartyId, partyType = contactModel.HoldingPartyType });
+ 
             }
             return View("Contact", contactModel);
         }

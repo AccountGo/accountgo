@@ -35,7 +35,8 @@
         var selectedRows = gridOptions.api.getSelectedRows();
         selectedRow = selectedRows[0];
 
-        document.getElementById('linkViewVendor').setAttribute('href', 'vendor/' + selectedRow.id);
+        //document.getElementById('linkViewVendor').setAttribute('href', 'vendor/' + selectedRow.id);
+        document.getElementById('linkViewClient').setAttribute('href', 'contact?id=' + selectedRow.id + '&partyId=' + selectedRow.holdingPartyId + '&partyType=' + selectedRow.holdingPartyType);
         document.getElementById('linkViewVendor').setAttribute('class', 'btn');
     }
 

@@ -919,8 +919,6 @@ namespace Services.Sales
             var contact = _contactRepo.GetAllIncluding(q => q.Party)
                 .Where(q => q.Id == id)
                 .FirstOrDefault();
-
-
             return contact;
         }
 

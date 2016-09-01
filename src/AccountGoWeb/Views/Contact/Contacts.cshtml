@@ -35,7 +35,8 @@
     function onSelectionChanged() {
         var selectedRows = gridOptions.api.getSelectedRows();
         selectedRow = selectedRows[0];
-        document.getElementById('linkViewClient').setAttribute('href', '../contact?id=' + selectedRow.id + '&customerId=' + selectedRow.customerId);
+ 
+        document.getElementById('linkViewClient').setAttribute('href', 'contact?id=' + selectedRow.id + '&partyId=' + selectedRow.holdingPartyId + '&partyType=' + selectedRow.holdingPartyType);
         document.getElementById('linkViewClient').setAttribute('class', 'btn');
     }
 
