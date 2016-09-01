@@ -108,7 +108,8 @@ namespace Services.Inventory
                 i => i.SalesAccount,
                 i => i.ItemTaxGroup,
                 i => i.ItemCategory,
-                i => i.InventoryControlJournals
+                i => i.InventoryControlJournals,
+                i => i.PurchaseMeasurement
                 );
 
             return items;
