@@ -1122,7 +1122,7 @@ namespace Api.Controllers
                     salesInvoiceDto.SalesInvoiceLines.Add(lineDto);
                 }
                 salesInvoiceDto.TotalTax = totalTax;
-                salesInvoiceDto.TotalAmountAfterTax = (salesInvoiceDto.Amount - salesInvoiceDto.TotalTax);
+                salesInvoiceDto.TotalAmountAfterTax = (salesInvoiceDto.Amount + salesInvoiceDto.TotalTax);
 
 
                 return new ObjectResult(salesInvoiceDto);

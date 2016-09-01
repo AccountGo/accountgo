@@ -8,7 +8,7 @@
 This is a starter template page. Use this page to start your new project from
 scratch. This page gets rid of all links and provides the needed markup only.
 -->
-
+<meta content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" name="viewport">
 <link rel="stylesheet" href="~/plugins/bootstrap/dist/css/bootstrap.min.css">
 <!-- Font Awesome -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.5.0/css/font-awesome.min.css">
@@ -21,20 +21,40 @@ scratch. This page gets rid of all links and provides the needed markup only.
       apply the skin class to the body tag so the changes take effect.
 -->
 <link rel="stylesheet" href="~/adminLTE/css/skins/_all-skins.min.css">
-<link rel="stylesheet" href="~/adminLTE/css/AdminLTEOverride.css">
+
 <script src="~/plugins/jspdf/dist/jspdf.min.js"></script>
 <script src="~/plugins/jquery/dist/jquery.js"></script>
 <script src="~/plugins/bootstrap/dist/js/bootstrap.min.js"></script>
 <script src="~/js/html2canvas.js"></script>
 <script>
-
+    $(document).ready(function () {
+     
+        //$(".main-sidebar").remove();
+    });
     function fromHTML() {
         var pdf = new jsPDF('p', 'pt', 'letter');
-        pdf.align = 'center';
-        pdf.addHTML($('#content')[0], function() {
-            pdf.save('Invoice.pdf');
+        //pdf.align = 'center';
+        //pdf.addHTML($('#content')[0], function() {
+        //    pdf.save('Invoice.pdf');
+        //}
+
+        margins = {
+            top: 20,
+            bottom: 20,
+            left: 0,
+            right:10,
+            width: 400
         }
-)};
+    
+        pdf.addHTML($('#content')[0], margins.left,// x coord
+              margins.top,
+        function(dispose) {
+            // dispose: object with X, Y of the last line add to the PDF
+            //          this allow the insertion of new lines after html
+            pdf.save('Invoice.pdf');
+        }, margins)};
+       
+   
             //var pdf = new jsPDF('p', 'pt', 'letter');
             //// source can be HTML-formatted string, or a reference
             //// to an actual DOM element from which the text will be scraped.
@@ -75,7 +95,7 @@ scratch. This page gets rid of all links and provides the needed markup only.
   
 </script>
 <a href="javascript:fromHTML()" class="button">Download</a>
-<div id="content">
+<div id="content" style="background-color: white;" >
     <section class="invoice">
         <!-- title row -->
         <div class="row">
@@ -151,28 +171,29 @@ scratch. This page gets rid of all links and provides the needed markup only.
         </div>
         <!-- /.row -->
 
-        <div class="row">
+        <div style="text-align: right" class="row">
    
 
             <!-- /.col -->
-            <div class="col-xs-8">
+            <div class="col-xs-12" align="right">
                 <p class="lead">Amount Due 2/22/2014</p>
 
                 <div class="table-responsive">
                     <table class="table">
                         <tbody>
                             <tr>
-                                <th style="width:50%">Subtotal:</th>
-                                <td>$@Model.Amount</td>
+                                <th style="width:80%" class="text-right">Subtotal:</th>
+                                <td class="text-right">$@Html.DisplayFor(m => m.Amount, "{0:0.00}")</td>
                             </tr>
                             <tr>
-                                <th>Tax (9.3%)</th>
-                                <td>$@Model.TotalTax</td>
+                                <th style="width:80%" class="text-right">Tax (9.3%):</th>
+                               
+                                <td style="text-align: right">$@Html.DisplayFor(m => m.TotalTax, "{0:0.00}")</td>
                             </tr>
 
                             <tr>
-                                <th>Total:</th>
-                                <td>$@Model.TotalAmountAfterTax</td>
+                                <th style="width:80%" class="text-right">Total:</th>
+                                <td style="text-align: right">$@Html.DisplayFor(m => m.TotalAmountAfterTax, "{0:0.00}")</td>
                             </tr>
                         </tbody>
                     </table>
@@ -182,10 +203,6 @@ scratch. This page gets rid of all links and provides the needed markup only.
         </div>
         <!-- /.row -->
         <!-- this row will not appear when printing -->
-        <div class="row no-print">
-            <div class="col-xs-12">
-               
-            </div>
-        </div>
+
     </section>
 </div>

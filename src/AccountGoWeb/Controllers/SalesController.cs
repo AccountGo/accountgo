@@ -282,10 +282,11 @@ namespace AccountGoWeb.Controllers
 
             salesInvoiceModel.CompanyName = invoice.CompanyName;
 
-
+            salesInvoiceModel.TotalTax = invoice.TotalTax;
+            salesInvoiceModel.TotalAmountAfterTax = invoice.TotalAmountAfterTax;
             salesInvoiceModel.CustomerName = invoice.CustomerName;
             salesInvoiceModel.SalesInvoiceLines = invoice.SalesInvoiceLines;
-            return View(salesInvoiceModel);
+            return PartialView(salesInvoiceModel);
         }
     }
 }
