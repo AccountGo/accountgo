@@ -180,6 +180,7 @@ namespace Api.Controllers
 
                         var customerContact = new Core.Domain.CustomerContact();
                         customerContact.Contact = contact;
+                        customerContact.Contact.Party = contact.Party;
                         customerContact.CustomerId = customer.Id;
                         customer.CustomerContact.Add(customerContact);
                         _salesService.UpdateCustomer(customer);
@@ -196,6 +197,7 @@ namespace Api.Controllers
 
                         var vendorContact = new Core.Domain.VendorContact();
                         vendorContact.Contact = contact;
+                        vendorContact.Contact.Party = contact.Party;
                         vendorContact.VendorId = vendor.Id;
                         vendor.VendorContact.Add(vendorContact);
                         _purchasingService.UpdateVendor(vendor);
