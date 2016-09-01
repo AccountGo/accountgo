@@ -83,8 +83,8 @@ namespace Api.Controllers
                     Id = item.Id,
                     Code = item.Code,
                     Description = item.Description,
-                    ItemTaxGroupName = item.ItemTaxGroup.Name == null ? "" : item.ItemTaxGroup.Name,
-                    Measurement = item.PurchaseMeasurement.Description == null ? "" : item.PurchaseMeasurement.Description,
+                    ItemTaxGroupName = item.ItemTaxGroup == null ? "" : item.ItemTaxGroup.Name,
+                    Measurement = item.PurchaseMeasurement == null ? "" : item.PurchaseMeasurement.Description,
                     Cost = item.Cost,
                     Price = item.Price,
                     QuantityOnHand = item.ComputeQuantityOnHand()
