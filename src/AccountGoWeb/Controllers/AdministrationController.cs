@@ -3,6 +3,7 @@ using Dto.Administration;
 using Dto.Security;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
+using System;
 using System.Net.Http;
 
 namespace AccountGoWeb.Controllers
@@ -91,6 +92,54 @@ namespace AccountGoWeb.Controllers
 
             ViewBag.PageContentHeader = "Audit Logs";
             return View(model:auditLogs);
+        }
+
+        [HttpGet]
+        public new IActionResult User(int id = 0)
+        {
+            if(id != 0)
+            {
+                ViewBag.PageContentHeader = "User";
+            }
+            else
+            {
+                ViewBag.PageContentHeader = "New User";
+            }
+            
+            return View(new Models.Account.RegisterViewModel());
+        }
+
+        [HttpPost]
+        public new IActionResult User(Models.Account.RegisterViewModel model)
+        {
+            try
+            {
+                if (ModelState.IsValid)
+                {
+                    var serialize = Newtonsoft.Json.JsonConvert.SerializeObject(model);
+                    var content = new StringContent(serialize);
+                    content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+                    HttpResponseMessage responseAddNewUser = Post("account/addnewuser", content);
+                    Newtonsoft.Json.Linq.JObject resultAddNewUser = Newtonsoft.Json.Linq.JObject.Parse(responseAddNewUser.Content.ReadAsStringAsync().Result);
+
+                    if ((bool)resultAddNewUser["succeeded"])
+                    {
+                        return RedirectToAction(nameof(AdministrationController.Users), "Administration");
+                    }
+                    else
+                    {
+                        ModelState.AddModelError(string.Empty, resultAddNewUser["errors"][0]["description"].ToString());
+                        return View(model);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                ModelState.AddModelError(string.Empty, "Please check if your database is ready/published." + ": " + ex.Message);
+                return View(model);
+            }
+            ViewBag.PageContentHeader = "New User";
+            return View(model);
         }
     }
 }

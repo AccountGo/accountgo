@@ -30,6 +30,8 @@ namespace Services.Sales
         private readonly IRepository<SalesInvoiceHeader> _salesInvoiceRepo;
         private readonly IRepository<SalesReceiptHeader> _salesReceiptRepo;
         private readonly IRepository<Customer> _customerRepo;
+        private readonly IRepository<CustomerContact> _customerContactRepo;
+        private readonly IRepository<VendorContact> _vendorContactRepo;
         private readonly IRepository<Account> _accountRepo;
         private readonly IRepository<Item> _itemRepo;
         private readonly IRepository<Measurement> _measurementRepo;
@@ -61,7 +63,9 @@ namespace Services.Sales
             IRepository<Contact> contactRepo,
             IRepository<TaxGroup> taxGroupRepo,
             IRepository<SalesQuoteHeader> salesQuoteRepo,
-            ISalesOrderRepository salesOrderRepository)
+            ISalesOrderRepository salesOrderRepository,
+            IRepository<CustomerContact> customerContactRepo,
+            IRepository<VendorContact> vendorContactRepo)
             : base(sequenceNumberRepo, generalLedgerSetting, paymentTermRepo, bankRepo)
         {
             _financialService = financialService;
@@ -83,13 +87,15 @@ namespace Services.Sales
             _salesQuoteRepo = salesQuoteRepo;
             _salesOrderRepository = salesOrderRepository;
             _salesOrderLineRepo = salesOrderLineRepo;
+            _customerContactRepo = customerContactRepo;
+            _vendorContactRepo = vendorContactRepo;
         }
 
         public void AddSalesOrder(SalesOrderHeader salesOrder, bool toSave)
         {
             if (string.IsNullOrEmpty(salesOrder.No))
                 salesOrder.No = GetNextNumber(SequenceNumberTypes.SalesOrder).ToString();
-            if(toSave)
+            if (toSave)
                 _salesOrderRepo.Insert(salesOrder);
         }
 
@@ -112,14 +118,14 @@ namespace Services.Sales
                     continue;
                 else
                 {
-                   
+
                 }
             }
             _salesOrderRepo.Update(salesOrder);
         }
 
         public void AddSalesInvoice(SalesInvoiceHeader salesInvoice, int? salesDeliveryId, int? salesOrderId)
-        {   
+        {
             decimal totalAmount = 0, totalDiscount = 0;
 
             var taxes = new List<KeyValuePair<int, decimal>>();
@@ -141,9 +147,9 @@ namespace Services.Sales
                 totalDiscount += lineDiscountAmount;
 
                 var totalLineAmount = lineAmount - lineDiscountAmount;
-                
+
                 totalAmount += totalLineAmount;
-                
+
                 var lineTaxes = _financialService.ComputeOutputTax(salesInvoice.CustomerId, item.Id, lineItem.Quantity, lineItem.Amount, lineItem.Discount);
 
                 foreach (var t in lineTaxes)
@@ -151,7 +157,7 @@ namespace Services.Sales
 
                 var lineTaxAmount = lineTaxes != null && lineTaxes.Count > 0 ? lineTaxes.Sum(t => t.Value) : 0;
                 totalLineAmount = totalLineAmount - lineTaxAmount;
-                
+
                 sales.Add(new KeyValuePair<int, decimal>(item.SalesAccountId.Value, totalLineAmount));
 
                 if (item.ItemCategory.ItemType == ItemTypes.Purchased)
@@ -165,7 +171,7 @@ namespace Services.Sales
                         lineItem.Quantity * item.Price);
                 }
             }
-            
+
             totalAmount += salesInvoice.ShippingHandlingCharge;
             var debitCustomerAR = _financialService.CreateGeneralLedgerLine(DrOrCrSide.Dr, customer.AccountsReceivableAccount.Id, Math.Round(totalAmount, 2, MidpointRounding.ToEven));
             glHeader.GeneralLedgerLines.Add(debitCustomerAR);
@@ -231,7 +237,7 @@ namespace Services.Sales
                         Date = salesInvoice.Date,
                         //SalesOrderHeaderId = salesOrderId
                     };
-                    foreach(var line in salesInvoice.SalesInvoiceLines)
+                    foreach (var line in salesInvoice.SalesInvoiceLines)
                     {
                         var item = _itemRepo.GetById(line.ItemId);
                         salesDelivery.SalesDeliveryLines.Add(new SalesDeliveryLine()
@@ -348,7 +354,7 @@ namespace Services.Sales
 
         public SalesReceiptHeader GetSalesReceiptById(int id)
         {
-            var receipt = _salesReceiptRepo.GetAllIncluding(r => r.Customer, 
+            var receipt = _salesReceiptRepo.GetAllIncluding(r => r.Customer,
                 r => r.CustomerAllocations,
                 r => r.SalesReceiptLines,
                 r => r.Customer.Party)
@@ -410,11 +416,19 @@ namespace Services.Sales
                 c => c.PrimaryContact.Party,
                 c => c.SalesInvoices,
                 c => c.SalesReceipts,
+                c => c.SalesOrders,
+                c => c.CustomerContact
                 c => c.SalesOrders
             };
 
             var customer = _customerRepo.GetAllIncluding(includeProperties)
                 .Where(c => c.Id == id).FirstOrDefault();
+
+            foreach (var customerContact in customer.CustomerContact)
+            {
+                var contact = GetContacyById(customerContact.ContactId);
+                customerContact.Contact = contact;
+            }
 
             foreach (var invoice in customer.SalesInvoices)
             {
@@ -553,8 +567,8 @@ namespace Services.Sales
                 //            Amount = item.Price.Value,
                 //        });
                 //    }
-                    //AddSalesOrder(salesOrder, false);
-                    //salesDelivery.SalesOrderHeader = salesOrder;
+                //AddSalesOrder(salesOrder, false);
+                //salesDelivery.SalesOrderHeader = salesOrder;
                 //}
 
                 if (toSave)
@@ -609,10 +623,33 @@ namespace Services.Sales
             return query;
         }
 
-        public int SaveContact(Contact contact)
+        //public int SaveContact(Contact contact)
+        //{
+        //    _contactRepo.Insert(contact);
+        //    return contact.Id;
+        //}
+
+        public void SaveContact(Contact contact)
         {
-            _contactRepo.Insert(contact);
-            return contact.Id;
+            try
+            {
+                if (contact.Id > 0)
+                {
+                    _contactRepo.Update(contact);
+                 
+                }
+                else
+                {
+                    _contactRepo.Insert(contact);
+                }
+                
+            }
+            catch (Exception e)
+            {
+
+                throw e;
+            }
+
         }
 
         public ICollection<SalesInvoiceHeader> GetSalesInvoicesByCustomerId(int customerId, SalesInvoiceStatus status)
@@ -877,5 +914,24 @@ namespace Services.Sales
                 }
             }
         }
+        
+        public Contact GetContacyById(int id)
+        {
+ 
+            var contact = _contactRepo.GetAllIncluding(q => q.Party)
+                .Where(q => q.Id == id)
+                .FirstOrDefault();
+
+
+            return contact;
+        }
+
+        public CustomerContact GetCustomerContact(int id)
+        {
+           return _customerContactRepo.GetById(id);
+
+
+        }
+ 
     }
 }
