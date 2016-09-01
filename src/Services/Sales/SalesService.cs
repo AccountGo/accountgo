@@ -417,7 +417,7 @@ namespace Services.Sales
                 c => c.SalesInvoices,
                 c => c.SalesReceipts,
                 c => c.SalesOrders,
-                c => c.CustomerContact
+                c => c.CustomerContact,
                 c => c.SalesOrders
             };
 
