@@ -542,7 +542,7 @@ namespace Api.Controllers
                         Website = vendor.Party.Website,
                         Balance = vendor.GetBalance(),
                         Contact = vendor.PrimaryContact.FirstName + " " + vendor.PrimaryContact.LastName,
-                        TaxGroup = vendor.TaxGroup.Description == null ? "" : vendor.TaxGroup.Description,
+                        TaxGroup = vendor.TaxGroup == null ? string.Empty : vendor.TaxGroup.Description,
                     };
 
                     vendorsDto.Add(vendorDto);
