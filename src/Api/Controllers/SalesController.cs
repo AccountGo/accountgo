@@ -153,7 +153,8 @@ namespace Api.Controllers
                     customerDto.Fax = customer.Party.Fax;
                     customerDto.Balance = customer.Balance;
                     customerDto.PrepaymentAccountId = customer.CustomerAdvancesAccountId;
-
+                    customerDto.Contact = customer.PrimaryContact.FirstName + " " + customer.PrimaryContact.LastName;
+                    customerDto.TaxGroup = customer.TaxGroup.Description;
                     customersDto.Add(customerDto);
                 }
 

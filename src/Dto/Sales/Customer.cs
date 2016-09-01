@@ -21,7 +21,8 @@ namespace Dto.Sales
         public int? TaxGroupId { get; set; }
         public int? PaymentTermId { get; set; }
         public decimal Balance { get; set; }        
-
+        public string Contact { get; set; }
+        public string TaxGroup { get; set; }
         public Contact PrimaryContact { get; set; }
         public IEnumerable<SalesInvoice> Invoices { get; set; }
 

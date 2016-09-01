@@ -25,5 +25,7 @@ namespace Dto.Inventory
         public int? InventoryAccountId { get; set; }
         public int? CostOfGoodsSoldAccountId { get; set; }
         public int? InventoryAdjustmentAccountId { get; set; }
+        public string ItemTaxGroupName { get; set; }
+        public string Measurement { get; set; }
     }
 }

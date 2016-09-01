@@ -70,19 +70,27 @@ namespace Api.Controllers
         public IActionResult Items()
         {
             var items = _inventoryService.GetAllItems();
+            
             ICollection<Item> itemsDto = new HashSet<Item>();
 
             foreach (var item in items)
             {
+                var measurments = _inventoryService.GetMeasurements();
+
                 itemsDto.Add(new Item()
                 {
+
                     Id = item.Id,
                     Code = item.Code,
                     Description = item.Description,
+                    ItemTaxGroupName = item.ItemTaxGroup.Name == null ? "" : item.ItemTaxGroup.Name,
+                    Measurement = item.PurchaseMeasurement.Description == null ? "" : item.PurchaseMeasurement.Description,
                     Cost = item.Cost,
                     Price = item.Price,
                     QuantityOnHand = item.ComputeQuantityOnHand()
                 });
+
+                
             }
 
             return new ObjectResult(itemsDto.AsEnumerable());
