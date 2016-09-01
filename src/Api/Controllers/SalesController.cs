@@ -21,6 +21,7 @@ namespace Api.Controllers
         private readonly IFinancialService _financialService;
         private readonly IInventoryService _inventoryService;
         private readonly ITaxService _taxService;
+   
         public SalesController(IAdministrationService adminService,
             ISalesService salesService,
             IFinancialService financialService, IInventoryService inventoryService, ITaxService taxService)
@@ -1106,7 +1107,8 @@ namespace Api.Controllers
                     lineDto.Quantity = line.Quantity;
                     lineDto.ItemId = line.ItemId;
                     lineDto.MeasurementId = line.MeasurementId;
-                    
+
+                    //lineDto.MeasurementDescription = line.Measurement.Description;
                     lineDto.ItemDescription = _inventoryService.GetItemById(line.ItemId).Description;
                     //totalTax += line.ComputeLineTaxAmount();
                     //GetSalesLineTaxAmount(int quantity, decimal amount, decimal discount, IEnumerable < Tax > taxes)

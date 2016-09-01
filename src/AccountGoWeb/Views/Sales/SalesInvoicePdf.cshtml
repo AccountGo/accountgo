@@ -138,7 +138,7 @@ scratch. This page gets rid of all links and provides the needed markup only.
                         <tr>
                             <th>Quantity</th>
                             <th>Product</th>
-                            <th>Serial #</th>
+                            <th>Measurement</th>
                             <th>Description</th>
                             <th>Subtotal</th>
                         </tr>
@@ -154,7 +154,7 @@ scratch. This page gets rid of all links and provides the needed markup only.
                                     @Html.DisplayFor(model => item.ItemDescription)
                                 </td>
                                 <td>
-                                    Serial
+                                    @Html.DisplayFor(model => item.MeasurementDescription)
                                 </td>
                                 <td>
                                     @Html.DisplayFor(model => item.ItemDescription)
@@ -190,7 +190,7 @@ scratch. This page gets rid of all links and provides the needed markup only.
                                
                                 <td style="text-align: right">$@Html.DisplayFor(m => m.TotalTax, "{0:0.00}")</td>
                             </tr>
-
+l
                             <tr>
                                 <th style="width:80%" class="text-right">Total:</th>
                                 <td style="text-align: right">$@Html.DisplayFor(m => m.TotalAmountAfterTax, "{0:0.00}")</td>
