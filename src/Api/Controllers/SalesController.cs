@@ -1108,7 +1108,7 @@ namespace Api.Controllers
                     lineDto.ItemId = line.ItemId;
                     lineDto.MeasurementId = line.MeasurementId;
 
-                    lineDto.ItemDescription = _inventoryService.GetMeasurementById(line.ItemId).Description;
+                    lineDto.ItemDescription = _inventoryService.GetItemById(line.ItemId).Description;
                     lineDto.MeasurementDescription = _inventoryService.GetMeasurementById(line.MeasurementId).Description;
                     //totalTax += line.ComputeLineTaxAmount();
                     //GetSalesLineTaxAmount(int quantity, decimal amount, decimal discount, IEnumerable < Tax > taxes)
