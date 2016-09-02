@@ -54,6 +54,7 @@
     <Compile Include="Domain\Company.cs" />
     <Compile Include="Domain\CompanySetting.cs" />
     <Compile Include="Domain\Contact.cs" />
+    <Compile Include="Domain\CustomerContact.cs" />
     <Compile Include="Domain\EnumTypes.cs" />
     <Compile Include="Domain\Financials\Account.cs" />
     <Compile Include="Domain\Financials\AccountClass.cs" />
@@ -102,6 +103,7 @@
     <Compile Include="Domain\SequenceNumber.cs" />
     <Compile Include="Domain\TaxSystem\Tax.cs" />
     <Compile Include="Domain\TaxSystem\TaxGroup.cs" />
+    <Compile Include="Domain\VendorContact.cs" />
     <Compile Include="MessageSource.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>

@@ -38,6 +38,7 @@ namespace Services.Purchasing
         private readonly IRepository<GeneralLedgerSetting> _generalLedgerSettingRepo;
         private readonly IRepository<PaymentTerm> _paymentTermRepo;
         private readonly IRepository<Bank> _bankRepo;
+        private readonly IRepository<Contact> _contactRepo;
         private readonly IPurchaseOrderRepository _purchaseOrderHeaderRepository;
 
         public PurchasingService(IFinancialService financialService,
@@ -55,6 +56,7 @@ namespace Services.Purchasing
             IRepository<GeneralLedgerSetting> generalLedgerSettingRepo,
             IRepository<PaymentTerm> paymentTermRepo,
             IRepository<Bank> bankRepo,
+            IRepository<Contact> contactRepo,
             IPurchaseOrderRepository purchaseOrderHeaderRepository
             )
             : base(sequenceNumberRepo, generalLedgerSettingRepo, paymentTermRepo, bankRepo)
@@ -75,6 +77,7 @@ namespace Services.Purchasing
             _paymentTermRepo = paymentTermRepo;
             _bankRepo = bankRepo;
             _purchaseOrderHeaderRepository = purchaseOrderHeaderRepository;
+            _contactRepo = contactRepo;
         }
 
         public void AddPurchaseInvoice(PurchaseInvoiceHeader purchaseIvoice, int? purchaseOrderId)
@@ -320,7 +323,8 @@ namespace Services.Purchasing
                 v => v.TaxGroup,
                 v => v.PurchaseInvoices,
                 v => v.PurchaseOrders,
-                v => v.PurchaseReceipts
+                v => v.PurchaseReceipts,
+                v => v.VendorContact
                 )
                 .Where(v => v.Id == id)
                 .FirstOrDefault();
@@ -328,6 +332,12 @@ namespace Services.Purchasing
             foreach (var invoice in vendor.PurchaseInvoices)
             {
                 invoice.PurchaseInvoiceLines = GetPurchaseInvoiceById(invoice.Id).PurchaseInvoiceLines;
+            }
+
+            foreach (var vendorContact in vendor.VendorContact)
+            {
+                var contact = GetContacyById(vendorContact.ContactId);
+                vendorContact.Contact = contact;
             }
 
             return vendor;
@@ -514,34 +524,42 @@ namespace Services.Purchasing
             decimal totalTaxAmount = 0, totalAmount = 0, totalDiscount = 0;
             var taxes = new List<KeyValuePair<int, decimal>>();
 
-            foreach (var line in purchaseInvoice.PurchaseInvoiceLines)
+            foreach (var lineItem in purchaseInvoice.PurchaseInvoiceLines)
             {
-                var lineTaxes = _financialService.ComputeInputTax(purchaseInvoice.VendorId.GetValueOrDefault(), line.ItemId, line.Quantity, line.Amount, line.Discount.GetValueOrDefault());
+                var item = _inventoryService.GetItemById(lineItem.ItemId);
 
-                var lineAmount = line.Quantity * line.Amount;
+                if (!item.GLAccountsValidated())
+                    throw new Exception("Item is not correctly setup for financial transaction. Please check if GL accounts are all set.");
 
-                var totalLineAmount = lineAmount + lineTaxes.Sum(t => t.Value);
+                var lineAmount = lineItem.Quantity * lineItem.Amount;
 
-                totalAmount += (decimal)totalLineAmount;
+                var lineDiscountAmount = (lineItem.Discount / 100) * lineAmount;
+                totalDiscount += lineDiscountAmount.GetValueOrDefault();
+
+                var totalLineAmount = lineAmount - lineDiscountAmount;
+
+                totalAmount += totalLineAmount.GetValueOrDefault();
+
+                var lineTaxes = _financialService.ComputeInputTax(purchaseInvoice.VendorId.GetValueOrDefault(), lineItem.ItemId, lineItem.Quantity, lineItem.Amount, lineItem.Discount.GetValueOrDefault());
 
                 foreach (var t in lineTaxes)
                     taxes.Add(t);
 
-                var item = _inventoryService.GetItemById(line.ItemId);
-                decimal lineItemTotalAmountAfterTax = line.Amount - lineTaxes.Sum(t => t.Value);
+                var lineTaxAmount = lineTaxes != null && lineTaxes.Count > 0 ? lineTaxes.Sum(t => t.Value) : 0;
+                totalLineAmount = totalLineAmount - lineTaxAmount;
 
-                GeneralLedgerLine debitInventory = _financialService.CreateGeneralLedgerLine(DrOrCrSide.Dr, item.InventoryAccount.Id, lineItemTotalAmountAfterTax);
+                GeneralLedgerLine debitInventory = _financialService.CreateGeneralLedgerLine(DrOrCrSide.Dr, item.InventoryAccount.Id, totalLineAmount.GetValueOrDefault());
                 glHeader.GeneralLedgerLines.Add(debitInventory);
 
-                GeneralLedgerLine creditGRNClearingAccount = _financialService.CreateGeneralLedgerLine(DrOrCrSide.Cr, GetGeneralLedgerSetting().GoodsReceiptNoteClearingAccountId.Value, lineItemTotalAmountAfterTax);
+                GeneralLedgerLine creditGRNClearingAccount = _financialService.CreateGeneralLedgerLine(DrOrCrSide.Cr, GetGeneralLedgerSetting().GoodsReceiptNoteClearingAccountId.Value, totalLineAmount.GetValueOrDefault());
                 glHeader.GeneralLedgerLines.Add(creditGRNClearingAccount);
 
-                line.InventoryControlJournal = _inventoryService.CreateInventoryControlJournal(line.ItemId,
-                    line.MeasurementId,
+                lineItem.InventoryControlJournal = _inventoryService.CreateInventoryControlJournal(lineItem.ItemId,
+                    lineItem.MeasurementId,
                     DocumentTypes.PurchaseReceipt,
-                    line.Quantity,
+                    lineItem.Quantity,
                     null,
-                    line.Quantity * item.Cost,
+                    lineItem.Quantity * item.Cost,
                     null);
             }
 
@@ -567,7 +585,9 @@ namespace Services.Purchasing
 
             if (totalDiscount > 0)
             {
-
+                var purchasesDiscountAccount = base.GetGeneralLedgerSetting().PurchaseDiscountAccount;
+                var creditPurchaseDiscountAccount = _financialService.CreateGeneralLedgerLine(DrOrCrSide.Dr, purchasesDiscountAccount.Id, Math.Round(totalDiscount, 2, MidpointRounding.ToEven));
+                glHeader.GeneralLedgerLines.Add(creditPurchaseDiscountAccount);
             }
 
             Vendor vendor = GetVendorById(purchaseInvoice.VendorId.Value);
@@ -585,5 +605,15 @@ namespace Services.Purchasing
                 _purchaseInvoiceRepo.Update(purchaseInvoice);
             }
         }
+
+        public Contact GetContacyById(int id)
+        {
+
+            var contact = _contactRepo.GetAllIncluding(q => q.Party)
+                .Where(q => q.Id == id)
+                .FirstOrDefault();
+            return contact;
+        }
+
     }
 }

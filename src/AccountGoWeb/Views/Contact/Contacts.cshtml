@@ -1,0 +1,49 @@
+﻿@model string
+
+<div>
+    <a href="~/contact/contact" class="btn" style="display:none;">
+        <i class="fa fa-plus"></i>
+        New Contact
+    </a>
+    <a href="~/contact/contact" id="linkViewClient" class="btn inactiveLink">
+        <i class="fa fa-edit"></i>
+        View
+    </a>
+</div>
+
+
+<div>
+    <div id="contacts" class="ag-fresh" style="height: 400px;"></div>
+</div>
+<script>
+    var columnDefs = [
+        {headerName: "Id", field: "id", width: 50, cellRenderer: function(params) {
+            return '<a href="contact/' + params.value + '">' + params.value + '</a>';
+        }},
+        {headerName: "First Name", field: "firstName", width: 350},
+        {headerName: "Last Name", field: "lastName", width: 100}
+    ];
+
+    var gridOptions = {
+        columnDefs: columnDefs,
+        rowData: @Html.Raw(Model),
+        // PROPERTIES - simple boolean / string / number properties
+        rowSelection: 'single',
+        onSelectionChanged: onSelectionChanged,
+    };
+
+    function onSelectionChanged() {
+        var selectedRows = gridOptions.api.getSelectedRows();
+        selectedRow = selectedRows[0];
+ 
+        document.getElementById('linkViewClient').setAttribute('href', 'contact?id=' + selectedRow.id + '&partyId=' + selectedRow.holdingPartyId + '&partyType=' + selectedRow.holdingPartyType);
+        document.getElementById('linkViewClient').setAttribute('class', 'btn');
+    }
+
+    // wait for the document to be loaded, otherwise
+    // ag-Grid will not find the div in the document.
+    document.addEventListener("DOMContentLoaded", function() {
+        var eGridDiv = document.querySelector('#contacts');
+        new agGrid.Grid(eGridDiv, gridOptions);
+    });
+</script>

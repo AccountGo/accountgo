@@ -49,6 +49,8 @@ namespace Core.Domain.Sales
         public virtual ICollection<SalesOrderHeader> SalesOrders { get; set; }
         public virtual ICollection<CustomerAllocation> CustomerAllocations { get; set; }
 
+        public virtual IList<CustomerContact> CustomerContact { get; set; }
+
         [NotMapped]
         public decimal Balance { get { return GetBalance(); } }
 
