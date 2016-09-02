@@ -10,8 +10,8 @@
 <form action="~/contact/savecontact" method="post">
     <div class="box" id="divContactCard">
         @Html.HiddenFor(m => m.Id)
-        @Html.HiddenFor(m => m.CustomerId)
-        @Html.HiddenFor(m => m.VendorId)
+        @Html.HiddenFor(m => m.HoldingPartyId)
+        @Html.HiddenFor(m => m.HoldingPartyType)
 
 
         <div class="box-header with-border">
