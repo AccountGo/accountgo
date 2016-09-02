@@ -1,0 +1,175 @@
+﻿
+@{
+    Layout = "";
+}
+
+@model Dto.Sales.SalesInvoice
+
+<!--
+This is a starter template page. Use this page to start your new project from
+scratch. This page gets rid of all links and provides the needed markup only.
+-->
+
+<script src="~/plugins/accounting/accounting.js"></script>
+<meta content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" name="viewport">
+<link rel="stylesheet" href="~/plugins/bootstrap/dist/css/bootstrap.min.css">
+<!-- Font Awesome -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.5.0/css/font-awesome.min.css">
+<!-- Ionicons -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/ionicons/2.0.1/css/ionicons.min.css">
+<!-- Theme style -->
+<link rel="stylesheet" href="~/adminLTE/css/AdminLTE.css">
+<!-- AdminLTE Skins. We have chosen the skin-blue for this starter
+page. However, you can choose any other skin. Make sure you
+apply the skin class to the body tag so the changes take effect.
+-->
+<link rel="stylesheet" href="~/adminLTE/css/skins/_all-skins.min.css">
+
+<script src="~/plugins/jspdf/dist/jspdf.min.js"></script>
+<script src="~/plugins/jquery/dist/jquery.js"></script>
+<script src="~/plugins/bootstrap/dist/js/bootstrap.min.js"></script>
+<script src="~/js/html2canvas.js"></script>
+
+<script>
+    $(document).ready(function () {
+
+        $(".formatTable tr label").each(function() {
+            var numberToFormat = $(this).text();
+
+            $(this).text(accounting.formatMoney(numberToFormat));
+        });
+
+    });
+
+
+    function formatCurrency(e) {
+        return accounting.formatMoney(e);
+
+    }
+
+    function fromHTML() {
+        var pdf = new jsPDF('p', 'pt', 'letter');
+
+
+        margins = {
+            top: 20,
+            bottom: 20,
+            left: 0,
+            right: 10,
+            width: 400
+        }
+
+        pdf.addHTML($('#content')[0], margins.left, // x coord
+            margins.top,
+            function(dispose) {
+
+                pdf.save('Invoice.pdf');
+            }, margins);
+    };
+
+
+   
+</script>
+<a href="javascript:fromHTML()" class="button">Download</a>
+<div id="content" style="background-color: white;">
+    <section class="invoice">
+        <!-- title row -->
+        <div class="row">
+            <div class="col-xs-12">
+                <h2 class="page-header">
+                    <i class="fa fa-globe"></i> @Model.CompanyName
+                    <small class="pull-right">Date: 2/10/2014</small>
+                </h2>
+            </div>
+        </div>
+
+        <div class="row invoice-info">
+            <div class="col-sm-4 invoice-col">
+                From
+                <address>
+                    <strong>@Model.CompanyName</strong><br>
+                </address>
+            </div>
+            <div class="col-sm-4 invoice-col">
+                To
+                <address>
+                    <strong>@Model.CustomerName</strong><br>
+                    @Model.CustomerEmail
+                </address>
+            </div>
+            <div class="col-sm-4 invoice-col">
+
+            </div>
+        </div>
+        <!-- Table row -->
+        <div class="row">
+            <div class="col-xs-12 table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Quantity</th>
+                            <th>Product</th>
+                            <th>Measurement</th>
+                            <th>Description</th>
+                            <th>Subtotal</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in Model.SalesInvoiceLines)
+                        {
+                            <tr>
+                                <td>
+                                    @Html.DisplayFor(model => item.Quantity)
+                                </td>
+                                <td>
+                                    @Html.DisplayFor(model => item.ItemDescription)
+                                </td>
+                                <td>
+                                    @Html.DisplayFor(model => item.MeasurementDescription)
+                                </td>
+                                <td>
+                                    @Html.DisplayFor(model => item.ItemDescription)
+                                </td>
+                                <td>
+                                    @Html.DisplayFor(model => item.Amount)
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div style="text-align: right" class="row">
+
+
+            <div class="col-xs-12" align="right">
+                <p class="lead">Amount Due:</p>
+
+                <div class="table-responsive">
+                    <table class="table formatTable">
+                        <tbody>
+                            <tr>
+                                <th style="width: 80%" class="text-right">Subtotal:</th>
+                                <td class="text-right"><label class="formattedCurrency">@Model.Amount</label></td>
+                            </tr>
+                            <tr>
+                                <th style="width: 80%" class="text-right">Tax (9.3%):</th>
+
+                                <td style="text-align: right"><label class="formattedCurrency">@Model.TotalTax</label></td>
+                            </tr>
+
+                            <tr>
+                                <th style="width: 80%" class="text-right">Total:</th>
+                                <td style="text-align: right">
+                                    <label class="formattedCurrency">@Model.TotalAmountAfterTax</label>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </section>
+</div>
+

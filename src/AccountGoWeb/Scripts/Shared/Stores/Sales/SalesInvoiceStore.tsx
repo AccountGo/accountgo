@@ -19,6 +19,7 @@ export default class SalesStore {
     @observable validationErrors;
     @observable editMode = false;
 
+
     constructor(orderId, invoiceId) {
         this.commonStore = new CommonStore();
         this.salesInvoice = new SalesInvoice();
@@ -31,6 +32,7 @@ export default class SalesStore {
             readyForPosting: this.salesInvoice.readyForPosting,
             salesInvoiceLines: []
         });
+
 
         autorun(() => this.computeTotals());
 
@@ -92,6 +94,7 @@ export default class SalesStore {
             this.changedEditMode(true);           
     }
 
+
     @observable RTotal = 0;
     @observable GTotal = 0;
     @observable TTotal = 0;
@@ -133,6 +136,10 @@ export default class SalesStore {
                     }.bind(this));
                 }.bind(this))
         }
+    }
+
+    printInvoice() {
+        window.open(baseUrl + 'sales/salesinvoicepdf?id=' + this.salesInvoice.id, "_blank", "toolbar=no,scrollbars=yes,resizable=yes,top=200,left=500,width=800,height=600");
     }
 
     postInvoice() {

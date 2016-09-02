@@ -105,6 +105,23 @@ class CancelInvoiceButton extends React.Component<any, {}>{
 }
 
 @observer
+class PrintButton extends React.Component<any, {}>{
+    printOnClick(e) {
+        store.printInvoice();
+    }
+
+    render() {
+        return (
+
+            <input type="button" value="Print" onClick={ this.printOnClick.bind(this) }
+                className={store.salesInvoice.posted 
+                    ? "btn btn-sm btn-primary btn-flat pull-right"
+                    : "btn btn-sm btn-primary btn-flat pull-right inactiveLink"} />
+        );
+    }
+}
+
+@observer
 class PostButton extends React.Component<any, {}>{
     postOnClick(e) {
         store.postInvoice();
@@ -307,6 +324,7 @@ export default class SalesInvoice extends React.Component<any, {}> {
                 <div id="divActionsBottom">
                     <SaveInvoiceButton />
                     <CancelInvoiceButton />
+                    <PrintButton />
                     <PostButton />
                 </div>
             </div>
