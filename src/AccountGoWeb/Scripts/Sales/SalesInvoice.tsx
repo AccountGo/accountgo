@@ -114,7 +114,7 @@ class PrintButton extends React.Component<any, {}>{
         return (
 
             <input type="button" value="Print" onClick={ this.printOnClick.bind(this) }
-                className={store.editMode 
+                className={store.salesInvoice.posted 
                     ? "btn btn-sm btn-primary btn-flat pull-right"
                     : "btn btn-sm btn-primary btn-flat pull-right inactiveLink"} />
         );
