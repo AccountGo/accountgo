@@ -8,6 +8,7 @@
 This is a starter template page. Use this page to start your new project from
 scratch. This page gets rid of all links and provides the needed markup only.
 -->
+<script src="~/plugins/accounting/accounting.js"></script>
 <meta content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" name="viewport">
 <link rel="stylesheet" href="~/plugins/bootstrap/dist/css/bootstrap.min.css">
 <!-- Font Awesome -->
@@ -194,7 +195,8 @@ l
                             <tr>
                                 <th style="width:80%" class="text-right">Total:</th>
                                 <td style="text-align: right">$@Html.DisplayFor(m => m.TotalAmountAfterTax, "{0:0.00}")</td>
-                            </tr>
+                                <td style="text-align: right">accounting.formatMoney(@Model.TotalAmountAfterTax, { symbol: "", format: "%s%v" })</td>
+</tr>
                         </tbody>
                     </table>
                 </div>
