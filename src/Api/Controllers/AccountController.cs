@@ -86,6 +86,8 @@ namespace Api.Controllers
 
                 string password = registerViewModel.Password;
                 string username = registerViewModel.Email;
+                string firstName = registerViewModel.FirstName;
+                string lastName = registerViewModel.LastName;
 
                 var user = new ApplicationUser { UserName = username, Email = username };
                 var result = await _userManager.CreateAsync(user, password);
@@ -94,6 +96,9 @@ namespace Api.Controllers
                     Core.Domain.Security.User newUser = new Core.Domain.Security.User();
                     newUser.EmailAddress = username;
                     newUser.UserName = username;
+                    newUser.Firstname = firstName;
+                    newUser.Lastname = lastName;
+
                     _administrationService.SaveUser(newUser);
 
                     return new ObjectResult(result);
