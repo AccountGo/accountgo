@@ -33,7 +33,8 @@ namespace Api.Controllers
                 {
                     Id = bank.Id,
                     Name = bank.Name,
-                    AccountNo = bank.Number
+                    AccountNo = bank.Number,
+                    BankName = bank.BankName
                 });
             }
 

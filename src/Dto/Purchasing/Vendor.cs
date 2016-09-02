@@ -1,5 +1,6 @@
 ﻿using Dto.Common;
 using System.ComponentModel.DataAnnotations;
+using System;
 
 namespace Dto.Purchasing
 {
@@ -18,6 +19,8 @@ namespace Dto.Purchasing
         public int? PaymentTermId { get; set; }
         public int? TaxGroupId { get; set; }
         public decimal Balance { get; set; }
+        public string Contact { get; set; }
+        public string TaxGroup { get; set; }
         public Contact PrimaryContact { get; set; }
 
         public Vendor()
