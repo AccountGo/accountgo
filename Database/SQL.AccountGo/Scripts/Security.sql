@@ -66,3 +66,19 @@ BEGIN
 	PRINT 'Data for table SecurityPermission uploaded successfully'
 END
 GO
+
+/*******************************************************************
+--- Insert initial user. username: admin@accountgo.ph | password: P@ssword1 ---
+********************************************************************/
+INSERT [dbo].[AspNetUsers] ([Id], [AccessFailedCount], [ConcurrencyStamp], [Email], [EmailConfirmed], [LockoutEnabled], [LockoutEnd], [NormalizedEmail], [NormalizedUserName], [PasswordHash], [PhoneNumber], [PhoneNumberConfirmed], [SecurityStamp], [TwoFactorEnabled], [UserName]) VALUES (N'c2a1983a-6e3f-40a2-b141-0a4e827af44e', 0, N'a1f8ccbc-f77a-4cd3-8d76-f24ed7be2d03', N'admin@accountgo.ph', 0, 1, NULL, N'ADMIN@ACCOUNTGO.PH', N'ADMIN@ACCOUNTGO.PH', N'AQAAAAEAACcQAAAAEOxDmtWUR4F6ZycBAXzB0Wz5c0yduXEQVIgZwGPEOKRdfKq1dmqleAPMjvInBp+xow==', NULL, 0, N'544b121a-1973-4403-9a6f-5a6abcec3bf5', 0, N'admin@accountgo.ph')
+GO
+
+SET IDENTITY_INSERT [dbo].[User] ON
+GO
+
+INSERT [dbo].[User] ([Id], [Lastname], [Firstname], [UserName], [EmailAddress]) VALUES (1, 'System', 'Administrator', N'admin@accountgo.ph', N'admin@accountgo.ph')
+GO
+
+SET IDENTITY_INSERT [dbo].[User] OFF
+  
+GO
