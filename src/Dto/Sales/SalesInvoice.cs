@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 
 namespace Dto.Sales
@@ -12,13 +13,17 @@ namespace Dto.Sales
         public int? FromSalesOrderId { get; set; }
         public int? FromSalesDeliveryId { get; set; }
         public string CustomerName { get; set; }
+        public string CustomerEmail { get; set; }
         public decimal Amount { get { return GetTotalAmount(); } }
         public decimal TotalAllocatedAmount { get; set; }
         public string ReferenceNo { get; set; }
         public bool Posted { get; set; }
         public bool? ReadyForPosting { get; set; }
+        public string CompanyName { get; set; }
+        public string CompanyEmail { get; set; }
+        public decimal? TotalAmountAfterTax { get; set; }
         public IList<SalesInvoiceLine> SalesInvoiceLines { get; set; }
-
+        public decimal? TotalTax { get; set; }
         public SalesInvoice()
         {
             SalesInvoiceLines = new List<SalesInvoiceLine>();
@@ -26,10 +31,10 @@ namespace Dto.Sales
 
         private decimal GetTotalAmount()
         {
-            return GetTotalAmountLessTax();
+            return GetTotalAmountWithoutTax();
         }
 
-        private decimal GetTotalAmountLessTax()
+        private decimal GetTotalAmountWithoutTax()
         {
             decimal total = 0;
             foreach (var line in SalesInvoiceLines)

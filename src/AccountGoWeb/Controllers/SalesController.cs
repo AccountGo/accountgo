@@ -272,5 +272,21 @@ namespace AccountGoWeb.Controllers
 
             return View(model);
         }
+
+        public IActionResult SalesInvoicePdf(int id)
+        {
+            var invoice = GetAsync<Dto.Sales.SalesInvoice>("sales/salesinvoiceforprinting?id=" + id).Result;
+            SalesInvoice salesInvoiceModel = new SalesInvoice();
+            salesInvoiceModel.ReferenceNo = invoice.ReferenceNo;
+            salesInvoiceModel.No = invoice.No;
+
+            salesInvoiceModel.CompanyName = invoice.CompanyName;
+
+            salesInvoiceModel.TotalTax = invoice.TotalTax;
+            salesInvoiceModel.TotalAmountAfterTax = invoice.TotalAmountAfterTax;
+            salesInvoiceModel.CustomerName = invoice.CustomerName;
+            salesInvoiceModel.SalesInvoiceLines = invoice.SalesInvoiceLines;
+            return View(salesInvoiceModel);
+        }
     }
 }

@@ -7,7 +7,9 @@ using System.Collections.Generic;
 using System.Linq;
 using Core.Domain;
 using Core.Domain.Sales;
+using Services.Inventory;
 using Dto.Sales;
+using Services.TaxSystem;
 
 namespace Api.Controllers
 {
@@ -17,14 +19,18 @@ namespace Api.Controllers
         private readonly IAdministrationService _adminService;
         private readonly ISalesService _salesService;
         private readonly IFinancialService _financialService;
-
+        private readonly IInventoryService _inventoryService;
+        private readonly ITaxService _taxService;
+   
         public SalesController(IAdministrationService adminService,
             ISalesService salesService,
-            IFinancialService financialService)
+            IFinancialService financialService, IInventoryService inventoryService, ITaxService taxService)
         {
             _adminService = adminService;
             _salesService = salesService;
             _financialService = financialService;
+            _inventoryService = inventoryService;
+            _taxService = taxService;
         }
 
         [HttpPost]
@@ -1063,6 +1069,71 @@ namespace Api.Controllers
             }
 
             return Json(finalmonthlySalesDto);
+        }
+
+
+
+        [HttpGet]
+        [Route("[action]")]
+        public IActionResult SalesInvoiceForPrinting(int id)
+        {
+            try
+            {
+                var salesInvoice = _salesService.GetSalesInvoiceById(id);
+     
+                //var items = _salesService.Ge
+                var salesInvoiceDto = new Dto.Sales.SalesInvoice()
+                {
+                    Id = salesInvoice.Id,
+                    CustomerId = salesInvoice.CustomerId,
+                    CustomerName = salesInvoice.Customer.Party.Name,
+                    CustomerEmail = salesInvoice.Customer.Party.Email,
+                    InvoiceDate = salesInvoice.Date,
+                    SalesInvoiceLines = new List<Dto.Sales.SalesInvoiceLine>(),
+                    PaymentTermId = salesInvoice.PaymentTermId,
+                    ReferenceNo = salesInvoice.ReferenceNo,
+                    Posted = salesInvoice.GeneralLedgerHeaderId != null,
+                    CompanyName = _adminService.GetDefaultCompany().Name
+                 
+                };
+
+                decimal? totalTax = 0;
+                foreach (var line in salesInvoice.SalesInvoiceLines)
+                {
+                    var lineDto = new Dto.Sales.SalesInvoiceLine();
+
+                    lineDto.Id = line.Id;
+                    lineDto.Amount = line.Amount;
+                    lineDto.Discount = line.Discount;
+                    lineDto.Quantity = line.Quantity;
+                    lineDto.ItemId = line.ItemId;
+                    lineDto.MeasurementId = line.MeasurementId;
+
+                    lineDto.ItemDescription = _inventoryService.GetItemById(line.ItemId).Description;
+                    lineDto.MeasurementDescription = _inventoryService.GetMeasurementById(line.MeasurementId).Description;
+                    //totalTax += line.ComputeLineTaxAmount();
+                    //GetSalesLineTaxAmount(int quantity, decimal amount, decimal discount, IEnumerable < Tax > taxes)
+
+                    if (_taxService != null)
+                    {
+                        var taxes = _taxService.GetIntersectionTaxes(line.ItemId, salesInvoice.CustomerId,
+                            salesInvoice.Customer.Party.PartyType);
+
+                        totalTax += _taxService.GetSalesLineTaxAmount(line.Quantity, line.Amount, line.Discount, taxes);
+
+                    }
+                    salesInvoiceDto.SalesInvoiceLines.Add(lineDto);
+                }
+                salesInvoiceDto.TotalTax = totalTax;
+                salesInvoiceDto.TotalAmountAfterTax = (salesInvoiceDto.Amount + salesInvoiceDto.TotalTax);
+
+
+                return new ObjectResult(salesInvoiceDto);
+            }
+            catch (Exception ex)
+            {
+                return new ObjectResult(ex);
+            }
         }
 
     }
