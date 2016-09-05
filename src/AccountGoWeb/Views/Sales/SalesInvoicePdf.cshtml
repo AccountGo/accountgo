@@ -28,24 +28,23 @@ apply the skin class to the body tag so the changes take effect.
 <script src="~/plugins/jspdf/dist/jspdf.min.js"></script>
 <script src="~/plugins/jquery/dist/jquery.js"></script>
 <script src="~/plugins/bootstrap/dist/js/bootstrap.min.js"></script>
-<script src="~/js/html2canvas.js"></script>
-
+<script src="~/plugins/html2canvas/dist/html2canvas.js"></script>
 <script>
     $(document).ready(function () {
 
         $(".formatTable tr label").each(function() {
             var numberToFormat = $(this).text();
 
-            $(this).text(accounting.formatMoney(numberToFormat));
+            $(this).text(accounting.formatNumber(numberToFormat,2));
         });
 
     });
 
 
-    function formatCurrency(e) {
-        return accounting.formatMoney(e);
+    //function formatCurrency(e) {
+    //    return accounting.formatMoney(e);
 
-    }
+    //}
 
     function fromHTML() {
         var pdf = new jsPDF('p', 'pt', 'letter');
@@ -78,7 +77,7 @@ apply the skin class to the body tag so the changes take effect.
             <div class="col-xs-12">
                 <h2 class="page-header">
                     <i class="fa fa-globe"></i> @Model.CompanyName
-                    <small class="pull-right">Date: 2/10/2014</small>
+                    <small class="pull-right">Date: @Model.InvoiceDate.ToShortDateString()</small>
                 </h2>
             </div>
         </div>
@@ -111,7 +110,7 @@ apply the skin class to the body tag so the changes take effect.
                             <th>Product</th>
                             <th>Measurement</th>
                             <th>Description</th>
-                            <th>Subtotal</th>
+                            <th>Subtotal (before tax)</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -151,18 +150,18 @@ apply the skin class to the body tag so the changes take effect.
                         <tbody>
                             <tr>
                                 <th style="width: 80%" class="text-right">Subtotal:</th>
-                                <td class="text-right"><label class="formattedCurrency">@Model.Amount</label></td>
+                                <td class="text-right"><label>@Model.Amount</label></td>
                             </tr>
                             <tr>
-                                <th style="width: 80%" class="text-right">Tax (9.3%):</th>
+                                <th style="width: 80%" class="text-right">Tax:</th>
 
-                                <td style="text-align: right"><label class="formattedCurrency">@Model.TotalTax</label></td>
+                                <td style="text-align: right"><label>@Model.TotalTax</label></td>
                             </tr>
 
                             <tr>
                                 <th style="width: 80%" class="text-right">Total:</th>
                                 <td style="text-align: right">
-                                    <label class="formattedCurrency">@Model.TotalAmountAfterTax</label>
+                                    <label>@Model.TotalAmountAfterTax</label>
                                 </td>
                             </tr>
                         </tbody>
