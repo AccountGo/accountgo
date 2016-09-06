@@ -75,9 +75,14 @@ class SalesQuotationHeader extends React.Component<any, {}>{
         store.changedQuotationDate(e.target.value);
     }
 
+    onChangeCustomer(e) {
+        alert('');
+    }
+
     onChangeReferenceNo(e) {
         store.changedReferenceNo(e.target.value);
     }
+
 
     render() {        
         return (
@@ -122,15 +127,16 @@ class SalesQuotationHeader extends React.Component<any, {}>{
 @observer
 class SalesQuotationLines extends React.Component<any, {}>{
     addLineItem() {
-        var itemId, measurementId, quantity, amount, discount;
+        var itemId, measurementId, quantity, amount, discount, code;
         itemId = (document.getElementById("optNewItemId") as HTMLInputElement).value;
+        code = (document.getElementById("txtNewCode") as HTMLInputElement).value;
         measurementId = (document.getElementById("optNewMeasurementId") as HTMLInputElement).value;
         quantity = (document.getElementById("txtNewQuantity") as HTMLInputElement).value;
         amount = (document.getElementById("txtNewAmount") as HTMLInputElement).value;
         discount = (document.getElementById("txtNewDiscount") as HTMLInputElement).value;
 
         //console.log(`itemId: ${itemId} | measurementId: ${measurementId} | quantity: ${quantity} | amount: ${amount} | discount: ${discount}`);
-        store.addLineItem(0, itemId, measurementId, quantity, amount, discount);
+        store.addLineItem(0, itemId, measurementId, quantity, amount, discount, code);
 
         (document.getElementById("txtNewQuantity") as HTMLInputElement).value = "1";
         (document.getElementById("txtNewAmount") as HTMLInputElement).value = "0";
@@ -153,13 +159,29 @@ class SalesQuotationLines extends React.Component<any, {}>{
         store.updateLineItem(e.target.name, "discount", e.target.value);
     }
 
+    onChangeCode(e) {
+        store.updateLineItem(e.target.name, "code", e.target.value);
+    }
+
+    onFocusOutItem(e) {        
+        
+        for (var i = 0; i < store.commonStore.items.length; i++)
+        {
+            if (store.commonStore.items[i].code == e.target.value)
+            {
+                console.log(store.commonStore.items[i]);
+ 
+                store.updateLineItem(e.target.parentElement.parentElement, "itemId", store.commonStore.items[i].id);
+            }
+        }
+    }
     render() {        
         var lineItems = [];
         for (var i = 0; i < store.salesQuotation.salesQuotationLines.length; i++) {
             lineItems.push(
                 <tr key={i}>
                     <td><SelectLineItem store={store} row={i} selected={store.salesQuotation.salesQuotationLines[i].itemId} /></td>
-                    <td>{store.salesQuotation.salesQuotationLines[i].itemId}</td>
+                    <td><input className="form-control" type="text" name={i} value={store.salesQuotation.salesQuotationLines[i].code} onBlur={this.onFocusOutItem.bind(this)} /></td>
                     <td><SelectLineMeasurement row={i} store={store} selected={store.salesQuotation.salesQuotationLines[i].measurementId} /></td>
                     <td><input className="form-control" type="text" name={i} value={store.salesQuotation.salesQuotationLines[i].quantity} onChange={this.onChangeQuantity.bind(this) } /></td>
                     <td><input className="form-control" type="text" name={i} value={store.salesQuotation.salesQuotationLines[i].amount} onChange={this.onChangeAmount.bind(this) } /></td>
@@ -187,8 +209,8 @@ class SalesQuotationLines extends React.Component<any, {}>{
                     <table className="table table-hover">
                         <thead>
                             <tr>
-                                <td>Item Id</td>
-                                <td>Item Name</td>
+                                <td>Item</td>
+                                <td>Code</td>
                                 <td>Measurement</td>
                                 <td>Quantity</td>
                                 <td>Amount</td>
@@ -201,7 +223,7 @@ class SalesQuotationLines extends React.Component<any, {}>{
                             {lineItems}
                             <tr>
                                 <td><SelectLineItem store={store} controlId="optNewItemId" /></td>
-                                <td>Item Name</td>
+                                <td><input className="form-control" type="text" id="txtNewCode" onBlur={this.onFocusOutItem.bind(this)} /></td>
                                 <td><SelectLineMeasurement store={store} controlId="optNewMeasurementId" /></td>
                                 <td><input className="form-control" type="text" id="txtNewQuantity" /></td>
                                 <td><input className="form-control" type="text" id="txtNewAmount" /></td>
