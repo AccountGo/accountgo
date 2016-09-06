@@ -279,7 +279,7 @@ namespace AccountGoWeb.Controllers
             SalesInvoice salesInvoiceModel = new SalesInvoice();
             salesInvoiceModel.ReferenceNo = invoice.ReferenceNo;
             salesInvoiceModel.No = invoice.No;
-
+            salesInvoiceModel.InvoiceDate = invoice.InvoiceDate;
             salesInvoiceModel.CompanyName = invoice.CompanyName;
 
             salesInvoiceModel.TotalTax = invoice.TotalTax;

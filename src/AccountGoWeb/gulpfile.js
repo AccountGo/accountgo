@@ -13,7 +13,8 @@ gulp.task("libs", () => {
             'knockout-mapping/dist/**',
             'd3/build/**',
             'jspdf/dist/**',
-            'accounting/**'
+            'accounting/**',
+            'html2canvas/dist/**'
     ],
     {
         cwd: "node_modules/**"
