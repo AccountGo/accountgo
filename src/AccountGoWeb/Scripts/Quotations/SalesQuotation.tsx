@@ -11,7 +11,9 @@ import SelectPaymentTerm from "../Shared/Components/SelectPaymentTerm";
 import SelectLineItem from "../Shared/Components/SelectLineItem";
 import SelectLineMeasurement from "../Shared/Components/SelectLineMeasurement";
 
+import SalesQuotationLine from "../Shared/Stores/Quotations/SalesQuotationLine";
 import SalesQuotationStore from "../Shared/Stores/Quotations/SalesQuotationStore";
+
 
 let quotationId = window.location.search.split("?id=")[1];
 
@@ -20,6 +22,7 @@ let store = new SalesQuotationStore(quotationId);
 @observer
 class ValidationErrors extends React.Component<any, {}>{
     render() {
+        
         if (store.validationErrors !== undefined && store.validationErrors.length > 0) {
             var errors = [];
             store.validationErrors.map(function (item, index) {
@@ -126,21 +129,30 @@ class SalesQuotationHeader extends React.Component<any, {}>{
 
 @observer
 class SalesQuotationLines extends React.Component<any, {}>{
-    addLineItem() {
-        var itemId, measurementId, quantity, amount, discount, code;
-        itemId = (document.getElementById("optNewItemId") as HTMLInputElement).value;
-        code = (document.getElementById("txtNewCode") as HTMLInputElement).value;
-        measurementId = (document.getElementById("optNewMeasurementId") as HTMLInputElement).value;
-        quantity = (document.getElementById("txtNewQuantity") as HTMLInputElement).value;
-        amount = (document.getElementById("txtNewAmount") as HTMLInputElement).value;
-        discount = (document.getElementById("txtNewDiscount") as HTMLInputElement).value;
+    addLineItem() { 
+ 
+      //  if (store.validation()) {
+            
+            var itemId, measurementId, quantity, amount, discount;
+            itemId = (document.getElementById("optNewItemId") as HTMLInputElement).value;
 
-        //console.log(`itemId: ${itemId} | measurementId: ${measurementId} | quantity: ${quantity} | amount: ${amount} | discount: ${discount}`);
-        store.addLineItem(0, itemId, measurementId, quantity, amount, discount, code);
+            measurementId = (document.getElementById("optNewMeasurementId") as HTMLInputElement).value;
+            quantity = (document.getElementById("txtNewQuantity") as HTMLInputElement).value;
+            amount = (document.getElementById("txtNewAmount") as HTMLInputElement).value;
+            discount = (document.getElementById("txtNewDiscount") as HTMLInputElement).value;
 
-        (document.getElementById("txtNewQuantity") as HTMLInputElement).value = "1";
-        (document.getElementById("txtNewAmount") as HTMLInputElement).value = "0";
-        (document.getElementById("txtNewDiscount") as HTMLInputElement).value = "";
+            //console.log(`itemId: ${itemId} | measurementId: ${measurementId} | quantity: ${quantity} | amount: ${amount} | discount: ${discount}`);
+            store.addLineItem(0, itemId, measurementId, quantity, amount, discount);
+
+            (document.getElementById("txtNewQuantity") as HTMLInputElement).value = "1";
+            (document.getElementById("txtNewAmount") as HTMLInputElement).value = "0";
+            (document.getElementById("txtNewDiscount") as HTMLInputElement).value = "";
+       // }
+
+       // else
+        //{
+        //    alert('x');
+        //}
     }
 
     onClickRemoveLineItem(i, e) {
@@ -163,25 +175,36 @@ class SalesQuotationLines extends React.Component<any, {}>{
         store.updateLineItem(e.target.name, "code", e.target.value);
     }
 
-    onFocusOutItem(e) {        
-        
-        for (var i = 0; i < store.commonStore.items.length; i++)
-        {
-            if (store.commonStore.items[i].code == e.target.value)
-            {
-                console.log(store.commonStore.items[i]);
+    onFocusOutItem(e, i) {        
+
  
-                store.updateLineItem(e.target.parentElement.parentElement, "itemId", store.commonStore.items[i].id);
+
+        for (var x = 0; x < store.commonStore.items.length; x++)
+        {
+            if (store.commonStore.items[x].code == i.target.value)
+            {
+ 
+                console.log(store.commonStore.items[x].itemId);
+
+                if (store.salesQuotation.salesQuotationLines.length > 0) {
+                    store.updateLineItem(e, "itemId", store.commonStore.items[x].id);
+                }
+                else
+                {
+                    (document.getElementById("optNewItemId") as HTMLInputElement).value = store.commonStore.items[x].id; 
+                }
+                         
             }
         }
     }
-    render() {        
+    render() {       
+ 
         var lineItems = [];
         for (var i = 0; i < store.salesQuotation.salesQuotationLines.length; i++) {
             lineItems.push(
                 <tr key={i}>
                     <td><SelectLineItem store={store} row={i} selected={store.salesQuotation.salesQuotationLines[i].itemId} /></td>
-                    <td><input className="form-control" type="text" name={i} value={store.salesQuotation.salesQuotationLines[i].code} onBlur={this.onFocusOutItem.bind(this)} /></td>
+                    <td><input className="form-control" type="text" name={i} value={store.salesQuotation.salesQuotationLines[i].code} onBlur={this.onFocusOutItem.bind(this, i)} /></td>
                     <td><SelectLineMeasurement row={i} store={store} selected={store.salesQuotation.salesQuotationLines[i].measurementId} /></td>
                     <td><input className="form-control" type="text" name={i} value={store.salesQuotation.salesQuotationLines[i].quantity} onChange={this.onChangeQuantity.bind(this) } /></td>
                     <td><input className="form-control" type="text" name={i} value={store.salesQuotation.salesQuotationLines[i].amount} onChange={this.onChangeAmount.bind(this) } /></td>
@@ -223,7 +246,7 @@ class SalesQuotationLines extends React.Component<any, {}>{
                             {lineItems}
                             <tr>
                                 <td><SelectLineItem store={store} controlId="optNewItemId" /></td>
-                                <td><input className="form-control" type="text" id="txtNewCode" onBlur={this.onFocusOutItem.bind(this)} /></td>
+                                <td><input className="form-control" type="text" id="txtNewCode" onBlur={this.onFocusOutItem.bind(this, i) } /></td>
                                 <td><SelectLineMeasurement store={store} controlId="optNewMeasurementId" /></td>
                                 <td><input className="form-control" type="text" id="txtNewQuantity" /></td>
                                 <td><input className="form-control" type="text" id="txtNewAmount" /></td>

@@ -155,7 +155,7 @@ export default class SalesQuotationStore {
     }
 
     updateLineItem(row, targetProperty, value) {
-        if (this.salesQuotation.salesQuotationLines.length > 0)
+        //if (this.salesQuotation.salesQuotationLines.length > 0)
             this.salesQuotation.salesQuotationLines[row][targetProperty] = value;
 
         this.computeTotals();        
