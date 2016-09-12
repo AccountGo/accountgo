@@ -165,10 +165,10 @@ namespace Core.Domain
 
     public enum SalesQuoteStatus
     {
-        Draft,
+        Draft = 0,
         Open = 1,
-        Overdue,
-        Closed,
-        Void
+        Overdue = 2,
+        Closed = 3,
+        Void = 4
     }
 }

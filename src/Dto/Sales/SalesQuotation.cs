@@ -12,6 +12,7 @@ namespace Dto.Sales
         public int? PaymentTermId { get; set; }
         public string ReferenceNo { get; set; }
         public decimal Amount { get { return GetTotalAmount(); } }
+        public int StatusId { get; set; }
 
         public virtual List<SalesQuotationLine> SalesQuotationLines { get; set; }
 

@@ -18,6 +18,7 @@ export default class SalesQuotationStore {
     salesQuotation;
     commonStore;
     @observable validationErrors;
+    @observable editMode = false;
 
     constructor(quotationId) {
         this.commonStore = new CommonStore();
@@ -27,8 +28,11 @@ export default class SalesQuotationStore {
             quotationDate: this.salesQuotation.quotationDate,
             paymentTermId: this.salesQuotation.paymentTermId,
             referenceNo: this.salesQuotation.referenceNo,
+            statusId : this.salesQuotation.statusId,
             salesQuotationLines: []
         });
+
+
 
         autorun(() => this.computeTotals());
 
@@ -38,6 +42,7 @@ export default class SalesQuotationStore {
                 this.salesQuotation.id = result.data.id;
                 this.salesQuotation.paymentTermId = result.data.paymentTermId;
                 this.salesQuotation.referenceNo = result.data.referenceNo;
+                this.salesQuotation.statusId = result.data.statusId;
                 this.changedCustomer(result.data.customerId);
                 this.changedQuotationDate(result.data.quotationDate);
                 for (var i = 0; i < result.data.salesQuotationLines.length; i++) {
@@ -47,12 +52,21 @@ export default class SalesQuotationStore {
                         result.data.salesQuotationLines[i].measurementId,
                         result.data.salesQuotationLines[i].quantity,
                         result.data.salesQuotationLines[i].amount,
-                        result.data.salesQuotationLines[i].discount
+                        result.data.salesQuotationLines[i].discount                  
                     );
                 }
                 this.computeTotals();
+                //this.changedEditMode(true);
+                var nodes = document.getElementById("divSalesQuotationForm").getElementsByTagName('*');
+                for (var i = 0; i < nodes.length; i++) {
+                    nodes[i].className += " disabledControl";
+                }
             }.bind(this));
         }
+        else {
+            this.changedEditMode(true);   
+        }
+
     }
 
     @observable RTotal = 0;
@@ -63,7 +77,7 @@ export default class SalesQuotationStore {
         var rtotal = 0;
         var ttotal = 0;
         var gtotal = 0;
-       
+
         for (var i = 0; i < this.salesQuotation.salesQuotationLines.length; i++) {
             var lineItem = this.salesQuotation.salesQuotationLines[i];
             rtotal = rtotal + this.getLineTotal(i);
@@ -71,11 +85,11 @@ export default class SalesQuotationStore {
                 .then(function (result) {
                     if (result.data.length > 0) {
                         ttotal = ttotal + this.commonStore.getSalesLineTaxAmount(lineItem.quantity, lineItem.amount, lineItem.discount, result.data);
-                    }                    
+                    }
                     this.TTotal = ttotal;
                     this.GTotal = rtotal - ttotal;
                 }.bind(this));
-            this.RTotal = rtotal;            
+            this.RTotal = rtotal;
         }
     }
 
@@ -131,40 +145,87 @@ export default class SalesQuotationStore {
         return this.validationErrors.length === 0;
     }
 
-    changedCustomer(custId) {
-        this.salesQuotation.customerId = custId;
+
+
+validationLine()
+{
+    this.validationErrors = [];
+    if (this.salesQuotation.salesQuotationLines !== undefined && this.salesQuotation.salesQuotationLines.length > 0) {
+        for (var i = 0; i < this.salesQuotation.salesQuotationLines.length; i++) {
+            if (this.salesQuotation.salesQuotationLines[i].itemId === undefined)
+                this.validationErrors.push("Item is required.");
+            if (this.salesQuotation.salesQuotationLines[i].measurementId === undefined)
+                this.validationErrors.push("Uom is required.");
+            if (this.salesQuotation.salesQuotationLines[i].quantity === undefined)
+                this.validationErrors.push("Quantity is required.");
+            if (this.salesQuotation.salesQuotationLines[i].amount === undefined)
+                this.validationErrors.push("Amount is required.");
+            if (this.getLineTotal(i) === undefined
+                || this.getLineTotal(i).toString() === "NaN")
+                this.validationErrors.push("Invalid data.");
+        }
+    }
+    else {
+        var itemId, measurementId, quantity, amount, discount;
+        itemId = (document.getElementById("optNewItemId") as HTMLInputElement).value;
+        measurementId = (document.getElementById("optNewMeasurementId") as HTMLInputElement).value;
+        quantity = (document.getElementById("txtNewQuantity") as HTMLInputElement).value;
+        amount = (document.getElementById("txtNewAmount") as HTMLInputElement).value;
+        discount = (document.getElementById("txtNewDiscount") as HTMLInputElement).value;
+
+        if (itemId == "" || itemId === undefined)
+            this.validationErrors.push("Item is required.");
+        if (measurementId == "" || measurementId === undefined)
+            this.validationErrors.push("Uom is required.");
+        if (quantity == "" || quantity === undefined)
+            this.validationErrors.push("Quantity is required.");
+        if (amount == "" || amount === undefined)
+            this.validationErrors.push("Amount is required.");
+
     }
 
-    changedPaymentTerm(termId) {
-        this.salesQuotation.paymentTermId = termId;
-    }
+    return this.validationErrors.length === 0;
+}
 
-    changedQuotationDate(date) {
-        this.salesQuotation.quotationDate = date;
-    }
-    changedReferenceNo(refNo) {
-        this.salesQuotation.referenceNo = refNo;
-    }
-    addLineItem(id, itemId, measurementId, quantity, amount, discount) {
-        var newLineItem = new SalesQuotationLine(id, itemId, measurementId, quantity, amount, discount);
-        this.salesQuotation.salesQuotationLines.push(extendObservable(newLineItem, newLineItem));
-    }
+changedCustomer(custId) {
+    this.salesQuotation.customerId = custId;
+}
 
-    removeLineItem(row) {
-        this.salesQuotation.salesQuotationLines.splice(row, 1);
-    }
+changedPaymentTerm(termId) {
+    this.salesQuotation.paymentTermId = termId;
+}
 
-    updateLineItem(row, targetProperty, value) {
-        //if (this.salesQuotation.salesQuotationLines.length > 0)
-            this.salesQuotation.salesQuotationLines[row][targetProperty] = value;
+changedQuotationDate(date) {
+    this.salesQuotation.quotationDate = date;
+}
+changedReferenceNo(refNo) {
+    this.salesQuotation.referenceNo = refNo;
+}
+addLineItem(id, itemId, measurementId, quantity, amount, discount) {
+    var newLineItem = new SalesQuotationLine(id, itemId, measurementId, quantity, amount, discount);
+    this.salesQuotation.salesQuotationLines.push(extendObservable(newLineItem, newLineItem));
+}
 
-        this.computeTotals();        
-    }
+removeLineItem(row) {
+    this.salesQuotation.salesQuotationLines.splice(row, 1);
+}
 
-    getLineTotal(row) {
-        let lineSum = 0;
-        let lineItem = this.salesQuotation.salesQuotationLines[row];
-        lineSum = (lineItem.quantity * lineItem.amount) - lineItem.discount;
-        return lineSum;
-    }
+updateLineItem(row, targetProperty, value) {
+    //if (this.salesQuotation.salesQuotationLines.length > 0)
+    this.salesQuotation.salesQuotationLines[row][targetProperty] = value;
+    this.computeTotals();
+}
+
+getLineTotal(row) {
+    let lineSum = 0;
+    let lineItem = this.salesQuotation.salesQuotationLines[row];
+    lineSum = (lineItem.quantity * lineItem.amount) - lineItem.discount;
+    return lineSum;
+}
+
+changedEditMode(editMode) {
+    this.editMode = editMode;
+}
+
+
 }

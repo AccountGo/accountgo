@@ -367,7 +367,8 @@ namespace Api.Controllers
                     CustomerName = quote.Customer.Party.Name,
                     PaymentTermId = quote.PaymentTermId,
                     QuotationDate = quote.Date,
-                    ReferenceNo = quote.ReferenceNo
+                    ReferenceNo = quote.ReferenceNo,    
+                      
                 };
 
                 foreach (var line in quote.SalesQuoteLines)
@@ -402,7 +403,8 @@ namespace Api.Controllers
                 CustomerName = quote.Customer.Party.Name,
                 QuotationDate = quote.Date,
                 PaymentTermId = quote.PaymentTermId,
-                ReferenceNo = quote.ReferenceNo
+                ReferenceNo = quote.ReferenceNo,
+                StatusId = (int)quote.Status               
             };
 
 
@@ -749,6 +751,7 @@ namespace Api.Controllers
                             salesOrderLine.ItemId = line.ItemId.GetValueOrDefault();
                             salesOrderLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
                             salesInvoiceLine.SalesOrderLine = salesOrderLine;
+
                             salesOrder.SalesOrderLines.Add(salesOrderLine);
 
                             salesInvoiceLine.SalesOrderLine = salesOrderLine; // map invoice line to newly added orderline
@@ -873,7 +876,7 @@ namespace Api.Controllers
 
                 salesQuote.ReferenceNo = quotationDto.ReferenceNo;
                 salesQuote.PaymentTermId = quotationDto.PaymentTermId;
-
+                salesQuote.Status = SalesQuoteStatus.Draft;
                 foreach (var line in quotationDto.SalesQuotationLines)
                 {
                     if (!isNew)

@@ -67,7 +67,7 @@ namespace Api.Controllers
             ICollection<Item> itemsDto = new HashSet<Item>();
 
             foreach (var item in items)
-                itemsDto.Add(new Item() { Id = item.Id, Description = item.Description , Code = item.Code});
+                itemsDto.Add(new Item() { Id = item.Id, Description = item.Description , Code = item.Code, Price = item.Price, SellMeasurementId = item.SellMeasurementId});
 
             return new ObjectResult(itemsDto);
         }
