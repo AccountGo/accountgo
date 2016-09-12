@@ -6,5 +6,6 @@ export default class SalesQuotation {
     quotationDate: Date;
     paymentTermId: number;
     referenceNo: string;
+    statusId: number;
     salesQuotationLines: SalesQuotationLine[] = [];
 }

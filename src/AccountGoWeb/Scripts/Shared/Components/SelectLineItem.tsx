@@ -4,8 +4,27 @@ import {observer} from "mobx-react";
 @observer
 export default class SelectLineItem extends React.Component<any, {}>{
     onChangeItem(e) {
+        console.log(e.target.value);
         if (this.props.row !== undefined)
             this.props.store.updateLineItem(this.props.row, "itemId", e.target.value);
+
+        for (var i = 0; i < this.props.store.commonStore.items.length; i++) {
+            if (this.props.store.commonStore.items[i].id === parseInt(e.target.value)) {
+
+
+                if (this.props.row !== undefined) {
+                    this.props.store.updateLineItem(this.props.row, "measurementId", this.props.store.commonStore.items[i].sellMeasurementId);
+                    this.props.store.updateLineItem(this.props.row, "price", this.props.store.commonStore.items[i].price);
+
+                }
+                else {
+                    (document.getElementById("optNewMeasurementId") as HTMLInputElement).value = this.props.store.commonStore.items[i].sellMeasurementId;
+                    (document.getElementById("txtNewAmount") as HTMLInputElement).value = this.props.store.commonStore.items[i].price;
+                }
+
+
+            }
+        }
     }
 
     render() {

@@ -45,7 +45,7 @@ namespace Api.Controllers
             foreach (var customer in customers)
             {
                 if(customer.Party != null)
-                    customersDto.Add(new Customer() { Id = customer.Id, Name = customer.Party.Name });
+                    customersDto.Add(new Customer() { Id = customer.Id, Name = customer.Party.Name, PaymentTermId = customer.PaymentTermId });
             }
 
             return new ObjectResult(customersDto);
@@ -67,7 +67,7 @@ namespace Api.Controllers
             ICollection<Item> itemsDto = new HashSet<Item>();
 
             foreach (var item in items)
-                itemsDto.Add(new Item() { Id = item.Id, Description = item.Description });
+                itemsDto.Add(new Item() { Id = item.Id, Description = item.Description , Code = item.Code, Price = item.Price, SellMeasurementId = item.SellMeasurementId});
 
             return new ObjectResult(itemsDto);
         }
@@ -130,5 +130,7 @@ namespace Api.Controllers
 
             return Ok(accountsDto);
         }
+
+ 
     }
 }

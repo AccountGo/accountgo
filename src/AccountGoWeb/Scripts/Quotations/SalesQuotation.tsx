@@ -11,7 +11,9 @@ import SelectPaymentTerm from "../Shared/Components/SelectPaymentTerm";
 import SelectLineItem from "../Shared/Components/SelectLineItem";
 import SelectLineMeasurement from "../Shared/Components/SelectLineMeasurement";
 
+import SalesQuotationLine from "../Shared/Stores/Quotations/SalesQuotationLine";
 import SalesQuotationStore from "../Shared/Stores/Quotations/SalesQuotationStore";
+
 
 let quotationId = window.location.search.split("?id=")[1];
 
@@ -20,6 +22,7 @@ let store = new SalesQuotationStore(quotationId);
 @observer
 class ValidationErrors extends React.Component<any, {}>{
     render() {
+
         if (store.validationErrors !== undefined && store.validationErrors.length > 0) {
             var errors = [];
             store.validationErrors.map(function (item, index) {
@@ -38,14 +41,19 @@ class ValidationErrors extends React.Component<any, {}>{
     }
 }
 
+@observer
 class SaveQuotationButton extends React.Component<any, {}>{
     saveNewSalesQuotation(e) {
         store.saveNewQuotation();
     }
-
+    //className = {!store.salesInvoice.posted && store.editMode 
     render() {
-        return (            
-            <input type="button" className="btn btn-sm btn-primary btn-flat pull-left" value="Save" onClick={this.saveNewSalesQuotation.bind(this) } />                
+        return (
+         <input type="button" value="Save" onClick={this.saveNewSalesQuotation.bind(this) }
+                className={(store.salesQuotation.statusId == 0 || store.salesQuotation.statusId == undefined) && store.editMode
+                ? "btn btn-sm btn-primary btn-flat pull-left"
+                : "btn btn-sm btn-primary btn-flat pull-left inactiveLink"}
+            />
             );
     }
 }
@@ -59,7 +67,7 @@ class CancelQuotationButton extends React.Component<any, {}>{
 
         window.location.href = baseUrl + 'quotations';
     }
-    
+
     render() {
         return (
             <button type="button" className="btn btn-sm btn-default btn-flat pull-left" onClick={ this.cancelOnClick.bind(this) }>
@@ -75,11 +83,16 @@ class SalesQuotationHeader extends React.Component<any, {}>{
         store.changedQuotationDate(e.target.value);
     }
 
+    onChangeCustomer(e) {
+        alert('');
+    }
+
     onChangeReferenceNo(e) {
         store.changedReferenceNo(e.target.value);
     }
 
-    render() {        
+
+    render() {
         return (
             <div className="box">
                 <div className="box-header with-border">
@@ -110,7 +123,7 @@ class SalesQuotationHeader extends React.Component<any, {}>{
                         <div className="row">
                             <div className="col-sm-2">Reference no.</div>
                             <div className="col-sm-10"><input type="text" className="form-control"  value={store.salesQuotation.referenceNo || ''} onChange={this.onChangeReferenceNo.bind(this) }  /></div>
-                  
+
                         </div>
                     </div>
                 </div>
@@ -122,19 +135,25 @@ class SalesQuotationHeader extends React.Component<any, {}>{
 @observer
 class SalesQuotationLines extends React.Component<any, {}>{
     addLineItem() {
-        var itemId, measurementId, quantity, amount, discount;
-        itemId = (document.getElementById("optNewItemId") as HTMLInputElement).value;
-        measurementId = (document.getElementById("optNewMeasurementId") as HTMLInputElement).value;
-        quantity = (document.getElementById("txtNewQuantity") as HTMLInputElement).value;
-        amount = (document.getElementById("txtNewAmount") as HTMLInputElement).value;
-        discount = (document.getElementById("txtNewDiscount") as HTMLInputElement).value;
 
-        //console.log(`itemId: ${itemId} | measurementId: ${measurementId} | quantity: ${quantity} | amount: ${amount} | discount: ${discount}`);
-        store.addLineItem(0, itemId, measurementId, quantity, amount, discount);
+        if (store.validationLine()) {
 
-        (document.getElementById("txtNewQuantity") as HTMLInputElement).value = "1";
-        (document.getElementById("txtNewAmount") as HTMLInputElement).value = "0";
-        (document.getElementById("txtNewDiscount") as HTMLInputElement).value = "";
+            var itemId, measurementId, quantity, amount, discount;
+            itemId = (document.getElementById("optNewItemId") as HTMLInputElement).value;
+
+            measurementId = (document.getElementById("optNewMeasurementId") as HTMLInputElement).value;
+            quantity = (document.getElementById("txtNewQuantity") as HTMLInputElement).value;
+            amount = (document.getElementById("txtNewAmount") as HTMLInputElement).value;
+            discount = (document.getElementById("txtNewDiscount") as HTMLInputElement).value;
+
+            console.log(`itemId: ${itemId} | measurementId: ${measurementId} | quantity: ${quantity} | amount: ${amount} | discount: ${discount}`);
+            store.addLineItem(0, itemId, measurementId, quantity, amount, discount);
+
+            (document.getElementById("txtNewQuantity") as HTMLInputElement).value = quantity;
+            (document.getElementById("txtNewAmount") as HTMLInputElement).value = amount;
+            (document.getElementById("txtNewDiscount") as HTMLInputElement).value = discount;
+        }
+
     }
 
     onClickRemoveLineItem(i, e) {
@@ -153,26 +172,51 @@ class SalesQuotationLines extends React.Component<any, {}>{
         store.updateLineItem(e.target.name, "discount", e.target.value);
     }
 
-    render() {        
+    onChangeCode(e) {
+        store.updateLineItem(e.target.name, "code", e.target.value);
+    }
+
+    onFocusOutItem(e, i) {
+
+        for (var x = 0; x < store.commonStore.items.length; x++) {
+            if (store.commonStore.items[x].code == i.target.value) {
+
+                if (store.salesQuotation.salesQuotationLines.length > 0) {
+                    store.updateLineItem(e, "itemId", store.commonStore.items[x].id);
+                    store.updateLineItem(e, "measurementId", store.commonStore.items[x].sellMeasurementId);
+                    store.updateLineItem(e, "amount", store.commonStore.items[x].price);
+                }
+                else {
+                    (document.getElementById("optNewItemId") as HTMLInputElement).value = store.commonStore.items[x].id;
+                    (document.getElementById("optNewMeasurementId") as HTMLInputElement).value = store.commonStore.items[x].sellMeasurementId;
+                    (document.getElementById("txtNewAmount") as HTMLInputElement).value = store.commonStore.items[x].price;
+                }
+
+            }
+        }
+    }
+    render() {
+
         var lineItems = [];
         for (var i = 0; i < store.salesQuotation.salesQuotationLines.length; i++) {
             lineItems.push(
                 <tr key={i}>
                     <td><SelectLineItem store={store} row={i} selected={store.salesQuotation.salesQuotationLines[i].itemId} /></td>
-                    <td>{store.salesQuotation.salesQuotationLines[i].itemId}</td>
+                    <td><input className="form-control" type="text" name={i} value={store.salesQuotation.salesQuotationLines[i].code} onBlur={this.onFocusOutItem.bind(this, i) } /></td>
                     <td><SelectLineMeasurement row={i} store={store} selected={store.salesQuotation.salesQuotationLines[i].measurementId} /></td>
                     <td><input className="form-control" type="text" name={i} value={store.salesQuotation.salesQuotationLines[i].quantity} onChange={this.onChangeQuantity.bind(this) } /></td>
                     <td><input className="form-control" type="text" name={i} value={store.salesQuotation.salesQuotationLines[i].amount} onChange={this.onChangeAmount.bind(this) } /></td>
                     <td><input className="form-control" type="text" name={i} value={store.salesQuotation.salesQuotationLines[i].discount} onChange={this.onChangeDiscount.bind(this) } /></td>
                     <td>{store.getLineTotal(i) }</td>
                     <td>
-                        <button type="button" className="btn btn-box-tool" onClick={this.onClickRemoveLineItem.bind(this, i)}>
+                        <button type="button" className="btn btn-box-tool" onClick={this.onClickRemoveLineItem.bind(this, i) }>
                             <i className="fa fa-fw fa-times"></i>
                         </button>
                     </td>
                 </tr>
             );
         }
+
         return (
             <div className="box">
                 <div className="box-header with-border">
@@ -187,8 +231,8 @@ class SalesQuotationLines extends React.Component<any, {}>{
                     <table className="table table-hover">
                         <thead>
                             <tr>
-                                <td>Item Id</td>
-                                <td>Item Name</td>
+                                <td>Item</td>
+                                <td>Code</td>
                                 <td>Measurement</td>
                                 <td>Quantity</td>
                                 <td>Amount</td>
@@ -201,7 +245,7 @@ class SalesQuotationLines extends React.Component<any, {}>{
                             {lineItems}
                             <tr>
                                 <td><SelectLineItem store={store} controlId="optNewItemId" /></td>
-                                <td>Item Name</td>
+                                <td><input className="form-control" type="text" id="txtNewCode" onBlur={this.onFocusOutItem.bind(this, i) } /></td>
                                 <td><SelectLineMeasurement store={store} controlId="optNewMeasurementId" /></td>
                                 <td><input className="form-control" type="text" id="txtNewQuantity" /></td>
                                 <td><input className="form-control" type="text" id="txtNewAmount" /></td>
@@ -222,7 +266,7 @@ class SalesQuotationLines extends React.Component<any, {}>{
 }
 
 @observer
-class SalesQuotationTotals extends React.Component<any, {}>{    
+class SalesQuotationTotals extends React.Component<any, {}>{
     render() {
         return (
             <div className="box">
@@ -241,21 +285,58 @@ class SalesQuotationTotals extends React.Component<any, {}>{
     }
 }
 
+@observer
+class EditButton extends React.Component<any, {}> {
+    onClickEditButton() {
+        // Remove " disabledControl" from current className
+        var nodes = document.getElementById("divSalesQuotationForm").getElementsByTagName('*');
+        for (var i = 0; i < nodes.length; i++) {
+            var subStringLength = nodes[i].className.length - " disabledControl".length;
+            nodes[i].className = nodes[i].className.substring(0, subStringLength);
+        }
+
+        store.changedEditMode(true);
+    }
+    render() {
+        console.log(store.salesQuotation.statusId);
+        console.log(store.salesQuotation);
+        return (
+            <a href="#" id="linkEdit" onClick={this.onClickEditButton} 
+                className={store.salesQuotation.statusId == 0 && !store.editMode
+                    ? "btn"
+                    : "btn inactiveLink"}>
+                <i className="fa fa-edit"></i>
+                Edit
+            </a>
+        );
+    }
+
+}
+
 export default class SalesQuotation extends React.Component<any, {}> {
     render() {
         return (
-            <div>                
-                <ValidationErrors />
-                <SalesQuotationHeader />
-                <SalesQuotationLines />
-                <SalesQuotationTotals />
+            <div>
+                <div id="divActionsTop">
+                    <EditButton/>
+                </div>
+                <div id="divSalesQuotationForm">
+                    <ValidationErrors />
+                    <SalesQuotationHeader />
+                    <SalesQuotationLines />
+                    <SalesQuotationTotals />
+                </div>
                 <div>
                     <SaveQuotationButton />
                     <CancelQuotationButton />
                 </div>
             </div>
-            );
+        );
     }
 }
 
+
 ReactDOM.render(<SalesQuotation />, document.getElementById("divSalesQuotation"));
+
+
+ 
