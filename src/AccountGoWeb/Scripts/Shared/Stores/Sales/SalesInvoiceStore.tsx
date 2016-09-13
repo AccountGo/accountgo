@@ -139,7 +139,14 @@ export default class SalesStore {
     }
 
     printInvoice() {
-        window.open(baseUrl + 'sales/salesinvoicepdf?id=' + this.salesInvoice.id, "_blank", "toolbar=no,scrollbars=yes,resizable=yes,top=200,left=500,width=800,height=600");
+        var w = 800;
+        var h = 600;
+        var wLeft = window.screenLeft ? window.screenLeft : window.screenX;
+        var wTop = window.screenTop ? window.screenTop : window.screenY;
+
+        var left = wLeft + (window.innerWidth / 2) - (w / 2);
+        var top = wTop + (window.innerHeight / 2) - (h / 2);
+        window.open(baseUrl + 'sales/salesinvoicepdf?id=' + this.salesInvoice.id, "_blank", 'toolbar=no, location=no, directories=no, status=no, menubar=no, scrollbars=no, resizable=no, copyhistory=no, width=' + w + ', height=' + h + ', top=' + top + ', left=' + left);
     }
 
     postInvoice() {

@@ -200,7 +200,10 @@
 @section scripts{
     <script src="~/js/custom.js" type="text/javascript"></script>
     <script>
-        setFormDisabled("divCustomerCard");
+        if (@Model.Id !== 0) {
+            setFormDisabled("divCustomerCard");
+        }
+
         function onClickEditButton() {
             document.getElementById("linkEdit").className = document.getElementById("linkEdit").className + " disabledControl";
             document.getElementById("btnSave").className = "btn btn-sm btn-primary btn-flat pull-left";

@@ -24,6 +24,7 @@
     "knockout": "latest",
     "knockout-mapping": "latest",
     "accounting": "^0.4.1",
-    "jspdf": "latest"
+    "jspdf": "latest",
+    "html2canvas": "0.5.0-beta4"
   }
 }
