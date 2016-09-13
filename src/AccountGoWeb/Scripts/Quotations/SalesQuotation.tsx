@@ -302,7 +302,7 @@ class BookButton extends React.Component<any, {}>{
     render() {
         return (
 
-            <input type="button" value="Post" onClick={ this.bookOnClick.bind(this) }
+            <input type="button" value="Book" onClick={ this.bookOnClick.bind(this) }
                 className={store.salesQuotation.statusId == 0 && !store.editMode
                     ? "btn btn-sm btn-primary btn-flat btn-danger pull-right"
                     : "btn btn-sm btn-primary btn-flat btn-danger pull-right inactiveLink"} />
