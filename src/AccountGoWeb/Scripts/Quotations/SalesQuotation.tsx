@@ -97,7 +97,7 @@ class SalesQuotationHeader extends React.Component<any, {}>{
         return (
             <div className="box">
                 <div className="box-header with-border">
-                    <h3 className="box-title">Customer Information</h3>
+                    <h3 className="box-title">Customer Information - <span>{store.salesQuotation.customerId}</span></h3>
                     <div className="box-tools pull-right">
                         <button type="button" className="btn btn-box-tool" data-widget="collapse" data-toggle="tooltip" title="Collapse">
                             <i className="fa fa-minus"></i>
@@ -124,6 +124,11 @@ class SalesQuotationHeader extends React.Component<any, {}>{
                         <div className="row">
                             <div className="col-sm-2">Reference no.</div>
                             <div className="col-sm-10"><input type="text" className="form-control"  value={store.salesQuotation.referenceNo || ''} onChange={this.onChangeReferenceNo.bind(this) }  /></div>
+
+                        </div>
+                        <div className="row">
+                            <div className="col-sm-2">Status</div>
+                            <div className="col-sm-10"><label>{store.salesQuotationStatus}</label></div>
 
                         </div>
                     </div>

@@ -17,6 +17,7 @@ let baseUrl = location.protocol
 export default class SalesQuotationStore {
     salesQuotation;
     commonStore;
+    @observable salesQuotationStatus;
     @observable validationErrors;
     @observable editMode = false;
 
@@ -44,6 +45,7 @@ export default class SalesQuotationStore {
                 this.salesQuotation.referenceNo = result.data.referenceNo;
                 this.salesQuotation.statusId = result.data.statusId;
                 this.changedCustomer(result.data.customerId);
+                this.getQuotationStatus(result.data.statusId);
                 this.changedQuotationDate(result.data.quotationDate);
                 for (var i = 0; i < result.data.salesQuotationLines.length; i++) {
                     this.addLineItem(
@@ -171,6 +173,23 @@ export default class SalesQuotationStore {
         }
 
         return this.validationErrors.length === 0;
+    }
+
+    
+    getQuotationStatus(statusId)
+    {
+        var status = "";
+        if (statusId === 0)
+            status = "Draft";
+        else if (statusId === 1)
+            status = "Open";
+        else if (statusId === 2)
+            status = "Overdue";
+        else if (statusId === 3)
+            status = "Closed";
+        else if (statusId === 4)
+            status = "Void";
+        this.salesQuotationStatus = status;
     }
 
 
