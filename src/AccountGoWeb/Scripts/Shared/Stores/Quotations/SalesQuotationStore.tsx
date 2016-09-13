@@ -17,6 +17,7 @@ let baseUrl = location.protocol
 export default class SalesQuotationStore {
     salesQuotation;
     commonStore;
+    @observable salesQuotationStatus;
     @observable validationErrors;
     @observable editMode = false;
 
@@ -28,7 +29,7 @@ export default class SalesQuotationStore {
             quotationDate: this.salesQuotation.quotationDate,
             paymentTermId: this.salesQuotation.paymentTermId,
             referenceNo: this.salesQuotation.referenceNo,
-            statusId : this.salesQuotation.statusId,
+            statusId: this.salesQuotation.statusId,
             salesQuotationLines: []
         });
 
@@ -44,6 +45,7 @@ export default class SalesQuotationStore {
                 this.salesQuotation.referenceNo = result.data.referenceNo;
                 this.salesQuotation.statusId = result.data.statusId;
                 this.changedCustomer(result.data.customerId);
+                this.getQuotationStatus(result.data.statusId);
                 this.changedQuotationDate(result.data.quotationDate);
                 for (var i = 0; i < result.data.salesQuotationLines.length; i++) {
                     this.addLineItem(
@@ -52,8 +54,9 @@ export default class SalesQuotationStore {
                         result.data.salesQuotationLines[i].measurementId,
                         result.data.salesQuotationLines[i].quantity,
                         result.data.salesQuotationLines[i].amount,
-                        result.data.salesQuotationLines[i].discount                  
+                        result.data.salesQuotationLines[i].discount
                     );
+                    this.updateLineItem(i, 'code', this.changeItemCode(result.data.salesQuotationLines[i].itemId));
                 }
                 this.computeTotals();
                 //this.changedEditMode(true);
@@ -63,15 +66,16 @@ export default class SalesQuotationStore {
                 }
             }.bind(this));
         }
-        else {
-            this.changedEditMode(true);   
-        }
 
     }
+
 
     @observable RTotal = 0;
     @observable GTotal = 0;
     @observable TTotal = 0;
+
+
+
 
     computeTotals() {
         var rtotal = 0;
@@ -97,6 +101,30 @@ export default class SalesQuotationStore {
         if (this.validation()) {
             if (this.validationErrors.length === 0) {
                 axios.post(Config.apiUrl + "api/sales/savequotation", JSON.stringify(this.salesQuotation),
+                    {
+                        headers:
+                        {
+                            'Content-type': 'application/json'
+                        }
+                    }
+                )
+                    .then(function (response) {
+                        window.location.href = baseUrl + 'quotations';
+                    })
+                    .catch(function (error) {
+                        error.data.map(function (err) {
+                            this.validationErrors.push(err);
+                        }.bind(this));
+                    }.bind(this));
+            }
+        }
+    }
+
+    bookQuotation() {
+        console.log(this.salesQuotation.id);
+        if (this.validation()) {
+            if (this.validationErrors.length === 0) {
+                axios.post(Config.apiUrl + "api/sales/bookquotation?id=" + parseInt(this.salesQuotation.id),
                     {
                         headers:
                         {
@@ -145,6 +173,23 @@ export default class SalesQuotationStore {
         return this.validationErrors.length === 0;
     }
 
+    
+    getQuotationStatus(statusId)
+    {
+        var status = "";
+        if (statusId === 0)
+            status = "Draft";
+        else if (statusId === 1)
+            status = "Open";
+        else if (statusId === 2)
+            status = "Overdue";
+        else if (statusId === 3)
+            status = "Closed";
+        else if (statusId === 4)
+            status = "Void";
+        this.salesQuotationStatus = status;
+    }
+
 
 
 validationLine()
@@ -181,8 +226,26 @@ validationLine()
             this.validationErrors.push("Quantity is required.");
         if (amount == "" || amount === undefined)
             this.validationErrors.push("Amount is required.");
-
     }
+
+    if (document.getElementById("optNewItemId")) {
+        var itemId, measurementId, quantity, amount, discount;
+        itemId = (document.getElementById("optNewItemId") as HTMLInputElement).value;
+        measurementId = (document.getElementById("optNewMeasurementId") as HTMLInputElement).value;
+        quantity = (document.getElementById("txtNewQuantity") as HTMLInputElement).value;
+        amount = (document.getElementById("txtNewAmount") as HTMLInputElement).value;
+        discount = (document.getElementById("txtNewDiscount") as HTMLInputElement).value;
+
+        if (itemId == "" || itemId === undefined)
+            this.validationErrors.push("Item is required.");
+        if (measurementId == "" || measurementId === undefined)
+            this.validationErrors.push("Uom is required.");
+        if (quantity == "" || quantity === undefined)
+            this.validationErrors.push("Quantity is required.");
+        if (amount == "" || amount === undefined)
+            this.validationErrors.push("Amount is required.");
+    }
+
 
     return this.validationErrors.length === 0;
 }
@@ -201,8 +264,18 @@ changedQuotationDate(date) {
 changedReferenceNo(refNo) {
     this.salesQuotation.referenceNo = refNo;
 }
-addLineItem(id, itemId, measurementId, quantity, amount, discount) {
-    var newLineItem = new SalesQuotationLine(id, itemId, measurementId, quantity, amount, discount);
+
+changeItemCode(itemId) {      
+  
+    for (var x = 0; x < this.commonStore.items.length; x++) {
+        if (this.commonStore.items[x].id === parseInt(itemId)) {
+            return this.commonStore.items[x].code;
+        }
+    }
+}
+
+addLineItem(id, itemId, measurementId, quantity, amount, discount, code) {
+    var newLineItem = new SalesQuotationLine(id, itemId, measurementId, quantity, amount, discount, code);
     this.salesQuotation.salesQuotationLines.push(extendObservable(newLineItem, newLineItem));
 }
 

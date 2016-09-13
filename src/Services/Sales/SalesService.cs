@@ -930,6 +930,15 @@ namespace Services.Sales
 
 
         }
+
+        public void BookQuotation(int id)
+        {
+            var quoatation = _salesQuoteRepo.GetById(id);
+
+            quoatation.Status = SalesQuoteStatus.Open;
+            _salesQuoteRepo.Update(quoatation);
+            
+        }
  
     }
 }

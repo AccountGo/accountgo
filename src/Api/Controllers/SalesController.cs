@@ -417,7 +417,7 @@ namespace Api.Controllers
                     MeasurementId = line.MeasurementId,
                     Quantity = line.Quantity,
                     Amount = line.Amount,
-                    Discount = line.Discount
+                    Discount = line.Discount           
                 };
                 quoteDto.SalesQuotationLines.Add(lineDto);
             }
@@ -1137,5 +1137,22 @@ namespace Api.Controllers
             }
         }
 
+        [HttpPost]
+        [Route("[action]")]
+        public IActionResult BookQuotation(int id)
+        {            
+  
+            try
+            {
+                _salesService.BookQuotation(id);            
+                return new ObjectResult(Ok());
+            }
+            catch (Exception ex)
+            {        
+                return new BadRequestObjectResult(ex.Message);
+            }
+ 
+
+        }
     }
 }

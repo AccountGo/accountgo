@@ -51,5 +51,6 @@ namespace Services.Sales
         void PostSalesInvoice(int invoiceId);
         Contact GetContacyById(int id);
         CustomerContact GetCustomerContact(int id);
+        void BookQuotation(int id);
     }
 }
