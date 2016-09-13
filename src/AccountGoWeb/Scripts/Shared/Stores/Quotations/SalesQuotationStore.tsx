@@ -54,7 +54,7 @@ export default class SalesQuotationStore {
                         result.data.salesQuotationLines[i].measurementId,
                         result.data.salesQuotationLines[i].quantity,
                         result.data.salesQuotationLines[i].amount,
-                        result.data.salesQuotationLines[i].discount              
+                        result.data.salesQuotationLines[i].discount
                     );
                     this.updateLineItem(i, 'code', this.changeItemCode(result.data.salesQuotationLines[i].itemId));                    
                 }
@@ -66,9 +66,7 @@ export default class SalesQuotationStore {
                 }
             }.bind(this));
         }
-        else {
-            this.changedEditMode(true);   
-        }
+    }
 
     }
 

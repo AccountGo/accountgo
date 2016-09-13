@@ -4,7 +4,6 @@ import {observer} from "mobx-react";
 @observer
 export default class SelectLineItem extends React.Component<any, {}>{
     onChangeItem(e) {
- 
         if (this.props.row !== undefined)
             this.props.store.updateLineItem(this.props.row, "itemId", e.target.value);
 
