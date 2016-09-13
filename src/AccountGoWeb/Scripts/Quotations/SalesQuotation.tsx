@@ -183,25 +183,30 @@ class SalesQuotationLines extends React.Component<any, {}>{
     }
 
 
-    onFocusOutItem(e, i) {
+    onFocusOutItem(e,isNew,i) {
 
         for (var x = 0; x < store.commonStore.items.length; x++) {
             if (store.commonStore.items[x].code == i.target.value) {
-
-                if (store.salesQuotation.salesQuotationLines.length > 0) {
-                    store.updateLineItem(e, "itemId", store.commonStore.items[x].id);
-                    store.updateLineItem(e, "measurementId", store.commonStore.items[x].sellMeasurementId);
-                    store.updateLineItem(e, "amount", store.commonStore.items[x].price);
-                }
-                else {
+ 
+                if (isNew) {
                     (document.getElementById("optNewItemId") as HTMLInputElement).value = store.commonStore.items[x].id;
                     (document.getElementById("optNewMeasurementId") as HTMLInputElement).value = store.commonStore.items[x].sellMeasurementId;
                     (document.getElementById("txtNewAmount") as HTMLInputElement).value = store.commonStore.items[x].price;
                 }
+                else {
+                    store.updateLineItem(e, "itemId", store.commonStore.items[x].id);
+                    store.updateLineItem(e, "measurementId", store.commonStore.items[x].sellMeasurementId);
+                    store.updateLineItem(e, "amount", store.commonStore.items[x].price);
+
+                }
+
 
             }
         }
     }
+
+ 
+
     render() {
         
         var lineItems = [];
@@ -210,7 +215,7 @@ class SalesQuotationLines extends React.Component<any, {}>{
             lineItems.push(
                 <tr key={i}>
                     <td><SelectLineItem store={store} row={i} selected={store.salesQuotation.salesQuotationLines[i].itemId} /></td>
-                    <td><input className="form-control" type="text" name={i} value={store.salesQuotation.salesQuotationLines[i].code} onBlur={this.onFocusOutItem.bind(this, i)} onChange={this.onChangeCode.bind(this) } /></td>
+                    <td><input className="form-control" type="text" name={i} value={store.salesQuotation.salesQuotationLines[i].code} onBlur={this.onFocusOutItem.bind(this, i, false)} onChange={this.onChangeCode.bind(this) } /></td>
                     <td><SelectLineMeasurement row={i} store={store} selected={store.salesQuotation.salesQuotationLines[i].measurementId} /></td>
                     <td><input className="form-control" type="text" name={i} value={store.salesQuotation.salesQuotationLines[i].quantity} onChange={this.onChangeQuantity.bind(this) } /></td>
                     <td><input className="form-control" type="text" name={i} value={store.salesQuotation.salesQuotationLines[i].amount} onChange={this.onChangeAmount.bind(this) } /></td>
@@ -253,7 +258,7 @@ class SalesQuotationLines extends React.Component<any, {}>{
                             {lineItems}
                             <tr>
                                 <td><SelectLineItem store={store} controlId="optNewItemId" /></td>
-                                <td><input className="form-control" type="text" id="txtNewCode" onBlur={this.onFocusOutItem.bind(this, i) } /></td>
+                                <td><input className="form-control" type="text" id="txtNewCode" onBlur={this.onFocusOutItem.bind(this, i, true) } /></td>
                                 <td><SelectLineMeasurement store={store} controlId="optNewMeasurementId" /></td>
                                 <td><input className="form-control" type="text" id="txtNewQuantity" /></td>
                                 <td><input className="form-control" type="text" id="txtNewAmount" /></td>
