@@ -5,12 +5,14 @@ import {observer} from "mobx-react";
 export default class SelectCustomer extends React.Component<any, {}>{
     onChangeCustomer(e) {
         this.props.store.changedCustomer(e.target.value);
-
  
         for (var i = 0; i < this.props.store.commonStore.customers.length; i++) {
             if (this.props.store.commonStore.customers[i].id === parseInt(e.target.value)) {
-                console.log(this.props.store.commonStore.customers[i].paymentTermId);
                 this.props.store.changedPaymentTerm(this.props.store.commonStore.customers[i].paymentTermId);
+            }
+            else
+            {
+                this.props.store.changedPaymentTerm("");
             }
         }
      

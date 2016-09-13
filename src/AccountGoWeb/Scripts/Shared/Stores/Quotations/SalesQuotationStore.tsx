@@ -52,8 +52,9 @@ export default class SalesQuotationStore {
                         result.data.salesQuotationLines[i].measurementId,
                         result.data.salesQuotationLines[i].quantity,
                         result.data.salesQuotationLines[i].amount,
-                        result.data.salesQuotationLines[i].discount                  
+                        result.data.salesQuotationLines[i].discount              
                     );
+                    this.updateLineItem(i, 'code', this.changeItemCode(result.data.salesQuotationLines[i].itemId));                    
                 }
                 this.computeTotals();
                 //this.changedEditMode(true);
@@ -72,6 +73,9 @@ export default class SalesQuotationStore {
     @observable RTotal = 0;
     @observable GTotal = 0;
     @observable TTotal = 0;
+
+
+
 
     computeTotals() {
         var rtotal = 0;
@@ -97,6 +101,30 @@ export default class SalesQuotationStore {
         if (this.validation()) {
             if (this.validationErrors.length === 0) {
                 axios.post(Config.apiUrl + "api/sales/savequotation", JSON.stringify(this.salesQuotation),
+                    {
+                        headers:
+                        {
+                            'Content-type': 'application/json'
+                        }
+                    }
+                )
+                    .then(function (response) {
+                        window.location.href = baseUrl + 'quotations';
+                    })
+                    .catch(function (error) {
+                        error.data.map(function (err) {
+                            this.validationErrors.push(err);
+                        }.bind(this));
+                    }.bind(this));
+            }
+        }
+    }
+
+    bookQuotation() {
+        console.log(this.salesQuotation.id);
+        if (this.validation()) {
+            if (this.validationErrors.length === 0) {
+                axios.post(Config.apiUrl + "api/sales/bookquotation?id=" + parseInt(this.salesQuotation.id),
                     {
                         headers:
                         {
@@ -181,8 +209,26 @@ validationLine()
             this.validationErrors.push("Quantity is required.");
         if (amount == "" || amount === undefined)
             this.validationErrors.push("Amount is required.");
-
     }
+
+    if (document.getElementById("optNewItemId")) {
+        var itemId, measurementId, quantity, amount, discount;
+        itemId = (document.getElementById("optNewItemId") as HTMLInputElement).value;
+        measurementId = (document.getElementById("optNewMeasurementId") as HTMLInputElement).value;
+        quantity = (document.getElementById("txtNewQuantity") as HTMLInputElement).value;
+        amount = (document.getElementById("txtNewAmount") as HTMLInputElement).value;
+        discount = (document.getElementById("txtNewDiscount") as HTMLInputElement).value;
+
+        if (itemId == "" || itemId === undefined)
+            this.validationErrors.push("Item is required.");
+        if (measurementId == "" || measurementId === undefined)
+            this.validationErrors.push("Uom is required.");
+        if (quantity == "" || quantity === undefined)
+            this.validationErrors.push("Quantity is required.");
+        if (amount == "" || amount === undefined)
+            this.validationErrors.push("Amount is required.");
+    }
+
 
     return this.validationErrors.length === 0;
 }
@@ -201,8 +247,21 @@ changedQuotationDate(date) {
 changedReferenceNo(refNo) {
     this.salesQuotation.referenceNo = refNo;
 }
-addLineItem(id, itemId, measurementId, quantity, amount, discount) {
-    var newLineItem = new SalesQuotationLine(id, itemId, measurementId, quantity, amount, discount);
+
+ 
+
+
+changeItemCode(itemId) {      
+  
+    for (var x = 0; x < this.commonStore.items.length; x++) {
+        if (this.commonStore.items[x].id === parseInt(itemId)) {
+            return this.commonStore.items[x].code;
+        }
+    }
+}
+
+addLineItem(id, itemId, measurementId, quantity, amount, discount, code) {
+    var newLineItem = new SalesQuotationLine(id, itemId, measurementId, quantity, amount, discount, code);
     this.salesQuotation.salesQuotationLines.push(extendObservable(newLineItem, newLineItem));
 }
 

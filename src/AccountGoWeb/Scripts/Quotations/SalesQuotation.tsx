@@ -18,6 +18,7 @@ import SalesQuotationStore from "../Shared/Stores/Quotations/SalesQuotationStore
 let quotationId = window.location.search.split("?id=")[1];
 
 let store = new SalesQuotationStore(quotationId);
+ 
 
 @observer
 class ValidationErrors extends React.Component<any, {}>{
@@ -138,16 +139,16 @@ class SalesQuotationLines extends React.Component<any, {}>{
 
         if (store.validationLine()) {
 
-            var itemId, measurementId, quantity, amount, discount;
+            var itemId, measurementId, quantity, amount, discount, code;
             itemId = (document.getElementById("optNewItemId") as HTMLInputElement).value;
 
             measurementId = (document.getElementById("optNewMeasurementId") as HTMLInputElement).value;
             quantity = (document.getElementById("txtNewQuantity") as HTMLInputElement).value;
             amount = (document.getElementById("txtNewAmount") as HTMLInputElement).value;
             discount = (document.getElementById("txtNewDiscount") as HTMLInputElement).value;
-
-            console.log(`itemId: ${itemId} | measurementId: ${measurementId} | quantity: ${quantity} | amount: ${amount} | discount: ${discount}`);
-            store.addLineItem(0, itemId, measurementId, quantity, amount, discount);
+            code = (document.getElementById("txtNewCode") as HTMLInputElement).value;
+            //console.log(`itemId: ${itemId} | measurementId: ${measurementId} | quantity: ${quantity} | amount: ${amount} | discount: ${discount}`);
+            store.addLineItem(0, itemId, measurementId, quantity, amount, discount, code);
 
             (document.getElementById("txtNewQuantity") as HTMLInputElement).value = quantity;
             (document.getElementById("txtNewAmount") as HTMLInputElement).value = amount;
@@ -176,6 +177,7 @@ class SalesQuotationLines extends React.Component<any, {}>{
         store.updateLineItem(e.target.name, "code", e.target.value);
     }
 
+
     onFocusOutItem(e, i) {
 
         for (var x = 0; x < store.commonStore.items.length; x++) {
@@ -196,13 +198,14 @@ class SalesQuotationLines extends React.Component<any, {}>{
         }
     }
     render() {
-
+        
         var lineItems = [];
         for (var i = 0; i < store.salesQuotation.salesQuotationLines.length; i++) {
+            //var initialCode = this.onloadCode(store.salesQuotation.salesQuotationLines[i].itemId); // this is for initial value of code
             lineItems.push(
                 <tr key={i}>
                     <td><SelectLineItem store={store} row={i} selected={store.salesQuotation.salesQuotationLines[i].itemId} /></td>
-                    <td><input className="form-control" type="text" name={i} value={store.salesQuotation.salesQuotationLines[i].code} onBlur={this.onFocusOutItem.bind(this, i) } /></td>
+                    <td><input className="form-control" type="text" name={i} value={store.salesQuotation.salesQuotationLines[i].code} onBlur={this.onFocusOutItem.bind(this, i)} onChange={this.onChangeCode.bind(this) } /></td>
                     <td><SelectLineMeasurement row={i} store={store} selected={store.salesQuotation.salesQuotationLines[i].measurementId} /></td>
                     <td><input className="form-control" type="text" name={i} value={store.salesQuotation.salesQuotationLines[i].quantity} onChange={this.onChangeQuantity.bind(this) } /></td>
                     <td><input className="form-control" type="text" name={i} value={store.salesQuotation.salesQuotationLines[i].amount} onChange={this.onChangeAmount.bind(this) } /></td>
@@ -286,6 +289,23 @@ class SalesQuotationTotals extends React.Component<any, {}>{
 }
 
 @observer
+class BookButton extends React.Component<any, {}>{
+    bookOnClick(e) {
+        store.bookQuotation();
+    }
+
+    render() {
+        return (
+
+            <input type="button" value="Post" onClick={ this.bookOnClick.bind(this) }
+                className={store.salesQuotation.statusId == 0 && !store.editMode
+                    ? "btn btn-sm btn-primary btn-flat btn-danger pull-right"
+                    : "btn btn-sm btn-primary btn-flat btn-danger pull-right inactiveLink"} />
+        );
+    }
+}
+
+@observer
 class EditButton extends React.Component<any, {}> {
     onClickEditButton() {
         // Remove " disabledControl" from current className
@@ -329,6 +349,7 @@ export default class SalesQuotation extends React.Component<any, {}> {
                 <div>
                     <SaveQuotationButton />
                     <CancelQuotationButton />
+                    <BookButton />
                 </div>
             </div>
         );

@@ -4,7 +4,7 @@ import {observer} from "mobx-react";
 @observer
 export default class SelectLineItem extends React.Component<any, {}>{
     onChangeItem(e) {
-        console.log(e.target.value);
+ 
         if (this.props.row !== undefined)
             this.props.store.updateLineItem(this.props.row, "itemId", e.target.value);
 
@@ -15,11 +15,15 @@ export default class SelectLineItem extends React.Component<any, {}>{
                 if (this.props.row !== undefined) {
                     this.props.store.updateLineItem(this.props.row, "measurementId", this.props.store.commonStore.items[i].sellMeasurementId);
                     this.props.store.updateLineItem(this.props.row, "price", this.props.store.commonStore.items[i].price);
+                    this.props.store.updateLineItem(this.props.row, "code", this.props.store.commonStore.items[i].code);
+
 
                 }
                 else {
                     (document.getElementById("optNewMeasurementId") as HTMLInputElement).value = this.props.store.commonStore.items[i].sellMeasurementId;
                     (document.getElementById("txtNewAmount") as HTMLInputElement).value = this.props.store.commonStore.items[i].price;
+                    (document.getElementById("txtNewCode") as HTMLInputElement).value = this.props.store.commonStore.items[i].code;
+                    
                 }
 
 
