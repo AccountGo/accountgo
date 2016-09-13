@@ -29,7 +29,7 @@ export default class SalesQuotationStore {
             quotationDate: this.salesQuotation.quotationDate,
             paymentTermId: this.salesQuotation.paymentTermId,
             referenceNo: this.salesQuotation.referenceNo,
-            statusId : this.salesQuotation.statusId,
+            statusId: this.salesQuotation.statusId,
             salesQuotationLines: []
         });
 
@@ -56,7 +56,7 @@ export default class SalesQuotationStore {
                         result.data.salesQuotationLines[i].amount,
                         result.data.salesQuotationLines[i].discount
                     );
-                    this.updateLineItem(i, 'code', this.changeItemCode(result.data.salesQuotationLines[i].itemId));                    
+                    this.updateLineItem(i, 'code', this.changeItemCode(result.data.salesQuotationLines[i].itemId));
                 }
                 this.computeTotals();
                 //this.changedEditMode(true);
@@ -66,9 +66,9 @@ export default class SalesQuotationStore {
                 }
             }.bind(this));
         }
-    }
 
     }
+
 
     @observable RTotal = 0;
     @observable GTotal = 0;
@@ -264,9 +264,6 @@ changedQuotationDate(date) {
 changedReferenceNo(refNo) {
     this.salesQuotation.referenceNo = refNo;
 }
-
- 
-
 
 changeItemCode(itemId) {      
   
