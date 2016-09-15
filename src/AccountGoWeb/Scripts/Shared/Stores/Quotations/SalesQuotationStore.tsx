@@ -59,12 +59,14 @@ export default class SalesQuotationStore {
                     this.updateLineItem(i, 'code', this.changeItemCode(result.data.salesQuotationLines[i].itemId));
                 }
                 this.computeTotals();
-                //this.changedEditMode(true);
                 var nodes = document.getElementById("divSalesQuotationForm").getElementsByTagName('*');
                 for (var i = 0; i < nodes.length; i++) {
                     nodes[i].className += " disabledControl";
                 }
             }.bind(this));
+        }
+        else {
+            this.changedEditMode(true);
         }
 
     }
@@ -156,13 +158,13 @@ export default class SalesQuotationStore {
             this.validationErrors.push("Enter at least 1 line item.");
         if (this.salesQuotation.salesQuotationLines !== undefined && this.salesQuotation.salesQuotationLines.length > 0) {
             for (var i = 0; i < this.salesQuotation.salesQuotationLines.length; i++) {
-                if (this.salesQuotation.salesQuotationLines[i].itemId === undefined)
+                if (this.salesQuotation.salesQuotationLines[i].itemId === undefined || this.salesQuotation.salesQuotationLines[i].itemId === "")
                     this.validationErrors.push("Item is required.");
-                if (this.salesQuotation.salesQuotationLines[i].measurementId === undefined)
+                if (this.salesQuotation.salesQuotationLines[i].measurementId === undefined || this.salesQuotation.salesQuotationLines[i].measurementId === "")
                     this.validationErrors.push("Uom is required.");
-                if (this.salesQuotation.salesQuotationLines[i].quantity === undefined)
+                if (this.salesQuotation.salesQuotationLines[i].quantity === undefined || this.salesQuotation.salesQuotationLines[i].quantity === "")
                     this.validationErrors.push("Quantity is required.");
-                if (this.salesQuotation.salesQuotationLines[i].amount === undefined)
+                if (this.salesQuotation.salesQuotationLines[i].amount === undefined || this.salesQuotation.salesQuotationLines[i].amount === "")
                     this.validationErrors.push("Amount is required.");
                 if (this.getLineTotal(i) === undefined
                     || this.getLineTotal(i).toString() === "NaN")

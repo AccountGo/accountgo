@@ -154,10 +154,15 @@ class SalesQuotationLines extends React.Component<any, {}>{
             code = (document.getElementById("txtNewCode") as HTMLInputElement).value;
             //console.log(`itemId: ${itemId} | measurementId: ${measurementId} | quantity: ${quantity} | amount: ${amount} | discount: ${discount}`);
             store.addLineItem(0, itemId, measurementId, quantity, amount, discount, code);
+    
 
-            (document.getElementById("txtNewQuantity") as HTMLInputElement).value = quantity;
-            (document.getElementById("txtNewAmount") as HTMLInputElement).value = amount;
-            (document.getElementById("txtNewDiscount") as HTMLInputElement).value = discount;
+            (document.getElementById("optNewItemId") as HTMLInputElement).value = "";
+            (document.getElementById("txtNewCode") as HTMLInputElement).value = "";
+            (document.getElementById("optNewMeasurementId") as HTMLInputElement).value = "";
+            (document.getElementById("txtNewQuantity") as HTMLInputElement).value = "1";
+            (document.getElementById("txtNewAmount") as HTMLInputElement).value = "";
+            (document.getElementById("txtNewDiscount") as HTMLInputElement).value = "";
+
         }
 
     }
@@ -183,25 +188,56 @@ class SalesQuotationLines extends React.Component<any, {}>{
     }
 
 
-    onFocusOutItem(e, i) {
+    onFocusOutItem(e,isNew,i) {
 
+        var isExisting = false;
         for (var x = 0; x < store.commonStore.items.length; x++) {
             if (store.commonStore.items[x].code == i.target.value) {
-
-                if (store.salesQuotation.salesQuotationLines.length > 0) {
-                    store.updateLineItem(e, "itemId", store.commonStore.items[x].id);
-                    store.updateLineItem(e, "measurementId", store.commonStore.items[x].sellMeasurementId);
-                    store.updateLineItem(e, "amount", store.commonStore.items[x].price);
-                }
-                else {
+                isExisting = true;
+                if (isNew) {
                     (document.getElementById("optNewItemId") as HTMLInputElement).value = store.commonStore.items[x].id;
                     (document.getElementById("optNewMeasurementId") as HTMLInputElement).value = store.commonStore.items[x].sellMeasurementId;
                     (document.getElementById("txtNewAmount") as HTMLInputElement).value = store.commonStore.items[x].price;
+                    (document.getElementById("txtNewQuantity") as HTMLInputElement).value = "1";
+                    document.getElementById("txtNewCode").style.borderColor = "";
                 }
-
+                else {
+                    store.updateLineItem(e, "itemId", store.commonStore.items[x].id);
+                    store.updateLineItem(e, "measurementId", store.commonStore.items[x].sellMeasurementId);
+                    store.updateLineItem(e, "amount", store.commonStore.items[x].price);
+                    store.updateLineItem(e, "quantity", 1);                 
+                    i.target.style.borderColor = ""; 
+                }
             }
         }
+
+        if (!isExisting)
+            var span = document.createElement("span");
+            span.innerHTML = "Code does not exist.";
+
+            if (isNew) {
+                (document.getElementById("optNewItemId") as HTMLInputElement).value = "";
+                (document.getElementById("optNewMeasurementId") as HTMLInputElement).value = "";
+                (document.getElementById("txtNewAmount") as HTMLInputElement).value = "";
+                (document.getElementById("txtNewQuantity") as HTMLInputElement).value = "";
+                document.getElementById("txtNewCode").style.borderColor = '#FF0000';
+                document.getElementById("txtNewCode").appendChild(span);
+               // document.getElementById("txtNewCode").style.border = 'solid';
+            }
+            else {
+                //store.updateLineItem(e, "itemId", "");
+                //store.updateLineItem(e, "measurementId", "");
+                //store.updateLineItem(e, "amount", "");
+                //store.updateLineItem(e, "quantity", "");
+                i.target.style.borderColor = "red";
+                i.target.appendChild(span);
+               // i.target.style.border = "solid";
+
+            }
     }
+
+ 
+
     render() {
         
         var lineItems = [];
@@ -210,7 +246,7 @@ class SalesQuotationLines extends React.Component<any, {}>{
             lineItems.push(
                 <tr key={i}>
                     <td><SelectLineItem store={store} row={i} selected={store.salesQuotation.salesQuotationLines[i].itemId} /></td>
-                    <td><input className="form-control" type="text" name={i} value={store.salesQuotation.salesQuotationLines[i].code} onBlur={this.onFocusOutItem.bind(this, i)} onChange={this.onChangeCode.bind(this) } /></td>
+                    <td><input className="form-control" type="text" name={i} value={store.salesQuotation.salesQuotationLines[i].code} onBlur={this.onFocusOutItem.bind(this, i, false)} onChange={this.onChangeCode.bind(this) } /></td>
                     <td><SelectLineMeasurement row={i} store={store} selected={store.salesQuotation.salesQuotationLines[i].measurementId} /></td>
                     <td><input className="form-control" type="text" name={i} value={store.salesQuotation.salesQuotationLines[i].quantity} onChange={this.onChangeQuantity.bind(this) } /></td>
                     <td><input className="form-control" type="text" name={i} value={store.salesQuotation.salesQuotationLines[i].amount} onChange={this.onChangeAmount.bind(this) } /></td>
@@ -253,7 +289,7 @@ class SalesQuotationLines extends React.Component<any, {}>{
                             {lineItems}
                             <tr>
                                 <td><SelectLineItem store={store} controlId="optNewItemId" /></td>
-                                <td><input className="form-control" type="text" id="txtNewCode" onBlur={this.onFocusOutItem.bind(this, i) } /></td>
+                                <td><input className="form-control" type="text" id="txtNewCode" onBlur={this.onFocusOutItem.bind(this, i, true) } /></td>
                                 <td><SelectLineMeasurement store={store} controlId="optNewMeasurementId" /></td>
                                 <td><input className="form-control" type="text" id="txtNewQuantity" /></td>
                                 <td><input className="form-control" type="text" id="txtNewAmount" /></td>
@@ -323,8 +359,6 @@ class EditButton extends React.Component<any, {}> {
         store.changedEditMode(true);
     }
     render() {
-        console.log(store.salesQuotation.statusId);
-        console.log(store.salesQuotation);
         return (
             <a href="#" id="linkEdit" onClick={this.onClickEditButton} 
                 className={store.salesQuotation.statusId == 0 && !store.editMode
