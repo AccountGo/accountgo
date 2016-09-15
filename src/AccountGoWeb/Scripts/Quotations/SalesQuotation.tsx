@@ -211,27 +211,8 @@ class SalesQuotationLines extends React.Component<any, {}>{
             }
         }
 
-        if (!isExisting)
-
-            if (isNew) {
-                (document.getElementById("optNewItemId") as HTMLInputElement).value = "";
-                (document.getElementById("optNewMeasurementId") as HTMLInputElement).value = "";
-                (document.getElementById("txtNewAmount") as HTMLInputElement).value = "";
-                (document.getElementById("txtNewQuantity") as HTMLInputElement).value = "";
-                document.getElementById("txtNewCode").style.borderColor = '#FF0000';
-                //document.getElementById("txtNewCode").appendChild(span);
-               // document.getElementById("txtNewCode").style.border = 'solid';
             }
-            else {
-                //store.updateLineItem(e, "itemId", "");
-                //store.updateLineItem(e, "measurementId", "");
-                //store.updateLineItem(e, "amount", "");
-                //store.updateLineItem(e, "quantity", "");
-                i.target.style.borderColor = "red";
-                //i.target.appendChild(span);
-               // i.target.style.border = "solid";
-
-            }
+        }
     }
 
  
