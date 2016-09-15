@@ -69,7 +69,7 @@ export default class SalesQuotationStore {
             this.changedEditMode(true);
         }
 
-
+    }
 
     @observable RTotal = 0;
     @observable GTotal = 0;
@@ -122,7 +122,7 @@ export default class SalesQuotationStore {
     }
 
     bookQuotation() {
-        console.log(this.salesQuotation.id);
+ 
         if (this.validation()) {
             if (this.validationErrors.length === 0) {
                 axios.post(Config.apiUrl + "api/sales/bookquotation?id=" + parseInt(this.salesQuotation.id),

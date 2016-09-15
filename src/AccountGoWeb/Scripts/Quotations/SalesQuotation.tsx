@@ -212,8 +212,6 @@ class SalesQuotationLines extends React.Component<any, {}>{
         }
 
         if (!isExisting)
-            var span = document.createElement("span");
-            span.innerHTML = "Code does not exist.";
 
             if (isNew) {
                 (document.getElementById("optNewItemId") as HTMLInputElement).value = "";
@@ -221,7 +219,7 @@ class SalesQuotationLines extends React.Component<any, {}>{
                 (document.getElementById("txtNewAmount") as HTMLInputElement).value = "";
                 (document.getElementById("txtNewQuantity") as HTMLInputElement).value = "";
                 document.getElementById("txtNewCode").style.borderColor = '#FF0000';
-                document.getElementById("txtNewCode").appendChild(span);
+                //document.getElementById("txtNewCode").appendChild(span);
                // document.getElementById("txtNewCode").style.border = 'solid';
             }
             else {
@@ -230,7 +228,7 @@ class SalesQuotationLines extends React.Component<any, {}>{
                 //store.updateLineItem(e, "amount", "");
                 //store.updateLineItem(e, "quantity", "");
                 i.target.style.borderColor = "red";
-                i.target.appendChild(span);
+                //i.target.appendChild(span);
                // i.target.style.border = "solid";
 
             }
