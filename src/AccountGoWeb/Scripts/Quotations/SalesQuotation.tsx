@@ -188,7 +188,7 @@ class SalesQuotationLines extends React.Component<any, {}>{
     }
 
 
-    onFocusOutItem(e,isNew,i) {
+    onFocusOutItem(e, isNew, i) {
 
         var isExisting = false;
         for (var x = 0; x < store.commonStore.items.length; x++) {
@@ -205,15 +205,37 @@ class SalesQuotationLines extends React.Component<any, {}>{
                     store.updateLineItem(e, "itemId", store.commonStore.items[x].id);
                     store.updateLineItem(e, "measurementId", store.commonStore.items[x].sellMeasurementId);
                     store.updateLineItem(e, "amount", store.commonStore.items[x].price);
-                    store.updateLineItem(e, "quantity", 1);                 
-                    i.target.style.borderColor = ""; 
+                    store.updateLineItem(e, "quantity", 1);
+                    i.target.style.borderColor = "";
                 }
             }
         }
 
+        if (!isExisting)
+
+            if (isNew) {
+                (document.getElementById("optNewItemId") as HTMLInputElement).value = "";
+                (document.getElementById("optNewMeasurementId") as HTMLInputElement).value = "";
+                (document.getElementById("txtNewAmount") as HTMLInputElement).value = "";
+                (document.getElementById("txtNewQuantity") as HTMLInputElement).value = "";
+                document.getElementById("txtNewCode").style.borderColor = '#FF0000';
+                //document.getElementById("txtNewCode").appendChild(span);
+                // document.getElementById("txtNewCode").style.border = 'solid';
             }
-        }
-    }
+            else {
+                //store.updateLineItem(e, "itemId", "");
+                //store.updateLineItem(e, "measurementId", "");
+                //store.updateLineItem(e, "amount", "");
+                //store.updateLineItem(e, "quantity", "");
+                i.target.style.borderColor = "red";
+                //i.target.appendChild(span);
+                // i.target.style.border = "solid";
+
+            }
+
+    }   
+        
+    
 
  
 
