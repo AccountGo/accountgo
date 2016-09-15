@@ -69,7 +69,6 @@ export default class SalesQuotationStore {
             this.changedEditMode(true);
         }
 
-    }
 
 
     @observable RTotal = 0;
