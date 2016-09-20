@@ -3,7 +3,7 @@ import * as ReactDOM from "react-dom";
 import {observer} from "mobx-react";
 import * as d3 from "d3";
 import Config = require("Config");
-import {autorun} from 'mobx';
+import {autorun, observable} from 'mobx';
 import * as accounting from "accounting";
 
 import SelectCustomer from "../Shared/Components/SelectCustomer";
@@ -18,7 +18,7 @@ import SalesQuotationStore from "../Shared/Stores/Quotations/SalesQuotationStore
 let quotationId = window.location.search.split("?id=")[1];
 
 let store = new SalesQuotationStore(quotationId);
- 
+
 
 @observer
 class ValidationErrors extends React.Component<any, {}>{
@@ -71,9 +71,8 @@ class CancelQuotationButton extends React.Component<any, {}>{
 
     render() {
         return (
-            <button type="button" className="btn btn-sm btn-default btn-flat pull-left" onClick={ this.cancelOnClick.bind(this) }>
-                Close
-            </button>
+            <input type="button" value={(store.editMode ? "Cancel" : "Close") } className="btn btn-sm btn-default btn-flat pull-left" onClick={store.editMode ? store.changedEditMode(false) : this.cancelOnClick.bind(this) }                
+            />
         );
     }
 }
@@ -83,6 +82,8 @@ class SalesQuotationHeader extends React.Component<any, {}>{
     onChangeQuotationDate(e) {
         store.changedQuotationDate(e.target.value);
     }
+
+ 
 
     onChangeCustomer(e) {
         alert('');
@@ -118,8 +119,9 @@ class SalesQuotationHeader extends React.Component<any, {}>{
                     <div className="col-md-6">
                         <div className="row">
                             <div className="col-sm-2">Date</div>
-                            <div className="col-sm-10"><input type="date" className="form-control pull-right" onChange={this.onChangeQuotationDate.bind(this) }
+                            <div className="col-sm-10"><input type="date" className="form-control pull-right"  onChange={this.onChangeQuotationDate.bind(this) } 
                                 value={store.salesQuotation.quotationDate !== undefined ? store.salesQuotation.quotationDate.substring(0, 10) : new Date(Date.now()).toISOString().substring(0, 10) } /></div>
+ 
                         </div>
                         <div className="row">
                             <div className="col-sm-2">Reference no.</div>
@@ -140,6 +142,9 @@ class SalesQuotationHeader extends React.Component<any, {}>{
 
 @observer
 class SalesQuotationLines extends React.Component<any, {}>{
+   
+
+
     addLineItem() {
 
         if (store.validationLine()) {
@@ -235,19 +240,23 @@ class SalesQuotationLines extends React.Component<any, {}>{
 
     }   
         
-    
-
+    @observable lineNo = 0;
  
-
+ 
     render() {
-        
+        var newLine = 0;
         var lineItems = [];
+
         for (var i = 0; i < store.salesQuotation.salesQuotationLines.length; i++) {
+            newLine = newLine + 10;
             //var initialCode = this.onloadCode(store.salesQuotation.salesQuotationLines[i].itemId); // this is for initial value of code
+
+
             lineItems.push(
                 <tr key={i}>
+                    <td><label>{newLine}</label></td>
                     <td><SelectLineItem store={store} row={i} selected={store.salesQuotation.salesQuotationLines[i].itemId} /></td>
-                    <td><input className="form-control" type="text" name={i} value={store.salesQuotation.salesQuotationLines[i].code} onBlur={this.onFocusOutItem.bind(this, i, false)} onChange={this.onChangeCode.bind(this) } /></td>
+                    <td><input className="form-control" type="text" name={i} value={store.salesQuotation.salesQuotationLines[i].code} onBlur={this.onFocusOutItem.bind(this, i, false) } onChange={this.onChangeCode.bind(this) } /></td>
                     <td><SelectLineMeasurement row={i} store={store} selected={store.salesQuotation.salesQuotationLines[i].measurementId} /></td>
                     <td><input className="form-control" type="text" name={i} value={store.salesQuotation.salesQuotationLines[i].quantity} onChange={this.onChangeQuantity.bind(this) } /></td>
                     <td><input className="form-control" type="text" name={i} value={store.salesQuotation.salesQuotationLines[i].amount} onChange={this.onChangeAmount.bind(this) } /></td>
@@ -260,6 +269,7 @@ class SalesQuotationLines extends React.Component<any, {}>{
                     </td>
                 </tr>
             );
+           //autorun(() =>  this.lineNo = newLine);
         }
 
         return (
@@ -276,6 +286,7 @@ class SalesQuotationLines extends React.Component<any, {}>{
                     <table className="table table-hover">
                         <thead>
                             <tr>
+                                <td>No</td>
                                 <td>Item</td>
                                 <td>Code</td>
                                 <td>Measurement</td>
@@ -289,6 +300,7 @@ class SalesQuotationLines extends React.Component<any, {}>{
                         <tbody>
                             {lineItems}
                             <tr>
+                                <td></td>
                                 <td><SelectLineItem store={store} controlId="optNewItemId" /></td>
                                 <td><input className="form-control" type="text" id="txtNewCode" onBlur={this.onFocusOutItem.bind(this, i, true) } /></td>
                                 <td><SelectLineMeasurement store={store} controlId="optNewMeasurementId" /></td>

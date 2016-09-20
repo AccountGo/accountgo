@@ -66,6 +66,7 @@ export default class SalesQuotationStore {
             }.bind(this));
         }
         else {
+           // this.changedQuotationDate(new Date(Date.now()).toISOString().substring(0, 10));
             this.changedEditMode(true);
         }
 
@@ -99,6 +100,10 @@ export default class SalesQuotationStore {
     }
 
     saveNewQuotation() {
+
+        if (this.salesQuotation.quotationDate === undefined)
+            this.salesQuotation.quotationDate = new Date(Date.now()).toISOString().substring(0, 10);
+
         if (this.validation()) {
             if (this.validationErrors.length === 0) {
                 axios.post(Config.apiUrl + "api/sales/savequotation", JSON.stringify(this.salesQuotation),
@@ -191,7 +196,11 @@ export default class SalesQuotationStore {
         this.salesQuotationStatus = status;
     }
 
-
+    //initializedQuotationDate()
+    //{
+    //    if (this.salesQuotation.quotationDate === undefined || this.salesQuotation.quotationDate === "")
+    //        this.salesQuotation.quotationDate = new Date(Date.now()).toISOString().substring(0, 10);
+    //}
 
 validationLine()
 {
