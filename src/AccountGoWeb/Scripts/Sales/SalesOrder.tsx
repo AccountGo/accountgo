@@ -114,6 +114,11 @@ class SalesOrderHeader extends React.Component<any, {}>{
                             <div className="col-sm-2">Reference no.</div>
                             <div className="col-sm-10"><input type="text" className="form-control"  value={store.salesOrder.referenceNo || ''} onChange={this.onChangeReferenceNo.bind(this) }  /></div>
                         </div>
+                        <div className="row">
+                            <div className="col-sm-2">Status</div>
+                            <div className="col-sm-10"><label>{store.salesOrderStatus}</label></div>
+
+                        </div>
                     </div>
                 </div>
             </div>
@@ -124,15 +129,15 @@ class SalesOrderHeader extends React.Component<any, {}>{
 @observer
 class SalesOrderLines extends React.Component<any, {}>{
     addLineItem() {
-        var itemId, measurementId, quantity, amount, discount;
+        var itemId, measurementId, quantity, amount, discount, code;
         itemId = (document.getElementById("optNewItemId") as HTMLInputElement).value;
         measurementId = (document.getElementById("optNewMeasurementId") as HTMLInputElement).value;
         quantity = (document.getElementById("txtNewQuantity") as HTMLInputElement).value;
         amount = (document.getElementById("txtNewAmount") as HTMLInputElement).value;
         discount = (document.getElementById("txtNewDiscount") as HTMLInputElement).value;
-
+        code = (document.getElementById("txtNewCode") as HTMLInputElement).value;
         //console.log(`itemId: ${itemId} | measurementId: ${measurementId} | quantity: ${quantity} | amount: ${amount} | discount: ${discount}`);
-        store.addLineItem(0, itemId, measurementId, quantity, amount, discount);
+        store.addLineItem(0, itemId, measurementId, quantity, amount, discount, code);
 
         (document.getElementById("txtNewQuantity") as HTMLInputElement).value = "1";
         (document.getElementById("txtNewAmount") as HTMLInputElement).value = "0";
@@ -155,13 +160,67 @@ class SalesOrderLines extends React.Component<any, {}>{
         store.updateLineItem(e.target.name, "discount", e.target.value);
     }
 
+    onChangeCode(e) {
+        store.updateLineItem(e.target.name, "code", e.target.value);
+    }
+
+
+    onFocusOutItem(e, isNew, i) {
+
+        var isExisting = false;
+        for (var x = 0; x < store.commonStore.items.length; x++) {
+            if (store.commonStore.items[x].code == i.target.value) {
+                isExisting = true;
+                if (isNew) {
+                    (document.getElementById("optNewItemId") as HTMLInputElement).value = store.commonStore.items[x].id;
+                    (document.getElementById("optNewMeasurementId") as HTMLInputElement).value = store.commonStore.items[x].sellMeasurementId;
+                    (document.getElementById("txtNewAmount") as HTMLInputElement).value = store.commonStore.items[x].price;
+                    (document.getElementById("txtNewQuantity") as HTMLInputElement).value = "1";
+                    document.getElementById("txtNewCode").style.borderColor = "";
+                }
+                else {
+                    store.updateLineItem(e, "itemId", store.commonStore.items[x].id);
+                    store.updateLineItem(e, "measurementId", store.commonStore.items[x].sellMeasurementId);
+                    store.updateLineItem(e, "amount", store.commonStore.items[x].price);
+                    store.updateLineItem(e, "quantity", 1);
+                    i.target.style.borderColor = "";
+                }
+            }
+        }
+
+        if (!isExisting)
+
+            if (isNew) {
+                (document.getElementById("optNewItemId") as HTMLInputElement).value = "";
+                (document.getElementById("optNewMeasurementId") as HTMLInputElement).value = "";
+                (document.getElementById("txtNewAmount") as HTMLInputElement).value = "";
+                (document.getElementById("txtNewQuantity") as HTMLInputElement).value = "";
+                document.getElementById("txtNewCode").style.borderColor = '#FF0000';
+                //document.getElementById("txtNewCode").appendChild(span);
+                // document.getElementById("txtNewCode").style.border = 'solid';
+            }
+            else {
+                //store.updateLineItem(e, "itemId", "");
+                //store.updateLineItem(e, "measurementId", "");
+                //store.updateLineItem(e, "amount", "");
+                //store.updateLineItem(e, "quantity", "");
+                i.target.style.borderColor = "red";
+                //i.target.appendChild(span);
+                // i.target.style.border = "solid";
+
+            }
+
+    }   
+
+                        //<td>{store.salesOrder.salesOrderLines[i].itemId}</td>
     render() {        
         var lineItems = [];
         for (var i = 0; i < store.salesOrder.salesOrderLines.length; i++) {
             lineItems.push(
                 <tr key={i}>
                     <td><SelectLineItem store={store} row={i} selected={store.salesOrder.salesOrderLines[i].itemId} /></td>
-                    <td>{store.salesOrder.salesOrderLines[i].itemId}</td>
+
+                    <td><input className="form-control" type="text" name={i} value={store.salesOrder.salesOrderLines[i].code} onBlur={this.onFocusOutItem.bind(this, i, false) } onChange={this.onChangeCode.bind(this) } /></td>
                     <td><SelectLineMeasurement row={i} store={store} selected={store.salesOrder.salesOrderLines[i].measurementId} /></td>
                     <td><input type="text" className="form-control" name={i} value={store.salesOrder.salesOrderLines[i].quantity} onChange={this.onChangeQuantity.bind(this)} /></td>
                     <td><input type="text" className="form-control" name={i} value={store.salesOrder.salesOrderLines[i].amount} onChange={this.onChangeAmount.bind(this) } /></td>
@@ -203,7 +262,7 @@ class SalesOrderLines extends React.Component<any, {}>{
                             {lineItems}
                             <tr>
                                 <td><SelectLineItem store={store} controlId="optNewItemId" /></td>
-                                <td>Item Name</td>
+                                <td><input className="form-control" type="text" id="txtNewCode" onBlur={this.onFocusOutItem.bind(this, i, true) } /></td>
                                 <td><SelectLineMeasurement store={store} controlId="optNewMeasurementId" /></td>
                                 <td><input className="form-control" type="text" id="txtNewQuantity" /></td>
                                 <td><input className="form-control" type="text" id="txtNewAmount" /></td>
@@ -243,14 +302,46 @@ class SalesOrderTotals extends React.Component<any, {}>{
     }
 }
 
+@observer
+class EditButton extends React.Component<any, {}> {
+    onClickEditButton() {
+        // Remove " disabledControl" from current className
+        var nodes = document.getElementById("divSalesOrderForm").getElementsByTagName('*');
+        for (var i = 0; i < nodes.length; i++) {
+            var subStringLength = nodes[i].className.length - " disabledControl".length;
+            nodes[i].className = nodes[i].className.substring(0, subStringLength);
+        }
+
+        store.changedEditMode(true);
+    }
+    render() {
+        return (
+            <a href="#" id="linkEdit" onClick={this.onClickEditButton}
+                className={!store.editMode
+                //className={store.salesOrder.statusId == 0 && !store.editMode
+                    ? "btn"
+                    : "btn inactiveLink"}>
+                <i className="fa fa-edit"></i>
+                Edit
+            </a>
+        );
+    }
+
+}
+
 export default class SalesOrder extends React.Component<any, {}> {
     render() {
         return (
             <div>
+                <div id="divActionsTop">
+                    <EditButton/>
+                </div>
+                <div id="divSalesOrderForm">
                 <ValidationErrors />
                 <SalesOrderHeader />
                 <SalesOrderLines />
                 <SalesOrderTotals />
+                </div>
                 <div>
                     <SaveOrderButton />
                     <CancelOrderButton />

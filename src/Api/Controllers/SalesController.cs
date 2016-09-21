@@ -193,7 +193,7 @@ namespace Api.Controllers
                         CustomerName = salesOrder.Customer.Party.Name,
                         OrderDate = salesOrder.Date,
                         ReferenceNo = salesOrder.ReferenceNo,
-                        Status = (int)salesOrder.Status.GetValueOrDefault(),
+                        StatusId = (int)salesOrder.Status.GetValueOrDefault(),
                         No = salesOrder.No
                     };
 
@@ -239,6 +239,7 @@ namespace Api.Controllers
                     OrderDate = salesOrder.Date,
                     PaymentTermId = salesOrder.PaymentTermId,
                     ReferenceNo = salesOrder.ReferenceNo,
+                    StatusId = (int)salesOrder.Status,
                     SalesOrderLines = new List<Dto.Sales.SalesOrderLine>()
                 };
 

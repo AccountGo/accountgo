@@ -15,5 +15,6 @@ export default class SalesOrder {
     orderDate: Date;
     paymentTermId: number;
     referenceNo: string;
+    statusId: number;
     salesOrderLines: SalesOrderLine[] = [];
 }

@@ -17,7 +17,9 @@ export default class SalesOrderStore {
     salesOrder;
     commonStore;
     @observable validationErrors;
-
+    @observable salesOrderStatus;
+    @observable salesQuotationStatus;
+    @observable editMode = false;
     constructor(quotationId, orderId) {
         this.commonStore = new CommonStore();
         this.salesOrder = new SalesOrder();
@@ -26,6 +28,7 @@ export default class SalesOrderStore {
             orderDate: this.salesOrder.orderDate,
             paymentTermId: this.salesOrder.paymentTermId,
             referenceNo: this.salesOrder.referenceNo,
+            statusId: this.salesOrder.statusId,
             salesOrderLines: []
         });
 
@@ -38,6 +41,7 @@ export default class SalesOrderStore {
                 this.salesOrder.paymentTermId = result.data.paymentTermId;
                 this.salesOrder.referenceNo = result.data.referenceNo;
                 this.changedOrderDate(result.data.quotationDate);
+                this.getQuotationStatus(result.data.statusId);
                 for (var i = 0; i < result.data.salesQuotationLines.length; i++) {
                     this.addLineItem(
                         result.data.salesQuotationLines[i].id,
@@ -49,6 +53,10 @@ export default class SalesOrderStore {
                     );
                 }
                 this.computeTotals();
+                var nodes = document.getElementById("divSalesOrderForm").getElementsByTagName('*');
+                for (var i = 0; i < nodes.length; i++) {
+                    nodes[i].className += " disabledControl";
+                }
             }.bind(this));
         }
         else if (orderId !== undefined) {
@@ -59,6 +67,7 @@ export default class SalesOrderStore {
                 this.salesOrder.paymentTermId = result.data.paymentTermId;
                 this.salesOrder.referenceNo = result.data.referenceNo;
                 this.changedOrderDate(result.data.orderDate);
+                this.getOrderStatus(result.data.statusId);
                 for (var i = 0; i < result.data.salesOrderLines.length; i++) {
                     this.addLineItem(
                         result.data.salesOrderLines[i].id,
@@ -68,9 +77,18 @@ export default class SalesOrderStore {
                         result.data.salesOrderLines[i].amount,
                         result.data.salesOrderLines[i].discount
                     );
+                    this.updateLineItem(i, 'code', this.changeItemCode(result.data.salesOrderLines[i].itemId));
                 }
                 this.computeTotals();
+                var nodes = document.getElementById("divSalesOrderForm").getElementsByTagName('*');
+                for (var i = 0; i < nodes.length; i++) {
+                    nodes[i].className += " disabledControl";
+                }
             }.bind(this));
+        }
+        else
+        {
+            this.changedEditMode(true);
         }
     }
 
@@ -148,6 +166,51 @@ export default class SalesOrderStore {
 
         return this.validationErrors.length === 0;
     }
+
+    getQuotationStatus(statusId) {
+        var status = "";
+        if (statusId === 0)
+            status = "Draft";
+        else if (statusId === 1)
+            status = "Open";
+        else if (statusId === 2)
+            status = "Overdue";
+        else if (statusId === 3)
+            status = "Closed";
+        else if (statusId === 4)
+            status = "Void";
+        this.salesQuotationStatus = status;
+    }
+ 
+
+    getOrderStatus(statusId) {
+        var status = "";
+        if (statusId === 0)
+            status = "Draft";
+        else if (statusId === 1)
+            status = "Open";
+        else if (statusId === 2)
+            status = "Overdue";
+        else if (statusId === 3)
+            status = "Closed";
+        else if (statusId === 4)
+            status = "Void";
+        else if (statusId === 5)
+            status = "Partially Invoiced";
+        else if (statusId === 6)
+            status = "Fully Invoiced";
+        this.salesOrderStatus = status;
+    }
+
+    changeItemCode(itemId) {
+
+        for (var x = 0; x < this.commonStore.items.length; x++) {
+            if (this.commonStore.items[x].id === parseInt(itemId)) {
+                return this.commonStore.items[x].code;
+            }
+        }
+    }
+
     changedReferenceNo(refNo) {
         this.salesOrder.referenceNo = refNo;
     }
@@ -163,8 +226,8 @@ export default class SalesOrderStore {
         this.salesOrder.paymentTermId = termId;
     }
 
-    addLineItem(id, itemId, measurementId, quantity, amount, discount) {
-        var newLineItem = new SalesOrderLine(id, itemId, measurementId, quantity, amount, discount);
+    addLineItem(id, itemId, measurementId, quantity, amount, discount, code) {
+        var newLineItem = new SalesOrderLine(id, itemId, measurementId, quantity, amount, discount, code);
         this.salesOrder.salesOrderLines.push(extendObservable(newLineItem, newLineItem));        
     }
 
@@ -184,5 +247,9 @@ export default class SalesOrderStore {
         let lineItem = this.salesOrder.salesOrderLines[row];
         lineSum = (lineItem.quantity * lineItem.amount) - lineItem.discount;
         return lineSum;
+    }
+
+    changedEditMode(editMode) {
+        this.editMode = editMode;
     }
 }

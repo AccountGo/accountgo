@@ -43,6 +43,24 @@ class ValidationErrors extends React.Component<any, {}>{
 }
 
 @observer
+class BookButton extends React.Component<any, {}>{
+    bookOnClick(e) {
+        store.bookQuotation();
+    }
+
+    render() {
+        return (
+
+            <input type="button" value="Book" onClick={ this.bookOnClick.bind(this) }
+                className={store.salesQuotation.statusId == 0 && !store.editMode
+                    ? "btn btn-sm btn-primary btn-flat btn-danger pull-right"
+                    : "btn btn-sm btn-primary btn-flat btn-danger pull-right inactiveLink"} />
+        );
+    }
+}
+
+
+@observer
 class SaveQuotationButton extends React.Component<any, {}>{
     saveNewSalesQuotation(e) {
         store.saveNewQuotation();
@@ -51,7 +69,8 @@ class SaveQuotationButton extends React.Component<any, {}>{
     render() {
         return (
          <input type="button" value="Save" onClick={this.saveNewSalesQuotation.bind(this) }
-                className={(store.salesQuotation.statusId == 0 || store.salesQuotation.statusId == undefined) && store.editMode
+                //className={(store.salesQuotation.statusId == 0 || store.salesQuotation.statusId == undefined) && store.editMode
+                className={store.editMode
                 ? "btn btn-sm btn-primary btn-flat pull-left"
                 : "btn btn-sm btn-primary btn-flat pull-left inactiveLink"}
             />
@@ -71,8 +90,11 @@ class CancelQuotationButton extends React.Component<any, {}>{
 
     render() {
         return (
-            <input type="button" value={(store.editMode ? "Cancel" : "Close") } className="btn btn-sm btn-default btn-flat pull-left" onClick={store.editMode ? store.changedEditMode(false) : this.cancelOnClick.bind(this) }                
-            />
+            //<input type="button" value="Cancel"  className="btn btn-sm btn-default btn-flat pull-left" onClick={store.editMode ? store.changedEditMode(false) : this.cancelOnClick.bind(this) }                
+            ///>
+            <input type="button" value="Cancel"  className="btn btn-sm btn-default btn-flat pull-left"
+                onClick={this.cancelOnClick.bind(this) }
+                />
         );
     }
 }
@@ -269,7 +291,7 @@ class SalesQuotationLines extends React.Component<any, {}>{
                     </td>
                 </tr>
             );
-           //autorun(() =>  this.lineNo = newLine);
+ 
         }
 
         return (
@@ -342,22 +364,6 @@ class SalesQuotationTotals extends React.Component<any, {}>{
     }
 }
 
-@observer
-class BookButton extends React.Component<any, {}>{
-    bookOnClick(e) {
-        store.bookQuotation();
-    }
-
-    render() {
-        return (
-
-            <input type="button" value="Book" onClick={ this.bookOnClick.bind(this) }
-                className={store.salesQuotation.statusId == 0 && !store.editMode
-                    ? "btn btn-sm btn-primary btn-flat btn-danger pull-right"
-                    : "btn btn-sm btn-primary btn-flat btn-danger pull-right inactiveLink"} />
-        );
-    }
-}
 
 @observer
 class EditButton extends React.Component<any, {}> {

@@ -154,13 +154,13 @@ namespace Core.Domain
 
     public enum SalesOrderStatus
     {
-        Draft,
+        Draft = 0,
         Open = 1,
-        Overdue,
-        Closed,
-        Void,
-        PartiallyInvoiced,
-        FullyInvoiced
+        Overdue = 2,
+        Closed = 3,
+        Void = 4,
+        PartiallyInvoiced = 5,
+        FullyInvoiced = 6
     }
 
     public enum SalesQuoteStatus
