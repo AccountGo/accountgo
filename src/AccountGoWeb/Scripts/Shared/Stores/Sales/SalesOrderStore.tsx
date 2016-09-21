@@ -117,6 +117,12 @@ export default class SalesOrderStore {
     }
 
     saveNewSalesOrder() {
+
+
+        if (this.salesOrder.orderDate === undefined)
+            this.salesOrder.orderDate = new Date(Date.now()).toISOString().substring(0, 10);
+
+
         if (this.validation() && this.validationErrors.length === 0) {
             axios.post(Config.apiUrl + "api/sales/savesalesorder", JSON.stringify(this.salesOrder),
                 {

@@ -213,13 +213,15 @@ class SalesOrderLines extends React.Component<any, {}>{
     }   
 
                         //<td>{store.salesOrder.salesOrderLines[i].itemId}</td>
-    render() {        
+    render() {  
+        var newLine = 0;      
         var lineItems = [];
         for (var i = 0; i < store.salesOrder.salesOrderLines.length; i++) {
+            newLine = newLine + 10;
             lineItems.push(
                 <tr key={i}>
+                    <td><label>{newLine}</label></td>
                     <td><SelectLineItem store={store} row={i} selected={store.salesOrder.salesOrderLines[i].itemId} /></td>
-
                     <td><input className="form-control" type="text" name={i} value={store.salesOrder.salesOrderLines[i].code} onBlur={this.onFocusOutItem.bind(this, i, false) } onChange={this.onChangeCode.bind(this) } /></td>
                     <td><SelectLineMeasurement row={i} store={store} selected={store.salesOrder.salesOrderLines[i].measurementId} /></td>
                     <td><input type="text" className="form-control" name={i} value={store.salesOrder.salesOrderLines[i].quantity} onChange={this.onChangeQuantity.bind(this)} /></td>
@@ -248,6 +250,7 @@ class SalesOrderLines extends React.Component<any, {}>{
                     <table className="table table-hover">
                         <thead>
                             <tr>
+                                <td>No</td>
                                 <td>Item Id</td>
                                 <td>Item Name</td>
                                 <td>Measurement</td>
@@ -261,6 +264,7 @@ class SalesOrderLines extends React.Component<any, {}>{
                         <tbody>
                             {lineItems}
                             <tr>
+                                <td></td>
                                 <td><SelectLineItem store={store} controlId="optNewItemId" /></td>
                                 <td><input className="form-control" type="text" id="txtNewCode" onBlur={this.onFocusOutItem.bind(this, i, true) } /></td>
                                 <td><SelectLineMeasurement store={store} controlId="optNewMeasurementId" /></td>

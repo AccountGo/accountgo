@@ -219,13 +219,65 @@ class SalesInvoiceLines extends React.Component<any, {}>{
         store.updateLineItem(e.target.name, "discount", e.target.value);
     }
 
+    onChangeCode(e) {
+        store.updateLineItem(e.target.name, "code", e.target.value);
+    }
+
+
+    onFocusOutItem(e, isNew, i) {
+
+        var isExisting = false;
+        for (var x = 0; x < store.commonStore.items.length; x++) {
+            if (store.commonStore.items[x].code == i.target.value) {
+                isExisting = true;
+                if (isNew) {
+                    (document.getElementById("optNewItemId") as HTMLInputElement).value = store.commonStore.items[x].id;
+                    (document.getElementById("optNewMeasurementId") as HTMLInputElement).value = store.commonStore.items[x].sellMeasurementId;
+                    (document.getElementById("txtNewAmount") as HTMLInputElement).value = store.commonStore.items[x].price;
+                    (document.getElementById("txtNewQuantity") as HTMLInputElement).value = "1";
+                    document.getElementById("txtNewCode").style.borderColor = "";
+                }
+                else {
+                    store.updateLineItem(e, "itemId", store.commonStore.items[x].id);
+                    store.updateLineItem(e, "measurementId", store.commonStore.items[x].sellMeasurementId);
+                    store.updateLineItem(e, "amount", store.commonStore.items[x].price);
+                    store.updateLineItem(e, "quantity", 1);
+                    i.target.style.borderColor = "";
+                }
+            }
+        }
+
+        if (!isExisting)
+
+            if (isNew) {
+                (document.getElementById("optNewItemId") as HTMLInputElement).value = "";
+                (document.getElementById("optNewMeasurementId") as HTMLInputElement).value = "";
+                (document.getElementById("txtNewAmount") as HTMLInputElement).value = "";
+                (document.getElementById("txtNewQuantity") as HTMLInputElement).value = "";
+                document.getElementById("txtNewCode").style.borderColor = '#FF0000';
+                //document.getElementById("txtNewCode").appendChild(span);
+                // document.getElementById("txtNewCode").style.border = 'solid';
+            }
+            else {
+                //store.updateLineItem(e, "itemId", "");
+                //store.updateLineItem(e, "measurementId", "");
+                //store.updateLineItem(e, "amount", "");
+                //store.updateLineItem(e, "quantity", "");
+                i.target.style.borderColor = "red";
+                //i.target.appendChild(span);
+                // i.target.style.border = "solid";
+
+            }
+
+    }   
+
     render() {        
         var lineItems = [];
         for (var i = 0; i < store.salesInvoice.salesInvoiceLines.length; i++) {
             lineItems.push(
                 <tr key={i}>
                     <td><SelectLineItem store={store} row={i} selected={store.salesInvoice.salesInvoiceLines[i].itemId} /></td>
-                    <td>{store.salesInvoice.salesInvoiceLines[i].itemId}</td>
+                    <td><input className="form-control" type="text" name={i} value={store.salesInvoice.salesInvoiceLines[i].code} onBlur={this.onFocusOutItem.bind(this, i, false) } onChange={this.onChangeCode.bind(this) } /></td>
                     <td><SelectLineMeasurement row={i} store={store} selected={store.salesInvoice.salesInvoiceLines[i].measurementId} /></td>
                     <td><input type="text" className="form-control" name={i} value={store.salesInvoice.salesInvoiceLines[i].quantity} onChange={this.onChangeQuantity.bind(this)} /></td>
                     <td><input type="text" className="form-control" name={i} value={store.salesInvoice.salesInvoiceLines[i].amount} onChange={this.onChangeAmount.bind(this) } /></td>
