@@ -541,6 +541,7 @@ namespace Api.Controllers
                         Fax = vendor.Party.Fax,
                         Website = vendor.Party.Website,
                         Balance = vendor.GetBalance(),
+                        PaymentTermId = vendor.PaymentTermId,
                         Contact = vendor.PrimaryContact.FirstName + " " + vendor.PrimaryContact.LastName,
                         TaxGroup = vendor.TaxGroup == null ? string.Empty : vendor.TaxGroup.Description,
                     };
@@ -578,6 +579,7 @@ namespace Api.Controllers
                     PurchaseDiscountAccountId = vendor.PurchaseDiscountAccountId.GetValueOrDefault(),
                     TaxGroupId = vendor.TaxGroupId.GetValueOrDefault(),
                     PaymentTermId = vendor.PaymentTermId.GetValueOrDefault(),
+                    
                 };
 
                 if (vendor.PrimaryContact != null)

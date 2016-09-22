@@ -17,6 +17,8 @@ export default class PurchaseOrderStore {
     purchaseOrder;
     commonStore;
     @observable validationErrors;
+    @observable editMode = false;
+    @observable purchaseOrderStatus;
 
     constructor(purchId: any) {
         this.commonStore = new CommonStore();
@@ -38,6 +40,7 @@ export default class PurchaseOrderStore {
                     this.purchaseOrder.paymentTermId = result.data.paymentTermId;
                     this.purchaseOrder.referenceNo = result.data.referenceNo;
                     this.changedVendor(result.data.vendorId);
+                    this.getPurchaseOrderStatus(result.data.statusId);
                     this.purchaseOrder.orderDate = result.data.orderDate;
                     for (var i = 0; i < result.data.purchaseOrderLines.length; i++) {
                         this.addLineItem(
@@ -48,11 +51,19 @@ export default class PurchaseOrderStore {
                             result.data.purchaseOrderLines[i].amount,
                             result.data.purchaseOrderLines[i].discount
                         );
+                        this.updateLineItem(i, 'code', this.changeItemCode(result.data.salesQuotationLines[i].itemId));
                     }
                     this.computeTotals();
+                    var nodes = document.getElementById("divPurchaseOrderForm").getElementsByTagName('*');
+                    for (var i = 0; i < nodes.length; i++) {
+                        nodes[i].className += " disabledControl";
+                    }
                 }.bind(this))
                 .catch(function (error) {
                 }.bind(this));
+        }
+        else {
+            this.changedEditMode(true);
         }
     }
 
@@ -134,6 +145,64 @@ export default class PurchaseOrderStore {
 
         return this.validationErrors.length === 0;
     }
+
+    validationLine() {
+        this.validationErrors = [];
+        if (this.purchaseOrder.purchaseOrderLines !== undefined && this.purchaseOrder.purchaseOrderLines.length > 0) {
+            for (var i = 0; i < this.purchaseOrder.purchaseOrderLines.length; i++) {
+                if (this.purchaseOrder.purchaseOrderLines[i].itemId === undefined)
+                    this.validationErrors.push("Item is required.");
+                if (this.purchaseOrder.purchaseOrderLines[i].measurementId === undefined)
+                    this.validationErrors.push("Uom is required.");
+                if (this.purchaseOrder.purchaseOrderLines[i].quantity === undefined)
+                    this.validationErrors.push("Quantity is required.");
+                if (this.purchaseOrder.purchaseOrderLines[i].amount === undefined)
+                    this.validationErrors.push("Amount is required.");
+                if (this.getLineTotal(i) === undefined
+                    || this.getLineTotal(i).toString() === "NaN")
+                    this.validationErrors.push("Invalid data.");
+            }
+        }
+        else {
+            var itemId, measurementId, quantity, amount, discount;
+            itemId = (document.getElementById("optNewItemId") as HTMLInputElement).value;
+            measurementId = (document.getElementById("optNewMeasurementId") as HTMLInputElement).value;
+            quantity = (document.getElementById("txtNewQuantity") as HTMLInputElement).value;
+            amount = (document.getElementById("txtNewAmount") as HTMLInputElement).value;
+            discount = (document.getElementById("txtNewDiscount") as HTMLInputElement).value;
+
+            if (itemId == "" || itemId === undefined)
+                this.validationErrors.push("Item is required.");
+            if (measurementId == "" || measurementId === undefined)
+                this.validationErrors.push("Uom is required.");
+            if (quantity == "" || quantity === undefined)
+                this.validationErrors.push("Quantity is required.");
+            if (amount == "" || amount === undefined)
+                this.validationErrors.push("Amount is required.");
+        }
+
+        if (document.getElementById("optNewItemId")) {
+            var itemId, measurementId, quantity, amount, discount;
+            itemId = (document.getElementById("optNewItemId") as HTMLInputElement).value;
+            measurementId = (document.getElementById("optNewMeasurementId") as HTMLInputElement).value;
+            quantity = (document.getElementById("txtNewQuantity") as HTMLInputElement).value;
+            amount = (document.getElementById("txtNewAmount") as HTMLInputElement).value;
+            discount = (document.getElementById("txtNewDiscount") as HTMLInputElement).value;
+
+            if (itemId == "" || itemId === undefined)
+                this.validationErrors.push("Item is required.");
+            if (measurementId == "" || measurementId === undefined)
+                this.validationErrors.push("Uom is required.");
+            if (quantity == "" || quantity === undefined)
+                this.validationErrors.push("Quantity is required.");
+            if (amount == "" || amount === undefined)
+                this.validationErrors.push("Amount is required.");
+        }
+
+
+        return this.validationErrors.length === 0;
+    }
+
     changedReferenceNo(refNo) {
         this.purchaseOrder.referenceNo = refNo;
     }
@@ -149,8 +218,8 @@ export default class PurchaseOrderStore {
         this.purchaseOrder.orderDate = date;
     }
 
-    addLineItem(id, itemId, measurementId, quantity, amount, discount) {
-        var newLineItem = new PurchaseOrderLine(id, itemId, measurementId, quantity, amount, discount);
+    addLineItem(id, itemId, measurementId, quantity, amount, discount, code) {
+        var newLineItem = new PurchaseOrderLine(id, itemId, measurementId, quantity, amount, discount, code);
         this.purchaseOrder.purchaseOrderLines.push(extendObservable(newLineItem, newLineItem));        
     }
 
@@ -170,5 +239,27 @@ export default class PurchaseOrderStore {
         let lineItem = this.purchaseOrder.purchaseOrderLines[row];
         lineSum = (lineItem.quantity * lineItem.amount) - lineItem.discount;
         return lineSum;
+    }
+
+    changedEditMode(editMode) {
+        this.editMode = editMode;
+    }
+ 
+
+    getPurchaseOrderStatus(statusId) {
+        var status = "";
+        if (statusId === 0)
+            status = "Draft";
+        else if (statusId === 1)
+            status = "Open";
+        else if (statusId === 2)
+            status = "Partially Received";
+        else if (statusId === 3)
+            status = "Full Received";
+        else if (statusId === 4)
+            status = "Invoiced";
+        else if (statusId === 5)
+            status = "Closed";
+        this.purchaseOrderStatus = status;
     }
 }

@@ -203,6 +203,65 @@ export default class SalesStore {
 
         return this.validationErrors.length === 0;
     }
+
+    validationLine() {
+        this.validationErrors = [];
+        if (this.salesInvoice.salesInvoiceLines !== undefined && this.salesInvoice.salesInvoiceLines.length > 0) {
+            for (var i = 0; i < this.salesInvoice.salesInvoiceLines.length; i++) {
+                if (this.salesInvoice.salesInvoiceLines[i].itemId === undefined)
+                    this.validationErrors.push("Item is required.");
+                if (this.salesInvoice.salesInvoiceLines[i].measurementId === undefined)
+                    this.validationErrors.push("Uom is required.");
+                if (this.salesInvoice.salesInvoiceLines[i].quantity === undefined)
+                    this.validationErrors.push("Quantity is required.");
+                if (this.salesInvoice.salesInvoiceLines[i].amount === undefined)
+                    this.validationErrors.push("Amount is required.");
+                if (this.getLineTotal(i) === undefined
+                    || this.getLineTotal(i).toString() === "NaN")
+                    this.validationErrors.push("Invalid data.");
+            }
+        }
+        else {
+            var itemId, measurementId, quantity, amount, discount;
+            itemId = (document.getElementById("optNewItemId") as HTMLInputElement).value;
+            measurementId = (document.getElementById("optNewMeasurementId") as HTMLInputElement).value;
+            quantity = (document.getElementById("txtNewQuantity") as HTMLInputElement).value;
+            amount = (document.getElementById("txtNewAmount") as HTMLInputElement).value;
+            discount = (document.getElementById("txtNewDiscount") as HTMLInputElement).value;
+
+            if (itemId == "" || itemId === undefined)
+                this.validationErrors.push("Item is required.");
+            if (measurementId == "" || measurementId === undefined)
+                this.validationErrors.push("Uom is required.");
+            if (quantity == "" || quantity === undefined)
+                this.validationErrors.push("Quantity is required.");
+            if (amount == "" || amount === undefined)
+                this.validationErrors.push("Amount is required.");
+        }
+
+        if (document.getElementById("optNewItemId")) {
+            var itemId, measurementId, quantity, amount, discount;
+            itemId = (document.getElementById("optNewItemId") as HTMLInputElement).value;
+            measurementId = (document.getElementById("optNewMeasurementId") as HTMLInputElement).value;
+            quantity = (document.getElementById("txtNewQuantity") as HTMLInputElement).value;
+            amount = (document.getElementById("txtNewAmount") as HTMLInputElement).value;
+            discount = (document.getElementById("txtNewDiscount") as HTMLInputElement).value;
+
+            if (itemId == "" || itemId === undefined)
+                this.validationErrors.push("Item is required.");
+            if (measurementId == "" || measurementId === undefined)
+                this.validationErrors.push("Uom is required.");
+            if (quantity == "" || quantity === undefined)
+                this.validationErrors.push("Quantity is required.");
+            if (amount == "" || amount === undefined)
+                this.validationErrors.push("Amount is required.");
+        }
+
+
+        return this.validationErrors.length === 0;
+    }
+
+
     changedReferenceNo(refNo) {
         this.salesInvoice.referenceNo = refNo;
     }

@@ -74,19 +74,19 @@ namespace Core.Domain
 
     public enum PurchaseOrderStatus
     {
-        Draft,
+        Draft = 0,
         Open = 1,
-        PartiallyReceived,
-        FullReceived,
-        Invoiced,
-        Closed
+        PartiallyReceived = 2,
+        FullReceived = 3,
+        Invoiced = 4 ,
+        Closed = 5
     }
 
     public enum PurchaseInvoiceStatus
     {
-        Draft,
+        Draft = 0,
         Open = 1,
-        Paid
+        Paid = 2
     }
 
     public enum SequenceNumberTypes
