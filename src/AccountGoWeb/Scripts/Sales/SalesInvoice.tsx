@@ -188,15 +188,16 @@ class SalesInvoiceHeader extends React.Component<any, {}>{
 @observer
 class SalesInvoiceLines extends React.Component<any, {}>{
     addLineItem() {
-        var itemId, measurementId, quantity, amount, discount;
+        var itemId, measurementId, quantity, amount, discount, code;
         itemId = (document.getElementById("optNewItemId") as HTMLInputElement).value;
         measurementId = (document.getElementById("optNewMeasurementId") as HTMLInputElement).value;
         quantity = (document.getElementById("txtNewQuantity") as HTMLInputElement).value;
         amount = (document.getElementById("txtNewAmount") as HTMLInputElement).value;
         discount = (document.getElementById("txtNewDiscount") as HTMLInputElement).value;
+        code = (document.getElementById("txtNewCode") as HTMLInputElement).value;
 
         //console.log(`itemId: ${itemId} | measurementId: ${measurementId} | quantity: ${quantity} | amount: ${amount} | discount: ${discount}`);
-        store.addLineItem(0, itemId, measurementId, quantity, amount, discount);
+        store.addLineItem(0, itemId, measurementId, quantity, amount, discount , code);
 
         (document.getElementById("txtNewQuantity") as HTMLInputElement).value = "1";
         (document.getElementById("txtNewAmount") as HTMLInputElement).value = "0";
@@ -319,7 +320,7 @@ class SalesInvoiceLines extends React.Component<any, {}>{
                             {lineItems}
                             <tr>
                                 <td><SelectLineItem store={store} controlId="optNewItemId" /></td>
-                                <td>Item Name</td>
+                                <td><input className="form-control" type="text" id="txtNewCode" onBlur={this.onFocusOutItem.bind(this, i, true) } /></td>
                                 <td><SelectLineMeasurement store={store} controlId="optNewMeasurementId" /></td>
                                 <td><input className="form-control" type="text" id="txtNewQuantity" /></td>
                                 <td><input className="form-control" type="text" id="txtNewAmount" /></td>

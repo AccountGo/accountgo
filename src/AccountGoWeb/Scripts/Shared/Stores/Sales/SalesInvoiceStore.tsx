@@ -120,6 +120,10 @@ export default class SalesStore {
     }
 
     saveNewSalesInvoice() {
+
+        if (this.salesInvoice.invoiceDate === undefined)
+            this.salesInvoice.invoiceDate = new Date(Date.now()).toISOString().substring(0, 10);
+
         if (this.validation() && this.validationErrors.length === 0) {
             axios.post(Config.apiUrl + "api/sales/savesalesinvoice", JSON.stringify(this.salesInvoice),
                 {
