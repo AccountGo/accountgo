@@ -89,7 +89,7 @@ namespace Api.Controllers
             foreach (var vendor in vendors)
             {
                 if(vendor.Party != null)
-                    vendorsDto.Add(new Vendor() { Id = vendor.Id, Name = vendor.Party.Name });
+                    vendorsDto.Add(new Vendor() { Id = vendor.Id, Name = vendor.Party.Name, PaymentTermId = vendor.PaymentTermId });
             }
 
             return new ObjectResult(vendorsDto);

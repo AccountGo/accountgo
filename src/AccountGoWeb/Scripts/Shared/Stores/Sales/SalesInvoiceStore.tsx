@@ -73,6 +73,7 @@ export default class SalesStore {
                         result.data.salesInvoiceLines[i].amount,
                         result.data.salesInvoiceLines[i].discount
                     );
+                    this.updateLineItem(i, 'code', this.changeItemCode(result.data.salesInvoiceLines[i].itemId));
                 }
 
                 this.salesInvoice.id = result.data.id;
@@ -302,5 +303,14 @@ export default class SalesStore {
 
     changedEditMode(editMode) {
         this.editMode = editMode;
+    }
+
+    changeItemCode(itemId) {
+
+        for (var x = 0; x < this.commonStore.items.length; x++) {
+            if (this.commonStore.items[x].id === parseInt(itemId)) {
+                return this.commonStore.items[x].code;
+            }
+        }
     }
 }

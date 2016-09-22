@@ -28,6 +28,7 @@ export default class PurchaseOrderStore {
             orderDate: this.purchaseOrder.orderDate,
             paymentTermId: this.purchaseOrder.paymentTermId,
             referenceNo: this.purchaseOrder.referenceNo,
+            statusId: this.purchaseOrder.statusId,
             purchaseOrderLines: []
         });
 
@@ -39,6 +40,7 @@ export default class PurchaseOrderStore {
                     this.purchaseOrder.id = result.data.id;
                     this.purchaseOrder.paymentTermId = result.data.paymentTermId;
                     this.purchaseOrder.referenceNo = result.data.referenceNo;
+                    this.purchaseOrder.statusId = result.data.statusId;
                     this.changedVendor(result.data.vendorId);
                     this.getPurchaseOrderStatus(result.data.statusId);
                     this.purchaseOrder.orderDate = result.data.orderDate;
@@ -51,7 +53,7 @@ export default class PurchaseOrderStore {
                             result.data.purchaseOrderLines[i].amount,
                             result.data.purchaseOrderLines[i].discount
                         );
-                        this.updateLineItem(i, 'code', this.changeItemCode(result.data.salesQuotationLines[i].itemId));
+                        this.updateLineItem(i, 'code', this.changeItemCode(result.data.purchaseOrderLines[i].itemId));
                     }
                     this.computeTotals();
                     var nodes = document.getElementById("divPurchaseOrderForm").getElementsByTagName('*');
@@ -92,6 +94,10 @@ export default class PurchaseOrderStore {
     }
 
     savePurchaseOrder() {
+
+        if (this.purchaseOrder.orderDate === undefined)
+            this.purchaseOrder.orderDate = new Date(Date.now()).toISOString().substring(0, 10);
+
         if (this.validation() && this.validationErrors.length === 0) {
             axios.post(Config.apiUrl + "api/purchasing/savepurchaseorder", JSON.stringify(this.purchaseOrder),
                 {
@@ -244,7 +250,6 @@ export default class PurchaseOrderStore {
     changedEditMode(editMode) {
         this.editMode = editMode;
     }
- 
 
     getPurchaseOrderStatus(statusId) {
         var status = "";
@@ -261,5 +266,14 @@ export default class PurchaseOrderStore {
         else if (statusId === 5)
             status = "Closed";
         this.purchaseOrderStatus = status;
+    }
+
+    changeItemCode(itemId) {
+
+        for (var x = 0; x < this.commonStore.items.length; x++) {
+            if (this.commonStore.items[x].id === parseInt(itemId)) {
+                return this.commonStore.items[x].code;
+            }
+        }
     }
 }

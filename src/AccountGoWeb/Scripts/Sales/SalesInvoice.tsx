@@ -256,27 +256,23 @@ class SalesInvoiceLines extends React.Component<any, {}>{
                 (document.getElementById("txtNewAmount") as HTMLInputElement).value = "";
                 (document.getElementById("txtNewQuantity") as HTMLInputElement).value = "";
                 document.getElementById("txtNewCode").style.borderColor = '#FF0000';
-                //document.getElementById("txtNewCode").appendChild(span);
-                // document.getElementById("txtNewCode").style.border = 'solid';
             }
             else {
-                //store.updateLineItem(e, "itemId", "");
-                //store.updateLineItem(e, "measurementId", "");
-                //store.updateLineItem(e, "amount", "");
-                //store.updateLineItem(e, "quantity", "");
+
                 i.target.style.borderColor = "red";
-                //i.target.appendChild(span);
-                // i.target.style.border = "solid";
 
             }
 
     }   
 
-    render() {        
+    render() {    
+        var newLine = 0;    
         var lineItems = [];
         for (var i = 0; i < store.salesInvoice.salesInvoiceLines.length; i++) {
+            newLine = newLine + 10;
             lineItems.push(
                 <tr key={i}>
+                    <td><label>{newLine}</label></td>
                     <td><SelectLineItem store={store} row={i} selected={store.salesInvoice.salesInvoiceLines[i].itemId} /></td>
                     <td><input className="form-control" type="text" name={i} value={store.salesInvoice.salesInvoiceLines[i].code} onBlur={this.onFocusOutItem.bind(this, i, false) } onChange={this.onChangeCode.bind(this) } /></td>
                     <td><SelectLineMeasurement row={i} store={store} selected={store.salesInvoice.salesInvoiceLines[i].measurementId} /></td>
@@ -306,8 +302,9 @@ class SalesInvoiceLines extends React.Component<any, {}>{
                     <table className="table table-hover">
                         <thead>
                             <tr>
+                                <td>No</td>
                                 <td>Item Id</td>
-                                <td>Item Name</td>
+                                <td>Code</td>
                                 <td>Measurement</td>
                                 <td>Quantity</td>
                                 <td>Amount</td>
@@ -319,6 +316,7 @@ class SalesInvoiceLines extends React.Component<any, {}>{
                         <tbody>
                             {lineItems}
                             <tr>
+                                <td></td>
                                 <td><SelectLineItem store={store} controlId="optNewItemId" /></td>
                                 <td><input className="form-control" type="text" id="txtNewCode" onBlur={this.onFocusOutItem.bind(this, i, true) } /></td>
                                 <td><SelectLineMeasurement store={store} controlId="optNewMeasurementId" /></td>

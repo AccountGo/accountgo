@@ -42,36 +42,7 @@ class ValidationErrors extends React.Component<any, {}>{
     }
 }
 
-class SavePurchaseOrderButton extends React.Component<any, {}>{
-    saveNewPurchaseOrder(e) {
-        store.savePurchaseOrder();
-    }
 
-    render() {
-        return (
-            <input type="button" className="btn btn-sm btn-primary btn-flat pull-left" value="Save" onClick={this.saveNewPurchaseOrder.bind(this)} />
-            );
-    }
-}
-
-class CancelPurchaseOrderButton extends React.Component<any, {}>{
-    cancelOnClick() {
-        let baseUrl = location.protocol
-            + "//" + location.hostname
-            + (location.port && ":" + location.port)
-            + "/";
-
-        window.location.href = baseUrl + 'purchasing/purchaseorders';
-    }
-
-    render() {
-        return (
-            <button type="button" className="btn btn-sm btn-default btn-flat pull-left" onClick={ this.cancelOnClick.bind(this) }>
-                Close
-            </button>
-        );
-    }
-}
 
 @observer
 class PurchaseOrderHeader extends React.Component<any, {}>{
@@ -329,6 +300,37 @@ class EditButton extends React.Component<any, {}> {
         );
     }
 
+}
+
+class SavePurchaseOrderButton extends React.Component<any, {}>{
+    saveNewPurchaseOrder(e) {
+        store.savePurchaseOrder();
+    }
+
+    render() {
+        return (
+            <input type="button" className="btn btn-sm btn-primary btn-flat pull-left" value="Save" onClick={this.saveNewPurchaseOrder.bind(this) } />
+        );
+    }
+}
+
+class CancelPurchaseOrderButton extends React.Component<any, {}>{
+    cancelOnClick() {
+        let baseUrl = location.protocol
+            + "//" + location.hostname
+            + (location.port && ":" + location.port)
+            + "/";
+
+        window.location.href = baseUrl + 'purchasing/purchaseorders';
+    }
+
+    render() {
+        return (
+            <button type="button" className="btn btn-sm btn-default btn-flat pull-left" onClick={ this.cancelOnClick.bind(this) }>
+                Close
+            </button>
+        );
+    }
 }
 
 export default class AddPurchaseOrder extends React.Component<any, {}> {

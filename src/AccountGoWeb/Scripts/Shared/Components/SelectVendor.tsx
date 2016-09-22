@@ -8,6 +8,7 @@ export default class SelectVendor extends React.Component<any, {}>{
 
         for (var i = 0; i < this.props.store.commonStore.vendors.length; i++) {
             if (this.props.store.commonStore.vendors[i].id === parseInt(e.target.value)) {
+   
                 this.props.store.changedPaymentTerm(this.props.store.commonStore.vendors[i].paymentTermId);
             }
             else {
