@@ -100,6 +100,9 @@ class PurchaseOrderHeader extends React.Component<any, {}>{
 @observer
 class PurchaseOrderLines extends React.Component<any, {}>{
     addLineItem() {
+
+        if (store.validationLine()) {
+
         var itemId, measurementId, quantity, amount, discount, code;
         itemId = (document.getElementById("optNewItemId") as HTMLInputElement).value;
         measurementId = (document.getElementById("optNewMeasurementId") as HTMLInputElement).value;
@@ -114,6 +117,7 @@ class PurchaseOrderLines extends React.Component<any, {}>{
         (document.getElementById("txtNewQuantity") as HTMLInputElement).value = "1";
         (document.getElementById("txtNewAmount") as HTMLInputElement).value = "0";
         (document.getElementById("txtNewDiscount") as HTMLInputElement).value = "";
+            }
     }
 
     onClickRemoveLineItem(i, e) {

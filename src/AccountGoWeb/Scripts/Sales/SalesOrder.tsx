@@ -129,19 +129,23 @@ class SalesOrderHeader extends React.Component<any, {}>{
 @observer
 class SalesOrderLines extends React.Component<any, {}>{
     addLineItem() {
-        var itemId, measurementId, quantity, amount, discount, code;
-        itemId = (document.getElementById("optNewItemId") as HTMLInputElement).value;
-        measurementId = (document.getElementById("optNewMeasurementId") as HTMLInputElement).value;
-        quantity = (document.getElementById("txtNewQuantity") as HTMLInputElement).value;
-        amount = (document.getElementById("txtNewAmount") as HTMLInputElement).value;
-        discount = (document.getElementById("txtNewDiscount") as HTMLInputElement).value;
-        code = (document.getElementById("txtNewCode") as HTMLInputElement).value;
-        //console.log(`itemId: ${itemId} | measurementId: ${measurementId} | quantity: ${quantity} | amount: ${amount} | discount: ${discount}`);
-        store.addLineItem(0, itemId, measurementId, quantity, amount, discount, code);
 
-        (document.getElementById("txtNewQuantity") as HTMLInputElement).value = "1";
-        (document.getElementById("txtNewAmount") as HTMLInputElement).value = "0";
-        (document.getElementById("txtNewDiscount") as HTMLInputElement).value = "";
+        if (store.validationLine()) {
+
+            var itemId, measurementId, quantity, amount, discount, code;
+            itemId = (document.getElementById("optNewItemId") as HTMLInputElement).value;
+            measurementId = (document.getElementById("optNewMeasurementId") as HTMLInputElement).value;
+            quantity = (document.getElementById("txtNewQuantity") as HTMLInputElement).value;
+            amount = (document.getElementById("txtNewAmount") as HTMLInputElement).value;
+            discount = (document.getElementById("txtNewDiscount") as HTMLInputElement).value;
+            code = (document.getElementById("txtNewCode") as HTMLInputElement).value;
+            //console.log(`itemId: ${itemId} | measurementId: ${measurementId} | quantity: ${quantity} | amount: ${amount} | discount: ${discount}`);
+            store.addLineItem(0, itemId, measurementId, quantity, amount, discount, code);
+
+            (document.getElementById("txtNewQuantity") as HTMLInputElement).value = "1";
+            (document.getElementById("txtNewAmount") as HTMLInputElement).value = "0";
+            (document.getElementById("txtNewDiscount") as HTMLInputElement).value = "";
+        }
     }
 
     onClickRemoveLineItem(i, e) {
