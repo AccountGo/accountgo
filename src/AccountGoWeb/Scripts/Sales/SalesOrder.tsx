@@ -142,8 +142,11 @@ class SalesOrderLines extends React.Component<any, {}>{
             //console.log(`itemId: ${itemId} | measurementId: ${measurementId} | quantity: ${quantity} | amount: ${amount} | discount: ${discount}`);
             store.addLineItem(0, itemId, measurementId, quantity, amount, discount, code);
 
+            (document.getElementById("optNewItemId") as HTMLInputElement).value = "";
+            (document.getElementById("txtNewCode") as HTMLInputElement).value = "";
+            (document.getElementById("optNewMeasurementId") as HTMLInputElement).value = "";
             (document.getElementById("txtNewQuantity") as HTMLInputElement).value = "1";
-            (document.getElementById("txtNewAmount") as HTMLInputElement).value = "0";
+            (document.getElementById("txtNewAmount") as HTMLInputElement).value = "";
             (document.getElementById("txtNewDiscount") as HTMLInputElement).value = "";
         }
     }
