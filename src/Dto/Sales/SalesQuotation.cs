@@ -14,6 +14,8 @@ namespace Dto.Sales
         public decimal Amount { get { return GetTotalAmount(); } }
         public int StatusId { get; set; }
 
+        public string SalesQuoteStatus { get; set; }
+
         public virtual List<SalesQuotationLine> SalesQuotationLines { get; set; }
 
         public SalesQuotation()

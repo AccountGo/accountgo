@@ -6,6 +6,8 @@
 // </copyright>
 //-----------------------------------------------------------------------
 
+using System.ComponentModel.DataAnnotations;
+
 namespace Core.Domain
 {
     public enum AccountClasses
@@ -169,6 +171,8 @@ namespace Core.Domain
         Open = 1,
         Overdue = 2,
         Closed = 3,
-        Void = 4
+        Void = 4,
+        [Display(Name = "Closed - Order Created")]
+        ClosedOrderCreated = 5
     }
 }

@@ -11,9 +11,11 @@ import SelectPaymentTerm from "../Shared/Components/SelectPaymentTerm";
 import SelectLineItem from "../Shared/Components/SelectLineItem";
 import SelectLineMeasurement from "../Shared/Components/SelectLineMeasurement";
 
+
 import SalesQuotationLine from "../Shared/Stores/Quotations/SalesQuotationLine";
 import SalesQuotationStore from "../Shared/Stores/Quotations/SalesQuotationStore";
 
+import SelectQuotationStatus from "../Shared/Components/SelectQuotationStatus";
 
 let quotationId = window.location.search.split("?id=")[1];
 
@@ -148,12 +150,10 @@ class SalesQuotationHeader extends React.Component<any, {}>{
                         <div className="row">
                             <div className="col-sm-2">Reference no.</div>
                             <div className="col-sm-10"><input type="text" className="form-control"  value={store.salesQuotation.referenceNo || ''} onChange={this.onChangeReferenceNo.bind(this) }  /></div>
-
                         </div>
-                        <div className="row">
-                            <div className="col-sm-2">Status</div>
-                            <div className="col-sm-10"><label>{store.salesQuotationStatus}</label></div>
-
+                        <div className={store.salesQuotation.id !== undefined ? 'row' : 'hidden'} >
+                            <div className="col-sm-2">Status</div>             
+                            <div className="col-sm-10"><SelectQuotationStatus store={store} selected={store.salesQuotation.statusId} /></div>
                         </div>
                     </div>
                 </div>
@@ -161,7 +161,7 @@ class SalesQuotationHeader extends React.Component<any, {}>{
         );
     }
 }
-
+//<div className="col-sm-10"><label>{store.salesQuotationStatus}</label></div>
 @observer
 class SalesQuotationLines extends React.Component<any, {}>{
    

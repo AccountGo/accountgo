@@ -10,6 +10,8 @@ using System.Collections.Generic;
 using Services.Financial;
 using Dto.Financial;
 using System.Linq;
+using System;
+using Core.Domain;
 
 namespace Api.Controllers
 {
@@ -131,6 +133,26 @@ namespace Api.Controllers
             return Ok(accountsDto);
         }
 
+        [HttpGet]
+        [Route("[action]")]
+        public IActionResult SalesQuotationStatus()
+        {
+
+            List<int> quoteStatuses = new List<int>(new int[] { 0, 1, 3 });
+
+            var salesQuotationsDto = new List<Dto.Common.Status>();
+            foreach (var item in Enum.GetValues(typeof(SalesQuoteStatus)))
+            {
+                if (quoteStatuses.Contains((int)item) )
+                {
+                    salesQuotationsDto.Add(new Dto.Common.Status { Id = (int)item, Description = Enum.GetName(typeof(SalesQuoteStatus), item) });
+                }
+
+            }
+            return Json(salesQuotationsDto);
  
+        }
+
+
     }
 }

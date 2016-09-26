@@ -21,7 +21,7 @@ namespace Api.Controllers
         private readonly IFinancialService _financialService;
         private readonly IInventoryService _inventoryService;
         private readonly ITaxService _taxService;
-   
+
         public SalesController(IAdministrationService adminService,
             ISalesService salesService,
             IFinancialService financialService, IInventoryService inventoryService, ITaxService taxService)
@@ -178,7 +178,7 @@ namespace Api.Controllers
         {
             var salesOrders = _salesService.GetSalesOrders();
             IList<Dto.Sales.SalesOrder> salesOrdersDto = new List<Dto.Sales.SalesOrder>();
-        
+
 
             try
             {
@@ -368,8 +368,8 @@ namespace Api.Controllers
                     CustomerName = quote.Customer.Party.Name,
                     PaymentTermId = quote.PaymentTermId,
                     QuotationDate = quote.Date,
-                    ReferenceNo = quote.ReferenceNo,    
-                      
+                    ReferenceNo = quote.ReferenceNo,
+                    SalesQuoteStatus = quote.Status.ToString()
                 };
 
                 foreach (var line in quote.SalesQuoteLines)
@@ -405,7 +405,7 @@ namespace Api.Controllers
                 QuotationDate = quote.Date,
                 PaymentTermId = quote.PaymentTermId,
                 ReferenceNo = quote.ReferenceNo,
-                StatusId = (int)quote.Status               
+                StatusId = (int)quote.Status
             };
 
 
@@ -418,7 +418,7 @@ namespace Api.Controllers
                     MeasurementId = line.MeasurementId,
                     Quantity = line.Quantity,
                     Amount = line.Amount,
-                    Discount = line.Discount           
+                    Discount = line.Discount
                 };
                 quoteDto.SalesQuotationLines.Add(lineDto);
             }
@@ -866,10 +866,12 @@ namespace Api.Controllers
                 if (isNew)
                 {
                     salesQuote = new Core.Domain.Sales.SalesQuoteHeader();
+                    salesQuote.Status = SalesQuoteStatus.Draft;
                 }
                 else
                 {
                     salesQuote = _salesService.GetSalesQuotationById(quotationDto.Id);
+                    salesQuote.Status = (SalesQuoteStatus)quotationDto.StatusId;
                 }
 
                 salesQuote.CustomerId = quotationDto.CustomerId.GetValueOrDefault();
@@ -877,7 +879,7 @@ namespace Api.Controllers
 
                 salesQuote.ReferenceNo = quotationDto.ReferenceNo;
                 salesQuote.PaymentTermId = quotationDto.PaymentTermId;
-                salesQuote.Status = SalesQuoteStatus.Draft;
+                
                 foreach (var line in quotationDto.SalesQuotationLines)
                 {
                     if (!isNew)
@@ -1077,6 +1079,10 @@ namespace Api.Controllers
 
 
 
+
+
+
+
         [HttpGet]
         [Route("[action]")]
         public IActionResult SalesInvoiceForPrinting(int id)
@@ -1084,7 +1090,7 @@ namespace Api.Controllers
             try
             {
                 var salesInvoice = _salesService.GetSalesInvoiceById(id);
-     
+
                 //var items = _salesService.Ge
                 var salesInvoiceDto = new Dto.Sales.SalesInvoice()
                 {
@@ -1098,7 +1104,7 @@ namespace Api.Controllers
                     ReferenceNo = salesInvoice.ReferenceNo,
                     Posted = salesInvoice.GeneralLedgerHeaderId != null,
                     CompanyName = _adminService.GetDefaultCompany().Name
-                 
+
                 };
 
                 decimal? totalTax = 0;
@@ -1141,18 +1147,18 @@ namespace Api.Controllers
         [HttpPost]
         [Route("[action]")]
         public IActionResult BookQuotation(int id)
-        {            
-  
+        {
+
             try
             {
-                _salesService.BookQuotation(id);            
+                _salesService.BookQuotation(id);
                 return new ObjectResult(Ok());
             }
             catch (Exception ex)
-            {        
+            {
                 return new BadRequestObjectResult(ex.Message);
             }
- 
+
 
         }
     }
