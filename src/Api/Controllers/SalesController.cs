@@ -566,6 +566,14 @@ namespace Api.Controllers
                 {
                     salesOrder = new Core.Domain.Sales.SalesOrderHeader();
                     salesOrder.Status = SalesOrderStatus.Open;
+
+                    if (salesOrderDto.QuotationId != null)
+                    {
+                        var quotation = _salesService.GetSalesQuotationById(salesOrderDto.QuotationId.Value);
+                        quotation.Status = SalesQuoteStatus.ClosedOrderCreated;
+                        _salesService.UpdateSalesQuote(quotation);
+                    }
+
                 }
                 else
                 {

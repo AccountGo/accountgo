@@ -16,5 +16,6 @@ export default class SalesOrder {
     paymentTermId: number;
     referenceNo: string;
     statusId: number;
+    quotationId: number;
     salesOrderLines: SalesOrderLine[] = [];
 }

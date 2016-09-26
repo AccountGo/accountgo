@@ -42,6 +42,9 @@ export default class SalesOrderStore {
                 this.salesOrder.referenceNo = result.data.referenceNo;
                 this.changedOrderDate(result.data.quotationDate);
                 this.getQuotationStatus(result.data.statusId);
+
+                //for addition to save quotation to set status closed - order created
+                this.salesOrder.quotationId = quotationId;
                 for (var i = 0; i < result.data.salesQuotationLines.length; i++) {
                     this.addLineItem(
                         result.data.salesQuotationLines[i].id,
