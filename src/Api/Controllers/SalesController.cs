@@ -369,7 +369,8 @@ namespace Api.Controllers
                     PaymentTermId = quote.PaymentTermId,
                     QuotationDate = quote.Date,
                     ReferenceNo = quote.ReferenceNo,
-                    SalesQuoteStatus = quote.Status.ToString()
+                    SalesQuoteStatus = quote.Status.ToString(),
+                    StatusId = (int)quote.Status
                 };
 
                 foreach (var line in quote.SalesQuoteLines)

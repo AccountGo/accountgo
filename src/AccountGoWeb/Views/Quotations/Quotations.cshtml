@@ -46,8 +46,16 @@
         document.getElementById('linkViewQuotation').setAttribute('href', 'quotation?id=' + selectedRow.id);
         document.getElementById('linkViewQuotation').setAttribute('class', 'btn');
 
-        document.getElementById('linkNewOrder').setAttribute('href', '/sales/salesorder?quotationId=' + selectedRow.id);
-        document.getElementById('linkNewOrder').setAttribute('class', 'btn');
+
+        console.log(selectedRow);
+        if (selectedRow.statusId == 1) {  
+            document.getElementById('linkNewOrder').setAttribute('href', '/sales/salesorder?quotationId=' + selectedRow.id);
+            document.getElementById('linkNewOrder').setAttribute('class', 'btn');
+        }
+        else //if (selectedRow.status == 3)
+        {
+            document.getElementById('linkNewOrder').setAttribute('class', 'btn inactiveLink');
+        }
     }
 
     // wait for the document to be loaded, otherwise
