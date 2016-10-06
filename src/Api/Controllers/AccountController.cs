@@ -101,10 +101,7 @@ namespace Api.Controllers
 
                     return new ObjectResult(result);
                 }
-                else
-                {
-                    return new BadRequestObjectResult(result);
-                }
+                return new BadRequestObjectResult(result);
             }
             catch(System.Exception ex)
             {
