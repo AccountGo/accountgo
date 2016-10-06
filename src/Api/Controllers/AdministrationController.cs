@@ -1,4 +1,4 @@
-﻿using Dto.Administration;
+using Dto.Administration;
 using Dto.Security;
 using Microsoft.AspNetCore.Mvc;
 using Services.Administration;
@@ -55,7 +55,7 @@ namespace Api.Controllers
             {
                 errors = new string[1] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
                 return new BadRequestObjectResult(errors);
-            }            
+            }
         }
 
         [HttpGet]
@@ -73,25 +73,20 @@ namespace Api.Controllers
         public IActionResult AuditLogs()
         {
             var auditLogs = _adminService.AuditLogs();
-            var auditLogsDto = new List<AuditLog>();
-
-            foreach(var log in auditLogs)
+            var auditLogsDto = auditLogs.Select(log => new AuditLog()
             {
-                auditLogsDto.Add(new AuditLog()
-                {
-                    Id = log.Id,
-                    UserName = log.UserName,
-                    AuditEventDateUTC = log.AuditEventDateUTC,
-                    AuditEventType = log.AuditEventType,
-                    TableName = log.TableName,
-                    RecordId = log.RecordId,
-                    FieldName = log.FieldName,
-                    OriginalValue = log.OriginalValue,
-                    NewValue = log.NewValue
-                });
-            }
+                Id = log.Id,
+                UserName = log.UserName,
+                AuditEventDateUTC = log.AuditEventDateUTC,
+                AuditEventType = log.AuditEventType,
+                TableName = log.TableName,
+                RecordId = log.RecordId,
+                FieldName = log.FieldName,
+                OriginalValue = log.OriginalValue,
+                NewValue = log.NewValue
+            }).ToList();
 
-            return new ObjectResult(auditLogs);
+            return new ObjectResult(auditLogsDto);
         }
 
         [HttpGet]
@@ -112,7 +107,7 @@ namespace Api.Controllers
                     UserName = user.UserName
                 };
 
-                foreach(var role in user.Roles)
+                foreach (var role in user.Roles)
                 {
                     var roleDto = new Role()
                     {
@@ -151,8 +146,8 @@ namespace Api.Controllers
                     var permissionDto = new Permission()
                     {
                         Id = permission.Id,
-                        Name = permission.SecurityPermission.Name,      
-                        DisplayName = permission.SecurityPermission.DisplayName                  
+                        Name = permission.SecurityPermission.Name,
+                        DisplayName = permission.SecurityPermission.DisplayName
                     };
 
                     roleDto.Permissions.Add(permissionDto);
@@ -265,7 +260,7 @@ namespace Api.Controllers
                 {
                     company = _adminService.GetDefaultCompany();
                 }
-                
+
                 company.CompanyCode = companyDto.CompanyCode;
                 company.Name = companyDto.Name;
                 company.ShortName = companyDto.ShortName;
@@ -274,7 +269,7 @@ namespace Api.Controllers
 
                 return new ObjectResult(Ok());
             }
-            catch(Exception ex)
+            catch (Exception ex)
             {
                 errors = new string[1] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
                 return new BadRequestObjectResult(errors);
@@ -309,11 +304,11 @@ namespace Api.Controllers
                         ShortName = "FSI",
                     };
                     _adminService.SaveCompany(company);
-                }                
+                }
 
                 //2.Chart of accounts/account classes
                 IList<Core.Domain.Financials.AccountClass> accountClasses = new List<Core.Domain.Financials.AccountClass>();
-                if(_financialService.GetAccounts().Count() < 1)
+                if (_financialService.GetAccounts().Count() < 1)
                 {
                     string[,] values = LoadCsv(Resource.ResourceManager.GetString("coa").Split(';')[0]);
                     List<Core.Domain.Financials.Account> accounts = new List<Core.Domain.Financials.Account>();
@@ -348,7 +343,7 @@ namespace Api.Controllers
                         if (parentAccount != null)
                             account.ParentAccount = parentAccount;
                     }
-                    
+
                     var assetClass = new Core.Domain.Financials.AccountClass() { Name = "Assets", NormalBalance = "Dr" };
                     var liabilitiesClass = new Core.Domain.Financials.AccountClass() { Name = "Liabilities", NormalBalance = "Cr" };
                     var equityClass = new Core.Domain.Financials.AccountClass() { Name = "Equity", NormalBalance = "Cr" };
@@ -388,7 +383,7 @@ namespace Api.Controllers
                         }
                     }
                     _financialService.SaveAccountClasses(accountClasses);
-                }                
+                }
 
                 //3.Financial year
                 Core.Domain.Financials.FinancialYear financialYear = null;
@@ -403,7 +398,7 @@ namespace Api.Controllers
                         IsActive = true
                     };
                     _financialService.SaveFinancialYear(financialYear);
-                }                
+                }
 
                 //4.Payment terms
                 IList<Core.Domain.PaymentTerm> paymentTerms = new List<Core.Domain.PaymentTerm>();
@@ -430,12 +425,12 @@ namespace Api.Controllers
                         IsActive = true,
                     });
 
-                    foreach(var p in paymentTerms)
+                    foreach (var p in paymentTerms)
                     {
                         _financialService.SavePaymentTerm(p);
                     }
                 }
-                
+
 
                 //5.GL setting
                 Core.Domain.Financials.GeneralLedgerSetting glSetting = null;
@@ -564,7 +559,7 @@ namespace Api.Controllers
                     taxes.Add(evat12);
                     taxes.Add(exportTax1);
 
-                    foreach(var tax in taxes)
+                    foreach (var tax in taxes)
                     {
                         _adminService.AddNewTax(tax);
                     }
@@ -577,7 +572,7 @@ namespace Api.Controllers
                     vendorParty.Name = "ABC Sample Supplier";
                     vendorParty.PartyType = Core.Domain.PartyTypes.Vendor;
                     vendorParty.IsActive = true;
-                    
+
                     vendor.AccountsPayableAccountId = _financialService.GetAccountByAccountCode("20110").Id;
                     vendor.PurchaseAccountId = _financialService.GetAccountByAccountCode("50200").Id;
                     vendor.PurchaseDiscountAccountId = _financialService.GetAccountByAccountCode("50400").Id;
@@ -595,7 +590,7 @@ namespace Api.Controllers
                     vendor.PrimaryContact = primaryContact;
 
                     _purchasingService.AddVendor(vendor);
-                }                
+                }
 
                 //8.Customer
                 Core.Domain.Sales.Customer customer = new Core.Domain.Sales.Customer();
@@ -630,7 +625,7 @@ namespace Api.Controllers
                     customer.PrimaryContact = primaryContact;
 
                     _salesService.AddCustomer(customer);
-                }                
+                }
 
                 // 9.Items
                 IList<Core.Domain.Items.Measurement> measurements = new List<Core.Domain.Items.Measurement>();
@@ -643,7 +638,7 @@ namespace Api.Controllers
                     measurements.Add(new Core.Domain.Items.Measurement() { Code = "MO", Description = "Monthly" });
                     measurements.Add(new Core.Domain.Items.Measurement() { Code = "HR", Description = "Hour" });
 
-                    foreach(var m in measurements)
+                    foreach (var m in measurements)
                     {
                         _inventoryService.SaveMeasurement(m);
                     }
@@ -761,7 +756,7 @@ namespace Api.Controllers
                         AssemblyAccount = assemblyCost,
                     });
 
-                    foreach(var c in categories)
+                    foreach (var c in categories)
                     {
                         _inventoryService.SaveItemCategory(c);
                     }
@@ -769,7 +764,7 @@ namespace Api.Controllers
 
                 //10.Banks
                 IList<Core.Domain.Financials.Bank> banks = new List<Core.Domain.Financials.Bank>();
-                if(_financialService.GetCashAndBanks().Count() < 1)
+                if (_financialService.GetCashAndBanks().Count() < 1)
                 {
                     var bank = new Core.Domain.Financials.Bank()
                     {
@@ -799,7 +794,7 @@ namespace Api.Controllers
                 }
 
                 //11.Security Roles
-                if(_securityService.GetAllSecurityRole().Count() < 1)
+                if (_securityService.GetAllSecurityRole().Count() < 1)
                 {
                     _securityService.AddRole("SystemAdministrators");
                     _securityService.AddRole("GeneralUsers");
@@ -807,7 +802,7 @@ namespace Api.Controllers
             }
             catch (Exception ex)
             {
-                throw ex;               
+                throw ex;
             }
             System.Diagnostics.Debug.Write("Completed");
         }
