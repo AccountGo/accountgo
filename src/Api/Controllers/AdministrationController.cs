@@ -62,10 +62,7 @@ namespace Api.Controllers
         [Route("[action]")]
         public IActionResult Company(string companyCode)
         {
-            if (string.IsNullOrEmpty(companyCode))
-                return new ObjectResult(_adminService.GetDefaultCompany());
-            else
-                return new ObjectResult(_adminService.GetDefaultCompany());
+            return new ObjectResult(_adminService.GetDefaultCompany());
         }
 
         [HttpGet]
@@ -98,7 +95,7 @@ namespace Api.Controllers
 
             foreach (var user in users)
             {
-                var userDto = new User()
+                var userDto = new User
                 {
                     Id = user.Id,
                     FirstName = user.Firstname,
@@ -109,7 +106,7 @@ namespace Api.Controllers
 
                 foreach (var role in user.Roles)
                 {
-                    var roleDto = new Role()
+                    var roleDto = new Role
                     {
                         Id = role.Id,
                         Name = role.SecurityRole.Name,
@@ -134,7 +131,7 @@ namespace Api.Controllers
 
             foreach (var role in roles)
             {
-                var roleDto = new Role()
+                var roleDto = new Role
                 {
                     Id = role.Id,
                     Name = role.Name,
@@ -143,7 +140,7 @@ namespace Api.Controllers
 
                 foreach (var permission in role.Permissions)
                 {
-                    var permissionDto = new Permission()
+                    var permissionDto = new Permission
                     {
                         Id = permission.Id,
                         Name = permission.SecurityPermission.Name,
@@ -168,7 +165,7 @@ namespace Api.Controllers
 
             foreach (var group in groups)
             {
-                var groupDto = new Group()
+                var groupDto = new Group
                 {
                     Id = group.Id,
                     Name = group.Name,
@@ -177,7 +174,7 @@ namespace Api.Controllers
 
                 foreach (var permission in group.Permissions)
                 {
-                    var permissionDto = new Permission()
+                    var permissionDto = new Permission
                     {
                         Id = permission.Id,
                         Name = permission.Name,
@@ -198,16 +195,18 @@ namespace Api.Controllers
         public IActionResult GetUser(string username)
         {
             var user = _securityService.GetUser(username);
-            var userDto = new Dto.Security.User();
-            userDto.Id = user.Id;
-            userDto.FirstName = user.Firstname;
-            userDto.LastName = user.Lastname;
-            userDto.UserName = user.UserName;
-            userDto.Email = user.EmailAddress;
+            var userDto = new Dto.Security.User
+            {
+                Id = user.Id,
+                FirstName = user.Firstname,
+                LastName = user.Lastname,
+                UserName = user.UserName,
+                Email = user.EmailAddress
+            };
 
             foreach (var role in user.Roles)
             {
-                var roleDto = new Dto.Security.Role()
+                var roleDto = new Dto.Security.Role
                 {
                     Id = role.SecurityRoleId,
                     Name = role.SecurityRole.Name,
@@ -218,11 +217,11 @@ namespace Api.Controllers
 
                 foreach (var permission in role.SecurityRole.Permissions)
                 {
-                    var permissionDto = new Dto.Security.Permission()
+                    var permissionDto = new Dto.Security.Permission
                     {
                         Id = permission.SecurityPermissionId,
                         Name = permission.SecurityPermission.Name,
-                        Group = new Dto.Security.Group()
+                        Group = new Dto.Security.Group
                         {
                             Name = permission.SecurityPermission.Group.Name
                         }
@@ -238,7 +237,7 @@ namespace Api.Controllers
         [Route("[action]")]
         public IActionResult SaveCompany([FromBody]Company companyDto)
         {
-            string[] errors = null;
+            string[] errors;
             try
             {
                 if (!ModelState.IsValid)
@@ -250,16 +249,9 @@ namespace Api.Controllers
                     return new BadRequestObjectResult(errors);
                 }
 
-                Core.Domain.Company company = null;
-
-                if (companyDto.Id == 0)
-                {
-                    company = new Core.Domain.Company();
-                }
-                else
-                {
-                    company = _adminService.GetDefaultCompany();
-                }
+                Core.Domain.Company company = companyDto.Id == 0
+                    ? new Core.Domain.Company()
+                    : _adminService.GetDefaultCompany();
 
                 company.CompanyCode = companyDto.CompanyCode;
                 company.Name = companyDto.Name;
@@ -271,7 +263,7 @@ namespace Api.Controllers
             }
             catch (Exception ex)
             {
-                errors = new string[1] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
+                errors = new[] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
                 return new BadRequestObjectResult(errors);
             }
         }
@@ -294,17 +286,14 @@ namespace Api.Controllers
             try
             {
                 // 1.Company
-                Core.Domain.Company company = null;
-                if (_adminService.GetDefaultCompany() == null)
+                if (_adminService.GetDefaultCompany() != null) return;
+                var company = new Core.Domain.Company
                 {
-                    company = new Core.Domain.Company()
-                    {
-                        Name = "Financial Solutions Inc.",
-                        CompanyCode = "100",
-                        ShortName = "FSI",
-                    };
-                    _adminService.SaveCompany(company);
-                }
+                    Name = "Financial Solutions Inc.",
+                    CompanyCode = "100",
+                    ShortName = "FSI",
+                };
+                _adminService.SaveCompany(company);
 
                 //2.Chart of accounts/account classes
                 IList<Core.Domain.Financials.AccountClass> accountClasses = new List<Core.Domain.Financials.AccountClass>();
