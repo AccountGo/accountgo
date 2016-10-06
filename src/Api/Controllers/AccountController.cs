@@ -1,4 +1,4 @@
-﻿using Api.Data;
+using Api.Data;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Services.Administration;
@@ -10,9 +10,7 @@ namespace Api.Controllers
     public class AccountController : BaseController
     {
         private readonly UserManager<ApplicationUser> _userManager;
-        private readonly SignInManager<ApplicationUser> _signInManager;
         private readonly IAdministrationService _administrationService;
-        private readonly ISecurityService _securityService;
 
         public AccountController(
             UserManager<ApplicationUser> userManager,
@@ -22,9 +20,7 @@ namespace Api.Controllers
             )
         {
             _userManager = userManager;
-            _signInManager = signInManager;
             _administrationService = administrationService;
-            _securityService = securityService;
         }
 
         [HttpPost]
