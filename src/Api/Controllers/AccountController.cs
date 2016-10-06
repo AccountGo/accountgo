@@ -72,7 +72,6 @@ namespace Api.Controllers
         [Route("[action]")]
         public async System.Threading.Tasks.Task<IActionResult> AddNewUser([FromBody]dynamic registerViewModel)
         {
-            string[] errors = null;
             try
             {
                 if (registerViewModel == null)
@@ -89,11 +88,14 @@ namespace Api.Controllers
                 var result = await _userManager.CreateAsync(user, password);
                 if (result.Succeeded)
                 {
-                    Core.Domain.Security.User newUser = new Core.Domain.Security.User();
-                    newUser.EmailAddress = username;
-                    newUser.UserName = username;
-                    newUser.Firstname = firstName;
-                    newUser.Lastname = lastName;
+                    Core.Domain.Security.User newUser =
+                        new Core.Domain.Security.User
+                        {
+                            EmailAddress = username,
+                            UserName = username,
+                            Firstname = firstName,
+                            Lastname = lastName
+                        };
 
                     _administrationService.SaveUser(newUser);
 
@@ -106,7 +108,7 @@ namespace Api.Controllers
             }
             catch(System.Exception ex)
             {
-                errors = new string[1] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
+                var errors = new[] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
                 return new BadRequestObjectResult(errors);
             }
         }
