@@ -67,7 +67,6 @@ export default class SalesQuotationStore {
             }.bind(this));
         }
         else {
-            // this.changedQuotationDate(new Date(Date.now()).toISOString().substring(0, 10));
             this.changedEditMode(true);
         }
 
