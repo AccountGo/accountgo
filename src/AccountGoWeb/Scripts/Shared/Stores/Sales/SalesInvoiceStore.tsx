@@ -73,6 +73,7 @@ export default class SalesStore {
                         result.data.salesInvoiceLines[i].amount,
                         result.data.salesInvoiceLines[i].discount
                     );
+                    this.updateLineItem(i, 'code', this.changeItemCode(result.data.salesInvoiceLines[i].itemId));
                 }
 
                 this.salesInvoice.id = result.data.id;
@@ -120,6 +121,10 @@ export default class SalesStore {
     }
 
     saveNewSalesInvoice() {
+
+        if (this.salesInvoice.invoiceDate === undefined)
+            this.salesInvoice.invoiceDate = new Date(Date.now()).toISOString().substring(0, 10);
+
         if (this.validation() && this.validationErrors.length === 0) {
             axios.post(Config.apiUrl + "api/sales/savesalesinvoice", JSON.stringify(this.salesInvoice),
                 {
@@ -199,6 +204,65 @@ export default class SalesStore {
 
         return this.validationErrors.length === 0;
     }
+
+    validationLine() {
+        this.validationErrors = [];
+        if (this.salesInvoice.salesInvoiceLines !== undefined && this.salesInvoice.salesInvoiceLines.length > 0) {
+            for (var i = 0; i < this.salesInvoice.salesInvoiceLines.length; i++) {
+                if (this.salesInvoice.salesInvoiceLines[i].itemId === undefined)
+                    this.validationErrors.push("Item is required.");
+                if (this.salesInvoice.salesInvoiceLines[i].measurementId === undefined)
+                    this.validationErrors.push("Uom is required.");
+                if (this.salesInvoice.salesInvoiceLines[i].quantity === undefined)
+                    this.validationErrors.push("Quantity is required.");
+                if (this.salesInvoice.salesInvoiceLines[i].amount === undefined)
+                    this.validationErrors.push("Amount is required.");
+                if (this.getLineTotal(i) === undefined
+                    || this.getLineTotal(i).toString() === "NaN")
+                    this.validationErrors.push("Invalid data.");
+            }
+        }
+        else {
+            var itemId, measurementId, quantity, amount, discount;
+            itemId = (document.getElementById("optNewItemId") as HTMLInputElement).value;
+            measurementId = (document.getElementById("optNewMeasurementId") as HTMLInputElement).value;
+            quantity = (document.getElementById("txtNewQuantity") as HTMLInputElement).value;
+            amount = (document.getElementById("txtNewAmount") as HTMLInputElement).value;
+            discount = (document.getElementById("txtNewDiscount") as HTMLInputElement).value;
+
+            if (itemId == "" || itemId === undefined)
+                this.validationErrors.push("Item is required.");
+            if (measurementId == "" || measurementId === undefined)
+                this.validationErrors.push("Uom is required.");
+            if (quantity == "" || quantity === undefined)
+                this.validationErrors.push("Quantity is required.");
+            if (amount == "" || amount === undefined)
+                this.validationErrors.push("Amount is required.");
+        }
+
+        if (document.getElementById("optNewItemId")) {
+            var itemId, measurementId, quantity, amount, discount;
+            itemId = (document.getElementById("optNewItemId") as HTMLInputElement).value;
+            measurementId = (document.getElementById("optNewMeasurementId") as HTMLInputElement).value;
+            quantity = (document.getElementById("txtNewQuantity") as HTMLInputElement).value;
+            amount = (document.getElementById("txtNewAmount") as HTMLInputElement).value;
+            discount = (document.getElementById("txtNewDiscount") as HTMLInputElement).value;
+
+            if (itemId == "" || itemId === undefined)
+                this.validationErrors.push("Item is required.");
+            if (measurementId == "" || measurementId === undefined)
+                this.validationErrors.push("Uom is required.");
+            if (quantity == "" || quantity === undefined)
+                this.validationErrors.push("Quantity is required.");
+            if (amount == "" || amount === undefined)
+                this.validationErrors.push("Amount is required.");
+        }
+
+
+        return this.validationErrors.length === 0;
+    }
+
+
     changedReferenceNo(refNo) {
         this.salesInvoice.referenceNo = refNo;
     }
@@ -214,8 +278,8 @@ export default class SalesStore {
         this.salesInvoice.paymentTermId = termId;
     }
 
-    addLineItem(id, itemId, measurementId, quantity, amount, discount) {
-        var newLineItem = new SalesInvoiceLine(id, itemId, measurementId, quantity, amount, discount);
+    addLineItem(id, itemId, measurementId, quantity, amount, discount, code) {
+        var newLineItem = new SalesInvoiceLine(id, itemId, measurementId, quantity, amount, discount, code);
         this.salesInvoice.salesInvoiceLines.push(extendObservable(newLineItem, newLineItem));        
     }
 
@@ -239,5 +303,14 @@ export default class SalesStore {
 
     changedEditMode(editMode) {
         this.editMode = editMode;
+    }
+
+    changeItemCode(itemId) {
+
+        for (var x = 0; x < this.commonStore.items.length; x++) {
+            if (this.commonStore.items[x].id === parseInt(itemId)) {
+                return this.commonStore.items[x].code;
+            }
+        }
     }
 }

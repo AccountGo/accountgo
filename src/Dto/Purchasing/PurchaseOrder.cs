@@ -13,7 +13,7 @@ namespace Dto.Purchasing
         public decimal Amount { get { return GetTotalAmount(); } }
         public bool Completed { get; set; }
         public string ReferenceNo { get; set; }
-        public int Status { get; set; }
+        public int StatusId { get; set; }
 
         public System.Collections.Generic.IList<PurchaseOrderLine> PurchaseOrderLines { get; set; }
         public PurchaseOrder()

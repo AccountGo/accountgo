@@ -16,6 +16,9 @@
 </div>
 <div>
     <div id="quotations" class="ag-fresh"></div>
+ 
+
+ 
 </div>
 <script>
     var columnDefs = [
@@ -23,7 +26,8 @@
     {headerName: "Customer Name", field: "customerName", width: 350},
     {headerName: "Date", field: "quotationDate", width: 100},
     {headerName: "Amount", field: "amount", width: 100},
-    {headerName: "Ref no", field: "referenceNo", width: 100}
+    {headerName: "Ref no", field: "referenceNo", width: 100},
+    {headerName: "Status" , field: "salesQuoteStatus", width : 100}
     ];
 
     var gridOptions = {
@@ -42,8 +46,21 @@
         document.getElementById('linkViewQuotation').setAttribute('href', 'quotation?id=' + selectedRow.id);
         document.getElementById('linkViewQuotation').setAttribute('class', 'btn');
 
-        document.getElementById('linkNewOrder').setAttribute('href', '/sales/salesorder?quotationId=' + selectedRow.id);
-        document.getElementById('linkNewOrder').setAttribute('class', 'btn');
+
+
+        if(selectedRow.status == 3)
+        {
+            document.getElementById('linkNewOrder').setAttribute('class', 'btn inactiveLink');
+        }
+        else if (selectedRow.status == 1){
+            document.getElementById('linkNewOrder').setAttribute('href', '/sales/salesorder?quotationId=' + selectedRow.id);
+            document.getElementById('linkNewOrder').setAttribute('class', 'btn');
+        }
+
+        if (true) {
+    
+        }
+
     }
 
     // wait for the document to be loaded, otherwise

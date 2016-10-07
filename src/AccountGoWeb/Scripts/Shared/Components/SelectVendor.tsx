@@ -5,6 +5,17 @@ import {observer} from "mobx-react";
 export default class SelectVendor extends React.Component<any, {}>{
     onChangeVendor(e) {
         this.props.store.changedVendor(e.target.value);
+
+        for (var i = 0; i < this.props.store.commonStore.vendors.length; i++) {
+            if (this.props.store.commonStore.vendors[i].id === parseInt(e.target.value)) {
+   
+                this.props.store.changedPaymentTerm(this.props.store.commonStore.vendors[i].paymentTermId);
+            }
+            else {
+                this.props.store.changedPaymentTerm("");
+            }
+        }
+
     }
     render() {
         var options = [];

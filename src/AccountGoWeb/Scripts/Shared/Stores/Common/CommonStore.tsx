@@ -10,6 +10,7 @@ export default class CommonStore {
     @observable measurements = [];
     @observable vendors = [];
     @observable accounts = [];
+    @observable salesQuotationStatus = [];
 
     constructor() {
         this.loadCustomersLookup();
@@ -18,6 +19,7 @@ export default class CommonStore {
         this.loadMeasurementsLookup();
         this.loadVendorsLookup();
         this.loadAccountsLookup();
+        this.loadQuotationStatusLookup();
     }
 
     loadCustomersLookup() {
@@ -76,6 +78,18 @@ export default class CommonStore {
     }
 
     loadVoucherTypesLookup() {
+    }
+
+    loadQuotationStatusLookup() {
+        let quotationStatus = this.salesQuotationStatus;
+        axios.get(Config.apiUrl + "api/common/salesquotationstatus")
+            .then(function (result) {
+                const data = result.data as [];
+                for (var i = 0; i < data.length; i++)
+                {
+                    quotationStatus.push(data[i]);
+                }
+            })
     }
 
     loadAccountsLookup() {

@@ -188,19 +188,27 @@ class SalesInvoiceHeader extends React.Component<any, {}>{
 @observer
 class SalesInvoiceLines extends React.Component<any, {}>{
     addLineItem() {
-        var itemId, measurementId, quantity, amount, discount;
-        itemId = (document.getElementById("optNewItemId") as HTMLInputElement).value;
-        measurementId = (document.getElementById("optNewMeasurementId") as HTMLInputElement).value;
-        quantity = (document.getElementById("txtNewQuantity") as HTMLInputElement).value;
-        amount = (document.getElementById("txtNewAmount") as HTMLInputElement).value;
-        discount = (document.getElementById("txtNewDiscount") as HTMLInputElement).value;
 
-        //console.log(`itemId: ${itemId} | measurementId: ${measurementId} | quantity: ${quantity} | amount: ${amount} | discount: ${discount}`);
-        store.addLineItem(0, itemId, measurementId, quantity, amount, discount);
+        if (store.validationLine()) {
 
-        (document.getElementById("txtNewQuantity") as HTMLInputElement).value = "1";
-        (document.getElementById("txtNewAmount") as HTMLInputElement).value = "0";
-        (document.getElementById("txtNewDiscount") as HTMLInputElement).value = "";
+            var itemId, measurementId, quantity, amount, discount, code;
+            itemId = (document.getElementById("optNewItemId") as HTMLInputElement).value;
+            measurementId = (document.getElementById("optNewMeasurementId") as HTMLInputElement).value;
+            quantity = (document.getElementById("txtNewQuantity") as HTMLInputElement).value;
+            amount = (document.getElementById("txtNewAmount") as HTMLInputElement).value;
+            discount = (document.getElementById("txtNewDiscount") as HTMLInputElement).value;
+            code = (document.getElementById("txtNewCode") as HTMLInputElement).value;
+
+            //console.log(`itemId: ${itemId} | measurementId: ${measurementId} | quantity: ${quantity} | amount: ${amount} | discount: ${discount}`);
+            store.addLineItem(0, itemId, measurementId, quantity, amount, discount, code);
+
+            (document.getElementById("optNewItemId") as HTMLInputElement).value = "";
+            (document.getElementById("txtNewCode") as HTMLInputElement).value = "";
+            (document.getElementById("optNewMeasurementId") as HTMLInputElement).value = "";
+            (document.getElementById("txtNewQuantity") as HTMLInputElement).value = "1";
+            (document.getElementById("txtNewAmount") as HTMLInputElement).value = "";
+            (document.getElementById("txtNewDiscount") as HTMLInputElement).value = "";
+        }
     }
 
     onClickRemoveLineItem(i, e) {
@@ -219,13 +227,61 @@ class SalesInvoiceLines extends React.Component<any, {}>{
         store.updateLineItem(e.target.name, "discount", e.target.value);
     }
 
-    render() {        
+    onChangeCode(e) {
+        store.updateLineItem(e.target.name, "code", e.target.value);
+    }
+
+
+    onFocusOutItem(e, isNew, i) {
+
+        var isExisting = false;
+        for (var x = 0; x < store.commonStore.items.length; x++) {
+            if (store.commonStore.items[x].code == i.target.value) {
+                isExisting = true;
+                if (isNew) {
+                    (document.getElementById("optNewItemId") as HTMLInputElement).value = store.commonStore.items[x].id;
+                    (document.getElementById("optNewMeasurementId") as HTMLInputElement).value = store.commonStore.items[x].sellMeasurementId;
+                    (document.getElementById("txtNewAmount") as HTMLInputElement).value = store.commonStore.items[x].price;
+                    (document.getElementById("txtNewQuantity") as HTMLInputElement).value = "1";
+                    document.getElementById("txtNewCode").style.borderColor = "";
+                }
+                else {
+                    store.updateLineItem(e, "itemId", store.commonStore.items[x].id);
+                    store.updateLineItem(e, "measurementId", store.commonStore.items[x].sellMeasurementId);
+                    store.updateLineItem(e, "amount", store.commonStore.items[x].price);
+                    store.updateLineItem(e, "quantity", 1);
+                    i.target.style.borderColor = "";
+                }
+            }
+        }
+
+        if (!isExisting)
+
+            if (isNew) {
+                (document.getElementById("optNewItemId") as HTMLInputElement).value = "";
+                (document.getElementById("optNewMeasurementId") as HTMLInputElement).value = "";
+                (document.getElementById("txtNewAmount") as HTMLInputElement).value = "";
+                (document.getElementById("txtNewQuantity") as HTMLInputElement).value = "";
+                document.getElementById("txtNewCode").style.borderColor = '#FF0000';
+            }
+            else {
+
+                i.target.style.borderColor = "red";
+
+            }
+
+    }   
+
+    render() {    
+        var newLine = 0;    
         var lineItems = [];
         for (var i = 0; i < store.salesInvoice.salesInvoiceLines.length; i++) {
+            newLine = newLine + 10;
             lineItems.push(
                 <tr key={i}>
+                    <td><label>{newLine}</label></td>
                     <td><SelectLineItem store={store} row={i} selected={store.salesInvoice.salesInvoiceLines[i].itemId} /></td>
-                    <td>{store.salesInvoice.salesInvoiceLines[i].itemId}</td>
+                    <td><input className="form-control" type="text" name={i} value={store.salesInvoice.salesInvoiceLines[i].code} onBlur={this.onFocusOutItem.bind(this, i, false) } onChange={this.onChangeCode.bind(this) } /></td>
                     <td><SelectLineMeasurement row={i} store={store} selected={store.salesInvoice.salesInvoiceLines[i].measurementId} /></td>
                     <td><input type="text" className="form-control" name={i} value={store.salesInvoice.salesInvoiceLines[i].quantity} onChange={this.onChangeQuantity.bind(this)} /></td>
                     <td><input type="text" className="form-control" name={i} value={store.salesInvoice.salesInvoiceLines[i].amount} onChange={this.onChangeAmount.bind(this) } /></td>
@@ -253,8 +309,9 @@ class SalesInvoiceLines extends React.Component<any, {}>{
                     <table className="table table-hover">
                         <thead>
                             <tr>
+                                <td>No</td>
                                 <td>Item Id</td>
-                                <td>Item Name</td>
+                                <td>Code</td>
                                 <td>Measurement</td>
                                 <td>Quantity</td>
                                 <td>Amount</td>
@@ -266,8 +323,9 @@ class SalesInvoiceLines extends React.Component<any, {}>{
                         <tbody>
                             {lineItems}
                             <tr>
+                                <td></td>
                                 <td><SelectLineItem store={store} controlId="optNewItemId" /></td>
-                                <td>Item Name</td>
+                                <td><input className="form-control" type="text" id="txtNewCode" onBlur={this.onFocusOutItem.bind(this, i, true) } /></td>
                                 <td><SelectLineMeasurement store={store} controlId="optNewMeasurementId" /></td>
                                 <td><input className="form-control" type="text" id="txtNewQuantity" /></td>
                                 <td><input className="form-control" type="text" id="txtNewAmount" /></td>

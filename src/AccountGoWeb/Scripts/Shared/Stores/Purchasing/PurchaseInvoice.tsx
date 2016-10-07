@@ -10,6 +10,7 @@ export default class PurchaseInvoice {
     posted: boolean;
     readyForPosting: boolean;
     purchaseInvoiceLines: PurchaseInvoiceLine[] = [];
+    statusId: number;
 
     constructor() {
         this.id = 0;

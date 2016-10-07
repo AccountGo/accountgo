@@ -1,4 +1,4 @@
-﻿using Api.Data;
+using Api.Data;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Services.Administration;
@@ -10,9 +10,7 @@ namespace Api.Controllers
     public class AccountController : BaseController
     {
         private readonly UserManager<ApplicationUser> _userManager;
-        private readonly SignInManager<ApplicationUser> _signInManager;
         private readonly IAdministrationService _administrationService;
-        private readonly ISecurityService _securityService;
 
         public AccountController(
             UserManager<ApplicationUser> userManager,
@@ -22,9 +20,7 @@ namespace Api.Controllers
             )
         {
             _userManager = userManager;
-            _signInManager = signInManager;
             _administrationService = administrationService;
-            _securityService = securityService;
         }
 
         [HttpPost]
@@ -76,7 +72,6 @@ namespace Api.Controllers
         [Route("[action]")]
         public async System.Threading.Tasks.Task<IActionResult> AddNewUser([FromBody]dynamic registerViewModel)
         {
-            string[] errors = null;
             try
             {
                 if (registerViewModel == null)
@@ -93,24 +88,24 @@ namespace Api.Controllers
                 var result = await _userManager.CreateAsync(user, password);
                 if (result.Succeeded)
                 {
-                    Core.Domain.Security.User newUser = new Core.Domain.Security.User();
-                    newUser.EmailAddress = username;
-                    newUser.UserName = username;
-                    newUser.Firstname = firstName;
-                    newUser.Lastname = lastName;
+                    Core.Domain.Security.User newUser =
+                        new Core.Domain.Security.User
+                        {
+                            EmailAddress = username,
+                            UserName = username,
+                            Firstname = firstName,
+                            Lastname = lastName
+                        };
 
                     _administrationService.SaveUser(newUser);
 
                     return new ObjectResult(result);
                 }
-                else
-                {
-                    return new BadRequestObjectResult(result);
-                }
+                return new BadRequestObjectResult(result);
             }
             catch(System.Exception ex)
             {
-                errors = new string[1] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
+                var errors = new[] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
                 return new BadRequestObjectResult(errors);
             }
         }
