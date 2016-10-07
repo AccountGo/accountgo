@@ -20,6 +20,7 @@ export default class SalesOrderStore {
     @observable salesOrderStatus;
     @observable salesQuotationStatus;
     @observable editMode = false;
+    @observable hasQuotation = false;
     constructor(quotationId, orderId) {
         this.commonStore = new CommonStore();
         this.salesOrder = new SalesOrder();
@@ -42,7 +43,7 @@ export default class SalesOrderStore {
                 this.salesOrder.referenceNo = result.data.referenceNo;
                 this.changedOrderDate(result.data.quotationDate);
                 this.getQuotationStatus(result.data.statusId);
-
+                this.hasQuotation = true; // this variable will serve as the footprint that it has a quotation and the edit button wil be disable.
                 //for addition to save quotation to set status closed - order created
                 this.salesOrder.quotationId = quotationId;
                 for (var i = 0; i < result.data.salesQuotationLines.length; i++) {

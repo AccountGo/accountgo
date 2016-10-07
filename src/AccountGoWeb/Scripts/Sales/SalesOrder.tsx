@@ -328,7 +328,7 @@ class EditButton extends React.Component<any, {}> {
     render() {
         return (
             <a href="#" id="linkEdit" onClick={this.onClickEditButton}
-                className={!store.editMode
+                className={!store.editMode && !store.hasQuotation
                 //className={store.salesOrder.statusId == 0 && !store.editMode
                     ? "btn"
                     : "btn inactiveLink"}>
