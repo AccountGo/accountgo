@@ -34,7 +34,11 @@
         // PROPERTIES - simple boolean / string / number properties
         rowSelection: 'single',
         onSelectionChanged: onSelectionChanged,
+        enableColResize : true
     };
+
+    //gridOptions.api.sizeColumnsToFit();
+
 
     function onSelectionChanged() {
         var selectedRows = gridOptions.api.getSelectedRows();

@@ -6,5 +6,6 @@ export default class PurchaseOrder {
     orderDate: Date;
     paymentTermId: number;
     referenceNo: string;
+    statusId: number;
     purchaseOrderLines: PurchaseOrderLine[] = [];
 }

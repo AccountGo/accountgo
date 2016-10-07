@@ -55,6 +55,7 @@ export default class SalesQuotationStore {
                         result.data.salesQuotationLines[i].quantity,
                         result.data.salesQuotationLines[i].amount,
                         result.data.salesQuotationLines[i].discount
+
                     );
                     this.updateLineItem(i, 'code', this.changeItemCode(result.data.salesQuotationLines[i].itemId));
                 }
@@ -66,7 +67,6 @@ export default class SalesQuotationStore {
             }.bind(this));
         }
         else {
-           // this.changedQuotationDate(new Date(Date.now()).toISOString().substring(0, 10));
             this.changedEditMode(true);
         }
 
@@ -127,7 +127,7 @@ export default class SalesQuotationStore {
     }
 
     bookQuotation() {
- 
+
         if (this.validation()) {
             if (this.validationErrors.length === 0) {
                 axios.post(Config.apiUrl + "api/sales/bookquotation?id=" + parseInt(this.salesQuotation.id),
@@ -179,9 +179,8 @@ export default class SalesQuotationStore {
         return this.validationErrors.length === 0;
     }
 
-    
-    getQuotationStatus(statusId)
-    {
+
+    getQuotationStatus(statusId) {
         var status = "";
         if (statusId === 0)
             status = "Draft";
@@ -202,113 +201,116 @@ export default class SalesQuotationStore {
     //        this.salesQuotation.quotationDate = new Date(Date.now()).toISOString().substring(0, 10);
     //}
 
-validationLine()
-{
-    this.validationErrors = [];
-    if (this.salesQuotation.salesQuotationLines !== undefined && this.salesQuotation.salesQuotationLines.length > 0) {
-        for (var i = 0; i < this.salesQuotation.salesQuotationLines.length; i++) {
-            if (this.salesQuotation.salesQuotationLines[i].itemId === undefined)
+    validationLine() {
+        this.validationErrors = [];
+        if (this.salesQuotation.salesQuotationLines !== undefined && this.salesQuotation.salesQuotationLines.length > 0) {
+            for (var i = 0; i < this.salesQuotation.salesQuotationLines.length; i++) {
+                if (this.salesQuotation.salesQuotationLines[i].itemId === undefined)
+                    this.validationErrors.push("Item is required.");
+                if (this.salesQuotation.salesQuotationLines[i].measurementId === undefined)
+                    this.validationErrors.push("Uom is required.");
+                if (this.salesQuotation.salesQuotationLines[i].quantity === undefined)
+                    this.validationErrors.push("Quantity is required.");
+                if (this.salesQuotation.salesQuotationLines[i].amount === undefined)
+                    this.validationErrors.push("Amount is required.");
+                if (this.getLineTotal(i) === undefined
+                    || this.getLineTotal(i).toString() === "NaN")
+                    this.validationErrors.push("Invalid data.");
+            }
+        }
+        else {
+            var itemId, measurementId, quantity, amount, discount;
+            itemId = (document.getElementById("optNewItemId") as HTMLInputElement).value;
+            measurementId = (document.getElementById("optNewMeasurementId") as HTMLInputElement).value;
+            quantity = (document.getElementById("txtNewQuantity") as HTMLInputElement).value;
+            amount = (document.getElementById("txtNewAmount") as HTMLInputElement).value;
+            discount = (document.getElementById("txtNewDiscount") as HTMLInputElement).value;
+
+            if (itemId == "" || itemId === undefined)
                 this.validationErrors.push("Item is required.");
-            if (this.salesQuotation.salesQuotationLines[i].measurementId === undefined)
+            if (measurementId == "" || measurementId === undefined)
                 this.validationErrors.push("Uom is required.");
-            if (this.salesQuotation.salesQuotationLines[i].quantity === undefined)
+            if (quantity == "" || quantity === undefined)
                 this.validationErrors.push("Quantity is required.");
-            if (this.salesQuotation.salesQuotationLines[i].amount === undefined)
+            if (amount == "" || amount === undefined)
                 this.validationErrors.push("Amount is required.");
-            if (this.getLineTotal(i) === undefined
-                || this.getLineTotal(i).toString() === "NaN")
-                this.validationErrors.push("Invalid data.");
+        }
+
+        if (document.getElementById("optNewItemId")) {
+            var itemId, measurementId, quantity, amount, discount;
+            itemId = (document.getElementById("optNewItemId") as HTMLInputElement).value;
+            measurementId = (document.getElementById("optNewMeasurementId") as HTMLInputElement).value;
+            quantity = (document.getElementById("txtNewQuantity") as HTMLInputElement).value;
+            amount = (document.getElementById("txtNewAmount") as HTMLInputElement).value;
+            discount = (document.getElementById("txtNewDiscount") as HTMLInputElement).value;
+
+            if (itemId == "" || itemId === undefined)
+                this.validationErrors.push("Item is required.");
+            if (measurementId == "" || measurementId === undefined)
+                this.validationErrors.push("Uom is required.");
+            if (quantity == "" || quantity === undefined)
+                this.validationErrors.push("Quantity is required.");
+            if (amount == "" || amount === undefined)
+                this.validationErrors.push("Amount is required.");
+        }
+
+
+        return this.validationErrors.length === 0;
+    }
+
+    changedCustomer(custId) {
+        this.salesQuotation.customerId = custId;
+    }
+
+    changedPaymentTerm(termId) {
+        this.salesQuotation.paymentTermId = termId;
+    }
+
+    changedQuotationDate(date) {
+        this.salesQuotation.quotationDate = date;
+    }
+    changedReferenceNo(refNo) {
+        this.salesQuotation.referenceNo = refNo;
+    }
+
+    changedQuoteStatus(statusId) {
+        this.salesQuotation.statusId = statusId;
+    }
+
+    changeItemCode(itemId) {
+
+        for (var x = 0; x < this.commonStore.items.length; x++) {
+            if (this.commonStore.items[x].id === parseInt(itemId)) {
+                return this.commonStore.items[x].code;
+            }
         }
     }
-    else {
-        var itemId, measurementId, quantity, amount, discount;
-        itemId = (document.getElementById("optNewItemId") as HTMLInputElement).value;
-        measurementId = (document.getElementById("optNewMeasurementId") as HTMLInputElement).value;
-        quantity = (document.getElementById("txtNewQuantity") as HTMLInputElement).value;
-        amount = (document.getElementById("txtNewAmount") as HTMLInputElement).value;
-        discount = (document.getElementById("txtNewDiscount") as HTMLInputElement).value;
 
-        if (itemId == "" || itemId === undefined)
-            this.validationErrors.push("Item is required.");
-        if (measurementId == "" || measurementId === undefined)
-            this.validationErrors.push("Uom is required.");
-        if (quantity == "" || quantity === undefined)
-            this.validationErrors.push("Quantity is required.");
-        if (amount == "" || amount === undefined)
-            this.validationErrors.push("Amount is required.");
+    addLineItem(id, itemId, measurementId, quantity, amount, discount, code) {
+        var newLineItem = new SalesQuotationLine(id, itemId, measurementId, quantity, amount, discount, code);
+        this.salesQuotation.salesQuotationLines.push(extendObservable(newLineItem, newLineItem));
     }
 
-    if (document.getElementById("optNewItemId")) {
-        var itemId, measurementId, quantity, amount, discount;
-        itemId = (document.getElementById("optNewItemId") as HTMLInputElement).value;
-        measurementId = (document.getElementById("optNewMeasurementId") as HTMLInputElement).value;
-        quantity = (document.getElementById("txtNewQuantity") as HTMLInputElement).value;
-        amount = (document.getElementById("txtNewAmount") as HTMLInputElement).value;
-        discount = (document.getElementById("txtNewDiscount") as HTMLInputElement).value;
-
-        if (itemId == "" || itemId === undefined)
-            this.validationErrors.push("Item is required.");
-        if (measurementId == "" || measurementId === undefined)
-            this.validationErrors.push("Uom is required.");
-        if (quantity == "" || quantity === undefined)
-            this.validationErrors.push("Quantity is required.");
-        if (amount == "" || amount === undefined)
-            this.validationErrors.push("Amount is required.");
+    removeLineItem(row) {
+        this.salesQuotation.salesQuotationLines.splice(row, 1);
     }
 
-
-    return this.validationErrors.length === 0;
-}
-
-changedCustomer(custId) {
-    this.salesQuotation.customerId = custId;
-}
-
-changedPaymentTerm(termId) {
-    this.salesQuotation.paymentTermId = termId;
-}
-
-changedQuotationDate(date) {
-    this.salesQuotation.quotationDate = date;
-}
-changedReferenceNo(refNo) {
-    this.salesQuotation.referenceNo = refNo;
-}
-
-changeItemCode(itemId) {      
-  
-    for (var x = 0; x < this.commonStore.items.length; x++) {
-        if (this.commonStore.items[x].id === parseInt(itemId)) {
-            return this.commonStore.items[x].code;
-        }
+    updateLineItem(row, targetProperty, value) {
+        //if (this.salesQuotation.salesQuotationLines.length > 0)
+        this.salesQuotation.salesQuotationLines[row][targetProperty] = value;
+        this.computeTotals();
     }
-}
 
-addLineItem(id, itemId, measurementId, quantity, amount, discount, code) {
-    var newLineItem = new SalesQuotationLine(id, itemId, measurementId, quantity, amount, discount, code);
-    this.salesQuotation.salesQuotationLines.push(extendObservable(newLineItem, newLineItem));
-}
+    getLineTotal(row) {
+        let lineSum = 0;
+        let lineItem = this.salesQuotation.salesQuotationLines[row];
+        lineSum = (lineItem.quantity * lineItem.amount) - lineItem.discount;
+        return lineSum;
+    }
 
-removeLineItem(row) {
-    this.salesQuotation.salesQuotationLines.splice(row, 1);
-}
-
-updateLineItem(row, targetProperty, value) {
-    //if (this.salesQuotation.salesQuotationLines.length > 0)
-    this.salesQuotation.salesQuotationLines[row][targetProperty] = value;
-    this.computeTotals();
-}
-
-getLineTotal(row) {
-    let lineSum = 0;
-    let lineItem = this.salesQuotation.salesQuotationLines[row];
-    lineSum = (lineItem.quantity * lineItem.amount) - lineItem.discount;
-    return lineSum;
-}
-
-changedEditMode(editMode) {
-    this.editMode = editMode;
-}
+    changedEditMode(editMode) {
+        this.editMode = editMode;
+    }
 
 
 }

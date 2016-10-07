@@ -18,6 +18,7 @@ export default class PurchaseOrderStore {
     commonStore;
     @observable validationErrors;
     @observable editMode = false;
+    @observable purchaseInvoiceStatus;
 
     constructor(purchId: any, invoiceId: any) {        
         this.commonStore = new CommonStore();
@@ -49,6 +50,7 @@ export default class PurchaseOrderStore {
                             result.data.purchaseOrderLines[i].amount,
                             result.data.purchaseOrderLines[i].discount
                         );
+
                     }
 
                     this.purchaseInvoice.fromPurchaseOrderId = purchId;
@@ -75,6 +77,7 @@ export default class PurchaseOrderStore {
                             result.data.purchaseInvoiceLines[i].amount,
                             result.data.purchaseInvoiceLines[i].discount
                         );
+                        this.updateLineItem(i, 'code', this.changeItemCode(result.data.purchaseInvoiceLines[i].itemId));
                     }
 
                     this.purchaseInvoice.id = result.data.id;
@@ -84,6 +87,9 @@ export default class PurchaseOrderStore {
                     this.changedInvoiceDate(result.data.invoiceDate);
                     this.purchaseInvoice.posted = result.data.posted;
                     this.purchaseInvoice.readyForPosting = result.data.readyForPosting;
+                    this.getPurchaseInvoiceStatus(result.data.statusId);
+
+
                     this.computeTotals();
 
                     var nodes = document.getElementById("divPurchaseInvoiceForm").getElementsByTagName('*');
@@ -197,6 +203,65 @@ export default class PurchaseOrderStore {
 
         return this.validationErrors.length === 0;
     }
+
+    validationLine() {
+        this.validationErrors = [];
+        if (this.purchaseInvoice.purchaseInvoiceLines !== undefined && this.purchaseInvoice.purchaseInvoiceLines.length > 0) {
+            for (var i = 0; i < this.purchaseInvoice.purchaseInvoiceLines.length; i++) {
+                if (this.purchaseInvoice.purchaseInvoiceLines[i].itemId === undefined)
+                    this.validationErrors.push("Item is required.");
+                if (this.purchaseInvoice.purchaseInvoiceLines[i].measurementId === undefined)
+                    this.validationErrors.push("Uom is required.");
+                if (this.purchaseInvoice.purchaseInvoiceLines[i].quantity === undefined)
+                    this.validationErrors.push("Quantity is required.");
+                if (this.purchaseInvoice.purchaseInvoiceLines[i].amount === undefined)
+                    this.validationErrors.push("Amount is required.");
+                if (this.getLineTotal(i) === undefined
+                    || this.getLineTotal(i).toString() === "NaN")
+                    this.validationErrors.push("Invalid data.");
+            }
+        }
+        else {
+            var itemId, measurementId, quantity, amount, discount;
+            itemId = (document.getElementById("optNewItemId") as HTMLInputElement).value;
+            measurementId = (document.getElementById("optNewMeasurementId") as HTMLInputElement).value;
+            quantity = (document.getElementById("txtNewQuantity") as HTMLInputElement).value;
+            amount = (document.getElementById("txtNewAmount") as HTMLInputElement).value;
+            discount = (document.getElementById("txtNewDiscount") as HTMLInputElement).value;
+
+            if (itemId == "" || itemId === undefined)
+                this.validationErrors.push("Item is required.");
+            if (measurementId == "" || measurementId === undefined)
+                this.validationErrors.push("Uom is required.");
+            if (quantity == "" || quantity === undefined)
+                this.validationErrors.push("Quantity is required.");
+            if (amount == "" || amount === undefined)
+                this.validationErrors.push("Amount is required.");
+        }
+
+        if (document.getElementById("optNewItemId")) {
+            var itemId, measurementId, quantity, amount, discount;
+            itemId = (document.getElementById("optNewItemId") as HTMLInputElement).value;
+            measurementId = (document.getElementById("optNewMeasurementId") as HTMLInputElement).value;
+            quantity = (document.getElementById("txtNewQuantity") as HTMLInputElement).value;
+            amount = (document.getElementById("txtNewAmount") as HTMLInputElement).value;
+            discount = (document.getElementById("txtNewDiscount") as HTMLInputElement).value;
+
+            if (itemId == "" || itemId === undefined)
+                this.validationErrors.push("Item is required.");
+            if (measurementId == "" || measurementId === undefined)
+                this.validationErrors.push("Uom is required.");
+            if (quantity == "" || quantity === undefined)
+                this.validationErrors.push("Quantity is required.");
+            if (amount == "" || amount === undefined)
+                this.validationErrors.push("Amount is required.");
+        }
+
+
+        return this.validationErrors.length === 0;
+    }
+
+
     changedReferenceNo(refNo) {
         this.purchaseInvoice.referenceNo = refNo;
     }
@@ -236,5 +301,25 @@ export default class PurchaseOrderStore {
 
     changedEditMode(editMode) {
         this.editMode = editMode;
+    }
+
+    getPurchaseInvoiceStatus(statusId) {
+        var status = "";
+        if (statusId === 0)
+            status = "Draft";
+        else if (statusId === 1)
+            status = "Open";
+        else if (statusId === 2)
+            status = "Paid";
+        this.purchaseInvoiceStatus = status;
+    }
+
+    changeItemCode(itemId) {
+
+        for (var x = 0; x < this.commonStore.items.length; x++) {
+            if (this.commonStore.items[x].id === parseInt(itemId)) {
+                return this.commonStore.items[x].code;
+            }
+        }
     }
 }

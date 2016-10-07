@@ -458,6 +458,7 @@ namespace Services.Purchasing
                     if (purchaseOrder.Id == 0)
                     {
                         purchaseOrder.No = GetNextNumber(SequenceNumberTypes.SalesOrder).ToString();
+                        purchaseOrder.Status = (int)PurchaseOrderStatus.Draft;
                         _purchaseOrderRepo.Insert(purchaseOrder);
                     }
                     else
