@@ -532,6 +532,19 @@ namespace Api.Controllers
                         Posted = invoice.GeneralLedgerHeaderId.HasValue
                     };
 
+                    foreach (var line in invoice.SalesInvoiceLines)
+                    {
+                        var lineDto = new Dto.Sales.SalesInvoiceLine();
+                        lineDto.Id = line.Id;
+                        lineDto.Amount = line.Amount;
+                        lineDto.Discount = line.Discount;
+                        lineDto.Quantity = line.Quantity;
+                        lineDto.ItemId = line.ItemId;
+                        lineDto.MeasurementId = line.MeasurementId;
+
+                        invoiceDto.SalesInvoiceLines.Add(lineDto);
+                    }
+
                     invoicesDto.Add(invoiceDto);
                 }
 
