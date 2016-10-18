@@ -51,7 +51,7 @@ class SaveQuotationButton extends React.Component<any, {}>{
     render() {
         return (
          <input type="button" value="Save" onClick={this.saveNewSalesQuotation.bind(this) }
-                className={(store.salesQuotation.statusId == 0 || store.salesQuotation.statusId == undefined) && store.editMode
+                className={(store.salesQuotation.statusId == 0 || store.salesQuotation.statusId == undefined) && !store.editMode
                 ? "btn btn-sm btn-primary btn-flat pull-left"
                 : "btn btn-sm btn-primary btn-flat pull-left inactiveLink"}
             />
