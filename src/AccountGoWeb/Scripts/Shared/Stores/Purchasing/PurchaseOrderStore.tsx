@@ -87,7 +87,7 @@ export default class PurchaseOrderStore {
                         ttotal = ttotal + this.commonStore.getPurhcaseLineTaxAmount(lineItem.quantity, lineItem.amount, lineItem.discount, result.data);
                     }
                     this.TTotal = ttotal;
-                    this.GTotal = rtotal - ttotal;
+                    this.GTotal = rtotal + ttotal;
                 }.bind(this));
             this.RTotal = rtotal;
         }
