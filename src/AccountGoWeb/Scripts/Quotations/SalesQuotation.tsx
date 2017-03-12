@@ -256,11 +256,11 @@ class SalesQuotationLines extends React.Component<any, {}>{
                 <tr key={i}>
                     <td><label>{newLine}</label></td>
                     <td><SelectLineItem store={store} row={i} selected={store.salesQuotation.salesQuotationLines[i].itemId} /></td>
-                    <td><input className="form-control" type="text" name={i} value={store.salesQuotation.salesQuotationLines[i].code} onBlur={this.onFocusOutItem.bind(this, i, false) } onChange={this.onChangeCode.bind(this) } /></td>
+                    <td><input className="form-control" type="text" name={i.toString()} value={store.salesQuotation.salesQuotationLines[i].code} onBlur={this.onFocusOutItem.bind(this, i, false) } onChange={this.onChangeCode.bind(this) } /></td>
                     <td><SelectLineMeasurement row={i} store={store} selected={store.salesQuotation.salesQuotationLines[i].measurementId} /></td>
-                    <td><input className="form-control" type="text" name={i} value={store.salesQuotation.salesQuotationLines[i].quantity} onChange={this.onChangeQuantity.bind(this) } /></td>
-                    <td><input className="form-control" type="text" name={i} value={store.salesQuotation.salesQuotationLines[i].amount} onChange={this.onChangeAmount.bind(this) } /></td>
-                    <td><input className="form-control" type="text" name={i} value={store.salesQuotation.salesQuotationLines[i].discount} onChange={this.onChangeDiscount.bind(this) } /></td>
+                    <td><input className="form-control" type="text" name={i.toString()} value={store.salesQuotation.salesQuotationLines[i].quantity} onChange={this.onChangeQuantity.bind(this) } /></td>
+                    <td><input className="form-control" type="text" name={i.toString()} value={store.salesQuotation.salesQuotationLines[i].amount} onChange={this.onChangeAmount.bind(this) } /></td>
+                    <td><input className="form-control" type="text" name={i.toString()} value={store.salesQuotation.salesQuotationLines[i].discount} onChange={this.onChangeDiscount.bind(this) } /></td>
                     <td>{store.getLineTotal(i) }</td>
                     <td>
                         <button type="button" className="btn btn-box-tool" onClick={this.onClickRemoveLineItem.bind(this, i) }>

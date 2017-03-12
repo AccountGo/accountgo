@@ -157,7 +157,7 @@ class JournalEntryHeader extends React.Component<any, {}>{
                     <div className="col-sm-6">
                         <div className="row">
                             <div className="col-sm-2">Posted</div>
-                            <div className="col-sm-10"><input type="checkbox" readOnly checked={store.journalEntry.posted === true ? "checked" : ""} /></div>
+                            <div className="col-sm-10"><input type="checkbox" readOnly checked={store.journalEntry.posted === true ? true : false} /></div>
                         </div>
                     </div>
                 </div>
@@ -196,8 +196,8 @@ class JournalEntryLines extends React.Component<any, {}>{
                 <tr key={i}>
                     <td><SelectAccount store={store} row={i} selected={store.journalEntry.journalEntryLines[i].accountId} /></td>
                     <td><SelectDebitCredit store={store} row={i} selected={store.journalEntry.journalEntryLines[i].drcr} /></td>
-                    <td><input type="text" className="form-control" name={i} onChange={this.onChangeAmount.bind(this) } value={store.journalEntry.journalEntryLines[i].amount} /></td>
-                    <td><input type="text" className="form-control" name={i} onChange={this.onChangeMemo.bind(this) } value={store.journalEntry.journalEntryLines[i].memo || ''} /></td>
+                    <td><input type="text" className="form-control" name={i.toString()} onChange={this.onChangeAmount.bind(this)} value={store.journalEntry.journalEntryLines[i].amount} /></td>
+                    <td><input type="text" className="form-control" name={i.toString()} onChange={this.onChangeMemo.bind(this) } value={store.journalEntry.journalEntryLines[i].memo || ''} /></td>
                     <td>         
                         <button type="button" className="btn btn-box-tool" onClick={this.onClickRemoveLineItem.bind(this, i) }>
                             <i className="fa fa-fw fa-times"></i> 

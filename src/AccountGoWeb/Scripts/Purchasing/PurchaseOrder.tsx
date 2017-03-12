@@ -199,11 +199,11 @@ class PurchaseOrderLines extends React.Component<any, {}>{
                 <tr key={i}>
                     <td><label>{newLine}</label></td>
                     <td><SelectLineItem store={store} row={i} selected={store.purchaseOrder.purchaseOrderLines[i].itemId} /></td>
-                    <td><input className="form-control" type="text" name={i} value={store.purchaseOrder.purchaseOrderLines[i].code} onBlur={this.onFocusOutItem.bind(this, i, false) } onChange={this.onChangeCode.bind(this) } /></td>
+                    <td><input className="form-control" type="text" name={i.toString()} value={store.purchaseOrder.purchaseOrderLines[i].code} onBlur={this.onFocusOutItem.bind(this, i, false) } onChange={this.onChangeCode.bind(this) } /></td>
                     <td><SelectLineMeasurement row={i} store={store} selected={store.purchaseOrder.purchaseOrderLines[i].measurementId} /></td>
-                    <td><input type="text" className="form-control" name={i} value={store.purchaseOrder.purchaseOrderLines[i].quantity} onChange={this.onChangeQuantity.bind(this)} /></td>
-                    <td><input type="text" className="form-control" name={i} value={store.purchaseOrder.purchaseOrderLines[i].amount} onChange={this.onChangeAmount.bind(this) } /></td>
-                    <td><input type="text" className="form-control" name={i} value={store.purchaseOrder.purchaseOrderLines[i].discount} onChange={this.onChangeDiscount.bind(this) } /></td>
+                    <td><input type="text" className="form-control" name={i.toString()} value={store.purchaseOrder.purchaseOrderLines[i].quantity} onChange={this.onChangeQuantity.bind(this)} /></td>
+                    <td><input type="text" className="form-control" name={i.toString()} value={store.purchaseOrder.purchaseOrderLines[i].amount} onChange={this.onChangeAmount.bind(this) } /></td>
+                    <td><input type="text" className="form-control" name={i.toString()} value={store.purchaseOrder.purchaseOrderLines[i].discount} onChange={this.onChangeDiscount.bind(this) } /></td>
                     <td>{store.getLineTotal(i) }</td>
                     <td>
                         <button type="button" className="btn btn-box-tool" onClick={this.onClickRemoveLineItem.bind(this, i) }>
@@ -245,7 +245,7 @@ class PurchaseOrderLines extends React.Component<any, {}>{
                                 <td><SelectLineItem store={store} controlId="optNewItemId" /></td>
                                 <td><input className="form-control" type="text" id="txtNewCode" onBlur={this.onFocusOutItem.bind(this, i, true) } /></td>
                                 <td><SelectLineMeasurement store={store} controlId="optNewMeasurementId" /></td>
-                                <td><input className="form-control" type="text" id="txtNewQuantity" defaultValue={1} /></td>
+                                <td><input className="form-control" type="text" id="txtNewQuantity" defaultValue="1" /></td>
                                 <td><input className="form-control" type="text" id="txtNewAmount" /></td>
                                 <td><input className="form-control" type="text" id="txtNewDiscount" /></td>
                                 <td></td>

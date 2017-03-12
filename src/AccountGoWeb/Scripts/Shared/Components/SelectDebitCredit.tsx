@@ -9,8 +9,8 @@ export default class SelectDebiCredit extends React.Component<any, {}>{
     }
     render() {
         var options = [];
-        options.push(<option key={1} value={1}>Debit</option>);
-        options.push(<option key={2} value={2}>Credit</option>);
+        options.push(<option key={1} value="1">Debit</option>);
+        options.push(<option key={2} value="2">Credit</option>);
 
         return (
             <select id={this.props.controlId} value={this.props.selected} onChange={this.onChangeDebitCredit.bind(this) } className="form-control select2" >

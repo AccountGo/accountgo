@@ -26,8 +26,8 @@ export default class CommonStore {
         let customers = this.customers;
         axios.get(Config.apiUrl + "api/common/customers")
             .then(function (result) {
-                const data = result.data as [];
-                for (var i = 0; i < data.length; i++) {
+                const data = result.data;
+                for (var i = 0; i < Object.keys(data).length; i++) {
                     customers.push(data[i]);
                 }
             });
@@ -37,8 +37,8 @@ export default class CommonStore {
         let paymentTerms = this.paymentTerms;
         axios.get(Config.apiUrl + "api/common/paymentterms")
             .then(function (result) {
-                const data = result.data as [];
-                for (var i = 0; i < data.length; i++) {
+                const data = result.data;
+                for (var i = 0; i < Object.keys(data).length; i++) {
                     paymentTerms.push(data[i]);
                 }
             });
@@ -48,8 +48,8 @@ export default class CommonStore {
         let vendors = this.vendors;
         axios.get(Config.apiUrl + "api/common/vendors")
             .then(function (result) {
-                const data = result.data as [];
-                for (var i = 0; i < data.length; i++) {
+                const data = result.data;
+                for (var i = 0; i < Object.keys(data).length; i++) {
                     vendors.push(data[i]);
                 }
             }.bind(this));
@@ -59,8 +59,8 @@ export default class CommonStore {
         let items = this.items;
         axios.get(Config.apiUrl + "api/common/items")
             .then(function (result) {
-                const data = result.data as [];
-                for (var i = 0; i < data.length; i++) {
+                const data = result.data;
+                for (var i = 0; i < Object.keys(data).length; i++) {
                     items.push(data[i]);
                 }
             });
@@ -70,8 +70,8 @@ export default class CommonStore {
         let measurements = this.measurements;
         axios.get(Config.apiUrl + "api/common/measurements")
             .then(function (result) {
-                const data = result.data as [];
-                for (var i = 0; i < data.length; i++) {
+                const data = result.data;
+                for (var i = 0; i < Object.keys(data).length; i++) {
                     measurements.push(data[i]);
                 }
             });
@@ -84,8 +84,8 @@ export default class CommonStore {
         let quotationStatus = this.salesQuotationStatus;
         axios.get(Config.apiUrl + "api/common/salesquotationstatus")
             .then(function (result) {
-                const data = result.data as [];
-                for (var i = 0; i < data.length; i++)
+                const data = result.data;
+                for (var i = 0; i < Object.keys(data).length; i++)
                 {
                     quotationStatus.push(data[i]);
                 }
@@ -96,8 +96,8 @@ export default class CommonStore {
         let accounts = this.accounts;
         axios.get(Config.apiUrl + "api/common/postingaccounts")
             .then(function (result) {
-                const data = result.data as [];
-                for (var i = 0; i < data.length; i++) {
+                const data = result.data;
+                for (var i = 0; i < Object.keys(data).length; i++) {
                     accounts.push(data[i]);
                 }
             });
