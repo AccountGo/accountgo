@@ -22,14 +22,14 @@ Technology Stack:
 - D3
 - React-router (on some pages)
 
-Demo site (new UI) : http://www.accountgo.ph/
+Demo site (new UI) : http://accountgo.net
 
 ![accountgoweb](https://cloud.githubusercontent.com/assets/17961526/17953180/d2e7aac2-6aa3-11e6-8150-fe1b8274cf91.png)
 ![accountgoweb](https://cloud.githubusercontent.com/assets/17961526/17430653/0cf89cca-5b28-11e6-81dd-5f14695c8cfc.png)
 
 # Setup Develoment Environment
 In “Presentation” folder, there are three web projects. 
--	“Web” – an old web front-end. Currently the demo site is http://www.accountgo.ph
+-	“Web” – an old web front-end. Currently the demo site is http://accountgo.net
 -	“AccountGoWeb” – this is the future. Functionalities from the old "Web" front-end are soon transported to this project. Development under ASP.NET Core 1.0, ReactJS and MobX.
 -	“Api” – ASP.NET REST API project to be consumed by “AccountGoWeb”.
 
