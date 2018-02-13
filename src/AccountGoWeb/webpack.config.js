@@ -22,9 +22,8 @@ var config = {
         filename: '[name].chunk.js'
     },
     resolve: {
-        extensions: ['', '.js', '.jsx', '.tsx']
+        extensions: ['.js', '.jsx', '.tsx']
     },
-    debug: true,
     devtool: 'source-map',
     //module: {
     //    loaders: [
@@ -36,15 +35,17 @@ var config = {
     //    ]
     //},
     plugins: [
-        new webpack.optimize.CommonsChunkPlugin("vendor", "vendor.bundle.js")
+        new webpack.optimize.CommonsChunkPlugin({
+            name: "vendor"
+        })
     ],
     externals: {
         'Config': JSON.stringify(process.env.ENV === 'production' ?
             {
-                apiUrl: "http://accountgo-dev-api.azurewebsites.net/"
+                apiUrl: "https://accountgoapi.azurewebsites.net/"
             } :
             {
-                apiUrl: "http://localhost:5000/"
+                apiUrl: "https://accountgoapi.azurewebsites.net/"
             })
     }
 };
