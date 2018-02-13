@@ -344,7 +344,7 @@ namespace Api.Controllers
             // If no accounts found just return.
             if (_financialService.GetAccounts().Any()) return;
 
-            string[,] values = LoadCsv(Resource.ResourceManager.GetString("coa").Split(';')[0]);
+            string[,] values = LoadCsv(Resource.ResourceManager.GetString("coa"));
             List<Core.Domain.Financials.Account> accounts = new List<Core.Domain.Financials.Account>();
 
             for (var i = 1; i < (values.Length / 8); i++)
@@ -897,10 +897,10 @@ namespace Api.Controllers
         private string[,] LoadCsv(string filename)
         {
             // Get the file's text.
-            string whole_file = System.IO.File.ReadAllText(filename);
+            //string whole_file = System.IO.File.ReadAllText(filename);
 
             // Split into lines.
-            whole_file = whole_file.Replace('\n', '\r');
+            string whole_file = filename.Replace('\n', '\r');
             string[] lines = whole_file.Split(new char[] { '\r' },
                 StringSplitOptions.RemoveEmptyEntries);
 
