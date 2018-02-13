@@ -17,6 +17,7 @@
     },
     "AccountGoApi": {
       "commandName": "Executable",
+      "executablePath": "bin\\Debug\\net471\\Api.exe",
       "launchUrl": "http://localhost:5000/api/values",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"

@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -41,7 +42,7 @@ namespace Api
                 .AddDbContext<Data.ApplicationIdentityDbContext>(options => options.UseSqlServer(connectionString));
 
             services
-                .AddIdentity<Data.ApplicationUser, Microsoft.AspNetCore.Identity.EntityFrameworkCore.IdentityRole>()
+                .AddIdentity<Data.ApplicationUser, IdentityRole>()
                 .AddEntityFrameworkStores<Data.ApplicationIdentityDbContext>()
                 .AddDefaultTokenProviders();
 
@@ -89,7 +90,7 @@ namespace Api
             loggerFactory.AddDebug();
                       
             app.UseStaticFiles();
-            app.UseIdentity();
+            app.UseAuthentication();
             app.UseCors("AllowAll");
             app.UseMvc();
             //app.UseSwaggerGen();

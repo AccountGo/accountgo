@@ -65,7 +65,7 @@ namespace AccountGoWeb.Controllers
                     ClaimsPrincipal principal = new ClaimsPrincipal(new[] { identity });
 
                     HttpContext.User = principal;
-
+                    
                     await HttpContext.Authentication.SignInAsync("AuthCookie", principal, new Microsoft.AspNetCore.Http.Authentication.AuthenticationProperties { IsPersistent = model.RememberMe });
 
                     return RedirectToLocal(returnUrl);

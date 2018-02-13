@@ -44,13 +44,21 @@ namespace Api.Controllers
             string password = loginViewModel.Password;
             string username = loginViewModel.Email;
 
-            var applicationUser = await _userManager.FindByNameAsync(username);
-                       
-            if (await _userManager.CheckPasswordAsync(applicationUser, password))
+            try
             {
-                //await ResetLockout(user);
-                return new ObjectResult(_userManager.FindByEmailAsync(applicationUser.Email));
+                var applicationUser = await _userManager.FindByNameAsync(username);
+
+                if (await _userManager.CheckPasswordAsync(applicationUser, password))
+                {
+                    //await ResetLockout(user);
+                    return new ObjectResult(_userManager.FindByEmailAsync(applicationUser.Email));
+                }
             }
+            catch(System.Exception ex)
+            {
+                System.Console.WriteLine(ex.StackTrace);
+            }
+
 
             //Logger.LogWarning(2, "User {userId} failed to provide the correct password.", await UserManager.GetUserIdAsync(user));
 

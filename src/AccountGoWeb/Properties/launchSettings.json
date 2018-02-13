@@ -16,8 +16,9 @@
       }
     },
     "AccountGoWeb": {
-      "commandName": "Project",
-      "launchUrl": "http://localhost:5000",
+      "commandName": "Executable",
+      "executablePath": "bin\\Debug\\net471\\AccountGoWeb.exe",
+      "launchUrl": "http://localhost:8000",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"
       }

@@ -1,5 +1,7 @@
-﻿using Microsoft.AspNetCore.Builder;
+﻿using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -15,6 +17,7 @@ namespace AccountGoWeb
                 .SetBasePath(env.ContentRootPath)
                 .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
                 .AddJsonFile($"appsettings.{env.EnvironmentName}.json", optional: true)
+                .AddJsonFile("hosting.json", optional: true)
                 .AddEnvironmentVariables();
             Configuration = builder.Build();
         }
@@ -24,8 +27,11 @@ namespace AccountGoWeb
         public void ConfigureServices(IServiceCollection services)
         {
             services.AddMvc();
-
+            
             services.AddSingleton<IConfiguration>(Configuration);
+
+            services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+                .AddCookie(o => o.LoginPath = new PathString("/account/signin"));
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
@@ -33,16 +39,18 @@ namespace AccountGoWeb
         {
             app.UseStaticFiles();
 
-            var options = new CookieAuthenticationOptions()
-            {   
-                AuthenticationScheme = "AuthCookie",
-                LoginPath = new Microsoft.AspNetCore.Http.PathString("/account/signin"),
-                AccessDeniedPath = new Microsoft.AspNetCore.Http.PathString("/account/unauthorize"),
-                AutomaticAuthenticate = true,
-                AutomaticChallenge = true
-            };
+            //var options = new CookieAuthenticationOptions()
+            //{
+            //    //AuthenticationScheme = "AuthCookie",
+            //    LoginPath = new Microsoft.AspNetCore.Http.PathString("/account/signin"),
+            //    AccessDeniedPath = new Microsoft.AspNetCore.Http.PathString("/account/unauthorize"),
+            //    //AutomaticAuthenticate = true,
+            //    //AutomaticChallenge = true
+            //};
 
-            app.UseCookieAuthentication(options);
+            //app.UseCookieAuthentication(options);
+
+            app.UseAuthentication();
 
             app.UseMvc(routes =>
             {
