@@ -1,4 +1,6 @@
 ﻿using AccountGoWeb.Models.Account;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
@@ -65,8 +67,8 @@ namespace AccountGoWeb.Controllers
                     ClaimsPrincipal principal = new ClaimsPrincipal(new[] { identity });
 
                     HttpContext.User = principal;
-                    
-                    await HttpContext.Authentication.SignInAsync("AuthCookie", principal, new Microsoft.AspNetCore.Http.Authentication.AuthenticationProperties { IsPersistent = model.RememberMe });
+
+                    await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal);
 
                     return RedirectToLocal(returnUrl);
                 }
@@ -83,7 +85,7 @@ namespace AccountGoWeb.Controllers
 
         public async Task<IActionResult> SignOut()
         {
-            await HttpContext.Authentication.SignOutAsync("AuthCookie");
+            await HttpContext.SignOutAsync();
 
             return SignedOut();
         }
