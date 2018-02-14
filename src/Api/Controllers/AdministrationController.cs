@@ -458,10 +458,10 @@ namespace Api.Controllers
             if (_adminService.GetFinancialYears().Count >= 1) return;
             var financialYear = new Core.Domain.Financials.FinancialYear
             {
-                FiscalYearCode = "FY1516",
-                FiscalYearName = "FY 2016/2017",
-                StartDate = new DateTime(2016, 01, 01),
-                EndDate = new DateTime(2016, 12, 31),
+                FiscalYearCode = "FY1819",
+                FiscalYearName = "FY 2018/2019",
+                StartDate = new DateTime(2018, 01, 01),
+                EndDate = new DateTime(2018, 12, 31),
                 IsActive = true
             };
             _financialService.SaveFinancialYear(financialYear);
