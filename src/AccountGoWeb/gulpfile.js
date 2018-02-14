@@ -5,20 +5,21 @@ var destPath = './wwwroot/plugins/';
 
 gulp.task("libs", () => {
     gulp.src([
-            'bootstrap/dist/**',
-            'bootstrap/less/**',
-            'jquery/dist/**',
-            'ag-grid/dist/**',
-            'knockout/build/output/**',
-            'knockout-mapping/dist/**',
-            'd3/build/**',
-            'jspdf/dist/**',
-            'accounting/**',
-            'html2canvas/dist/**'
+        'bootstrap/dist/**',
+        'bootstrap/less/**',
+        'jquery/dist/**',
+        'ag-grid/dist/**',
+        'knockout/build/output/**',
+        'knockout-mapping/dist/**',
+        'd3/build/**',
+        'jspdf/dist/**',
+        'accounting/**',
+        'html2canvas/dist/**',
+        'popper.js/dist/**'
     ],
-    {
-        cwd: "node_modules/**"
-    })
+        {
+            cwd: "node_modules/**"
+        })
         .pipe(gulp.dest("./wwwroot/plugins"));
 });
 
