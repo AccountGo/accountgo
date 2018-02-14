@@ -4,11 +4,10 @@ var path = require('path');
 
 var buildDir = path.resolve(__dirname, './wwwroot/scripts');
 var scriptsDir = path.resolve(__dirname, './wwwroot/libs/tsxbuild');
-//var scriptsDir = path.resolve(__dirname, './Scripts');
 
 var config = {
     entry: {
-        home: scriptsDir + '/home' + '/home',
+        index: scriptsDir + '/home' + '/index',
         "sales/salesorder": scriptsDir + '/sales/salesorder',
         "quotations/salesquotation": scriptsDir + '/quotations/salesquotation',
         "sales/salesinvoice": scriptsDir + '/sales/salesinvoice',
@@ -25,27 +24,26 @@ var config = {
         extensions: ['.js', '.jsx', '.tsx']
     },
     devtool: 'source-map',
-    //module: {
-    //    loaders: [
-    //      {
-    //          test: /\.tsx$/,
-    //          loader: 'ts-loader',
-    //          exclude: /(node_modules)/
-    //      }
-    //    ]
-    //},
     plugins: [
         new webpack.optimize.CommonsChunkPlugin({
             name: "vendor"
+        }),
+        new webpack.ProvidePlugin({
+            $: 'jquery',
+            jQuery: 'jquery',
+            'window.jQuery': 'jquery',
+            Popper: ['popper.js', 'default']
         })
     ],
     externals: {
         'Config': JSON.stringify(process.env.ENV === 'production' ?
             {
                 apiUrl: "https://accountgoapi.azurewebsites.net/"
+                //apiUrl: "http://localhost:5000/"
             } :
             {
                 apiUrl: "https://accountgoapi.azurewebsites.net/"
+                //apiUrl: "http://localhost:5000/"
             })
     }
 };

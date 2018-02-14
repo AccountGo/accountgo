@@ -6,34 +6,40 @@
     <div id="masterGL" class="ag-blue"></div>
 </div>
 <script>
- 
-
     var columnDefs = [
-    {headerName: "Group", cellRenderer: 'group'},
-    //{headerName: "GL", field: "id", width: 100, callRenderer : function (val) {
-    //    return val.data.id == 0 || val.data.id  ? '' : val.data.GL;
-    //}},
-    {headerName: "Account", field: "accountName", width: 350, cellRenderer: function(val){
- 
-        if(val.data.length > 0)
-            return "";
-        return val.data.accountName;
-    }},
-    {headerName: "Date", field: "date", width: 250, cellRenderer: function(val){
-        if(val.data.length > 0)
-            return val.data.date;
-        return val.data.date;
-    }},
-    {headerName: "Debit", field: "debit", width: 100, cellRenderer: function(val){
-        if(val.data.length > 0)
-            return val.data.debit;
-        return val.data.debit;
-    }},
-    {headerName: "Credit", field: "credit", width: 100, cellRenderer: function(val){
-        if(val.data.length > 0)
-            return val.data.credit  == 'undefined' ? '' : val.data.credit;
-        return val.data.credit;
-    }}
+        { headerName: "Group", cellRenderer: 'agGroupCellRenderer' },
+        //{headerName: "GL", field: "id", width: 100, callRenderer : function (val) {
+        //    return val.data.id == 0 || val.data.id  ? '' : val.data.GL;
+        //}},
+        {
+            headerName: "Account", field: "accountName", width: 350, cellRenderer: function (val) {
+
+                if (val.data.length > 0)
+                    return "";
+                return val.data.accountName;
+            }
+        },
+        {
+            headerName: "Date", field: "date", width: 250, cellRenderer: function (val) {
+                if (val.data.length > 0)
+                    return val.data.date;
+                return val.data.date;
+            }
+        },
+        {
+            headerName: "Debit", field: "debit", width: 100, cellRenderer: function (val) {
+                if (val.data.length > 0)
+                    return val.data.debit;
+                return val.data.debit;
+            }
+        },
+        {
+            headerName: "Credit", field: "credit", width: 100, cellRenderer: function (val) {
+                if (val.data.length > 0)
+                    return val.data.credit == 'undefined' ? '' : val.data.credit;
+                return val.data.credit;
+            }
+        }
     ];
     var xx;
     var gridOptions = {
@@ -62,7 +68,7 @@
         enableColResize: true,
     };
 
- 
+
 
     function autoSizeAll() {
         var allColumnIds = [];
