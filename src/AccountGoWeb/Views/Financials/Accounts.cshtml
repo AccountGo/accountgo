@@ -3,52 +3,35 @@
 <div>
 </div>
 <div>
-    <div id="accounts" class="ag-blue"></div>
+    <div id="accounts" class="ag-blue" style="height:600px;"></div>
 </div>
 <script>
     var columnDefs = [
-        { headerName: "Group", cellRenderer: 'agGroupCellRenderer'},
-        {headerName: "Code", width: 100, cellRenderer: function(val){
-            return "<a href='account/" + val.data.id + "'>" + val.data.accountCode + "</a>";
-        }},
-        {headerName: "Name", field: "accountName", width: 350, cellRenderer: function(val){
-            if(val.data.childAccounts.length > 0)
-                return "";
-            return val.data.accountName;
-        }
+        { headerName: "Group", cellRenderer: "agGroupCellRenderer", field: "accountClassId" },
+        { headerName: "Code", field: "accountCode", width: 100 },
+        { headerName: "Name", field: "accountName", width: 350 },
+        { headerName: "Description", field: "description", width: 250 },
+        {
+            headerName: "Cash", width: 100, cellRenderer: function (val) {
+                if (val.data.isCash)
+                    return '<input type="checkbox" checked disabled />';
+                return '<input type="checkbox" disabled />';
+            }
         },
-        {headerName: "Description", field: "description", width: 250},
-        {headerName: "Cash", width: 100, cellRenderer: function(val) {
-            if(val.data.isCash)
-                return '<input type="checkbox" checked disabled />';
-            return '<input type="checkbox" disabled />';
-        }},
-        {headerName: "Balance", field: "balance", width: 100, cellRenderer: function(val){
-            if(val.data.childAccounts.length > 0)
-                return val.data.totalBalance;
-            return val.data.balance;
-        }},
-        {headerName: "Debit", field: "debitBalance", width: 100, cellRenderer: function(val){
-            if(val.data.childAccounts.length > 0)
-                return val.data.totalDebitBalance;
-            return val.data.debitBalance;
-        }},
-        {headerName: "Credit", field: "creditBalance", width: 100, cellRenderer: function(val){
-            if(val.data.childAccounts.length > 0)
-                return val.data.totalCreditBalance;
-            return val.data.creditBalance;
-        }}
+        { headerName: "Balance", field: "totalBalance", width: 100 },
+        { headerName: "Debit", field: "totalDebitBalance", width: 100 },
+        { headerName: "Credit", field: "totalCreditBalance", width: 100 }
     ];
 
     var gridOptions = {
         columnDefs: columnDefs,
-        rowData: @Html.Raw(Model),
-        getNodeChildDetails: function(data) {
+        rowData: null,
+        getNodeChildDetails: function (data) {
             if (data.childAccounts.length > 0) {
                 return {
                     group: true,
                     children: data.childAccounts,
-                    key: data.accountName
+                    key: data.accountCode
                 };
             } else {
                 return null;
@@ -77,6 +60,8 @@
     document.addEventListener("DOMContentLoaded", function() {
         var eGridDiv = document.querySelector('#accounts');
         new agGrid.Grid(eGridDiv, gridOptions);
+        console.log(@Html.Raw(Model));
+        gridOptions.api.setRowData(@Html.Raw(Model));
         autoSizeAll();
     });
 </script>
