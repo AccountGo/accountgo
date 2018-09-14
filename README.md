@@ -48,10 +48,12 @@ AccountGoWeb/Api projects using ASP.NET Core 2.1.
 1. Clone/Fork the latest repo here https://github.com/AccountGo/accountgo
 1. Build the projects in this order. Core->Services->Dto->Api. To build the project, CD to project folder and execute "dotnet restore" then "dotnet build".
 1. CD to AccountGoWeb project folder. 
-1. Install webpack-cli. Execute "npm install -g webpack"
-1. Install webpack. Execute "npm install -g webpack-cli"
+1. Install typescript. Execute "npm install -g typescript"
+1. Install webpack-cli. Execute "npm install -g webpack-cli"
+1. Install webpack. Execute "npm install -g webpack"
 1. Install gulp. Execute "npm install -g gulp"
 1. In cmd, type and enter "gulp"
+1. In cmd, type and enter "tsc"
 1. In cmd, type and enter "webpack"
 1. In cmd, type and enter "dotnet build"
 1. Run the front-end by typing "dotnet run"
