@@ -12,10 +12,15 @@ variables:
 steps:
 - script: dotnet build --configuration $(buildConfiguration)
   displayName: 'dotnet build $(buildConfiguration)'
+
 - task: Npm@1
   inputs:
     command: 'install' # Options: install, publish, custom
+
+- script: npm install -g gulp
+  displayName: 'Install gulp to global location'
+
 - task: gulp@0
   inputs:
     gulpFile: './src/AccountGoWeb/gulpfile.js'
-    gulpjs: './src/AccountGoWeb/node_modules/gulp/bin/gulp.js'
+    
