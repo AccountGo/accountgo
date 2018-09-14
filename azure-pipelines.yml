@@ -17,10 +17,10 @@ steps:
   inputs:
     command: 'install' # Options: install, publish, custom
 
-- script: npm install -g gulp
-  displayName: 'Install gulp to global location'
+- script: npm install gulp
 
 - task: gulp@0
   inputs:
+    gulpjs: './src/AccountGoWeb/node_modules/gulp/bin/gulp.js'
     gulpFile: './src/AccountGoWeb/gulpfile.js'
     
