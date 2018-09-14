@@ -3,7 +3,7 @@
   "name": "accountgoweb",
   "private": true,
   "devDependencies": {
-    "gulp": "3.9.1",
+    "gulp": "^3.9.1",
     "mobx-react-devtools": "4.2.15",
     "ts-loader": "3.5.0",
     "tsd": "0.6.5",
