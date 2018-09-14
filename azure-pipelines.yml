@@ -18,3 +18,4 @@ steps:
 - task: gulp@0
   inputs:
     gulpFile: './src/AccountGoWeb/gulpfile.js'
+    gulpjs: './src/AccountGoWeb/node_modules/gulp/bin/gulp.js'
