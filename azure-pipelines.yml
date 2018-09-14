@@ -15,3 +15,6 @@ steps:
 - task: gulp@0
   inputs:
     gulpFile: './src/AccountGoWeb/gulpfile.js'
+- task: Npm@1
+  inputs:
+    command: 'install' # Options: install, publish, custom
