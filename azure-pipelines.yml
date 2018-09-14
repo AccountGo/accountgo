@@ -14,4 +14,4 @@ steps:
   displayName: 'dotnet build $(buildConfiguration)'
 - task: gulp@0
   inputs:
-    gulpFile: './src/accountgoweb/gulpfile.js'
+    gulpFile: './src/AccountGoWeb/gulpfile.js'
