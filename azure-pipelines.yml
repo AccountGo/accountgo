@@ -12,9 +12,9 @@ variables:
 steps:
 - script: dotnet build --configuration $(buildConfiguration)
   displayName: 'dotnet build $(buildConfiguration)'
-- task: gulp@0
-  inputs:
-    gulpFile: './src/AccountGoWeb/gulpfile.js'
 - task: Npm@1
   inputs:
     command: 'install' # Options: install, publish, custom
+- task: gulp@0
+  inputs:
+    gulpFile: './src/AccountGoWeb/gulpfile.js'
