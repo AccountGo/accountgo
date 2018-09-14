@@ -27,32 +27,34 @@ Demo site (new UI) : http://accountgo.net
 ![accountgoweb](https://cloud.githubusercontent.com/assets/17961526/17953180/d2e7aac2-6aa3-11e6-8150-fe1b8274cf91.png)
 ![accountgoweb](https://cloud.githubusercontent.com/assets/17961526/17430653/0cf89cca-5b28-11e6-81dd-5f14695c8cfc.png)
 
-# Setup Develoment Environment
-In “Presentation” folder, there are three web projects. 
--	“Web” – an old web front-end. Currently the demo site is http://accountgo.net
--	“AccountGoWeb” – this is the future. Functionalities from the old "Web" front-end are soon transported to this project. Development under ASP.NET Core 1.0, ReactJS and MobX.
--	“Api” – ASP.NET REST API project to be consumed by “AccountGoWeb”.
-
-AccountGoWeb/Api projects using ASP.NET Core 1.0, and requires you to install VS 2015 (Community is Ok) with Update 3 and the latest update of “Microsoft ASP.NET and Web Tools” extension.
-
-“AccountGoWeb” use webpack so you also need to install webpack to the project. For some reason, Visual Studio 2015 "dependencies" is showing warning "Dependencies - not installed" when adding webpack to project.json. So for the time being, you need to install webpack manually. See instructions below.
-
-1. Install Visual 2015 (i.e. Community edition) with Update 3.
-2. Update “Microsoft ASP.NET and Web Tools” external tools. After you install VS 2015, go to "Tools->Extensions and updates" and search for “Microsoft ASP.NET and Web Tools”.
-3. Clone/Fork the latest repo here https://github.com/AccountGo/accountgo
-4. Install “Webpack”. open command prompt and go to “AccountGoWeb” folder. Type “npm install webpack”.
-5. Install "Webpack Task Runner" Visual Studio 2015 extension. Go to "Tools->Extensions and updates" and search for “Webpack Task Runner”.
-6. Open the solution in VS and restore all packages.
-7. Run webpack and gulpfile in Task Runner.
-8. Set "accountgo" solution to "Multiple Startup Projects". Select "AccountGoWeb" and "Api".
-9. Open "AccountGoWeb/webpack.config.js", set 'Config' apiUrl: "http://localhost:5000/"
-
 # Publish Database
 1. Open solution in VS. The SQL Database project is under Database\SQL.Accountgo
 2. Right click the project Database\SQL.Accountgo and select Rebuild.
 3. Right click the project Database\SQL.Accountgo and select Publish.
 4. In "Target database connection", click "Edit" button.
 5. Select existing database connection or create a new one.
+
+# Setup Develoment Environment
+In “Presentation” folder, there are three web projects. Go to demo site is http://accountgo.net
+-	“Web” – an old web front-end.
+-	“AccountGoWeb” – this is the future. Functionalities from the old "Web" front-end are soon transported to this project. Development under ASP.NET Core 1.0, ReactJS and MobX.
+-	“Api” – ASP.NET REST API project to be consumed by “AccountGoWeb”.
+
+AccountGoWeb/Api projects using ASP.NET Core 2.0 (or 2.1), and requires you to install VS 2015 (Community is Ok) with Update 3 and the latest update of “Microsoft ASP.NET and Web Tools” extension. It's also fine to use Visual Studio Code.
+
+“AccountGoWeb” use webpack so you also need to install webpack to the project. For some reason, Visual Studio 2015 "dependencies" is showing warning "Dependencies - not installed" when adding webpack to project.json. So for the time being, you need to install webpack manually. See instructions below.
+
+1. Install latest Visual Studio 2017 (Community is okay).
+2. Update “Microsoft ASP.NET and Web Tools” external tools. After you install VS 2017, go to "Tools->Extensions and updates" and search for “Microsoft ASP.NET and Web Tools”.
+3. Clone/Fork the latest repo here https://github.com/AccountGo/accountgo
+4. Install “Webpack”. open command prompt and go to “AccountGoWeb” folder. 
+4.a "Type npm install"
+4.b Type “npm install webpack”.
+5. Install "Webpack Task Runner" Visual Studio 2017 extension. Go to "Tools->Extensions and updates" and search for “Webpack Task Runner”.
+6. Open the solution in VS and restore all packages.
+7. Run webpack and gulpfile in Task Runner.
+8. Set "accountgo" solution to "Multiple Startup Projects". Select "AccountGoWeb" and "Api".
+9. Open "AccountGoWeb/webpack.config.js", set 'Config' apiUrl: "http://localhost:5000/"
 
 # Run "Api" project
 1. Right click on the project properties and go to Debug. Select "AccountGoApi" from the profile. This by default will run the api on "http://localhost:5000"

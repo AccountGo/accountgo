@@ -20,14 +20,22 @@ var config = {
         path: buildDir,
         filename: '[name].chunk.js'
     },
+    optimization: {
+        splitChunks: {
+            cacheGroups: {
+                commons: {
+                    test: /[\\/]node_modules[\\/]/,
+                    name: 'vendor',
+                    chunks: 'all'
+                }
+            }
+        }
+    },
     resolve: {
         extensions: ['.js', '.jsx', '.tsx']
     },
     devtool: 'source-map',
     plugins: [
-        new webpack.optimize.CommonsChunkPlugin({
-            name: "vendor"
-        }),
         new webpack.ProvidePlugin({
             $: 'jquery',
             jQuery: 'jquery',
