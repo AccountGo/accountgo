@@ -8,7 +8,7 @@ namespace Dto.Financial
 {
     public class MasterGeneralLedger : BaseDto
     {
-        public int? Id { get; set; }
+        public new int? Id { get; set; }
         public int AccountId { get; set; }
         public int CurrencyId { get; set; }
         public string DocumentType { get; set; }

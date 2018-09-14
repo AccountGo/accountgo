@@ -6,7 +6,6 @@
 // </copyright>
 //-----------------------------------------------------------------------
 
-using System;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Core.Domain
