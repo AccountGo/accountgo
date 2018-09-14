@@ -1,3 +1,5 @@
+[![Build Status](https://dev.azure.com/accountgo/accountgo/_apis/build/status/AccountGo-Nightly-Build)](https://dev.azure.com/accountgo/accountgo/_build/latest?definitionId=10)
+
 # AccountGo
 Accounting System built in ASP.NET MVC is in early stage and lots of work to do but happy to share it to anyone. This will be very useful if you have future project to develop accounting system. We do the hard work for you!
 It is initially designed for a small size businesses and the idea is to help them running efficient business by using Accounting System fit to them.
