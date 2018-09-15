@@ -4,6 +4,11 @@
 Accounting System built on DOTNETCORE, an opensource and cross platform (ASP.NET + ReactJS on the Frontend). It's in early stage and still lots of work to do but happy to share it to anyone. This will be very useful if you have future project to develop accounting system. We do the hard work for you!
 It is initially designed for a small size businesses and the idea is to help them running efficient business by using Accounting System fit to them.
 
+### IMPORTANT NOTE:
+You can completely use MacOS, Linux, Windows to develop and deploy this project.
+
+We envisioned this project will be ported microservices and kubernetes. Perhaps some microsevices will be coded in F# for functional programming and machine learning.
+
 # Features
 On a high level, this solution will provide modules including
 
@@ -33,7 +38,8 @@ AccountGoWeb and Api projects are using ASP.NET Core 2.1.
 1. "dotnet build"
 1. Then run the front-end by typing "dotnet run"
 
-## Note: Your wwwroot folder should be look like this if you correctly followed the steps above
+### IMPORTANT  NOTE:
+Your wwwroot folder should be look like this if you correctly followed the steps above
 
 ![AccountGo](https://user-images.githubusercontent.com/17961526/45582820-273d0000-b8e9-11e8-9ff0-2b3f8f978513.png)
 
@@ -89,7 +95,7 @@ Wether you are a Developer, Consultant, Accountant, QA, Marketing expert, Projec
 
 If you are a developer and wanted to take part as contributor/collaborator we are happy to welcome you! To start with, you can visit the issues page and pick an issue that you would like to work on.
 
-So go ahead, add your code. Looking forward to your first pull request.
+So go ahead, add your code and make your first pull request.
 
 # Contact Support
 Feel free to email mvpsolution@gmail.com of any questions.
