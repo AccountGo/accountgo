@@ -25,12 +25,12 @@ steps:
 
 - task: Bash@3
   inputs:
-    script: ./src/AccountGoWeb/node_modules/typescript/bin/tsc --build './src/AccountGoWeb/tsconfig.json'
+    script: /node_modules/typescript/bin/tsc --build './src/AccountGoWeb/tsconfig.json'
     displayName: 'run tsc'
     workingDirectory: './src/AccountGoWeb'
     
 - task: Bash@3
   inputs:
-    script: ./src/AccountGoWeb/node_modules/webpack/bin/webpack.js
+    script: /node_modules/webpack/bin/webpack.js
     displayName: 'run webpack'
     workingDirectory: './src/AccountGoWeb'
