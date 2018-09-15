@@ -20,4 +20,4 @@ steps:
 - task: gulp@0
   inputs:
     gulpjs: './node_modules/gulp/bin/gulp.js'
-    gulpFile: 'gulpfile.js'
+    gulpFile: './gulpfile.js'
