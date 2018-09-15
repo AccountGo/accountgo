@@ -25,23 +25,26 @@ AccountGoWeb and Api projects are using ASP.NET Core 2.1.
 
 1. Install Visual Studio Code.
 1. Clone/Fork the latest repo here https://github.com/AccountGo/accountgo
-1. Build the projects in this order. Core->Services->Dto->Api. To build the project, CD to each project folder and execute "dotnet restore" then "dotnet build". Confirm if everything can build properly.
-1. CD to AccountGoWeb project folder. This includes several steps. From this folder, do the following.
-1. Install typescript. Execute "npm install -g typescript"
-1. Install webpack-cli. Execute "npm install -g webpack-cli"
-1. Install webpack. Execute "npm install -g webpack"
-1. Install gulp. Execute "npm install -g gulp"
+1. Build each projects in this order. Core->Services->Dto->Api. To build the project, change directory to project folder, execute "dotnet restore" then "dotnet build". Make sure all projects build successfully. Alternatively, use accountgo.sln file to use by dotnet build. To do this change directory to "src" folder, execute "dotnet restore", then "dotnet build".
+1. AccountGoWeb require more steps to completely build the front-end artifacts. To do this, follow the succeeding steps.
+1. Change directory to src/AccountGoWeb and open Visual Studio Code terminal.
+1. Install typescript by executing"npm install -g typescript".
+1. Install webpack-cli by executing "npm install -g webpack-cli".
+1. Install webpack by executing "npm install -g webpack".
+1. Install gulp by executing install -g gulp".
 1. Still in the same folder, type and enter the following in command prompt.
 1. "gulp" (This will run the gulpfile.js)
 1. "tsc" (This will run the tsconfig.json)
 1. "webpack" (This will run the webpack.config.js)
-1. "dotnet build"
-1. Then run the front-end by typing "dotnet run"
+1. To test if the front-end build successfully, in src/AccountGoWeb terminal, execute "dotnet run"
+1. To test if the backend api build successfully, in src/Api terminal, execute "dotnet run"
 
 ### IMPORTANT  NOTE:
 Your wwwroot folder should be look like this if you correctly followed the steps above
 
 ![AccountGo](https://user-images.githubusercontent.com/17961526/45582820-273d0000-b8e9-11e8-9ff0-2b3f8f978513.png)
+
+Next, setup database and backend api database connection
 
 # Run "Api" project
 1. Run the api by typing "dotnet run". Make sure you CD to api project.
