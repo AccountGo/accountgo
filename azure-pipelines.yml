@@ -20,5 +20,5 @@ steps:
 - task: gulp@0
   inputs:
     gulpjs: '/node_modules/gulp/bin/gulp.js'
-    gulpFile: '././src/AccountGoWeb/gulpfile.js'
+    gulpFile: './src/AccountGoWeb/gulpfile.js'
     workingDirectory: './src/AccountGoWeb'
