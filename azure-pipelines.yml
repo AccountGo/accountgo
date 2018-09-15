@@ -21,3 +21,4 @@ steps:
   inputs:
     gulpjs: './node_modules/gulp/bin/gulp.js'
     gulpFile: './gulpfile.js'
+    workingDirectory: './src/AccountGoWeb'
