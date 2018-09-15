@@ -1,7 +1,7 @@
 [![Build Status](https://dev.azure.com/accountgo/accountgo/_apis/build/status/AccountGo-Nightly-Build)](https://dev.azure.com/accountgo/accountgo/_build/latest?definitionId=10)
 
 # AccountGo
-Accounting System built in ASP.NET MVC is in early stage and lots of work to do but happy to share it to anyone. This will be very useful if you have future project to develop accounting system. We do the hard work for you!
+Accounting System built on DOTNETCORE for cross platform (ASP.NET + ReactJS on the Frontend). It's in early stage and still lots of work to do but happy to share it to anyone. This will be very useful if you have future project to develop accounting system. We do the hard work for you!
 It is initially designed for a small size businesses and the idea is to help them running efficient business by using Accounting System fit to them.
 
 # Features
@@ -12,7 +12,7 @@ On a high level, this solution will provide modules including
 3. Inventory Control
 4. Financial/Accounting
 
-#FRONT-END
+# Front-end
 The screenshot below will be the future front-end. It is heavily under-development and you could be part of it. The project is "AccountGoWeb" and consuming the "Api" project.
 
 Technology Stack:
@@ -30,6 +30,7 @@ Demo site (new UI) : http://accountgo.net
 ![accountgoweb](https://cloud.githubusercontent.com/assets/17961526/17430653/0cf89cca-5b28-11e6-81dd-5f14695c8cfc.png)
 
 # Publish Database
+This requires improvement for easy deployment and initialization
 1. Open solution in VS. The SQL Database project is under Database\SQL.Accountgo
 2. Right click the project Database\SQL.Accountgo and select Rebuild.
 3. Right click the project Database\SQL.Accountgo and select Publish.
@@ -37,28 +38,25 @@ Demo site (new UI) : http://accountgo.net
 5. Select existing database connection or create a new one.
 
 # Setup Develoment Environment (Visual Studio Code)
-In “Presentation” folder, there are three web projects. Go to demo site is http://accountgo.net
--	“Web” – an old web front-end.
--	“AccountGoWeb” – this is the future. Functionalities from the old "Web" front-end are soon transported to this project. Development under ASP.NET Core 2.1, ReactJS and MobX.
--	“Api” – ASP.NET REST API project to be consumed by “AccountGoWeb”.
-
 AccountGoWeb/Api projects using ASP.NET Core 2.1.
 
-“AccountGoWeb” use webpack so you also need to install webpack to the project.
+-   “AccountGoWeb” requires webpack, webpack-cli, gulp, typescript installed
+-   “Api” – ASP.NET REST API project to be consumed by “AccountGoWeb”
 
 1. Install Visual Studio Code.
 1. Clone/Fork the latest repo here https://github.com/AccountGo/accountgo
-1. Build the projects in this order. Core->Services->Dto->Api. To build the project, CD to project folder and execute "dotnet restore" then "dotnet build".
-1. CD to AccountGoWeb project folder. 
+1. Build the projects in this order. Core->Services->Dto->Api. To build the project, CD to each project folder and execute "dotnet restore" then "dotnet build". Confirm if everything can build properly.
+1. CD to AccountGoWeb project folder. This includes several steps. From this folder, do the following.
 1. Install typescript. Execute "npm install -g typescript"
 1. Install webpack-cli. Execute "npm install -g webpack-cli"
 1. Install webpack. Execute "npm install -g webpack"
 1. Install gulp. Execute "npm install -g gulp"
-1. In cmd, type and enter "gulp"
-1. In cmd, type and enter "tsc"
-1. In cmd, type and enter "webpack"
-1. In cmd, type and enter "dotnet build"
-1. Run the front-end by typing "dotnet run"
+1. Still in the same folder, type and enter the following in command prompt.
+1. "gulp" (This will run the gulpfile.js)
+1. "tsc" (This will run the tsconfig.json)
+1. "webpack" (This will run the webpack.config.js)
+1. "dotnet build"
+1. Then run the front-end by typing "dotnet run"
 
 # Run "Api" project
 1. Run the api by typing "dotnet run". Make sure you CD to api project.
