@@ -25,7 +25,7 @@ steps:
 
 - task: Bash@3
   inputs:
-    script: /node_modules/typescript/bin/tsc --build './src/AccountGoWeb/tsconfig.json'
+    script: /node_modules/typescript/bin/tsc --build 'tsconfig.json'
     displayName: 'run tsc'
     workingDirectory: './src/AccountGoWeb'
     
