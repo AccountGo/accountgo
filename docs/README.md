@@ -7,7 +7,7 @@ It is initially designed for a small size businesses and the idea is to help the
 ### IMPORTANT NOTE:
 You can completely use MacOS, Linux, Windows to develop and deploy this project.
 
-We envisioned this project will be ported microservices and kubernetes. Perhaps some microsevices will be coded in F# for functional programming and machine learning.
+We envisioned this project will be ported to microservices architecture and using kubernetes. Perhaps some microsevices will be coded in F# for functional programming and machine learning.
 
 # Features
 On a high level, this solution will provide modules including
@@ -36,6 +36,7 @@ AccountGoWeb and Api projects are using ASP.NET Core 2.1.
 1. "gulp" (This will run the gulpfile.js)
 1. "tsc" (This will run the tsconfig.json)
 1. "webpack" (This will run the webpack.config.js)
+1. And lastly, in src/AccountGoWeb terminal, execute "dotnet build"
 1. To test if the front-end build successfully, in src/AccountGoWeb terminal, execute "dotnet run"
 1. To test if the backend api build successfully, in src/Api terminal, execute "dotnet run"
 
