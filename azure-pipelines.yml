@@ -24,7 +24,9 @@ steps:
     gulpjs: '/node_modules/gulp/bin/gulp.js'
 
 - script: tsc
+    displayName: 'run tsc'
     workingDirectory: './src/AccountGoWeb'
 
 - script: webpack
+    displayName: 'run webpack'
     workingDirectory: './src/AccountGoWeb'
