@@ -33,7 +33,9 @@ AccountGoWeb and Api projects are using ASP.NET Core 2.1.
 1. "dotnet build"
 1. Then run the front-end by typing "dotnet run"
 
-Note: Your wwwroot folder should be look like this
+## Note: Your wwwroot folder should be look like this if you correctly followed the steps above
+
+![AccountGo](https://user-images.githubusercontent.com/17961526/45582820-273d0000-b8e9-11e8-9ff0-2b3f8f978513.png)
 
 # Run "Api" project
 1. Run the api by typing "dotnet run". Make sure you CD to api project.
