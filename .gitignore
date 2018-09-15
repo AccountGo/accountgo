@@ -204,3 +204,4 @@ FakesAssemblies/
 /wrap/Dto/project.json
 /global.json
 .DS_Store
+.vscode/
