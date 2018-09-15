@@ -13,14 +13,11 @@ steps:
 - script: dotnet build --configuration $(buildConfiguration)
   displayName: 'dotnet build $(buildConfiguration)'
 
-- task: Npm@1
-  inputs:
-    command: 'install' # Options: install, publish, custom
-
-- script: npm install gulp
+- script: npm install
+  displayName: 'npm install'
+  workingDirectory: './src/AccountGoWeb'
 
 - task: gulp@0
   inputs:
-    gulpjs: './src/AccountGoWeb/node_modules/gulp/bin/gulp.js'
-    gulpFile: './src/AccountGoWeb/gulpfile.js'
-    
+    gulpjs: './node_modules/gulp/bin/gulp.js'
+    gulpFile: 'gulpfile.js'

@@ -203,3 +203,4 @@ FakesAssemblies/
 /Database/SQL.AccountGo/SQL.AccountGo.jfm
 /wrap/Dto/project.json
 /global.json
+.DS_Store
