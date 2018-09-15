@@ -19,6 +19,12 @@ steps:
 
 - task: gulp@0
   inputs:
-    gulpjs: '/node_modules/gulp/bin/gulp.js'
     gulpFile: './src/AccountGoWeb/gulpfile.js'
+    workingDirectory: './src/AccountGoWeb'
+    gulpjs: '/node_modules/gulp/bin/gulp.js'
+
+- script: tsc
+    workingDirectory: './src/AccountGoWeb'
+
+- script: webpack
     workingDirectory: './src/AccountGoWeb'
