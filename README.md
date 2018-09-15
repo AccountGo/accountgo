@@ -58,6 +58,9 @@ AccountGoWeb/Api projects using ASP.NET Core 2.1.
 1. "dotnet build"
 1. Then run the front-end by typing "dotnet run"
 
+Note: Your wwwroot folder should be look like this
+
+
 # Run "Api" project
 1. Run the api by typing "dotnet run". Make sure you CD to api project.
 2. In api/appsettings.json, update properly your "LocalConnection" connection string.
