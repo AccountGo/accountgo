@@ -1,7 +1,7 @@
 [![Build Status](https://dev.azure.com/accountgo/accountgo/_apis/build/status/AccountGo-Nightly-Build)](https://dev.azure.com/accountgo/accountgo/_build/latest?definitionId=10)
 
 # AccountGo
-Accounting System built on DOTNETCORE for cross platform (ASP.NET + ReactJS on the Frontend). It's in early stage and still lots of work to do but happy to share it to anyone. This will be very useful if you have future project to develop accounting system. We do the hard work for you!
+Accounting System built on DOTNETCORE, an opensource and cross platform (ASP.NET + ReactJS on the Frontend). It's in early stage and still lots of work to do but happy to share it to anyone. This will be very useful if you have future project to develop accounting system. We do the hard work for you!
 It is initially designed for a small size businesses and the idea is to help them running efficient business by using Accounting System fit to them.
 
 # Features
@@ -12,33 +12,8 @@ On a high level, this solution will provide modules including
 3. Inventory Control
 4. Financial/Accounting
 
-# Front-end
-The screenshot below will be the future front-end. It is heavily under-development and you could be part of it. The project is "AccountGoWeb" and consuming the "Api" project.
-
-Technology Stack:
-- ASP.NET Core
-- ReactJS
-- MobX, React-MobX
-- Axios
-- Bootstrap
-- D3
-- React-router (on some pages)
-
-Demo site (new UI) : http://accountgo.net
-
-![accountgoweb](https://cloud.githubusercontent.com/assets/17961526/17953180/d2e7aac2-6aa3-11e6-8150-fe1b8274cf91.png)
-![accountgoweb](https://cloud.githubusercontent.com/assets/17961526/17430653/0cf89cca-5b28-11e6-81dd-5f14695c8cfc.png)
-
-# Publish Database
-This requires improvement for easy deployment and initialization
-1. Open solution in VS. The SQL Database project is under Database\SQL.Accountgo
-2. Right click the project Database\SQL.Accountgo and select Rebuild.
-3. Right click the project Database\SQL.Accountgo and select Publish.
-4. In "Target database connection", click "Edit" button.
-5. Select existing database connection or create a new one.
-
-# Setup Develoment Environment (Visual Studio Code)
-AccountGoWeb/Api projects using ASP.NET Core 2.1.
+# Setup Development Environment (Visual Studio Code)
+AccountGoWeb and Api projects are using ASP.NET Core 2.1.
 
 -   “AccountGoWeb” requires webpack, webpack-cli, gulp, typescript installed
 -   “Api” – ASP.NET REST API project to be consumed by “AccountGoWeb”
@@ -60,11 +35,18 @@ AccountGoWeb/Api projects using ASP.NET Core 2.1.
 
 Note: Your wwwroot folder should be look like this
 
-
 # Run "Api" project
 1. Run the api by typing "dotnet run". Make sure you CD to api project.
 2. In api/appsettings.json, update properly your "LocalConnection" connection string.
 3. In api/Startup.cs, then ConfigureServices method, set connectionString = Configuration["Data:LocalConnection:ConnectionString"];
+
+# Publish Database
+This requires improvement for easy deployment and initialization. This instruction is old which uses Visual Studio instead of Visual Studio Code.
+1. Open solution in VS. The SQL Database project is under Database\SQL.Accountgo
+2. Right click the project Database\SQL.Accountgo and select Rebuild.
+3. Right click the project Database\SQL.Accountgo and select Publish.
+4. In "Target database connection", click "Edit" button.
+5. Select existing database connection or create a new one.
 
 # Initialized Data
 On your first run, if you successfully Publish Database\SQL.AccountGo you will get an empty database. Let's get your DB Initialized with sample master data.'
@@ -81,6 +63,23 @@ On your first run, if you successfully Publish Database\SQL.AccountGo you will g
 - Customer
 - Items
 - Banks
+
+# Front-end
+The screenshot below will be the future front-end. It is heavily under-development and you could be part of it. The project is "AccountGoWeb" and consuming the "Api" project.
+
+Technology Stack:
+- ASP.NET Core
+- ReactJS
+- MobX, React-MobX
+- Axios
+- Bootstrap
+- D3
+- React-router (on some pages)
+
+Demo site (new UI) : http://accountgo.net
+
+![accountgoweb](https://cloud.githubusercontent.com/assets/17961526/17953180/d2e7aac2-6aa3-11e6-8150-fe1b8274cf91.png)
+![accountgoweb](https://cloud.githubusercontent.com/assets/17961526/17430653/0cf89cca-5b28-11e6-81dd-5f14695c8cfc.png)
              
 
 # Help Wanted
