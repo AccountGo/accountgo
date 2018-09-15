@@ -23,10 +23,10 @@ steps:
     workingDirectory: './src/AccountGoWeb'
     gulpjs: '/node_modules/gulp/bin/gulp.js'
 
-- script: ./src/AccountGoWeb/node_modules/typescript/bin/tsc --build './src/AccountGoWeb/tsconfig.json'
+- bash: ./src/AccountGoWeb/node_modules/typescript/bin/tsc --build './src/AccountGoWeb/tsconfig.json'
     displayName: 'run tsc'
     workingDirectory: './src/AccountGoWeb'
 
-- script: webpack
+- bash: ./src/AccountGoWeb/node_modules/webpack/bin/webpack.js
     displayName: 'run webpack'
     workingDirectory: './src/AccountGoWeb'
