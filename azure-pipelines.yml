@@ -23,7 +23,7 @@ steps:
     workingDirectory: './src/AccountGoWeb'
     gulpjs: '/node_modules/gulp/bin/gulp.js'
 
-- script: ./node_modules/typescript/bin/tsc
+- script: '/node_modules/typescript/bin/tsc' './src/AccountGoWeb/tsconfig.json'
     displayName: 'run tsc'
     workingDirectory: './src/AccountGoWeb'
 
