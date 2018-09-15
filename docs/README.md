@@ -46,10 +46,14 @@ Your wwwroot folder should be look like this if you correctly followed the steps
 
 Next, setup database and backend api database connection
 
-# Run "Api" project
-1. Run the api by typing "dotnet run". Make sure you CD to api project.
-2. In api/appsettings.json, update properly your "LocalConnection" connection string.
-3. In api/Startup.cs, then ConfigureServices method, set connectionString = Configuration["Data:LocalConnection:ConnectionString"];
+# Setup SQL Server (Using Docker)
+You can opt to install SQL Server or use docker image (like we do). Assuming you have docker installed, follow the steps below. (Install docker if you haven't done)
+1. Open command prompt (terminal for MacOS).
+1. Execute "docker pull microsoft/mssql-server-linux". We prefer to use SQL Server for Linux for lightweight.
+1. Run sql server for linux. 
+1. Execute "docker run -e 'ACCEPT_EULA=Y' -e 'SA_PASSWORD=Str0ngPassword!' -p 1433:1433 -d --name=local_mssql microsoft/mssql-server-linux"
+1. Download SQL Operation Studio by Microsoft to manage the SQL Server. https://docs.microsoft.com/en-us/sql/sql-operations-studio/download?view=sql-server-2017
+1. Open SQL Operation Studio and connect to your running SQL Server docker container.
 
 # Publish Database
 This requires improvement for easy deployment and initialization. This instruction is old which uses Visual Studio instead of Visual Studio Code.
@@ -59,7 +63,15 @@ This requires improvement for easy deployment and initialization. This instructi
 4. In "Target database connection", click "Edit" button.
 5. Select existing database connection or create a new one.
 
-# Initialized Data
+# Run "Api" project
+1. Run the api by typing "dotnet run". Make sure you change directory to src/Api
+2. In api/appsettings.json, update properly your "LocalConnection" connection string.
+3. In api/Startup.cs, then ConfigureServices method, set connectionString = Configuration["Data:LocalConnection:ConnectionString"];
+
+# Run "AccountGoWeb" Front-end
+1. Run the frontend by typing "dotnet run". Make sure you change directory to src/AccountGoWeb
+
+# Initialize Data
 On your first run, if you successfully Publish Database\SQL.AccountGo you will get an empty database. Let's get your DB Initialized with sample master data.'
 1. Create your first user. registration page is hidden but you can go directly from your browser. (e.g. http://localhost/account/register)
 2. Set password like 'P@ssword1'. More than 6 chars, 1 Caps, 1 special, 1 number. Note: Currently, even successfully register a new user, it will not inform you. Just try to login using your newly created user. This registratio page is temporary.
