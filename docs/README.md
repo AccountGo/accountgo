@@ -52,17 +52,19 @@ You can opt to install SQL Server or use docker image (like we do). Assuming you
 1. Open command prompt (terminal for MacOS).
 1. Execute "docker pull microsoft/mssql-server-linux". We prefer to use SQL Server for Linux for lightweight.
 1. Run sql server for linux. 
-1. Execute "docker run -e 'ACCEPT_EULA=Y' -e 'SA_PASSWORD=Str0ngPassword!' -p 1433:1433 -d --name=local_mssql microsoft/mssql-server-linux"
+1. Execute "docker run -e 'ACCEPT_EULA=Y' -e 'SA_PASSWORD=Str0ngPassword' -p 1433:1433 -d --name=local-mssql microsoft/mssql-server-linux"
 1. Download SQL Operation Studio by Microsoft to manage the SQL Server. https://docs.microsoft.com/en-us/sql/sql-operations-studio/download?view=sql-server-2017
 1. Open SQL Operation Studio and connect to your running SQL Server docker container.
 
 # Publish Database
-This requires improvement for easy deployment and initialization. This instruction is old which uses Visual Studio instead of Visual Studio Code.
-1. Open solution in VS. The SQL Database project is under Database\SQL.Accountgo
-2. Right click the project Database\SQL.Accountgo and select Rebuild.
-3. Right click the project Database\SQL.Accountgo and select Publish.
-4. In "Target database connection", click "Edit" button.
-5. Select existing database connection or create a new one.
+The database/scripts folder contains the sql scripts to execute. You can use DbUp tool [https://dbup.readthedocs.io/en/latest/] if you want to create your own migration console app. Or use this very cool tool https://richardtasker.co.uk/2018/09/15/introducing-dotnet-db-migrate/#.W6PIJJMza3U for a quick one. Follow the instruction how to install the tool.
+
+1. In accountgo folder, go to command prompt or terminal (macos) and run the following in order.
+1. dotnet-db-migrate "Data Source=localhost;User ID=sa;Password=Str0ngPassword;Initial Catalog=accountgo;" -s ./database/scripts/tables  --ensure-db-exists
+1. dotnet-db-migrate "Data Source=localhost;User ID=sa;Password=Str0ngPassword;Initial Catalog=accountgo;" -s ./database/scripts/foreign_keys  --ensure-db-exists
+1. dotnet-db-migrate "Data Source=localhost;User ID=sa;Password=Str0ngPassword;Initial Catalog=accountgo;" -s ./database/scripts/initial_data  --ensure-db-exists
+
+### Note: The initial data in the previous steps only include the security initial data. There's more data initialization to in the preceding instructions
 
 # Run "Api" project
 1. Run the api by typing "dotnet run". Make sure you change directory to src/Api
