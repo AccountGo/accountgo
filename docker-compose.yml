@@ -1,0 +1,27 @@
+version: "3"
+services:
+    web:
+        image: accountgo/accountgoweb
+        build: 
+            dockerfile: ./src/AccountGoWeb/Dockerfile
+            context: .
+        ports:
+            - "8000:80"
+        depends_on:
+            - api
+    api:
+        image: accountgo/accountgoapi
+        build:
+            dockerfile: ./src/Api/Dockerfile
+            context: .
+        ports:
+            - "5000:80"
+        depends_on:
+            - db
+    db:
+        image: microsoft/mssql-server-linux
+        ports:
+            - "1433:1433"
+        environment:
+            SA_PASSWORD: "Str0ngPassword"
+            ACCEPT_EULA: "Y"
