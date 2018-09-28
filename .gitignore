@@ -205,3 +205,4 @@ FakesAssemblies/
 /global.json
 .DS_Store
 .vscode/
+/src/out
