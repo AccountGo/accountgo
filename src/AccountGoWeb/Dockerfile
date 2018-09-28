@@ -16,14 +16,14 @@ RUN curl -SL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-lin
 
 WORKDIR /app/AccountGoWeb
 
-RUN npm install -g typescript webpack webpack-cli gulp
 RUN npm install
+RUN npm install -g typescript webpack webpack-cli gulp
 
-RUN [ "gulp", "gulpfile.js" ]
-RUN [ "tsc", "tsconfig.json" ]
-RUN [ "webpack", "webpack.config.js" ]
+RUN gulp
+RUN tsc
+RUN webpack-cli
 
-RUN dotnet publish ./AccountGoWeb/*.csproj -c Release -o out
+RUN dotnet publish AccountGoWeb.csproj -c Release -o out
 
 FROM microsoft/dotnet:2.1.1-aspnetcore-runtime-alpine3.7
 WORKDIR /app
