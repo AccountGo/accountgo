@@ -8,7 +8,7 @@ var scriptsDir = path.resolve(__dirname, 'wwwroot/libs/tsxbuild');
 var config = {
     entry: {
         index: scriptsDir + '/Home' + '/Index',
-        "sales/salesorder": scriptsDir + '/Sales/Salesorder',
+        "sales/salesorder": scriptsDir + '/Sales/SalesOrder',
         "quotations/salesquotation": scriptsDir + '/Quotations/SalesQuotation',
         "sales/salesinvoice": scriptsDir + '/Sales/Salesinvoice',
         "purchasing/purchaseorder": scriptsDir + '/Purchasing/PurchaseOrder',
