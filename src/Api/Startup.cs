@@ -30,12 +30,13 @@ namespace Api
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
         {
-            string connectionString = "";
-            connectionString = Configuration["Data:LocalConnection:ConnectionString"];
-            //if (_hostingEnv.IsDevelopment())
-            //    connectionString = Configuration["Data:LocalConnection:ConnectionString"];
-            //else
-            //    connectionString = Configuration["Data:DefaultConnection:ConnectionString"];
+            string connectionString = Configuration["Data:DevelopmentConnection:ConnectionString"];
+
+            if (_hostingEnv.IsDevelopment())
+               connectionString = Configuration["Data:DevelopmentConnection:ConnectionString"];
+            else
+               connectionString = Configuration["Data:ProductionConnection:ConnectionString"];
+
             services
                 .AddEntityFrameworkSqlServer()
                 .AddDbContext<Data.ApiDbContext>(options => options.UseSqlServer(connectionString))

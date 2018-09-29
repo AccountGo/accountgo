@@ -1,3 +1,3 @@
 ﻿{
-  "server.urls": "http://localhost:5001"
+  "urls": "http://0.0.0.0:80;https://0.0.0.0:443"
 }

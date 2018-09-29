@@ -1,21 +1,15 @@
-﻿using Microsoft.AspNetCore.Hosting;
-using System.IO;
+﻿using Microsoft.AspNetCore;
+using Microsoft.AspNetCore.Hosting;
 
 namespace AccountGoWeb
 {
     public class Program
     {
-        public static void Main(string[] args)
-        {
-            var host = new WebHostBuilder()
-                .UseKestrel()
-                .UseContentRoot(Directory.GetCurrentDirectory())
-                .UseIISIntegration()
-                .UseStartup<Startup>()
-                .UseUrls()
-                .Build();
+        public static void Main(string[] args) => CreateWebHostBuilder(args).Build().Run();
 
-            host.Run();
-        }
+        public static IWebHostBuilder CreateWebHostBuilder(string[] args) =>
+            WebHost.CreateDefaultBuilder(args)
+                .UseStartup<Startup>()
+                .UseUrls("http://0.0.0.0:8000", "https://0.0.0.0:44300");
     }
 }
