@@ -2,18 +2,18 @@
 var webpack = require('webpack');
 var path = require('path');
 
-var buildDir = path.resolve(__dirname, './wwwroot/scripts');
-var scriptsDir = path.resolve(__dirname, './wwwroot/libs/tsxbuild');
+var buildDir = path.resolve(__dirname, 'wwwroot/scripts');
+var scriptsDir = path.resolve(__dirname, 'wwwroot/libs/tsxbuild');
 
 var config = {
     entry: {
-        index: scriptsDir + '/home' + '/index',
-        "sales/salesorder": scriptsDir + '/sales/salesorder',
-        "quotations/salesquotation": scriptsDir + '/quotations/salesquotation',
-        "sales/salesinvoice": scriptsDir + '/sales/salesinvoice',
-        "purchasing/purchaseorder": scriptsDir + '/purchasing/purchaseorder',
-        "purchasing/purchaseinvoice": scriptsDir + '/purchasing/purchaseinvoice',
-        "financials/journalentry": scriptsDir + '/financials/journalentry',
+        index: scriptsDir + '/Home' + '/Index',
+        "sales/salesorder": scriptsDir + '/Sales/Salesorder',
+        "quotations/salesquotation": scriptsDir + '/Quotations/SalesQuotation',
+        "sales/salesinvoice": scriptsDir + '/Sales/Salesinvoice',
+        "purchasing/purchaseorder": scriptsDir + '/Purchasing/PurchaseOrder',
+        "purchasing/purchaseinvoice": scriptsDir + '/Purchasing/PurchaseInvoice',
+        "financials/journalentry": scriptsDir + '/Financials/JournalEntry',
         vendor: ['react', 'react-dom']
     },
     output: {
