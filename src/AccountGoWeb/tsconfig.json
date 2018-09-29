@@ -7,8 +7,8 @@
     "noImplicitAny": false,
     "removeComments": true,
     "sourceMap": true,
-    "outDir": "./wwwroot/libs/tsxbuild",
-    "rootDir": "./Scripts",
+    "outDir": "wwwroot/libs/tsxbuild",
+    "rootDir": "Scripts",
     "experimentalDecorators": true
   },
   "compileOnSave": true,
