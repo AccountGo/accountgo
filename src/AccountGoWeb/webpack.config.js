@@ -10,7 +10,7 @@ var config = {
         index: scriptsDir + '/Home' + '/Index',
         "sales/salesorder": scriptsDir + '/Sales/SalesOrder',
         "quotations/salesquotation": scriptsDir + '/Quotations/SalesQuotation',
-        "sales/salesinvoice": scriptsDir + '/Sales/Salesinvoice',
+        "sales/salesinvoice": scriptsDir + '/Sales/SalesInvoice',
         "purchasing/purchaseorder": scriptsDir + '/Purchasing/PurchaseOrder',
         "purchasing/purchaseinvoice": scriptsDir + '/Purchasing/PurchaseInvoice',
         "financials/journalentry": scriptsDir + '/Financials/JournalEntry',
