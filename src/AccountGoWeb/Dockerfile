@@ -28,7 +28,7 @@ RUN dotnet publish AccountGoWeb.csproj -c Release -o out
 FROM microsoft/dotnet:2.1.1-aspnetcore-runtime-alpine3.7
 WORKDIR /app
 
-EXPOSE 8000
+EXPOSE 8000 443400
 
 COPY --from=build-env /app/AccountGoWeb/out ./
 

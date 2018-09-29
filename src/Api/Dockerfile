@@ -10,7 +10,7 @@ RUN dotnet publish ./Api/*.csproj -c Release -o out
 
 FROM microsoft/dotnet:2.1.1-aspnetcore-runtime-alpine3.7
 WORKDIR /app
-EXPOSE 5000
+EXPOSE 8001 44301
 
 COPY --from=build-env /app/Api/out ./
 

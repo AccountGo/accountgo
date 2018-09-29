@@ -6,7 +6,8 @@ services:
             dockerfile: ./src/AccountGoWeb/Dockerfile
             context: .
         ports:
-            - "8000:80"
+            - "8000:8000"
+            - "44300:44300"
         depends_on:
             - api
     api:
@@ -15,7 +16,8 @@ services:
             dockerfile: ./src/Api/Dockerfile
             context: .
         ports:
-            - "5000:80"
+            - "8001:8001"
+            - "44301:44301"
         depends_on:
             - db
     db:

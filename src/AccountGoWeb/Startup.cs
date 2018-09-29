@@ -17,8 +17,8 @@ namespace AccountGoWeb
                 .SetBasePath(env.ContentRootPath)
                 .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
                 .AddJsonFile($"appsettings.{env.EnvironmentName}.json", optional: true)
-                .AddJsonFile("hosting.json", optional: true)
                 .AddEnvironmentVariables();
+                
             Configuration = builder.Build();
         }
 
@@ -38,17 +38,6 @@ namespace AccountGoWeb
         public void Configure(IApplicationBuilder app)
         {
             app.UseStaticFiles();
-
-            //var options = new CookieAuthenticationOptions()
-            //{
-            //    //AuthenticationScheme = "AuthCookie",
-            //    LoginPath = new Microsoft.AspNetCore.Http.PathString("/account/signin"),
-            //    AccessDeniedPath = new Microsoft.AspNetCore.Http.PathString("/account/unauthorize"),
-            //    //AutomaticAuthenticate = true,
-            //    //AutomaticChallenge = true
-            //};
-
-            //app.UseCookieAuthentication(options);
 
             app.UseAuthentication();
 

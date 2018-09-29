@@ -47,11 +47,9 @@ var config = {
         'Config': JSON.stringify(process.env.ENV === 'production' ?
             {
                 apiUrl: "https://accountgoapi.azurewebsites.net/"
-                //apiUrl: "http://localhost:5000/"
             } :
             {
-                apiUrl: "https://accountgoapi.azurewebsites.net/"
-                //apiUrl: "http://localhost:5000/"
+                apiUrl: "https://localhost:44301/"
             })
     }
 };
