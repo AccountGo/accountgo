@@ -82,8 +82,8 @@ Your wwwroot folder should be look like this if you correctly followed the steps
 
 ![AccountGo](https://user-images.githubusercontent.com/17961526/45582820-273d0000-b8e9-11e8-9ff0-2b3f8f978513.png)
 
-# Initialize Data (Instructions work in progress)
-At this point, your database has no data on it. But there is already an initial username and password (admin@accountgo.ph/P@ssword1!) and you can logon to the UI. Now lets, create some initial data that would populate the following models.
+# Initialize Data
+At this point, your database has no data on it. But there is already an initial username and password (admin@accountgo.ph/P@ssword1) and you can logon to the UI. Now lets, create some initial data that would populate the following models.
 - Company
 - Chart of accounts/account classes
 - Financial year
@@ -94,6 +94,7 @@ At this point, your database has no data on it. But there is already an initial 
 - Customer
 - Items
 - Banks
+
 To initialialized a company, call the api endpoint directly http://localhost:8001/api/administration/initializedcompany. If you encounter some issues, the easy way for now is recreate your database and repeat the "Publish Database" section.
 
 ### SUMMARY: At this point, you should have:
