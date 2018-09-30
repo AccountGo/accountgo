@@ -39,9 +39,11 @@ You can opt to install SQL Server or use docker image (like we do). Assuming you
 1. Open SQL Operation Studio and connect to your running SQL Server docker container.
 
 # Publish Database
-The database/scripts folder contains the sql scripts to execute. You can use DbUp tool [https://dbup.readthedocs.io/en/latest/] if you want to create your own migration console app. Or use this very cool tool https://richardtasker.co.uk/2018/09/15/introducing-dotnet-db-migrate/#.W6PIJJMza3U for a quick one. Follow the instruction how to install the tool.
+The "database/scripts" folder contains the sql scripts to execute. For the purpose of db migration, you can use DbUp [https://dbup.readthedocs.io] tool and create your own migration console. For simplicity and quick one, download this cool tool used in this guide. https://richardtasker.co.uk/2018/09/15/introducing-dotnet-db-migrate/#.W6PIJJMza3U - checkout this site and download.  
 
-1. In accountgo folder, go to command prompt or terminal (macos) and run the following in order.
+Once "dotnet-db-migrate" already installed, execute the following in this specfic order:
+
+1. In root folder "accountgo", open command prompt or terminal (macos) and run the following.
 1. dotnet-db-migrate "Data Source=localhost;User ID=sa;Password=Str0ngPassword;Initial Catalog=accountgo;" -s ./database/scripts/tables  --ensure-db-exists
 1. dotnet-db-migrate "Data Source=localhost;User ID=sa;Password=Str0ngPassword;Initial Catalog=accountgo;" -s ./database/scripts/foreign_keys  --ensure-db-exists
 1. dotnet-db-migrate "Data Source=localhost;User ID=sa;Password=Str0ngPassword;Initial Catalog=accountgo;" -s ./database/scripts/initial_data  --ensure-db-exists
@@ -92,12 +94,13 @@ At this point, your database has no data on it. But there is already an initial 
 - Customer
 - Items
 - Banks
+To initialialized a company, call the api endpoint directly http://localhost:8001/api/administration/initializedcompany. If you encounter some issues, the easy way for now is recreate your database and repeat the "Publish Database" section.
 
 ### SUMMARY: At this point, you should have:
 1. Database instance running in docker container and you can connect to it
 1. You should have a running "Api" and can test it by getting the list of customers e.g. http://localhost:8001/api/sales customers
-1. You can browse the UI from http://localhost:8000 and able to login to the system using initial username/password: admin@accountgo.ph/P@ssword1!
-1. Initialize data by calling a special api endpoint directly
+1. You can browse the UI from http://localhost:8000 and able to login to the system using initial username/password: admin@accountgo.ph/P@ssword1
+1. Initialize data by calling a special api endpoint directly. http://localhost:8001/api/administration/initializedcompany
 
 ## Technology Stack:
 - ASP.NET Core

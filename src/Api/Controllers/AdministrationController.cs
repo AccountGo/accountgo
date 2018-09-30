@@ -9,7 +9,10 @@ using Services.Sales;
 using Services.Security;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Reflection;
+using System.Text;
 
 namespace Api.Controllers
 {
@@ -343,8 +346,14 @@ namespace Api.Controllers
             IList<Core.Domain.Financials.AccountClass> accountClasses = new List<Core.Domain.Financials.AccountClass>();
             // If no accounts found just return.
             if (_financialService.GetAccounts().Any()) return;
-
-            string[,] values = LoadCsv(Resource.ResourceManager.GetString("coa"));
+            string[,] values;
+            var assembly = Assembly.GetEntryAssembly();
+            var resourceStream = assembly.GetManifestResourceStream("Api.Data.coa.csv");
+            using (var reader = new StreamReader(resourceStream, Encoding.UTF8))
+            {
+                var coa = reader.ReadToEndAsync().Result;
+                values = LoadCsv(coa);
+            }
             List<Core.Domain.Financials.Account> accounts = new List<Core.Domain.Financials.Account>();
 
             for (var i = 1; i < (values.Length / 8); i++)
