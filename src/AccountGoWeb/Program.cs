@@ -9,7 +9,6 @@ namespace AccountGoWeb
 
         public static IWebHostBuilder CreateWebHostBuilder(string[] args) =>
             WebHost.CreateDefaultBuilder(args)
-                .UseStartup<Startup>()
-                .UseUrls("http://0.0.0.0:8000", "https://0.0.0.0:44300");
+                .UseStartup<Startup>();
     }
 }
