@@ -44,12 +44,12 @@ var config = {
         })
     ],
     externals: {
-        'Config': JSON.stringify(process.env.ENV === 'production' ?
+        'Config': JSON.stringify(process.env.ENV === 'Production' ?
             {
-                apiUrl: "https://accountgoapi.azurewebsites.net/"
+                apiUrl: "http://localhost:8001/"
             } :
             {
-                apiUrl: "https://localhost:44301/"
+                apiUrl: "http://localhost:8001/"
             })
     }
 };

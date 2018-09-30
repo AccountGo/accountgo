@@ -3,8 +3,6 @@ import * as ReactDOM from "react-dom";
 import {observer} from "mobx-react";
 import * as accounting from "accounting";
 
-import Config = require("Config");
-
 import SelectCustomer from "../Shared/Components/SelectCustomer";
 import SelectPaymentTerm from "../Shared/Components/SelectPaymentTerm";
 import SelectLineItem from "../Shared/Components/SelectLineItem";
