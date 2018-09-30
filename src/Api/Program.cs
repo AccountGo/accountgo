@@ -9,7 +9,6 @@ namespace Api
 
         public static IWebHostBuilder CreateWebHostBuilder(string[] args) =>
             WebHost.CreateDefaultBuilder(args)
-                .UseStartup<Startup>()
-                .UseUrls("http://0.0.0.0:8001", "https://0.0.0.0:44301");
+                .UseStartup<Startup>();
     }
 }

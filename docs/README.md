@@ -25,27 +25,9 @@ AccountGoWeb and Api projects are using ASP.NET Core 2.1.
 
 1. Install Visual Studio Code.
 1. Clone/Fork the latest repo here https://github.com/AccountGo/accountgo
-1. Build each projects in this order. Core->Services->Dto->Api. To build the project, change directory to project folder, execute "dotnet restore" then "dotnet build". Make sure all projects build successfully. Alternatively, use accountgo.sln file to use by dotnet build. To do this change directory to "src" folder, execute "dotnet restore", then "dotnet build".
-1. AccountGoWeb require more steps to completely build the front-end artifacts. To do this, follow the succeeding steps.
-1. Change directory to src/AccountGoWeb and open Visual Studio Code terminal.
-1. Install typescript by executing"npm install -g typescript".
-1. Install webpack-cli by executing "npm install -g webpack-cli".
-1. Install webpack by executing "npm install -g webpack".
-1. Install gulp by executing install -g gulp".
-1. Still in the same folder, type and enter the following in command prompt.
-1. "gulp" (This will run the gulpfile.js)
-1. "tsc" (This will run the tsconfig.json)
-1. "webpack" (This will run the webpack.config.js)
-1. And lastly, in src/AccountGoWeb terminal, execute "dotnet build"
-1. To test if the front-end build successfully, in src/AccountGoWeb terminal, execute "dotnet run"
-1. To test if the backend api build successfully, in src/Api terminal, execute "dotnet run"
+1. Build each projects in this order. Core->Services->Dto->Api->AccountGoWeb. To build the project, change directory to project folder, execute "dotnet restore" then "dotnet build". Make sure all projects build successfully. Alternatively, use accountgo.sln file to use by dotnet build. To do this change directory to "src" folder, execute "dotnet restore", then "dotnet build".
 
-### IMPORTANT  NOTE:
-Your wwwroot folder should be look like this if you correctly followed the steps above
-
-![AccountGo](https://user-images.githubusercontent.com/17961526/45582820-273d0000-b8e9-11e8-9ff0-2b3f8f978513.png)
-
-Next, setup database and backend api database connection
+Note: Above steps are just confirmation all projects will build using "dotnet". Succeding instruction will provide specific instructions to build and run Api (Back-end), and AccountGoWeb (Front-end), as well as how to setup database. Let's start on database setup first.
 
 # Setup SQL Server (Using Docker)
 You can opt to install SQL Server or use docker image (like we do). Assuming you have docker installed, follow the steps below. (Install docker if you haven't done)
@@ -66,19 +48,40 @@ The database/scripts folder contains the sql scripts to execute. You can use DbU
 
 ### Note: The initial data in the previous steps only include the security initial data. There's more data initialization to in the preceding instructions
 
-# Run "Api" project
-1. Run the api by typing "dotnet run". Make sure you change directory to src/Api
-2. In api/appsettings.json, update properly your "LocalConnection" connection string.
-3. In api/Startup.cs, then ConfigureServices method, set connectionString = Configuration["Data:LocalConnection:ConnectionString"];
+## Build and run "Api" (Back-end)
+1. Change directory to Api project folder
+1. Build the project "dotnet build"
+1. Update database connection. Open "appsettings.json" and change the connection string. You may want to change "DevelopmentConnectionString" as we will be running the api in "Development" mode shortly.
+1. Run the api, execute "dotnet run". Note that there is no launchsettings.json included in the repository, thus, the following bullets are important.
+    * To run in development mode, execute "dotnet run --environment Development"
+    * To change it to specific port, execute "dotnet run --environment Development server.urls=http://+:8001". It could be any port as you like, but the front-end is hard-coded to call api on port http://localhost:8001. So change the front-end as too. By default, port is open to 5000 and 5001 (http and https respectively).
+1. To test if Api is running correctly, you can simply call one "GET" endpoint. e.g. http://localhost:8001/api/sales/customers. This will return list of customers in JSON format.
 
-# Run "AccountGoWeb" Front-end
-1. Run the frontend by typing "dotnet run". Make sure you change directory to src/AccountGoWeb
+# Build and run "AccountGoWeb" (Front-end)
+1. AccountGoWeb require more steps to completely build the front-end artifacts. To do this, follow the succeeding steps
+1. Change directory to src/AccountGoWeb and open Visual Studio Code terminal
+1. Install all npm packages by executing "npm install"
+1. Install typescript by executing "npm install -g typescript"
+1. Install webpack-cli by executing "npm install -g webpack-cli"
+1. Install webpack by executing "npm install -g webpack"
+1. Install gulp by executing install -g gulp"
+1. Still in the same folder, type and enter the following in command prompt
+1. "gulp" (This will run the gulpfile.js)
+1. "tsc" (This will run the tsconfig.json)
+1. "webpack" (This will run the webpack.config.js)
+1. And lastly, in src/AccountGoWeb terminal, execute "dotnet build"
+1. Run the "AccoungGoWeb" project, execute "dotnet run". Note that there is no launchsettings.json included in the repository, thus, the following bullets are important.
+    * To run in development mode, execute "dotnet run --environment Development"
+    * To change it to specific port, execute "dotnet run --environment Development server.urls=http://+:8000". It could be any port as you like. By default, port is open to 5000 and 5001 (http and https respectively).
+1. To test if AccountGoWeb UI is running correctly, open your browser to http://localhost:8000
 
-# Initialize Data
-On your first run, if you successfully Publish Database\SQL.AccountGo you will get an empty database. Let's get your DB Initialized with sample master data.'
-1. Create your first user. registration page is hidden but you can go directly from your browser. (e.g. http://localhost/account/register)
-2. Set password like 'P@ssword1'. More than 6 chars, 1 Caps, 1 special, 1 number. Note: Currently, even successfully register a new user, it will not inform you. Just try to login using your newly created user. This registratio page is temporary.
-3. After successful user registration, the system automatically runs data initialization of the following.
+### IMPORTANT  NOTE:
+Your wwwroot folder should be look like this if you correctly followed the steps above
+
+![AccountGo](https://user-images.githubusercontent.com/17961526/45582820-273d0000-b8e9-11e8-9ff0-2b3f8f978513.png)
+
+# Initialize Data (Instructions work in progress)
+At this point, your database has no data on it. But there is already an initial username and password (admin@accountgo.ph/P@ssword1!) and you can logon to the UI. Now lets, create some initial data that would populate the following models.
 - Company
 - Chart of accounts/account classes
 - Financial year
@@ -90,10 +93,13 @@ On your first run, if you successfully Publish Database\SQL.AccountGo you will g
 - Items
 - Banks
 
-# Front-end
-The screenshot below will be the future front-end. It is heavily under-development and you could be part of it. The project is "AccountGoWeb" and consuming the "Api" project.
+### SUMMARY: At this point, you should have:
+1. Database instance running in docker, and you can connect to it
+1. You should have a running "Api" and test it by getting the list of customers e.g. http://localhost:8001/api/sales customers
+1. You can browse the UI from http://localhost:8000 and able to login to the system using initial username/password: admin@accountgo.ph/P@ssword1!
+1. Initialize data by calling a special api endpoint directly
 
-Technology Stack:
+## Technology Stack:
 - ASP.NET Core
 - ReactJS
 - MobX, React-MobX

@@ -2,7 +2,6 @@
 import * as ReactDOM from "react-dom";
 import {observer} from "mobx-react";
 import * as d3 from "d3";
-import Config = require("Config");
 import {autorun, observable} from 'mobx';
 import * as accounting from "accounting";
 

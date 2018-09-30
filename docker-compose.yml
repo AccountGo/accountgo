@@ -1,15 +1,18 @@
 version: "3"
 services:
-    web:
-        image: accountgo/accountgoweb
-        build: 
-            dockerfile: ./src/AccountGoWeb/Dockerfile
-            context: .
-        ports:
-            - "8000:8000"
-            - "44300:44300"
-        depends_on:
-            - api
+    # web:
+    #     image: accountgo/accountgoweb
+    #     build: 
+    #         dockerfile: ./src/AccountGoWeb/Dockerfile
+    #         context: .
+    #     ports:
+    #         - "8000:8000"
+    #     depends_on:
+    #         - api
+    #     environment:
+    #         - ASPNETCORE_ENVIRONMENT=Development
+    #         - ASPNETCORE_URLS=https://+;http://+
+    #         - ASPNETCORE_HTTPS_PORT=44300
     api:
         image: accountgo/accountgoapi
         build:
@@ -18,6 +21,10 @@ services:
         ports:
             - "8001:8001"
             - "44301:44301"
+        environment:
+            - ASPNETCORE_ENVIRONMENT=Development
+            - ASPNETCORE_URLS=http://+
+            - ASPNETCORE_HTTPS_PORT=44301
         depends_on:
             - db
     db:

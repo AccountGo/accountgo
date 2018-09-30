@@ -3,7 +3,6 @@ import * as ReactDOM from "react-dom";
 import {observer} from "mobx-react";
 import {autorun, reaction, toJS, intercept} from 'mobx';
 import * as d3 from "d3";
-import Config = require("Config");
 
 import SelectVoucherType from "../Shared/Components/SelectVoucherType";
 import SelectAccount from "../Shared/Components/SelectAccount";
