@@ -27,7 +27,7 @@ AccountGoWeb and Api projects are using ASP.NET Core 2.1.
 1. Clone/Fork the latest repo here https://github.com/AccountGo/accountgo
 1. Build each projects in this order. Core->Services->Dto->Api->AccountGoWeb. To build the project, change directory to project folder, execute "dotnet restore" then "dotnet build". Make sure all projects build successfully. Alternatively, use accountgo.sln file to use by dotnet build. To do this change directory to "src" folder, execute "dotnet restore", then "dotnet build".
 
-Note: Above steps are just confirmation all projects will build using "dotnet". Succeding instruction will provide specific instructions to build and run Api (Back-end), and AccountGoWeb (Front-end), as well as how to setup database. Let's start on database setup first.
+Note: Preceding steps confirms all projects can build successfully using "dotnet build". Succeeding steps will provide specific instructions to build and run Api (Back-end), asnd AccountGoWeb (Front-end), as well as how to setup database. Let's start on database setup first.
 
 # Setup SQL Server (Using Docker)
 You can opt to install SQL Server or use docker image (like we do). Assuming you have docker installed, follow the steps below. (Install docker if you haven't done)
@@ -94,8 +94,8 @@ At this point, your database has no data on it. But there is already an initial 
 - Banks
 
 ### SUMMARY: At this point, you should have:
-1. Database instance running in docker, and you can connect to it
-1. You should have a running "Api" and test it by getting the list of customers e.g. http://localhost:8001/api/sales customers
+1. Database instance running in docker container and you can connect to it
+1. You should have a running "Api" and can test it by getting the list of customers e.g. http://localhost:8001/api/sales customers
 1. You can browse the UI from http://localhost:8000 and able to login to the system using initial username/password: admin@accountgo.ph/P@ssword1!
 1. Initialize data by calling a special api endpoint directly
 
