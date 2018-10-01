@@ -45,13 +45,13 @@ var config = {
     ],
     externals: {
         'Config': JSON.stringify(process.env.ENV === 'Production' ?
-            {
-                apiUrl: "http://localhost:8001/"
+            {                
+                apiUrl: "http://{0}:8001/"
             } :
             {
-                apiUrl: "http://localhost:8001/"
+                apiUrl: "http://{0}:8001/"
             })
     }
 };
-
+debug.log(process.env.ASPNETCORE_URLS)
 module.exports = config;

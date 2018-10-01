@@ -6,22 +6,24 @@ services:
             dockerfile: ./src/AccountGoWeb/Dockerfile
             context: .
         ports:
-            - "8000:80"
+            - "8000:8000"
         depends_on:
             - api
         environment:
             - ASPNETCORE_ENVIRONMENT=Development
-            - ASPNETCORE_URLS=http://+
+            - ASPNETCORE_URLS=http://+:8000
+            - APIHOST=api
     api:
         image: accountgo/accountgoapi
         build:
             dockerfile: ./src/Api/Dockerfile
             context: .
         ports:
-            - "8001:80"
+            - "8001:8001"
         environment:
             - ASPNETCORE_ENVIRONMENT=Development
-            - ASPNETCORE_URLS=http://+
+            - ASPNETCORE_URLS=http://+:8001
+            - DBSERVER=db
         depends_on:
             - db
     db:
