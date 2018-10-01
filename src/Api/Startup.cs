@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using System;
 
 namespace Api
 {
@@ -31,11 +32,16 @@ namespace Api
         public void ConfigureServices(IServiceCollection services)
         {
             string connectionString = Configuration["Data:DevelopmentConnection:ConnectionString"];
-
             if (_hostingEnv.IsDevelopment())
-               connectionString = Configuration["Data:DevelopmentConnection:ConnectionString"];
+            {
+                connectionString = Configuration["Data:DevelopmentConnection:ConnectionString"];
+                string dbServer = String.Format(connectionString, System.Environment.GetEnvironmentVariable("DBSERVER") ?? "localhost");
+                connectionString = String.Format(connectionString, dbServer);
+            }
             else
                connectionString = Configuration["Data:ProductionConnection:ConnectionString"];
+            
+            connectionString = String.Format(connectionString, System.Environment.GetEnvironmentVariable("DBSERVER") ?? "localhost");
 
             services
                 .AddEntityFrameworkSqlServer()
