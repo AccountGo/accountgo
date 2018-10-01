@@ -53,5 +53,5 @@ var config = {
             })
     }
 };
-debug.log(process.env.ASPNETCORE_URLS)
+
 module.exports = config;
