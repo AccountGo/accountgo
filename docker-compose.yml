@@ -12,7 +12,6 @@ services:
         environment:
             - ASPNETCORE_ENVIRONMENT=Development
             - ASPNETCORE_URLS=http://+:8000
-            - APIHOST=api
     api:
         image: accountgo/accountgoapi
         build:

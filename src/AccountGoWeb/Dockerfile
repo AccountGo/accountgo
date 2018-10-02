@@ -6,6 +6,7 @@ COPY ./src/AccountGoWeb AccountGoWeb
 
 RUN dotnet build ./AccountGoWeb/*.csproj
 
+ENV APIHOST api
 ENV NODE_VERSION 10.11.0
 ENV NODE_DOWNLOAD_SHA 4d8aaf8c1c51acbbb46bbd4e3c924a573884603b1c4e35cc02982bbda9779c8b
 RUN curl -SL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.gz" --output nodejs.tar.gz \
@@ -21,11 +22,13 @@ RUN npm install -g typescript webpack webpack-cli gulp
 
 RUN gulp
 RUN tsc
-RUN webpack-cli
+RUN APIHOST=${APIHOST} webpack
 
 RUN dotnet publish AccountGoWeb.csproj -c Release -o out
 
 FROM microsoft/dotnet:2.1.1-aspnetcore-runtime-alpine3.7
+# This APIHOST environment variable is not a duplicate of above declaration
+ENV APIHOST api
 WORKDIR /app
 
 EXPOSE 8000
