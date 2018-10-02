@@ -35,13 +35,14 @@ namespace Api
             if (_hostingEnv.IsDevelopment())
             {
                 connectionString = Configuration["Data:DevelopmentConnection:ConnectionString"];
-                string dbServer = String.Format(connectionString, System.Environment.GetEnvironmentVariable("DBSERVER") ?? "localhost");
+                string dbServer = System.Environment.GetEnvironmentVariable("DBSERVER") ?? "localhost";
                 connectionString = String.Format(connectionString, dbServer);
             }
             else
                connectionString = Configuration["Data:ProductionConnection:ConnectionString"];
             
             connectionString = String.Format(connectionString, System.Environment.GetEnvironmentVariable("DBSERVER") ?? "localhost");
+            System.Console.WriteLine("DB Connection String: " + connectionString);
 
             services
                 .AddEntityFrameworkSqlServer()
