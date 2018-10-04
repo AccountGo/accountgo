@@ -24,7 +24,6 @@ export default class CommonStore {
 
     loadCustomersLookup() {
         let customers = this.customers;
-        console.log(Config.apiUrl + "api/common/customers");
         axios.get(Config.apiUrl + "api/common/customers")
             .then(function (result) {
                 const data = result.data;
