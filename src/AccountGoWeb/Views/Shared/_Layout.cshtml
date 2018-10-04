@@ -14,7 +14,7 @@ scratch. This page gets rid of all links and provides the needed markup only.
   <!-- Font Awesome -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
   <!-- Ionicons -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/ionicons/4.4.1/css/ionicons.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/ionicons/3.0.0/css/ionicons.min.css">
   <!-- Theme style -->
   <link rel="stylesheet" href="~/adminLTE/css/AdminLTE.min.css">
   <!-- Overriding Css -->
@@ -259,7 +259,7 @@ desired effect
       <!-- /.search form -->
 
       <!-- Sidebar Menu -->
-                <ul class="sidebar-menu">
+                <ul class="sidebar-menu" data-widget="tree">
                     <li class="header">NAVIGATION</li>
                     <!-- Optionally, you can add icons to the links -->
                     <li class="active">
@@ -537,9 +537,8 @@ desired effect
     </script>
     <!--//END TODO-->
     @RenderSection("scripts", required: false)
-
-<!-- Optionally, you can add Slimscroll and FastClick plugins.
-     Both of these plugins are recommended to enhance the
-     user experience. -->
+    <!-- Optionally, you can add Slimscroll and FastClick plugins.
+        Both of these plugins are recommended to enhance the
+        user experience. -->
 </body>
 </html>

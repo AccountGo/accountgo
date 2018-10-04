@@ -1,12 +1,12 @@
 ﻿
 https://adminlte.io/docs/2.4/installation
 
-Install admin lte via git
+## Install admin lte via git
 - Fork the repository (guide).
 - Clone to your machine. 
 - git clone https://github.com/YOUR_USERNAME/AdminLTE.git
 
-Overwrite/Copy these files:
+## Overwrite/Copy these files:
 
 - dist/skins -> wwwroot/adminLTE/css/skins
 - dist/AdminLTE.css -> wwwroot/adminLTE/css/AdminLTE.css
@@ -17,7 +17,7 @@ Overwrite/Copy these files:
 - dist/js/adminlte.js -> wwwroot/adminLTE/css/js/app.js
 - dist/js/adminlte.min.js -> wwwroot/adminLTE/css/js/app.min.js
 
-In adminlte source, open the starter.html. Select all and copy (ctrl+c).
+## In adminlte source, open the starter.html. Select all and copy (ctrl+c).
 Open accountgo _Layout.cshtml. paste to overwrite.
 Change one by one
 - <title>Starter</title> -> <title>AcountGo</title>
@@ -28,11 +28,11 @@ Change one by one
 - <link rel="stylesheet" href="dist/css/skins/skin-blue.min.css"> -> 
 - add <link rel="stylesheet" href="~/adminLTE/css/AdminLTEOverride.css">
 
-Then at the bottom before </head> tag, add these lines
+## Then at the bottom before </head> tag, add these lines
     <script src="~/scripts/vendor.chunk.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/bluebird/3.5.2/bluebird.min.js"></script>
 
-In line 65, change logo
+## Change logo
 
 From:
     <!-- Logo -->
@@ -51,14 +51,14 @@ To
       <span class="logo-lg"><b>AccountGo</span>
     </a>
 
-Change user image
+## Change user image
 From:
                         <!-- User Image -->
                         <img src="dist/img/user2-160x160.jpg" class="img-circle" alt="User Image">
 To:
 <img src="~/adminLTE/img/user2-160x160.png" class="img-circle" alt="User Image">
 
-Change user image in the navbar,
+## Change user image in the navbar,
 From:
             <!-- Menu Toggle Button -->
             <a href="#" class="dropdown-toggle" data-toggle="dropdown">
@@ -75,7 +75,8 @@ To:
                                 <!-- hidden-xs hides the username on small devices so only the image appears. -->
                                 <span class="hidden-xs">@User.Identity.Name</span>
                             </a>
-Then:
+### Next
+
 From:
               <!-- The user image in the menu -->
               <li class="user-header">
@@ -96,7 +97,7 @@ To:
                                     </p>
                                 </li>
 
-Replace the side bar menu
+## Replace the side bar menu
 
 From:
 
@@ -120,7 +121,7 @@ From:
 
 To:
 
-                <ul class="sidebar-menu">
+                <ul class="sidebar-menu" data-widget="tree">
                     <li class="header">NAVIGATION</li>
                     <!-- Optionally, you can add icons to the links -->
                     <li class="active">
@@ -260,6 +261,7 @@ To:
                 </ul>
 
 ## Comment out 
+
       <!-- Sidebar user panel (optional) -->
       <div class="user-panel">
         <div class="pull-left image">
@@ -300,7 +302,7 @@ To:
                                 <span class="hidden-xs">@User.Identity.Name</span>
                             </a>
 
-Replace the main content
+## Replace the main content
     <!-- Main content -->
     <section class="content container-fluid">
 
@@ -321,7 +323,7 @@ To:
             <!-- /.content -->
 
 
-lastly, change the required js scripts
+## Change the required js scripts
 From:
 <!-- ./wrapper -->
 
@@ -361,7 +363,7 @@ To:
     <!--//END TODO-->
     @RenderSection("scripts", required: false)
 
-    ## Comment out 
+## Comment out 
         <!-- Content Header (Page header) -->
     <!-- <section class="content-header">
       <h1>
