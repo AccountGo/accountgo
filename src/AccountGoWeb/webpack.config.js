@@ -4,12 +4,14 @@ var path = require('path');
 
 var buildDir = path.resolve(__dirname, 'wwwroot/scripts');
 var scriptsDir = path.resolve(__dirname, 'wwwroot/libs/tsxbuild');
+
 var host = "localhost";
 if(process.env.APIHOST)
     host = process.env.APIHOST;
 
 console.log("APIHOST environment variable in webpack is set to '" + host + "'. This can be change from Dockerfile e.g. 'RUN APIHOST=${APIHOST} webpack'. Or if manually running webpack, e.g. 'APIHOST=localhost webpack'");
 console.log("API full url is " + JSON.stringify("http://" + host + ":8001/"));
+
 var config = {
     entry: {
         index: scriptsDir + '/Home' + '/Index',
@@ -49,7 +51,7 @@ var config = {
         })
     ],
     externals: {
-        'Config': JSON.stringify("http://" + process.env.APIHOST === undefined ? "localhost"  : process.env.APIHOST + ":8001/")
+        'Config':  JSON.stringify({apiUrl : "http://" + host + ":8001/"})
     }    
 };
 
