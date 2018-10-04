@@ -22,7 +22,6 @@ namespace Api
                 .AddJsonFile($"appsettings.{env.EnvironmentName}.json", optional: true)
                 .AddEnvironmentVariables();
             Configuration = builder.Build();
-
             _hostingEnv = env;
         }
 

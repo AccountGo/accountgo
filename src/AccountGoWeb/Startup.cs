@@ -18,15 +18,11 @@ namespace AccountGoWeb
                 .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
                 .AddJsonFile($"appsettings.{env.EnvironmentName}.json", optional: true)
                 .AddEnvironmentVariables();
-            
             Configuration = builder.Build();
 
-            System.Console.WriteLine("APIHOST is set to '" + System.Environment.GetEnvironmentVariable("APIHOST") + "'");
-            System.Console.WriteLine("API full url is http://" + System.Environment.GetEnvironmentVariable("APIHOST") + ":8001/api/");
-            
-            string urlhost = string.IsNullOrWhiteSpace(System.Environment.GetEnvironmentVariable("APIHOST")) ? "localhost" : System.Environment.GetEnvironmentVariable("APIHOST");
+            string urlhost = System.Environment.GetEnvironmentVariable("APIHOST") ?? "localhost";
             Configuration["ApiUrl"] = $"http://{urlhost}:8001/api/";
-            
+            System.Console.WriteLine("API full url is http://" + urlhost + ":8001/api/");
             System.Console.WriteLine("ApiUrl = " + Configuration["ApiUrl"]);
         }
 
