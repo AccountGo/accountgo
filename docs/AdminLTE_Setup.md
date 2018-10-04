@@ -26,6 +26,7 @@ Change one by one
 - <link rel="stylesheet" href="bower_components/Ionicons/css/ionicons.min.css"> -> <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/ionicons/4.4.1/css/ionicons.min.css">
 - <link rel="stylesheet" href="dist/css/AdminLTE.min.css"> -> <link rel="stylesheet" href="~/adminLTE/css/AdminLTE.min.css">
 - <link rel="stylesheet" href="dist/css/skins/skin-blue.min.css"> -> 
+- add <link rel="stylesheet" href="~/adminLTE/css/AdminLTEOverride.css">
 
 Then at the bottom before </head> tag, add these lines
     <script src="~/scripts/vendor.chunk.js"></script>

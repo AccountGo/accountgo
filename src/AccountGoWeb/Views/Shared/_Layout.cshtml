@@ -21,7 +21,7 @@ scratch. This page gets rid of all links and provides the needed markup only.
         page. However, you can choose any other skin. Make sure you
         apply the skin class to the body tag so the changes take effect. -->
   <link rel="stylesheet" href="~/adminLTE/css/skins/skin-blue.min.css">
-
+  <link rel="stylesheet" href="~/adminLTE/css/AdminLTEOverride.css">
   <!-- HTML5 Shim and Respond.js IE8 support of HTML5 elements and media queries -->
   <!-- WARNING: Respond.js doesn't work if you view the page via file:// -->
   <!--[if lt IE 9]>
@@ -214,7 +214,7 @@ desired effect
                   <a href="#" class="btn btn-default btn-flat">Profile</a>
                 </div>
                 <div class="pull-right">
-                  <a href="#" class="btn btn-default btn-flat">Sign out</a>
+                  <a href="~/account/signout" class="btn btn-default btn-flat">Sign out</a>
                 </div>
               </li>
             </ul>
@@ -266,11 +266,7 @@ desired effect
                         <a href="~/"><i class="fa fa-dashboard"></i><span>Dashboard</span></a>
                     </li>
                     <li class="treeview">
-                        <a href="#"><i class="fa fa-industry"></i> <span>Accounts Receivable</span> 
-                            <span class="pull-right-container">
-                                <i class="fa fa-angle-left pull-right"></i>
-                              </span>
-                        </a>
+                        <a href="#"><i class="fa fa-industry"></i> <span>Accounts Receivable</span> <i class="fa fa-angle-left pull-right"></i></a>
                         <ul class="treeview-menu">
                             <li>
                                 <a href="~/quotations/">Sales Quotations</a>
