@@ -200,7 +200,6 @@ FakesAssemblies/
 /src/Api/project.lock.json
 /src/AccountGoWeb/project.lock.json
 /src/AccountGoWeb/project.fragment.lock.json
-/Database/SQL.AccountGo/SQL.AccountGo.jfm
 /wrap/Dto/project.json
 /global.json
 .DS_Store
