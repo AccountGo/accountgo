@@ -3,7 +3,7 @@ var webpack = require('webpack');
 var path = require('path');
 
 var buildDir = path.resolve(__dirname, 'wwwroot/scripts');
-var scriptsDir = path.resolve(__dirname, 'wwwroot/libs/tsxbuild');
+var scriptsDir = path.resolve(__dirname, 'wwwroot/tsxbuild');
 
 var host = "localhost";
 if(process.env.APIHOST)
@@ -15,7 +15,6 @@ console.log("API full url is " + JSON.stringify("http://" + host + ":8001/"));
 var config = {
     entry: {
         index: scriptsDir + '/Home' + '/Index',
-        "helloworld": scriptsDir + '/HelloWorld',
         "sales/salesorder": scriptsDir + '/Sales/SalesOrder',
         "quotations/salesquotation": scriptsDir + '/Quotations/SalesQuotation',
         "sales/salesinvoice": scriptsDir + '/Sales/SalesInvoice',
