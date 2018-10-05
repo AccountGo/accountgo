@@ -2,6 +2,11 @@
   "version": "0.0.1",
   "name": "accountgoweb",
   "private": true,
+  "scripts": {
+    "webpack": "webpack",
+    "gulp": "gulp",
+    "tsc": "tsc"
+  },
   "devDependencies": {
     "gulp": "^3.9.1",
     "mobx-react-devtools": "6.0.3",
