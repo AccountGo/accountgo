@@ -3,7 +3,7 @@ var webpack = require('webpack');
 var path = require('path');
 
 var buildDir = path.resolve(__dirname, 'wwwroot/scripts');
-var scriptsDir = path.resolve(__dirname, 'wwwroot/libs/tsxbuild');
+var scriptsDir = path.resolve(__dirname, 'wwwroot/tsxbuild');
 
 var host = "localhost";
 if(process.env.APIHOST)

@@ -18,7 +18,6 @@ let quotationId = window.location.search.split("?id=")[1];
 
 let store = new SalesQuotationStore(quotationId);
 
-
 @observer
 class ValidationErrors extends React.Component<any, {}>{
     render() {
