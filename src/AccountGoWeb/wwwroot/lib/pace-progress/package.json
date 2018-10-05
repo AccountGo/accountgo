@@ -1,0 +1,54 @@
+{
+  "_from": "pace-progress",
+  "_id": "pace-progress@1.0.2",
+  "_inBundle": false,
+  "_integrity": "sha1-/cVlxX3ZFyWjFns2C/JXjTw7VI0=",
+  "_location": "/pace-progress",
+  "_phantomChildren": {},
+  "_requested": {
+    "type": "tag",
+    "registry": true,
+    "raw": "pace-progress",
+    "name": "pace-progress",
+    "escapedName": "pace-progress",
+    "rawSpec": "",
+    "saveSpec": null,
+    "fetchSpec": "latest"
+  },
+  "_requiredBy": [
+    "#USER",
+    "/"
+  ],
+  "_resolved": "https://registry.npmjs.org/pace-progress/-/pace-progress-1.0.2.tgz",
+  "_shasum": "fdc565c57dd91725a3167b360bf2578d3c3b548d",
+  "_spec": "pace-progress",
+  "_where": "C:\\MPPY\\Development\\vs2017\\repos\\AccountGo\\accountgo\\src\\accountgoweb",
+  "authors": [
+    "Zack Bloom <zackbloom@gmail.com>",
+    "Adam Schwartz <adam.flynn.schwartz@gmail.com>"
+  ],
+  "bugs": {
+    "url": "https://github.com/graingert/pace/issues"
+  },
+  "bundleDependencies": false,
+  "deprecated": "Disclaimer, We no longer use this library internally and are focusing our efforts on open sourcing and maintaining projects that we do use and can meaningfully contribute to. Sorry for any frustrations with this project (we're happy to link to any fork that has an excited, commited maintainer).",
+  "description": "Automatic page load progress bar",
+  "devDependencies": {
+    "coffee-script": "~1.6.3",
+    "color": "~0.4.4",
+    "grunt": "~0.4.1",
+    "grunt-cli": "~0.1.9",
+    "grunt-contrib-coffee": "~0.7.0",
+    "grunt-contrib-uglify": "~0.2.4",
+    "grunt-contrib-watch": "~0.5.3"
+  },
+  "homepage": "https://github.com/graingert/pace#readme",
+  "license": "MIT",
+  "main": "pace.js",
+  "name": "pace-progress",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/graingert/pace.git"
+  },
+  "version": "1.0.2"
+}
