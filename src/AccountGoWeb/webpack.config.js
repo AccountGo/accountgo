@@ -15,6 +15,7 @@ console.log("API full url is " + JSON.stringify("http://" + host + ":8001/"));
 var config = {
     entry: {
         index: scriptsDir + '/Home' + '/Index',
+        "helloworld": scriptsDir + '/HelloWorld',
         "sales/salesorder": scriptsDir + '/Sales/SalesOrder',
         "quotations/salesquotation": scriptsDir + '/Quotations/SalesQuotation',
         "sales/salesinvoice": scriptsDir + '/Sales/SalesInvoice',
