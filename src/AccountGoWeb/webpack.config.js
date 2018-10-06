@@ -3,7 +3,7 @@ var webpack = require('webpack');
 var path = require('path');
 
 var buildDir = path.resolve(__dirname, 'wwwroot/scripts');
-var scriptsDir = path.resolve(__dirname, 'wwwroot/tsxbuild');
+var scriptsDir = path.resolve(__dirname, 'Scripts');
 
 var host = "localhost";
 if(process.env.APIHOST)
@@ -22,6 +22,15 @@ var config = {
         "purchasing/purchaseinvoice": scriptsDir + '/Purchasing/PurchaseInvoice',
         "financials/journalentry": scriptsDir + '/Financials/JournalEntry',
         vendor: ['react', 'react-dom']
+    },
+    module: {
+        rules: [
+          {
+            test: /\.tsx?$/,
+            loader: require.resolve('ts-loader'),
+            exclude: /node_modules/
+          }
+        ]
     },
     output: {
         path: buildDir,
