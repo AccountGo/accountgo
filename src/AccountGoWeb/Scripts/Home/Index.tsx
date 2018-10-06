@@ -9,7 +9,7 @@ class Home extends React.Component<any, {}> {
     render() {
         return (
             <div>
-                Tiles or widgets here
+                Tiles or widgets here!
             </div>
         );
     }
