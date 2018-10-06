@@ -1,0 +1,13 @@
+// Here you can add other styles
+.inactiveLink {
+  pointer-events: none;
+  opacity: 0.65;
+  filter: alpha(opacity=65);
+  color:#cabfbf;   
+}
+
+.disabledControl {
+  pointer-events: none;
+  opacity: 0.95;
+  filter: alpha(opacity=65);
+}
