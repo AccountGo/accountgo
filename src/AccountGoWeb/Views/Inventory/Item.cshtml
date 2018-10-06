@@ -8,16 +8,11 @@
 <form action="~/inventory/saveitem" method="post">
     <div id="divItemCard" class="col-md-9">
         @Html.HiddenFor(m => m.Id)
-        <div class="box">
-            <div class="box-header with-border">
-                <h3 class="box-title">General</h3>
-                <div class="box-tools pull-right">
-                    <button type="button" class="btn btn-box-tool" data-widget="collapse" data-toggle="tooltip" title="Collapse">
-                        <i class="fa fa-minus"></i>
-                    </button>
-                </div>
+        <div class="card">
+            <div class="card-header">
+                <a data-toggle="collapse" href="#general"><i class="fa fa-align-justify"></i></a> General
             </div>
-            <div class="box-body">
+            <div class="card-body collapse show row" id="general">
                 <div class="col-sm-6">
                     <div class="row">
                         <div class="col-sm-3">No</div>
@@ -55,16 +50,11 @@
             </div>
         </div>
 
-        <div class="box">
-            <div class="box-header with-border">
-                <h3 class="box-title">Pricing</h3>
-                <div class="box-tools pull-right">
-                    <button type="button" class="btn btn-box-tool" data-widget="collapse" data-toggle="tooltip" title="Collapse">
-                        <i class="fa fa-minus"></i>
-                    </button>
-                </div>
+        <div class="card">
+            <div class="card-header">
+                <a data-toggle="collapse" href="#pricing"><i class="fa fa-align-justify"></i></a> Pricing
             </div>
-            <div class="box-body">
+            <div class="card-body collapse show row" id="pricing">
                 <div class="col-sm-6">
                     <div class="row">
                         <div class="col-sm-4">Sell Description</div>
@@ -96,16 +86,11 @@
             </div>
         </div>
 
-        <div class="box">
-            <div class="box-header with-border">
-                <h3 class="box-title">Invoicing</h3>
-                <div class="box-tools pull-right">
-                    <button type="button" class="btn btn-box-tool" data-widget="collapse" data-toggle="tooltip" title="Collapse">
-                        <i class="fa fa-minus"></i>
-                    </button>
-                </div>
+        <div class="card">
+            <div class="card-header">
+                <a data-toggle="collapse" href="#invoicing"><i class="fa fa-align-justify"></i></a> Invoicing
             </div>
-            <div class="box-body">
+            <div class="card-body collapse show row" id="invoicing">
                 <div class="col-sm-6">
                     <div class="row">
                         <div class="col-sm-4">Sales Account</div>
