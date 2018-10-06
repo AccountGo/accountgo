@@ -1,0 +1,22 @@
+// Here you can add other styles for dark theme
+
+.nav-tabs {
+  .nav-link {
+    &.active {
+      color: $gray-300;
+      background: #252525;
+      &:focus {
+        background: #8d8b8b;
+        color: black;
+      }
+    }
+  }
+}
+
+.tab-content {
+  background: #252525; // my override => default #fff
+}
+
+.switch-slider {
+  background-color: #252525; // my override => default white
+}

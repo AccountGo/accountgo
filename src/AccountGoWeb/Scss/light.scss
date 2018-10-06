@@ -1,8 +1,14 @@
-// If you want to override variables do it here
-@import "variables";
+// If you want to override variables applicable to all themes, do it here
+@import "shared-variables";
+
+// If you want to override variables applicable only to light theme, do it here
+@import "light-variables";
 
 // Import styles
 @import "node_modules/@coreui/coreui/scss/coreui";
 
-// If you want to add something do it here
-@import "custom";
+// If you want to add something that applies to all themes, do it here
+@import "shared-custom";
+
+// If you want to add something that applies only to light theme, do it here
+@import "light-custom";

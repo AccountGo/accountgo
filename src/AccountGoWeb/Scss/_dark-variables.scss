@@ -1,0 +1,79 @@
+// Import styles
+@import "node_modules/@coreui/coreui/scss/coreui";
+
+// Variable overrides for dark theme
+$dark-primary:            #1C1C1C;
+$dark-secondary:          #333333;
+$dark-tertiary:           #252525;
+$overcast:              #767676;
+$storm:                 #4C4A48;
+
+// ==================================================================================================
+// ==================================================================================================
+//      BOOTSTRAP OVERRIDES START
+// ==================================================================================================
+// ==================================================================================================
+
+
+$body-bg: $dark-secondary;
+$body-color: white;
+
+$link-hover-color:          lighten($link-color, 15%);
+$input-bg:                              $storm;
+$input-disabled-bg:                     $gray-500;
+
+$input-color:                           $gray-100;
+$input-border-color:                    $dark-primary;
+
+$input-placeholder-color:               $gray-500;
+
+$custom-control-indicator-bg:           $gray-600;
+
+$custom-control-indicator-disabled-bg:          $gray-500;
+$custom-control-label-disabled-color:           $gray-300;
+
+$dropdown-bg:                       $dark-secondary;
+$dropdown-border-color:             $dark-primary;
+
+$dropdown-link-color:               $gray-300;
+$dropdown-link-hover-color:         $gray-300;
+$dropdown-link-hover-bg:            $gray-600;
+
+$dropdown-link-active-bg:           $component-active-bg;
+
+$nav-tabs-border-color:             $dark-primary;
+
+$jumbotron-bg:                      $dark-secondary;
+
+$card-border-color:                 $gray-300;
+
+$card-cap-bg:                       $dark-primary;
+$card-bg:                           $dark-tertiary;
+
+$modal-content-bg:                  $dark-tertiary;
+
+$list-group-bg:                     $dark-tertiary;
+
+$list-group-hover-bg:               $dark-secondary;
+
+$list-group-action-color:           $gray-100;
+
+$breadcrumb-bg:                     $dark-tertiary;
+
+// ==================================================================================================
+// ==================================================================================================
+//      COREUI VARIABLES START
+// ==================================================================================================
+// ==================================================================================================
+
+
+$navbar-bg: $dark-tertiary;
+$navbar-color: #fff;
+$navbar-hover-color: $primary;
+$sidebar-bg: $dark-tertiary;
+$sidebar-nav-link-active-bg: $primary;
+$sidebar-nav-link-active-icon-color: $white;
+$aside-menu-color: #fff;
+$aside-menu-bg: $dark-tertiary;
+$footer-bg: $dark-tertiary;
+$footer-color: $body-color;
