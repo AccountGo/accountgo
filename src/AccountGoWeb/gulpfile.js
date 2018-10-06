@@ -9,6 +9,7 @@ gulp.task("libs", () => {
         '@coreui/icons/css/**',
         'simple-line-icons/css/**',
         'simple-line-icons/fonts/**',
+        'ionicons/dist/**',
         'bootstrap/dist/**',
         'perfect-scrollbar/dist/**',
         'jquery/dist/**',

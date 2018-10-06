@@ -15,61 +15,70 @@
     <title>AccountGo | Log in</title>
     <!-- Tell the browser to be responsive to screen width -->
     <meta content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" name="viewport">
-    <!-- Bootstrap 3.3.6 -->
-    <link rel="stylesheet" href="~/plugins/bootstrap/dist/css/bootstrap.min.css">
-    <!-- Font Awesome -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.5.0/css/font-awesome.min.css">
-    <!-- Ionicons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/ionicons/2.0.1/css/ionicons.min.css">
-    <!-- Theme style -->
-    <link rel="stylesheet" href="~/adminLTE/css/AdminLTE.css">
-    <!-- iCheck -->
-    <link rel="stylesheet" href="~/adminLTE/css/skins/skin-blue.css">
-    <!-- HTML5 Shim and Respond.js IE8 support of HTML5 elements and media queries -->
-    <!-- WARNING: Respond.js doesn't work if you view the page via file:// -->
-    <!--[if lt IE 9]>
-    <script src="https://oss.maxcdn.com/html5shiv/3.7.3/html5shiv.min.js"></script>
-    <script src="https://oss.maxcdn.com/respond/1.4.2/respond.min.js"></script>
-    <![endif]-->
+    <!-- Icons-->
+    <link href="~/lib/@@coreui/icons/css/coreui-icons.min.css" rel="stylesheet">
+    <link href="~/lib/font-awesome/css/font-awesome.min.css" rel="stylesheet">
+    <link href="~/lib/simple-line-icons/css/simple-line-icons.css" rel="stylesheet">
+    <!-- Main styles for this application-->
+    <link href="~/css/style.css" rel="stylesheet">
+    <link href="~/vendors/pace-progress/css/pace.min.css" rel="stylesheet">
 </head>
-<body class="hold-transition login-page">
-    <div class="login-box">
-        <div class="login-logo">
-            <a href="~/"><b>AccountGo</b></a>
-        </div>
-        <!-- /.login-logo -->
-        <div class="login-box-body">
-            <p class="login-box-msg">Sign in to start your session</p>
-            <form action="/account/signin?returnurl=@ViewData["ReturnUrl"]" method="post">
-                <div class="form-group has-feedback">
-                    <input asp-for="Email" class="form-control" placeholder="admin@accoungo.ph">
-                    <span class="glyphicon glyphicon-envelope form-control-feedback"></span>
-                    <span asp-validation-for="Email" class="text-danger"></span>
-                </div>
-                <div class="form-group has-feedback">
-                    <input asp-for="Password" class="form-control" placeholder="P@ssword1">(P@ssword1)
-                    <span class="glyphicon glyphicon-lock form-control-feedback"></span>
-                    <span asp-validation-for="Password" class="text-danger"></span>
-                </div>
-                <div class="row">
-                    <div class="col-xs-8">
-                        <label>
-                            <input asp-for="RememberMe"> @Html.DisplayNameFor(m => m.RememberMe)
-                        </label>
+<body class="app flex-row align-items-center">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-md-4">
+                <div class="card-group">
+                    <div class="card p-4">
+                        <div class="card-body">
+                            <h1>AccountGo</h1>
+                            <p class="text-muted">Sign In to your account</p>
+                            <form action="/account/signin?returnurl=@ViewData["ReturnUrl"]" method="post">
+                                <div class="input-group mb-3">
+                                    <div class="input-group-prepend">
+                                        <span class="input-group-text">
+                                            <i class="icon-user"></i>
+                                        </span>
+                                    </div>
+                                    <input asp-for="Email" class="form-control" placeholder="admin@accoungo.ph">
+                                    <span class="glyphicon glyphicon-envelope form-control-feedback"></span>
+                                    <span asp-validation-for="Email" class="text-danger"></span>
+                                </div>
+                                <div class="input-group mb-4">
+                                    <div class="input-group-prepend">
+                                        <span class="input-group-text">
+                                            <i class="icon-lock"></i>
+                                        </span>
+                                    </div>
+                                    <input asp-for="Password" class="form-control" placeholder="P@ssword1">(P@ssword1)
+                                    <span class="glyphicon glyphicon-lock form-control-feedback"></span>
+                                    <span asp-validation-for="Password" class="text-danger"></span>
+                                </div>
+                                <div class="row">
+                                    <div class="col-6">
+                                        <button type="submit" class="btn btn-primary px-4">Login</button>
+                                    </div>
+                                    <!-- <div class="col-6 text-right">
+                                        <button type="button" class="btn btn-link px-0">Forgot password?</button>
+                                    </div> -->
+                                    <div class="col-xs-6">
+                                        <label>
+                                            <input asp-for="RememberMe"> @Html.DisplayNameFor(m => m.RememberMe)
+                                        </label>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
                     </div>
-                    <!-- /.col -->
-                    <div class="col-xs-4">
-                        <button type="submit" class="btn btn-primary btn-block btn-flat">Sign In</button>
-                    </div>
                 </div>
-            </form>
+            </div>
         </div>
-        <!-- /.login-box-body -->
     </div>
-    <!-- /.login-box -->
-    <!-- jQuery 2.2.3 -->
-    <script src="~/plugins/jquery/dist/jquery.min.js"></script>
-    <!-- Bootstrap 3.3.6 -->
-    <script src="~/plugins/bootstrap/dist/js/bootstrap.min.js"></script>
+    <!-- Bootstrap and necessary plugins-->
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="~/lib/popper.js/dist/umd/popper.min.js"></script>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.min.js"></script>
+    <script src="~/lib/pace-progress/pace.min.js"></script>
+    <script src="~/lib/perfect-scrollbar/dist/perfect-scrollbar.min.js"></script>
+    <script src="~/lib/@@coreui/coreui/dist/js/coreui.min.js"></script>
 </body>
 </html>
