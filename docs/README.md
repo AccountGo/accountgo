@@ -5,12 +5,10 @@ Accounting System built on DOTNETCORE, an opensource and cross platform (ASP.NET
 It is initially designed for a small size businesses and the idea is to help them running efficient business by using Accounting System fit to them.
 
 ### IMPORTANT NOTE:
-You can completely use MacOS, Linux, Windows to develop and deploy this project. Make sure you have the latest .net core 2.1 sdk and runtime installed. Go to https://www.microsoft.com/net/download/dotnet-core/2.1 to download the installer.
-
-We envisioned this project will be ported to microservices architecture and using kubernetes. Perhaps some microsevices will be coded in F# for functional programming and machine learning.
+You can use MacOS, Linux, Windows to develop and deploy this project. Make sure you have the latest .net core 2.1 sdk and runtime installed. Go to https://www.microsoft.com/net/download/dotnet-core/2.1 to download the installer. We are also experimenting F# + microservice on some parts.
 
 # Features
-On a high level, this solution will provide modules including
+On a high level, this solution will provide modules including but not limited to
 
 1. Accounts Receivable
 2. Accounts Payable
@@ -78,10 +76,13 @@ Once "dotnet-db-migrate" already installed, execute the following in this specfi
     * To change it to specific port, execute "dotnet run --environment Development server.urls=http://+:8000". It could be any port as you like. By default, port is open to 5000 and 5001 (http and https respectively).
 1. To test if AccountGoWeb UI is running correctly, open your browser to http://localhost:8000
 
-### IMPORTANT  NOTE:
-Your wwwroot folder should be look like this if you correctly followed the steps above
+### UPDATE: Above steps are still valid, however, "dotnet run --environment Development server.urls=http://+:8000" will automatically execute gulp, tsc, and webpack commands.
 
-![AccountGo](https://user-images.githubusercontent.com/17961526/45582820-273d0000-b8e9-11e8-9ff0-2b3f8f978513.png)
+### IMPORTANT  NOTE:
+Your wwwroot folder should be look like this if you correctly followed the steps above.
+
+
+![AccountGo](https://user-images.githubusercontent.com/17961526/46572613-ab037d00-c9bb-11e8-9e59-6ed84fc1a04d.png)
 
 # Initialize Data
 At this point, your database has no data on it. But there is already an initial username and password (admin@accountgo.ph/P@ssword1) and you can logon to the UI. Now lets, create some initial data that would populate the following models.
@@ -112,23 +113,24 @@ To run everything (database, api, web) in docker container you can use docker-co
 1. Initialize data by calling a special api endpoint directly. http://localhost:8001/api/administration/initializedcompany
 
 ## Technology Stack:
-- ASP.NET Core
+- ASP.NET Core 2.1
 - ReactJS
 - MobX, React-MobX
 - Axios
 - Bootstrap
 - D3
 - React-router (on some pages)
+- Typescript
 
 Demo site (new UI) : http://accountgo.net
 
-![accountgoweb](https://cloud.githubusercontent.com/assets/17961526/17953180/d2e7aac2-6aa3-11e6-8150-fe1b8274cf91.png)
-![accountgoweb](https://cloud.githubusercontent.com/assets/17961526/17430653/0cf89cca-5b28-11e6-81dd-5f14695c8cfc.png)
+Dark theme
+
+![accountgoweb](https://user-images.githubusercontent.com/17961526/46572651-501e5580-c9bc-11e8-8f3a-336555add757.png)
+![accountgoweb](https://user-images.githubusercontent.com/17961526/46572643-30872d00-c9bc-11e8-912d-8307fdd94027.png)
              
 
 # Help Wanted
-Wether you are a Developer, Consultant, Accountant, QA, Marketing expert, Project Manager we can all be part of this great and promising project.
-
 If you are a developer and wanted to take part as contributor/collaborator we are happy to welcome you! To start with, you can visit the issues page and pick an issue that you would like to work on.
 
 So go ahead, add your code and make your first pull request.
