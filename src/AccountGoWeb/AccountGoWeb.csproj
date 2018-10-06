@@ -45,6 +45,7 @@
   </ItemGroup>
 
   <Target Name="NpmCommands" AfterTargets="Build">
+        <Exec Command="gulp" />
         <Exec Command="webpack" />
   </Target>
 
