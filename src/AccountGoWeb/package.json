@@ -5,11 +5,14 @@
   "scripts": {
     "webpack": "webpack",
     "gulp": "gulp",
-    "tsc": "tsc"
+    "tsc": "tsc",
+    "css": "npm run css-compile-minified",
+    "css-compile-minified": "node-sass --output-style compressed --source-map true --source-map-contents true --precision 6 Scss -o wwwroot/css"
   },
   "devDependencies": {
     "gulp": "^3.9.1",
     "mobx-react-devtools": "6.0.3",
+    "node-sass": "^4.9.3",
     "ts-loader": "5.2.1",
     "tsd": "0.6.5",
     "typescript": "3.1.1",

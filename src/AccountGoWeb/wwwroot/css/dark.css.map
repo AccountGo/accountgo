@@ -1,8 +1,8 @@
 {
 	"version": 3,
-	"file": "light.css",
+	"file": "dark.css",
 	"sources": [
-		"../../Scss/light.scss",
+		"../../Scss/dark.scss",
 		"../../Scss/_variables.scss",
 		"../../node_modules/@coreui/coreui/scss/coreui.scss",
 		"../../node_modules/@coreui/coreui/scss/_variables.scss",
