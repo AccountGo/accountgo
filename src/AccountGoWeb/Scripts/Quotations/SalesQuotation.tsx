@@ -94,16 +94,11 @@ class SalesQuotationHeader extends React.Component<any, {}>{
 
     render() {
         return (
-            <div className="box">
-                <div className="box-header with-border">
-                    <h3 className="box-title">Customer Information - <span>{store.salesQuotation.customerId}</span></h3>
-                    <div className="box-tools pull-right">
-                        <button type="button" className="btn btn-box-tool" data-widget="collapse" data-toggle="tooltip" title="Collapse">
-                            <i className="fa fa-minus"></i>
-                        </button>
-                    </div>
+            <div className="card">
+                <div className="card-header">
+                    <a data-toggle="collapse" href="#customer-info" aria-expanded="true" aria-controls="customer-info"><i class="fa fa-align-justify"></i></a> Customer Information - <span>{store.salesQuotation.customerId}</span>
                 </div>
-                <div className="box-body">
+                <div className="card-body collapse show row" id="customer-info">
                     <div className="col-md-6">
                         <div className="row">
                             <div className="col-sm-2">Customer</div>
@@ -132,8 +127,8 @@ class SalesQuotationHeader extends React.Component<any, {}>{
 
                         </div>
                     </div>
+                    </div>
                 </div>
-            </div>
         );
     }
 }
@@ -271,16 +266,11 @@ class SalesQuotationLines extends React.Component<any, {}>{
         }
 
         return (
-            <div className="box">
-                <div className="box-header with-border">
-                    <h3 className="box-title">Line Items</h3>
-                    <div className="box-tools pull-right">
-                        <button type="button" className="btn btn-box-tool" data-widget="collapse" data-toggle="tooltip" title="Collapse">
-                            <i className="fa fa-minus"></i>
-                        </button>
-                    </div>
+            <div className="card">
+                <div className="card-header">
+                <a data-toggle="collapse" href="#line-items" aria-expanded="true" aria-controls="line-items"><i className="fa fa-align-justify"></i></a> Line Items
                 </div>
-                <div className="box-body table-responsive">
+                <div className="card-body collapse show table-responsive" id="table-responsive">
                     <table className="table table-hover">
                         <thead>
                             <tr>
@@ -324,8 +314,8 @@ class SalesQuotationLines extends React.Component<any, {}>{
 class SalesQuotationTotals extends React.Component<any, {}>{
     render() {
         return (
-            <div className="box">
-                <div className="box-body">
+            <div className="card">
+                <div className="card-body">
                     <div className="row">
                         <div className="col-md-2"><label>SubTotal: </label></div>
                         <div className="col-md-2">{accounting.formatMoney(store.RTotal, { symbol: "", format: "%s%v" }) }</div>

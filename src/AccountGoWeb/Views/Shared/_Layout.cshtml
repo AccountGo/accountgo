@@ -9,10 +9,10 @@
     <title>AccountGo</title>
     <!-- Icons-->
     <link href="~/lib/@@coreui/icons/css/coreui-icons.min.css" rel="stylesheet">
-    <!-- <link href="~/lib/font-awesome/css/font-awesome.min.css" rel="stylesheet"> -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
-    <!-- <link href="~/lib/simple-line-icons/css/simple-line-icons.css" rel="stylesheet"> -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/simple-line-icons/2.4.1/css/simple-line-icons.css">
+    <link href="~/lib/font-awesome/css/font-awesome.min.css" rel="stylesheet">
+    <!-- <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css"> -->
+    <link href="~/lib/simple-line-icons/css/simple-line-icons.css" rel="stylesheet">
+    <!-- <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/simple-line-icons/2.4.1/css/simple-line-icons.css"> -->
     <!-- Main styles for this application-->
     <link href="~/css/style.css" rel="stylesheet">
     <link href="~/css/custom.css" rel="stylesheet">
@@ -324,6 +324,9 @@
             <div class="container-fluid">
                 <div class="animated fadeIn">
                     <!-- PAGE CONTENT -->
+                    <!-- <h2>
+            @Html.Raw(ViewBag.PageContentHeader)
+                    </h2> -->
                     @RenderBody()
                     <!-- /PAGE CONTENT -->
                 </div>
