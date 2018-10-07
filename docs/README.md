@@ -43,9 +43,9 @@ The "database/scripts" folder contains the sql scripts to execute. For the purpo
 Once "dotnet-db-migrate" already installed, execute the following in this specfic order:
 
 1. In root folder "accountgo", open command prompt or terminal (macos) and run the following.
-1. dotnet-db-migrate "Data Source=localhost;User ID=sa;Password=Str0ngPassword;Initial Catalog=accountgo;" -s ./database/scripts/tables  --ensure-db-exists
-1. dotnet-db-migrate "Data Source=localhost;User ID=sa;Password=Str0ngPassword;Initial Catalog=accountgo;" -s ./database/scripts/foreign_keys  --ensure-db-exists
-1. dotnet-db-migrate "Data Source=localhost;User ID=sa;Password=Str0ngPassword;Initial Catalog=accountgo;" -s ./database/scripts/initial_data  --ensure-db-exists
+1. dotnet-db-migrate "Data Source=localhost;User ID=sa;Password=Str0ngPassword;Initial Catalog=accountgo;" -s ./db/scripts/tables  --ensure-db-exists
+1. dotnet-db-migrate "Data Source=localhost;User ID=sa;Password=Str0ngPassword;Initial Catalog=accountgo;" -s ./db/scripts/foreign_keys  --ensure-db-exists
+1. dotnet-db-migrate "Data Source=localhost;User ID=sa;Password=Str0ngPassword;Initial Catalog=accountgo;" -s ./db/scripts/initial_data  --ensure-db-exists
 
 ### Note: The initial data in the previous steps only include the security initial data. There's more data initialization to in the preceding instructions
 
