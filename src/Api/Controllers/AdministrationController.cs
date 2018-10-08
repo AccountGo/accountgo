@@ -43,6 +43,30 @@ namespace Api.Controllers
 
         [HttpGet]
         [Route("[action]")]
+        public IActionResult Setup()
+        {
+            Api.Data.Initializer initializer = new Data.Initializer(_adminService, _financialService, _salesService, _purchasingService, _inventoryService, _securityService);
+            bool success = initializer.Setup();
+            if (success)
+                return Ok("{ 'message': 'Initialization completed!' }");
+            else
+                return BadRequest("{ 'message': 'Initialization not successful! Please check the log.' }");
+        }
+
+        [HttpGet]
+        [Route("[action]")]
+        public IActionResult Clear()
+        {
+            Api.Data.Initializer initializer = new Data.Initializer(_adminService, _financialService, _salesService, _purchasingService, _inventoryService, _securityService);
+            bool success = initializer.Clear();
+            if (success)
+                return Ok("{ 'message': 'Database is cleared!' }");
+            else
+                return BadRequest("{ 'message': 'Clearing database not successful! Please check the log.' }");
+        }
+
+        [HttpGet]
+        [Route("[action]")]
         public IActionResult InitializedCompany()
         {
             string[] errors = null;
@@ -270,7 +294,7 @@ namespace Api.Controllers
                 return new BadRequestObjectResult(errors);
             }
         }
-        
+
         private void InitializedData()
         {
             /*
