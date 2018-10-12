@@ -376,3 +376,5 @@ To:
       </ol>
     </section> -->
     <!-- Main content -->
+
+    docker rmi $(docker images --filter "dangling=true" -q --no-trunc)
