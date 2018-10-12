@@ -52,8 +52,8 @@ Once `dotnet-db-migrate` already installed, execute the following in this specif
 ## Build and run "Api" (Back-end)
 1. Change directory to Api project folder
 1. Build the project `dotnet build`
-1. Update database connection. Open `appsettings.json` and change the connection string. You may want to change `DevelopmentConnectionString` as we will be running the api in `Development` mode shortly.
-1. Run the api, execute `dotnet run`. Note that there is no `launchsettings.json` included in the repository, thus, the following bullets are important.
+1. Use the `launchsettings.json` to change database connection `DBSERVER`, `DBUSERID` and `DBPASSWORD`. The `appsettings.json` contain connectionstring but need to supply some values.
+1. Run the api, execute `dotnet run`.
     * To run in development mode, execute `dotnet run --environment Development`
     * To change it to specific port, execute `dotnet run --environment Development server.urls=http://+:8001`. It could be any port as you like, but the front-end is hard-coded to call api on port http://localhost:8001. So change the front-end as too. By default, port is open to 5000 and 5001 (http and https respectively).
 1. To test if Api is running correctly, you can simply call one **GET** endpoint. e.g. http://localhost:8001/api/sales/customers. This will return list of customers in JSON format.
@@ -71,9 +71,10 @@ Once `dotnet-db-migrate` already installed, execute the following in this specif
 1. If typescript is installed globally, run `tsc` (This will run the tsconfig.json). Else run `npm run tsc`
 1. If webpack and webpack-cli are installed globally, run `webpack` (This will run the webpack.config.js). Else, run `npm run webpack`
 1. And lastly, in src/AccountGoWeb terminal, execute `dotnet build`
-1. Run the **AccoungGoWeb** project, execute `dotnet run`. Note that there is no `launchsettings.json` included in the repository, thus, the following bullets are important.
+1. Run the **AccoungGoWeb** project, execute `dotnet run`. If `launchsettings.json` ommitted, thus, the following points are important.
     * To run in development mode, execute `dotnet run --environment Development`
     * To change it to specific port, execute `dotnet run --environment Development server.urls=http://+:8000`. It could be any port as you like. By default, port is open to 5000 and 5001 (http and https respectively).
+    * `dotnet run` will use `launchsettings.json` by default if exist.
 1. To test if AccountGoWeb UI is running correctly, open your browser to http://localhost:8000
 
 ### UPDATE: Above steps are still valid, however, `dotnet run --environment Development server.urls=http://+:8000` will automatically execute gulp, tsc, and webpack commands. Changes to the styles must be done inside the **Scss** folder as any modifications in the css files inside `wwwroot/css` folder will only be overriden if a sass compilation is done using `npm run css`. Everytime, you change the source scss files, run `npm run css` first before `dotnet build` to ensure that the latest style modifications are being used.

@@ -7,11 +7,10 @@ services:
             context: .
         ports:
             - "8000:8000"
-        depends_on:
-            - api
         environment:
             - ASPNETCORE_ENVIRONMENT=Development
             - ASPNETCORE_URLS=http://+:8000
+            - APIHOST=api
     api:
         image: accountgo/accountgoapi
         build:
@@ -22,7 +21,9 @@ services:
         environment:
             - ASPNETCORE_ENVIRONMENT=Development
             - ASPNETCORE_URLS=http://+:8001
-            - DBSERVER=db
+            - DBSERVER=localhost
+            - DBUSERID=sa
+            - DBPASSWORD=Str0ngPassword
         depends_on:
             - db
     db:
