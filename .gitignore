@@ -207,3 +207,9 @@ FakesAssemblies/
 .DS_Store
 .vscode/
 /src/out
+
+/src/test/Module.Tests/Modules/*
+/src/Api/Modules/*
+/src/Api/Plugins/*
+/src/AccountGoWeb/Modules/*
+/src/AccountGoWeb/Plugins/*
