@@ -127,8 +127,8 @@ Demo site (new UI) : http://accountgo.net
 
 Dark theme
 
-![accountgoweb](https://user-images.githubusercontent.com/17961526/46572651-501e5580-c9bc-11e8-8f3a-336555add757.png)
-![accountgoweb](https://user-images.githubusercontent.com/17961526/46572643-30872d00-c9bc-11e8-912d-8307fdd94027.png)
+![accountgoweb](https://user-images.githubusercontent.com/17961526/47023961-5e762980-d193-11e8-8968-6874766971d3.png)
+![accountgoweb](https://user-images.githubusercontent.com/17961526/47024191-cd538280-d193-11e8-92fe-7619b79b9307.png)
              
 
 # Help Wanted
