@@ -1,0 +1,16 @@
+<Project>
+  <!-- <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+  </PropertyGroup> -->
+
+  <ItemGroup>
+    <Content Include="modules.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../SampleModules/SampleNetStandard20/SampleNetStandard20.csproj" />
+  </ItemGroup>
+
+</Project>
