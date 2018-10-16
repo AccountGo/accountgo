@@ -1,20 +1,21 @@
 using Xunit;
 using Infrastructure.AssemblyLoader;
+using Infrastructure.Module;
 using System;
 using System.Reflection;
 using System.IO;
+using System.Linq;
 
 namespace Module.Tests
 {
     public class BasicModuleLoaderTests
     {
-        /// TODO: add SampleModulesRefs.targets so that when Module.Tests projects builds, sample modules copied to test project Modules folder
-        private const string assemblyPath = "/Users/Marvs/source/accountgo/test/Module.Tests/Modules/";
         [Fact]
         public void LoadNetCoreApp21ModuleProject()
         {
             //Given
-            string path = assemblyPath + "SampleNetStandard20/netstandard2.0/SampleNetStandard20.dll";
+            Constants.CodeBaseRootPath = GetExecutingDirectorybyAppDomain();
+            var path = Path.Combine(Constants.CodeBaseRootPath, "SampleNetStandard20.dll");
             var assembly = new CustomAssemblyLoadContext().LoadFromAssemblyPath(path);
             var type = assembly.GetType("SampleNetStandard20.Class1");
             //When
@@ -22,6 +23,26 @@ namespace Module.Tests
             var returnValue = method.Invoke(null, null);
             //Then
             Assert.Equal("Hello, World!", returnValue);
+        }
+
+        [Fact]
+        public void GetListOfModulesInJsonFile()
+        {
+            //Given
+            Constants.CodeBaseRootPath = GetExecutingDirectorybyAppDomain();
+            AssemblyLoaderManager loader = new AssemblyLoaderManager();
+            //When
+            var (modules, plugins) = loader.GetAssembliesToLoad();
+            //Then
+            Assert.NotEmpty(modules);
+        }
+
+        [Fact]
+        public void PrintSolutionVariables()
+        {
+            Console.WriteLine(GetAssemblyPathByCodeBase());
+            Console.WriteLine(GetExecutingDirectorybyAppDomain());
+            Console.WriteLine(GetExecutingDirectoryByAssemblyLocation());
         }
 
         private string GetAssemblyPathByCodeBase()
@@ -39,7 +60,7 @@ namespace Module.Tests
 
         private string GetExecutingDirectoryByAssemblyLocation()
         {
-            string path= Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+            string path = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
             return path; // /Users/Marvs/source/accountgo/test/Module.Tests/bin/Debug/netcoreapp2.1
         }
     }

@@ -15,4 +15,5 @@
     <ProjectReference Include="..\..\src\Infrastructure\Infrastructure.csproj" />
   </ItemGroup>
 
+  <Import Project="SampleModulesRefs.targets" />
 </Project>

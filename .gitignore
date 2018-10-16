@@ -208,6 +208,7 @@ FakesAssemblies/
 .vscode/
 /src/out
 
+.build/
 /src/test/Module.Tests/Modules/*
 /src/Api/Modules/*
 /src/Api/Plugins/*
