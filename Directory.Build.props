@@ -1,0 +1,24 @@
+<Project>
+
+  <PropertyGroup>
+    <Authors>Marvin Perez</Authors>
+    <Product>AccountGo</Product>
+    <Copyright>Copyright © AccountGo</Copyright>
+    <NeutralLanguage>en-US</NeutralLanguage>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+    <RepoRoot>$(MSBuildThisFileDirectory)</RepoRoot>
+    <PackageLicenseUrl>https://opensource.org/licenses/MIT</PackageLicenseUrl>
+    <PackageProjectUrl>https://github.com/AccountGo/accountgo</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/AccountGo/accountgo.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <DebugType>embedded</DebugType>
+    <IsPackable>false</IsPackable>
+    <NoWarn>$(NoWarn);NU5105</NoWarn>
+
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <GenerateFullPaths Condition="'$(VSCODE_PID)' != ''">true</GenerateFullPaths>
+    <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory).build\obj\$(MSBuildProjectName)\</BaseIntermediateOutputPath>
+    <BaseOutputPath>$(MSBuildThisFileDirectory).build\bin\$(MSBuildProjectName)\</BaseOutputPath>
+  </PropertyGroup>
+
+</Project>
