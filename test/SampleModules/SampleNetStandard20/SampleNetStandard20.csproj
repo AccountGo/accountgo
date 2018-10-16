@@ -2,10 +2,7 @@
 
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
-  </PropertyGroup>
-  
-  <PropertyGroup>
-    <OutputPath>..\..\Module.Tests\Modules\SampleNetStandard20\</OutputPath>
+    <OutputType>Library</OutputType>
   </PropertyGroup>
 
 </Project>

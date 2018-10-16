@@ -1,21 +1,14 @@
 using System;
-using System.Reflection;
+using Infrastructure.AssemblyLoader;
 
 namespace Infrastructure.Module
 {
-    public sealed class ModuleDescriptor
+    public sealed class ModuleDescriptor : AssemblyInfo
     {
-        public ModuleDescriptor(string id, string name, Version version, Assembly assembly)
+        #region Ctor
+        public ModuleDescriptor(string name, Version version) : base (name, version)
         {
-            this.Id = id;
-            this.Name = name;
-            this.Version = version;
-            this.Assembly = assembly;
-
         }
-        public readonly string Id;
-        public readonly string Name;
-        public readonly Version Version;
-        public readonly Assembly Assembly;
+        #endregion
     }
 }
