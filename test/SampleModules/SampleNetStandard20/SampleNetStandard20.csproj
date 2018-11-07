@@ -3,6 +3,17 @@
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
     <OutputType>Library</OutputType>
+    <BaseIntermediateOutputPath>$(SolutionDir).build\obj\Module.Tests\$(Configuration)\netcoreapp2.1\Modules\$(MSBuildProjectName)\</BaseIntermediateOutputPath>
+    <BaseOutputPath>$(SolutionDir).build\bin\Module.Tests\$(Configuration)\netcoreapp2.1\Modules\$(MSBuildProjectName)\</BaseOutputPath>
   </PropertyGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="2.1.1" />
+    <PackageReference Include="Microsoft.Extensions.Configuration" Version="2.1.1" />
+    <PackageReference Include="Microsoft.AspNetCore.Http.Abstractions" Version="2.1.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\Infrastructure\Infrastructure.csproj" />
+  </ItemGroup>
 </Project>

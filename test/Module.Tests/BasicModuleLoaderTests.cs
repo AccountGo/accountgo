@@ -1,10 +1,13 @@
 using Xunit;
 using Infrastructure.AssemblyLoader;
 using Infrastructure.Module;
+using Infrastructure.Extensions;
 using System;
 using System.Reflection;
 using System.IO;
 using System.Linq;
+using Microsoft.Extensions.DependencyInjection;
+using Infrastructure;
 
 namespace Module.Tests
 {
@@ -15,7 +18,7 @@ namespace Module.Tests
         {
             //Given
             Constants.CodeBaseRootPath = GetExecutingDirectorybyAppDomain();
-            var path = Path.Combine(Constants.CodeBaseRootPath, "SampleNetStandard20.dll");
+            var path = Path.Combine(Constants.CodeBaseRootPath + "Modules" + "\\SampleNetStandard20\\Debug\\netstandard2.0\\", "SampleNetStandard20.dll");
             var assembly = new CustomAssemblyLoadContext().LoadFromAssemblyPath(path);
             var type = assembly.GetType("SampleNetStandard20.Class1");
             //When
@@ -32,9 +35,26 @@ namespace Module.Tests
             Constants.CodeBaseRootPath = GetExecutingDirectorybyAppDomain();
             AssemblyLoaderManager loader = new AssemblyLoaderManager();
             //When
-            var (modules, plugins) = loader.GetAssembliesToLoad();
+            var (modules, plugins) = loader.GetAssembliesToRegister();
             //Then
             Assert.NotEmpty(modules);
+        }
+
+        [Fact]
+        public void TestServiceCollection()
+        {
+            //Given
+            Constants.CodeBaseRootPath = GetExecutingDirectorybyAppDomain();
+            var services = new ServiceCollection();
+            services.AddModulesToCollection(Constants.CodeBaseRootPath);
+            var sp = services.BuildServiceProvider();
+            var moduleInitializers = sp.GetServices<IStartup>();
+            foreach (var moduleInitializer in moduleInitializers)
+            {
+                moduleInitializer.ConfigureServices(services);
+            }
+            //When
+            //Then
         }
 
         [Fact]

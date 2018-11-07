@@ -9,7 +9,7 @@ namespace Infrastructure
     /// </summary>
     public interface IStartup
     {
-        void ConfigureServices(IServiceCollection services, IConfiguration configuration);
+        void ConfigureServices(IServiceCollection services, IConfiguration configuration = null);
         void Configure(IApplicationBuilder application);
     }
 }
