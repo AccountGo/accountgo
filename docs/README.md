@@ -22,7 +22,7 @@ On a high level, this solution will provide modules including but not limited to
 ## Global Options
 `AccountGoWeb` project requires `webpack`, `webpack-cli`, `gulp` and `typescript` installed and if you wish to install these globally you can proceed on these below steps. Otherwise you can skip these steps and proceed to **Project Builds**
 
-1. Open Visual Studio Code terminal and install all npm packages by calling `npm install`
+1. Open Visual Studio Code terminal, change to directory `src/accountgoweb` and install all npm packages by calling `npm install`
 1. Install typescript globally by executing `npm install -g typescript`
 1. Install webpack-cli globally by executing `npm install -g webpack-cli`
 1. Install webpack globally by executing `npm install -g webpack`
