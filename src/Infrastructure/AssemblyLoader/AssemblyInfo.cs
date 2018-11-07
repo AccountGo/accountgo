@@ -24,6 +24,8 @@ namespace Infrastructure.AssemblyLoader
             this._version = version;
             this._assembly = assembly;
         }
+
+        public abstract AssemblyInfo SetAssembly(Assembly assembly);
         #endregion
     }
 }
