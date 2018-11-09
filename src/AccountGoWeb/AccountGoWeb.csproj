@@ -47,8 +47,8 @@
   </ItemGroup>
 
   <Target Name="NpmCommands" AfterTargets="Build">
-    <!-- <Exec Command="npm run gulp" />
-    <Exec Command="npm run webpack" /> -->
+    <Exec Command="npm run gulp" />
+    <Exec Command="npm run webpack" />
   </Target>
 
   <Target Name="BuildModules" AfterTargets="Build">
