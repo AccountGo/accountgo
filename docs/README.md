@@ -108,6 +108,14 @@ To initialize a company, call the api endpoint directly http://localhost:8001/ap
 1. If typescript is installed globally, run `tsc` (This will run the tsconfig.json). Else run `npm run tsc`
 1. If webpack and webpack-cli are installed globally, run `webpack` (This will run the webpack.config.js). Else, run `npm run webpack`
 1. And lastly, in `src/AccountGoWeb` terminal, execute `dotnet build`
+
+`Note:` If you encounter this error below, then run `dotnet restore` on `SampleModule` project. 
+
+`/usr/local/share/dotnet/sdk/2.1.401/Sdks/Microsoft.NET.Sdk/targets/Microsoft.PackageDependencyResolution.targets(198,5): error` `NETSDK1004: Assets file '/Users/Marvs/source/accountgo/.build/obj/SampleModule/project.assets.json' not found. Run a NuGet package restore to generate this file.`
+`[/Users/Marvs/source/accountgo/src/Modules/SampleModule/SampleModule.csproj]`
+`    6 Warning(s)`
+`    1 Error(s)`
+
 1. Run the **AccoungGoWeb** project, execute `dotnet run`. If `launchsettings.json` ommitted, thus, the following points are important.
     * To run in development mode, execute `dotnet run --environment Development`
     * To change it to specific port, execute `dotnet run --environment Development server.urls=http://+:8000`. It could be any port as you like. By default, port is open to 5000 and 5001 (http and https respectively).
