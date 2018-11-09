@@ -24,6 +24,7 @@
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Core" Version="2.1.3" />
     <PackageReference Include="Microsoft.AspNetCore.StaticFiles" Version="2.1.1" />
     <PackageReference Include="Microsoft.AspNetCore.Mvc" Version="2.1.3" />
+    <PackageReference Include="Microsoft.AspNetCore.Razor.Design" Version="2.1.2" />
     <PackageReference Include="Microsoft.Extensions.Configuration.FileExtensions" Version="2.1.1" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="2.1.1" />
     <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="2.1.1" />
@@ -42,11 +43,16 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Dto\Dto.csproj" />
+    <ProjectReference Include="..\Infrastructure\Infrastructure.csproj" />
   </ItemGroup>
 
   <Target Name="NpmCommands" AfterTargets="Build">
-    <Exec Command="npm run gulp" />
-    <Exec Command="npm run webpack" />
+    <!-- <Exec Command="npm run gulp" />
+    <Exec Command="npm run webpack" /> -->
+  </Target>
+
+  <Target Name="BuildModules" AfterTargets="Build">
+    <MSBuild Projects="..\Modules\SampleModule\SampleModule.csproj" Targets="Publish" Properties="Configuration=$(Configuration);PublishDir=$(OutputPath)/modules/SampleModule" />
   </Target>
 
 </Project>
