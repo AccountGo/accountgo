@@ -12,7 +12,7 @@
   "devDependencies": {
     "gulp": "^3.9.1",
     "mobx-react-devtools": "6.0.3",
-    "node-sass": "^4.9.3",
+    "node-sass": "^4.10.0",
     "ts-loader": "5.2.1",
     "tsd": "0.6.5",
     "typescript": "3.1.1",
