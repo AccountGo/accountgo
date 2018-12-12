@@ -64,17 +64,27 @@ If you have an existing SQL Server either from your local machine or remotely, y
 
 ## Data Setup
 
-### Publish Database (Create Tables, Foreign Keys, and some Initial Data)
-The "database/scripts" folder contains the sql scripts to execute. For the purpose of db migration, you can use DbUp [https://dbup.readthedocs.io] tool and create your own migration console. For simplicity and a quick one, download this cool tool we used in this guide. https://richardtasker.co.uk/2018/09/15/introducing-dotnet-db-migrate/#.W6PIJJMza3U - checkout this site and download. Or directly execute this .net cli `dotnet tool install --global dotnet-db-migrate --version 1.0.0` in the command prompt. Confirm if installed properly, execute `dotnet-db-migrate -h`.
+### Publish Database
 
-Once `dotnet-db-migrate` already installed, execute the following in this specific order:
+Using EntityFrameworkCore CLI database migration will create and migrate the `accountgo` database to the current version.
 
-1. In root folder `accountgo`, open command prompt or terminal (macos) and run the following.
-1. `dotnet-db-migrate "Data Source=localhost;User ID=sa;Password=Str0ngPassword;Initial Catalog=accountgo;" -s ./db/scripts/tables  --ensure-db-exists`
-1. `dotnet-db-migrate "Data Source=localhost;User ID=sa;Password=Str0ngPassword;Initial Catalog=accountgo;" -s ./db/scripts/foreign_keys  --ensure-db-exists`
-1. `dotnet-db-migrate "Data Source=localhost;User ID=sa;Password=Str0ngPassword;Initial Catalog=accountgo;" -s ./db/scripts/initial_data  --ensure-db-exists`
+In root folder `accountgo` run the following command using a terminal, command prompt, or package manager console:
 
-Note: The initial data in the previous steps only include the security initial data. There's more data initialization to in the preceding instructions
+1. `dotnet ef database update --project .\src\Api\ --msbuildprojectextensionspath .build\obj\Api\ --context ApplicationIdentityDbContext`
+2. `dotnet ef database update --project .\src\Api\ --msbuildprojectextensionspath .build\obj\Api\ --context ApiDbContext`
+
+Note: The initial migration only contains initial security data username and password.
+
+#### Updating Migrations
+
+If changes are made to the models used by the database, using EntityFrameworkCore CLI database migration to create an update migration to keep the `accountgo` database updated.
+
+In root folder `accountgo` run the following command using a terminal, command prompt, or package manager console:
+
+`dotnet ef migrations add {Name} --project .\src\Api\ --startup-project .\src\Api\Api.csproj --msbuildprojectextensionspath ..build\obj\Api\ --context ApplicationIdentityDbContext --output-dir Data\Migration\IdentityDb`
+`dotnet ef migrations add {Name} --project .\src\Api\ --startup-project .\src\Api\Api.csproj --msbuildprojectextensionspath ..build\obj\Api\ --context ApiDbContext --output-dir Data\Migration\ApiDb`
+
+Note: `{Name}` must be provided
 
 ### Initialize Data
 At this point, your database has no data on it. But there is already an initial username and password (admin@accountgo.ph/P@ssword1) and you can logon to the UI. Now lets, create some initial data that would populate the following models.
