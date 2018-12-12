@@ -7,11 +7,11 @@ using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
-namespace Api.Data.Migrations
+namespace Api.Data.Migrations.ApiDb
 {
     [DbContext(typeof(ApiDbContext))]
-    [Migration("20181130185043_IntialCreate")]
-    partial class IntialCreate
+    [Migration("20181130185043_InitialCreate")]
+    partial class InitialCreate
     {
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {

@@ -1,10 +1,11 @@
 ﻿using System;
+using Core.Domain.Security;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Migrations;
 
-namespace Api.Data.Migrations
+namespace Api.Data.Migrations.ApiDb
 {
-    public partial class IntialCreate : Migration
+    public partial class InitialCreate : Migration
     {
         protected override void Up(MigrationBuilder migrationBuilder)
         {

@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
-namespace Api.Data.Migrations
+namespace Api.Data.Migrations.ApiDb
 {
     [DbContext(typeof(ApiDbContext))]
     partial class ApiDbContextModelSnapshot : ModelSnapshot
