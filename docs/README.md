@@ -5,7 +5,7 @@ Accounting System built on DOTNETCORE, an open-source and cross platform (ASP.NE
 It is initially designed for small size businesses and the idea is to help them run efficient business by using Accounting System fit to them.
 
 ### IMPORTANT NOTE:
-You can use MacOS, Linux, Windows to develop and deploy this project. Make sure you have the latest .net core 2.1 sdk and runtime installed. Go to https://www.microsoft.com/net/download/dotnet-core/2.1 to download the installer. We are also experimenting F# + microservice on some parts.
+You can use MacOS, Linux, Windows to develop and deploy this project. Make sure you have the latest .net core 2.2 sdk and runtime installed. Go to https://www.microsoft.com/net/download/dotnet-core/2.2 to download the installer. We are also experimenting F# + microservice on some parts.
 
 # Features
 On a high level, this solution will provide modules including but not limited to
