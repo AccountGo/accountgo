@@ -33,6 +33,7 @@ Normal project build steps that you need to go through:
 
 1. Open a new Visual Studio Code terminal
 1. Navigate directory to `src/Core` and execute `dotnet restore` then `dotnet build`
+1. For 'AccountGoWeb', please go to the folder and run 'npm install' and 'npm install natives@1.1.6'
 1. Do the same for `Services`, `Dto`, `Api` and `AccountGoWeb` respectively and make sure all projects build successfully
 1. Alternatively, use accountgo.sln file to use by `dotnet build`. To do this change directory to `src` folder, execute `dotnet restore`, then `dotnet build`
 
