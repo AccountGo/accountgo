@@ -1,0 +1,36 @@
+# ASP.NET Core
+# Build and test ASP.NET Core web applications targeting .NET Core.
+# Add steps that run tests, create a NuGet package, deploy, and more:
+# https://docs.microsoft.com/vsts/pipelines/languages/dotnet-core
+
+pool:
+  vmImage: 'Ubuntu 16.04'
+
+variables:
+  buildConfiguration: 'Release'
+
+steps:
+- script: npm install
+  displayName: 'npm install'
+  workingDirectory: './src/AccountGoWeb'
+
+- script: dotnet build --configuration $(buildConfiguration)
+  displayName: 'dotnet build $(buildConfiguration)'
+
+# - task: gulp@0
+#   inputs:
+#     gulpFile: './src/AccountGoWeb/gulpfile.js'
+#     workingDirectory: './src/AccountGoWeb'
+#     gulpjs: '/node_modules/gulp/bin/gulp.js'
+
+# - task: Bash@3
+#   inputs:
+#     script: /node_modules/typescript/bin/tsc --build 'tsconfig.json'
+#     displayName: 'run tsc'
+#     workingDirectory: './src/AccountGoWeb'
+    
+# - task: Bash@3
+#   inputs:
+#     script: /node_modules/webpack/bin/webpack.js
+#     displayName: 'run webpack'
+#     workingDirectory: './src/AccountGoWeb'

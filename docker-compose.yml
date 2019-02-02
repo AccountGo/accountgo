@@ -1,0 +1,35 @@
+version: "3"
+services:
+    web:
+        image: accountgo/accountgoweb
+        build: 
+            dockerfile: ./src/AccountGoWeb/Dockerfile
+            context: .
+        ports:
+            - "8000:8000"
+        environment:
+            - ASPNETCORE_ENVIRONMENT=Development
+            - ASPNETCORE_URLS=http://+:8000
+            - APIHOST=api
+    api:
+        image: accountgo/accountgoapi
+        build:
+            dockerfile: ./src/Api/Dockerfile
+            context: .
+        ports:
+            - "8001:8001"
+        environment:
+            - ASPNETCORE_ENVIRONMENT=Development
+            - ASPNETCORE_URLS=http://+:8001
+            - DBSERVER=localhost
+            - DBUSERID=sa
+            - DBPASSWORD=Str0ngPassword
+        depends_on:
+            - db
+    db:
+        image: microsoft/mssql-server-linux
+        ports:
+            - "1433:1433"
+        environment:
+            SA_PASSWORD: "Str0ngPassword"
+            ACCEPT_EULA: "Y"

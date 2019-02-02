@@ -9,7 +9,10 @@ using Services.Sales;
 using Services.Security;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Reflection;
+using System.Text;
 
 namespace Api.Controllers
 {
@@ -36,6 +39,30 @@ namespace Api.Controllers
             _purchasingService = purchasingService;
             _inventoryService = inventoryService;
             _securityService = securityService;
+        }
+
+        [HttpGet]
+        [Route("[action]")]
+        public IActionResult Setup()
+        {
+            Api.Data.Initializer initializer = new Data.Initializer(_adminService, _financialService, _salesService, _purchasingService, _inventoryService, _securityService);
+            bool success = initializer.Setup();
+            if (success)
+                return Ok("{ 'message': 'Initialization completed!' }");
+            else
+                return BadRequest("{ 'message': 'Initialization not successful! Please check the log.' }");
+        }
+
+        [HttpGet]
+        [Route("[action]")]
+        public IActionResult Clear()
+        {
+            Api.Data.Initializer initializer = new Data.Initializer(_adminService, _financialService, _salesService, _purchasingService, _inventoryService, _securityService);
+            bool success = initializer.Clear();
+            if (success)
+                return Ok("{ 'message': 'Database is cleared!' }");
+            else
+                return BadRequest("{ 'message': 'Clearing database not successful! Please check the log.' }");
         }
 
         [HttpGet]
@@ -267,7 +294,7 @@ namespace Api.Controllers
                 return new BadRequestObjectResult(errors);
             }
         }
-        
+
         private void InitializedData()
         {
             /*
@@ -343,8 +370,14 @@ namespace Api.Controllers
             IList<Core.Domain.Financials.AccountClass> accountClasses = new List<Core.Domain.Financials.AccountClass>();
             // If no accounts found just return.
             if (_financialService.GetAccounts().Any()) return;
-
-            string[,] values = LoadCsv(Resource.ResourceManager.GetString("coa").Split(';')[0]);
+            string[,] values;
+            var assembly = Assembly.GetEntryAssembly();
+            var resourceStream = assembly.GetManifestResourceStream("Api.Data.coa.csv");
+            using (var reader = new StreamReader(resourceStream, Encoding.UTF8))
+            {
+                var coa = reader.ReadToEndAsync().Result;
+                values = LoadCsv(coa);
+            }
             List<Core.Domain.Financials.Account> accounts = new List<Core.Domain.Financials.Account>();
 
             for (var i = 1; i < (values.Length / 8); i++)
@@ -458,10 +491,10 @@ namespace Api.Controllers
             if (_adminService.GetFinancialYears().Count >= 1) return;
             var financialYear = new Core.Domain.Financials.FinancialYear
             {
-                FiscalYearCode = "FY1516",
-                FiscalYearName = "FY 2016/2017",
-                StartDate = new DateTime(2016, 01, 01),
-                EndDate = new DateTime(2016, 12, 31),
+                FiscalYearCode = "FY1819",
+                FiscalYearName = "FY 2018/2019",
+                StartDate = new DateTime(2018, 01, 01),
+                EndDate = new DateTime(2018, 12, 31),
                 IsActive = true
             };
             _financialService.SaveFinancialYear(financialYear);
@@ -897,10 +930,10 @@ namespace Api.Controllers
         private string[,] LoadCsv(string filename)
         {
             // Get the file's text.
-            string whole_file = System.IO.File.ReadAllText(filename);
+            //string whole_file = System.IO.File.ReadAllText(filename);
 
             // Split into lines.
-            whole_file = whole_file.Replace('\n', '\r');
+            string whole_file = filename.Replace('\n', '\r');
             string[] lines = whole_file.Split(new char[] { '\r' },
                 StringSplitOptions.RemoveEmptyEntries);
 

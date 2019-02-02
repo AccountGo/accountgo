@@ -3,8 +3,8 @@
     "windowsAuthentication": false,
     "anonymousAuthentication": true,
     "iisExpress": {
-      "applicationUrl": "http://localhost:5000/",
-      "sslPort": 44300
+      "applicationUrl": "http://localhost:8001/",
+      "sslPort": 0
     }
   },
   "profiles": {
@@ -15,12 +15,16 @@
         "ASPNETCORE_ENVIRONMENT": "Development"
       }
     },
-    "AccountGoApi": {
-      "commandName": "Executable",
-      "launchUrl": "http://localhost:5000/api/values",
+    "Api": {
+      "commandName": "Project",
+      "launchBrowser": true,
       "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development"
-      }
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "DBSERVER": "localhost",
+        "DBUSERID": "sa",
+        "DBPASSWORD": "Str0ngPassword"
+      },
+      "applicationUrl": "http://localhost:8001/"
     }
   }
 }

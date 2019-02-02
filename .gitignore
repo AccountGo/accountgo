@@ -193,6 +193,8 @@ FakesAssemblies/
 **/src/[Aa]ccount[Gg]o[Ww]eb/wwwroot/plugins/*
 **/src/[Aa]ccount[Gg]o[Ww]eb/wwwroot/[Ll]ibs/*
 **/src/[Aa]ccount[Gg]o[Ww]eb/wwwroot/[Ss]cripts/*
+**/src/[Aa]ccount[Gg]o[Ww]eb/wwwroot/[Ll]ib/*
+**/src/[Aa]ccount[Gg]o[Ww]eb/wwwroot/tsxbuild/*
 # node modules
 **/src/[Ww]eb[Aa]ngular/node_modules
 **/src/[Ww]eb[Aa]pp/wwwroot/node_modules/*
@@ -200,6 +202,15 @@ FakesAssemblies/
 /src/Api/project.lock.json
 /src/AccountGoWeb/project.lock.json
 /src/AccountGoWeb/project.fragment.lock.json
-/Database/SQL.AccountGo/SQL.AccountGo.jfm
 /wrap/Dto/project.json
 /global.json
+.DS_Store
+.vscode/
+/src/out
+
+.build/
+/src/test/Module.Tests/Modules/*
+/src/Api/Modules/*
+/src/Api/Plugins/*
+/src/AccountGoWeb/Modules/*
+/src/AccountGoWeb/Plugins/*

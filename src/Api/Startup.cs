@@ -1,9 +1,11 @@
 ﻿using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using System;
 
 namespace Api
 {
@@ -20,7 +22,6 @@ namespace Api
                 .AddJsonFile($"appsettings.{env.EnvironmentName}.json", optional: true)
                 .AddEnvironmentVariables();
             Configuration = builder.Build();
-
             _hostingEnv = env;
         }
 
@@ -29,19 +30,29 @@ namespace Api
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
         {
-            string connectionString = "";
-            connectionString = Configuration["Data:LocalConnection:ConnectionString"];
-            //if (_hostingEnv.IsDevelopment())
-            //    connectionString = Configuration["Data:LocalConnection:ConnectionString"];
-            //else
-            //    connectionString = Configuration["Data:DefaultConnection:ConnectionString"];
+            string connectionString = Configuration["Data:DevelopmentConnection:ConnectionString"];
+            // These environment variables can be overriden from launchSettings.json.
+            string dbServer = System.Environment.GetEnvironmentVariable("DBSERVER") ?? "localhost";
+            string dbUserID = System.Environment.GetEnvironmentVariable("DBUSERID") ?? "sa";
+            string dbUserPassword= System.Environment.GetEnvironmentVariable("DBPASSWORD") ?? "Str0ngPassword!";
+            
+            if (_hostingEnv.IsDevelopment())
+            {
+                connectionString = Configuration["Data:DevelopmentConnection:ConnectionString"];
+            }
+            else
+               connectionString = Configuration["Data:ProductionConnection:ConnectionString"];
+
+            connectionString = String.Format(connectionString, dbServer, dbUserID, dbUserPassword);
+            System.Console.WriteLine("DB Connection String: " + connectionString);
+
             services
                 .AddEntityFrameworkSqlServer()
                 .AddDbContext<Data.ApiDbContext>(options => options.UseSqlServer(connectionString))
                 .AddDbContext<Data.ApplicationIdentityDbContext>(options => options.UseSqlServer(connectionString));
 
             services
-                .AddIdentity<Data.ApplicationUser, Microsoft.AspNetCore.Identity.EntityFrameworkCore.IdentityRole>()
+                .AddIdentity<Data.ApplicationUser, IdentityRole>()
                 .AddEntityFrameworkStores<Data.ApplicationIdentityDbContext>()
                 .AddDefaultTokenProviders();
 
@@ -89,7 +100,7 @@ namespace Api
             loggerFactory.AddDebug();
                       
             app.UseStaticFiles();
-            app.UseIdentity();
+            app.UseAuthentication();
             app.UseCors("AllowAll");
             app.UseMvc();
             //app.UseSwaggerGen();

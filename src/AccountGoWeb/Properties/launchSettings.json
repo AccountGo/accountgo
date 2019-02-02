@@ -3,8 +3,8 @@
     "windowsAuthentication": false,
     "anonymousAuthentication": true,
     "iisExpress": {
-      "applicationUrl": "http://localhost:9921/",
-      "sslPort": 44350
+      "applicationUrl": "http://localhost:8000/",
+      "sslPort": 0
     }
   },
   "profiles": {
@@ -17,10 +17,11 @@
     },
     "AccountGoWeb": {
       "commandName": "Project",
-      "launchUrl": "http://localhost:5000",
+      "launchBrowser": true,
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"
-      }
+      },
+      "applicationUrl": "http://localhost:8000/"
     }
   }
 }
