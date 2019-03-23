@@ -35,15 +35,9 @@ namespace Api
             string dbServer = System.Environment.GetEnvironmentVariable("DBSERVER") ?? "localhost";
             string dbUserID = System.Environment.GetEnvironmentVariable("DBUSERID") ?? "sa";
             string dbUserPassword= System.Environment.GetEnvironmentVariable("DBPASSWORD") ?? "Str0ngPassword!";
-            
-            if (_hostingEnv.IsDevelopment())
-            {
-                connectionString = Configuration["Data:DevelopmentConnection:ConnectionString"];
-            }
-            else
-               connectionString = Configuration["Data:ProductionConnection:ConnectionString"];
 
-            connectionString = String.Format(connectionString, dbServer, dbUserID, dbUserPassword);
+            connectionString = String.Format(Configuration["Database:ConnectionString"], dbServer, dbUserID, dbUserPassword);
+
             System.Console.WriteLine("DB Connection String: " + connectionString);
 
             services

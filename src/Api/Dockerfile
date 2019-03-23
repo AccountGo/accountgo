@@ -1,4 +1,4 @@
-FROM microsoft/dotnet:2.1.301-sdk AS build-env
+FROM mcr.microsoft.com/dotnet/core/sdk:2.2-alpine3.9 AS build-env
 WORKDIR /app
 
 COPY ./src/Core Core
@@ -8,7 +8,7 @@ COPY ./src/Api Api
 
 RUN dotnet publish ./Api/*.csproj -c Release -o out
 
-FROM microsoft/dotnet:2.1.1-aspnetcore-runtime-alpine3.7
+FROM mcr.microsoft.com/dotnet/core/runtime:2.2-alpine3.9
 WORKDIR /app
 EXPOSE 8001
 

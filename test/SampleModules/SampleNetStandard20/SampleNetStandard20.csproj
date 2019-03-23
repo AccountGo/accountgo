@@ -3,8 +3,8 @@
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
     <OutputType>Library</OutputType>
-    <BaseIntermediateOutputPath>$(SolutionDir).build\obj\Module.Tests\$(Configuration)\netcoreapp2.1\Modules\$(MSBuildProjectName)\</BaseIntermediateOutputPath>
-    <BaseOutputPath>$(SolutionDir).build\bin\Module.Tests\$(Configuration)\netcoreapp2.1\Modules\$(MSBuildProjectName)\</BaseOutputPath>
+    <!-- <BaseIntermediateOutputPath>$(SolutionDir).build\obj\Module.Tests\$(Configuration)\netcoreapp2.1\Modules\$(MSBuildProjectName)\</BaseIntermediateOutputPath>
+    <BaseOutputPath>$(SolutionDir).build\bin\Module.Tests\$(Configuration)\netcoreapp2.1\Modules\$(MSBuildProjectName)\</BaseOutputPath> -->
   </PropertyGroup>
 
   <ItemGroup>
