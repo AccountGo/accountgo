@@ -4,17 +4,22 @@
     <TargetFramework>netcoreapp2.2</TargetFramework>
     <PreserveCompilationContext>true</PreserveCompilationContext>
     <AssemblyName>AccountGoWeb</AssemblyName>
-    <OutputType>Exe</OutputType>
     <PackageId>AccountGoWeb</PackageId>
     <TypeScriptToolsVersion>3.0</TypeScriptToolsVersion>
     <Version>0.0.1</Version>
+    <Language>Latest</Language>
+    <!-- <EnableDefaultContentItems>false</EnableDefaultContentItems> -->
   </PropertyGroup>
 
   <ItemGroup>
-    <None Update="wwwroot\**\*;Views\**\*;Areas\**\Views">
+    <None Update="wwwroot\**\*;Views\**\*;Areas\**\Views;">
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </None>
   </ItemGroup>
+
+  <!-- <ItemGroup>
+    <Content Include="**\*.json" Exclude="bin\**\*;obj\**\*" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup> -->
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore" Version="2.1.4" />
@@ -51,8 +56,6 @@
     <Exec Command="npm run webpack" />
   </Target>
 
-  <Target Name="BuildModules" AfterTargets="Build">
-    <MSBuild Projects="..\Modules\SampleModule\SampleModule.csproj" Targets="Publish" Properties="Configuration=$(Configuration);PublishDir=$(OutputPath)/modules/SampleModule" />
-  </Target>
+  <Import Project="ModulesReferences.targets" />
 
 </Project>

@@ -4,9 +4,9 @@
     <TargetFramework>netcoreapp2.2</TargetFramework>
     <PreserveCompilationContext>true</PreserveCompilationContext>
     <AssemblyName>Api</AssemblyName>
-    <OutputType>Exe</OutputType>
     <PackageId>Api</PackageId>
     <Version>0.0.1</Version>
+    <Language>Latest</Language>
   </PropertyGroup>
 
   <ItemGroup>

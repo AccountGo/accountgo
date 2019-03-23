@@ -10,11 +10,11 @@
     "css-compile-minified": "node-sass --output-style compressed --source-map true --source-map-contents true --precision 6 Scss -o wwwroot/css"
   },
   "devDependencies": {
-    "gulp": "^3.9.1",
+    "gulp": "^4.0.0",
     "mobx-react-devtools": "6.0.3",
     "node-sass": "^4.10.0",
     "ts-loader": "5.2.1",
-    "tsd": "0.6.5",
+    "tsd": "^0.7.0",
     "typescript": "3.1.1",
     "webpack": "^4.20.2",
     "webpack-cli": "^3.1.2"
