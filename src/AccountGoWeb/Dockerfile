@@ -5,6 +5,8 @@ COPY ./src/Dto Dto
 COPY ./src/Infrastructure Infrastructure
 COPY ./src/AccountGoWeb AccountGoWeb
 COPY ./src/Modules Modules
+COPY ./Directory.Build.props .
+COPY ./Directory.Build.targets .
 
 ENV APIHOST api
 ENV NODE_VERSION 10.15.1
@@ -15,9 +17,8 @@ RUN curl -SL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-lin
     && rm nodejs.tar.gz \
     && ln -s /usr/local/bin/node /usr/local/bin/nodejs
 
-### Add all modules here
-WORKDIR /app/Modules
-RUN dotnet publish SampleModule/SampleModule.csproj -c Release -o out
+### Add all modules here. TODO: Improve in such a way all projects under Modules folder are automatically build.
+RUN dotnet build Modules/SampleModule/SampleModule.csproj -c Release
 
 WORKDIR /app/AccountGoWeb
 
@@ -25,7 +26,7 @@ RUN npm install
 RUN npm rebuild node-sass
 RUN npm run css
 
-RUN dotnet publish AccountGoWeb.csproj -c Release -o out
+RUN dotnet publish -c Release
 
 FROM mcr.microsoft.com/dotnet/core/runtime:2.2-alpine3.9
 # This APIHOST environment variable is not a duplicate of above declaration
@@ -33,6 +34,6 @@ ENV APIHOST api
 WORKDIR /app
 EXPOSE 8000
 
-COPY --from=build-env /app/AccountGoWeb/out ./
+COPY --from=build-env /app/.build/bin/AccountGoWeb/Release/netcoreapp2.2/publish ./
 
 ENTRYPOINT ["dotnet", "AccountGoWeb.dll"]

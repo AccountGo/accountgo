@@ -1,13 +1,13 @@
 <Project>
 
-  <!-- <ItemGroup>
-    <Content Include="modules.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-  </ItemGroup> -->
-
   <Target Name="BuildModules" AfterTargets="Build">
+    <Message Text="OUTPUT PATH For the Modules: $(OutputPath)" Importance="high"/>
     <MSBuild Projects="..\Modules\SampleModule\SampleModule.csproj" Targets="Publish" Properties="Configuration=$(Configuration);PublishDir=$(OutputPath)/modules/SampleModule" />
+  </Target>
+
+  <Target Name="PublishModules" AfterTargets="Publish">
+    <Message Text="PUBLISH DIR For the Modules: $(PublishDir)" Importance="high"/>
+    <MSBuild Projects="..\Modules\SampleModule\SampleModule.csproj" Targets="Publish" Properties="Configuration=$(Configuration);PublishDir=$(PublishDir)/modules/SampleModule" />
   </Target>
 
 </Project>
