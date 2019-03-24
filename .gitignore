@@ -205,7 +205,6 @@ FakesAssemblies/
 /wrap/Dto/project.json
 /global.json
 .DS_Store
-.vscode/
 /src/out
 
 .build/
