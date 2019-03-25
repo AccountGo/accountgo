@@ -8,9 +8,12 @@ COPY ./src/Modules Modules
 COPY ./Directory.Build.props .
 COPY ./Directory.Build.targets .
 
-ENV APIHOST api
+# APIURLSPA and NODE_ENV variables are for webpack used. http://accountgo.net/spaproxy?endpoint=, http://localhost:8000/api
+ENV APIURLSPA http://accountgo.net/spaproxy?endpoint=
+ENV NODE_ENV Production
 ENV NODE_VERSION 10.15.1
 ENV NODE_DOWNLOAD_SHA ca1dfa9790876409c8d9ecab7b4cdb93e3276cedfc64d56ef1a4ff1778a40214
+
 RUN curl -SL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.gz" --output nodejs.tar.gz \
     && echo "$NODE_DOWNLOAD_SHA nodejs.tar.gz" | sha256sum -c - \
     && tar -xzf "nodejs.tar.gz" -C /usr/local --strip-components=1 \

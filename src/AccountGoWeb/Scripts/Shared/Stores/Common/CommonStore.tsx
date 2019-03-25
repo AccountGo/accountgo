@@ -24,7 +24,7 @@ export default class CommonStore {
 
     loadCustomersLookup() {
         let customers = this.customers;
-        axios.get(Config.apiUrl + "api/common/customers")
+        axios.get(Config.apiUrl + "common/customers")
             .then(function (result) {
                 const data = result.data;
                 for (var i = 0; i < Object.keys(data).length; i++) {
@@ -35,7 +35,7 @@ export default class CommonStore {
 
     loadPaymentTermsLookup() {
         let paymentTerms = this.paymentTerms;
-        axios.get(Config.apiUrl + "api/common/paymentterms")
+        axios.get(Config.apiUrl + "common/paymentterms")
             .then(function (result) {
                 const data = result.data;
                 for (var i = 0; i < Object.keys(data).length; i++) {
@@ -46,7 +46,7 @@ export default class CommonStore {
 
     loadVendorsLookup() {
         let vendors = this.vendors;
-        axios.get(Config.apiUrl + "api/common/vendors")
+        axios.get(Config.apiUrl + "common/vendors")
             .then(function (result) {
                 const data = result.data;
                 for (var i = 0; i < Object.keys(data).length; i++) {
@@ -57,7 +57,7 @@ export default class CommonStore {
 
     loadItemsLookup() {
         let items = this.items;
-        axios.get(Config.apiUrl + "api/common/items")
+        axios.get(Config.apiUrl + "common/items")
             .then(function (result) {
                 const data = result.data;
                 for (var i = 0; i < Object.keys(data).length; i++) {
@@ -68,7 +68,7 @@ export default class CommonStore {
 
     loadMeasurementsLookup() {
         let measurements = this.measurements;
-        axios.get(Config.apiUrl + "api/common/measurements")
+        axios.get(Config.apiUrl + "common/measurements")
             .then(function (result) {
                 const data = result.data;
                 for (var i = 0; i < Object.keys(data).length; i++) {
@@ -82,7 +82,7 @@ export default class CommonStore {
 
     loadQuotationStatusLookup() {
         let quotationStatus = this.salesQuotationStatus;
-        axios.get(Config.apiUrl + "api/common/salesquotationstatus")
+        axios.get(Config.apiUrl + "common/salesquotationstatus")
             .then(function (result) {
                 const data = result.data;
                 for (var i = 0; i < Object.keys(data).length; i++)
@@ -94,7 +94,7 @@ export default class CommonStore {
 
     loadAccountsLookup() {
         let accounts = this.accounts;
-        axios.get(Config.apiUrl + "api/common/postingaccounts")
+        axios.get(Config.apiUrl + "common/postingaccounts")
             .then(function (result) {
                 const data = result.data;
                 for (var i = 0; i < Object.keys(data).length; i++) {
@@ -104,7 +104,7 @@ export default class CommonStore {
     }
 
     getApplicableTaxes(itemId: number, partyId: number) {
-        var result = axios.get(Config.apiUrl + "api/tax/gettax?itemId=" + itemId + "&partyId=" + partyId);
+        var result = axios.get(Config.apiUrl + "tax/gettax?itemId=" + itemId + "&partyId=" + partyId);
         result.then(function (result) {
             return result.data;
         });

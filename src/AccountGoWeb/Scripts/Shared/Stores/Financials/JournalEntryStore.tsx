@@ -52,7 +52,7 @@ export default class JournalEntryStore {
     }
 
     getJournalEntry(journalEntryId: number) {
-        axios.get(Config.apiUrl + "api/financials/journalentry?id=" + journalEntryId)
+        axios.get(Config.apiUrl + "financials/journalentry?id=" + journalEntryId)
             .then(function (result) {
                 for (var i = 0; i < result.data.journalEntryLines.length; i++) {
                     var item = result.data.journalEntryLines[i];
@@ -75,7 +75,7 @@ export default class JournalEntryStore {
 
     saveNewJournalEntry() {
         if (this.validation() && this.validationErrors.length == 0) {
-            axios.post(Config.apiUrl + "api/financials/savejournalentry", JSON.stringify(this.journalEntry),
+            axios.post(Config.apiUrl + "financials/savejournalentry", JSON.stringify(this.journalEntry),
                 {
                     headers: {
                         'Content-type': 'application/json'
@@ -122,7 +122,7 @@ export default class JournalEntryStore {
 
     postJournal() {
         if (this.validation() && this.validationErrors.length == 0) {
-            axios.post(Config.apiUrl + "api/financials/postjournalentry", JSON.stringify(this.journalEntry),
+            axios.post(Config.apiUrl + "financials/postjournalentry", JSON.stringify(this.journalEntry),
                 {
                     headers: {
                         'Content-type': 'application/json'

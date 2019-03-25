@@ -40,6 +40,8 @@ namespace AccountGoWeb
 
             services.AddSingleton<IConfiguration>(Configuration);
 
+            services.AddHttpClient();
+            
             services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
                 .AddCookie(o => o.LoginPath = new PathString("/account/signin"));
 
