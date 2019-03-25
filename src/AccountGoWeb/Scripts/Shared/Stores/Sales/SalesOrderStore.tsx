@@ -36,7 +36,7 @@ export default class SalesOrderStore {
         autorun(() => this.computeTotals());
 
         if (quotationId !== undefined) {
-            var result = axios.get(Config.apiUrl + "api/sales/quotation?id=" + quotationId);
+            var result = axios.get(Config.apiUrl + "sales/quotation?id=" + quotationId);
             result.then(function (result) {
                 this.changedCustomer(result.data.customerId);
                 this.salesOrder.paymentTermId = result.data.paymentTermId;
@@ -64,7 +64,7 @@ export default class SalesOrderStore {
             }.bind(this));
         }
         else if (orderId !== undefined) {
-            var result = axios.get(Config.apiUrl + "api/sales/salesorder?id=" + orderId);
+            var result = axios.get(Config.apiUrl + "sales/salesorder?id=" + orderId);
             result.then(function (result) {
                 this.salesOrder.id = result.data.id;
                 this.changedCustomer(result.data.customerId);
@@ -108,7 +108,7 @@ export default class SalesOrderStore {
         for (var i = 0; i < this.salesOrder.salesOrderLines.length; i++) {
             var lineItem = this.salesOrder.salesOrderLines[i];
             rtotal = rtotal + this.getLineTotal(i);
-            axios.get(Config.apiUrl + "api/tax/gettax?itemId=" + lineItem.itemId + "&partyId=" + this.salesOrder.customerId + "&type=1")
+            axios.get(Config.apiUrl + "tax/gettax?itemId=" + lineItem.itemId + "&partyId=" + this.salesOrder.customerId + "&type=1")
                 .then(function (result) {
                     if (result.data.length > 0) {
                         ttotal = ttotal + this.commonStore.getSalesLineTaxAmount(lineItem.quantity, lineItem.amount, lineItem.discount, result.data);
@@ -128,7 +128,7 @@ export default class SalesOrderStore {
 
 
         if (this.validation() && this.validationErrors.length === 0) {
-            axios.post(Config.apiUrl + "api/sales/savesalesorder", JSON.stringify(this.salesOrder),
+            axios.post(Config.apiUrl + "sales/savesalesorder", JSON.stringify(this.salesOrder),
                 {
                     headers: {
                         'Content-type': 'application/json'

@@ -35,7 +35,7 @@ export default class PurchaseOrderStore {
         autorun(() => this.computeTotals());
 
         if (purchId !== undefined) {
-            axios.get(Config.apiUrl + "api/purchasing/purchaseorder?id=" + purchId)
+            axios.get(Config.apiUrl + "purchasing/purchaseorder?id=" + purchId)
                 .then(function (result) {
                     this.purchaseOrder.id = result.data.id;
                     this.purchaseOrder.paymentTermId = result.data.paymentTermId;
@@ -81,7 +81,7 @@ export default class PurchaseOrderStore {
         for (var i = 0; i < this.purchaseOrder.purchaseOrderLines.length; i++) {
             var lineItem = this.purchaseOrder.purchaseOrderLines[i];
             rtotal = rtotal + this.getLineTotal(i);
-            axios.get(Config.apiUrl + "api/tax/gettax?itemId=" + lineItem.itemId + "&partyId=" + this.purchaseOrder.vendorId + "&type=2")
+            axios.get(Config.apiUrl + "tax/gettax?itemId=" + lineItem.itemId + "&partyId=" + this.purchaseOrder.vendorId + "&type=2")
                 .then(function (result) {
                     if (result.data.length > 0) {
                         ttotal = ttotal + this.commonStore.getPurhcaseLineTaxAmount(lineItem.quantity, lineItem.amount, lineItem.discount, result.data);
@@ -99,7 +99,7 @@ export default class PurchaseOrderStore {
             this.purchaseOrder.orderDate = new Date(Date.now()).toISOString().substring(0, 10);
 
         if (this.validation() && this.validationErrors.length === 0) {
-            axios.post(Config.apiUrl + "api/purchasing/savepurchaseorder", JSON.stringify(this.purchaseOrder),
+            axios.post(Config.apiUrl + "purchasing/savepurchaseorder", JSON.stringify(this.purchaseOrder),
                 {
                     headers: {
                         'Content-type': 'application/json'

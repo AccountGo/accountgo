@@ -38,7 +38,7 @@ export default class SalesQuotationStore {
         autorun(() => this.computeTotals());
 
         if (quotationId !== undefined) {
-            var result = axios.get(Config.apiUrl + "api/sales/quotation?id=" + quotationId);
+            var result = axios.get(Config.apiUrl + "sales/quotation?id=" + quotationId);
             result.then(function (result) {
                 this.salesQuotation.id = result.data.id;
                 this.salesQuotation.paymentTermId = result.data.paymentTermId;
@@ -87,7 +87,7 @@ export default class SalesQuotationStore {
         for (var i = 0; i < this.salesQuotation.salesQuotationLines.length; i++) {
             var lineItem = this.salesQuotation.salesQuotationLines[i];
             rtotal = rtotal + this.getLineTotal(i);
-            axios.get(Config.apiUrl + "api/tax/gettax?itemId=" + lineItem.itemId + "&partyId=" + this.salesQuotation.customerId + "&type=1")
+            axios.get(Config.apiUrl + "tax/gettax?itemId=" + lineItem.itemId + "&partyId=" + this.salesQuotation.customerId + "&type=1")
                 .then(function (result) {
                     if (result.data.length > 0) {
                         ttotal = ttotal + this.commonStore.getSalesLineTaxAmount(lineItem.quantity, lineItem.amount, lineItem.discount, result.data);
@@ -106,7 +106,7 @@ export default class SalesQuotationStore {
 
         if (this.validation()) {
             if (this.validationErrors.length === 0) {
-                axios.post(Config.apiUrl + "api/sales/savequotation", JSON.stringify(this.salesQuotation),
+                axios.post(Config.apiUrl + "sales/savequotation", JSON.stringify(this.salesQuotation),
                     {
                         headers:
                         {
@@ -130,7 +130,7 @@ export default class SalesQuotationStore {
 
         if (this.validation()) {
             if (this.validationErrors.length === 0) {
-                axios.post(Config.apiUrl + "api/sales/bookquotation?id=" + parseInt(this.salesQuotation.id),
+                axios.post(Config.apiUrl + "sales/bookquotation?id=" + parseInt(this.salesQuotation.id),
                     {
                         headers:
                         {

@@ -65,7 +65,7 @@ export default class PurchaseOrderStore {
                 }.bind(this));
         }
         else if (invoiceId !== undefined) {
-            axios.get(Config.apiUrl + "api/purchasing/purchaseinvoice?id=" + invoiceId)
+            axios.get(Config.apiUrl + "purchasing/purchaseinvoice?id=" + invoiceId)
                 .then(function (result) {
                    
                     for (var i = 0; i < result.data.purchaseInvoiceLines.length; i++) {
@@ -118,7 +118,7 @@ export default class PurchaseOrderStore {
         for (var i = 0; i < this.purchaseInvoice.purchaseInvoiceLines.length; i++) {
             var lineItem = this.purchaseInvoice.purchaseInvoiceLines[i];
             rtotal = rtotal + this.getLineTotal(i);
-            axios.get(Config.apiUrl + "api/tax/gettax?itemId=" + lineItem.itemId + "&partyId=" + this.purchaseInvoice.vendorId + "&type=2")
+            axios.get(Config.apiUrl + "tax/gettax?itemId=" + lineItem.itemId + "&partyId=" + this.purchaseInvoice.vendorId + "&type=2")
                 .then(function (result) {
                     if (result.data.length > 0) {
                         ttotal = ttotal + this.commonStore.getPurhcaseLineTaxAmount(lineItem.quantity, lineItem.amount, lineItem.discount, result.data);
@@ -132,7 +132,7 @@ export default class PurchaseOrderStore {
 
     savePurchaseInvoice() {
         if (this.validation() && this.validationErrors.length === 0) {
-            axios.post(Config.apiUrl + "api/purchasing/savepurchaseinvoice", JSON.stringify(this.purchaseInvoice),
+            axios.post(Config.apiUrl + "purchasing/savepurchaseinvoice", JSON.stringify(this.purchaseInvoice),
                 {
                     headers: {
                         'Content-type': 'application/json'
@@ -151,7 +151,7 @@ export default class PurchaseOrderStore {
 
     postInvoice() {
         if (this.validation() && this.validationErrors.length === 0) {
-            axios.post(Config.apiUrl + "api/purchasing/postpurchaseinvoice", JSON.stringify(this.purchaseInvoice),
+            axios.post(Config.apiUrl + "purchasing/postpurchaseinvoice", JSON.stringify(this.purchaseInvoice),
                 {
                     headers: {
                         'Content-type': 'application/json'
