@@ -9,7 +9,7 @@ console.log("APIURLSPA (webpack.config.js) => " + process.env.npm_config_apiurls
 
 var apiUrl = process.env.npm_config_apiurlspa;
 if (apiUrl === 'undefined' || apiUrl == null || apiUrl === '') {
-    apiUrl = "http://localhost:8001/spaproxy?endpoint=";
+    apiUrl = "http://localhost:8000/spaproxy?endpoint=";
     console.log("[webpack.config.js] APIURL environment variable not found. apiUrl is set to default => " + apiUrl);
 }
 
@@ -19,7 +19,6 @@ if (mode === 'undefined' || mode == null || mode === '') {
 }
 
 var config = {
-    mode: mode.toLowerCase(),
     entry: {
         index: scriptsDir + '/Home' + '/Index',
         "sales/salesorder": scriptsDir + '/Sales/SalesOrder',
