@@ -52,6 +52,7 @@
   </ItemGroup>
 
   <Target Name="NpmCommands" AfterTargets="Build">
+    <Exec Command="npm install" />
     <Exec Command="npm run gulp" />
     <Exec Command="npm run webpack" />
   </Target>
