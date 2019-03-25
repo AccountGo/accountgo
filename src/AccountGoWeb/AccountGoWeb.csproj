@@ -33,9 +33,10 @@
     <PackageReference Include="Microsoft.Extensions.Configuration.FileExtensions" Version="2.1.1" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="2.1.1" />
     <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="2.1.1" />
-    <PackageReference Include="Microsoft.Extensions.Logging" Version="2.1.1" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="2.1.1" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="2.1.1" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="2.2.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="2.2.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="2.2.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="2.2.0" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication" Version="2.1.2" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.Cookies" Version="2.1.2" />
     <PackageReference Include="BundlerMinifier.Core" Version="2.8.391" />
@@ -51,10 +52,12 @@
     <ProjectReference Include="..\Infrastructure\Infrastructure.csproj" />
   </ItemGroup>
 
-  <Target Name="NpmCommands" AfterTargets="Build">
+  <Target Name="NpmCommands" AfterTargets="Build">    
     <Exec Command="npm install" />
     <Exec Command="npm run gulp" />
-    <Exec Command="npm run webpack" />
+    <!-- Important: NODE_ENV and APIURLSPA are used by webpack to properly set the api url. Here, it access the environment variable which is set in dockerfile. -->
+    <Message Text="NODE_ENV: =&gt; $(NODE_ENV), APIURLSPA: =&gt; $(APIURLSPA)" Importance="high" />
+    <Exec Command="npm --nodeenv=$(NODE_ENV) --apiurlspa=$(APIURLSPA) run-script webpack" />
   </Target>
 
   <Import Project="ModulesReferences.targets" />

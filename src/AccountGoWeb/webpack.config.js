@@ -4,15 +4,22 @@ var path = require('path');
 
 var buildDir = path.resolve(__dirname, 'wwwroot/scripts');
 var scriptsDir = path.resolve(__dirname, 'Scripts');
+console.log("NODE_ENV (webpack.config.js) => " + process.env.npm_config_nodeenv);
+console.log("APIURLSPA (webpack.config.js) => " + process.env.npm_config_apiurlspa);
 
-var host = "localhost";
-if(process.env.APIHOST)
-    host = process.env.APIHOST;
+var apiUrl = process.env.npm_config_apiurlspa;
+if (apiUrl === 'undefined' || apiUrl == null || apiUrl === '') {
+    apiUrl = "http://localhost:8001/spaproxy?endpoint=";
+    console.log("[webpack.config.js] APIURL environment variable not found. apiUrl is set to default => " + apiUrl);
+}
 
-console.log("APIHOST environment variable in webpack is set to '" + host + "'. This can be change from Dockerfile e.g. 'RUN APIHOST=${APIHOST} webpack'. Or if manually running webpack, e.g. 'APIHOST=localhost webpack'");
-console.log("API full url is " + JSON.stringify("http://" + host + ":8001/"));
+var mode = process.env.npm_config_nodeenv;
+if (mode === 'undefined' || mode == null || mode === '') {
+    mode = "development";
+}
 
 var config = {
+    mode: mode.toLowerCase(),
     entry: {
         index: scriptsDir + '/Home' + '/Index',
         "sales/salesorder": scriptsDir + '/Sales/SalesOrder',
@@ -25,11 +32,11 @@ var config = {
     },
     module: {
         rules: [
-          {
-            test: /\.tsx?$/,
-            loader: require.resolve('ts-loader'),
-            exclude: /node_modules/
-          }
+            {
+                test: /\.tsx?$/,
+                loader: require.resolve('ts-loader'),
+                exclude: /node_modules/
+            }
         ]
     },
     output: {
@@ -60,8 +67,8 @@ var config = {
         })
     ],
     externals: {
-        'Config':  JSON.stringify({apiUrl : "http://" + host + ":8001/"})
-    }    
+        'Config': JSON.stringify({ apiUrl: apiUrl, env: mode })
+    }
 };
 
 module.exports = config;

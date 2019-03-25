@@ -81,8 +81,8 @@ If changes are made to the models used by the database, using EntityFrameworkCor
 
 In root folder `accountgo` run the following command using a terminal, command prompt, or package manager console:
 
-`dotnet ef migrations add {Name} --project .\src\Api\ --startup-project .\src\Api\Api.csproj --msbuildprojectextensionspath ..build\obj\Api\ --context ApplicationIdentityDbContext --output-dir Data\Migration\IdentityDb`
-`dotnet ef migrations add {Name} --project .\src\Api\ --startup-project .\src\Api\Api.csproj --msbuildprojectextensionspath ..build\obj\Api\ --context ApiDbContext --output-dir Data\Migration\ApiDb`
+1. `dotnet ef migrations add {Name} --project .\src\Api\ --startup-project .\src\Api\Api.csproj --msbuildprojectextensionspath ..build\obj\Api\ --context ApplicationIdentityDbContext --output-dir Data\Migration\IdentityDb`
+1. `dotnet ef migrations add {Name} --project .\src\Api\ --startup-project .\src\Api\Api.csproj --msbuildprojectextensionspath ..build\obj\Api\ --context ApiDbContext --output-dir Data\Migration\ApiDb`
 
 Note: `{Name}` must be provided
 

@@ -34,7 +34,7 @@ namespace Api
             // These environment variables can be overriden from launchSettings.json.
             string dbServer = System.Environment.GetEnvironmentVariable("DBSERVER") ?? "localhost";
             string dbUserID = System.Environment.GetEnvironmentVariable("DBUSERID") ?? "sa";
-            string dbUserPassword= System.Environment.GetEnvironmentVariable("DBPASSWORD") ?? "Str0ngPassword!";
+            string dbUserPassword= System.Environment.GetEnvironmentVariable("DBPASSWORD") ?? "Str0ngPassword";
 
             connectionString = String.Format(Configuration["Database:ConnectionString"], dbServer, dbUserID, dbUserPassword);
 
