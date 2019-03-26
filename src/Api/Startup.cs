@@ -33,10 +33,11 @@ namespace Api
             string connectionString = Configuration["Data:DevelopmentConnection:ConnectionString"];
             // These environment variables can be overriden from launchSettings.json.
             string dbServer = System.Environment.GetEnvironmentVariable("DBSERVER") ?? "localhost";
-            string dbUserID = System.Environment.GetEnvironmentVariable("DBUSERID") ?? "sa";
+            string dbUserID = System.Environment.GetEnvironmentVariable("DBUSERID") ?? "dbuser";
             string dbUserPassword= System.Environment.GetEnvironmentVariable("DBPASSWORD") ?? "Str0ngPassword";
+            string dbName= System.Environment.GetEnvironmentVariable("DBNAME") ?? "accountgodb";
 
-            connectionString = String.Format(Configuration["Database:ConnectionString"], dbServer, dbUserID, dbUserPassword);
+            connectionString = String.Format(Configuration["Database:ConnectionString"], dbServer, dbUserID, dbUserPassword, dbName);
 
             System.Console.WriteLine("DB Connection String: " + connectionString);
 

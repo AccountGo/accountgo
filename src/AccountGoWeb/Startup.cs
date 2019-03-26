@@ -26,8 +26,7 @@ namespace AccountGoWeb
 
             string urlhost = System.Environment.GetEnvironmentVariable("APIHOST") ?? "localhost";
             Configuration["ApiUrl"] = $"http://{urlhost}:8001/api/";
-            System.Console.WriteLine("API full url is http://" + urlhost + ":8001/api/");
-            System.Console.WriteLine("ApiUrl = " + Configuration["ApiUrl"]);
+            System.Console.WriteLine($"[ASPNETCORE SERVER] API URL {Configuration["ApiUrl"]}");
         }
 
         // This method gets called by the runtime. Use this method to add services to the container.
