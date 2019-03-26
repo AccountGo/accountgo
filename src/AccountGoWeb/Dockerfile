@@ -9,7 +9,7 @@ COPY ./Directory.Build.props .
 COPY ./Directory.Build.targets .
 
 # APIURLSPA and NODE_ENV variables are for webpack used. http://accountgo.net/spaproxy?endpoint=, http://localhost:8000/api
-ENV APIURLSPA http://accountgo.net/spaproxy?endpoint=
+ENV APIURLSPA http://container-test.azurewebsites.net/spaproxy?endpoint=
 ENV NODE_ENV Production
 ENV NODE_VERSION 10.15.1
 ENV NODE_DOWNLOAD_SHA ca1dfa9790876409c8d9ecab7b4cdb93e3276cedfc64d56ef1a4ff1778a40214

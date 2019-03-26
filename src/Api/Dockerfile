@@ -9,8 +9,15 @@ COPY ./src/Api Api
 RUN dotnet publish ./Api/*.csproj -c Release -o out
 
 FROM mcr.microsoft.com/dotnet/core/runtime:2.2-alpine3.9
-WORKDIR /app
+        
+ENV DBSERVER localhost
+ENV DBUSERID dbadmin
+ENV DBPASSWORD Str0ngPassword
+ENV DBNAME accountgodb
+
 EXPOSE 8001
+
+WORKDIR /app
 
 COPY --from=build-env /app/Api/out ./
 
