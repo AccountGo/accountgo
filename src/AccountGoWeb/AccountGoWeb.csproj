@@ -40,7 +40,6 @@
     <PackageReference Include="Microsoft.AspNetCore.Authentication" Version="2.1.2" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.Cookies" Version="2.1.2" />
     <PackageReference Include="BundlerMinifier.Core" Version="2.8.391" />
-    <PackageReference Include="Microsoft.Net.Http" Version="2.2.29" />
     <PackageReference Include="ExpressiveAnnotations" Version="2.9.6" />
   </ItemGroup>
 
