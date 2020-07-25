@@ -26,7 +26,7 @@
     "ag-grid": "18.1.2",
     "ag-grid-community": "^19.0.0",
     "ajv": "^6.5.4",
-    "axios": "0.18.0",
+    "axios": "0.18.1",
     "bootstrap": "4.3.1",
     "d3": "5.7.0",
     "font-awesome": "^4.7.0",
