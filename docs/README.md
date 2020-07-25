@@ -1,11 +1,20 @@
 [![Build Status](https://dev.azure.com/accountgo/accountgo/_apis/build/status/AccountGo-Nightly-Build)](https://dev.azure.com/accountgo/accountgo/_build/latest?definitionId=10)
 
 # AccountGo
-Accounting System built on DOTNETCORE, an open-source and cross platform (ASP.NET Core MVC + ReactJS on the Frontend). It's in early stage and still have lots of work to do but happy to share it to anyone. This will be very useful if you have future project to develop accounting system. We do the hard work for you!
-It is initially designed for small size businesses and the idea is to help them run efficient business by using Accounting System fit to them.
+Accounting System built on .net core, opensource and cross platform (ASP.NET Core MVC + ReactJS on the Frontend). This is useful if you have a requirement to develop accounting system. Although it's still in early stage and still have lots of work to do but happy to share it to anyone. It is designed for small size businesses and the idea is to help them run efficient business by using Accounting System fit to them.
 
 ### IMPORTANT NOTE:
-You can use MacOS, Linux, Windows to develop and deploy this project. Make sure you have the latest .net core 2.2 sdk and runtime installed. Go to https://www.microsoft.com/net/download/dotnet-core/2.2 to download the installer. We are also experimenting F# + microservice on some parts.
+
+- Make sure you have the latest .net core 2.2 sdk and runtime installed. Go to https://www.microsoft.com/net/download/dotnet-core/2.2 to download the installer. Verify you have .net 2.2 sdk:
+
+```
+% dotnet --list-sdks
+2.2.207 [/Users/Marvin/.dotnet/sdk]
+```
+
+- You can use MacOS, Linux, Windows to develop and deploy this project. 
+- We are also experimenting F# + microservice on some parts.
+- Due to time availability constraint, this project is not in active development.
 
 # Features
 On a high level, this solution will provide modules including but not limited to
@@ -23,6 +32,9 @@ On a high level, this solution will provide modules including but not limited to
 `AccountGoWeb` project requires `webpack`, `webpack-cli`, `gulp` and `typescript` installed and if you wish to install these globally you can proceed on these below steps. Otherwise you can skip these steps and proceed to **Project Builds**
 
 1. Open Visual Studio Code terminal, change to directory `src/accountgoweb` and install all npm packages by calling `npm install`
+
+***NOTE***: If you encounter error on npm install in AccountGoWeb project, try to delete the `package_lock.json` file and run npm install again.
+
 1. Install typescript globally by executing `npm install -g typescript`
 1. Install webpack-cli globally by executing `npm install -g webpack-cli`
 1. Install webpack globally by executing `npm install -g webpack`
@@ -50,7 +62,8 @@ You can opt to install your local SQL Server instance or you can use docker imag
 Assuming you have docker installed (make sure to use linux container), follow the steps below. (Install docker if you haven't done so.)
 1. Open command prompt (terminal for MacOS).
 1. Execute `docker pull microsoft/mssql-server-linux`. We prefer to use SQL Server for Linux for lightweight.
-1. Run sql server for linux. Execute `docker run -e 'ACCEPT_EULA=Y' -e 'SA_PASSWORD=Str0ngPassword' -p 1433:1433 -d --name=local-mssql microsoft/mssql-server-linux`. Note: If you are encountering issue where the docker container close immediately, try to use `docker-compose up` but be sure to comment out `web` and `api` services so that `db` service is the only service that will be configured to run.
+1. Run sql server for linux. Execute `docker run -e 'ACCEPT_EULA=Y' -e 'SA_PASSWORD=Str0ngPassword' -p 1433:1433 -d --name=local-mssql microsoft/mssql-server-linux`. The default database user here is `sa`
+Note: If you are encountering issue where the docker container close immediately, try to use `docker-compose up` but be sure to comment out `web` and `api` services so that `db` service is the only service that will be configured to run.
 
 Checking docker connection using **SQL Operation Studio**:
 1. Download SQL Operation Studio by Microsoft to manage the SQL Server. https://docs.microsoft.com/en-us/sql/sql-operations-studio/download?view=sql-server-2017
@@ -60,20 +73,36 @@ Checking docker connection using **SQL Operation Studio**:
 If you have an existing SQL Server either from your local machine or remotely, you can opt to create your own accountgo database instance:
 
 1. Login to SQL Server Management Studio using your existing database account
-1. Create blank database instance by executing `CREATE DATABASE accountgo`
+1. Create blank database instance by executing `CREATE DATABASE accountgo` ***NOTE***: This is optional. EF Migration script will auto create database if not exist.
 
 ## Data Setup
 
 ### Publish Database
 
-Using EntityFrameworkCore CLI database migration will create and migrate the `accountgo` database to the current version.
+Using EntityFrameworkCore CLI database migration will create and migrate the `accountgo` database to the current version. Make sure you have dotnet ef tool.
+
+```
+% dotnet tool list -g
+Package Id      Version      Commands 
+--------------------------------------
+dotnet-ef       3.1.6        dotnet-ef
+
+% dotnet tool install --global dotnet-ef
+
+```
 
 In root folder `accountgo` run the following command using a terminal, command prompt, or package manager console:
 
-1. `dotnet ef database update --project .\src\Api\ --msbuildprojectextensionspath .build\obj\Api\ --context ApplicationIdentityDbContext`
-2. `dotnet ef database update --project .\src\Api\ --msbuildprojectextensionspath .build\obj\Api\ --context ApiDbContext`
+1. `dotnet ef database update --project ./src/Api/ --msbuildprojectextensionspath .build/obj/Api/ --context ApplicationIdentityDbContext`
+2. `dotnet ef database update --project ./src/Api/ --msbuildprojectextensionspath .build/obj/Api/ --context ApiDbContext`
 
-Note: The initial migration only contains initial security data username and password.
+If you install your .net runtime to other location other than default installation directory, you need to set the environment variable `DOTNET_ROOT` to the installation directory of your dotnet. For example, I installed my dotnet sdk to `/Users/Marvin/.dotnet` so I will set the env variable to: 
+
+```
+% export DOTNET_ROOT=/Users/Marvin/.dotnet
+```
+
+***Note:*** The initial migration only contains initial security data username and password.
 
 #### Updating Migrations
 
@@ -81,8 +110,8 @@ If changes are made to the models used by the database, using EntityFrameworkCor
 
 In root folder `accountgo` run the following command using a terminal, command prompt, or package manager console:
 
-1. `dotnet ef migrations add {Name} --project .\src\Api\ --startup-project .\src\Api\Api.csproj --msbuildprojectextensionspath ..build\obj\Api\ --context ApplicationIdentityDbContext --output-dir Data\Migration\IdentityDb`
-1. `dotnet ef migrations add {Name} --project .\src\Api\ --startup-project .\src\Api\Api.csproj --msbuildprojectextensionspath ..build\obj\Api\ --context ApiDbContext --output-dir Data\Migration\ApiDb`
+1. `dotnet ef migrations add {Name} --project ./src/Api/ --startup-project ./src/Api/Api.csproj --msbuildprojectextensionspath ..build/obj/Api/ --context ApplicationIdentityDbContext --output-dir Data/Migration/IdentityDb`
+1. `dotnet ef migrations add {Name} --project ./src/Api/ --startup-project ./src/Api/Api.csproj --msbuildprojectextensionspath ..build/obj/Api/ --context ApiDbContext --output-dir Data/Migration/ApiDb`
 
 Note: `{Name}` must be provided
 
@@ -155,7 +184,7 @@ To run everything (database, api, web) in docker container you can use docker-co
 1. Initialize data by calling a special api endpoint directly. http://localhost:8001/api/administration/initializedcompany
 
 # Technology Stack
-- ASP.NET Core 2.1
+- ASP.NET Core 2.2
 - ReactJS
 - MobX, React-MobX
 - Axios

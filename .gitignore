@@ -208,6 +208,8 @@ FakesAssemblies/
 /src/out
 
 .build/
+.ionide/
+
 /src/test/Module.Tests/Modules/*
 /src/Api/Modules/*
 /src/Api/Plugins/*
