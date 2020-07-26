@@ -5,11 +5,11 @@ Accounting System built on .net core, opensource and cross platform (ASP.NET Cor
 
 ### IMPORTANT NOTE:
 
-- Make sure you have the latest .net core 2.2 sdk and runtime installed. Go to https://www.microsoft.com/net/download/dotnet-core/2.2 to download the installer. Verify you have .net 2.2 sdk:
+- Make sure you have the latest .net core 3.1 sdk and runtime installed. Go to https://dotnet.microsoft.com/download/dotnet-core/3.1 to download the installer. Verify you have .net core 3.1.* (* means the latest) sdk:
 
 ```
 % dotnet --list-sdks
-2.2.207 [/Users/Marvin/.dotnet/sdk]
+3.1.302 [/Users/Marvin/.dotnet/sdk]
 ```
 
 - You can use MacOS, Linux, Windows to develop and deploy this project. 
@@ -184,7 +184,7 @@ To run everything (database, api, web) in docker container you can use docker-co
 1. Initialize data by calling a special api endpoint directly. http://localhost:8001/api/administration/initializedcompany
 
 # Technology Stack
-- ASP.NET Core 2.2
+- ASP.NET Core 3.1
 - ReactJS
 - MobX, React-MobX
 - Axios

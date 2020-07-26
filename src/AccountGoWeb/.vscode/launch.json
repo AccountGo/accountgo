@@ -9,7 +9,7 @@
             "type": "coreclr",
             "request": "launch",
             "preLaunchTask": "build",
-            "program": "../../.build/bin/AccountGoWeb/Debug/netcoreapp2.2/AccountGoWeb.dll",
+            "program": "../../.build/bin/AccountGoWeb/Debug/netcoreapp3.1/AccountGoWeb.dll",
             "args": [],
             "cwd": "${workspaceFolder}",
             "stopAtEntry": false,
