@@ -43,11 +43,14 @@ namespace Api.Controllers
             //}
             string password = loginViewModel.Password;
             string username = loginViewModel.Email;
-
+            
             try
             {
-                var applicationUser = await _userManager.FindByNameAsync(username);
-
+                var applicationUser = await _userManager.FindByEmailAsync(username);
+                if (applicationUser == null)
+                {
+                    System.Console.WriteLine($"Unable to load user with email '{username}'.");
+                }
                 if (await _userManager.CheckPasswordAsync(applicationUser, password))
                 {
                     //await ResetLockout(user);
