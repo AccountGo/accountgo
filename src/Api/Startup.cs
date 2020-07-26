@@ -1,35 +1,41 @@
-﻿using Microsoft.AspNetCore.Builder;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.HttpsPolicy;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using System;
+using Microsoft.EntityFrameworkCore;
 
 namespace Api
 {
     public class Startup
     {
-        private readonly IHostingEnvironment _hostingEnv;
-
-        public Startup(IHostingEnvironment env)
+        public Startup(IConfiguration configuration)
         {
-            // Set up configuration sources.
-            var builder = new ConfigurationBuilder()
-                .SetBasePath(env.ContentRootPath)
-                .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
-                .AddJsonFile($"appsettings.{env.EnvironmentName}.json", optional: true)
-                .AddEnvironmentVariables();
-            Configuration = builder.Build();
-            _hostingEnv = env;
+            Configuration = configuration;
         }
 
-        public IConfigurationRoot Configuration { get; set; }
+        public IConfiguration Configuration { get; }
 
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
         {
+            services
+                .AddControllers()
+                .AddNewtonsoftJson(options => 
+                    {
+                        options.SerializerSettings.ContractResolver = new Newtonsoft.Json.Serialization.CamelCasePropertyNamesContractResolver();
+                        options.SerializerSettings.ReferenceLoopHandling = Newtonsoft.Json.ReferenceLoopHandling.Ignore;
+                    }
+                );
+
             string connectionString = Configuration["Data:DevelopmentConnection:ConnectionString"];
             // These environment variables can be overriden from launchSettings.json.
             string dbServer = System.Environment.GetEnvironmentVariable("DBSERVER") ?? "localhost";
@@ -42,7 +48,7 @@ namespace Api
             System.Console.WriteLine("DB Connection String: " + connectionString);
 
             services
-                .AddEntityFrameworkSqlServer()
+                //.AddEntityFrameworkSqlServer()
                 .AddDbContext<Data.ApiDbContext>(options => options.UseSqlServer(connectionString))
                 .AddDbContext<Data.ApplicationIdentityDbContext>(options => options.UseSqlServer(connectionString));
 
@@ -50,16 +56,6 @@ namespace Api
                 .AddIdentity<Data.ApplicationUser, IdentityRole>()
                 .AddEntityFrameworkStores<Data.ApplicationIdentityDbContext>()
                 .AddDefaultTokenProviders();
-
-            // Add framework services.
-            services.AddMvc()
-                .AddJsonOptions(options =>
-                {
-                    options.SerializerSettings.ContractResolver = new Newtonsoft.Json.Serialization.CamelCasePropertyNamesContractResolver();
-                    options.SerializerSettings.ReferenceLoopHandling = Newtonsoft.Json.ReferenceLoopHandling.Ignore;
-                });
-
-            //services.AddSwaggerGen();
 
             // Add cors
             services.AddCors(o => o.AddPolicy("AllowAll", builder =>
@@ -89,17 +85,23 @@ namespace Api
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
-        public void Configure(IApplicationBuilder app, IHostingEnvironment env, ILoggerFactory loggerFactory)
+        public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
         {
-            loggerFactory.AddConsole(Configuration.GetSection("Logging"));
-            loggerFactory.AddDebug();
-                      
-            app.UseStaticFiles();
-            app.UseAuthentication();
-            app.UseCors("AllowAll");
-            app.UseMvc();
-            //app.UseSwaggerGen();
-            //app.UseSwaggerUi();
-        }        
+            if (env.IsDevelopment())
+            {
+                app.UseDeveloperExceptionPage();
+            }
+
+            // app.UseHttpsRedirection();
+
+            app.UseRouting();
+
+            app.UseAuthorization();
+
+            app.UseEndpoints(endpoints =>
+            {
+                endpoints.MapControllers();
+            });
+        }
     }
 }

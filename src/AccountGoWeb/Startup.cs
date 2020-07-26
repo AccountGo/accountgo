@@ -1,41 +1,43 @@
-﻿using System;
+using System;
 using System.IO;
-using Infrastructure.AssemblyLoader;
-using Microsoft.AspNetCore.Authentication.Cookies;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.HttpsPolicy;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc.ApplicationParts;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Infrastructure.AssemblyLoader;
 
 namespace AccountGoWeb
 {
     public class Startup
     {
-        public IConfigurationRoot Configuration { get; }
-
-        public Startup(IHostingEnvironment env)
+        public Startup(IConfiguration configuration)
         {
-            var builder = new ConfigurationBuilder()
-                .SetBasePath(env.ContentRootPath)
-                .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
-                .AddJsonFile($"appsettings.{env.EnvironmentName}.json", optional: true)
-                .AddEnvironmentVariables();
-            Configuration = builder.Build();
+            Configuration = configuration;
+            // var builder = new ConfigurationBuilder()
+            //     .SetBasePath(env.ContentRootPath)
+            //     .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
+            //     .AddJsonFile($"appsettings.{env.EnvironmentName}.json", optional: true)
+            //     .AddEnvironmentVariables();
+            // Configuration = builder.Build();
 
             string urlhost = System.Environment.GetEnvironmentVariable("APIHOST") ?? "localhost";
             Configuration["ApiUrl"] = $"http://{urlhost}:8001/api/";
             System.Console.WriteLine($"[ASPNETCORE SERVER] API URL {Configuration["ApiUrl"]}");
         }
 
+        public IConfiguration Configuration { get; }
+
         // This method gets called by the runtime. Use this method to add services to the container.
-        // For more information on how to configure your application, visit http://go.microsoft.com/fwlink/?LinkID=398940
         public void ConfigureServices(IServiceCollection services)
         {
-            var mvcBuilder = services
-            .AddMvc()
-            .SetCompatibilityVersion(Microsoft.AspNetCore.Mvc.CompatibilityVersion.Version_2_1);
+            services.AddControllersWithViews();
 
             services.AddSingleton<IConfiguration>(Configuration);
 
@@ -43,50 +45,36 @@ namespace AccountGoWeb
             
             services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
                 .AddCookie(o => o.LoginPath = new PathString("/account/signin"));
-
-            // Load and install modules. Get all module folder names inside 'Modules' folder
-            if (Directory.Exists(Path.Combine(AppContext.BaseDirectory, "modules")))
-            {
-                foreach (var dir in Directory.GetDirectories(Path.Combine(AppContext.BaseDirectory, "modules")))
-                {
-                    var moduleAssembly = new CustomAssemblyLoadContext().LoadFromAssemblyPath(Path.Combine(dir, Path.GetFileName(dir)) + ".dll");
-                    Console.WriteLine($"Loading application parts from module {moduleAssembly.FullName}");
-
-                    // This loads MVC application parts from module assemblies
-                    var partFactory = ApplicationPartFactory.GetApplicationPartFactory(moduleAssembly);
-                    foreach (var part in partFactory.GetApplicationParts(moduleAssembly))
-                    {
-                        Console.WriteLine($"* {part.Name}");
-                        mvcBuilder.PartManager.ApplicationParts.Add(part);
-                    }
-
-                    // This piece finds and loads related parts, such as SampleModule.Views.dll.
-                    var relatedAssemblies = RelatedAssemblyAttribute.GetRelatedAssemblies(moduleAssembly, throwOnError: true);
-                    foreach (var assembly in relatedAssemblies)
-                    {
-                        partFactory = ApplicationPartFactory.GetApplicationPartFactory(assembly);
-                        foreach (var part in partFactory.GetApplicationParts(assembly))
-                        {
-                            Console.WriteLine($"  * {part.Name}");
-                            mvcBuilder.PartManager.ApplicationParts.Add(part);
-                        }
-                    }
-                }
-            }
+            
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
-        public void Configure(IApplicationBuilder app)
+        public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
         {
+            if (env.IsDevelopment())
+            {
+                app.UseDeveloperExceptionPage();
+            }
+            else
+            {
+                app.UseExceptionHandler("/Home/Error");
+                // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
+                app.UseHsts();
+            }
+            // app.UseHttpsRedirection();
             app.UseStaticFiles();
+
+            app.UseRouting();
 
             app.UseAuthentication();
 
-            app.UseMvc(routes =>
+            app.UseAuthorization(); 
+
+            app.UseEndpoints(endpoints =>
             {
-                routes.MapRoute(
+                endpoints.MapControllerRoute(
                     name: "default",
-                    template: "{controller=Home}/{action=Index}/{id?}");
+                    pattern: "{controller=Home}/{action=Index}/{id?}");
             });
         }
     }
