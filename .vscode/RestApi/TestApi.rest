@@ -1,6 +1,0 @@
-###
-GET http://localhost:8001/api/sales/customers
-###
-GET http://localhost:8001/api/administration/initializedcompany
-###
-GET http://accountgo.azurewebsites.net:8001/api/sales/customers

@@ -215,3 +215,5 @@ FakesAssemblies/
 /src/Api/Plugins/*
 /src/AccountGoWeb/Modules/*
 /src/AccountGoWeb/Plugins/*
+
+.vscode
