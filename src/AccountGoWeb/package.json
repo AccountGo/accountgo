@@ -28,7 +28,7 @@
     "ajv": "^6.5.4",
     "axios": "0.21.2",
     "bootstrap": "4.3.1",
-    "d3": "5.7.0",
+    "d3": "7.8.2",
     "font-awesome": "^4.7.0",
     "html2canvas": "1.0.0-alpha.12",
     "ionicons": "^4.4.4",
