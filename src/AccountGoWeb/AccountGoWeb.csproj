@@ -33,7 +33,7 @@
   </ItemGroup>
 
   <Target Name="NpmCommands" AfterTargets="Build">    
-    <Exec Command="npm install" />
+    <Exec Command="npm install --legacy-peer-deps" />
     <Exec Command="npm run gulp" />
     <!-- Important: NODE_ENV and APIURLSPA are used by webpack to properly set the api url. Here, it access the environment variable which is set in dockerfile. -->
     <Message Text="NODE_ENV: =&gt; $(NODE_ENV), APIURLSPA: =&gt; $(APIURLSPA)" Importance="high" />
