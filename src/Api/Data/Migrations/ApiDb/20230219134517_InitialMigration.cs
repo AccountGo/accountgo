@@ -1,12 +1,14 @@
 ﻿using System;
-using Core.Domain.Security;
-using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Migrations;
+
+#nullable disable
 
 namespace Api.Data.Migrations.ApiDb
 {
-    public partial class InitialCreate : Migration
+    /// <inheritdoc />
+    public partial class InitialMigration : Migration
     {
+        /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.EnsureSchema(
@@ -16,10 +18,10 @@ namespace Api.Data.Migrations.ApiDb
                 name: "AccountClass",
                 columns: table => new
                 {
-                    Id = table.Column<int>(nullable: false)
-                        .Annotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn),
-                    Name = table.Column<string>(nullable: true),
-                    NormalBalance = table.Column<string>(nullable: true)
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    Name = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    NormalBalance = table.Column<string>(type: "nvarchar(max)", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -30,11 +32,11 @@ namespace Api.Data.Migrations.ApiDb
                 name: "Address",
                 columns: table => new
                 {
-                    Id = table.Column<int>(nullable: false)
-                        .Annotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn),
-                    No = table.Column<string>(nullable: true),
-                    Street = table.Column<string>(nullable: true),
-                    City = table.Column<string>(nullable: true)
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    No = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    Street = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    City = table.Column<string>(type: "nvarchar(max)", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -42,177 +44,14 @@ namespace Api.Data.Migrations.ApiDb
                 });
 
             migrationBuilder.CreateTable(
-                name: "Company",
-                columns: table => new
-                {
-                    Id = table.Column<int>(nullable: false)
-                        .Annotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn),
-                    Name = table.Column<string>(nullable: true),
-                    ShortName = table.Column<string>(nullable: true),
-                    CompanyCode = table.Column<string>(nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_Company", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "FinancialYear",
-                columns: table => new
-                {
-                    Id = table.Column<int>(nullable: false)
-                        .Annotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn),
-                    FiscalYearCode = table.Column<string>(maxLength: 10, nullable: false),
-                    FiscalYearName = table.Column<string>(maxLength: 100, nullable: false),
-                    StartDate = table.Column<DateTime>(nullable: false),
-                    EndDate = table.Column<DateTime>(nullable: false),
-                    IsActive = table.Column<bool>(nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_FinancialYear", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "GeneralLedgerHeader",
-                columns: table => new
-                {
-                    Id = table.Column<int>(nullable: false)
-                        .Annotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn),
-                    Date = table.Column<DateTime>(nullable: false),
-                    DocumentType = table.Column<int>(nullable: false),
-                    Description = table.Column<string>(nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_GeneralLedgerHeader", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "ItemTaxGroup",
-                columns: table => new
-                {
-                    Id = table.Column<int>(nullable: false)
-                        .Annotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn),
-                    Name = table.Column<string>(nullable: true),
-                    IsFullyExempt = table.Column<bool>(nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_ItemTaxGroup", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "Log",
-                columns: table => new
-                {
-                    Id = table.Column<int>(nullable: false)
-                        .Annotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn),
-                    TimeStamp = table.Column<DateTime>(nullable: false),
-                    Level = table.Column<string>(nullable: true),
-                    Logger = table.Column<string>(nullable: true),
-                    Message = table.Column<string>(nullable: true),
-                    Username = table.Column<string>(nullable: true),
-                    CallSite = table.Column<string>(nullable: true),
-                    Thread = table.Column<string>(nullable: true),
-                    Exception = table.Column<string>(nullable: true),
-                    StackTrace = table.Column<string>(nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_Log", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "Measurement",
-                columns: table => new
-                {
-                    Id = table.Column<int>(nullable: false)
-                        .Annotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn),
-                    Code = table.Column<string>(nullable: true),
-                    Description = table.Column<string>(nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_Measurement", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "Party",
-                columns: table => new
-                {
-                    Id = table.Column<int>(nullable: false)
-                        .Annotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn),
-                    PartyType = table.Column<int>(nullable: false),
-                    Name = table.Column<string>(nullable: true),
-                    Email = table.Column<string>(nullable: true),
-                    Website = table.Column<string>(nullable: true),
-                    Phone = table.Column<string>(nullable: true),
-                    Fax = table.Column<string>(nullable: true),
-                    IsActive = table.Column<bool>(nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_Party", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "PaymentTerm",
-                columns: table => new
-                {
-                    Id = table.Column<int>(nullable: false)
-                        .Annotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn),
-                    Description = table.Column<string>(nullable: true),
-                    PaymentType = table.Column<int>(nullable: false),
-                    DueAfterDays = table.Column<int>(nullable: true),
-                    IsActive = table.Column<bool>(nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_PaymentTerm", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "SequenceNumber",
-                columns: table => new
-                {
-                    Id = table.Column<int>(nullable: false)
-                        .Annotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn),
-                    SequenceNumberType = table.Column<int>(nullable: false),
-                    Description = table.Column<string>(nullable: true),
-                    Prefix = table.Column<string>(nullable: true),
-                    NextNumber = table.Column<int>(nullable: false),
-                    UsePrefix = table.Column<bool>(nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_SequenceNumber", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "TaxGroup",
-                columns: table => new
-                {
-                    Id = table.Column<int>(nullable: false)
-                        .Annotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn),
-                    Description = table.Column<string>(nullable: true),
-                    TaxAppliedToShipping = table.Column<bool>(nullable: false),
-                    IsActive = table.Column<bool>(nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_TaxGroup", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "AuditableEntity",
                 schema: "dbo",
                 columns: table => new
                 {
-                    Id = table.Column<int>(nullable: false)
-                        .Annotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn),
-                    EntityName = table.Column<string>(nullable: true),
-                    EnableAudit = table.Column<bool>(nullable: false)
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    EntityName = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    EnableAudit = table.Column<bool>(type: "bit", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -224,16 +63,16 @@ namespace Api.Data.Migrations.ApiDb
                 schema: "dbo",
                 columns: table => new
                 {
-                    Id = table.Column<int>(nullable: false)
-                        .Annotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn),
-                    UserName = table.Column<string>(nullable: true),
-                    AuditEventDateUTC = table.Column<DateTime>(nullable: false),
-                    AuditEventType = table.Column<int>(nullable: false),
-                    TableName = table.Column<string>(nullable: true),
-                    RecordId = table.Column<string>(nullable: true),
-                    FieldName = table.Column<string>(nullable: true),
-                    OriginalValue = table.Column<string>(nullable: true),
-                    NewValue = table.Column<string>(nullable: true)
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    UserName = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    AuditEventDateUTC = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    AuditEventType = table.Column<int>(type: "int", nullable: false),
+                    TableName = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    RecordId = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    FieldName = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    OriginalValue = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    NewValue = table.Column<string>(type: "nvarchar(max)", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -241,14 +80,145 @@ namespace Api.Data.Migrations.ApiDb
                 });
 
             migrationBuilder.CreateTable(
+                name: "Company",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    Name = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    ShortName = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    CompanyCode = table.Column<string>(type: "nvarchar(max)", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Company", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "FinancialYear",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    FiscalYearCode = table.Column<string>(type: "nvarchar(10)", maxLength: 10, nullable: false),
+                    FiscalYearName = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
+                    StartDate = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    EndDate = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    IsActive = table.Column<bool>(type: "bit", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_FinancialYear", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "GeneralLedgerHeader",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    Date = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    DocumentType = table.Column<int>(type: "int", nullable: false),
+                    Description = table.Column<string>(type: "nvarchar(max)", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_GeneralLedgerHeader", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "ItemTaxGroup",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    Name = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    IsFullyExempt = table.Column<bool>(type: "bit", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_ItemTaxGroup", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "Log",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    TimeStamp = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    Level = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    Logger = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    Message = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    Username = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    CallSite = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    Thread = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    Exception = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    StackTrace = table.Column<string>(type: "nvarchar(max)", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Log", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "Measurement",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    Code = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    Description = table.Column<string>(type: "nvarchar(max)", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Measurement", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "Party",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    PartyType = table.Column<int>(type: "int", nullable: false),
+                    Name = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    Email = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    Website = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    Phone = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    Fax = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    IsActive = table.Column<bool>(type: "bit", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Party", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "PaymentTerm",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    Description = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    PaymentType = table.Column<int>(type: "int", nullable: false),
+                    DueAfterDays = table.Column<int>(type: "int", nullable: true),
+                    IsActive = table.Column<bool>(type: "bit", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_PaymentTerm", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "SecurityGroup",
                 schema: "dbo",
                 columns: table => new
                 {
-                    Id = table.Column<int>(nullable: false)
-                        .Annotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn),
-                    Name = table.Column<string>(nullable: true),
-                    DisplayName = table.Column<string>(nullable: true)
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    Name = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    DisplayName = table.Column<string>(type: "nvarchar(max)", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -260,12 +230,12 @@ namespace Api.Data.Migrations.ApiDb
                 schema: "dbo",
                 columns: table => new
                 {
-                    Id = table.Column<int>(nullable: false)
-                        .Annotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn),
-                    Name = table.Column<string>(nullable: true),
-                    DisplayName = table.Column<string>(nullable: true),
-                    SysAdmin = table.Column<bool>(nullable: false),
-                    System = table.Column<bool>(nullable: false)
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    Name = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    DisplayName = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    SysAdmin = table.Column<bool>(type: "bit", nullable: false),
+                    System = table.Column<bool>(type: "bit", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -273,16 +243,48 @@ namespace Api.Data.Migrations.ApiDb
                 });
 
             migrationBuilder.CreateTable(
+                name: "SequenceNumber",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    SequenceNumberType = table.Column<int>(type: "int", nullable: false),
+                    Description = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    Prefix = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    NextNumber = table.Column<int>(type: "int", nullable: false),
+                    UsePrefix = table.Column<bool>(type: "bit", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_SequenceNumber", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "TaxGroup",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    Description = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    TaxAppliedToShipping = table.Column<bool>(type: "bit", nullable: false),
+                    IsActive = table.Column<bool>(type: "bit", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_TaxGroup", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "User",
                 schema: "dbo",
                 columns: table => new
                 {
-                    Id = table.Column<int>(nullable: false)
-                        .Annotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn),
-                    UserName = table.Column<string>(nullable: true),
-                    EmailAddress = table.Column<string>(nullable: true),
-                    Firstname = table.Column<string>(nullable: true),
-                    Lastname = table.Column<string>(nullable: true)
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    UserName = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    EmailAddress = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    Firstname = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    Lastname = table.Column<string>(type: "nvarchar(max)", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -290,20 +292,43 @@ namespace Api.Data.Migrations.ApiDb
                 });
 
             migrationBuilder.CreateTable(
+                name: "AuditableAttribute",
+                schema: "dbo",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    AuditableEntityId = table.Column<int>(type: "int", nullable: false),
+                    AttributeName = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    EnableAudit = table.Column<bool>(type: "bit", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AuditableAttribute", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_AuditableAttribute_AuditableEntity_AuditableEntityId",
+                        column: x => x.AuditableEntityId,
+                        principalSchema: "dbo",
+                        principalTable: "AuditableEntity",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "Account",
                 columns: table => new
                 {
-                    Id = table.Column<int>(nullable: false)
-                        .Annotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn),
-                    AccountClassId = table.Column<int>(nullable: false),
-                    ParentAccountId = table.Column<int>(nullable: true),
-                    DrOrCrSide = table.Column<int>(nullable: false),
-                    CompanyId = table.Column<int>(nullable: false),
-                    AccountCode = table.Column<string>(maxLength: 50, nullable: false),
-                    AccountName = table.Column<string>(maxLength: 200, nullable: false),
-                    Description = table.Column<string>(maxLength: 200, nullable: true),
-                    IsCash = table.Column<bool>(nullable: false),
-                    IsContraAccount = table.Column<bool>(nullable: false),
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    AccountClassId = table.Column<int>(type: "int", nullable: false),
+                    ParentAccountId = table.Column<int>(type: "int", nullable: true),
+                    DrOrCrSide = table.Column<int>(type: "int", nullable: false),
+                    CompanyId = table.Column<int>(type: "int", nullable: false),
+                    AccountCode = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
+                    AccountName = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
+                    Description = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: true),
+                    IsCash = table.Column<bool>(type: "bit", nullable: false),
+                    IsContraAccount = table.Column<bool>(type: "bit", nullable: false),
                     RowVersion = table.Column<byte[]>(type: "timestamp", maxLength: 8, nullable: true)
                 },
                 constraints: table =>
@@ -316,26 +341,25 @@ namespace Api.Data.Migrations.ApiDb
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                     table.ForeignKey(
+                        name: "FK_Account_Account_ParentAccountId",
+                        column: x => x.ParentAccountId,
+                        principalTable: "Account",
+                        principalColumn: "Id");
+                    table.ForeignKey(
                         name: "FK_Account_Company_CompanyId",
                         column: x => x.CompanyId,
                         principalTable: "Company",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "FK_Account_Account_ParentAccountId",
-                        column: x => x.ParentAccountId,
-                        principalTable: "Account",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
                 name: "CompanySetting",
                 columns: table => new
                 {
-                    Id = table.Column<int>(nullable: false)
-                        .Annotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn),
-                    CompanyId = table.Column<int>(nullable: false)
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    CompanyId = table.Column<int>(type: "int", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -352,13 +376,13 @@ namespace Api.Data.Migrations.ApiDb
                 name: "Contact",
                 columns: table => new
                 {
-                    Id = table.Column<int>(nullable: false)
-                        .Annotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn),
-                    ContactType = table.Column<int>(nullable: false),
-                    FirstName = table.Column<string>(nullable: true),
-                    LastName = table.Column<string>(nullable: true),
-                    MiddleName = table.Column<string>(nullable: true),
-                    PartyId = table.Column<int>(nullable: false)
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    ContactType = table.Column<int>(type: "int", nullable: false),
+                    FirstName = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    LastName = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    MiddleName = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    PartyId = table.Column<int>(type: "int", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -375,15 +399,15 @@ namespace Api.Data.Migrations.ApiDb
                 name: "JournalEntryHeader",
                 columns: table => new
                 {
-                    Id = table.Column<int>(nullable: false)
-                        .Annotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn),
-                    GeneralLedgerHeaderId = table.Column<int>(nullable: true),
-                    PartyId = table.Column<int>(nullable: true),
-                    VoucherType = table.Column<int>(nullable: true),
-                    Date = table.Column<DateTime>(nullable: false),
-                    Memo = table.Column<string>(nullable: true),
-                    ReferenceNo = table.Column<string>(nullable: true),
-                    Posted = table.Column<bool>(nullable: true)
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    GeneralLedgerHeaderId = table.Column<int>(type: "int", nullable: true),
+                    PartyId = table.Column<int>(type: "int", nullable: true),
+                    VoucherType = table.Column<int>(type: "int", nullable: true),
+                    Date = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    Memo = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    ReferenceNo = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    Posted = table.Column<bool>(type: "bit", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -392,37 +416,12 @@ namespace Api.Data.Migrations.ApiDb
                         name: "FK_JournalEntryHeader_GeneralLedgerHeader_GeneralLedgerHeaderId",
                         column: x => x.GeneralLedgerHeaderId,
                         principalTable: "GeneralLedgerHeader",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
+                        principalColumn: "Id");
                     table.ForeignKey(
                         name: "FK_JournalEntryHeader_Party_PartyId",
                         column: x => x.PartyId,
                         principalTable: "Party",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "AuditableAttribute",
-                schema: "dbo",
-                columns: table => new
-                {
-                    Id = table.Column<int>(nullable: false)
-                        .Annotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn),
-                    AuditableEntityId = table.Column<int>(nullable: false),
-                    AttributeName = table.Column<string>(nullable: true),
-                    EnableAudit = table.Column<bool>(nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_AuditableAttribute", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_AuditableAttribute_AuditableEntity_AuditableEntityId",
-                        column: x => x.AuditableEntityId,
-                        principalSchema: "dbo",
-                        principalTable: "AuditableEntity",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
+                        principalColumn: "Id");
                 });
 
             migrationBuilder.CreateTable(
@@ -430,11 +429,11 @@ namespace Api.Data.Migrations.ApiDb
                 schema: "dbo",
                 columns: table => new
                 {
-                    Id = table.Column<int>(nullable: false)
-                        .Annotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn),
-                    Name = table.Column<string>(nullable: true),
-                    DisplayName = table.Column<string>(nullable: true),
-                    SecurityGroupId = table.Column<int>(nullable: false)
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    Name = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    DisplayName = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    SecurityGroupId = table.Column<int>(type: "int", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -453,10 +452,10 @@ namespace Api.Data.Migrations.ApiDb
                 schema: "dbo",
                 columns: table => new
                 {
-                    Id = table.Column<int>(nullable: false)
-                        .Annotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn),
-                    UserId = table.Column<int>(nullable: false),
-                    SecurityRoleId = table.Column<int>(nullable: false)
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    UserId = table.Column<int>(type: "int", nullable: false),
+                    SecurityRoleId = table.Column<int>(type: "int", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -481,16 +480,16 @@ namespace Api.Data.Migrations.ApiDb
                 name: "Bank",
                 columns: table => new
                 {
-                    Id = table.Column<int>(nullable: false)
-                        .Annotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn),
-                    Type = table.Column<int>(nullable: false),
-                    Name = table.Column<string>(nullable: true),
-                    AccountId = table.Column<int>(nullable: true),
-                    BankName = table.Column<string>(nullable: true),
-                    Number = table.Column<string>(nullable: true),
-                    Address = table.Column<string>(nullable: true),
-                    IsDefault = table.Column<bool>(nullable: false),
-                    IsActive = table.Column<bool>(nullable: false)
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    Type = table.Column<int>(type: "int", nullable: false),
+                    Name = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    AccountId = table.Column<int>(type: "int", nullable: true),
+                    BankName = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    Number = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    Address = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    IsDefault = table.Column<bool>(type: "bit", nullable: false),
+                    IsActive = table.Column<bool>(type: "bit", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -499,20 +498,19 @@ namespace Api.Data.Migrations.ApiDb
                         name: "FK_Bank_Account_AccountId",
                         column: x => x.AccountId,
                         principalTable: "Account",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
+                        principalColumn: "Id");
                 });
 
             migrationBuilder.CreateTable(
                 name: "GeneralLedgerLine",
                 columns: table => new
                 {
-                    Id = table.Column<int>(nullable: false)
-                        .Annotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn),
-                    GeneralLedgerHeaderId = table.Column<int>(nullable: false),
-                    AccountId = table.Column<int>(nullable: false),
-                    DrCr = table.Column<int>(nullable: false),
-                    Amount = table.Column<decimal>(nullable: false)
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    GeneralLedgerHeaderId = table.Column<int>(type: "int", nullable: false),
+                    AccountId = table.Column<int>(type: "int", nullable: false),
+                    DrCr = table.Column<int>(type: "int", nullable: false),
+                    Amount = table.Column<decimal>(type: "decimal(18,2)", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -535,84 +533,76 @@ namespace Api.Data.Migrations.ApiDb
                 name: "GeneralLedgerSetting",
                 columns: table => new
                 {
-                    Id = table.Column<int>(nullable: false)
-                        .Annotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn),
-                    CompanyId = table.Column<int>(nullable: true),
-                    PayableAccountId = table.Column<int>(nullable: true),
-                    PurchaseDiscountAccountId = table.Column<int>(nullable: true),
-                    GoodsReceiptNoteClearingAccountId = table.Column<int>(nullable: true),
-                    SalesDiscountAccountId = table.Column<int>(nullable: true),
-                    ShippingChargeAccountId = table.Column<int>(nullable: true),
-                    PermanentAccountId = table.Column<int>(nullable: true),
-                    IncomeSummaryAccountId = table.Column<int>(nullable: true)
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    CompanyId = table.Column<int>(type: "int", nullable: true),
+                    PayableAccountId = table.Column<int>(type: "int", nullable: true),
+                    PurchaseDiscountAccountId = table.Column<int>(type: "int", nullable: true),
+                    GoodsReceiptNoteClearingAccountId = table.Column<int>(type: "int", nullable: true),
+                    SalesDiscountAccountId = table.Column<int>(type: "int", nullable: true),
+                    ShippingChargeAccountId = table.Column<int>(type: "int", nullable: true),
+                    PermanentAccountId = table.Column<int>(type: "int", nullable: true),
+                    IncomeSummaryAccountId = table.Column<int>(type: "int", nullable: true)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_GeneralLedgerSetting", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_GeneralLedgerSetting_Company_CompanyId",
-                        column: x => x.CompanyId,
-                        principalTable: "Company",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
                         name: "FK_GeneralLedgerSetting_Account_GoodsReceiptNoteClearingAccountId",
                         column: x => x.GoodsReceiptNoteClearingAccountId,
                         principalTable: "Account",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
+                        principalColumn: "Id");
                     table.ForeignKey(
                         name: "FK_GeneralLedgerSetting_Account_IncomeSummaryAccountId",
                         column: x => x.IncomeSummaryAccountId,
                         principalTable: "Account",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
+                        principalColumn: "Id");
                     table.ForeignKey(
                         name: "FK_GeneralLedgerSetting_Account_PayableAccountId",
                         column: x => x.PayableAccountId,
                         principalTable: "Account",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
+                        principalColumn: "Id");
                     table.ForeignKey(
                         name: "FK_GeneralLedgerSetting_Account_PermanentAccountId",
                         column: x => x.PermanentAccountId,
                         principalTable: "Account",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
+                        principalColumn: "Id");
                     table.ForeignKey(
                         name: "FK_GeneralLedgerSetting_Account_PurchaseDiscountAccountId",
                         column: x => x.PurchaseDiscountAccountId,
                         principalTable: "Account",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
+                        principalColumn: "Id");
                     table.ForeignKey(
                         name: "FK_GeneralLedgerSetting_Account_SalesDiscountAccountId",
                         column: x => x.SalesDiscountAccountId,
                         principalTable: "Account",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
+                        principalColumn: "Id");
                     table.ForeignKey(
                         name: "FK_GeneralLedgerSetting_Account_ShippingChargeAccountId",
                         column: x => x.ShippingChargeAccountId,
                         principalTable: "Account",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
+                        principalColumn: "Id");
+                    table.ForeignKey(
+                        name: "FK_GeneralLedgerSetting_Company_CompanyId",
+                        column: x => x.CompanyId,
+                        principalTable: "Company",
+                        principalColumn: "Id");
                 });
 
             migrationBuilder.CreateTable(
                 name: "ItemCategory",
                 columns: table => new
                 {
-                    Id = table.Column<int>(nullable: false)
-                        .Annotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn),
-                    ItemType = table.Column<int>(nullable: false),
-                    MeasurementId = table.Column<int>(nullable: true),
-                    SalesAccountId = table.Column<int>(nullable: true),
-                    InventoryAccountId = table.Column<int>(nullable: true),
-                    CostOfGoodsSoldAccountId = table.Column<int>(nullable: true),
-                    AdjustmentAccountId = table.Column<int>(nullable: true),
-                    AssemblyAccountId = table.Column<int>(nullable: true),
-                    Name = table.Column<string>(nullable: true)
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    ItemType = table.Column<int>(type: "int", nullable: false),
+                    MeasurementId = table.Column<int>(type: "int", nullable: true),
+                    SalesAccountId = table.Column<int>(type: "int", nullable: true),
+                    InventoryAccountId = table.Column<int>(type: "int", nullable: true),
+                    CostOfGoodsSoldAccountId = table.Column<int>(type: "int", nullable: true),
+                    AdjustmentAccountId = table.Column<int>(type: "int", nullable: true),
+                    AssemblyAccountId = table.Column<int>(type: "int", nullable: true),
+                    Name = table.Column<string>(type: "nvarchar(max)", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -621,48 +611,42 @@ namespace Api.Data.Migrations.ApiDb
                         name: "FK_ItemCategory_Account_AdjustmentAccountId",
                         column: x => x.AdjustmentAccountId,
                         principalTable: "Account",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
+                        principalColumn: "Id");
                     table.ForeignKey(
                         name: "FK_ItemCategory_Account_AssemblyAccountId",
                         column: x => x.AssemblyAccountId,
                         principalTable: "Account",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
+                        principalColumn: "Id");
                     table.ForeignKey(
                         name: "FK_ItemCategory_Account_CostOfGoodsSoldAccountId",
                         column: x => x.CostOfGoodsSoldAccountId,
                         principalTable: "Account",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
+                        principalColumn: "Id");
                     table.ForeignKey(
                         name: "FK_ItemCategory_Account_InventoryAccountId",
                         column: x => x.InventoryAccountId,
                         principalTable: "Account",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_ItemCategory_Measurement_MeasurementId",
-                        column: x => x.MeasurementId,
-                        principalTable: "Measurement",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
+                        principalColumn: "Id");
                     table.ForeignKey(
                         name: "FK_ItemCategory_Account_SalesAccountId",
                         column: x => x.SalesAccountId,
                         principalTable: "Account",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
+                        principalColumn: "Id");
+                    table.ForeignKey(
+                        name: "FK_ItemCategory_Measurement_MeasurementId",
+                        column: x => x.MeasurementId,
+                        principalTable: "Measurement",
+                        principalColumn: "Id");
                 });
 
             migrationBuilder.CreateTable(
                 name: "MainContraAccount",
                 columns: table => new
                 {
-                    Id = table.Column<int>(nullable: false)
-                        .Annotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn),
-                    MainAccountId = table.Column<int>(nullable: false),
-                    RelatedContraAccountId = table.Column<int>(nullable: false)
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    MainAccountId = table.Column<int>(type: "int", nullable: false),
+                    RelatedContraAccountId = table.Column<int>(type: "int", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -671,28 +655,27 @@ namespace Api.Data.Migrations.ApiDb
                         name: "FK_MainContraAccount_Account_MainAccountId",
                         column: x => x.MainAccountId,
                         principalTable: "Account",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
+                        principalColumn: "Id");
                     table.ForeignKey(
                         name: "FK_MainContraAccount_Account_RelatedContraAccountId",
                         column: x => x.RelatedContraAccountId,
                         principalTable: "Account",
                         principalColumn: "Id",
-                        onDelete: ReferentialAction.NoAction);  // changed
+                        onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateTable(
                 name: "Tax",
                 columns: table => new
                 {
-                    Id = table.Column<int>(nullable: false)
-                        .Annotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn),
-                    SalesAccountId = table.Column<int>(nullable: true),
-                    PurchasingAccountId = table.Column<int>(nullable: true),
-                    TaxName = table.Column<string>(maxLength: 50, nullable: false),
-                    TaxCode = table.Column<string>(maxLength: 16, nullable: false),
-                    Rate = table.Column<decimal>(nullable: false),
-                    IsActive = table.Column<bool>(nullable: false)
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    SalesAccountId = table.Column<int>(type: "int", nullable: true),
+                    PurchasingAccountId = table.Column<int>(type: "int", nullable: true),
+                    TaxName = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
+                    TaxCode = table.Column<string>(type: "nvarchar(16)", maxLength: 16, nullable: false),
+                    Rate = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    IsActive = table.Column<bool>(type: "bit", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -701,32 +684,30 @@ namespace Api.Data.Migrations.ApiDb
                         name: "FK_Tax_Account_PurchasingAccountId",
                         column: x => x.PurchasingAccountId,
                         principalTable: "Account",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
+                        principalColumn: "Id");
                     table.ForeignKey(
                         name: "FK_Tax_Account_SalesAccountId",
                         column: x => x.SalesAccountId,
                         principalTable: "Account",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
+                        principalColumn: "Id");
                 });
 
             migrationBuilder.CreateTable(
                 name: "Customer",
                 columns: table => new
                 {
-                    Id = table.Column<int>(nullable: false)
-                        .Annotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn),
-                    No = table.Column<string>(nullable: true),
-                    PartyId = table.Column<int>(nullable: true),
-                    PrimaryContactId = table.Column<int>(nullable: true),
-                    TaxGroupId = table.Column<int>(nullable: true),
-                    AccountsReceivableAccountId = table.Column<int>(nullable: true),
-                    SalesAccountId = table.Column<int>(nullable: true),
-                    SalesDiscountAccountId = table.Column<int>(nullable: true),
-                    PromptPaymentDiscountAccountId = table.Column<int>(nullable: true),
-                    PaymentTermId = table.Column<int>(nullable: true),
-                    CustomerAdvancesAccountId = table.Column<int>(nullable: true)
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    No = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    PartyId = table.Column<int>(type: "int", nullable: true),
+                    PrimaryContactId = table.Column<int>(type: "int", nullable: true),
+                    TaxGroupId = table.Column<int>(type: "int", nullable: true),
+                    AccountsReceivableAccountId = table.Column<int>(type: "int", nullable: true),
+                    SalesAccountId = table.Column<int>(type: "int", nullable: true),
+                    SalesDiscountAccountId = table.Column<int>(type: "int", nullable: true),
+                    PromptPaymentDiscountAccountId = table.Column<int>(type: "int", nullable: true),
+                    PaymentTermId = table.Column<int>(type: "int", nullable: true),
+                    CustomerAdvancesAccountId = table.Column<int>(type: "int", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -735,72 +716,63 @@ namespace Api.Data.Migrations.ApiDb
                         name: "FK_Customer_Account_AccountsReceivableAccountId",
                         column: x => x.AccountsReceivableAccountId,
                         principalTable: "Account",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
+                        principalColumn: "Id");
                     table.ForeignKey(
                         name: "FK_Customer_Account_CustomerAdvancesAccountId",
                         column: x => x.CustomerAdvancesAccountId,
                         principalTable: "Account",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_Customer_Party_PartyId",
-                        column: x => x.PartyId,
-                        principalTable: "Party",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_Customer_PaymentTerm_PaymentTermId",
-                        column: x => x.PaymentTermId,
-                        principalTable: "PaymentTerm",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_Customer_Contact_PrimaryContactId",
-                        column: x => x.PrimaryContactId,
-                        principalTable: "Contact",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
+                        principalColumn: "Id");
                     table.ForeignKey(
                         name: "FK_Customer_Account_PromptPaymentDiscountAccountId",
                         column: x => x.PromptPaymentDiscountAccountId,
                         principalTable: "Account",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
+                        principalColumn: "Id");
                     table.ForeignKey(
                         name: "FK_Customer_Account_SalesAccountId",
                         column: x => x.SalesAccountId,
                         principalTable: "Account",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
+                        principalColumn: "Id");
                     table.ForeignKey(
                         name: "FK_Customer_Account_SalesDiscountAccountId",
                         column: x => x.SalesDiscountAccountId,
                         principalTable: "Account",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
+                        principalColumn: "Id");
+                    table.ForeignKey(
+                        name: "FK_Customer_Contact_PrimaryContactId",
+                        column: x => x.PrimaryContactId,
+                        principalTable: "Contact",
+                        principalColumn: "Id");
+                    table.ForeignKey(
+                        name: "FK_Customer_Party_PartyId",
+                        column: x => x.PartyId,
+                        principalTable: "Party",
+                        principalColumn: "Id");
+                    table.ForeignKey(
+                        name: "FK_Customer_PaymentTerm_PaymentTermId",
+                        column: x => x.PaymentTermId,
+                        principalTable: "PaymentTerm",
+                        principalColumn: "Id");
                     table.ForeignKey(
                         name: "FK_Customer_TaxGroup_TaxGroupId",
                         column: x => x.TaxGroupId,
                         principalTable: "TaxGroup",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
+                        principalColumn: "Id");
                 });
 
             migrationBuilder.CreateTable(
                 name: "Vendor",
                 columns: table => new
                 {
-                    Id = table.Column<int>(nullable: false)
-                        .Annotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn),
-                    No = table.Column<string>(nullable: true),
-                    PartyId = table.Column<int>(nullable: true),
-                    AccountsPayableAccountId = table.Column<int>(nullable: true),
-                    PurchaseAccountId = table.Column<int>(nullable: true),
-                    PurchaseDiscountAccountId = table.Column<int>(nullable: true),
-                    PrimaryContactId = table.Column<int>(nullable: true),
-                    PaymentTermId = table.Column<int>(nullable: true),
-                    TaxGroupId = table.Column<int>(nullable: true)
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    No = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    PartyId = table.Column<int>(type: "int", nullable: true),
+                    AccountsPayableAccountId = table.Column<int>(type: "int", nullable: true),
+                    PurchaseAccountId = table.Column<int>(type: "int", nullable: true),
+                    PurchaseDiscountAccountId = table.Column<int>(type: "int", nullable: true),
+                    PrimaryContactId = table.Column<int>(type: "int", nullable: true),
+                    PaymentTermId = table.Column<int>(type: "int", nullable: true),
+                    TaxGroupId = table.Column<int>(type: "int", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -809,57 +781,50 @@ namespace Api.Data.Migrations.ApiDb
                         name: "FK_Vendor_Account_AccountsPayableAccountId",
                         column: x => x.AccountsPayableAccountId,
                         principalTable: "Account",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_Vendor_Party_PartyId",
-                        column: x => x.PartyId,
-                        principalTable: "Party",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_Vendor_PaymentTerm_PaymentTermId",
-                        column: x => x.PaymentTermId,
-                        principalTable: "PaymentTerm",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_Vendor_Contact_PrimaryContactId",
-                        column: x => x.PrimaryContactId,
-                        principalTable: "Contact",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
+                        principalColumn: "Id");
                     table.ForeignKey(
                         name: "FK_Vendor_Account_PurchaseAccountId",
                         column: x => x.PurchaseAccountId,
                         principalTable: "Account",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
+                        principalColumn: "Id");
                     table.ForeignKey(
                         name: "FK_Vendor_Account_PurchaseDiscountAccountId",
                         column: x => x.PurchaseDiscountAccountId,
                         principalTable: "Account",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
+                        principalColumn: "Id");
+                    table.ForeignKey(
+                        name: "FK_Vendor_Contact_PrimaryContactId",
+                        column: x => x.PrimaryContactId,
+                        principalTable: "Contact",
+                        principalColumn: "Id");
+                    table.ForeignKey(
+                        name: "FK_Vendor_Party_PartyId",
+                        column: x => x.PartyId,
+                        principalTable: "Party",
+                        principalColumn: "Id");
+                    table.ForeignKey(
+                        name: "FK_Vendor_PaymentTerm_PaymentTermId",
+                        column: x => x.PaymentTermId,
+                        principalTable: "PaymentTerm",
+                        principalColumn: "Id");
                     table.ForeignKey(
                         name: "FK_Vendor_TaxGroup_TaxGroupId",
                         column: x => x.TaxGroupId,
                         principalTable: "TaxGroup",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
+                        principalColumn: "Id");
                 });
 
             migrationBuilder.CreateTable(
                 name: "JournalEntryLine",
                 columns: table => new
                 {
-                    Id = table.Column<int>(nullable: false)
-                        .Annotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn),
-                    JournalEntryHeaderId = table.Column<int>(nullable: false),
-                    AccountId = table.Column<int>(nullable: false),
-                    DrCr = table.Column<int>(nullable: false),
-                    Amount = table.Column<decimal>(nullable: false),
-                    Memo = table.Column<string>(nullable: true)
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    JournalEntryHeaderId = table.Column<int>(type: "int", nullable: false),
+                    AccountId = table.Column<int>(type: "int", nullable: false),
+                    DrCr = table.Column<int>(type: "int", nullable: false),
+                    Amount = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    Memo = table.Column<string>(type: "nvarchar(max)", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -883,10 +848,10 @@ namespace Api.Data.Migrations.ApiDb
                 schema: "dbo",
                 columns: table => new
                 {
-                    Id = table.Column<int>(nullable: false)
-                        .Annotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn),
-                    SecurityRoleId = table.Column<int>(nullable: false),
-                    SecurityPermissionId = table.Column<int>(nullable: false)
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    SecurityRoleId = table.Column<int>(type: "int", nullable: false),
+                    SecurityPermissionId = table.Column<int>(type: "int", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -911,11 +876,11 @@ namespace Api.Data.Migrations.ApiDb
                 name: "ItemTaxGroupTax",
                 columns: table => new
                 {
-                    Id = table.Column<int>(nullable: false)
-                        .Annotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn),
-                    TaxId = table.Column<int>(nullable: false),
-                    ItemTaxGroupId = table.Column<int>(nullable: false),
-                    IsExempt = table.Column<bool>(nullable: false)
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    TaxId = table.Column<int>(type: "int", nullable: false),
+                    ItemTaxGroupId = table.Column<int>(type: "int", nullable: false),
+                    IsExempt = table.Column<bool>(type: "bit", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -938,10 +903,10 @@ namespace Api.Data.Migrations.ApiDb
                 name: "TaxGroupTax",
                 columns: table => new
                 {
-                    Id = table.Column<int>(nullable: false)
-                        .Annotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn),
-                    TaxId = table.Column<int>(nullable: false),
-                    TaxGroupId = table.Column<int>(nullable: false)
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    TaxId = table.Column<int>(type: "int", nullable: false),
+                    TaxGroupId = table.Column<int>(type: "int", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -964,10 +929,10 @@ namespace Api.Data.Migrations.ApiDb
                 name: "CustomerContact",
                 columns: table => new
                 {
-                    Id = table.Column<int>(nullable: false)
-                        .Annotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn),
-                    ContactId = table.Column<int>(nullable: false),
-                    CustomerId = table.Column<int>(nullable: false)
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    ContactId = table.Column<int>(type: "int", nullable: false),
+                    CustomerId = table.Column<int>(type: "int", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -990,14 +955,14 @@ namespace Api.Data.Migrations.ApiDb
                 name: "SalesDeliveryHeader",
                 columns: table => new
                 {
-                    Id = table.Column<int>(nullable: false)
-                        .Annotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn),
-                    PaymentTermId = table.Column<int>(nullable: true),
-                    CustomerId = table.Column<int>(nullable: true),
-                    GeneralLedgerHeaderId = table.Column<int>(nullable: true),
-                    No = table.Column<string>(nullable: true),
-                    Date = table.Column<DateTime>(nullable: false),
-                    Status = table.Column<int>(nullable: true)
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    PaymentTermId = table.Column<int>(type: "int", nullable: true),
+                    CustomerId = table.Column<int>(type: "int", nullable: true),
+                    GeneralLedgerHeaderId = table.Column<int>(type: "int", nullable: true),
+                    No = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    Date = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    Status = table.Column<int>(type: "int", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -1006,36 +971,33 @@ namespace Api.Data.Migrations.ApiDb
                         name: "FK_SalesDeliveryHeader_Customer_CustomerId",
                         column: x => x.CustomerId,
                         principalTable: "Customer",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
+                        principalColumn: "Id");
                     table.ForeignKey(
                         name: "FK_SalesDeliveryHeader_GeneralLedgerHeader_GeneralLedgerHeaderId",
                         column: x => x.GeneralLedgerHeaderId,
                         principalTable: "GeneralLedgerHeader",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
+                        principalColumn: "Id");
                     table.ForeignKey(
                         name: "FK_SalesDeliveryHeader_PaymentTerm_PaymentTermId",
                         column: x => x.PaymentTermId,
                         principalTable: "PaymentTerm",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
+                        principalColumn: "Id");
                 });
 
             migrationBuilder.CreateTable(
                 name: "SalesInvoiceHeader",
                 columns: table => new
                 {
-                    Id = table.Column<int>(nullable: false)
-                        .Annotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn),
-                    CustomerId = table.Column<int>(nullable: false),
-                    GeneralLedgerHeaderId = table.Column<int>(nullable: true),
-                    No = table.Column<string>(nullable: true),
-                    Date = table.Column<DateTime>(nullable: false),
-                    ShippingHandlingCharge = table.Column<decimal>(nullable: false),
-                    PaymentTermId = table.Column<int>(nullable: true),
-                    ReferenceNo = table.Column<string>(nullable: true),
-                    Status = table.Column<int>(nullable: true)
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    CustomerId = table.Column<int>(type: "int", nullable: false),
+                    GeneralLedgerHeaderId = table.Column<int>(type: "int", nullable: true),
+                    No = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    Date = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    ShippingHandlingCharge = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    PaymentTermId = table.Column<int>(type: "int", nullable: true),
+                    ReferenceNo = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    Status = table.Column<int>(type: "int", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -1050,22 +1012,21 @@ namespace Api.Data.Migrations.ApiDb
                         name: "FK_SalesInvoiceHeader_GeneralLedgerHeader_GeneralLedgerHeaderId",
                         column: x => x.GeneralLedgerHeaderId,
                         principalTable: "GeneralLedgerHeader",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
+                        principalColumn: "Id");
                 });
 
             migrationBuilder.CreateTable(
                 name: "SalesOrderHeader",
                 columns: table => new
                 {
-                    Id = table.Column<int>(nullable: false)
-                        .Annotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn),
-                    CustomerId = table.Column<int>(nullable: true),
-                    PaymentTermId = table.Column<int>(nullable: true),
-                    No = table.Column<string>(nullable: true),
-                    ReferenceNo = table.Column<string>(nullable: true),
-                    Status = table.Column<int>(nullable: true),
-                    Date = table.Column<DateTime>(nullable: false)
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    CustomerId = table.Column<int>(type: "int", nullable: true),
+                    PaymentTermId = table.Column<int>(type: "int", nullable: true),
+                    No = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    ReferenceNo = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    Status = table.Column<int>(type: "int", nullable: true),
+                    Date = table.Column<DateTime>(type: "datetime2", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -1074,28 +1035,26 @@ namespace Api.Data.Migrations.ApiDb
                         name: "FK_SalesOrderHeader_Customer_CustomerId",
                         column: x => x.CustomerId,
                         principalTable: "Customer",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
+                        principalColumn: "Id");
                     table.ForeignKey(
                         name: "FK_SalesOrderHeader_PaymentTerm_PaymentTermId",
                         column: x => x.PaymentTermId,
                         principalTable: "PaymentTerm",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
+                        principalColumn: "Id");
                 });
 
             migrationBuilder.CreateTable(
                 name: "SalesQuoteHeader",
                 columns: table => new
                 {
-                    Id = table.Column<int>(nullable: false)
-                        .Annotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn),
-                    CustomerId = table.Column<int>(nullable: false),
-                    PaymentTermId = table.Column<int>(nullable: true),
-                    ReferenceNo = table.Column<string>(nullable: true),
-                    No = table.Column<string>(nullable: true),
-                    Status = table.Column<int>(nullable: true),
-                    Date = table.Column<DateTime>(nullable: false)
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    CustomerId = table.Column<int>(type: "int", nullable: false),
+                    PaymentTermId = table.Column<int>(type: "int", nullable: true),
+                    ReferenceNo = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    No = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    Status = table.Column<int>(type: "int", nullable: true),
+                    Date = table.Column<DateTime>(type: "datetime2", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -1112,15 +1071,15 @@ namespace Api.Data.Migrations.ApiDb
                 name: "SalesReceiptHeader",
                 columns: table => new
                 {
-                    Id = table.Column<int>(nullable: false)
-                        .Annotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn),
-                    CustomerId = table.Column<int>(nullable: false),
-                    GeneralLedgerHeaderId = table.Column<int>(nullable: true),
-                    AccountToDebitId = table.Column<int>(nullable: true),
-                    No = table.Column<string>(nullable: true),
-                    Date = table.Column<DateTime>(nullable: false),
-                    Amount = table.Column<decimal>(nullable: false),
-                    Status = table.Column<int>(nullable: true)
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    CustomerId = table.Column<int>(type: "int", nullable: false),
+                    GeneralLedgerHeaderId = table.Column<int>(type: "int", nullable: true),
+                    AccountToDebitId = table.Column<int>(type: "int", nullable: true),
+                    No = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    Date = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    Amount = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    Status = table.Column<int>(type: "int", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -1129,8 +1088,7 @@ namespace Api.Data.Migrations.ApiDb
                         name: "FK_SalesReceiptHeader_Account_AccountToDebitId",
                         column: x => x.AccountToDebitId,
                         principalTable: "Account",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
+                        principalColumn: "Id");
                     table.ForeignKey(
                         name: "FK_SalesReceiptHeader_Customer_CustomerId",
                         column: x => x.CustomerId,
@@ -1141,33 +1099,32 @@ namespace Api.Data.Migrations.ApiDb
                         name: "FK_SalesReceiptHeader_GeneralLedgerHeader_GeneralLedgerHeaderId",
                         column: x => x.GeneralLedgerHeaderId,
                         principalTable: "GeneralLedgerHeader",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
+                        principalColumn: "Id");
                 });
 
             migrationBuilder.CreateTable(
                 name: "Item",
                 columns: table => new
                 {
-                    Id = table.Column<int>(nullable: false)
-                        .Annotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn),
-                    ItemCategoryId = table.Column<int>(nullable: true),
-                    SmallestMeasurementId = table.Column<int>(nullable: true),
-                    SellMeasurementId = table.Column<int>(nullable: true),
-                    PurchaseMeasurementId = table.Column<int>(nullable: true),
-                    PreferredVendorId = table.Column<int>(nullable: true),
-                    ItemTaxGroupId = table.Column<int>(nullable: true),
-                    SalesAccountId = table.Column<int>(nullable: true),
-                    InventoryAccountId = table.Column<int>(nullable: true),
-                    CostOfGoodsSoldAccountId = table.Column<int>(nullable: true),
-                    InventoryAdjustmentAccountId = table.Column<int>(nullable: true),
-                    No = table.Column<string>(nullable: true),
-                    Code = table.Column<string>(nullable: true),
-                    Description = table.Column<string>(nullable: true),
-                    PurchaseDescription = table.Column<string>(nullable: true),
-                    SellDescription = table.Column<string>(nullable: true),
-                    Cost = table.Column<decimal>(nullable: true),
-                    Price = table.Column<decimal>(nullable: true)
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    ItemCategoryId = table.Column<int>(type: "int", nullable: true),
+                    SmallestMeasurementId = table.Column<int>(type: "int", nullable: true),
+                    SellMeasurementId = table.Column<int>(type: "int", nullable: true),
+                    PurchaseMeasurementId = table.Column<int>(type: "int", nullable: true),
+                    PreferredVendorId = table.Column<int>(type: "int", nullable: true),
+                    ItemTaxGroupId = table.Column<int>(type: "int", nullable: true),
+                    SalesAccountId = table.Column<int>(type: "int", nullable: true),
+                    InventoryAccountId = table.Column<int>(type: "int", nullable: true),
+                    CostOfGoodsSoldAccountId = table.Column<int>(type: "int", nullable: true),
+                    InventoryAdjustmentAccountId = table.Column<int>(type: "int", nullable: true),
+                    No = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    Code = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    Description = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    PurchaseDescription = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    SellDescription = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    Cost = table.Column<decimal>(type: "decimal(18,2)", nullable: true),
+                    Price = table.Column<decimal>(type: "decimal(18,2)", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -1176,79 +1133,69 @@ namespace Api.Data.Migrations.ApiDb
                         name: "FK_Item_Account_CostOfGoodsSoldAccountId",
                         column: x => x.CostOfGoodsSoldAccountId,
                         principalTable: "Account",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
+                        principalColumn: "Id");
                     table.ForeignKey(
                         name: "FK_Item_Account_InventoryAccountId",
                         column: x => x.InventoryAccountId,
                         principalTable: "Account",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
+                        principalColumn: "Id");
                     table.ForeignKey(
                         name: "FK_Item_Account_InventoryAdjustmentAccountId",
                         column: x => x.InventoryAdjustmentAccountId,
                         principalTable: "Account",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_Item_ItemCategory_ItemCategoryId",
-                        column: x => x.ItemCategoryId,
-                        principalTable: "ItemCategory",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_Item_ItemTaxGroup_ItemTaxGroupId",
-                        column: x => x.ItemTaxGroupId,
-                        principalTable: "ItemTaxGroup",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_Item_Vendor_PreferredVendorId",
-                        column: x => x.PreferredVendorId,
-                        principalTable: "Vendor",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_Item_Measurement_PurchaseMeasurementId",
-                        column: x => x.PurchaseMeasurementId,
-                        principalTable: "Measurement",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
+                        principalColumn: "Id");
                     table.ForeignKey(
                         name: "FK_Item_Account_SalesAccountId",
                         column: x => x.SalesAccountId,
                         principalTable: "Account",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
+                        principalColumn: "Id");
+                    table.ForeignKey(
+                        name: "FK_Item_ItemCategory_ItemCategoryId",
+                        column: x => x.ItemCategoryId,
+                        principalTable: "ItemCategory",
+                        principalColumn: "Id");
+                    table.ForeignKey(
+                        name: "FK_Item_ItemTaxGroup_ItemTaxGroupId",
+                        column: x => x.ItemTaxGroupId,
+                        principalTable: "ItemTaxGroup",
+                        principalColumn: "Id");
+                    table.ForeignKey(
+                        name: "FK_Item_Measurement_PurchaseMeasurementId",
+                        column: x => x.PurchaseMeasurementId,
+                        principalTable: "Measurement",
+                        principalColumn: "Id");
                     table.ForeignKey(
                         name: "FK_Item_Measurement_SellMeasurementId",
                         column: x => x.SellMeasurementId,
                         principalTable: "Measurement",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
+                        principalColumn: "Id");
                     table.ForeignKey(
                         name: "FK_Item_Measurement_SmallestMeasurementId",
                         column: x => x.SmallestMeasurementId,
                         principalTable: "Measurement",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
+                        principalColumn: "Id");
+                    table.ForeignKey(
+                        name: "FK_Item_Vendor_PreferredVendorId",
+                        column: x => x.PreferredVendorId,
+                        principalTable: "Vendor",
+                        principalColumn: "Id");
                 });
 
             migrationBuilder.CreateTable(
                 name: "PurchaseInvoiceHeader",
                 columns: table => new
                 {
-                    Id = table.Column<int>(nullable: false)
-                        .Annotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn),
-                    VendorId = table.Column<int>(nullable: true),
-                    GeneralLedgerHeaderId = table.Column<int>(nullable: true),
-                    Date = table.Column<DateTime>(nullable: false),
-                    No = table.Column<string>(nullable: true),
-                    VendorInvoiceNo = table.Column<string>(nullable: false),
-                    Description = table.Column<string>(nullable: true),
-                    PaymentTermId = table.Column<int>(nullable: true),
-                    ReferenceNo = table.Column<string>(nullable: true),
-                    Status = table.Column<int>(nullable: true)
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    VendorId = table.Column<int>(type: "int", nullable: true),
+                    GeneralLedgerHeaderId = table.Column<int>(type: "int", nullable: true),
+                    Date = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    No = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    VendorInvoiceNo = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    Description = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    PaymentTermId = table.Column<int>(type: "int", nullable: true),
+                    ReferenceNo = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    Status = table.Column<int>(type: "int", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -1257,26 +1204,24 @@ namespace Api.Data.Migrations.ApiDb
                         name: "FK_PurchaseInvoiceHeader_GeneralLedgerHeader_GeneralLedgerHeaderId",
                         column: x => x.GeneralLedgerHeaderId,
                         principalTable: "GeneralLedgerHeader",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
+                        principalColumn: "Id");
                     table.ForeignKey(
                         name: "FK_PurchaseInvoiceHeader_Vendor_VendorId",
                         column: x => x.VendorId,
                         principalTable: "Vendor",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
+                        principalColumn: "Id");
                 });
 
             migrationBuilder.CreateTable(
                 name: "PurchaseReceiptHeader",
                 columns: table => new
                 {
-                    Id = table.Column<int>(nullable: false)
-                        .Annotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn),
-                    VendorId = table.Column<int>(nullable: false),
-                    GeneralLedgerHeaderId = table.Column<int>(nullable: true),
-                    Date = table.Column<DateTime>(nullable: false),
-                    No = table.Column<string>(nullable: true)
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    VendorId = table.Column<int>(type: "int", nullable: false),
+                    GeneralLedgerHeaderId = table.Column<int>(type: "int", nullable: true),
+                    Date = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    No = table.Column<string>(type: "nvarchar(max)", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -1285,8 +1230,7 @@ namespace Api.Data.Migrations.ApiDb
                         name: "FK_PurchaseReceiptHeader_GeneralLedgerHeader_GeneralLedgerHeaderId",
                         column: x => x.GeneralLedgerHeaderId,
                         principalTable: "GeneralLedgerHeader",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
+                        principalColumn: "Id");
                     table.ForeignKey(
                         name: "FK_PurchaseReceiptHeader_Vendor_VendorId",
                         column: x => x.VendorId,
@@ -1299,10 +1243,10 @@ namespace Api.Data.Migrations.ApiDb
                 name: "VendorContact",
                 columns: table => new
                 {
-                    Id = table.Column<int>(nullable: false)
-                        .Annotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn),
-                    ContactId = table.Column<int>(nullable: false),
-                    VendorId = table.Column<int>(nullable: false)
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    ContactId = table.Column<int>(type: "int", nullable: false),
+                    VendorId = table.Column<int>(type: "int", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -1325,13 +1269,13 @@ namespace Api.Data.Migrations.ApiDb
                 name: "CustomerAllocation",
                 columns: table => new
                 {
-                    Id = table.Column<int>(nullable: false)
-                        .Annotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn),
-                    CustomerId = table.Column<int>(nullable: false),
-                    SalesInvoiceHeaderId = table.Column<int>(nullable: false),
-                    SalesReceiptHeaderId = table.Column<int>(nullable: false),
-                    Date = table.Column<DateTime>(nullable: false),
-                    Amount = table.Column<decimal>(nullable: false)
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    CustomerId = table.Column<int>(type: "int", nullable: false),
+                    SalesInvoiceHeaderId = table.Column<int>(type: "int", nullable: false),
+                    SalesReceiptHeaderId = table.Column<int>(type: "int", nullable: false),
+                    Date = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    Amount = table.Column<decimal>(type: "decimal(18,2)", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -1340,37 +1284,34 @@ namespace Api.Data.Migrations.ApiDb
                         name: "FK_CustomerAllocation_Customer_CustomerId",
                         column: x => x.CustomerId,
                         principalTable: "Customer",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
+                        principalColumn: "Id");
                     table.ForeignKey(
                         name: "FK_CustomerAllocation_SalesInvoiceHeader_SalesInvoiceHeaderId",
                         column: x => x.SalesInvoiceHeaderId,
                         principalTable: "SalesInvoiceHeader",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.NoAction);  // changed
+                        principalColumn: "Id");
                     table.ForeignKey(
                         name: "FK_CustomerAllocation_SalesReceiptHeader_SalesReceiptHeaderId",
                         column: x => x.SalesReceiptHeaderId,
                         principalTable: "SalesReceiptHeader",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.NoAction);  // changed
+                        principalColumn: "Id");
                 });
 
             migrationBuilder.CreateTable(
                 name: "InventoryControlJournal",
                 columns: table => new
                 {
-                    Id = table.Column<int>(nullable: false)
-                        .Annotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn),
-                    ItemId = table.Column<int>(nullable: false),
-                    MeasurementId = table.Column<int>(nullable: false),
-                    DocumentType = table.Column<int>(nullable: false),
-                    INQty = table.Column<decimal>(nullable: true),
-                    OUTQty = table.Column<decimal>(nullable: true),
-                    Date = table.Column<DateTime>(nullable: false),
-                    TotalCost = table.Column<decimal>(nullable: true),
-                    TotalAmount = table.Column<decimal>(nullable: true),
-                    IsReverse = table.Column<bool>(nullable: false)
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    ItemId = table.Column<int>(type: "int", nullable: false),
+                    MeasurementId = table.Column<int>(type: "int", nullable: false),
+                    DocumentType = table.Column<int>(type: "int", nullable: false),
+                    INQty = table.Column<decimal>(type: "decimal(18,2)", nullable: true),
+                    OUTQty = table.Column<decimal>(type: "decimal(18,2)", nullable: true),
+                    Date = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    TotalCost = table.Column<decimal>(type: "decimal(18,2)", nullable: true),
+                    TotalAmount = table.Column<decimal>(type: "decimal(18,2)", nullable: true),
+                    IsReverse = table.Column<bool>(type: "bit", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -1393,14 +1334,14 @@ namespace Api.Data.Migrations.ApiDb
                 name: "SalesOrderLine",
                 columns: table => new
                 {
-                    Id = table.Column<int>(nullable: false)
-                        .Annotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn),
-                    SalesOrderHeaderId = table.Column<int>(nullable: false),
-                    ItemId = table.Column<int>(nullable: false),
-                    MeasurementId = table.Column<int>(nullable: false),
-                    Quantity = table.Column<decimal>(nullable: false),
-                    Discount = table.Column<decimal>(nullable: false),
-                    Amount = table.Column<decimal>(nullable: false)
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    SalesOrderHeaderId = table.Column<int>(type: "int", nullable: false),
+                    ItemId = table.Column<int>(type: "int", nullable: false),
+                    MeasurementId = table.Column<int>(type: "int", nullable: false),
+                    Quantity = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    Discount = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    Amount = table.Column<decimal>(type: "decimal(18,2)", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -1429,14 +1370,14 @@ namespace Api.Data.Migrations.ApiDb
                 name: "SalesQuoteLine",
                 columns: table => new
                 {
-                    Id = table.Column<int>(nullable: false)
-                        .Annotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn),
-                    SalesQuoteHeaderId = table.Column<int>(nullable: false),
-                    ItemId = table.Column<int>(nullable: false),
-                    MeasurementId = table.Column<int>(nullable: false),
-                    Quantity = table.Column<decimal>(nullable: false),
-                    Discount = table.Column<decimal>(nullable: false),
-                    Amount = table.Column<decimal>(nullable: false)
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    SalesQuoteHeaderId = table.Column<int>(type: "int", nullable: false),
+                    ItemId = table.Column<int>(type: "int", nullable: false),
+                    MeasurementId = table.Column<int>(type: "int", nullable: false),
+                    Quantity = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    Discount = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    Amount = table.Column<decimal>(type: "decimal(18,2)", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -1465,16 +1406,16 @@ namespace Api.Data.Migrations.ApiDb
                 name: "PurchaseOrderHeader",
                 columns: table => new
                 {
-                    Id = table.Column<int>(nullable: false)
-                        .Annotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn),
-                    VendorId = table.Column<int>(nullable: true),
-                    No = table.Column<string>(nullable: true),
-                    Date = table.Column<DateTime>(nullable: false),
-                    Description = table.Column<string>(nullable: true),
-                    PaymentTermId = table.Column<int>(nullable: true),
-                    ReferenceNo = table.Column<string>(nullable: true),
-                    Status = table.Column<int>(nullable: true),
-                    PurchaseInvoiceHeaderId = table.Column<int>(nullable: true)
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    VendorId = table.Column<int>(type: "int", nullable: true),
+                    No = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    Date = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    Description = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    PaymentTermId = table.Column<int>(type: "int", nullable: true),
+                    ReferenceNo = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    Status = table.Column<int>(type: "int", nullable: true),
+                    PurchaseInvoiceHeaderId = table.Column<int>(type: "int", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -1483,28 +1424,26 @@ namespace Api.Data.Migrations.ApiDb
                         name: "FK_PurchaseOrderHeader_PurchaseInvoiceHeader_PurchaseInvoiceHeaderId",
                         column: x => x.PurchaseInvoiceHeaderId,
                         principalTable: "PurchaseInvoiceHeader",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
+                        principalColumn: "Id");
                     table.ForeignKey(
                         name: "FK_PurchaseOrderHeader_Vendor_VendorId",
                         column: x => x.VendorId,
                         principalTable: "Vendor",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
+                        principalColumn: "Id");
                 });
 
             migrationBuilder.CreateTable(
                 name: "VendorPayment",
                 columns: table => new
                 {
-                    Id = table.Column<int>(nullable: false)
-                        .Annotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn),
-                    VendorId = table.Column<int>(nullable: false),
-                    PurchaseInvoiceHeaderId = table.Column<int>(nullable: true),
-                    GeneralLedgerHeaderId = table.Column<int>(nullable: true),
-                    No = table.Column<string>(nullable: true),
-                    Date = table.Column<DateTime>(nullable: false),
-                    Amount = table.Column<decimal>(nullable: false)
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    VendorId = table.Column<int>(type: "int", nullable: false),
+                    PurchaseInvoiceHeaderId = table.Column<int>(type: "int", nullable: true),
+                    GeneralLedgerHeaderId = table.Column<int>(type: "int", nullable: true),
+                    No = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    Date = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    Amount = table.Column<decimal>(type: "decimal(18,2)", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -1513,14 +1452,12 @@ namespace Api.Data.Migrations.ApiDb
                         name: "FK_VendorPayment_GeneralLedgerHeader_GeneralLedgerHeaderId",
                         column: x => x.GeneralLedgerHeaderId,
                         principalTable: "GeneralLedgerHeader",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
+                        principalColumn: "Id");
                     table.ForeignKey(
                         name: "FK_VendorPayment_PurchaseInvoiceHeader_PurchaseInvoiceHeaderId",
                         column: x => x.PurchaseInvoiceHeaderId,
                         principalTable: "PurchaseInvoiceHeader",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
+                        principalColumn: "Id");
                     table.ForeignKey(
                         name: "FK_VendorPayment_Vendor_VendorId",
                         column: x => x.VendorId,
@@ -1533,16 +1470,16 @@ namespace Api.Data.Migrations.ApiDb
                 name: "SalesInvoiceLine",
                 columns: table => new
                 {
-                    Id = table.Column<int>(nullable: false)
-                        .Annotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn),
-                    SalesInvoiceHeaderId = table.Column<int>(nullable: false),
-                    SalesOrderLineId = table.Column<int>(nullable: true),
-                    ItemId = table.Column<int>(nullable: false),
-                    MeasurementId = table.Column<int>(nullable: false),
-                    InventoryControlJournalId = table.Column<int>(nullable: true),
-                    Quantity = table.Column<decimal>(nullable: false),
-                    Discount = table.Column<decimal>(nullable: false),
-                    Amount = table.Column<decimal>(nullable: false)
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    SalesInvoiceHeaderId = table.Column<int>(type: "int", nullable: false),
+                    SalesOrderLineId = table.Column<int>(type: "int", nullable: true),
+                    ItemId = table.Column<int>(type: "int", nullable: false),
+                    MeasurementId = table.Column<int>(type: "int", nullable: false),
+                    InventoryControlJournalId = table.Column<int>(type: "int", nullable: true),
+                    Quantity = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    Discount = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    Amount = table.Column<decimal>(type: "decimal(18,2)", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -1551,8 +1488,7 @@ namespace Api.Data.Migrations.ApiDb
                         name: "FK_SalesInvoiceLine_InventoryControlJournal_InventoryControlJournalId",
                         column: x => x.InventoryControlJournalId,
                         principalTable: "InventoryControlJournal",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
+                        principalColumn: "Id");
                     table.ForeignKey(
                         name: "FK_SalesInvoiceLine_Item_ItemId",
                         column: x => x.ItemId,
@@ -1575,23 +1511,22 @@ namespace Api.Data.Migrations.ApiDb
                         name: "FK_SalesInvoiceLine_SalesOrderLine_SalesOrderLineId",
                         column: x => x.SalesOrderLineId,
                         principalTable: "SalesOrderLine",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
+                        principalColumn: "Id");
                 });
 
             migrationBuilder.CreateTable(
                 name: "PurchaseOrderLine",
                 columns: table => new
                 {
-                    Id = table.Column<int>(nullable: false)
-                        .Annotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn),
-                    PurchaseOrderHeaderId = table.Column<int>(nullable: false),
-                    ItemId = table.Column<int>(nullable: false),
-                    MeasurementId = table.Column<int>(nullable: false),
-                    Quantity = table.Column<decimal>(nullable: false),
-                    Cost = table.Column<decimal>(nullable: false),
-                    Discount = table.Column<decimal>(nullable: false),
-                    Amount = table.Column<decimal>(nullable: false)
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    PurchaseOrderHeaderId = table.Column<int>(type: "int", nullable: false),
+                    ItemId = table.Column<int>(type: "int", nullable: false),
+                    MeasurementId = table.Column<int>(type: "int", nullable: false),
+                    Quantity = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    Cost = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    Discount = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    Amount = table.Column<decimal>(type: "decimal(18,2)", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -1620,15 +1555,15 @@ namespace Api.Data.Migrations.ApiDb
                 name: "SalesDeliveryLine",
                 columns: table => new
                 {
-                    Id = table.Column<int>(nullable: false)
-                        .Annotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn),
-                    SalesDeliveryHeaderId = table.Column<int>(nullable: false),
-                    SalesInvoiceLineId = table.Column<int>(nullable: true),
-                    ItemId = table.Column<int>(nullable: true),
-                    MeasurementId = table.Column<int>(nullable: true),
-                    Quantity = table.Column<decimal>(nullable: false),
-                    Price = table.Column<decimal>(nullable: false),
-                    Discount = table.Column<decimal>(nullable: false)
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    SalesDeliveryHeaderId = table.Column<int>(type: "int", nullable: false),
+                    SalesInvoiceLineId = table.Column<int>(type: "int", nullable: true),
+                    ItemId = table.Column<int>(type: "int", nullable: true),
+                    MeasurementId = table.Column<int>(type: "int", nullable: true),
+                    Quantity = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    Price = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    Discount = table.Column<decimal>(type: "decimal(18,2)", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -1637,14 +1572,12 @@ namespace Api.Data.Migrations.ApiDb
                         name: "FK_SalesDeliveryLine_Item_ItemId",
                         column: x => x.ItemId,
                         principalTable: "Item",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
+                        principalColumn: "Id");
                     table.ForeignKey(
                         name: "FK_SalesDeliveryLine_Measurement_MeasurementId",
                         column: x => x.MeasurementId,
                         principalTable: "Measurement",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
+                        principalColumn: "Id");
                     table.ForeignKey(
                         name: "FK_SalesDeliveryLine_SalesDeliveryHeader_SalesDeliveryHeaderId",
                         column: x => x.SalesDeliveryHeaderId,
@@ -1655,25 +1588,24 @@ namespace Api.Data.Migrations.ApiDb
                         name: "FK_SalesDeliveryLine_SalesInvoiceLine_SalesInvoiceLineId",
                         column: x => x.SalesInvoiceLineId,
                         principalTable: "SalesInvoiceLine",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
+                        principalColumn: "Id");
                 });
 
             migrationBuilder.CreateTable(
                 name: "SalesReceiptLine",
                 columns: table => new
                 {
-                    Id = table.Column<int>(nullable: false)
-                        .Annotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn),
-                    SalesReceiptHeaderId = table.Column<int>(nullable: false),
-                    SalesInvoiceLineId = table.Column<int>(nullable: true),
-                    ItemId = table.Column<int>(nullable: true),
-                    AccountToCreditId = table.Column<int>(nullable: true),
-                    MeasurementId = table.Column<int>(nullable: true),
-                    Quantity = table.Column<decimal>(nullable: true),
-                    Discount = table.Column<decimal>(nullable: true),
-                    Amount = table.Column<decimal>(nullable: true),
-                    AmountPaid = table.Column<decimal>(nullable: false)
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    SalesReceiptHeaderId = table.Column<int>(type: "int", nullable: false),
+                    SalesInvoiceLineId = table.Column<int>(type: "int", nullable: true),
+                    ItemId = table.Column<int>(type: "int", nullable: true),
+                    AccountToCreditId = table.Column<int>(type: "int", nullable: true),
+                    MeasurementId = table.Column<int>(type: "int", nullable: true),
+                    Quantity = table.Column<decimal>(type: "decimal(18,2)", nullable: true),
+                    Discount = table.Column<decimal>(type: "decimal(18,2)", nullable: true),
+                    Amount = table.Column<decimal>(type: "decimal(18,2)", nullable: true),
+                    AmountPaid = table.Column<decimal>(type: "decimal(18,2)", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -1682,14 +1614,12 @@ namespace Api.Data.Migrations.ApiDb
                         name: "FK_SalesReceiptLine_Account_AccountToCreditId",
                         column: x => x.AccountToCreditId,
                         principalTable: "Account",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
+                        principalColumn: "Id");
                     table.ForeignKey(
                         name: "FK_SalesReceiptLine_SalesInvoiceLine_SalesInvoiceLineId",
                         column: x => x.SalesInvoiceLineId,
                         principalTable: "SalesInvoiceLine",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
+                        principalColumn: "Id");
                     table.ForeignKey(
                         name: "FK_SalesReceiptLine_SalesReceiptHeader_SalesReceiptHeaderId",
                         column: x => x.SalesReceiptHeaderId,
@@ -1702,18 +1632,18 @@ namespace Api.Data.Migrations.ApiDb
                 name: "PurchaseInvoiceLine",
                 columns: table => new
                 {
-                    Id = table.Column<int>(nullable: false)
-                        .Annotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn),
-                    PurchaseInvoiceHeaderId = table.Column<int>(nullable: false),
-                    ItemId = table.Column<int>(nullable: false),
-                    MeasurementId = table.Column<int>(nullable: false),
-                    InventoryControlJournalId = table.Column<int>(nullable: true),
-                    PurchaseOrderLineId = table.Column<int>(nullable: true),
-                    Quantity = table.Column<decimal>(nullable: false),
-                    ReceivedQuantity = table.Column<decimal>(nullable: true),
-                    Cost = table.Column<decimal>(nullable: true),
-                    Discount = table.Column<decimal>(nullable: true),
-                    Amount = table.Column<decimal>(nullable: false)
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    PurchaseInvoiceHeaderId = table.Column<int>(type: "int", nullable: false),
+                    ItemId = table.Column<int>(type: "int", nullable: false),
+                    MeasurementId = table.Column<int>(type: "int", nullable: false),
+                    InventoryControlJournalId = table.Column<int>(type: "int", nullable: true),
+                    PurchaseOrderLineId = table.Column<int>(type: "int", nullable: true),
+                    Quantity = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    ReceivedQuantity = table.Column<decimal>(type: "decimal(18,2)", nullable: true),
+                    Cost = table.Column<decimal>(type: "decimal(18,2)", nullable: true),
+                    Discount = table.Column<decimal>(type: "decimal(18,2)", nullable: true),
+                    Amount = table.Column<decimal>(type: "decimal(18,2)", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -1722,8 +1652,7 @@ namespace Api.Data.Migrations.ApiDb
                         name: "FK_PurchaseInvoiceLine_InventoryControlJournal_InventoryControlJournalId",
                         column: x => x.InventoryControlJournalId,
                         principalTable: "InventoryControlJournal",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
+                        principalColumn: "Id");
                     table.ForeignKey(
                         name: "FK_PurchaseInvoiceLine_Item_ItemId",
                         column: x => x.ItemId,
@@ -1746,26 +1675,25 @@ namespace Api.Data.Migrations.ApiDb
                         name: "FK_PurchaseInvoiceLine_PurchaseOrderLine_PurchaseOrderLineId",
                         column: x => x.PurchaseOrderLineId,
                         principalTable: "PurchaseOrderLine",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
+                        principalColumn: "Id");
                 });
 
             migrationBuilder.CreateTable(
                 name: "PurchaseReceiptLine",
                 columns: table => new
                 {
-                    Id = table.Column<int>(nullable: false)
-                        .Annotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn),
-                    PurchaseReceiptHeaderId = table.Column<int>(nullable: false),
-                    ItemId = table.Column<int>(nullable: false),
-                    InventoryControlJournalId = table.Column<int>(nullable: true),
-                    PurchaseInvoiceLineId = table.Column<int>(nullable: true),
-                    MeasurementId = table.Column<int>(nullable: false),
-                    Quantity = table.Column<decimal>(nullable: false),
-                    ReceivedQuantity = table.Column<decimal>(nullable: false),
-                    Cost = table.Column<decimal>(nullable: false),
-                    Discount = table.Column<decimal>(nullable: false),
-                    Amount = table.Column<decimal>(nullable: false)
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    PurchaseReceiptHeaderId = table.Column<int>(type: "int", nullable: false),
+                    ItemId = table.Column<int>(type: "int", nullable: false),
+                    InventoryControlJournalId = table.Column<int>(type: "int", nullable: true),
+                    PurchaseInvoiceLineId = table.Column<int>(type: "int", nullable: true),
+                    MeasurementId = table.Column<int>(type: "int", nullable: false),
+                    Quantity = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    ReceivedQuantity = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    Cost = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    Discount = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    Amount = table.Column<decimal>(type: "decimal(18,2)", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -1774,8 +1702,7 @@ namespace Api.Data.Migrations.ApiDb
                         name: "FK_PurchaseReceiptLine_InventoryControlJournal_InventoryControlJournalId",
                         column: x => x.InventoryControlJournalId,
                         principalTable: "InventoryControlJournal",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
+                        principalColumn: "Id");
                     table.ForeignKey(
                         name: "FK_PurchaseReceiptLine_Item_ItemId",
                         column: x => x.ItemId,
@@ -1792,8 +1719,7 @@ namespace Api.Data.Migrations.ApiDb
                         name: "FK_PurchaseReceiptLine_PurchaseInvoiceLine_PurchaseInvoiceLineId",
                         column: x => x.PurchaseInvoiceLineId,
                         principalTable: "PurchaseInvoiceLine",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
+                        principalColumn: "Id");
                     table.ForeignKey(
                         name: "FK_PurchaseReceiptLine_PurchaseReceiptHeader_PurchaseReceiptHeaderId",
                         column: x => x.PurchaseReceiptHeaderId,
@@ -1816,6 +1742,12 @@ namespace Api.Data.Migrations.ApiDb
                 name: "IX_Account_ParentAccountId",
                 table: "Account",
                 column: "ParentAccountId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AuditableAttribute_AuditableEntityId",
+                schema: "dbo",
+                table: "AuditableAttribute",
+                column: "AuditableEntityId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Bank_AccountId",
@@ -2075,7 +2007,8 @@ namespace Api.Data.Migrations.ApiDb
             migrationBuilder.CreateIndex(
                 name: "IX_MainContraAccount_MainAccountId",
                 table: "MainContraAccount",
-                column: "MainAccountId");
+                column: "MainAccountId",
+                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_MainContraAccount_RelatedContraAccountId",
@@ -2323,6 +2256,36 @@ namespace Api.Data.Migrations.ApiDb
                 column: "SalesReceiptHeaderId");
 
             migrationBuilder.CreateIndex(
+                name: "IX_SecurityPermission_SecurityGroupId",
+                schema: "dbo",
+                table: "SecurityPermission",
+                column: "SecurityGroupId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_SecurityRolePermission_SecurityPermissionId",
+                schema: "dbo",
+                table: "SecurityRolePermission",
+                column: "SecurityPermissionId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_SecurityRolePermission_SecurityRoleId",
+                schema: "dbo",
+                table: "SecurityRolePermission",
+                column: "SecurityRoleId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_SecurityUserRole_SecurityRoleId",
+                schema: "dbo",
+                table: "SecurityUserRole",
+                column: "SecurityRoleId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_SecurityUserRole_UserId",
+                schema: "dbo",
+                table: "SecurityUserRole",
+                column: "UserId");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_Tax_PurchasingAccountId",
                 table: "Tax",
                 column: "PurchasingAccountId");
@@ -2401,48 +2364,21 @@ namespace Api.Data.Migrations.ApiDb
                 name: "IX_VendorPayment_VendorId",
                 table: "VendorPayment",
                 column: "VendorId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_AuditableAttribute_AuditableEntityId",
-                schema: "dbo",
-                table: "AuditableAttribute",
-                column: "AuditableEntityId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_SecurityPermission_SecurityGroupId",
-                schema: "dbo",
-                table: "SecurityPermission",
-                column: "SecurityGroupId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_SecurityRolePermission_SecurityPermissionId",
-                schema: "dbo",
-                table: "SecurityRolePermission",
-                column: "SecurityPermissionId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_SecurityRolePermission_SecurityRoleId",
-                schema: "dbo",
-                table: "SecurityRolePermission",
-                column: "SecurityRoleId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_SecurityUserRole_SecurityRoleId",
-                schema: "dbo",
-                table: "SecurityUserRole",
-                column: "SecurityRoleId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_SecurityUserRole_UserId",
-                schema: "dbo",
-                table: "SecurityUserRole",
-                column: "UserId");
         }
 
+        /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropTable(
                 name: "Address");
+
+            migrationBuilder.DropTable(
+                name: "AuditableAttribute",
+                schema: "dbo");
+
+            migrationBuilder.DropTable(
+                name: "AuditLog",
+                schema: "dbo");
 
             migrationBuilder.DropTable(
                 name: "Bank");
@@ -2490,6 +2426,14 @@ namespace Api.Data.Migrations.ApiDb
                 name: "SalesReceiptLine");
 
             migrationBuilder.DropTable(
+                name: "SecurityRolePermission",
+                schema: "dbo");
+
+            migrationBuilder.DropTable(
+                name: "SecurityUserRole",
+                schema: "dbo");
+
+            migrationBuilder.DropTable(
                 name: "SequenceNumber");
 
             migrationBuilder.DropTable(
@@ -2502,19 +2446,7 @@ namespace Api.Data.Migrations.ApiDb
                 name: "VendorPayment");
 
             migrationBuilder.DropTable(
-                name: "AuditableAttribute",
-                schema: "dbo");
-
-            migrationBuilder.DropTable(
-                name: "AuditLog",
-                schema: "dbo");
-
-            migrationBuilder.DropTable(
-                name: "SecurityRolePermission",
-                schema: "dbo");
-
-            migrationBuilder.DropTable(
-                name: "SecurityUserRole",
+                name: "AuditableEntity",
                 schema: "dbo");
 
             migrationBuilder.DropTable(
@@ -2539,13 +2471,6 @@ namespace Api.Data.Migrations.ApiDb
                 name: "SalesReceiptHeader");
 
             migrationBuilder.DropTable(
-                name: "Tax");
-
-            migrationBuilder.DropTable(
-                name: "AuditableEntity",
-                schema: "dbo");
-
-            migrationBuilder.DropTable(
                 name: "SecurityPermission",
                 schema: "dbo");
 
@@ -2556,6 +2481,9 @@ namespace Api.Data.Migrations.ApiDb
             migrationBuilder.DropTable(
                 name: "User",
                 schema: "dbo");
+
+            migrationBuilder.DropTable(
+                name: "Tax");
 
             migrationBuilder.DropTable(
                 name: "PurchaseOrderLine");
@@ -2607,10 +2535,10 @@ namespace Api.Data.Migrations.ApiDb
                 name: "Account");
 
             migrationBuilder.DropTable(
-                name: "PaymentTerm");
+                name: "Contact");
 
             migrationBuilder.DropTable(
-                name: "Contact");
+                name: "PaymentTerm");
 
             migrationBuilder.DropTable(
                 name: "TaxGroup");
