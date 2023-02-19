@@ -62,6 +62,7 @@ You can opt to install your local SQL Server instance or you can use docker imag
 Assuming you have docker installed (make sure to use linux container), follow the steps below. (Install docker if you haven't done so.)
 1. Open command prompt (terminal for MacOS).
 1. Execute `docker pull microsoft/mssql-server-linux`. We prefer to use SQL Server for Linux for lightweight.
+1. Azure SQL Edfe on Mac M1 `docker run -e "ACCEPT_EULA=1" -e "MSSQL_SA_PASSWORD=Str0ngPassword" -e "MSSQL_PID=Developer" -e "MSSQL_USER=SA" -p 1433:1433 -d --name=sql mcr.microsoft.com/azure-sql-edge`
 1. Run sql server for linux. Execute `docker run -e 'ACCEPT_EULA=Y' -e 'SA_PASSWORD=Str0ngPassword' -p 1433:1433 -d --name=local-mssql microsoft/mssql-server-linux`. The default database user here is `sa`
 Note: If you are encountering issue where the docker container close immediately, try to use `docker-compose up` but be sure to comment out `web` and `api` services so that `db` service is the only service that will be configured to run.
 
@@ -73,13 +74,13 @@ Checking docker connection using **SQL Operation Studio**:
 If you have an existing SQL Server either from your local machine or remotely, you can opt to create your own accountgo database instance:
 
 1. Login to SQL Server Management Studio using your existing database account
-1. Create blank database instance by executing `CREATE DATABASE accountgo` ***NOTE***: This is optional. EF Migration script will auto create database if not exist.
+1. Create blank database instance by executing `CREATE DATABASE accountgodb` ***NOTE***: This is optional. EF Migration script will auto create database if not exist.
 
 ## Data Setup
 
 ### Publish Database
 
-Using EntityFrameworkCore CLI database migration will create and migrate the `accountgo` database to the current version. Make sure you have dotnet ef tool.
+Using EntityFrameworkCore CLI database migration will create and migrate the `accountgodb` database to the current version. Make sure you have dotnet ef tool.
 
 ```
 % dotnet tool list -g
@@ -102,18 +103,18 @@ If you install your .net runtime to other location other than default installati
 % export DOTNET_ROOT=/Users/Marvin/.dotnet
 ```
 
-***Note:*** The initial migration only contains initial security data username and password.
+***Note:*** The above `dotnet ef database eupdate` command use the initial migration script included in this repository located at Api/Data/Migration folder. To insert initial admin user, run the script in db/scripts/initial_data folder.
 
 #### Updating Migrations
 
-If changes are made to the models used by the database, using EntityFrameworkCore CLI database migration to create an update migration to keep the `accountgo` database updated.
+If changes are made to the models used by the database, using EntityFrameworkCore CLI database migration to create an update migration to keep the `accountgodb` database updated.
 
 In root folder `accountgo` run the following command using a terminal, command prompt, or package manager console:
 
-1. `dotnet ef migrations add {Name} --project ./src/Api/ --startup-project ./src/Api/Api.csproj --msbuildprojectextensionspath ..build/obj/Api/ --context ApplicationIdentityDbContext --output-dir Data/Migration/IdentityDb`
-1. `dotnet ef migrations add {Name} --project ./src/Api/ --startup-project ./src/Api/Api.csproj --msbuildprojectextensionspath ..build/obj/Api/ --context ApiDbContext --output-dir Data/Migration/ApiDb`
+1. `dotnet ef migrations add {Name} --project ./src/Api/ --startup-project ./src/Api/Api.csproj --msbuildprojectextensionspath .build/obj/Api/ --context ApplicationIdentityDbContext --output-dir Data/Migrations/IdentityDb`
+1. `dotnet ef migrations add {Name} --project ./src/Api/ --startup-project ./src/Api/Api.csproj --msbuildprojectextensionspath .build/obj/Api/ --context ApiDbContext --output-dir Data/Migrations/ApiDb`
 
-Note: `{Name}` must be provided
+Note: `{Name}` must be provided. For example the name can be "InitialMigration".
 
 ### Initialize Data
 At this point, your database has no data on it. But there is already an initial username and password (admin@accountgo.ph/P@ssword1) and you can logon to the UI. Now lets, create some initial data that would populate the following models.

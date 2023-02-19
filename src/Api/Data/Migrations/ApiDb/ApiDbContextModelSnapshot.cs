@@ -6,6 +6,8 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
+#nullable disable
+
 namespace Api.Data.Migrations.ApiDb
 {
     [DbContext(typeof(ApiDbContext))]
@@ -15,99 +17,129 @@ namespace Api.Data.Migrations.ApiDb
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "2.1.4-rtm-31024")
-                .HasAnnotation("Relational:MaxIdentifierLength", 128)
-                .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+                .HasAnnotation("ProductVersion", "7.0.3")
+                .HasAnnotation("Relational:MaxIdentifierLength", 128);
+
+            SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
             modelBuilder.Entity("Core.Domain.Address", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+                        .HasColumnType("int");
 
-                    b.Property<string>("City");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("No");
+                    b.Property<string>("City")
+                        .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("Street");
+                    b.Property<string>("No")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Street")
+                        .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");
 
                     b.ToTable("Address");
                 });
 
+            modelBuilder.Entity("Core.Domain.Auditing.AuditLog", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("AuditEventDateUTC")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("AuditEventType")
+                        .HasColumnType("int");
+
+                    b.Property<string>("FieldName")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("NewValue")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("OriginalValue")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("RecordId")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("TableName")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("UserName")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("AuditLog", "dbo");
+                });
+
             modelBuilder.Entity("Core.Domain.Auditing.AuditableAttribute", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+                        .HasColumnType("int");
 
-                    b.Property<string>("AttributeName");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<int>("AuditableEntityId");
+                    b.Property<string>("AttributeName")
+                        .HasColumnType("nvarchar(max)");
 
-                    b.Property<bool>("EnableAudit");
+                    b.Property<int>("AuditableEntityId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("EnableAudit")
+                        .HasColumnType("bit");
 
                     b.HasKey("Id");
 
                     b.HasIndex("AuditableEntityId");
 
-                    b.ToTable("AuditableAttribute","dbo");
+                    b.ToTable("AuditableAttribute", "dbo");
                 });
 
             modelBuilder.Entity("Core.Domain.Auditing.AuditableEntity", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+                        .HasColumnType("int");
 
-                    b.Property<bool>("EnableAudit");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("EntityName");
+                    b.Property<bool>("EnableAudit")
+                        .HasColumnType("bit");
 
-                    b.HasKey("Id");
-
-                    b.ToTable("AuditableEntity","dbo");
-                });
-
-            modelBuilder.Entity("Core.Domain.Auditing.AuditLog", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
-
-                    b.Property<DateTime>("AuditEventDateUTC");
-
-                    b.Property<int>("AuditEventType");
-
-                    b.Property<string>("FieldName");
-
-                    b.Property<string>("NewValue");
-
-                    b.Property<string>("OriginalValue");
-
-                    b.Property<string>("RecordId");
-
-                    b.Property<string>("TableName");
-
-                    b.Property<string>("UserName");
+                    b.Property<string>("EntityName")
+                        .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");
 
-                    b.ToTable("AuditLog","dbo");
+                    b.ToTable("AuditableEntity", "dbo");
                 });
 
             modelBuilder.Entity("Core.Domain.Company", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+                        .HasColumnType("int");
 
-                    b.Property<string>("CompanyCode");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("Name");
+                    b.Property<string>("CompanyCode")
+                        .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("ShortName");
+                    b.Property<string>("Name")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ShortName")
+                        .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");
 
@@ -118,9 +150,12 @@ namespace Api.Data.Migrations.ApiDb
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+                        .HasColumnType("int");
 
-                    b.Property<int>("CompanyId");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
@@ -133,17 +168,24 @@ namespace Api.Data.Migrations.ApiDb
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+                        .HasColumnType("int");
 
-                    b.Property<int>("ContactType");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("FirstName");
+                    b.Property<int>("ContactType")
+                        .HasColumnType("int");
 
-                    b.Property<string>("LastName");
+                    b.Property<string>("FirstName")
+                        .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("MiddleName");
+                    b.Property<string>("LastName")
+                        .HasColumnType("nvarchar(max)");
 
-                    b.Property<int>("PartyId");
+                    b.Property<string>("MiddleName")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("PartyId")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
@@ -156,11 +198,15 @@ namespace Api.Data.Migrations.ApiDb
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+                        .HasColumnType("int");
 
-                    b.Property<int>("ContactId");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<int>("CustomerId");
+                    b.Property<int>("ContactId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("CustomerId")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
@@ -175,35 +221,46 @@ namespace Api.Data.Migrations.ApiDb
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+                        .HasColumnType("int");
 
-                    b.Property<int>("AccountClassId");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AccountClassId")
+                        .HasColumnType("int");
 
                     b.Property<string>("AccountCode")
                         .IsRequired()
-                        .HasMaxLength(50);
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
 
                     b.Property<string>("AccountName")
                         .IsRequired()
-                        .HasMaxLength(200);
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
 
-                    b.Property<int>("CompanyId");
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
 
                     b.Property<string>("Description")
-                        .HasMaxLength(200);
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
 
-                    b.Property<int>("DrOrCrSide");
+                    b.Property<int>("DrOrCrSide")
+                        .HasColumnType("int");
 
-                    b.Property<bool>("IsCash");
+                    b.Property<bool>("IsCash")
+                        .HasColumnType("bit");
 
-                    b.Property<bool>("IsContraAccount");
+                    b.Property<bool>("IsContraAccount")
+                        .HasColumnType("bit");
 
-                    b.Property<int?>("ParentAccountId");
+                    b.Property<int?>("ParentAccountId")
+                        .HasColumnType("int");
 
                     b.Property<byte[]>("RowVersion")
                         .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("timestamp")
-                        .HasMaxLength(8);
+                        .HasMaxLength(8)
+                        .HasColumnType("timestamp");
 
                     b.HasKey("Id");
 
@@ -220,11 +277,15 @@ namespace Api.Data.Migrations.ApiDb
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+                        .HasColumnType("int");
 
-                    b.Property<string>("Name");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("NormalBalance");
+                    b.Property<string>("Name")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("NormalBalance")
+                        .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");
 
@@ -235,23 +296,33 @@ namespace Api.Data.Migrations.ApiDb
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+                        .HasColumnType("int");
 
-                    b.Property<int?>("AccountId");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("Address");
+                    b.Property<int?>("AccountId")
+                        .HasColumnType("int");
 
-                    b.Property<string>("BankName");
+                    b.Property<string>("Address")
+                        .HasColumnType("nvarchar(max)");
 
-                    b.Property<bool>("IsActive");
+                    b.Property<string>("BankName")
+                        .HasColumnType("nvarchar(max)");
 
-                    b.Property<bool>("IsDefault");
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
 
-                    b.Property<string>("Name");
+                    b.Property<bool>("IsDefault")
+                        .HasColumnType("bit");
 
-                    b.Property<string>("Number");
+                    b.Property<string>("Name")
+                        .HasColumnType("nvarchar(max)");
 
-                    b.Property<int>("Type");
+                    b.Property<string>("Number")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
@@ -264,21 +335,28 @@ namespace Api.Data.Migrations.ApiDb
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+                        .HasColumnType("int");
 
-                    b.Property<DateTime>("EndDate");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("EndDate")
+                        .HasColumnType("datetime2");
 
                     b.Property<string>("FiscalYearCode")
                         .IsRequired()
-                        .HasMaxLength(10);
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
 
                     b.Property<string>("FiscalYearName")
                         .IsRequired()
-                        .HasMaxLength(100);
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
-                    b.Property<bool>("IsActive");
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
 
-                    b.Property<DateTime>("StartDate");
+                    b.Property<DateTime>("StartDate")
+                        .HasColumnType("datetime2");
 
                     b.HasKey("Id");
 
@@ -289,13 +367,18 @@ namespace Api.Data.Migrations.ApiDb
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+                        .HasColumnType("int");
 
-                    b.Property<DateTime>("Date");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("Description");
+                    b.Property<DateTime>("Date")
+                        .HasColumnType("datetime2");
 
-                    b.Property<int>("DocumentType");
+                    b.Property<string>("Description")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("DocumentType")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
@@ -306,15 +389,21 @@ namespace Api.Data.Migrations.ApiDb
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+                        .HasColumnType("int");
 
-                    b.Property<int>("AccountId");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<decimal>("Amount");
+                    b.Property<int>("AccountId")
+                        .HasColumnType("int");
 
-                    b.Property<int>("DrCr");
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(18,2)");
 
-                    b.Property<int>("GeneralLedgerHeaderId");
+                    b.Property<int>("DrCr")
+                        .HasColumnType("int");
+
+                    b.Property<int>("GeneralLedgerHeaderId")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
@@ -329,23 +418,33 @@ namespace Api.Data.Migrations.ApiDb
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+                        .HasColumnType("int");
 
-                    b.Property<int?>("CompanyId");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<int?>("GoodsReceiptNoteClearingAccountId");
+                    b.Property<int?>("CompanyId")
+                        .HasColumnType("int");
 
-                    b.Property<int?>("IncomeSummaryAccountId");
+                    b.Property<int?>("GoodsReceiptNoteClearingAccountId")
+                        .HasColumnType("int");
 
-                    b.Property<int?>("PayableAccountId");
+                    b.Property<int?>("IncomeSummaryAccountId")
+                        .HasColumnType("int");
 
-                    b.Property<int?>("PermanentAccountId");
+                    b.Property<int?>("PayableAccountId")
+                        .HasColumnType("int");
 
-                    b.Property<int?>("PurchaseDiscountAccountId");
+                    b.Property<int?>("PermanentAccountId")
+                        .HasColumnType("int");
 
-                    b.Property<int?>("SalesDiscountAccountId");
+                    b.Property<int?>("PurchaseDiscountAccountId")
+                        .HasColumnType("int");
 
-                    b.Property<int?>("ShippingChargeAccountId");
+                    b.Property<int?>("SalesDiscountAccountId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("ShippingChargeAccountId")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
@@ -372,21 +471,30 @@ namespace Api.Data.Migrations.ApiDb
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+                        .HasColumnType("int");
 
-                    b.Property<DateTime>("Date");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<int?>("GeneralLedgerHeaderId");
+                    b.Property<DateTime>("Date")
+                        .HasColumnType("datetime2");
 
-                    b.Property<string>("Memo");
+                    b.Property<int?>("GeneralLedgerHeaderId")
+                        .HasColumnType("int");
 
-                    b.Property<int?>("PartyId");
+                    b.Property<string>("Memo")
+                        .HasColumnType("nvarchar(max)");
 
-                    b.Property<bool?>("Posted");
+                    b.Property<int?>("PartyId")
+                        .HasColumnType("int");
 
-                    b.Property<string>("ReferenceNo");
+                    b.Property<bool?>("Posted")
+                        .HasColumnType("bit");
 
-                    b.Property<int?>("VoucherType");
+                    b.Property<string>("ReferenceNo")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("VoucherType")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
@@ -401,17 +509,24 @@ namespace Api.Data.Migrations.ApiDb
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+                        .HasColumnType("int");
 
-                    b.Property<int>("AccountId");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<decimal>("Amount");
+                    b.Property<int>("AccountId")
+                        .HasColumnType("int");
 
-                    b.Property<int>("DrCr");
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(18,2)");
 
-                    b.Property<int>("JournalEntryHeaderId");
+                    b.Property<int>("DrCr")
+                        .HasColumnType("int");
 
-                    b.Property<string>("Memo");
+                    b.Property<int>("JournalEntryHeaderId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Memo")
+                        .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");
 
@@ -426,15 +541,20 @@ namespace Api.Data.Migrations.ApiDb
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+                        .HasColumnType("int");
 
-                    b.Property<int>("MainAccountId");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<int>("RelatedContraAccountId");
+                    b.Property<int>("MainAccountId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("RelatedContraAccountId")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("MainAccountId");
+                    b.HasIndex("MainAccountId")
+                        .IsUnique();
 
                     b.HasIndex("RelatedContraAccountId");
 
@@ -445,25 +565,36 @@ namespace Api.Data.Migrations.ApiDb
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+                        .HasColumnType("int");
 
-                    b.Property<DateTime>("Date");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<int>("DocumentType");
+                    b.Property<DateTime>("Date")
+                        .HasColumnType("datetime2");
 
-                    b.Property<decimal?>("INQty");
+                    b.Property<int>("DocumentType")
+                        .HasColumnType("int");
 
-                    b.Property<bool>("IsReverse");
+                    b.Property<decimal?>("INQty")
+                        .HasColumnType("decimal(18,2)");
 
-                    b.Property<int>("ItemId");
+                    b.Property<bool>("IsReverse")
+                        .HasColumnType("bit");
 
-                    b.Property<int>("MeasurementId");
+                    b.Property<int>("ItemId")
+                        .HasColumnType("int");
 
-                    b.Property<decimal?>("OUTQty");
+                    b.Property<int>("MeasurementId")
+                        .HasColumnType("int");
 
-                    b.Property<decimal?>("TotalAmount");
+                    b.Property<decimal?>("OUTQty")
+                        .HasColumnType("decimal(18,2)");
 
-                    b.Property<decimal?>("TotalCost");
+                    b.Property<decimal?>("TotalAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("TotalCost")
+                        .HasColumnType("decimal(18,2)");
 
                     b.HasKey("Id");
 
@@ -478,41 +609,60 @@ namespace Api.Data.Migrations.ApiDb
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+                        .HasColumnType("int");
 
-                    b.Property<string>("Code");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<decimal?>("Cost");
+                    b.Property<string>("Code")
+                        .HasColumnType("nvarchar(max)");
 
-                    b.Property<int?>("CostOfGoodsSoldAccountId");
+                    b.Property<decimal?>("Cost")
+                        .HasColumnType("decimal(18,2)");
 
-                    b.Property<string>("Description");
+                    b.Property<int?>("CostOfGoodsSoldAccountId")
+                        .HasColumnType("int");
 
-                    b.Property<int?>("InventoryAccountId");
+                    b.Property<string>("Description")
+                        .HasColumnType("nvarchar(max)");
 
-                    b.Property<int?>("InventoryAdjustmentAccountId");
+                    b.Property<int?>("InventoryAccountId")
+                        .HasColumnType("int");
 
-                    b.Property<int?>("ItemCategoryId");
+                    b.Property<int?>("InventoryAdjustmentAccountId")
+                        .HasColumnType("int");
 
-                    b.Property<int?>("ItemTaxGroupId");
+                    b.Property<int?>("ItemCategoryId")
+                        .HasColumnType("int");
 
-                    b.Property<string>("No");
+                    b.Property<int?>("ItemTaxGroupId")
+                        .HasColumnType("int");
 
-                    b.Property<int?>("PreferredVendorId");
+                    b.Property<string>("No")
+                        .HasColumnType("nvarchar(max)");
 
-                    b.Property<decimal?>("Price");
+                    b.Property<int?>("PreferredVendorId")
+                        .HasColumnType("int");
 
-                    b.Property<string>("PurchaseDescription");
+                    b.Property<decimal?>("Price")
+                        .HasColumnType("decimal(18,2)");
 
-                    b.Property<int?>("PurchaseMeasurementId");
+                    b.Property<string>("PurchaseDescription")
+                        .HasColumnType("nvarchar(max)");
 
-                    b.Property<int?>("SalesAccountId");
+                    b.Property<int?>("PurchaseMeasurementId")
+                        .HasColumnType("int");
 
-                    b.Property<string>("SellDescription");
+                    b.Property<int?>("SalesAccountId")
+                        .HasColumnType("int");
 
-                    b.Property<int?>("SellMeasurementId");
+                    b.Property<string>("SellDescription")
+                        .HasColumnType("nvarchar(max)");
 
-                    b.Property<int?>("SmallestMeasurementId");
+                    b.Property<int?>("SellMeasurementId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("SmallestMeasurementId")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
@@ -543,23 +693,33 @@ namespace Api.Data.Migrations.ApiDb
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+                        .HasColumnType("int");
 
-                    b.Property<int?>("AdjustmentAccountId");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<int?>("AssemblyAccountId");
+                    b.Property<int?>("AdjustmentAccountId")
+                        .HasColumnType("int");
 
-                    b.Property<int?>("CostOfGoodsSoldAccountId");
+                    b.Property<int?>("AssemblyAccountId")
+                        .HasColumnType("int");
 
-                    b.Property<int?>("InventoryAccountId");
+                    b.Property<int?>("CostOfGoodsSoldAccountId")
+                        .HasColumnType("int");
 
-                    b.Property<int>("ItemType");
+                    b.Property<int?>("InventoryAccountId")
+                        .HasColumnType("int");
 
-                    b.Property<int?>("MeasurementId");
+                    b.Property<int>("ItemType")
+                        .HasColumnType("int");
 
-                    b.Property<string>("Name");
+                    b.Property<int?>("MeasurementId")
+                        .HasColumnType("int");
 
-                    b.Property<int?>("SalesAccountId");
+                    b.Property<string>("Name")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("SalesAccountId")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
@@ -582,11 +742,15 @@ namespace Api.Data.Migrations.ApiDb
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+                        .HasColumnType("int");
 
-                    b.Property<string>("Code");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("Description");
+                    b.Property<string>("Code")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");
 
@@ -597,25 +761,36 @@ namespace Api.Data.Migrations.ApiDb
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+                        .HasColumnType("int");
 
-                    b.Property<string>("CallSite");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("Exception");
+                    b.Property<string>("CallSite")
+                        .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("Level");
+                    b.Property<string>("Exception")
+                        .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("Logger");
+                    b.Property<string>("Level")
+                        .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("Message");
+                    b.Property<string>("Logger")
+                        .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("StackTrace");
+                    b.Property<string>("Message")
+                        .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("Thread");
+                    b.Property<string>("StackTrace")
+                        .HasColumnType("nvarchar(max)");
 
-                    b.Property<DateTime>("TimeStamp");
+                    b.Property<string>("Thread")
+                        .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("Username");
+                    b.Property<DateTime>("TimeStamp")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Username")
+                        .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");
 
@@ -626,21 +801,30 @@ namespace Api.Data.Migrations.ApiDb
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+                        .HasColumnType("int");
 
-                    b.Property<string>("Email");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("Fax");
+                    b.Property<string>("Email")
+                        .HasColumnType("nvarchar(max)");
 
-                    b.Property<bool>("IsActive");
+                    b.Property<string>("Fax")
+                        .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("Name");
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
 
-                    b.Property<int>("PartyType");
+                    b.Property<string>("Name")
+                        .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("Phone");
+                    b.Property<int>("PartyType")
+                        .HasColumnType("int");
 
-                    b.Property<string>("Website");
+                    b.Property<string>("Phone")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Website")
+                        .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");
 
@@ -651,15 +835,21 @@ namespace Api.Data.Migrations.ApiDb
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+                        .HasColumnType("int");
 
-                    b.Property<string>("Description");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<int?>("DueAfterDays");
+                    b.Property<string>("Description")
+                        .HasColumnType("nvarchar(max)");
 
-                    b.Property<bool>("IsActive");
+                    b.Property<int?>("DueAfterDays")
+                        .HasColumnType("int");
 
-                    b.Property<int>("PaymentType");
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("PaymentType")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
@@ -670,26 +860,37 @@ namespace Api.Data.Migrations.ApiDb
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+                        .HasColumnType("int");
 
-                    b.Property<DateTime>("Date");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("Description");
+                    b.Property<DateTime>("Date")
+                        .HasColumnType("datetime2");
 
-                    b.Property<int?>("GeneralLedgerHeaderId");
+                    b.Property<string>("Description")
+                        .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("No");
+                    b.Property<int?>("GeneralLedgerHeaderId")
+                        .HasColumnType("int");
 
-                    b.Property<int?>("PaymentTermId");
+                    b.Property<string>("No")
+                        .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("ReferenceNo");
+                    b.Property<int?>("PaymentTermId")
+                        .HasColumnType("int");
 
-                    b.Property<int?>("Status");
+                    b.Property<string>("ReferenceNo")
+                        .HasColumnType("nvarchar(max)");
 
-                    b.Property<int?>("VendorId");
+                    b.Property<int?>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("VendorId")
+                        .HasColumnType("int");
 
                     b.Property<string>("VendorInvoiceNo")
-                        .IsRequired();
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");
 
@@ -704,27 +905,39 @@ namespace Api.Data.Migrations.ApiDb
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+                        .HasColumnType("int");
 
-                    b.Property<decimal>("Amount");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<decimal?>("Cost");
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(18,2)");
 
-                    b.Property<decimal?>("Discount");
+                    b.Property<decimal?>("Cost")
+                        .HasColumnType("decimal(18,2)");
 
-                    b.Property<int?>("InventoryControlJournalId");
+                    b.Property<decimal?>("Discount")
+                        .HasColumnType("decimal(18,2)");
 
-                    b.Property<int>("ItemId");
+                    b.Property<int?>("InventoryControlJournalId")
+                        .HasColumnType("int");
 
-                    b.Property<int>("MeasurementId");
+                    b.Property<int>("ItemId")
+                        .HasColumnType("int");
 
-                    b.Property<int>("PurchaseInvoiceHeaderId");
+                    b.Property<int>("MeasurementId")
+                        .HasColumnType("int");
 
-                    b.Property<int?>("PurchaseOrderLineId");
+                    b.Property<int>("PurchaseInvoiceHeaderId")
+                        .HasColumnType("int");
 
-                    b.Property<decimal>("Quantity");
+                    b.Property<int?>("PurchaseOrderLineId")
+                        .HasColumnType("int");
 
-                    b.Property<decimal?>("ReceivedQuantity");
+                    b.Property<decimal>("Quantity")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("ReceivedQuantity")
+                        .HasColumnType("decimal(18,2)");
 
                     b.HasKey("Id");
 
@@ -745,23 +958,33 @@ namespace Api.Data.Migrations.ApiDb
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+                        .HasColumnType("int");
 
-                    b.Property<DateTime>("Date");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("Description");
+                    b.Property<DateTime>("Date")
+                        .HasColumnType("datetime2");
 
-                    b.Property<string>("No");
+                    b.Property<string>("Description")
+                        .HasColumnType("nvarchar(max)");
 
-                    b.Property<int?>("PaymentTermId");
+                    b.Property<string>("No")
+                        .HasColumnType("nvarchar(max)");
 
-                    b.Property<int?>("PurchaseInvoiceHeaderId");
+                    b.Property<int?>("PaymentTermId")
+                        .HasColumnType("int");
 
-                    b.Property<string>("ReferenceNo");
+                    b.Property<int?>("PurchaseInvoiceHeaderId")
+                        .HasColumnType("int");
 
-                    b.Property<int?>("Status");
+                    b.Property<string>("ReferenceNo")
+                        .HasColumnType("nvarchar(max)");
 
-                    b.Property<int?>("VendorId");
+                    b.Property<int?>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("VendorId")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
@@ -776,21 +999,30 @@ namespace Api.Data.Migrations.ApiDb
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+                        .HasColumnType("int");
 
-                    b.Property<decimal>("Amount");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<decimal>("Cost");
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(18,2)");
 
-                    b.Property<decimal>("Discount");
+                    b.Property<decimal>("Cost")
+                        .HasColumnType("decimal(18,2)");
 
-                    b.Property<int>("ItemId");
+                    b.Property<decimal>("Discount")
+                        .HasColumnType("decimal(18,2)");
 
-                    b.Property<int>("MeasurementId");
+                    b.Property<int>("ItemId")
+                        .HasColumnType("int");
 
-                    b.Property<int>("PurchaseOrderHeaderId");
+                    b.Property<int>("MeasurementId")
+                        .HasColumnType("int");
 
-                    b.Property<decimal>("Quantity");
+                    b.Property<int>("PurchaseOrderHeaderId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("Quantity")
+                        .HasColumnType("decimal(18,2)");
 
                     b.HasKey("Id");
 
@@ -807,15 +1039,21 @@ namespace Api.Data.Migrations.ApiDb
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+                        .HasColumnType("int");
 
-                    b.Property<DateTime>("Date");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<int?>("GeneralLedgerHeaderId");
+                    b.Property<DateTime>("Date")
+                        .HasColumnType("datetime2");
 
-                    b.Property<string>("No");
+                    b.Property<int?>("GeneralLedgerHeaderId")
+                        .HasColumnType("int");
 
-                    b.Property<int>("VendorId");
+                    b.Property<string>("No")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("VendorId")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
@@ -830,27 +1068,39 @@ namespace Api.Data.Migrations.ApiDb
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+                        .HasColumnType("int");
 
-                    b.Property<decimal>("Amount");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<decimal>("Cost");
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(18,2)");
 
-                    b.Property<decimal>("Discount");
+                    b.Property<decimal>("Cost")
+                        .HasColumnType("decimal(18,2)");
 
-                    b.Property<int?>("InventoryControlJournalId");
+                    b.Property<decimal>("Discount")
+                        .HasColumnType("decimal(18,2)");
 
-                    b.Property<int>("ItemId");
+                    b.Property<int?>("InventoryControlJournalId")
+                        .HasColumnType("int");
 
-                    b.Property<int>("MeasurementId");
+                    b.Property<int>("ItemId")
+                        .HasColumnType("int");
 
-                    b.Property<int?>("PurchaseInvoiceLineId");
+                    b.Property<int>("MeasurementId")
+                        .HasColumnType("int");
 
-                    b.Property<int>("PurchaseReceiptHeaderId");
+                    b.Property<int?>("PurchaseInvoiceLineId")
+                        .HasColumnType("int");
 
-                    b.Property<decimal>("Quantity");
+                    b.Property<int>("PurchaseReceiptHeaderId")
+                        .HasColumnType("int");
 
-                    b.Property<decimal>("ReceivedQuantity");
+                    b.Property<decimal>("Quantity")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("ReceivedQuantity")
+                        .HasColumnType("decimal(18,2)");
 
                     b.HasKey("Id");
 
@@ -871,23 +1121,33 @@ namespace Api.Data.Migrations.ApiDb
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+                        .HasColumnType("int");
 
-                    b.Property<int?>("AccountsPayableAccountId");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("No");
+                    b.Property<int?>("AccountsPayableAccountId")
+                        .HasColumnType("int");
 
-                    b.Property<int?>("PartyId");
+                    b.Property<string>("No")
+                        .HasColumnType("nvarchar(max)");
 
-                    b.Property<int?>("PaymentTermId");
+                    b.Property<int?>("PartyId")
+                        .HasColumnType("int");
 
-                    b.Property<int?>("PrimaryContactId");
+                    b.Property<int?>("PaymentTermId")
+                        .HasColumnType("int");
 
-                    b.Property<int?>("PurchaseAccountId");
+                    b.Property<int?>("PrimaryContactId")
+                        .HasColumnType("int");
 
-                    b.Property<int?>("PurchaseDiscountAccountId");
+                    b.Property<int?>("PurchaseAccountId")
+                        .HasColumnType("int");
 
-                    b.Property<int?>("TaxGroupId");
+                    b.Property<int?>("PurchaseDiscountAccountId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("TaxGroupId")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
@@ -912,19 +1172,27 @@ namespace Api.Data.Migrations.ApiDb
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+                        .HasColumnType("int");
 
-                    b.Property<decimal>("Amount");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<DateTime>("Date");
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(18,2)");
 
-                    b.Property<int?>("GeneralLedgerHeaderId");
+                    b.Property<DateTime>("Date")
+                        .HasColumnType("datetime2");
 
-                    b.Property<string>("No");
+                    b.Property<int?>("GeneralLedgerHeaderId")
+                        .HasColumnType("int");
 
-                    b.Property<int?>("PurchaseInvoiceHeaderId");
+                    b.Property<string>("No")
+                        .HasColumnType("nvarchar(max)");
 
-                    b.Property<int>("VendorId");
+                    b.Property<int?>("PurchaseInvoiceHeaderId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("VendorId")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
@@ -941,27 +1209,39 @@ namespace Api.Data.Migrations.ApiDb
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+                        .HasColumnType("int");
 
-                    b.Property<int?>("AccountsReceivableAccountId");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<int?>("CustomerAdvancesAccountId");
+                    b.Property<int?>("AccountsReceivableAccountId")
+                        .HasColumnType("int");
 
-                    b.Property<string>("No");
+                    b.Property<int?>("CustomerAdvancesAccountId")
+                        .HasColumnType("int");
 
-                    b.Property<int?>("PartyId");
+                    b.Property<string>("No")
+                        .HasColumnType("nvarchar(max)");
 
-                    b.Property<int?>("PaymentTermId");
+                    b.Property<int?>("PartyId")
+                        .HasColumnType("int");
 
-                    b.Property<int?>("PrimaryContactId");
+                    b.Property<int?>("PaymentTermId")
+                        .HasColumnType("int");
 
-                    b.Property<int?>("PromptPaymentDiscountAccountId");
+                    b.Property<int?>("PrimaryContactId")
+                        .HasColumnType("int");
 
-                    b.Property<int?>("SalesAccountId");
+                    b.Property<int?>("PromptPaymentDiscountAccountId")
+                        .HasColumnType("int");
 
-                    b.Property<int?>("SalesDiscountAccountId");
+                    b.Property<int?>("SalesAccountId")
+                        .HasColumnType("int");
 
-                    b.Property<int?>("TaxGroupId");
+                    b.Property<int?>("SalesDiscountAccountId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("TaxGroupId")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
@@ -990,17 +1270,24 @@ namespace Api.Data.Migrations.ApiDb
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+                        .HasColumnType("int");
 
-                    b.Property<decimal>("Amount");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<int>("CustomerId");
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(18,2)");
 
-                    b.Property<DateTime>("Date");
+                    b.Property<int>("CustomerId")
+                        .HasColumnType("int");
 
-                    b.Property<int>("SalesInvoiceHeaderId");
+                    b.Property<DateTime>("Date")
+                        .HasColumnType("datetime2");
 
-                    b.Property<int>("SalesReceiptHeaderId");
+                    b.Property<int>("SalesInvoiceHeaderId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SalesReceiptHeaderId")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
@@ -1017,19 +1304,27 @@ namespace Api.Data.Migrations.ApiDb
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+                        .HasColumnType("int");
 
-                    b.Property<int?>("CustomerId");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<DateTime>("Date");
+                    b.Property<int?>("CustomerId")
+                        .HasColumnType("int");
 
-                    b.Property<int?>("GeneralLedgerHeaderId");
+                    b.Property<DateTime>("Date")
+                        .HasColumnType("datetime2");
 
-                    b.Property<string>("No");
+                    b.Property<int?>("GeneralLedgerHeaderId")
+                        .HasColumnType("int");
 
-                    b.Property<int?>("PaymentTermId");
+                    b.Property<string>("No")
+                        .HasColumnType("nvarchar(max)");
 
-                    b.Property<int?>("Status");
+                    b.Property<int?>("PaymentTermId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("Status")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
@@ -1046,21 +1341,30 @@ namespace Api.Data.Migrations.ApiDb
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+                        .HasColumnType("int");
 
-                    b.Property<decimal>("Discount");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<int?>("ItemId");
+                    b.Property<decimal>("Discount")
+                        .HasColumnType("decimal(18,2)");
 
-                    b.Property<int?>("MeasurementId");
+                    b.Property<int?>("ItemId")
+                        .HasColumnType("int");
 
-                    b.Property<decimal>("Price");
+                    b.Property<int?>("MeasurementId")
+                        .HasColumnType("int");
 
-                    b.Property<decimal>("Quantity");
+                    b.Property<decimal>("Price")
+                        .HasColumnType("decimal(18,2)");
 
-                    b.Property<int>("SalesDeliveryHeaderId");
+                    b.Property<decimal>("Quantity")
+                        .HasColumnType("decimal(18,2)");
 
-                    b.Property<int?>("SalesInvoiceLineId");
+                    b.Property<int>("SalesDeliveryHeaderId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("SalesInvoiceLineId")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
@@ -1079,23 +1383,33 @@ namespace Api.Data.Migrations.ApiDb
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+                        .HasColumnType("int");
 
-                    b.Property<int>("CustomerId");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<DateTime>("Date");
+                    b.Property<int>("CustomerId")
+                        .HasColumnType("int");
 
-                    b.Property<int?>("GeneralLedgerHeaderId");
+                    b.Property<DateTime>("Date")
+                        .HasColumnType("datetime2");
 
-                    b.Property<string>("No");
+                    b.Property<int?>("GeneralLedgerHeaderId")
+                        .HasColumnType("int");
 
-                    b.Property<int?>("PaymentTermId");
+                    b.Property<string>("No")
+                        .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("ReferenceNo");
+                    b.Property<int?>("PaymentTermId")
+                        .HasColumnType("int");
 
-                    b.Property<decimal>("ShippingHandlingCharge");
+                    b.Property<string>("ReferenceNo")
+                        .HasColumnType("nvarchar(max)");
 
-                    b.Property<int?>("Status");
+                    b.Property<decimal>("ShippingHandlingCharge")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int?>("Status")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
@@ -1110,23 +1424,33 @@ namespace Api.Data.Migrations.ApiDb
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+                        .HasColumnType("int");
 
-                    b.Property<decimal>("Amount");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<decimal>("Discount");
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(18,2)");
 
-                    b.Property<int?>("InventoryControlJournalId");
+                    b.Property<decimal>("Discount")
+                        .HasColumnType("decimal(18,2)");
 
-                    b.Property<int>("ItemId");
+                    b.Property<int?>("InventoryControlJournalId")
+                        .HasColumnType("int");
 
-                    b.Property<int>("MeasurementId");
+                    b.Property<int>("ItemId")
+                        .HasColumnType("int");
 
-                    b.Property<decimal>("Quantity");
+                    b.Property<int>("MeasurementId")
+                        .HasColumnType("int");
 
-                    b.Property<int>("SalesInvoiceHeaderId");
+                    b.Property<decimal>("Quantity")
+                        .HasColumnType("decimal(18,2)");
 
-                    b.Property<int?>("SalesOrderLineId");
+                    b.Property<int>("SalesInvoiceHeaderId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("SalesOrderLineId")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
@@ -1147,19 +1471,27 @@ namespace Api.Data.Migrations.ApiDb
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+                        .HasColumnType("int");
 
-                    b.Property<int?>("CustomerId");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<DateTime>("Date");
+                    b.Property<int?>("CustomerId")
+                        .HasColumnType("int");
 
-                    b.Property<string>("No");
+                    b.Property<DateTime>("Date")
+                        .HasColumnType("datetime2");
 
-                    b.Property<int?>("PaymentTermId");
+                    b.Property<string>("No")
+                        .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("ReferenceNo");
+                    b.Property<int?>("PaymentTermId")
+                        .HasColumnType("int");
 
-                    b.Property<int?>("Status");
+                    b.Property<string>("ReferenceNo")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("Status")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
@@ -1174,19 +1506,27 @@ namespace Api.Data.Migrations.ApiDb
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+                        .HasColumnType("int");
 
-                    b.Property<decimal>("Amount");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<decimal>("Discount");
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(18,2)");
 
-                    b.Property<int>("ItemId");
+                    b.Property<decimal>("Discount")
+                        .HasColumnType("decimal(18,2)");
 
-                    b.Property<int>("MeasurementId");
+                    b.Property<int>("ItemId")
+                        .HasColumnType("int");
 
-                    b.Property<decimal>("Quantity");
+                    b.Property<int>("MeasurementId")
+                        .HasColumnType("int");
 
-                    b.Property<int>("SalesOrderHeaderId");
+                    b.Property<decimal>("Quantity")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("SalesOrderHeaderId")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
@@ -1203,19 +1543,27 @@ namespace Api.Data.Migrations.ApiDb
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+                        .HasColumnType("int");
 
-                    b.Property<int>("CustomerId");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<DateTime>("Date");
+                    b.Property<int>("CustomerId")
+                        .HasColumnType("int");
 
-                    b.Property<string>("No");
+                    b.Property<DateTime>("Date")
+                        .HasColumnType("datetime2");
 
-                    b.Property<int?>("PaymentTermId");
+                    b.Property<string>("No")
+                        .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("ReferenceNo");
+                    b.Property<int?>("PaymentTermId")
+                        .HasColumnType("int");
 
-                    b.Property<int?>("Status");
+                    b.Property<string>("ReferenceNo")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("Status")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
@@ -1228,19 +1576,27 @@ namespace Api.Data.Migrations.ApiDb
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+                        .HasColumnType("int");
 
-                    b.Property<decimal>("Amount");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<decimal>("Discount");
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(18,2)");
 
-                    b.Property<int>("ItemId");
+                    b.Property<decimal>("Discount")
+                        .HasColumnType("decimal(18,2)");
 
-                    b.Property<int>("MeasurementId");
+                    b.Property<int>("ItemId")
+                        .HasColumnType("int");
 
-                    b.Property<decimal>("Quantity");
+                    b.Property<int>("MeasurementId")
+                        .HasColumnType("int");
 
-                    b.Property<int>("SalesQuoteHeaderId");
+                    b.Property<decimal>("Quantity")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("SalesQuoteHeaderId")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
@@ -1257,21 +1613,30 @@ namespace Api.Data.Migrations.ApiDb
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+                        .HasColumnType("int");
 
-                    b.Property<int?>("AccountToDebitId");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<decimal>("Amount");
+                    b.Property<int?>("AccountToDebitId")
+                        .HasColumnType("int");
 
-                    b.Property<int>("CustomerId");
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(18,2)");
 
-                    b.Property<DateTime>("Date");
+                    b.Property<int>("CustomerId")
+                        .HasColumnType("int");
 
-                    b.Property<int?>("GeneralLedgerHeaderId");
+                    b.Property<DateTime>("Date")
+                        .HasColumnType("datetime2");
 
-                    b.Property<string>("No");
+                    b.Property<int?>("GeneralLedgerHeaderId")
+                        .HasColumnType("int");
 
-                    b.Property<int?>("Status");
+                    b.Property<string>("No")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("Status")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
@@ -1288,25 +1653,36 @@ namespace Api.Data.Migrations.ApiDb
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+                        .HasColumnType("int");
 
-                    b.Property<int?>("AccountToCreditId");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<decimal?>("Amount");
+                    b.Property<int?>("AccountToCreditId")
+                        .HasColumnType("int");
 
-                    b.Property<decimal>("AmountPaid");
+                    b.Property<decimal?>("Amount")
+                        .HasColumnType("decimal(18,2)");
 
-                    b.Property<decimal?>("Discount");
+                    b.Property<decimal>("AmountPaid")
+                        .HasColumnType("decimal(18,2)");
 
-                    b.Property<int?>("ItemId");
+                    b.Property<decimal?>("Discount")
+                        .HasColumnType("decimal(18,2)");
 
-                    b.Property<int?>("MeasurementId");
+                    b.Property<int?>("ItemId")
+                        .HasColumnType("int");
 
-                    b.Property<decimal?>("Quantity");
+                    b.Property<int?>("MeasurementId")
+                        .HasColumnType("int");
 
-                    b.Property<int?>("SalesInvoiceLineId");
+                    b.Property<decimal?>("Quantity")
+                        .HasColumnType("decimal(18,2)");
 
-                    b.Property<int>("SalesReceiptHeaderId");
+                    b.Property<int?>("SalesInvoiceLineId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SalesReceiptHeaderId")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
@@ -1323,64 +1699,83 @@ namespace Api.Data.Migrations.ApiDb
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+                        .HasColumnType("int");
 
-                    b.Property<string>("DisplayName");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("Name");
+                    b.Property<string>("DisplayName")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Name")
+                        .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");
 
-                    b.ToTable("SecurityGroup","dbo");
+                    b.ToTable("SecurityGroup", "dbo");
                 });
 
             modelBuilder.Entity("Core.Domain.Security.SecurityPermission", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+                        .HasColumnType("int");
 
-                    b.Property<string>("DisplayName");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("Name");
+                    b.Property<string>("DisplayName")
+                        .HasColumnType("nvarchar(max)");
 
-                    b.Property<int>("SecurityGroupId");
+                    b.Property<string>("Name")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("SecurityGroupId")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
                     b.HasIndex("SecurityGroupId");
 
-                    b.ToTable("SecurityPermission","dbo");
+                    b.ToTable("SecurityPermission", "dbo");
                 });
 
             modelBuilder.Entity("Core.Domain.Security.SecurityRole", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+                        .HasColumnType("int");
 
-                    b.Property<string>("DisplayName");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("Name");
+                    b.Property<string>("DisplayName")
+                        .HasColumnType("nvarchar(max)");
 
-                    b.Property<bool>("SysAdmin");
+                    b.Property<string>("Name")
+                        .HasColumnType("nvarchar(max)");
 
-                    b.Property<bool>("System");
+                    b.Property<bool>("SysAdmin")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("System")
+                        .HasColumnType("bit");
 
                     b.HasKey("Id");
 
-                    b.ToTable("SecurityRole","dbo");
+                    b.ToTable("SecurityRole", "dbo");
                 });
 
             modelBuilder.Entity("Core.Domain.Security.SecurityRolePermission", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+                        .HasColumnType("int");
 
-                    b.Property<int>("SecurityPermissionId");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<int>("SecurityRoleId");
+                    b.Property<int>("SecurityPermissionId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SecurityRoleId")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
@@ -1388,18 +1783,22 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasIndex("SecurityRoleId");
 
-                    b.ToTable("SecurityRolePermission","dbo");
+                    b.ToTable("SecurityRolePermission", "dbo");
                 });
 
             modelBuilder.Entity("Core.Domain.Security.SecurityUserRole", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+                        .HasColumnType("int");
 
-                    b.Property<int>("SecurityRoleId");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<int>("UserId");
+                    b.Property<int>("SecurityRoleId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
@@ -1407,43 +1806,56 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("SecurityUserRole","dbo");
+                    b.ToTable("SecurityUserRole", "dbo");
                 });
 
             modelBuilder.Entity("Core.Domain.Security.User", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+                        .HasColumnType("int");
 
-                    b.Property<string>("EmailAddress");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("Firstname");
+                    b.Property<string>("EmailAddress")
+                        .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("Lastname");
+                    b.Property<string>("Firstname")
+                        .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("UserName");
+                    b.Property<string>("Lastname")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("UserName")
+                        .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");
 
-                    b.ToTable("User","dbo");
+                    b.ToTable("User", "dbo");
                 });
 
             modelBuilder.Entity("Core.Domain.SequenceNumber", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+                        .HasColumnType("int");
 
-                    b.Property<string>("Description");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<int>("NextNumber");
+                    b.Property<string>("Description")
+                        .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("Prefix");
+                    b.Property<int>("NextNumber")
+                        .HasColumnType("int");
 
-                    b.Property<int>("SequenceNumberType");
+                    b.Property<string>("Prefix")
+                        .HasColumnType("nvarchar(max)");
 
-                    b.Property<bool>("UsePrefix");
+                    b.Property<int>("SequenceNumberType")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("UsePrefix")
+                        .HasColumnType("bit");
 
                     b.HasKey("Id");
 
@@ -1454,11 +1866,15 @@ namespace Api.Data.Migrations.ApiDb
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+                        .HasColumnType("int");
 
-                    b.Property<bool>("IsFullyExempt");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("Name");
+                    b.Property<bool>("IsFullyExempt")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");
 
@@ -1469,13 +1885,18 @@ namespace Api.Data.Migrations.ApiDb
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+                        .HasColumnType("int");
 
-                    b.Property<bool>("IsExempt");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<int>("ItemTaxGroupId");
+                    b.Property<bool>("IsExempt")
+                        .HasColumnType("bit");
 
-                    b.Property<int>("TaxId");
+                    b.Property<int>("ItemTaxGroupId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("TaxId")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
@@ -1490,23 +1911,31 @@ namespace Api.Data.Migrations.ApiDb
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+                        .HasColumnType("int");
 
-                    b.Property<bool>("IsActive");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<int?>("PurchasingAccountId");
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
 
-                    b.Property<decimal>("Rate");
+                    b.Property<int?>("PurchasingAccountId")
+                        .HasColumnType("int");
 
-                    b.Property<int?>("SalesAccountId");
+                    b.Property<decimal>("Rate")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int?>("SalesAccountId")
+                        .HasColumnType("int");
 
                     b.Property<string>("TaxCode")
                         .IsRequired()
-                        .HasMaxLength(16);
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
 
                     b.Property<string>("TaxName")
                         .IsRequired()
-                        .HasMaxLength(50);
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
 
                     b.HasKey("Id");
 
@@ -1521,13 +1950,18 @@ namespace Api.Data.Migrations.ApiDb
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+                        .HasColumnType("int");
 
-                    b.Property<string>("Description");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<bool>("IsActive");
+                    b.Property<string>("Description")
+                        .HasColumnType("nvarchar(max)");
 
-                    b.Property<bool>("TaxAppliedToShipping");
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("TaxAppliedToShipping")
+                        .HasColumnType("bit");
 
                     b.HasKey("Id");
 
@@ -1538,11 +1972,15 @@ namespace Api.Data.Migrations.ApiDb
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+                        .HasColumnType("int");
 
-                    b.Property<int>("TaxGroupId");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<int>("TaxId");
+                    b.Property<int>("TaxGroupId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("TaxId")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
@@ -1557,11 +1995,15 @@ namespace Api.Data.Migrations.ApiDb
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+                        .HasColumnType("int");
 
-                    b.Property<int>("ContactId");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<int>("VendorId");
+                    b.Property<int>("ContactId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("VendorId")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
@@ -1577,7 +2019,10 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasOne("Core.Domain.Auditing.AuditableEntity", "AuditableEntity")
                         .WithMany("AuditableAttributes")
                         .HasForeignKey("AuditableEntityId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("AuditableEntity");
                 });
 
             modelBuilder.Entity("Core.Domain.CompanySetting", b =>
@@ -1585,7 +2030,10 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasOne("Core.Domain.Company", "Company")
                         .WithMany()
                         .HasForeignKey("CompanyId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Company");
                 });
 
             modelBuilder.Entity("Core.Domain.Contact", b =>
@@ -1593,7 +2041,10 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasOne("Core.Domain.Party", "Party")
                         .WithMany("Contacts")
                         .HasForeignKey("PartyId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Party");
                 });
 
             modelBuilder.Entity("Core.Domain.CustomerContact", b =>
@@ -1601,12 +2052,18 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasOne("Core.Domain.Contact", "Contact")
                         .WithMany()
                         .HasForeignKey("ContactId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.HasOne("Core.Domain.Sales.Customer", "Customer")
                         .WithMany("CustomerContact")
                         .HasForeignKey("CustomerId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Contact");
+
+                    b.Navigation("Customer");
                 });
 
             modelBuilder.Entity("Core.Domain.Financials.Account", b =>
@@ -1614,16 +2071,24 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasOne("Core.Domain.Financials.AccountClass", "AccountClass")
                         .WithMany("Accounts")
                         .HasForeignKey("AccountClassId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.HasOne("Core.Domain.Company", "Company")
                         .WithMany()
                         .HasForeignKey("CompanyId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.HasOne("Core.Domain.Financials.Account", "ParentAccount")
                         .WithMany("ChildAccounts")
                         .HasForeignKey("ParentAccountId");
+
+                    b.Navigation("AccountClass");
+
+                    b.Navigation("Company");
+
+                    b.Navigation("ParentAccount");
                 });
 
             modelBuilder.Entity("Core.Domain.Financials.Bank", b =>
@@ -1631,6 +2096,8 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasOne("Core.Domain.Financials.Account", "Account")
                         .WithMany()
                         .HasForeignKey("AccountId");
+
+                    b.Navigation("Account");
                 });
 
             modelBuilder.Entity("Core.Domain.Financials.GeneralLedgerLine", b =>
@@ -1638,12 +2105,18 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasOne("Core.Domain.Financials.Account", "Account")
                         .WithMany("GeneralLedgerLines")
                         .HasForeignKey("AccountId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.HasOne("Core.Domain.Financials.GeneralLedgerHeader", "GeneralLedgerHeader")
                         .WithMany("GeneralLedgerLines")
                         .HasForeignKey("GeneralLedgerHeaderId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Account");
+
+                    b.Navigation("GeneralLedgerHeader");
                 });
 
             modelBuilder.Entity("Core.Domain.Financials.GeneralLedgerSetting", b =>
@@ -1679,6 +2152,22 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasOne("Core.Domain.Financials.Account", "ShippingChargeAccount")
                         .WithMany()
                         .HasForeignKey("ShippingChargeAccountId");
+
+                    b.Navigation("Company");
+
+                    b.Navigation("GoodsReceiptNoteClearingAccount");
+
+                    b.Navigation("IncomeSummaryAccount");
+
+                    b.Navigation("PayableAccount");
+
+                    b.Navigation("PermanentAccount");
+
+                    b.Navigation("PurchaseDiscountAccount");
+
+                    b.Navigation("SalesDiscountAccount");
+
+                    b.Navigation("ShippingChargeAccount");
                 });
 
             modelBuilder.Entity("Core.Domain.Financials.JournalEntryHeader", b =>
@@ -1690,6 +2179,10 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasOne("Core.Domain.Party", "Party")
                         .WithMany()
                         .HasForeignKey("PartyId");
+
+                    b.Navigation("GeneralLedgerHeader");
+
+                    b.Navigation("Party");
                 });
 
             modelBuilder.Entity("Core.Domain.Financials.JournalEntryLine", b =>
@@ -1697,25 +2190,37 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasOne("Core.Domain.Financials.Account", "Account")
                         .WithMany()
                         .HasForeignKey("AccountId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.HasOne("Core.Domain.Financials.JournalEntryHeader", "JournalEntryHeader")
                         .WithMany("JournalEntryLines")
                         .HasForeignKey("JournalEntryHeaderId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Account");
+
+                    b.Navigation("JournalEntryHeader");
                 });
 
             modelBuilder.Entity("Core.Domain.Financials.MainContraAccount", b =>
                 {
                     b.HasOne("Core.Domain.Financials.Account", "MainAccount")
-                        .WithMany("ContraAccounts")
-                        .HasForeignKey("MainAccountId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .WithOne()
+                        .HasForeignKey("Core.Domain.Financials.MainContraAccount", "MainAccountId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
 
                     b.HasOne("Core.Domain.Financials.Account", "RelatedContraAccount")
                         .WithMany()
                         .HasForeignKey("RelatedContraAccountId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("MainAccount");
+
+                    b.Navigation("RelatedContraAccount");
                 });
 
             modelBuilder.Entity("Core.Domain.Items.InventoryControlJournal", b =>
@@ -1723,12 +2228,18 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasOne("Core.Domain.Items.Item", "Item")
                         .WithMany("InventoryControlJournals")
                         .HasForeignKey("ItemId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.HasOne("Core.Domain.Items.Measurement", "Measurement")
                         .WithMany()
                         .HasForeignKey("MeasurementId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Item");
+
+                    b.Navigation("Measurement");
                 });
 
             modelBuilder.Entity("Core.Domain.Items.Item", b =>
@@ -1772,6 +2283,26 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasOne("Core.Domain.Items.Measurement", "SmallestMeasurement")
                         .WithMany()
                         .HasForeignKey("SmallestMeasurementId");
+
+                    b.Navigation("CostOfGoodsSoldAccount");
+
+                    b.Navigation("InventoryAccount");
+
+                    b.Navigation("InventoryAdjustmentAccount");
+
+                    b.Navigation("ItemCategory");
+
+                    b.Navigation("ItemTaxGroup");
+
+                    b.Navigation("PreferredVendor");
+
+                    b.Navigation("PurchaseMeasurement");
+
+                    b.Navigation("SalesAccount");
+
+                    b.Navigation("SellMeasurement");
+
+                    b.Navigation("SmallestMeasurement");
                 });
 
             modelBuilder.Entity("Core.Domain.Items.ItemCategory", b =>
@@ -1799,6 +2330,18 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasOne("Core.Domain.Financials.Account", "SalesAccount")
                         .WithMany()
                         .HasForeignKey("SalesAccountId");
+
+                    b.Navigation("AdjustmentAccount");
+
+                    b.Navigation("AssemblyAccount");
+
+                    b.Navigation("CostOfGoodsSoldAccount");
+
+                    b.Navigation("InventoryAccount");
+
+                    b.Navigation("Measurement");
+
+                    b.Navigation("SalesAccount");
                 });
 
             modelBuilder.Entity("Core.Domain.Purchases.PurchaseInvoiceHeader", b =>
@@ -1810,6 +2353,10 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasOne("Core.Domain.Purchases.Vendor", "Vendor")
                         .WithMany("PurchaseInvoices")
                         .HasForeignKey("VendorId");
+
+                    b.Navigation("GeneralLedgerHeader");
+
+                    b.Navigation("Vendor");
                 });
 
             modelBuilder.Entity("Core.Domain.Purchases.PurchaseInvoiceLine", b =>
@@ -1821,32 +2368,47 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasOne("Core.Domain.Items.Item", "Item")
                         .WithMany("PurchaseInvoiceLines")
                         .HasForeignKey("ItemId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.HasOne("Core.Domain.Items.Measurement", "Measurement")
                         .WithMany()
                         .HasForeignKey("MeasurementId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.HasOne("Core.Domain.Purchases.PurchaseInvoiceHeader", "PurchaseInvoiceHeader")
                         .WithMany("PurchaseInvoiceLines")
                         .HasForeignKey("PurchaseInvoiceHeaderId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.HasOne("Core.Domain.Purchases.PurchaseOrderLine", "PurchaseOrderLine")
                         .WithMany("PurchaseInvoiceLines")
                         .HasForeignKey("PurchaseOrderLineId");
+
+                    b.Navigation("InventoryControlJournal");
+
+                    b.Navigation("Item");
+
+                    b.Navigation("Measurement");
+
+                    b.Navigation("PurchaseInvoiceHeader");
+
+                    b.Navigation("PurchaseOrderLine");
                 });
 
             modelBuilder.Entity("Core.Domain.Purchases.PurchaseOrderHeader", b =>
                 {
-                    b.HasOne("Core.Domain.Purchases.PurchaseInvoiceHeader")
+                    b.HasOne("Core.Domain.Purchases.PurchaseInvoiceHeader", null)
                         .WithMany("PurchaseOrders")
                         .HasForeignKey("PurchaseInvoiceHeaderId");
 
                     b.HasOne("Core.Domain.Purchases.Vendor", "Vendor")
                         .WithMany("PurchaseOrders")
                         .HasForeignKey("VendorId");
+
+                    b.Navigation("Vendor");
                 });
 
             modelBuilder.Entity("Core.Domain.Purchases.PurchaseOrderLine", b =>
@@ -1854,17 +2416,26 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasOne("Core.Domain.Items.Item", "Item")
                         .WithMany("PurchaseOrderLines")
                         .HasForeignKey("ItemId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.HasOne("Core.Domain.Items.Measurement", "Measurement")
                         .WithMany()
                         .HasForeignKey("MeasurementId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.HasOne("Core.Domain.Purchases.PurchaseOrderHeader", "PurhcaseOrderHeader")
                         .WithMany("PurchaseOrderLines")
                         .HasForeignKey("PurchaseOrderHeaderId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Item");
+
+                    b.Navigation("Measurement");
+
+                    b.Navigation("PurhcaseOrderHeader");
                 });
 
             modelBuilder.Entity("Core.Domain.Purchases.PurchaseReceiptHeader", b =>
@@ -1876,7 +2447,12 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasOne("Core.Domain.Purchases.Vendor", "Vendor")
                         .WithMany("PurchaseReceipts")
                         .HasForeignKey("VendorId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("GeneralLedgerHeader");
+
+                    b.Navigation("Vendor");
                 });
 
             modelBuilder.Entity("Core.Domain.Purchases.PurchaseReceiptLine", b =>
@@ -1888,12 +2464,14 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasOne("Core.Domain.Items.Item", "Item")
                         .WithMany("PurchaseReceiptLines")
                         .HasForeignKey("ItemId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.HasOne("Core.Domain.Items.Measurement", "Measurement")
                         .WithMany()
                         .HasForeignKey("MeasurementId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.HasOne("Core.Domain.Purchases.PurchaseInvoiceLine", "PurchaseInvoiceLine")
                         .WithMany()
@@ -1902,7 +2480,18 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasOne("Core.Domain.Purchases.PurchaseReceiptHeader", "PurchaseReceiptHeader")
                         .WithMany("PurchaseReceiptLines")
                         .HasForeignKey("PurchaseReceiptHeaderId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("InventoryControlJournal");
+
+                    b.Navigation("Item");
+
+                    b.Navigation("Measurement");
+
+                    b.Navigation("PurchaseInvoiceLine");
+
+                    b.Navigation("PurchaseReceiptHeader");
                 });
 
             modelBuilder.Entity("Core.Domain.Purchases.Vendor", b =>
@@ -1934,6 +2523,20 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasOne("Core.Domain.TaxSystem.TaxGroup", "TaxGroup")
                         .WithMany()
                         .HasForeignKey("TaxGroupId");
+
+                    b.Navigation("AccountsPayableAccount");
+
+                    b.Navigation("Party");
+
+                    b.Navigation("PaymentTerm");
+
+                    b.Navigation("PrimaryContact");
+
+                    b.Navigation("PurchaseAccount");
+
+                    b.Navigation("PurchaseDiscountAccount");
+
+                    b.Navigation("TaxGroup");
                 });
 
             modelBuilder.Entity("Core.Domain.Purchases.VendorPayment", b =>
@@ -1949,7 +2552,14 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasOne("Core.Domain.Purchases.Vendor", "Vendor")
                         .WithMany("VendorPayments")
                         .HasForeignKey("VendorId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("GeneralLedgerHeader");
+
+                    b.Navigation("PurchaseInvoiceHeader");
+
+                    b.Navigation("Vendor");
                 });
 
             modelBuilder.Entity("Core.Domain.Sales.Customer", b =>
@@ -1989,6 +2599,24 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasOne("Core.Domain.TaxSystem.TaxGroup", "TaxGroup")
                         .WithMany()
                         .HasForeignKey("TaxGroupId");
+
+                    b.Navigation("AccountsReceivableAccount");
+
+                    b.Navigation("CustomerAdvancesAccount");
+
+                    b.Navigation("Party");
+
+                    b.Navigation("PaymentTerm");
+
+                    b.Navigation("PrimaryContact");
+
+                    b.Navigation("PromptPaymentDiscountAccount");
+
+                    b.Navigation("SalesAccount");
+
+                    b.Navigation("SalesDiscountAccount");
+
+                    b.Navigation("TaxGroup");
                 });
 
             modelBuilder.Entity("Core.Domain.Sales.CustomerAllocation", b =>
@@ -1996,17 +2624,26 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasOne("Core.Domain.Sales.Customer", "Customer")
                         .WithMany("CustomerAllocations")
                         .HasForeignKey("CustomerId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
 
                     b.HasOne("Core.Domain.Sales.SalesInvoiceHeader", "SalesInvoiceHeader")
                         .WithMany("CustomerAllocations")
                         .HasForeignKey("SalesInvoiceHeaderId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
 
                     b.HasOne("Core.Domain.Sales.SalesReceiptHeader", "SalesReceiptHeader")
                         .WithMany("CustomerAllocations")
                         .HasForeignKey("SalesReceiptHeaderId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("Customer");
+
+                    b.Navigation("SalesInvoiceHeader");
+
+                    b.Navigation("SalesReceiptHeader");
                 });
 
             modelBuilder.Entity("Core.Domain.Sales.SalesDeliveryHeader", b =>
@@ -2022,6 +2659,12 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasOne("Core.Domain.PaymentTerm", "PaymentTerm")
                         .WithMany()
                         .HasForeignKey("PaymentTermId");
+
+                    b.Navigation("Customer");
+
+                    b.Navigation("GeneralLedgerHeader");
+
+                    b.Navigation("PaymentTerm");
                 });
 
             modelBuilder.Entity("Core.Domain.Sales.SalesDeliveryLine", b =>
@@ -2037,11 +2680,20 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasOne("Core.Domain.Sales.SalesDeliveryHeader", "SalesDeliveryHeader")
                         .WithMany("SalesDeliveryLines")
                         .HasForeignKey("SalesDeliveryHeaderId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.HasOne("Core.Domain.Sales.SalesInvoiceLine", "SalesInvoiceLine")
                         .WithMany()
                         .HasForeignKey("SalesInvoiceLineId");
+
+                    b.Navigation("Item");
+
+                    b.Navigation("Measurement");
+
+                    b.Navigation("SalesDeliveryHeader");
+
+                    b.Navigation("SalesInvoiceLine");
                 });
 
             modelBuilder.Entity("Core.Domain.Sales.SalesInvoiceHeader", b =>
@@ -2049,11 +2701,16 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasOne("Core.Domain.Sales.Customer", "Customer")
                         .WithMany("SalesInvoices")
                         .HasForeignKey("CustomerId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.HasOne("Core.Domain.Financials.GeneralLedgerHeader", "GeneralLedgerHeader")
                         .WithMany()
                         .HasForeignKey("GeneralLedgerHeaderId");
+
+                    b.Navigation("Customer");
+
+                    b.Navigation("GeneralLedgerHeader");
                 });
 
             modelBuilder.Entity("Core.Domain.Sales.SalesInvoiceLine", b =>
@@ -2065,21 +2722,34 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasOne("Core.Domain.Items.Item", "Item")
                         .WithMany("SalesInvoiceLines")
                         .HasForeignKey("ItemId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.HasOne("Core.Domain.Items.Measurement", "Measurement")
                         .WithMany()
                         .HasForeignKey("MeasurementId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.HasOne("Core.Domain.Sales.SalesInvoiceHeader", "SalesInvoiceHeader")
                         .WithMany("SalesInvoiceLines")
                         .HasForeignKey("SalesInvoiceHeaderId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.HasOne("Core.Domain.Sales.SalesOrderLine", "SalesOrderLine")
                         .WithMany("SalesInvoiceLines")
                         .HasForeignKey("SalesOrderLineId");
+
+                    b.Navigation("InventoryControlJournal");
+
+                    b.Navigation("Item");
+
+                    b.Navigation("Measurement");
+
+                    b.Navigation("SalesInvoiceHeader");
+
+                    b.Navigation("SalesOrderLine");
                 });
 
             modelBuilder.Entity("Core.Domain.Sales.SalesOrderHeader", b =>
@@ -2091,6 +2761,10 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasOne("Core.Domain.PaymentTerm", "PaymentTerm")
                         .WithMany()
                         .HasForeignKey("PaymentTermId");
+
+                    b.Navigation("Customer");
+
+                    b.Navigation("PaymentTerm");
                 });
 
             modelBuilder.Entity("Core.Domain.Sales.SalesOrderLine", b =>
@@ -2098,17 +2772,26 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasOne("Core.Domain.Items.Item", "Item")
                         .WithMany()
                         .HasForeignKey("ItemId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.HasOne("Core.Domain.Items.Measurement", "Measurement")
                         .WithMany()
                         .HasForeignKey("MeasurementId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.HasOne("Core.Domain.Sales.SalesOrderHeader", "SalesOrderHeader")
                         .WithMany("SalesOrderLines")
                         .HasForeignKey("SalesOrderHeaderId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Item");
+
+                    b.Navigation("Measurement");
+
+                    b.Navigation("SalesOrderHeader");
                 });
 
             modelBuilder.Entity("Core.Domain.Sales.SalesQuoteHeader", b =>
@@ -2116,7 +2799,10 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasOne("Core.Domain.Sales.Customer", "Customer")
                         .WithMany()
                         .HasForeignKey("CustomerId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Customer");
                 });
 
             modelBuilder.Entity("Core.Domain.Sales.SalesQuoteLine", b =>
@@ -2124,17 +2810,26 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasOne("Core.Domain.Items.Item", "Item")
                         .WithMany()
                         .HasForeignKey("ItemId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.HasOne("Core.Domain.Items.Measurement", "Measurement")
                         .WithMany()
                         .HasForeignKey("MeasurementId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.HasOne("Core.Domain.Sales.SalesQuoteHeader", "SalesQuoteHeader")
                         .WithMany("SalesQuoteLines")
                         .HasForeignKey("SalesQuoteHeaderId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Item");
+
+                    b.Navigation("Measurement");
+
+                    b.Navigation("SalesQuoteHeader");
                 });
 
             modelBuilder.Entity("Core.Domain.Sales.SalesReceiptHeader", b =>
@@ -2146,11 +2841,18 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasOne("Core.Domain.Sales.Customer", "Customer")
                         .WithMany("SalesReceipts")
                         .HasForeignKey("CustomerId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.HasOne("Core.Domain.Financials.GeneralLedgerHeader", "GeneralLedgerHeader")
                         .WithMany()
                         .HasForeignKey("GeneralLedgerHeaderId");
+
+                    b.Navigation("AccountToDebit");
+
+                    b.Navigation("Customer");
+
+                    b.Navigation("GeneralLedgerHeader");
                 });
 
             modelBuilder.Entity("Core.Domain.Sales.SalesReceiptLine", b =>
@@ -2166,7 +2868,14 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasOne("Core.Domain.Sales.SalesReceiptHeader", "SalesReceiptHeader")
                         .WithMany("SalesReceiptLines")
                         .HasForeignKey("SalesReceiptHeaderId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("AccountToCredit");
+
+                    b.Navigation("SalesInvoiceLine");
+
+                    b.Navigation("SalesReceiptHeader");
                 });
 
             modelBuilder.Entity("Core.Domain.Security.SecurityPermission", b =>
@@ -2174,7 +2883,10 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasOne("Core.Domain.Security.SecurityGroup", "Group")
                         .WithMany("Permissions")
                         .HasForeignKey("SecurityGroupId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Group");
                 });
 
             modelBuilder.Entity("Core.Domain.Security.SecurityRolePermission", b =>
@@ -2182,12 +2894,18 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasOne("Core.Domain.Security.SecurityPermission", "SecurityPermission")
                         .WithMany("RolePermissions")
                         .HasForeignKey("SecurityPermissionId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.HasOne("Core.Domain.Security.SecurityRole", "SecurityRole")
                         .WithMany("Permissions")
                         .HasForeignKey("SecurityRoleId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("SecurityPermission");
+
+                    b.Navigation("SecurityRole");
                 });
 
             modelBuilder.Entity("Core.Domain.Security.SecurityUserRole", b =>
@@ -2195,12 +2913,18 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasOne("Core.Domain.Security.SecurityRole", "SecurityRole")
                         .WithMany("Users")
                         .HasForeignKey("SecurityRoleId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.HasOne("Core.Domain.Security.User", "User")
                         .WithMany("Roles")
                         .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("SecurityRole");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("Core.Domain.TaxSystem.ItemTaxGroupTax", b =>
@@ -2208,12 +2932,18 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasOne("Core.Domain.TaxSystem.ItemTaxGroup", "ItemTaxGroup")
                         .WithMany("ItemTaxGroupTax")
                         .HasForeignKey("ItemTaxGroupId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.HasOne("Core.Domain.TaxSystem.Tax", "Tax")
                         .WithMany("ItemTaxGroupTaxes")
                         .HasForeignKey("TaxId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ItemTaxGroup");
+
+                    b.Navigation("Tax");
                 });
 
             modelBuilder.Entity("Core.Domain.TaxSystem.Tax", b =>
@@ -2225,6 +2955,10 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasOne("Core.Domain.Financials.Account", "SalesAccount")
                         .WithMany()
                         .HasForeignKey("SalesAccountId");
+
+                    b.Navigation("PurchasingAccount");
+
+                    b.Navigation("SalesAccount");
                 });
 
             modelBuilder.Entity("Core.Domain.TaxSystem.TaxGroupTax", b =>
@@ -2232,12 +2966,18 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasOne("Core.Domain.TaxSystem.TaxGroup", "TaxGroup")
                         .WithMany("TaxGroupTax")
                         .HasForeignKey("TaxGroupId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.HasOne("Core.Domain.TaxSystem.Tax", "Tax")
                         .WithMany("TaxGroupTaxes")
                         .HasForeignKey("TaxId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Tax");
+
+                    b.Navigation("TaxGroup");
                 });
 
             modelBuilder.Entity("Core.Domain.VendorContact", b =>
@@ -2245,12 +2985,198 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasOne("Core.Domain.Contact", "Contact")
                         .WithMany()
                         .HasForeignKey("ContactId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.HasOne("Core.Domain.Purchases.Vendor", "Vendor")
                         .WithMany("VendorContact")
                         .HasForeignKey("VendorId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Contact");
+
+                    b.Navigation("Vendor");
+                });
+
+            modelBuilder.Entity("Core.Domain.Auditing.AuditableEntity", b =>
+                {
+                    b.Navigation("AuditableAttributes");
+                });
+
+            modelBuilder.Entity("Core.Domain.Financials.Account", b =>
+                {
+                    b.Navigation("ChildAccounts");
+
+                    b.Navigation("GeneralLedgerLines");
+                });
+
+            modelBuilder.Entity("Core.Domain.Financials.AccountClass", b =>
+                {
+                    b.Navigation("Accounts");
+                });
+
+            modelBuilder.Entity("Core.Domain.Financials.GeneralLedgerHeader", b =>
+                {
+                    b.Navigation("GeneralLedgerLines");
+
+                    b.Navigation("PurchaseOrderReceipts");
+                });
+
+            modelBuilder.Entity("Core.Domain.Financials.JournalEntryHeader", b =>
+                {
+                    b.Navigation("JournalEntryLines");
+                });
+
+            modelBuilder.Entity("Core.Domain.Items.Item", b =>
+                {
+                    b.Navigation("InventoryControlJournals");
+
+                    b.Navigation("PurchaseInvoiceLines");
+
+                    b.Navigation("PurchaseOrderLines");
+
+                    b.Navigation("PurchaseReceiptLines");
+
+                    b.Navigation("SalesInvoiceLines");
+                });
+
+            modelBuilder.Entity("Core.Domain.Items.ItemCategory", b =>
+                {
+                    b.Navigation("Items");
+                });
+
+            modelBuilder.Entity("Core.Domain.Party", b =>
+                {
+                    b.Navigation("Contacts");
+                });
+
+            modelBuilder.Entity("Core.Domain.Purchases.PurchaseInvoiceHeader", b =>
+                {
+                    b.Navigation("PurchaseInvoiceLines");
+
+                    b.Navigation("PurchaseOrders");
+
+                    b.Navigation("VendorPayments");
+                });
+
+            modelBuilder.Entity("Core.Domain.Purchases.PurchaseOrderHeader", b =>
+                {
+                    b.Navigation("PurchaseOrderLines");
+                });
+
+            modelBuilder.Entity("Core.Domain.Purchases.PurchaseOrderLine", b =>
+                {
+                    b.Navigation("PurchaseInvoiceLines");
+                });
+
+            modelBuilder.Entity("Core.Domain.Purchases.PurchaseReceiptHeader", b =>
+                {
+                    b.Navigation("PurchaseReceiptLines");
+                });
+
+            modelBuilder.Entity("Core.Domain.Purchases.Vendor", b =>
+                {
+                    b.Navigation("PurchaseInvoices");
+
+                    b.Navigation("PurchaseOrders");
+
+                    b.Navigation("PurchaseReceipts");
+
+                    b.Navigation("VendorContact");
+
+                    b.Navigation("VendorPayments");
+                });
+
+            modelBuilder.Entity("Core.Domain.Sales.Customer", b =>
+                {
+                    b.Navigation("CustomerAllocations");
+
+                    b.Navigation("CustomerContact");
+
+                    b.Navigation("SalesInvoices");
+
+                    b.Navigation("SalesOrders");
+
+                    b.Navigation("SalesReceipts");
+                });
+
+            modelBuilder.Entity("Core.Domain.Sales.SalesDeliveryHeader", b =>
+                {
+                    b.Navigation("SalesDeliveryLines");
+                });
+
+            modelBuilder.Entity("Core.Domain.Sales.SalesInvoiceHeader", b =>
+                {
+                    b.Navigation("CustomerAllocations");
+
+                    b.Navigation("SalesInvoiceLines");
+                });
+
+            modelBuilder.Entity("Core.Domain.Sales.SalesInvoiceLine", b =>
+                {
+                    b.Navigation("SalesReceiptLines");
+                });
+
+            modelBuilder.Entity("Core.Domain.Sales.SalesOrderHeader", b =>
+                {
+                    b.Navigation("SalesOrderLines");
+                });
+
+            modelBuilder.Entity("Core.Domain.Sales.SalesOrderLine", b =>
+                {
+                    b.Navigation("SalesInvoiceLines");
+                });
+
+            modelBuilder.Entity("Core.Domain.Sales.SalesQuoteHeader", b =>
+                {
+                    b.Navigation("SalesQuoteLines");
+                });
+
+            modelBuilder.Entity("Core.Domain.Sales.SalesReceiptHeader", b =>
+                {
+                    b.Navigation("CustomerAllocations");
+
+                    b.Navigation("SalesReceiptLines");
+                });
+
+            modelBuilder.Entity("Core.Domain.Security.SecurityGroup", b =>
+                {
+                    b.Navigation("Permissions");
+                });
+
+            modelBuilder.Entity("Core.Domain.Security.SecurityPermission", b =>
+                {
+                    b.Navigation("RolePermissions");
+                });
+
+            modelBuilder.Entity("Core.Domain.Security.SecurityRole", b =>
+                {
+                    b.Navigation("Permissions");
+
+                    b.Navigation("Users");
+                });
+
+            modelBuilder.Entity("Core.Domain.Security.User", b =>
+                {
+                    b.Navigation("Roles");
+                });
+
+            modelBuilder.Entity("Core.Domain.TaxSystem.ItemTaxGroup", b =>
+                {
+                    b.Navigation("ItemTaxGroupTax");
+                });
+
+            modelBuilder.Entity("Core.Domain.TaxSystem.Tax", b =>
+                {
+                    b.Navigation("ItemTaxGroupTaxes");
+
+                    b.Navigation("TaxGroupTaxes");
+                });
+
+            modelBuilder.Entity("Core.Domain.TaxSystem.TaxGroup", b =>
+                {
+                    b.Navigation("TaxGroupTax");
                 });
 #pragma warning restore 612, 618
         }
