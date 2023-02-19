@@ -14,7 +14,7 @@ namespace Api.Data
     public class ApiDbContext : DbContext
     {
         public ApiDbContext(DbContextOptions<ApiDbContext> options)
-            :base(options)
+            : base(options)
         {
         }
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
@@ -23,6 +23,33 @@ namespace Api.Data
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
+            builder.Entity<MainContraAccount>(entity =>
+            {
+                entity.HasOne(e => e.MainAccount)
+                .WithOne()
+                .OnDelete(DeleteBehavior.NoAction);
+            }
+            );
+
+            builder.Entity<CustomerAllocation>(b =>
+            {
+                b.HasOne("Core.Domain.Sales.Customer", "Customer")
+                .WithMany("CustomerAllocations")
+                .HasForeignKey("CustomerId")
+                .OnDelete(DeleteBehavior.NoAction);
+
+                b.HasOne("Core.Domain.Sales.SalesInvoiceHeader", "SalesInvoiceHeader")
+                .WithMany("CustomerAllocations")
+                .HasForeignKey("SalesInvoiceHeaderId")
+                .OnDelete(DeleteBehavior.NoAction);
+
+                b.HasOne("Core.Domain.Sales.SalesReceiptHeader", "SalesReceiptHeader")
+                .WithMany("CustomerAllocations")
+                .HasForeignKey("SalesReceiptHeaderId")
+                .OnDelete(DeleteBehavior.NoAction);
+            }
+            );
+
             base.OnModelCreating(builder);
         }
         public virtual DbSet<Account> Accounts { get; set; }
@@ -53,7 +80,7 @@ namespace Api.Data
         public virtual DbSet<Measurement> Measurements { get; set; }
         public virtual DbSet<PaymentTerm> PaymentTerms { get; set; }
         public virtual DbSet<PurchaseInvoiceHeader> PurchaseInvoiceHeaders { get; set; }
-        public virtual DbSet<PurchaseInvoiceLine> PurchaseInvoiceLines { get; set; }        
+        public virtual DbSet<PurchaseInvoiceLine> PurchaseInvoiceLines { get; set; }
         public virtual DbSet<PurchaseOrderLine> PurchaseOrderLines { get; set; }
         public virtual DbSet<PurchaseOrderHeader> PurchaseOrderHeaders { get; set; }
         public virtual DbSet<PurchaseReceiptHeader> PurchaseReceiptHeaders { get; set; }
