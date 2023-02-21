@@ -5,11 +5,17 @@ Accounting System built on .net core, opensource and cross platform (ASP.NET Cor
 
 ### IMPORTANT NOTE:
 
-- Make sure you have the latest .net core 3.1 sdk and runtime installed. Go to https://dotnet.microsoft.com/download/dotnet-core/3.1 to download the installer. Verify you have .net core 3.1.* (* means the latest) sdk:
+- Make sure you have the latest .net7.0 sdk and runtime installed. Go to https://dotnet.microsoft.com/download/dotnet-core/7.0 to download the installer. Verify you have .net 7.0 (* means the latest) sdk:
 
 ```
 % dotnet --list-sdks
-3.1.302 [/Users/Marvin/.dotnet/sdk]
+7.0.103 [/usr/share/dotnet/sdk]
+```
+
+If you install your .net runtime to other location other than default installation directory, you need to set the environment variable `DOTNET_ROOT` to the installation directory of your dotnet. For example, I installed my dotnet sdk to `/usr/bin/dotnet` so I will set the env variable to: 
+
+```
+% export DOTNET_ROOT=/usr/bin/dotnet
 ```
 
 - You can use MacOS, Linux, Windows to develop and deploy this project. 
@@ -62,12 +68,14 @@ You can opt to install your local SQL Server instance or you can use docker imag
 Assuming you have docker installed (make sure to use linux container), follow the steps below. (Install docker if you haven't done so.)
 1. Open command prompt (terminal for MacOS).
 1. Execute `docker pull microsoft/mssql-server-linux`. We prefer to use SQL Server for Linux for lightweight.
-1. Azure SQL Edfe on Mac M1 `docker run -e "ACCEPT_EULA=1" -e "MSSQL_SA_PASSWORD=Str0ngPassword" -e "MSSQL_PID=Developer" -e "MSSQL_USER=SA" -p 1433:1433 -d --name=sql mcr.microsoft.com/azure-sql-edge`
 1. Run sql server for linux. Execute `docker run -e 'ACCEPT_EULA=Y' -e 'SA_PASSWORD=Str0ngPassword' -p 1433:1433 -d --name=local-mssql microsoft/mssql-server-linux`. The default database user here is `sa`
 Note: If you are encountering issue where the docker container close immediately, try to use `docker-compose up` but be sure to comment out `web` and `api` services so that `db` service is the only service that will be configured to run.
 
+If you are using Mac M1 or higher, you can use Azure SQL Edge which can support arm64 architecture.
+1. Azure SQL Edge on Mac M1 `docker run -e "ACCEPT_EULA=1" -e "MSSQL_SA_PASSWORD=Str0ngPassword" -e "MSSQL_PID=Developer" -e "MSSQL_USER=SA" -p 1433:1433 -d --name=sql mcr.microsoft.com/azure-sql-edge`
+
 Checking docker connection using **SQL Operation Studio**:
-1. Download SQL Operation Studio by Microsoft to manage the SQL Server. https://docs.microsoft.com/en-us/sql/sql-operations-studio/download?view=sql-server-2017
+1. Download SQL Operation Studio or Azure Data Studio by Microsoft to manage the SQL Server. https://docs.microsoft.com/en-us/sql/sql-operations-studio/download?view=sql-server-2017
 1. Open SQL Operation Studio and connect to your running SQL Server docker container.
 
 ### Using SQL Server 
@@ -78,7 +86,7 @@ If you have an existing SQL Server either from your local machine or remotely, y
 
 ## Data Setup
 
-### Publish Database
+### Publish Database For the first time
 
 Using EntityFrameworkCore CLI database migration will create and migrate the `accountgodb` database to the current version. Make sure you have dotnet ef tool.
 
@@ -91,30 +99,21 @@ dotnet-ef       3.1.6        dotnet-ef
 % dotnet tool install --global dotnet-ef
 
 ```
+#### Create Migration Scripts
 
-In root folder `accountgo` run the following command using a terminal, command prompt, or package manager console:
-
-1. `dotnet ef database update --project ./src/Api/ --msbuildprojectextensionspath .build/obj/Api/ --context ApplicationIdentityDbContext`
-2. `dotnet ef database update --project ./src/Api/ --msbuildprojectextensionspath .build/obj/Api/ --context ApiDbContext`
-
-If you install your .net runtime to other location other than default installation directory, you need to set the environment variable `DOTNET_ROOT` to the installation directory of your dotnet. For example, I installed my dotnet sdk to `/Users/Marvin/.dotnet` so I will set the env variable to: 
-
-```
-% export DOTNET_ROOT=/Users/Marvin/.dotnet
-```
-
-***Note:*** The above `dotnet ef database eupdate` command use the initial migration script included in this repository located at Api/Data/Migration folder. To insert initial admin user, run the script in db/scripts/initial_data folder.
-
-#### Updating Migrations
-
-If changes are made to the models used by the database, using EntityFrameworkCore CLI database migration to create an update migration to keep the `accountgodb` database updated.
+If publishing database for the first time or there are changes made to the models, use EntityFrameworkCore CLI database migration to create an update migration to keep the `accountgodb` database updated.
 
 In root folder `accountgo` run the following command using a terminal, command prompt, or package manager console:
 
 1. `dotnet ef migrations add {Name} --project ./src/Api/ --startup-project ./src/Api/Api.csproj --msbuildprojectextensionspath .build/obj/Api/ --context ApplicationIdentityDbContext --output-dir Data/Migrations/IdentityDb`
 1. `dotnet ef migrations add {Name} --project ./src/Api/ --startup-project ./src/Api/Api.csproj --msbuildprojectextensionspath .build/obj/Api/ --context ApiDbContext --output-dir Data/Migrations/ApiDb`
 
-Note: `{Name}` must be provided. For example the name can be "InitialMigration".
+Note: `{Name}` must be provided. For example the name can be "InitialMigration". The above command will create migration scripts. Obviously, if you are doing this for the first time, the migration scripts contains all tables. Make you can connect to your database since the EF will connect to that and check for existing database and tables.
+
+Then to actually publish, In root folder `accountgo` run the following command using a terminal, command prompt, or package manager console:
+
+1. `dotnet ef database update --project ./src/Api/ --msbuildprojectextensionspath .build/obj/Api/ --context ApplicationIdentityDbContext`
+2. `dotnet ef database update --project ./src/Api/ --msbuildprojectextensionspath .build/obj/Api/ --context ApiDbContext`
 
 ### Initialize Data
 At this point, your database has no data on it. But there is already an initial username and password (admin@accountgo.ph/P@ssword1) and you can logon to the UI. Now lets, create some initial data that would populate the following models.
