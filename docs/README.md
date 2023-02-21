@@ -67,7 +67,7 @@ You can opt to install your local SQL Server instance or you can use docker imag
 ### Using Docker
 Assuming you have docker installed (make sure to use linux container), follow the steps below. (Install docker if you haven't done so.)
 1. Open command prompt (terminal for MacOS).
-1. Execute `docker pull microsoft/mssql-server-linux`. We prefer to use SQL Server for Linux for lightweight. 
+1. Execute `docker pull microsoft/mssql-server-linux`. We prefer to use SQL Server for Linux for lightweight.
 1. Run sql server for linux. Execute `docker run -e 'ACCEPT_EULA=Y' -e 'SA_PASSWORD=Str0ngPassword' -p 1433:1433 -d --name=local-mssql microsoft/mssql-server-linux`. The default database user here is `sa`
 Note: If you are encountering issue where the docker container close immediately, try to use `docker-compose up` but be sure to comment out `web` and `api` services so that `db` service is the only service that will be configured to run.
 
