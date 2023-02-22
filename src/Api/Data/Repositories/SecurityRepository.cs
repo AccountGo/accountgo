@@ -56,10 +56,11 @@ namespace Api.Data.Repositories
 
         public IEnumerable<SecurityRole> GetAllRoles()
         {
-            var roles = _context.SecurityRoles.Include(r => r.Permissions)
-                .ThenInclude(r => r.SecurityPermission.RolePermissions)
-                .ThenInclude(r => r.SecurityPermission.Group);
-
+            // Commented out the additional ThenInclude below because of the error encountered as copied below
+            // An error was generated for warning 'Microsoft.EntityFrameworkCore.Query.NavigationBaseIncludeIgnored': The navigation 'SecurityRolePermission.SecurityPermission' was ignored from 'Include' in the query since the fix-up will automatically populate it. If any further navigations are specified in 'Include' afterwards then they will be ignored. Walking back include tree is not allowed. This exception can be suppressed or logged by passing event ID 'CoreEventId.NavigationBaseIncludeIgnored' to the 'ConfigureWarnings' method in 'DbContext.OnConfiguring' or 'AddDbContext'.
+            var roles = _context.SecurityRoles.Include(r => r.Permissions);
+                // .ThenInclude(r => r.SecurityPermission.RolePermissions)
+                // .ThenInclude(r => r.SecurityPermission.Group);
             return roles;
         }
 
