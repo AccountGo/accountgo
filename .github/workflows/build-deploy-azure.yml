@@ -5,6 +5,7 @@ on:
     branches: [ "vscode-devcontainer" ]
   pull_request:
     branches: [ "vscode-devcontainer" ]
+  workflow_dispatch:
 
 jobs:
 
