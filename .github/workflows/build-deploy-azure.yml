@@ -2,9 +2,9 @@ name: Docker Image CI
 
 on:
   push:
-    branches: [ "vscode-devcontainer" ]
+    branches: [ "main" ]
   pull_request:
-    branches: [ "vscode-devcontainer" ]
+    branches: [ "main" ]
   workflow_dispatch:
 
 jobs:
