@@ -1,16 +1,5 @@
 version: "3"
 services:
-    web:
-        image: accountgo/accountgoweb
-        build: 
-            dockerfile: ./src/AccountGoWeb/Dockerfile
-            context: .
-        ports:
-            - "8000:8000"
-        environment:
-            # - ASPNETCORE_ENVIRONMENT=Production
-            - ASPNETCORE_URLS=http://+:8000
-            - APIHOST=api
     api:
         image: accountgo/accountgoapi
         build:
@@ -27,6 +16,17 @@ services:
             # - DBNAME=accountgodb
     #     depends_on:
     #         - db
+    web:
+        image: accountgo/accountgoweb
+        build: 
+            dockerfile: ./src/AccountGoWeb/Dockerfile
+            context: .
+        ports:
+            - "8000:8000"
+        environment:
+            # - ASPNETCORE_ENVIRONMENT=Production
+            - ASPNETCORE_URLS=http://+:8000
+            - APIHOST=api
     # db:
     #     image: microsoft/mssql-server-linux
     #     ports:
