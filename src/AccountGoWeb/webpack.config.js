@@ -10,7 +10,7 @@ console.log("APIURLSPA (webpack.config.js) => " + process.env.npm_config_apiurls
 var apiUrl = process.env.npm_config_apiurlspa;
 if (apiUrl === 'undefined' || apiUrl == null || apiUrl === '') {
     apiUrl = "http://localhost:8000/spaproxy?endpoint=";
-    console.log("[webpack.config.js] APIURL environment variable not found. apiUrl is set to default => " + apiUrl);
+    console.log("[webpack.config.js] APIURLSPA environment variable not found. apiUrl is set to default => " + apiUrl);
 }
 
 var mode = process.env.npm_config_nodeenv;
@@ -47,7 +47,7 @@ var config = {
             cacheGroups: {
                 commons: {
                     test: /[\\/]node_modules[\\/]/,
-                    name: 'vendor',
+                    // name: 'vendor',
                     chunks: 'all'
                 }
             }
