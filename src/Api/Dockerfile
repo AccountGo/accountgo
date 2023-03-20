@@ -1,5 +1,4 @@
-ARG BUILDPLATFORM="linux/amd64"
-FROM --platform=${BUILDPLATFORM} mcr.microsoft.com/dotnet/sdk:7.0 AS build-env
+FROM mcr.microsoft.com/dotnet/sdk:7.0-bullseye-slim-amd64 AS build-env
 
 WORKDIR /app
 
@@ -13,7 +12,7 @@ RUN ls -a
 RUN dotnet restore ./Api/*.csproj
 RUN dotnet publish ./Api/*.csproj -c Release -o out
 
-FROM --platform=${BUILDPLATFORM} mcr.microsoft.com/dotnet/runtime:latest
+FROM mcr.microsoft.com/dotnet/aspnet:7.0-bullseye-slim-amd64
 
 ARG DBSERVER localhost
 ARG DBUSERID dbuser
@@ -30,4 +29,5 @@ WORKDIR /app
 COPY --from=build-env /app/out ./
 
 EXPOSE 8001
+
 CMD ["dotnet", "Api.dll"]
