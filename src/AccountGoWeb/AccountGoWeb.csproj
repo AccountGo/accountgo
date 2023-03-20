@@ -41,6 +41,6 @@
     <Exec Command="npm --nodeenv=$(NODE_ENV) --apiurlspa=$(APIURLSPA) run-script webpack" />
   </Target>
 
-  <!-- <Import Project="ModulesReferences.targets" /> -->
+  <Import Project="ModulesReferences.targets" />
 
 </Project>

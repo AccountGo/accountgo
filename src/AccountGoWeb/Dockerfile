@@ -1,5 +1,4 @@
-ARG BUILDPLATFORM="linux/amd64"
-FROM --platform=${BUILDPLATFORM} mcr.microsoft.com/dotnet/sdk AS build-env
+FROM mcr.microsoft.com/dotnet/sdk:7.0-bullseye-slim-amd64 AS build-env
 
 WORKDIR /app
 
@@ -22,34 +21,34 @@ RUN curl -SL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-lin
     && rm nodejs.tar.gz \
     && ln -s /usr/local/bin/node /usr/local/bin/nodejs
 
-### Add all modules here. TODO: Improve in such a way all projects under Modules folder are automatically build.
-RUN dotnet restore ./Modules/SampleModule
-RUN dotnet build ./Modules/SampleModule
-
 WORKDIR /app/AccountGoWeb
 
 RUN npm install --legacy-peer-deps
 RUN npm rebuild node-sass
 RUN npm run css
-# Below commands are run on AccountGoWeb.csproj
-# RUN npm run tsc
-# RUN npm run gulp
-# RUN npm run webpack
 
-RUN dotnet publish -c Release -o /app/publish
+WORKDIR /app
 
-FROM --platform=${BUILDPLATFORM} mcr.microsoft.com/dotnet/runtime:latest
+### Add all modules here. TODO: Improve in such a way all projects under Modules folder are automatically build.
+RUN dotnet restore ./Modules/SampleModule/*.csproj
+RUN dotnet build ./Modules/SampleModule/*.csproj
+
+RUN dotnet restore ./AccountGoWeb/*.csproj
+RUN dotnet publish ./AccountGoWeb/*.csproj -c Release -o out
+
+FROM mcr.microsoft.com/dotnet/runtime:7.0-bullseye-slim-amd64
+
+WORKDIR /app
 
 # This APIHOST environment variable is not a duplicate of above declaration
-ENV APIHOST api
+ARG APIHOST api
+ENV APIHOST ${APIHOST}
 
 ARG ASPNETCORE_ENVIRONMENT Development
 ENV ASPNETCORE_ENVIRONMENT ${ASPNETCORE_ENVIRONMENT}
 
-WORKDIR /app
+COPY --from=build-env /app/out ./
 
 EXPOSE 8000
 
-COPY --from=build-env /app/publish .
-
-ENTRYPOINT ["dotnet", "AccountGoWeb.dll"]
+CMD ["dotnet", "AccountGoWeb.dll"]
