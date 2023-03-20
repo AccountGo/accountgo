@@ -12,7 +12,7 @@ RUN ls -a
 RUN dotnet restore ./Api/*.csproj
 RUN dotnet publish ./Api/*.csproj -c Release -o out
 
-FROM mcr.microsoft.com/dotnet/runtime:7.0-bullseye-slim-amd64
+FROM mcr.microsoft.com/dotnet/aspnet:7.0-bullseye-slim-amd64
 
 ARG DBSERVER localhost
 ARG DBUSERID dbuser
