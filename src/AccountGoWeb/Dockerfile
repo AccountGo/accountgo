@@ -23,21 +23,20 @@ RUN curl -SL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-lin
     && ln -s /usr/local/bin/node /usr/local/bin/nodejs
 
 ### Add all modules here. TODO: Improve in such a way all projects under Modules folder are automatically build.
-WORKDIR /app/Modules/SampleModule
-
-RUN dotnet restore
-RUN dotnet build
+RUN dotnet restore ./Modules/SampleModule
+RUN dotnet build ./Modules/SampleModule
 
 WORKDIR /app/AccountGoWeb
 
-RUN npm install
-RUN npm run gulp
-RUN npm run tsc
-RUN npm run webpack
+RUN npm install --legacy-peer-deps
 RUN npm rebuild node-sass
 RUN npm run css
+# Below commands are run on AccountGoWeb.csproj
+# RUN npm run tsc
+# RUN npm run gulp
+# RUN npm run webpack
 
-RUN dotnet publish -c Release
+RUN dotnet publish -c Release -o /app/publish
 
 FROM --platform=${BUILDPLATFORM} mcr.microsoft.com/dotnet/runtime:latest
 
@@ -51,6 +50,6 @@ WORKDIR /app
 
 EXPOSE 8000
 
-COPY --from=build-env /app/.build/bin/AccountGoWeb/Release/netcoreapp2.2/publish ./
+COPY --from=build-env /app/publish .
 
 ENTRYPOINT ["dotnet", "AccountGoWeb.dll"]
