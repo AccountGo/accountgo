@@ -218,3 +218,4 @@ FakesAssemblies/
 /src/Api/Data/Migrations
 
 .vscode
+exclude
