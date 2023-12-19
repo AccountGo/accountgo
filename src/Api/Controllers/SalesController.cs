@@ -137,7 +137,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("Customers")]
+        [Route("Customers")] // api/Sales/Customers
         public IActionResult Customers()
         {
             IList<Dto.Sales.Customer> customersDto = new List<Dto.Sales.Customer>();
@@ -173,7 +173,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("SalesOrders")]
+        [Route("SalesOrders")] // api/Sales/SalesOrders
         public IActionResult SalesOrders()
         {
             var salesOrders = _salesService.GetSalesOrders();
@@ -351,7 +351,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("Quotations")]
+        [Route("Quotations")] // api/Sales/Quotations
         public IActionResult Quotations()
         {
             var quotes = _salesService.GetSalesQuotes();
@@ -428,7 +428,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("SalesInvoices")]
+        [Route("SalesInvoices")] // api/Sales/SalesInvoices
         public IActionResult SalesInvoices()
         {
             var salesInvoices = _salesService.GetSalesInvoices();
@@ -467,7 +467,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("SalesReceipts")]
+        [Route("SalesReceipts")] // api/Sales/SalesReceipts
         public IActionResult SalesReceipts()
         {
             var salesReceipts = _salesService.GetSalesReceipts();
@@ -512,7 +512,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("CustomerInvoices")]
+        [Route("CustomerInvoices")] // api/Sales/CustomerInvoices
         public IActionResult CustomerInvoices(int id)
         {
             try
@@ -1060,7 +1060,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("GetMonthlySales")]
+        [Route("GetMonthlySales")] // api/Sales/GetMonthlySales
         public IActionResult GetMonthlySales()
         {
             var salesOrders = _salesService.GetSalesInvoices().Where(a => a.GeneralLedgerHeaderId != null);
@@ -1106,7 +1106,7 @@ namespace Api.Controllers
 
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("SalesInvoiceForPrinting")]
         public IActionResult SalesInvoiceForPrinting(int id)
         {
             try
@@ -1167,7 +1167,7 @@ namespace Api.Controllers
         }
 
         [HttpPost]
-        [Route("[action]")]
+        [Route("BookQuotation")]
         public IActionResult BookQuotation(int id)
         {
 

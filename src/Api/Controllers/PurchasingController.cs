@@ -25,7 +25,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("PurchaseOrders")]
+        [Route("PurchaseOrders")] // api/Purchasing/PurchaseOrders
         public IActionResult PurchaseOrders()
         {
             var purchaseOrders = _purchasingService.GetPurchaseOrders();
@@ -207,7 +207,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("PurchaseInvoices")]
+        [Route("PurchaseInvoices")] //  api/Purchasing/PurchaseInvoices
         public IActionResult PurchaseInvoices()
         {
             var purchaseInvoices = _purchasingService.GetPurchaseInvoices();
@@ -522,7 +522,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("Vendors")]
+        [Route("Vendors")] // api/Purchasing/Vendors
         public IActionResult Vendors()
         {
             IList<Dto.Purchasing.Vendor> vendorsDto = new List<Dto.Purchasing.Vendor>();
@@ -558,7 +558,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("Vendor")]
         public IActionResult Vendor(int id)
         {
             try
@@ -602,7 +602,7 @@ namespace Api.Controllers
         }
 
         [HttpPost]
-        [Route("[action]")]
+        [Route("SavePayment")]
         public IActionResult SavePayment([FromBody]dynamic paymentDto)
         {
             string[] errors = null;

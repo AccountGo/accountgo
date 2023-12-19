@@ -74,7 +74,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("auditlogs")]
+        [Route("auditlogs")] // api/Administration/AuditLogs
         public IActionResult AuditLogs()
         {
             var auditLogs = _adminService.AuditLogs();
@@ -95,7 +95,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("users")]
+        [Route("users")] // api/Administration/Users
         public IActionResult Users()
         {
             var users = _securityService.GetAllUser();
@@ -131,7 +131,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("roles")]
+        [Route("roles")] // api/Administration/Roles
         public IActionResult Roles()
         {
             var roles = _securityService.GetAllSecurityRole();
@@ -166,6 +166,7 @@ namespace Api.Controllers
 
         [HttpGet]
         [Route("groups")]
+        // TODO: generates exception
         public IActionResult Groups()
         {
             var groups = _securityService.GetAllSecurityGroup();
@@ -199,7 +200,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("GetUser")]
         public IActionResult GetUser(string username)
         {
             var user = _securityService.GetUser(username);
@@ -242,7 +243,7 @@ namespace Api.Controllers
         }
 
         [HttpPost]
-        [Route("[action]")]
+        [Route("SaveCompany")]
         public IActionResult SaveCompany([FromBody]Company companyDto)
         {
             string[] errors;

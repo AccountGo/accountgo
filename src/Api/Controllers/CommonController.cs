@@ -38,7 +38,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("Customers")]
+        [Route("Customers")] // api/Common/Customers
         public IActionResult Customers()
         {
             var customers = _salesService.GetCustomers();
@@ -54,7 +54,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("PaymentTerms")]
+        [Route("PaymentTerms")] // api/Common/PaymentTerms
         public IActionResult PaymentTerms()
         {
             var paymentterms = _administrationService.GetPaymentTerms();
@@ -62,7 +62,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("Items")]
+        [Route("Items")] // api/Common/Items
         public IActionResult Items()
         {
             var items = _inventoryService.GetAllItems();
@@ -75,14 +75,14 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("Measurements")]
+        [Route("Measurements")] // api/Common/Measurements
         public IActionResult Measurements()
         {
             return new ObjectResult(_inventoryService.GetMeasurements());
         }
 
         [HttpGet]
-        [Route("Vendors")]
+        [Route("Vendors")] // api/Common/Vendors
         public IActionResult Vendors()
         {
             var vendors = _purchasingService.GetVendors();
@@ -98,7 +98,7 @@ namespace Api.Controllers
         }
         
         [HttpGet]
-        [Route("ItemCategories")]
+        [Route("ItemCategories")] // api/Common/ItemCategories
         public IActionResult ItemCategories()
         {
             var itemcategories = _inventoryService.GetItemCategories();
@@ -106,7 +106,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("CashBanks")]
+        [Route("CashBanks")] // api/Common/CashBanks
         public IActionResult CashBanks()
         {
             var banks = _financialService.GetCashAndBanks();
@@ -119,7 +119,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("PostingAccounts")] // api/Common/PostingAccounts
         public IActionResult PostingAccounts()
         {
             var accounts = _financialService.GetAccounts()
@@ -134,7 +134,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("SalesQuotationStatus")]
+        [Route("SalesQuotationStatus")] // api/Common/SalesQuotationStatus
         public IActionResult SalesQuotationStatus()
         {
 
