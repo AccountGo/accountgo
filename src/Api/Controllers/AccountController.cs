@@ -24,7 +24,7 @@ namespace Api.Controllers
         }
 
         [HttpPost]
-        [Route("[action]")]
+        [Route("SignIn")]
         public async System.Threading.Tasks.Task<IActionResult> SignIn([FromBody]dynamic loginViewModel)
         {
             if (loginViewModel == null)
@@ -80,7 +80,7 @@ namespace Api.Controllers
         }
 
         [HttpPost]
-        [Route("[action]")]
+        [Route("AddNewUser")]
         public async System.Threading.Tasks.Task<IActionResult> AddNewUser([FromBody]dynamic registerViewModel)
         {
             try

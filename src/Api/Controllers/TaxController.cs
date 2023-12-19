@@ -24,7 +24,7 @@ namespace Api.Controllers
         /// <param name="partyId">Customer or Vendor</param>
         /// <returns></returns>
         [HttpGet]
-        [Route("[action]")]
+        [Route("GetTax")]
         public IActionResult GetTax(int itemId, int partyId, int type = 0)
         {
             //var taxes = _taxService.GetIntersectionTaxes(itemId, partyId);
@@ -57,7 +57,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("TaxGroups")] // api/Tax/TaxGroups
         public IActionResult TaxGroups()
         {
             var taxGroupsDto = new List<TaxGroup>();
@@ -80,7 +80,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("ItemTaxGroups")] // api/Tax/ItemTaxGroups
         public IActionResult ItemTaxGroups()
         {
             var itemTaxGroupsDto = new List<ItemTaxGroup>();
@@ -102,7 +102,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("Taxes")] // api/Tax/Taxes
         public IActionResult Taxes()
         {
             var taxes = _taxService.GetTaxes(true);

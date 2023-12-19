@@ -22,7 +22,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("CashBanks")]
+        [Route("CashBanks")] // api/Financials/CashBanks
         public IActionResult CashBanks()
         {
             var cashAndBanks = _financialService.GetCashAndBanks();
@@ -42,7 +42,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("Accounts")]
+        [Route("Accounts")] // api/Financials/Accounts
         public IActionResult Accounts()
         {
             var accounts = _financialService.GetAccounts().ToList();
@@ -52,7 +52,7 @@ namespace Api.Controllers
             return new ObjectResult(accountTree);
         }
 
-        [Route("[action]")]
+        [Route("Account")]
         public IActionResult Account(int id)
         {
             var account = _financialService.GetAccount(id);
@@ -78,7 +78,7 @@ namespace Api.Controllers
 
 
         [HttpGet]
-        [Route("JournalEntries")]
+        [Route("JournalEntries")] // api/Financials/JournalEntries
         public IActionResult JournalEntries()
         {
             var journalEntries = _financialService.GetJournalEntries();
@@ -187,7 +187,7 @@ namespace Api.Controllers
         }
 
         [HttpPost]
-        [Route("[action]")]
+        [Route("SaveJournalEntry")]
         public IActionResult SaveJournalEntry([FromBody]JournalEntry journalEntryDto)
         {
             string[] errors = null;
@@ -305,6 +305,7 @@ namespace Api.Controllers
 
         [HttpGet]
         [Route("BalanceSheet")]
+        // TODO: this generates an error a.ContraAccounts' is invalid inside an 'Include' operation
         public ActionResult BalanceSheet()
         {
             var Dto = _financialService.BalanceSheet().ToList();
@@ -330,7 +331,8 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("IncomeStatement")]
+        // TODO: this generates an error a.ContraAccounts' is invalid inside an 'Include' operation
         public ActionResult IncomeStatement()
         {
             var Dto = _financialService.IncomeStatement();

@@ -21,7 +21,7 @@ namespace Api.Controllers
         }
 
         [HttpPost]
-        [Route("[action]")]
+        [Route("SaveItem")]
         public IActionResult SaveItem([FromBody]Item itemDto)
         {
             bool isNew = itemDto.Id == 0;
@@ -66,7 +66,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("items")]
+        [Route("items")] // api/Inventory/items
         public IActionResult Items()
         {
             var items = _inventoryService.GetAllItems();
@@ -124,7 +124,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("ICJ")] // api/Inventory/ICJ
         public IActionResult ICJ()
         {
             var invControlJournals = _inventoryService.GetInventoryControlJournals();
