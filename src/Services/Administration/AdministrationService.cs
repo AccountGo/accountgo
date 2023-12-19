@@ -12,6 +12,7 @@ using Core.Domain.Auditing;
 using Core.Domain.Financials;
 using Core.Domain.Security;
 using Core.Domain.TaxSystem;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -123,7 +124,9 @@ namespace Services.Administration
 
         public void SaveCompany(Company company)
         {
-            if (company.Id == 0) { _company.Insert(company); }
+            if (company.Id == 0) { 
+                _company.Insert(company); 
+            }
             else { _company.Update(company); }
         }
 

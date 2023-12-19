@@ -34,7 +34,7 @@ namespace Api.Controllers
         }
 
         [HttpPost]
-        [Route("[action]")]
+        [Route("SaveCustomer")]
         public IActionResult SaveCustomer([FromBody]Dto.Sales.Customer customerDto)
         {
             bool isNew = customerDto.Id == 0;
@@ -93,7 +93,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("Customer")]
         public IActionResult Customer(int id)
         {
             try
@@ -137,7 +137,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("Customers")]
         public IActionResult Customers()
         {
             IList<Dto.Sales.Customer> customersDto = new List<Dto.Sales.Customer>();
@@ -173,7 +173,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("SalesOrders")]
         public IActionResult SalesOrders()
         {
             var salesOrders = _salesService.GetSalesOrders();
@@ -223,7 +223,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("SalesOrder")]
         public IActionResult SalesOrder(int id)
         {
             try
@@ -268,7 +268,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("SalesInvoice")]
         public IActionResult SalesInvoice(int id)
         {
             try
@@ -315,7 +315,7 @@ namespace Api.Controllers
         }
 
         [HttpPost]
-        [Route("[action]")]
+        [Route("addsalesorder")]
         public IActionResult AddSalesOrder([FromBody]Dto.Sales.SalesOrder salesorderDto)
         {
             try
@@ -351,7 +351,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("Quotations")]
         public IActionResult Quotations()
         {
             var quotes = _salesService.GetSalesQuotes();
@@ -393,7 +393,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("Quotation")]
         public IActionResult Quotation(int id)
         {
             var quote = _salesService.GetSalesQuotationById(id);
@@ -428,7 +428,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("SalesInvoices")]
         public IActionResult SalesInvoices()
         {
             var salesInvoices = _salesService.GetSalesInvoices();
@@ -467,7 +467,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("SalesReceipts")]
         public IActionResult SalesReceipts()
         {
             var salesReceipts = _salesService.GetSalesReceipts();
@@ -493,7 +493,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("SalesReceipt")]
         public IActionResult SalesReceipt(int id)
         {
             var salesReceipt = _salesService.GetSalesReceiptById(id);
@@ -512,7 +512,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("CustomerInvoices")]
         public IActionResult CustomerInvoices(int id)
         {
             try
@@ -557,7 +557,7 @@ namespace Api.Controllers
         }
 
         [HttpPost]
-        [Route("[action]")]
+        [Route("SaveSalesOrder")]
         public IActionResult SaveSalesOrder([FromBody]Dto.Sales.SalesOrder salesOrderDto)
         {
             string[] errors = null;
@@ -672,7 +672,7 @@ namespace Api.Controllers
         }
 
         [HttpPost]
-        [Route("[action]")]
+        [Route("PostSalesInvoice")]
         public IActionResult PostSalesInvoice([FromBody]Dto.Sales.SalesInvoice salesInvoiceDto)
         {
             string[] errors = null;
@@ -701,7 +701,7 @@ namespace Api.Controllers
         }
 
         [HttpPost]
-        [Route("[action]")]
+        [Route("SaveSalesInvoice")]
         public IActionResult SaveSalesInvoice([FromBody]Dto.Sales.SalesInvoice salesInvoiceDto)
         {
             string[] errors = null;
@@ -865,7 +865,7 @@ namespace Api.Controllers
         }
 
         [HttpPost]
-        [Route("[action]")]
+        [Route("SaveQuotation")]
         public IActionResult SaveQuotation([FromBody]Dto.Sales.SalesQuotation quotationDto)
         {
             string[] errors = null;
@@ -969,7 +969,7 @@ namespace Api.Controllers
         }
 
         [HttpPost]
-        [Route("[action]")]
+        [Route("SaveReceipt")]
         public IActionResult SaveReceipt([FromBody]dynamic receiptDto)
         {
             string[] errors = null;
@@ -1018,7 +1018,7 @@ namespace Api.Controllers
         }
 
         [HttpPost]
-        [Route("[action]")]
+        [Route("SaveAllocation")]
         public IActionResult SaveAllocation([FromBody]dynamic allocationDto)
         {
             string[] errors = null;
@@ -1060,7 +1060,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("GetMonthlySales")]
         public IActionResult GetMonthlySales()
         {
             var salesOrders = _salesService.GetSalesInvoices().Where(a => a.GeneralLedgerHeaderId != null);

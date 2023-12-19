@@ -42,7 +42,8 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("[action]")]
+        // [Route("[action]")]
+        [Route("Setup")]
         public IActionResult Setup()
         {
             Api.Data.Initializer initializer = new Data.Initializer(_adminService, _financialService, _salesService, _purchasingService, _inventoryService, _securityService);
@@ -54,7 +55,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("clear")]
         public IActionResult Clear()
         {
             Api.Data.Initializer initializer = new Data.Initializer(_adminService, _financialService, _salesService, _purchasingService, _inventoryService, _securityService);
@@ -66,14 +67,14 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("company")]
         public IActionResult Company(string companyCode)
         {
             return new ObjectResult(_adminService.GetDefaultCompany());
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("auditlogs")]
         public IActionResult AuditLogs()
         {
             var auditLogs = _adminService.AuditLogs();
@@ -94,7 +95,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("users")]
         public IActionResult Users()
         {
             var users = _securityService.GetAllUser();
@@ -130,7 +131,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("roles")]
         public IActionResult Roles()
         {
             var roles = _securityService.GetAllSecurityRole();
@@ -164,7 +165,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("groups")]
         public IActionResult Groups()
         {
             var groups = _securityService.GetAllSecurityGroup();

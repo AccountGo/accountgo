@@ -10,6 +10,7 @@ using Services.Inventory;
 using Services.Purchasing;
 using Services.Sales;
 using Services.Security;
+using Core.Domain.Financials;
 
 namespace Api.Data
 {
@@ -57,36 +58,47 @@ namespace Api.Data
                 // 1.Company
                 var company = SetupCompany();
                 Console.WriteLine("SetupCompany() - Completed!");
-                //2.Chart of accounts/account classes
+
+                // 2.Chart of accounts/ account classes
                 SetupChartOfAccountsAndAccountClasses();
                 Console.WriteLine("SetupChartOfAccountsAndAccountClasses() - Completed!");
+
                 //3.Financial year
                 SetupFinancialYear();
                 Console.WriteLine("SetupFinancialYear() - Completed!");
+
                 //4.Payment terms
                 SetupPaymentTerms();
                 Console.WriteLine("SetupPaymentTerms() - Completed!");
-                //5.GL setting
+
+                //5.gl setting
                 SetupLedgerSetting(company);
-                Console.WriteLine("SetupLedgerSetting() - Completed!");
+                Console.WriteLine("setupledgersetting() - completed!");
+
                 //6.Tax
                 SetupTax();
                 Console.WriteLine("SetupTax() - Completed!");
+
                 // 7. Vendor
                 SetupVendor();
                 Console.WriteLine("SetupVendor() - Completed!");
+
                 //8.Customer
                 SetupCustomer();
                 Console.WriteLine("SetupCustomer() - Completed!");
+
                 // 9.Items
                 SetupItems();
                 Console.WriteLine("SetupItems() - Completed!");
+
                 //10.Banks
                 SetupBanks();
                 Console.WriteLine("SetupBanks() - Completed!");
+
                 //11.Security Roles
                 SetupSecurityRoles();
                 Console.WriteLine("SetupSecurityRoles() - Completed!");
+
                 return true;
             }
             catch (Exception ex)
@@ -137,20 +149,178 @@ namespace Api.Data
 
         private Core.Domain.Company SetupCompany()
         {
+            // Console.WriteLine("Checking if there is already a default company.");
+            // var defaultCompany = _adminService.GetDefaultCompany();
+            // Console.WriteLine(defaultCompany == null ? "There is none." : "There is one.");
+            // if (defaultCompany == null)
+            // {
+            //     Console.WriteLine("Default company found. Returning it.");
+            //     defaultCompany = new Core.Domain.Company
+            //     {
+            //         Id = 1,
+            //         Name = "Financial Solutions Inc.",
+            //         CompanyCode = "100",
+            //         ShortName = "FSI",
+            //     };
+            //     Console.WriteLine("Default company returned.");
+            //     _adminService.SaveCompany(defaultCompany);
+            //     Console.WriteLine("Default company saved.");
+            // }
+            // Console.WriteLine("Default company not found. Creating one.");
+            // return defaultCompany;
+
             Console.WriteLine("Checking if there is already a default company.");
             var defaultCompany = _adminService.GetDefaultCompany();
-            Console.WriteLine(defaultCompany == null ? "There is none." : "There is one.");
             if (defaultCompany != null)
             {
+                Console.WriteLine("Default company found. Returning it.");
+                return defaultCompany;
+            }
+            else
+            {
+                Console.WriteLine("Default company not found. Creating it.");
                 defaultCompany = new Core.Domain.Company
                 {
+                    //Id = 1,
                     Name = "Financial Solutions Inc.",
                     CompanyCode = "100",
                     ShortName = "FSI",
                 };
+
                 _adminService.SaveCompany(defaultCompany);
+//                Console.WriteLine($"Default company returned = {defaultCompany.Id}");
+                return defaultCompany;
             }
-            return defaultCompany;
+        }
+
+        public static IList<AccountClass> GetAccountClassesFromCsv()
+        {
+            Console.WriteLine("SetupChartOfAccountsAndAccountClasses() starting.");
+            IList<Core.Domain.Financials.AccountClass> accountClasses = new List<Core.Domain.Financials.AccountClass>();
+            try
+            {
+                // If no accounts found just return.
+                //if (_financialService.GetAccounts().Any()) return accountClasses;
+                string[,] values;
+                var assembly = Assembly.GetEntryAssembly();
+                var resourceStream = assembly.GetManifestResourceStream("Api.Data.coa.csv");
+                using (var reader = new StreamReader(resourceStream, Encoding.UTF8))
+                {
+                    var coa = reader.ReadToEndAsync().Result;
+                    values = LoadCsv(coa);
+                }
+                List<Core.Domain.Financials.Account> accounts = new List<Core.Domain.Financials.Account>();
+
+                for (var i = 1; i < (values.Length / 8); i++)
+                {
+                    Core.Domain.Financials.Account account =
+                        new Core.Domain.Financials.Account
+                        {
+                            AccountCode = values[i, 0],
+                            AccountName = values[i, 1],
+                            AccountClassId = int.Parse(values[i, 3]),
+                            IsCash = bool.Parse(values[i, 5]),
+                            IsContraAccount =
+                                bool.Parse(values[i, 4])
+                        };
+
+                    switch (values[i, 7])
+                    {
+                        case "DR":
+                            account.DrOrCrSide = Core.Domain.DrOrCrSide.Dr;
+                            break;
+                        case "CR":
+                            account.DrOrCrSide = Core.Domain.DrOrCrSide.Cr;
+                            break;
+                        default:
+                            account.DrOrCrSide = Core.Domain.DrOrCrSide.NA;
+                            break;
+                    }
+
+                    account.CompanyId = 1;
+                    accounts.Add(account);
+                }
+
+                for (var i = 1; i < (values.Length / 8); i++)
+                {
+                    string accountCode = values[i, 0];
+                    string parentAccountCode = values[i, 2];
+
+                    var account = accounts.FirstOrDefault(a => a.AccountCode == accountCode);
+                    var parentAccount = accounts.FirstOrDefault(a => a.AccountCode == parentAccountCode);
+                    if (parentAccount != null)
+                        account.ParentAccount = parentAccount;
+                }
+
+                var assetClass = new Core.Domain.Financials.AccountClass
+                {
+                    Name = "Assets",
+                    NormalBalance = "Dr"
+                };
+                var liabilitiesClass = new Core.Domain.Financials.AccountClass
+                {
+                    Name = "Liabilities",
+                    NormalBalance = "Cr"
+                };
+                var equityClass = new Core.Domain.Financials.AccountClass
+                {
+                    Name = "Equity",
+                    NormalBalance = "Cr"
+                };
+                var revenueClass = new Core.Domain.Financials.AccountClass
+                {
+                    Name = "Revenue",
+                    NormalBalance = "Cr"
+                };
+                var expenseClass = new Core.Domain.Financials.AccountClass
+                {
+                    Name = "Expense",
+                    NormalBalance = "Dr"
+                };
+                var temporaryClass = new Core.Domain.Financials.AccountClass
+                {
+                    Name = "Temporary",
+                    NormalBalance = "NA"
+                };
+
+                accountClasses.Add(assetClass);
+                accountClasses.Add(liabilitiesClass);
+                accountClasses.Add(equityClass);
+                accountClasses.Add(revenueClass);
+                accountClasses.Add(expenseClass);
+                accountClasses.Add(temporaryClass);
+
+                foreach (var account in accounts)
+                {
+                    switch (account.AccountClassId)
+                    {
+                        case 1:
+                            assetClass.Accounts.Add(account);
+                            break;
+                        case 2:
+                            liabilitiesClass.Accounts.Add(account);
+                            break;
+                        case 3:
+                            equityClass.Accounts.Add(account);
+                            break;
+                        case 4:
+                            revenueClass.Accounts.Add(account);
+                            break;
+                        case 5:
+                            expenseClass.Accounts.Add(account);
+                            break;
+                        case 6:
+                            temporaryClass.Accounts.Add(account);
+                            break;
+                    }
+                }
+                return accountClasses;
+            }
+            catch (System.Exception ex)
+            {
+                Console.WriteLine("SetupChartOfAccountsAndAccountClasses() encounterd an Exception - " + ex.StackTrace);
+                throw;
+            }
         }
 
         private void SetupChartOfAccountsAndAccountClasses()
@@ -737,7 +907,7 @@ namespace Api.Data
             }
         }
 
-        private string[,] LoadCsv(string filename)
+        private static string[,] LoadCsv(string filename)
         {
             // Get the file's text.
             //string whole_file = System.IO.File.ReadAllText(filename);

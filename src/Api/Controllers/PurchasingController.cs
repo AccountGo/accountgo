@@ -25,7 +25,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("PurchaseOrders")]
         public IActionResult PurchaseOrders()
         {
             var purchaseOrders = _purchasingService.GetPurchaseOrders();
@@ -65,11 +65,11 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("PurchaseOrder")]
         public IActionResult PurchaseOrder(int id)
         {
             var purchaseOrder = _purchasingService.GetPurchaseOrderById(id);
-            Dto.Purchasing.PurchaseOrder purchaseOrderDto = new Dto.Purchasing.PurchaseOrder();
+            Dto.Purchasing.PurchaseOrder purchaseOrderDto;
 
             purchaseOrderDto = new Dto.Purchasing.PurchaseOrder()
             {
@@ -102,7 +102,7 @@ namespace Api.Controllers
         }
 
         [HttpPost]
-        [Route("[action]")]
+        [Route("savepurchaseorder")]
         public IActionResult SavePurchaseOrder([FromBody]Dto.Purchasing.PurchaseOrder purchaseOrderDto)
         {
             string[] errors = null;
@@ -207,7 +207,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("PurchaseInvoices")]
         public IActionResult PurchaseInvoices()
         {
             var purchaseInvoices = _purchasingService.GetPurchaseInvoices();
@@ -249,7 +249,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("PurchaseInvoice")]
         public IActionResult PurchaseInvoice(int id)
         {
             var purchaseInvoice = _purchasingService.GetPurchaseInvoiceById(id);
@@ -287,7 +287,7 @@ namespace Api.Controllers
         }
 
         [HttpPost]
-        [Route("[action]")]
+        [Route("PostPurchaseInvoice")]
         public IActionResult PostPurchaseInvoice([FromBody]Dto.Purchasing.PurchaseInvoice purchaseInvoiceDto)
         {
             string[] errors = null;
@@ -316,7 +316,7 @@ namespace Api.Controllers
         }
 
         [HttpPost]
-        [Route("[action]")]
+        [Route("SavePurchaseInvoice")]
         public IActionResult SavePurchaseInvoice([FromBody]Dto.Purchasing.PurchaseInvoice purchaseInvoiceDto)
         {
             string[] errors = null;
@@ -478,11 +478,11 @@ namespace Api.Controllers
         }
 
         [HttpPost]
-        [Route("[action]")]
+        [Route("SaveVendor")]
         public IActionResult SaveVendor([FromBody]Dto.Purchasing.Vendor vendorDto)
         {
             bool isNew = vendorDto.Id == 0;
-            Core.Domain.Purchases.Vendor vendor = null;
+            Core.Domain.Purchases.Vendor vendor;
 
             if (isNew)
             {
@@ -522,7 +522,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("Vendors")]
         public IActionResult Vendors()
         {
             IList<Dto.Purchasing.Vendor> vendorsDto = new List<Dto.Purchasing.Vendor>();

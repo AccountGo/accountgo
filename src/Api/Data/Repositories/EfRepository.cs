@@ -147,7 +147,7 @@ namespace Api.Data
                 if (entity == null)
                     throw new ArgumentNullException("entity");
 
-                this._context.SaveChanges();
+                _context.SaveChanges();
             }
             //catch (DbEntityValidationException dbEx)
             //{
