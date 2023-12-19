@@ -66,7 +66,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("items")]
         public IActionResult Items()
         {
             var items = _inventoryService.GetAllItems();
@@ -75,11 +75,8 @@ namespace Api.Controllers
 
             foreach (var item in items)
             {
-                var measurments = _inventoryService.GetMeasurements();
-
                 itemsDto.Add(new Item()
                 {
-
                     Id = item.Id,
                     Code = item.Code,
                     Description = item.Description,
@@ -97,7 +94,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("Item")]
         public IActionResult Item(int id)
         {
             var item = _inventoryService.GetItemById(id);

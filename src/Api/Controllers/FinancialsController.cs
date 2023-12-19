@@ -22,7 +22,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("CashBanks")]
         public IActionResult CashBanks()
         {
             var cashAndBanks = _financialService.GetCashAndBanks();
@@ -42,7 +42,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("Accounts")]
         public IActionResult Accounts()
         {
             var accounts = _financialService.GetAccounts().ToList();
@@ -78,7 +78,7 @@ namespace Api.Controllers
 
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("JournalEntries")]
         public IActionResult JournalEntries()
         {
             var journalEntries = _financialService.GetJournalEntries();
@@ -115,7 +115,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("JournalEntry")]
         public IActionResult JournalEntry(int id)
         {
             var je = _financialService.GetJournalEntry(id);
@@ -156,7 +156,7 @@ namespace Api.Controllers
         }
 
         [HttpPost]
-        [Route("[action]")]
+        [Route("PostJournalEntry")]
         public IActionResult PostJournalEntry([FromBody]JournalEntry journalEntryDto)
         {
             string[] errors = null;
@@ -280,7 +280,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("GeneralLedger")]
         public ActionResult GeneralLedger(DateTime? from = default(DateTime?),
             DateTime? to = default(DateTime?),
             string accountCode = null,
@@ -296,7 +296,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("trialbalance")]
         public ActionResult TrialBalance()
         {
             var Dto = _financialService.TrialBalance();
@@ -304,7 +304,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("BalanceSheet")]
         public ActionResult BalanceSheet()
         {
             var Dto = _financialService.BalanceSheet().ToList();

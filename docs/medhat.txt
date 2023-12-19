@@ -1,0 +1,16 @@
+docker run --cap-add SYS_PTRACE -e ACCEPT_EULA=1 -e MSSQL_SA_PASSWORD=SqlPassword! -p 1444:1433 --name azsql -d mcr.microsoft.com/azure-sql-edge
+
+Data Source=localhost,1444;Database=Northwind;Persist Security Info=True;User ID=sa;Password=SqlPassword!;TrustServerCertificate=True;
+=======================
+
+dotnet ef migrations add M1 --project ./src/Api/ --startup-project ./src/Api/Api.csproj --msbuildprojectextensionspath .build/obj/Api/ --context ApplicationIdentityDbContext --output-dir Data/Migrations/IdentityDb
+
+dotnet ef migrations add M2 --project ./src/Api/ --startup-project ./src/Api/Api.csproj --msbuildprojectextensionspath .build/obj/Api/ --context ApiDbContext --output-dir Data/Migrations/ApiDb
+
+========================
+
+dotnet ef database update --project ./src/Api/ --msbuildprojectextensionspath .build/obj/Api/ --context ApplicationIdentityDbContext
+
+dotnet ef database update --project ./src/Api/ --msbuildprojectextensionspath .build/obj/Api/ --context ApiDbContext
+
+

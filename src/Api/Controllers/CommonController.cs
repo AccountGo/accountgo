@@ -38,7 +38,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("Customers")]
         public IActionResult Customers()
         {
             var customers = _salesService.GetCustomers();
@@ -54,7 +54,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("PaymentTerms")]
         public IActionResult PaymentTerms()
         {
             var paymentterms = _administrationService.GetPaymentTerms();
@@ -62,7 +62,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("Items")]
         public IActionResult Items()
         {
             var items = _inventoryService.GetAllItems();
@@ -75,14 +75,14 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("Measurements")]
         public IActionResult Measurements()
         {
             return new ObjectResult(_inventoryService.GetMeasurements());
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("Vendors")]
         public IActionResult Vendors()
         {
             var vendors = _purchasingService.GetVendors();
@@ -98,7 +98,7 @@ namespace Api.Controllers
         }
         
         [HttpGet]
-        [Route("[action]")]
+        [Route("ItemCategories")]
         public IActionResult ItemCategories()
         {
             var itemcategories = _inventoryService.GetItemCategories();
@@ -106,7 +106,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("CashBanks")]
         public IActionResult CashBanks()
         {
             var banks = _financialService.GetCashAndBanks();
@@ -134,7 +134,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("SalesQuotationStatus")]
         public IActionResult SalesQuotationStatus()
         {
 

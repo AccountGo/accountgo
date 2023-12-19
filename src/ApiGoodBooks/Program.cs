@@ -1,13 +1,4 @@
-using System;
-using Api.Data;
-using Api.Data.Repositories;
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -28,7 +19,7 @@ builder.Services.AddSwaggerGen();
 
 
 
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
+var connectionString = builder.Configuration.GetConnectionString("Data:DevelopmentConnection:ConnectionString") ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
 
 // These environment variables can be overriden from launchSettings.json.
 string dbServer = System.Environment.GetEnvironmentVariable("DBSERVER") ?? "localhost,1444";
@@ -36,19 +27,18 @@ string dbUserID = System.Environment.GetEnvironmentVariable("DBUSERID") ?? "sa";
 string dbUserPassword = System.Environment.GetEnvironmentVariable("DBPASSWORD") ?? "SqlPassword!";
 string dbName = System.Environment.GetEnvironmentVariable("DBNAME") ?? "accountgodb";
 
-connectionString = String.Format(builder.Configuration.GetConnectionString("DefaultConnection")!, dbServer, dbUserID, dbUserPassword, dbName);
+connectionString = String.Format(builder.Configuration.GetConnectionString("Database:ConnectionString")!, dbServer, dbUserID, dbUserPassword, dbName);
 
 System.Console.WriteLine("DB Connection String: " + connectionString);
 
 builder.Services
     //.AddEntityFrameworkSqlServer()
-    .AddDbContext<ApiDbContext>(options => options.UseSqlServer(connectionString))
-    //.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery) // Add this line
-    .AddDbContext<ApplicationIdentityDbContext>(options => options.UseSqlServer(connectionString));
+    .AddDbContext<Data.ApiDbContext>(options => options.UseSqlServer(connectionString))
+    .AddDbContext<Data.ApplicationIdentityDbContext>(options => options.UseSqlServer(connectionString));
 
 builder.Services
-    .AddIdentity<ApplicationUser, IdentityRole>()
-    .AddEntityFrameworkStores<ApplicationIdentityDbContext>()
+    .AddIdentity<Data.ApplicationUser, IdentityRole>()
+    .AddEntityFrameworkStores<Data.ApplicationIdentityDbContext>()
     .AddDefaultTokenProviders();
 
 // Add cors
@@ -61,12 +51,12 @@ builder.Services.AddCors(o => o.AddPolicy("AllowAll", builder =>
 }));
 
 // generic repository
-builder.Services.AddScoped(typeof(Core.Data.IRepository<>), typeof(EfRepository<>));
+builder.Services.AddScoped(typeof(Core.Data.IRepository<>), typeof(Data.EfRepository<>));
 
 // custom repositories
-builder.Services.AddScoped(typeof(Core.Data.ISalesOrderRepository), typeof(SalesOrderRepository));
-builder.Services.AddScoped(typeof(Core.Data.IPurchaseOrderRepository), typeof(PurchaseOrderRepository));
-builder.Services.AddScoped(typeof(Core.Data.ISecurityRepository), typeof(SecurityRepository));
+builder.Services.AddScoped(typeof(Core.Data.ISalesOrderRepository), typeof(Data.SalesOrderRepository));
+builder.Services.AddScoped(typeof(Core.Data.IPurchaseOrderRepository), typeof(Data.PurchaseOrderRepository));
+builder.Services.AddScoped(typeof(Core.Data.ISecurityRepository), typeof(Data.Repositories.SecurityRepository));
 
 // domain services
 builder.Services.AddScoped(typeof(Services.Sales.ISalesService), typeof(Services.Sales.SalesService));

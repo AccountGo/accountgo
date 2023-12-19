@@ -154,6 +154,7 @@ namespace Services.Financial
                 a => a.ParentAccount,
                 a => a.Company)
                 .Where(a => a.AccountCode == accountcode)
+                //.OrderByDescending(a => a.Id)
                 .FirstOrDefault();
 
             return account;
@@ -509,10 +510,9 @@ namespace Services.Financial
         /// <returns></returns>
         public List<KeyValuePair<int, decimal>> ComputeInputTax(int vendorId, int itemId, decimal quantity, decimal amount, decimal discount)
         {
-            decimal taxAmount = 0, amountXquantity = 0, discountAmount = 0, subTotalAmount = 0;
+            decimal taxAmount, amountXquantity, discountAmount = 0, subTotalAmount;
 
             var taxes = new List<KeyValuePair<int, decimal>>();
-            var item = _inventoryService.GetItemById(itemId);
 
             amountXquantity = amount * quantity;
 
@@ -541,7 +541,7 @@ namespace Services.Financial
         /// <returns></returns>
         public List<KeyValuePair<int, decimal>> ComputeOutputTax(int customerId, int itemId, decimal quantity, decimal amount, decimal discount)
         {
-            decimal taxAmount = 0, amountXquantity = 0, discountAmount = 0, subTotalAmount = 0;
+            decimal taxAmount, amountXquantity, discountAmount = 0, subTotalAmount;
 
             var taxes = new List<KeyValuePair<int, decimal>>();
 
@@ -732,11 +732,12 @@ namespace Services.Financial
 
             var glSetting = _generalLedgerSettingRepo.Table.FirstOrDefault();
 
-            var journalEntry = new JournalEntryHeader();
-            journalEntry.Memo = "Closing entries";
-            journalEntry.Date = DateTime.Now;
-            journalEntry.Posted = false;
-            journalEntry.VoucherType = JournalVoucherTypes.ClosingEntries;
+            var journalEntry = new JournalEntryHeader() {
+                Memo = "Closing entries",
+                Date = DateTime.Now,
+                Posted = false,
+                VoucherType = JournalVoucherTypes.ClosingEntries
+            };
 
             return journalEntry;
         }

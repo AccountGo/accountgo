@@ -4,7 +4,9 @@ using System.Net.Http;
 
 namespace AccountGoWeb.Controllers
 {
-    [Microsoft.AspNetCore.Authorization.Authorize]
+    // [Microsoft.AspNetCore.Authorization.Authorize]
+    [ApiController]
+    [Route("[controller]")]
     public class InventoryController : BaseController
     {
         public InventoryController(Microsoft.Extensions.Configuration.IConfiguration config)

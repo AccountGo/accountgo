@@ -7,7 +7,7 @@ using System.Net.Http;
 
 namespace AccountGoWeb.Controllers
 {
-  [Microsoft.AspNetCore.Authorization.Authorize]
+  //[Microsoft.AspNetCore.Authorization.Authorize]
   public class AdministrationController : BaseController
   {
     public AdministrationController(IConfiguration config)
