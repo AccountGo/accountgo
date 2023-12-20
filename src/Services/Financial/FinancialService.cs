@@ -311,6 +311,7 @@ namespace Services.Financial
             return accounts;
         }
 
+        // TODO: This generates an error
         public ICollection<BalanceSheet> BalanceSheet(DateTime? from = default(DateTime?), DateTime? to = default(DateTime?))
         {
             var assets = from a in _accountRepo.GetAllIncluding(a => a.AccountClass, 
