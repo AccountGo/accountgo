@@ -4,11 +4,12 @@ using Microsoft.Extensions.Configuration;
 
 namespace AccountGoWeb.Controllers
 {
-    [Microsoft.AspNetCore.Authorization.Authorize]
-    public class QuotationsController : BaseController
+    //[Microsoft.AspNetCore.Authorization.Authorize]
+    public class QuotationsController : Controller
     {
+        private readonly IConfiguration _configuration;
         public QuotationsController(IConfiguration config) {
-            _baseConfig = config;
+            _configuration = config;
         }
 
         public IActionResult Index()
@@ -22,7 +23,7 @@ namespace AccountGoWeb.Controllers
 
             using (var client = new HttpClient())
             {
-                var baseUri = _baseConfig["ApiUrl"];
+                var baseUri = _configuration["ApiUrl"];
                 client.BaseAddress = new System.Uri(baseUri);
                 client.DefaultRequestHeaders.Accept.Clear();
                 var response = await client.GetAsync(baseUri + "sales/quotations");

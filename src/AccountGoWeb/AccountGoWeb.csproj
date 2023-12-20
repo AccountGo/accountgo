@@ -11,6 +11,21 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <None Remove="package.json.exclude" />
+    <None Remove="Startup.csexclude" />
+    <None Remove="tsconfig.json.exclude" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="Startup.csexclude" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="package.json.exclude" />
+    <Content Include="tsconfig.json.exclude" />
+  </ItemGroup>
+
+  <ItemGroup>
     <None Update="wwwroot\**\*;Views\**\*;Areas\**\Views;">
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </None>
@@ -31,15 +46,6 @@
   <ItemGroup>
     <DotNetCliToolReference Include="BundlerMinifier.Core" Version="3.2.449" />
   </ItemGroup>
-
-  <Target Name="NpmCommands" AfterTargets="Build">    
-    <Exec Command="npm install --legacy-peer-deps" />
-    <Exec Command="npm run tsc" />
-    <Exec Command="npm run gulp" />
-    <!-- Important: NODE_ENV and APIURLSPA are used by webpack to properly set the api url. Here, it access the environment variable which is set in dockerfile. -->
-    <Message Text="NODE_ENV: =&gt; $(NODE_ENV), APIURLSPA: =&gt; $(APIURLSPA)" Importance="high" />
-    <Exec Command="npm --nodeenv=$(NODE_ENV) --apiurlspa=$(APIURLSPA) run-script webpack" />
-  </Target>
 
   <Import Project="ModulesReferences.targets" />
 

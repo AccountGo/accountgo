@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace AccountGoWeb.Controllers
 {
-    [Microsoft.AspNetCore.Authorization.Authorize]
+    //[Microsoft.AspNetCore.Authorization.Authorize]
     public class FinancialsController : BaseController
     {
         public FinancialsController(Microsoft.Extensions.Configuration.IConfiguration config)
