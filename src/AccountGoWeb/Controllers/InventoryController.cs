@@ -1,12 +1,11 @@
 ﻿using Dto.Inventory;
 using Microsoft.AspNetCore.Mvc;
 using System.Net.Http;
+using System.Threading.Tasks;
 
 namespace AccountGoWeb.Controllers
 {
     // [Microsoft.AspNetCore.Authorization.Authorize]
-    [ApiController]
-    [Route("[controller]")]
     public class InventoryController : BaseController
     {
         public InventoryController(Microsoft.Extensions.Configuration.IConfiguration config)
@@ -15,7 +14,7 @@ namespace AccountGoWeb.Controllers
             Models.SelectListItemHelper._config = config;
         }
 
-        public async System.Threading.Tasks.Task<IActionResult> Items()
+        public async Task<IActionResult> Index()
         {
             ViewBag.PageContentHeader = "Items";
 
@@ -35,7 +34,7 @@ namespace AccountGoWeb.Controllers
             return View();
         }
 
-        public async System.Threading.Tasks.Task<IActionResult> ICJ()
+        public async Task<IActionResult> ICJ()
         {
             ViewBag.PageContentHeader = "Inventory Control Journal";
 
@@ -55,7 +54,7 @@ namespace AccountGoWeb.Controllers
             return View();
         }
 
-        public IActionResult Item(int id = -1)
+        public IActionResult GetItem(int id = -1)
         {
             Item itemModel = null;
             if (id == -1)
