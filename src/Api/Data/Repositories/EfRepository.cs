@@ -4,13 +4,20 @@ using Core.Data;
 using Core.Domain;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace Api.Data
 {
     public class EfRepository<T> : IRepository<T> where T : BaseEntity
     {
         private readonly ApiDbContext _context;
+        private readonly ILogger<T> _logger;
         private DbSet<T> _entities;
+
+        public EfRepository(ILogger<T> logger)
+        {
+            _logger = logger;
+        }
 
         #region Properties
 
@@ -102,7 +109,9 @@ namespace Api.Data
             //    //Debug.WriteLine(fail.Message, fail);
             //    throw fail;
             //}
-            catch (Exception ex) { throw ex; }
+            catch (Exception ex) {
+                _logger.LogError(ex.Message);
+            }
         }
 
         /// <summary>
@@ -133,7 +142,9 @@ namespace Api.Data
             //    //Debug.WriteLine(fail.Message, fail);
             //    throw fail;
             //}
-            catch (Exception ex) { throw ex; }
+            catch (Exception ex) {
+                _logger.LogError(ex.Message);
+            }
         }
 
         /// <summary>
@@ -161,7 +172,9 @@ namespace Api.Data
             //    //Debug.WriteLine(fail.Message, fail);
             //    throw fail;
             //}
-            catch (Exception ex) { throw ex; }
+            catch (Exception ex) {
+                _logger.LogError(ex.Message);
+            }
         }
 
         /// <summary>
@@ -191,7 +204,9 @@ namespace Api.Data
             //    //Debug.WriteLine(fail.Message, fail);
             //    throw fail;
             //}
-            catch (Exception ex) { throw ex; }
+            catch (Exception ex) {
+                _logger.LogError(ex.Message);
+            }
         }
 
         /// <summary>
@@ -222,7 +237,9 @@ namespace Api.Data
             //    //Debug.WriteLine(fail.Message, fail);
             //    throw fail;
             //}
-            catch (Exception ex) { throw ex; }
+            catch (Exception ex) {
+                _logger.LogError(ex.Message);
+            }
         }
 
         public IQueryable<T> GetAllIncluding(params System.Linq.Expressions.Expression<Func<T, object>>[] includeProperties)

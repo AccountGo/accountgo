@@ -17,6 +17,7 @@ using System.Linq;
 using System;
 using System.Collections.Generic;
 using Core.Domain.TaxSystem;
+using Microsoft.Extensions.Logging;
 
 namespace Services.Sales
 {
@@ -24,6 +25,8 @@ namespace Services.Sales
     {
         private readonly IFinancialService _financialService;
         private readonly IInventoryService _inventoryService;
+
+        private readonly ILogger<SalesService> _logger;
 
         private readonly IRepository<SalesOrderHeader> _salesOrderRepo;
         private readonly IRepository<SalesOrderLine> _salesOrderLineRepo;
@@ -65,7 +68,8 @@ namespace Services.Sales
             IRepository<SalesQuoteHeader> salesQuoteRepo,
             ISalesOrderRepository salesOrderRepository,
             IRepository<CustomerContact> customerContactRepo,
-            IRepository<VendorContact> vendorContactRepo)
+            IRepository<VendorContact> vendorContactRepo,
+            ILogger<SalesService> logger)
             : base(sequenceNumberRepo, generalLedgerSetting, paymentTermRepo, bankRepo)
         {
             _financialService = financialService;
@@ -89,6 +93,7 @@ namespace Services.Sales
             _salesOrderLineRepo = salesOrderLineRepo;
             _customerContactRepo = customerContactRepo;
             _vendorContactRepo = vendorContactRepo;
+            _logger = logger;
         }
 
         public void AddSalesOrder(SalesOrderHeader salesOrder, bool toSave)
@@ -644,10 +649,9 @@ namespace Services.Sales
                 }
                 
             }
-            catch (Exception e)
+            catch (Exception ex)
             {
-
-                throw e;
+                _logger.LogError(ex.Message);
             }
 
         }
@@ -737,7 +741,7 @@ namespace Services.Sales
             }
             catch (Exception ex)
             {
-                throw ex;
+                _logger.LogError(ex.Message);
             }
         }
 
