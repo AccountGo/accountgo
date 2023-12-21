@@ -17,6 +17,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System;
 using System.Threading;
+using Microsoft.Extensions.Logging;
+using Services.Sales;
 
 namespace Services.Purchasing
 {
@@ -24,6 +26,8 @@ namespace Services.Purchasing
     {
         private readonly IFinancialService _financialService;
         private readonly IInventoryService _inventoryService;
+
+        private readonly ILogger<PurchasingService> _logger;
 
         private readonly IRepository<PurchaseOrderHeader> _purchaseOrderRepo;
         private readonly IRepository<PurchaseOrderLine> _purchaseOrderLineRepo;
@@ -57,7 +61,8 @@ namespace Services.Purchasing
             IRepository<PaymentTerm> paymentTermRepo,
             IRepository<Bank> bankRepo,
             IRepository<Contact> contactRepo,
-            IPurchaseOrderRepository purchaseOrderHeaderRepository
+            IPurchaseOrderRepository purchaseOrderHeaderRepository,
+            ILogger<PurchasingService> logger
             )
             : base(sequenceNumberRepo, generalLedgerSettingRepo, paymentTermRepo, bankRepo)
         {
@@ -78,6 +83,7 @@ namespace Services.Purchasing
             _bankRepo = bankRepo;
             _purchaseOrderHeaderRepository = purchaseOrderHeaderRepository;
             _contactRepo = contactRepo;
+            _logger = logger;
         }
 
         public void AddPurchaseInvoice(PurchaseInvoiceHeader purchaseIvoice, int? purchaseOrderId)
@@ -481,7 +487,7 @@ namespace Services.Purchasing
             }
             catch (Exception ex)
             {
-                throw ex;
+                _logger.LogError(ex.Message);
             }
         }
 

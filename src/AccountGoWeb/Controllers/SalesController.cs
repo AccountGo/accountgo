@@ -10,7 +10,6 @@ namespace AccountGoWeb.Controllers
     //[Microsoft.AspNetCore.Authorization.Authorize]
     public class SalesController : GoodController
     {
-        private readonly IConfiguration _configuration;
         public SalesController(IConfiguration config)
         {
             _configuration = config;

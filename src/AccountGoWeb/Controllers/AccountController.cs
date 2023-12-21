@@ -12,11 +12,11 @@ using System.Threading.Tasks;
 
 namespace AccountGoWeb.Controllers
 {
-    public class AccountController : BaseController
+    public class AccountController : GoodController
     {
         public AccountController(IConfiguration config)
         {
-            _baseConfig = config;
+            _configuration = config;
         }
 
         [HttpGet]

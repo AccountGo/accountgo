@@ -8,6 +8,19 @@ namespace AccountGoWeb.Controllers
     {
         protected IConfiguration _configuration;
 
+        protected HttpResponseMessage Get(string uri)
+        {
+            string responseJson = string.Empty;
+            using (var client = new HttpClient())
+            {
+                var baseUri = _configuration["ApiUrl"];
+                client.BaseAddress = new System.Uri(baseUri);
+                client.DefaultRequestHeaders.Accept.Clear();
+                var response = client.GetAsync(baseUri + uri);
+                return response.Result;
+            }
+        }
+
         protected HttpResponseMessage Post(string uri, StringContent data)
         {
             string responseJson = string.Empty;
