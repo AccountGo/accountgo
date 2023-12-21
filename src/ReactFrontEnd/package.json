@@ -1,6 +1,6 @@
 {
   "version": "0.0.1",
-  "name": "accountgoweb",
+  "name": "good-books",
   "private": true,
   "scripts": {
     "webpack": "webpack",
