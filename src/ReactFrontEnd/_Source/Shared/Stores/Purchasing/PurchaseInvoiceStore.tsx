@@ -1,6 +1,6 @@
 ﻿import {observable, extendObservable, action, autorun, computed} from 'mobx';
 import axios from "axios";
-import { API_URL } from '../../Config/index';
+import Config from '../../Config';
 
 import PurchaseInvoice from './PurchaseInvoice';
 import PurchaseInvoiceLine from './PurchaseInvoiceLine';
@@ -35,7 +35,7 @@ export default class PurchaseOrderStore {
         autorun(() => this.computeTotals());
 
         if (purchId !== undefined) {
-            axios.get(API_URL + "api/purchasing/purchaseorder?id=" + purchId)
+            axios.get(Config.API_URL + "api/purchasing/purchaseorder?id=" + purchId)
                 .then(function (result) {
                    
                     for (var i = 0; i < result.data.purchaseOrderLines.length; i++) {
@@ -64,7 +64,7 @@ export default class PurchaseOrderStore {
                 }.bind(this));
         }
         else if (invoiceId !== undefined) {
-            axios.get(API_URL + "purchasing/purchaseinvoice?id=" + invoiceId)
+            axios.get(Config.API_URL + "purchasing/purchaseinvoice?id=" + invoiceId)
                 .then(function (result) {
                    
                     for (var i = 0; i < result.data.purchaseInvoiceLines.length; i++) {
@@ -117,7 +117,7 @@ export default class PurchaseOrderStore {
         for (var i = 0; i < this.purchaseInvoice.purchaseInvoiceLines.length; i++) {
             var lineItem = this.purchaseInvoice.purchaseInvoiceLines[i];
             rtotal = rtotal + this.getLineTotal(i);
-            axios.get(API_URL + "tax/gettax?itemId=" + lineItem.itemId + "&partyId=" + this.purchaseInvoice.vendorId + "&type=2")
+            axios.get(Config.API_URL + "tax/gettax?itemId=" + lineItem.itemId + "&partyId=" + this.purchaseInvoice.vendorId + "&type=2")
                 .then(function (result) {
                     if (result.data.length > 0) {
                         ttotal = ttotal + this.commonStore.getPurhcaseLineTaxAmount(lineItem.quantity, lineItem.amount, lineItem.discount, result.data);
@@ -131,7 +131,7 @@ export default class PurchaseOrderStore {
 
     savePurchaseInvoice() {
         if (this.validation() && this.validationErrors.length === 0) {
-            axios.post(API_URL + "purchasing/savepurchaseinvoice", JSON.stringify(this.purchaseInvoice),
+            axios.post(Config.API_URL + "purchasing/savepurchaseinvoice", JSON.stringify(this.purchaseInvoice),
                 {
                     headers: {
                         'Content-type': 'application/json'
@@ -150,7 +150,7 @@ export default class PurchaseOrderStore {
 
     postInvoice() {
         if (this.validation() && this.validationErrors.length === 0) {
-            axios.post(API_URL + "purchasing/postpurchaseinvoice", JSON.stringify(this.purchaseInvoice),
+            axios.post(Config.API_URL + "purchasing/postpurchaseinvoice", JSON.stringify(this.purchaseInvoice),
                 {
                     headers: {
                         'Content-type': 'application/json'

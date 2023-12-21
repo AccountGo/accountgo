@@ -3,7 +3,7 @@ var webpack = require('webpack');
 var path = require('path');
 
 var buildDir = path.resolve(__dirname, 'wwwroot/scripts');
-var scriptsDir = path.resolve(__dirname, 'Scripts');
+var scriptsDir = path.resolve(__dirname, '_Source');
 console.log("NODE_ENV (webpack.config.js) => " + process.env.npm_config_nodeenv);
 console.log("APIURLSPA (webpack.config.js) => " + process.env.npm_config_apiurlspa);
 
@@ -19,6 +19,7 @@ if (mode === 'undefined' || mode == null || mode === '') {
 }
 
 var config = {
+    mode: 'production',
     entry: {
         index: scriptsDir + '/Home' + '/Index',
         "sales/salesorder": scriptsDir + '/Sales/SalesOrder',
