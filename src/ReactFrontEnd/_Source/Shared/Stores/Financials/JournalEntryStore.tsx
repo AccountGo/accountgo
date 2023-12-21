@@ -1,7 +1,7 @@
 ﻿import {observable, extendObservable, action, intercept, reaction} from 'mobx';
 import axios from "axios";
 import * as d3 from "d3";
-import { API_URL } from '../../Config/index';
+import Config from '../../Config';
 
 import JournalEntry from './JournalEntry';
 import JournalEntryLine from './JournalEntryLine';
@@ -51,7 +51,7 @@ export default class JournalEntryStore {
     }
 
     getJournalEntry(journalEntryId: number) {
-        axios.get(API_URL + "financials/journalentry?id=" + journalEntryId)
+        axios.get(Config.API_URL + "financials/journalentry?id=" + journalEntryId)
             .then(function (result) {
                 for (var i = 0; i < result.data.journalEntryLines.length; i++) {
                     var item = result.data.journalEntryLines[i];
@@ -74,7 +74,7 @@ export default class JournalEntryStore {
 
     saveNewJournalEntry() {
         if (this.validation() && this.validationErrors.length == 0) {
-            axios.post(API_URL + "financials/savejournalentry", JSON.stringify(this.journalEntry),
+            axios.post(Config.API_URL + "financials/savejournalentry", JSON.stringify(this.journalEntry),
                 {
                     headers: {
                         'Content-type': 'application/json'
@@ -121,7 +121,7 @@ export default class JournalEntryStore {
 
     postJournal() {
         if (this.validation() && this.validationErrors.length == 0) {
-            axios.post(API_URL + "financials/postjournalentry", JSON.stringify(this.journalEntry),
+            axios.post(Config.API_URL + "financials/postjournalentry", JSON.stringify(this.journalEntry),
                 {
                     headers: {
                         'Content-type': 'application/json'

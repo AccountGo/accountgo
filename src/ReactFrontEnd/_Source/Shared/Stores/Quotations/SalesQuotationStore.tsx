@@ -1,7 +1,7 @@
 ﻿import {observable, extendObservable, action, autorun, computed} from 'mobx';
 import axios from "axios";
 import * as d3 from "d3";
-import { API_URL } from '../../Config/index';
+import Config from '../../Config';
 
 import SalesQuotation from './SalesQuotation';
 import SalesQuotationLine from './SalesQuotationLine';
@@ -37,7 +37,7 @@ export default class SalesQuotationStore {
         autorun(() => this.computeTotals());
 
         if (quotationId !== undefined) {
-            var result = axios.get(API_URL + "sales/quotation?id=" + quotationId);
+            var result = axios.get(Config.API_URL + "sales/quotation?id=" + quotationId);
             result.then(function (result) {
                 this.salesQuotation.id = result.data.id;
                 this.salesQuotation.paymentTermId = result.data.paymentTermId;
@@ -86,7 +86,7 @@ export default class SalesQuotationStore {
         for (var i = 0; i < this.salesQuotation.salesQuotationLines.length; i++) {
             var lineItem = this.salesQuotation.salesQuotationLines[i];
             rtotal = rtotal + this.getLineTotal(i);
-            axios.get(API_URL + "tax/gettax?itemId=" + lineItem.itemId + "&partyId=" + this.salesQuotation.customerId + "&type=1")
+            axios.get(Config.API_URL + "tax/gettax?itemId=" + lineItem.itemId + "&partyId=" + this.salesQuotation.customerId + "&type=1")
                 .then(function (result) {
                     if (result.data.length > 0) {
                         ttotal = ttotal + this.commonStore.getSalesLineTaxAmount(lineItem.quantity, lineItem.amount, lineItem.discount, result.data);
@@ -105,7 +105,7 @@ export default class SalesQuotationStore {
 
         if (this.validation()) {
             if (this.validationErrors.length === 0) {
-                axios.post(API_URL + "sales/savequotation", JSON.stringify(this.salesQuotation),
+                axios.post(Config.API_URL + "sales/savequotation", JSON.stringify(this.salesQuotation),
                     {
                         headers:
                         {
@@ -129,7 +129,7 @@ export default class SalesQuotationStore {
 
         if (this.validation()) {
             if (this.validationErrors.length === 0) {
-                axios.post(API_URL + "sales/bookquotation?id=" + parseInt(this.salesQuotation.id),
+                axios.post(Config.API_URL + "sales/bookquotation?id=" + parseInt(this.salesQuotation.id),
                     {
                         headers:
                         {

@@ -1,6 +1,6 @@
 ﻿import {observable, extendObservable, action, autorun, computed} from 'mobx';
 import axios from "axios";
-import { API_URL } from '../../Config/index';
+import Config from '../../Config';
 
 import SalesOrder from './SalesOrder';
 import SalesOrderLine from './SalesOrderLine';
@@ -35,7 +35,7 @@ export default class SalesOrderStore {
         autorun(() => this.computeTotals());
 
         if (quotationId !== undefined) {
-            var result = axios.get(API_URL + "sales/quotation?id=" + quotationId);
+            var result = axios.get(Config.API_URL + "sales/quotation?id=" + quotationId);
             result.then(function (result) {
                 this.changedCustomer(result.data.customerId);
                 this.salesOrder.paymentTermId = result.data.paymentTermId;
@@ -63,7 +63,7 @@ export default class SalesOrderStore {
             }.bind(this));
         }
         else if (orderId !== undefined) {
-            var result = axios.get(API_URL + "sales/salesorder?id=" + orderId);
+            var result = axios.get(Config.API_URL + "sales/salesorder?id=" + orderId);
             result.then(function (result) {
                 this.salesOrder.id = result.data.id;
                 this.changedCustomer(result.data.customerId);
@@ -107,7 +107,7 @@ export default class SalesOrderStore {
         for (var i = 0; i < this.salesOrder.salesOrderLines.length; i++) {
             var lineItem = this.salesOrder.salesOrderLines[i];
             rtotal = rtotal + this.getLineTotal(i);
-            axios.get(API_URL + "tax/gettax?itemId=" + lineItem.itemId + "&partyId=" + this.salesOrder.customerId + "&type=1")
+            axios.get(Config.API_URL + "tax/gettax?itemId=" + lineItem.itemId + "&partyId=" + this.salesOrder.customerId + "&type=1")
                 .then(function (result) {
                     if (result.data.length > 0) {
                         ttotal = ttotal + this.commonStore.getSalesLineTaxAmount(lineItem.quantity, lineItem.amount, lineItem.discount, result.data);
@@ -127,7 +127,7 @@ export default class SalesOrderStore {
 
 
         if (this.validation() && this.validationErrors.length === 0) {
-            axios.post(API_URL + "sales/savesalesorder", JSON.stringify(this.salesOrder),
+            axios.post(Config.API_URL + "sales/savesalesorder", JSON.stringify(this.salesOrder),
                 {
                     headers: {
                         'Content-type': 'application/json'

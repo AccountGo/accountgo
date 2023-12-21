@@ -1,6 +1,6 @@
 ﻿import {observable, extendObservable, action} from 'mobx';
 import axios from "axios";
-import { API_URL } from '../../Config/index';
+import Config  from '../../Config';
 
 export default class CommonStore {
     @observable customers = [];
@@ -24,7 +24,7 @@ export default class CommonStore {
     loadCustomersLookup() {
         let customers = this.customers;
 
-        axios.get(API_URL + "common/customers")
+        axios.get(Config.API_URL + "common/customers")
             .then(function (result) {
                 const data = result.data;
                 for (var i = 0; i < Object.keys(data).length; i++) {
@@ -35,7 +35,7 @@ export default class CommonStore {
 
     loadPaymentTermsLookup() {
         let paymentTerms = this.paymentTerms;
-        axios.get(API_URL + "common/paymentterms")
+        axios.get(Config.API_URL + "common/paymentterms")
             .then(function (result) {
                 const data = result.data;
                 for (var i = 0; i < Object.keys(data).length; i++) {
@@ -46,7 +46,7 @@ export default class CommonStore {
 
     loadVendorsLookup() {
         let vendors = this.vendors;
-        axios.get(API_URL + "common/vendors")
+        axios.get(Config.API_URL + "common/vendors")
             .then(function (result) {
                 const data = result.data;
                 for (var i = 0; i < Object.keys(data).length; i++) {
@@ -57,7 +57,7 @@ export default class CommonStore {
 
     loadItemsLookup() {
         let items = this.items;
-        axios.get(API_URL + "common/items")
+        axios.get(Config.API_URL + "common/items")
             .then(function (result) {
                 const data = result.data;
                 for (var i = 0; i < Object.keys(data).length; i++) {
@@ -68,7 +68,7 @@ export default class CommonStore {
 
     loadMeasurementsLookup() {
         let measurements = this.measurements;
-        axios.get(API_URL + "common/measurements")
+        axios.get(Config.API_URL + "common/measurements")
             .then(function (result) {
                 const data = result.data;
                 for (var i = 0; i < Object.keys(data).length; i++) {
@@ -82,7 +82,7 @@ export default class CommonStore {
 
     loadQuotationStatusLookup() {
         let quotationStatus = this.salesQuotationStatus;
-        axios.get(API_URL + "common/salesquotationstatus")
+        axios.get(Config.API_URL + "common/salesquotationstatus")
             .then(function (result) {
                 const data = result.data;
                 for (var i = 0; i < Object.keys(data).length; i++)
@@ -94,7 +94,7 @@ export default class CommonStore {
 
     loadAccountsLookup() {
         let accounts = this.accounts;
-        axios.get(API_URL + "common/postingaccounts")
+        axios.get(Config.API_URL + "common/postingaccounts")
             .then(function (result) {
                 const data = result.data;
                 for (var i = 0; i < Object.keys(data).length; i++) {
@@ -104,7 +104,7 @@ export default class CommonStore {
     }
 
     getApplicableTaxes(itemId: number, partyId: number) {
-        var result = axios.get(API_URL + "tax/gettax?itemId=" + itemId + "&partyId=" + partyId);
+        var result = axios.get(Config.API_URL + "tax/gettax?itemId=" + itemId + "&partyId=" + partyId);
         result.then(function (result) {
             return result.data;
         });
