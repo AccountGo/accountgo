@@ -36,10 +36,8 @@ export default class SelectLineItem extends React.Component<any, {}>{
             }
         }
         
-
         for (var i = 0; i < this.props.store.commonStore.items.length; i++) {
             if (this.props.store.commonStore.items[i].id === parseInt(e.target.value)) {
-
 
                 if (this.props.row !== undefined) {
                     this.props.store.updateLineItem(this.props.row, "measurementId", this.props.store.commonStore.items[i].sellMeasurementId);
