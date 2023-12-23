@@ -22,7 +22,7 @@ export default class CommonStore {
     }
 
     loadCustomersLookup() {
-        let customers: string[] = this.customers;
+        let customers: any[] = this.customers;
 
         axios.get(Config.API_URL + "common/customers")
             .then(function (result) {
@@ -34,7 +34,7 @@ export default class CommonStore {
     }
 
     loadPaymentTermsLookup() {
-        let paymentTerms: string[] = this.paymentTerms;
+        let paymentTerms: any[] = this.paymentTerms;
         axios.get(Config.API_URL + "common/paymentterms")
             .then(function (result) {
                 const data = result.data;
@@ -45,7 +45,7 @@ export default class CommonStore {
     }
 
     loadVendorsLookup() {
-        let vendors: string[] = this.vendors;
+        let vendors: any[] = this.vendors;
         axios.get(Config.API_URL + "common/vendors")
             .then(function (result: any) {
                 const data = result.data;
@@ -56,7 +56,7 @@ export default class CommonStore {
     }
 
     loadItemsLookup() {
-        let items: string[] = this.items;
+        let items: any[] = this.items;
         axios.get(Config.API_URL + "common/items")
             .then(function (result: any) {
                 const data = result.data;
@@ -67,7 +67,7 @@ export default class CommonStore {
     }
 
     loadMeasurementsLookup() {
-        let measurements: string[] = this.measurements;
+        let measurements: any[] = this.measurements;
         axios.get(Config.API_URL + "common/measurements")
             .then(function (result: any) {
                 const data = result.data;
@@ -81,7 +81,7 @@ export default class CommonStore {
     }
 
     loadQuotationStatusLookup() {
-        let quotationStatus: string[] = this.salesQuotationStatus;
+        let quotationStatus: any[] = this.salesQuotationStatus;
         axios.get(Config.API_URL + "common/salesquotationstatus")
             .then(function (result: any) {
                 const data = result.data;
@@ -93,7 +93,7 @@ export default class CommonStore {
     }
 
     loadAccountsLookup() {
-        let accounts: string[] = this.accounts; 
+        let accounts: any[] = this.accounts; 
         axios.get(Config.API_URL + "common/postingaccounts")
             .then(function (result: any) {
                 const data: string[] = result.data;
