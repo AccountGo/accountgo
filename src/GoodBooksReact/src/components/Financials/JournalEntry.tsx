@@ -1,24 +1,20 @@
 ﻿import * as React from "react";
 import * as ReactDOM from "react-dom";
 import {observer} from "mobx-react";
-import {autorun, reaction, toJS, intercept} from 'mobx';
-import * as d3 from "d3";
 
 import SelectVoucherType from "../Shared/Components/SelectVoucherType";
 import SelectAccount from "../Shared/Components/SelectAccount";
 import SelectDebitCredit from "../Shared/Components/SelectDebitCredit";
 
 import JournalEntryStore from "../Shared/Stores/Financials/JournalEntryStore";
-import JournalEntryUIStore from "../Shared/Stores/Financials/JournalEntryUIStore";
 
 let store = new JournalEntryStore();
-let uiStore = new JournalEntryUIStore(store);
 
 @observer
 class ValidationErrors extends React.Component<any, {}>{
     render() {
         if (store.validationErrors !== undefined && store.validationErrors.length > 0) {
-            var errors = [];
+            var errors: any = [];
             store.validationErrors.map(function (item: any, index: any) {
                 const errors: React.ReactNode[] = [];
                 errors.push(<li key={index}>{item}</li>);
@@ -61,7 +57,7 @@ class EditButton extends React.Component<any, {}>{
 
 @observer
 class SaveJournalEntryButton extends React.Component<any, {}>{
-    onClickSaveNewJournalEntry(e) {
+    onClickSaveNewJournalEntry() {
         store.saveNewJournalEntry();
     }
     render() {
@@ -95,7 +91,7 @@ class CancelJournalEntryButton extends React.Component<any, {}>{
 
 @observer
 class PostJournalEntryButton extends React.Component<any, {}>{
-    postOnClick(e) {
+    postOnClick() {
         store.postJournal();
     }
 
@@ -119,7 +115,7 @@ class JournalEntryHeader extends React.Component<any, {}>{
         store.changedReferenceNo(e.target.value);
     }
 
-    onChangeMemo(e) {
+    onChangeMemo(e: any) {
         store.changedMemo(e.target.value);
     }
 
@@ -134,7 +130,7 @@ class JournalEntryHeader extends React.Component<any, {}>{
                         <div className="row">
                             <div className="col-sm-3">Date</div>
                             <div className="col-sm-9"><input type="date" className="form-control" id="newJournalDate" onChange={this.onChangeJournalDate.bind(this) }
-                                value={store.journalEntry.journalDate !== undefined ? store.journalEntry.journalDate.substring(0, 10) : new Date(Date.now()).toISOString().substring(0, 10) } /></div>
+                                value={store.journalEntry.journalDate !== undefined ? store.journalEntry.journalDate.toISOString().substring(0, 10) : new Date(Date.now()).toISOString().substring(0, 10) } /></div>
                         </div>
                         <div className="row">
                             <div className="col-sm-3">Voucher</div>
@@ -169,15 +165,14 @@ class JournalEntryLines extends React.Component<any, {}>{
     onChangeMemo(e: any) {
         store.updateLineItem(e.target.name, "memo", e.target.value);
     }
-    onClickRemoveLineItem(i: any, e: any) {
+    onClickRemoveLineItem(i: any) {
         store.removeLineItem(i);
     }
     addLineItem() {
-        var accountId, drcr, amount, memo;
-        accountId = (document.getElementById("optNewAccountId") as HTMLInputElement).value;;
-        drcr = (document.getElementById("optNewDebitCredit") as HTMLInputElement).value;
-        amount = (document.getElementById("txtNewAmount") as HTMLInputElement).value;
-        memo = (document.getElementById("txtNewMemo") as HTMLInputElement).value;
+        var accountId: any = (document.getElementById("optNewAccountId") as HTMLInputElement).value;;
+        var drcr: any = (document.getElementById("optNewDebitCredit") as HTMLInputElement).value;
+        var amount: any = (document.getElementById("txtNewAmount") as HTMLInputElement).value;
+        var memo: any = (document.getElementById("txtNewMemo") as HTMLInputElement).value;
 
         store.addLineItem(0, accountId, drcr, amount, memo);
         
