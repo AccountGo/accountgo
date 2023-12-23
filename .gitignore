@@ -18,6 +18,7 @@ build/
 bld/
 [Bb]in/
 [Oo]bj/
+node_modules/
 
 # Roslyn cache directories
 *.ide/

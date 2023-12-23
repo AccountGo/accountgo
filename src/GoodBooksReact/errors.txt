@@ -1,0 +1,472 @@
+
+> goodbooksreact@0.0.0 tsc
+> tsc
+
+src/components/Shared/Components/SelectPaymentTerm.tsx(6,25): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/components/Shared/Components/SelectQuotationStatus.tsx(6,25): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/components/Shared/Components/SelectVendor.tsx(6,20): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/components/Shared/Components/SelectVendor.tsx(24,47): error TS2339: Property 'id' does not exist on type 'AsyncDisposable'.
+src/components/Shared/Components/SelectVendor.tsx(24,67): error TS2339: Property 'id' does not exist on type 'AsyncDisposable'.
+src/components/Shared/Components/SelectVendor.tsx(24,82): error TS2339: Property 'name' does not exist on type 'AsyncDisposable'.
+src/components/Shared/Components/SelectVoucherType.tsx(6,25): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/components/Shared/Stores/AppState.tsx(1,1): error TS6133: 'observable' is declared but its value is never read.
+src/components/Shared/Stores/Common/CommonStore.tsx(1,21): error TS6133: 'extendObservable' is declared but its value is never read.
+src/components/Shared/Stores/Common/CommonStore.tsx(1,39): error TS6133: 'action' is declared but its value is never read.
+src/components/Shared/Stores/Common/CommonStore.tsx(31,36): error TS2345: Argument of type 'any' is not assignable to parameter of type 'never'.
+src/components/Shared/Stores/Common/CommonStore.tsx(42,39): error TS2345: Argument of type 'any' is not assignable to parameter of type 'never'.
+src/components/Shared/Stores/Common/CommonStore.tsx(50,29): error TS7006: Parameter 'result' implicitly has an 'any' type.
+src/components/Shared/Stores/Common/CommonStore.tsx(53,34): error TS2345: Argument of type 'any' is not assignable to parameter of type 'never'.
+src/components/Shared/Stores/Common/CommonStore.tsx(64,32): error TS2345: Argument of type 'any' is not assignable to parameter of type 'never'.
+src/components/Shared/Stores/Common/CommonStore.tsx(75,39): error TS2345: Argument of type 'any' is not assignable to parameter of type 'never'.
+src/components/Shared/Stores/Common/CommonStore.tsx(90,42): error TS2345: Argument of type 'any' is not assignable to parameter of type 'never'.
+src/components/Shared/Stores/Common/CommonStore.tsx(101,35): error TS2345: Argument of type 'any' is not assignable to parameter of type 'never'.
+src/components/Shared/Stores/Common/CommonStore.tsx(116,29): error TS7006: Parameter 'tax' implicitly has an 'any' type.
+src/components/Shared/Stores/Common/CommonStore.tsx(125,29): error TS7006: Parameter 'tax' implicitly has an 'any' type.
+src/components/Shared/Stores/Financials/JournalEntry.tsx(5,5): error TS2564: Property 'voucherType' has no initializer and is not definitely assigned in the constructor.
+src/components/Shared/Stores/Financials/JournalEntry.tsx(6,5): error TS2564: Property 'journalDate' has no initializer and is not definitely assigned in the constructor.
+src/components/Shared/Stores/Financials/JournalEntry.tsx(7,5): error TS2564: Property 'referenceNo' has no initializer and is not definitely assigned in the constructor.
+src/components/Shared/Stores/Financials/JournalEntry.tsx(8,5): error TS2564: Property 'memo' has no initializer and is not definitely assigned in the constructor.
+src/components/Shared/Stores/Financials/JournalEntryLine.tsx(8,17): error TS7006: Parameter 'id' implicitly has an 'any' type.
+src/components/Shared/Stores/Financials/JournalEntryLine.tsx(8,21): error TS7006: Parameter 'accountId' implicitly has an 'any' type.
+src/components/Shared/Stores/Financials/JournalEntryLine.tsx(8,32): error TS7006: Parameter 'drcr' implicitly has an 'any' type.
+src/components/Shared/Stores/Financials/JournalEntryLine.tsx(8,38): error TS7006: Parameter 'amount' implicitly has an 'any' type.
+src/components/Shared/Stores/Financials/JournalEntryLine.tsx(8,46): error TS7006: Parameter 'memo' implicitly has an 'any' type.
+src/components/Shared/Stores/Financials/JournalEntryStore.tsx(1,39): error TS6133: 'action' is declared but its value is never read.
+src/components/Shared/Stores/Financials/JournalEntryStore.tsx(1,47): error TS6133: 'intercept' is declared but its value is never read.
+src/components/Shared/Stores/Financials/JournalEntryStore.tsx(1,58): error TS6133: 'reaction' is declared but its value is never read.
+src/components/Shared/Stores/Financials/JournalEntryStore.tsx(3,1): error TS6133: 'd3' is declared but its value is never read.
+src/components/Shared/Stores/Financials/JournalEntryStore.tsx(3,21): error TS7016: Could not find a declaration file for module 'd3'. 'D:/_playground/react/GoodBooksReact/node_modules/d3/src/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/d3` if it exists or add a new declaration (.d.ts) file containing `declare module 'd3';`
+src/components/Shared/Stores/Financials/JournalEntryStore.tsx(17,5): error TS7008: Member 'originalJournalEntry' implicitly has an 'any' type.
+src/components/Shared/Stores/Financials/JournalEntryStore.tsx(20,17): error TS7008: Member 'validationErrors' implicitly has an 'any' type.
+src/components/Shared/Stores/Financials/JournalEntryStore.tsx(45,19): error TS7006: Parameter 'dirty' implicitly has an 'any' type.
+src/components/Shared/Stores/Financials/JournalEntryStore.tsx(49,23): error TS7006: Parameter 'initialized' implicitly has an 'any' type.
+src/components/Shared/Stores/Financials/JournalEntryStore.tsx(55,29): error TS7006: Parameter 'result' implicitly has an 'any' type.
+src/components/Shared/Stores/Financials/JournalEntryStore.tsx(58,21): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Financials/JournalEntryStore.tsx(60,17): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Financials/JournalEntryStore.tsx(61,17): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Financials/JournalEntryStore.tsx(62,17): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Financials/JournalEntryStore.tsx(63,17): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Financials/JournalEntryStore.tsx(64,17): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Financials/JournalEntryStore.tsx(65,17): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Financials/JournalEntryStore.tsx(66,17): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Financials/JournalEntryStore.tsx(68,29): error TS2531: Object is possibly 'null'.
+src/components/Shared/Stores/Financials/JournalEntryStore.tsx(83,33): error TS6133: 'response' is declared but its value is never read.
+src/components/Shared/Stores/Financials/JournalEntryStore.tsx(86,34): error TS7006: Parameter 'error' implicitly has an 'any' type.
+src/components/Shared/Stores/Financials/JournalEntryStore.tsx(87,46): error TS7006: Parameter 'err' implicitly has an 'any' type.
+src/components/Shared/Stores/Financials/JournalEntryStore.tsx(88,25): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Financials/JournalEntryStore.tsx(89,28): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Financials/JournalEntryStore.tsx(130,33): error TS6133: 'response' is declared but its value is never read.
+src/components/Shared/Stores/Financials/JournalEntryStore.tsx(133,34): error TS7006: Parameter 'error' implicitly has an 'any' type.
+src/components/Shared/Stores/Financials/JournalEntryStore.tsx(134,46): error TS7006: Parameter 'err' implicitly has an 'any' type.
+src/components/Shared/Stores/Financials/JournalEntryStore.tsx(135,25): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Financials/JournalEntryStore.tsx(136,28): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Financials/JournalEntryStore.tsx(141,17): error TS7006: Parameter 'id' implicitly has an 'any' type.
+src/components/Shared/Stores/Financials/JournalEntryStore.tsx(141,21): error TS7006: Parameter 'accountId' implicitly has an 'any' type.
+src/components/Shared/Stores/Financials/JournalEntryStore.tsx(141,32): error TS7006: Parameter 'drcr' implicitly has an 'any' type.
+src/components/Shared/Stores/Financials/JournalEntryStore.tsx(141,38): error TS7006: Parameter 'amount' implicitly has an 'any' type.
+src/components/Shared/Stores/Financials/JournalEntryStore.tsx(141,46): error TS7006: Parameter 'memo' implicitly has an 'any' type.
+src/components/Shared/Stores/Financials/JournalEntryStore.tsx(146,20): error TS7006: Parameter 'row' implicitly has an 'any' type.
+src/components/Shared/Stores/Financials/JournalEntryStore.tsx(146,25): error TS7006: Parameter 'targetProperty' implicitly has an 'any' type.
+src/components/Shared/Stores/Financials/JournalEntryStore.tsx(146,41): error TS7006: Parameter 'value' implicitly has an 'any' type.
+src/components/Shared/Stores/Financials/JournalEntryStore.tsx(148,13): error TS7053: Element implicitly has an 'any' type because expression of type 'any' can't be used to index type 'JournalEntryLine'.
+src/components/Shared/Stores/Financials/JournalEntryStore.tsx(151,20): error TS7006: Parameter 'row' implicitly has an 'any' type.
+src/components/Shared/Stores/Financials/JournalEntryStore.tsx(155,24): error TS7006: Parameter 'date' implicitly has an 'any' type.
+src/components/Shared/Stores/Financials/JournalEntryStore.tsx(159,24): error TS7006: Parameter 'refNo' implicitly has an 'any' type.
+src/components/Shared/Stores/Financials/JournalEntryStore.tsx(163,17): error TS7006: Parameter 'memo' implicitly has an 'any' type.
+src/components/Shared/Stores/Financials/JournalEntryStore.tsx(167,24): error TS7006: Parameter 'type' implicitly has an 'any' type.
+src/components/Shared/Stores/Financials/JournalEntryStore.tsx(171,21): error TS7006: Parameter 'editMode' implicitly has an 'any' type.
+src/components/Shared/Stores/Financials/JournalEntryUIStore.tsx(1,1): error TS6192: All imports in import declaration are unused.
+src/components/Shared/Stores/Financials/JournalEntryUIStore.tsx(2,1): error TS6133: 'mobx' is declared but its value is never read.
+src/components/Shared/Stores/Purchasing/PurchaseInvoice.tsx(5,5): error TS2564: Property 'fromPurchaseOrderId' has no initializer and is not definitely assigned in the constructor.
+src/components/Shared/Stores/Purchasing/PurchaseInvoice.tsx(6,5): error TS2564: Property 'vendorId' has no initializer and is not definitely assigned in the constructor.
+src/components/Shared/Stores/Purchasing/PurchaseInvoice.tsx(7,5): error TS2564: Property 'invoiceDate' has no initializer and is not definitely assigned in the constructor.
+src/components/Shared/Stores/Purchasing/PurchaseInvoice.tsx(8,5): error TS2564: Property 'paymentTermId' has no initializer and is not definitely assigned in the constructor.
+src/components/Shared/Stores/Purchasing/PurchaseInvoice.tsx(9,5): error TS2564: Property 'referenceNo' has no initializer and is not definitely assigned in the constructor.
+src/components/Shared/Stores/Purchasing/PurchaseInvoice.tsx(13,5): error TS2564: Property 'statusId' has no initializer and is not definitely assigned in the constructor.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceLine.tsx(10,17): error TS7006: Parameter 'id' implicitly has an 'any' type.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceLine.tsx(10,21): error TS7006: Parameter 'itemId' implicitly has an 'any' type.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceLine.tsx(10,29): error TS7006: Parameter 'measurementId' implicitly has an 'any' type.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceLine.tsx(10,44): error TS7006: Parameter 'quantity' implicitly has an 'any' type.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceLine.tsx(10,54): error TS7006: Parameter 'amount' implicitly has an 'any' type.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceLine.tsx(10,62): error TS7006: Parameter 'discount' implicitly has an 'any' type.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceStore.tsx(1,39): error TS6133: 'action' is declared but its value is never read.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceStore.tsx(1,56): error TS6133: 'computed' is declared but its value is never read.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceStore.tsx(18,17): error TS7008: Member 'validationErrors' implicitly has an 'any' type.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceStore.tsx(20,17): error TS7008: Member 'purchaseInvoiceStatus' implicitly has an 'any' type.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceStore.tsx(39,33): error TS7006: Parameter 'result' implicitly has an 'any' type.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceStore.tsx(44,25): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceStore.tsx(55,21): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceStore.tsx(56,21): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceStore.tsx(57,21): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceStore.tsx(58,21): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceStore.tsx(59,21): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceStore.tsx(60,21): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceStore.tsx(61,21): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceStore.tsx(63,34): error TS6133: 'error' is declared but its value is never read.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceStore.tsx(63,34): error TS7006: Parameter 'error' implicitly has an 'any' type.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceStore.tsx(68,33): error TS7006: Parameter 'result' implicitly has an 'any' type.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceStore.tsx(71,25): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceStore.tsx(79,25): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceStore.tsx(79,56): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceStore.tsx(82,21): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceStore.tsx(83,21): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceStore.tsx(84,21): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceStore.tsx(85,21): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceStore.tsx(86,21): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceStore.tsx(87,21): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceStore.tsx(88,21): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceStore.tsx(89,21): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceStore.tsx(92,21): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceStore.tsx(94,33): error TS2531: Object is possibly 'null'.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceStore.tsx(99,34): error TS6133: 'error' is declared but its value is never read.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceStore.tsx(99,34): error TS7006: Parameter 'error' implicitly has an 'any' type.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceStore.tsx(115,13): error TS6133: 'gtotal' is declared but its value is never read.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceStore.tsx(121,33): error TS7006: Parameter 'result' implicitly has an 'any' type.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceStore.tsx(123,43): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceStore.tsx(125,21): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceStore.tsx(126,21): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceStore.tsx(140,33): error TS6133: 'response' is declared but its value is never read.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceStore.tsx(143,34): error TS7006: Parameter 'error' implicitly has an 'any' type.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceStore.tsx(144,46): error TS7006: Parameter 'err' implicitly has an 'any' type.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceStore.tsx(145,25): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceStore.tsx(146,28): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceStore.tsx(159,33): error TS6133: 'response' is declared but its value is never read.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceStore.tsx(162,34): error TS7006: Parameter 'error' implicitly has an 'any' type.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceStore.tsx(163,46): error TS7006: Parameter 'err' implicitly has an 'any' type.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceStore.tsx(164,25): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceStore.tsx(165,28): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceStore.tsx(224,58): error TS6133: 'discount' is declared but its value is never read.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceStore.tsx(242,58): error TS6133: 'discount' is declared but its value is never read.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceStore.tsx(264,24): error TS7006: Parameter 'refNo' implicitly has an 'any' type.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceStore.tsx(267,19): error TS7006: Parameter 'vendorId' implicitly has an 'any' type.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceStore.tsx(271,24): error TS7006: Parameter 'paymentTermId' implicitly has an 'any' type.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceStore.tsx(274,24): error TS7006: Parameter 'date' implicitly has an 'any' type.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceStore.tsx(278,17): error TS7006: Parameter 'id' implicitly has an 'any' type.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceStore.tsx(278,21): error TS7006: Parameter 'itemId' implicitly has an 'any' type.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceStore.tsx(278,29): error TS7006: Parameter 'measurementId' implicitly has an 'any' type.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceStore.tsx(278,44): error TS7006: Parameter 'quantity' implicitly has an 'any' type.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceStore.tsx(278,54): error TS7006: Parameter 'amount' implicitly has an 'any' type.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceStore.tsx(278,62): error TS7006: Parameter 'discount' implicitly has an 'any' type.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceStore.tsx(283,20): error TS7006: Parameter 'row' implicitly has an 'any' type.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceStore.tsx(287,20): error TS7006: Parameter 'row' implicitly has an 'any' type.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceStore.tsx(287,25): error TS7006: Parameter 'targetProperty' implicitly has an 'any' type.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceStore.tsx(287,41): error TS7006: Parameter 'value' implicitly has an 'any' type.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceStore.tsx(289,13): error TS7053: Element implicitly has an 'any' type because expression of type 'any' can't be used to index type 'PurchaseInvoiceLine'.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceStore.tsx(294,18): error TS7006: Parameter 'row' implicitly has an 'any' type.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceStore.tsx(301,21): error TS7006: Parameter 'editMode' implicitly has an 'any' type.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceStore.tsx(305,30): error TS7006: Parameter 'statusId' implicitly has an 'any' type.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceStore.tsx(316,20): error TS7006: Parameter 'itemId' implicitly has an 'any' type.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceStore.tsx(319,43): error TS2339: Property 'id' does not exist on type 'never'.
+src/components/Shared/Stores/Purchasing/PurchaseInvoiceStore.tsx(320,50): error TS2339: Property 'code' does not exist on type 'never'.
+src/components/Shared/Stores/Purchasing/PurchaseOrder.tsx(4,5): error TS2564: Property 'id' has no initializer and is not definitely assigned in the constructor.
+src/components/Shared/Stores/Purchasing/PurchaseOrder.tsx(5,5): error TS2564: Property 'vendorId' has no initializer and is not definitely assigned in the constructor.
+src/components/Shared/Stores/Purchasing/PurchaseOrder.tsx(6,5): error TS2564: Property 'orderDate' has no initializer and is not definitely assigned in the constructor.
+src/components/Shared/Stores/Purchasing/PurchaseOrder.tsx(7,5): error TS2564: Property 'paymentTermId' has no initializer and is not definitely assigned in the constructor.
+src/components/Shared/Stores/Purchasing/PurchaseOrder.tsx(8,5): error TS2564: Property 'referenceNo' has no initializer and is not definitely assigned in the constructor.
+src/components/Shared/Stores/Purchasing/PurchaseOrder.tsx(9,5): error TS2564: Property 'statusId' has no initializer and is not definitely assigned in the constructor.
+src/components/Shared/Stores/Purchasing/PurchaseOrderLine.tsx(10,17): error TS7006: Parameter 'id' implicitly has an 'any' type.
+src/components/Shared/Stores/Purchasing/PurchaseOrderLine.tsx(10,21): error TS7006: Parameter 'itemId' implicitly has an 'any' type.
+src/components/Shared/Stores/Purchasing/PurchaseOrderLine.tsx(10,29): error TS7006: Parameter 'measurementId' implicitly has an 'any' type.
+src/components/Shared/Stores/Purchasing/PurchaseOrderLine.tsx(10,44): error TS7006: Parameter 'quantity' implicitly has an 'any' type.
+src/components/Shared/Stores/Purchasing/PurchaseOrderLine.tsx(10,54): error TS7006: Parameter 'amount' implicitly has an 'any' type.
+src/components/Shared/Stores/Purchasing/PurchaseOrderLine.tsx(10,62): error TS7006: Parameter 'discount' implicitly has an 'any' type.
+src/components/Shared/Stores/Purchasing/PurchaseOrderLine.tsx(10,72): error TS7006: Parameter 'code' implicitly has an 'any' type.
+src/components/Shared/Stores/Purchasing/PurchaseOrderStore.tsx(1,39): error TS6133: 'action' is declared but its value is never read.
+src/components/Shared/Stores/Purchasing/PurchaseOrderStore.tsx(1,56): error TS6133: 'computed' is declared but its value is never read.
+src/components/Shared/Stores/Purchasing/PurchaseOrderStore.tsx(18,17): error TS7008: Member 'validationErrors' implicitly has an 'any' type.
+src/components/Shared/Stores/Purchasing/PurchaseOrderStore.tsx(20,17): error TS7008: Member 'purchaseOrderStatus' implicitly has an 'any' type.
+src/components/Shared/Stores/Purchasing/PurchaseOrderStore.tsx(38,33): error TS7006: Parameter 'result' implicitly has an 'any' type.
+src/components/Shared/Stores/Purchasing/PurchaseOrderStore.tsx(39,21): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Purchasing/PurchaseOrderStore.tsx(40,21): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Purchasing/PurchaseOrderStore.tsx(41,21): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Purchasing/PurchaseOrderStore.tsx(42,21): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Purchasing/PurchaseOrderStore.tsx(43,21): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Purchasing/PurchaseOrderStore.tsx(44,21): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Purchasing/PurchaseOrderStore.tsx(45,21): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Purchasing/PurchaseOrderStore.tsx(47,25): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Purchasing/PurchaseOrderStore.tsx(55,25): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Purchasing/PurchaseOrderStore.tsx(55,56): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Purchasing/PurchaseOrderStore.tsx(57,21): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Purchasing/PurchaseOrderStore.tsx(58,33): error TS2531: Object is possibly 'null'.
+src/components/Shared/Stores/Purchasing/PurchaseOrderStore.tsx(63,34): error TS6133: 'error' is declared but its value is never read.
+src/components/Shared/Stores/Purchasing/PurchaseOrderStore.tsx(63,34): error TS7006: Parameter 'error' implicitly has an 'any' type.
+src/components/Shared/Stores/Purchasing/PurchaseOrderStore.tsx(78,13): error TS6133: 'gtotal' is declared but its value is never read.
+src/components/Shared/Stores/Purchasing/PurchaseOrderStore.tsx(84,33): error TS7006: Parameter 'result' implicitly has an 'any' type.
+src/components/Shared/Stores/Purchasing/PurchaseOrderStore.tsx(86,43): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Purchasing/PurchaseOrderStore.tsx(88,21): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Purchasing/PurchaseOrderStore.tsx(89,21): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Purchasing/PurchaseOrderStore.tsx(98,13): error TS2322: Type 'string' is not assignable to type 'Date'.
+src/components/Shared/Stores/Purchasing/PurchaseOrderStore.tsx(107,33): error TS6133: 'response' is declared but its value is never read.
+src/components/Shared/Stores/Purchasing/PurchaseOrderStore.tsx(110,34): error TS7006: Parameter 'error' implicitly has an 'any' type.
+src/components/Shared/Stores/Purchasing/PurchaseOrderStore.tsx(111,46): error TS7006: Parameter 'err' implicitly has an 'any' type.
+src/components/Shared/Stores/Purchasing/PurchaseOrderStore.tsx(112,25): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Purchasing/PurchaseOrderStore.tsx(113,28): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Purchasing/PurchaseOrderStore.tsx(120,58): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+src/components/Shared/Stores/Purchasing/PurchaseOrderStore.tsx(122,63): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+src/components/Shared/Stores/Purchasing/PurchaseOrderStore.tsx(124,59): error TS2367: This comparison appears to be unintentional because the types 'Date' and 'string' have no overlap.
+src/components/Shared/Stores/Purchasing/PurchaseOrderStore.tsx(172,58): error TS6133: 'discount' is declared but its value is never read.
+src/components/Shared/Stores/Purchasing/PurchaseOrderStore.tsx(190,58): error TS6133: 'discount' is declared but its value is never read.
+src/components/Shared/Stores/Purchasing/PurchaseOrderStore.tsx(211,24): error TS7006: Parameter 'refNo' implicitly has an 'any' type.
+src/components/Shared/Stores/Purchasing/PurchaseOrderStore.tsx(214,19): error TS7006: Parameter 'vendorId' implicitly has an 'any' type.
+src/components/Shared/Stores/Purchasing/PurchaseOrderStore.tsx(218,24): error TS7006: Parameter 'paymentTermId' implicitly has an 'any' type.
+src/components/Shared/Stores/Purchasing/PurchaseOrderStore.tsx(222,22): error TS7006: Parameter 'date' implicitly has an 'any' type.
+src/components/Shared/Stores/Purchasing/PurchaseOrderStore.tsx(226,17): error TS7006: Parameter 'id' implicitly has an 'any' type.
+src/components/Shared/Stores/Purchasing/PurchaseOrderStore.tsx(226,21): error TS7006: Parameter 'itemId' implicitly has an 'any' type.
+src/components/Shared/Stores/Purchasing/PurchaseOrderStore.tsx(226,29): error TS7006: Parameter 'measurementId' implicitly has an 'any' type.
+src/components/Shared/Stores/Purchasing/PurchaseOrderStore.tsx(226,44): error TS7006: Parameter 'quantity' implicitly has an 'any' type.
+src/components/Shared/Stores/Purchasing/PurchaseOrderStore.tsx(226,54): error TS7006: Parameter 'amount' implicitly has an 'any' type.
+src/components/Shared/Stores/Purchasing/PurchaseOrderStore.tsx(226,62): error TS7006: Parameter 'discount' implicitly has an 'any' type.
+src/components/Shared/Stores/Purchasing/PurchaseOrderStore.tsx(226,72): error TS7006: Parameter 'code' implicitly has an 'any' type.
+src/components/Shared/Stores/Purchasing/PurchaseOrderStore.tsx(231,20): error TS7006: Parameter 'row' implicitly has an 'any' type.
+src/components/Shared/Stores/Purchasing/PurchaseOrderStore.tsx(235,20): error TS7006: Parameter 'row' implicitly has an 'any' type.
+src/components/Shared/Stores/Purchasing/PurchaseOrderStore.tsx(235,25): error TS7006: Parameter 'targetProperty' implicitly has an 'any' type.
+src/components/Shared/Stores/Purchasing/PurchaseOrderStore.tsx(235,41): error TS7006: Parameter 'value' implicitly has an 'any' type.
+src/components/Shared/Stores/Purchasing/PurchaseOrderStore.tsx(237,13): error TS7053: Element implicitly has an 'any' type because expression of type 'any' can't be used to index type 'PurchaseOrderLine'.
+src/components/Shared/Stores/Purchasing/PurchaseOrderStore.tsx(242,18): error TS7006: Parameter 'row' implicitly has an 'any' type.
+src/components/Shared/Stores/Purchasing/PurchaseOrderStore.tsx(249,21): error TS7006: Parameter 'editMode' implicitly has an 'any' type.
+src/components/Shared/Stores/Purchasing/PurchaseOrderStore.tsx(253,28): error TS7006: Parameter 'statusId' implicitly has an 'any' type.
+src/components/Shared/Stores/Purchasing/PurchaseOrderStore.tsx(270,20): error TS7006: Parameter 'itemId' implicitly has an 'any' type.
+src/components/Shared/Stores/Purchasing/PurchaseOrderStore.tsx(273,43): error TS2339: Property 'id' does not exist on type 'never'.
+src/components/Shared/Stores/Purchasing/PurchaseOrderStore.tsx(274,50): error TS2339: Property 'code' does not exist on type 'never'.
+src/components/Shared/Stores/Quotations/SalesQuotation.tsx(4,5): error TS2564: Property 'id' has no initializer and is not definitely assigned in the constructor.
+src/components/Shared/Stores/Quotations/SalesQuotation.tsx(5,5): error TS2564: Property 'customerId' has no initializer and is not definitely assigned in the constructor.
+src/components/Shared/Stores/Quotations/SalesQuotation.tsx(6,5): error TS2564: Property 'quotationDate' has no initializer and is not definitely assigned in the constructor.
+src/components/Shared/Stores/Quotations/SalesQuotation.tsx(7,5): error TS2564: Property 'paymentTermId' has no initializer and is not definitely assigned in the constructor.
+src/components/Shared/Stores/Quotations/SalesQuotation.tsx(8,5): error TS2564: Property 'referenceNo' has no initializer and is not definitely assigned in the constructor.
+src/components/Shared/Stores/Quotations/SalesQuotation.tsx(9,5): error TS2564: Property 'statusId' has no initializer and is not definitely assigned in the constructor.
+src/components/Shared/Stores/Quotations/SalesQuotationLine.tsx(10,17): error TS7006: Parameter 'id' implicitly has an 'any' type.
+src/components/Shared/Stores/Quotations/SalesQuotationLine.tsx(10,21): error TS7006: Parameter 'itemId' implicitly has an 'any' type.
+src/components/Shared/Stores/Quotations/SalesQuotationLine.tsx(10,29): error TS7006: Parameter 'measurementId' implicitly has an 'any' type.
+src/components/Shared/Stores/Quotations/SalesQuotationLine.tsx(10,44): error TS7006: Parameter 'quantity' implicitly has an 'any' type.
+src/components/Shared/Stores/Quotations/SalesQuotationLine.tsx(10,54): error TS7006: Parameter 'amount' implicitly has an 'any' type.
+src/components/Shared/Stores/Quotations/SalesQuotationLine.tsx(10,62): error TS7006: Parameter 'discount' implicitly has an 'any' type.
+src/components/Shared/Stores/Quotations/SalesQuotationLine.tsx(10,72): error TS7006: Parameter 'code' implicitly has an 'any' type.
+src/components/Shared/Stores/Quotations/SalesQuotationStore.tsx(1,39): error TS6133: 'action' is declared but its value is never read.
+src/components/Shared/Stores/Quotations/SalesQuotationStore.tsx(1,56): error TS6133: 'computed' is declared but its value is never read.
+src/components/Shared/Stores/Quotations/SalesQuotationStore.tsx(3,1): error TS6133: 'd3' is declared but its value is never read.
+src/components/Shared/Stores/Quotations/SalesQuotationStore.tsx(3,21): error TS7016: Could not find a declaration file for module 'd3'. 'D:/_playground/react/GoodBooksReact/node_modules/d3/src/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/d3` if it exists or add a new declaration (.d.ts) file containing `declare module 'd3';`
+src/components/Shared/Stores/Quotations/SalesQuotationStore.tsx(19,17): error TS7008: Member 'salesQuotationStatus' implicitly has an 'any' type.
+src/components/Shared/Stores/Quotations/SalesQuotationStore.tsx(20,17): error TS7008: Member 'validationErrors' implicitly has an 'any' type.
+src/components/Shared/Stores/Quotations/SalesQuotationStore.tsx(23,17): error TS7006: Parameter 'quotationId' implicitly has an 'any' type.
+src/components/Shared/Stores/Quotations/SalesQuotationStore.tsx(41,35): error TS7006: Parameter 'result' implicitly has an 'any' type.
+src/components/Shared/Stores/Quotations/SalesQuotationStore.tsx(42,17): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Quotations/SalesQuotationStore.tsx(43,17): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Quotations/SalesQuotationStore.tsx(44,17): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Quotations/SalesQuotationStore.tsx(45,17): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Quotations/SalesQuotationStore.tsx(46,17): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Quotations/SalesQuotationStore.tsx(47,17): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Quotations/SalesQuotationStore.tsx(48,17): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Quotations/SalesQuotationStore.tsx(50,21): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Quotations/SalesQuotationStore.tsx(59,21): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Quotations/SalesQuotationStore.tsx(59,52): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Quotations/SalesQuotationStore.tsx(61,17): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Quotations/SalesQuotationStore.tsx(62,29): error TS2531: Object is possibly 'null'.
+src/components/Shared/Stores/Quotations/SalesQuotationStore.tsx(84,13): error TS6133: 'gtotal' is declared but its value is never read.
+src/components/Shared/Stores/Quotations/SalesQuotationStore.tsx(90,33): error TS7006: Parameter 'result' implicitly has an 'any' type.
+src/components/Shared/Stores/Quotations/SalesQuotationStore.tsx(92,43): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Quotations/SalesQuotationStore.tsx(94,21): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Quotations/SalesQuotationStore.tsx(95,21): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Quotations/SalesQuotationStore.tsx(104,13): error TS2322: Type 'string' is not assignable to type 'Date'.
+src/components/Shared/Stores/Quotations/SalesQuotationStore.tsx(116,37): error TS6133: 'response' is declared but its value is never read.
+src/components/Shared/Stores/Quotations/SalesQuotationStore.tsx(119,38): error TS7006: Parameter 'error' implicitly has an 'any' type.
+src/components/Shared/Stores/Quotations/SalesQuotationStore.tsx(120,50): error TS7006: Parameter 'err' implicitly has an 'any' type.
+src/components/Shared/Stores/Quotations/SalesQuotationStore.tsx(121,29): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Quotations/SalesQuotationStore.tsx(122,32): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Quotations/SalesQuotationStore.tsx(132,82): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/components/Shared/Stores/Quotations/SalesQuotationStore.tsx(140,37): error TS6133: 'response' is declared but its value is never read.
+src/components/Shared/Stores/Quotations/SalesQuotationStore.tsx(143,38): error TS7006: Parameter 'error' implicitly has an 'any' type.
+src/components/Shared/Stores/Quotations/SalesQuotationStore.tsx(144,50): error TS7006: Parameter 'err' implicitly has an 'any' type.
+src/components/Shared/Stores/Quotations/SalesQuotationStore.tsx(145,29): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Quotations/SalesQuotationStore.tsx(146,32): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Quotations/SalesQuotationStore.tsx(164,88): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+src/components/Shared/Stores/Quotations/SalesQuotationStore.tsx(166,95): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+src/components/Shared/Stores/Quotations/SalesQuotationStore.tsx(168,90): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+src/components/Shared/Stores/Quotations/SalesQuotationStore.tsx(170,88): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+src/components/Shared/Stores/Quotations/SalesQuotationStore.tsx(182,24): error TS7006: Parameter 'statusId' implicitly has an 'any' type.
+src/components/Shared/Stores/Quotations/SalesQuotationStore.tsx(221,58): error TS6133: 'discount' is declared but its value is never read.
+src/components/Shared/Stores/Quotations/SalesQuotationStore.tsx(239,58): error TS6133: 'discount' is declared but its value is never read.
+src/components/Shared/Stores/Quotations/SalesQuotationStore.tsx(260,21): error TS7006: Parameter 'custId' implicitly has an 'any' type.
+src/components/Shared/Stores/Quotations/SalesQuotationStore.tsx(264,24): error TS7006: Parameter 'termId' implicitly has an 'any' type.
+src/components/Shared/Stores/Quotations/SalesQuotationStore.tsx(268,26): error TS7006: Parameter 'date' implicitly has an 'any' type.
+src/components/Shared/Stores/Quotations/SalesQuotationStore.tsx(271,24): error TS7006: Parameter 'refNo' implicitly has an 'any' type.
+src/components/Shared/Stores/Quotations/SalesQuotationStore.tsx(275,24): error TS7006: Parameter 'statusId' implicitly has an 'any' type.
+src/components/Shared/Stores/Quotations/SalesQuotationStore.tsx(279,20): error TS7006: Parameter 'itemId' implicitly has an 'any' type.
+src/components/Shared/Stores/Quotations/SalesQuotationStore.tsx(282,43): error TS2339: Property 'id' does not exist on type 'never'.
+src/components/Shared/Stores/Quotations/SalesQuotationStore.tsx(283,50): error TS2339: Property 'code' does not exist on type 'never'.
+src/components/Shared/Stores/Quotations/SalesQuotationStore.tsx(288,17): error TS7006: Parameter 'id' implicitly has an 'any' type.
+src/components/Shared/Stores/Quotations/SalesQuotationStore.tsx(288,21): error TS7006: Parameter 'itemId' implicitly has an 'any' type.
+src/components/Shared/Stores/Quotations/SalesQuotationStore.tsx(288,29): error TS7006: Parameter 'measurementId' implicitly has an 'any' type.
+src/components/Shared/Stores/Quotations/SalesQuotationStore.tsx(288,44): error TS7006: Parameter 'quantity' implicitly has an 'any' type.
+src/components/Shared/Stores/Quotations/SalesQuotationStore.tsx(288,54): error TS7006: Parameter 'amount' implicitly has an 'any' type.
+src/components/Shared/Stores/Quotations/SalesQuotationStore.tsx(288,62): error TS7006: Parameter 'discount' implicitly has an 'any' type.
+src/components/Shared/Stores/Quotations/SalesQuotationStore.tsx(288,72): error TS7006: Parameter 'code' implicitly has an 'any' type.
+src/components/Shared/Stores/Quotations/SalesQuotationStore.tsx(293,20): error TS7006: Parameter 'row' implicitly has an 'any' type.
+src/components/Shared/Stores/Quotations/SalesQuotationStore.tsx(297,20): error TS7006: Parameter 'row' implicitly has an 'any' type.
+src/components/Shared/Stores/Quotations/SalesQuotationStore.tsx(297,25): error TS7006: Parameter 'targetProperty' implicitly has an 'any' type.
+src/components/Shared/Stores/Quotations/SalesQuotationStore.tsx(297,41): error TS7006: Parameter 'value' implicitly has an 'any' type.
+src/components/Shared/Stores/Quotations/SalesQuotationStore.tsx(299,9): error TS7053: Element implicitly has an 'any' type because expression of type 'any' can't be used to index type 'SalesQuotationLine'.
+src/components/Shared/Stores/Quotations/SalesQuotationStore.tsx(303,18): error TS7006: Parameter 'row' implicitly has an 'any' type.
+src/components/Shared/Stores/Quotations/SalesQuotationStore.tsx(310,21): error TS7006: Parameter 'editMode' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesInvoice.tsx(6,5): error TS2564: Property 'customerId' has no initializer and is not definitely assigned in the constructor.
+src/components/Shared/Stores/Sales/SalesInvoice.tsx(7,5): error TS2564: Property 'invoiceDate' has no initializer and is not definitely assigned in the constructor.
+src/components/Shared/Stores/Sales/SalesInvoice.tsx(8,5): error TS2564: Property 'paymentTermId' has no initializer and is not definitely assigned in the constructor.
+src/components/Shared/Stores/Sales/SalesInvoice.tsx(9,5): error TS2564: Property 'referenceNo' has no initializer and is not definitely assigned in the constructor.
+src/components/Shared/Stores/Sales/SalesInvoiceLine.tsx(11,17): error TS7006: Parameter 'id' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesInvoiceLine.tsx(11,21): error TS7006: Parameter 'itemId' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesInvoiceLine.tsx(11,29): error TS7006: Parameter 'measurementId' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesInvoiceLine.tsx(11,44): error TS7006: Parameter 'quantity' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesInvoiceLine.tsx(11,54): error TS7006: Parameter 'amount' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesInvoiceLine.tsx(11,62): error TS7006: Parameter 'discount' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesInvoiceLine.tsx(11,72): error TS7006: Parameter 'code' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesInvoiceStore.tsx(1,39): error TS6133: 'action' is declared but its value is never read.
+src/components/Shared/Stores/Sales/SalesInvoiceStore.tsx(1,56): error TS6133: 'computed' is declared but its value is never read.
+src/components/Shared/Stores/Sales/SalesInvoiceStore.tsx(18,17): error TS7008: Member 'validationErrors' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesInvoiceStore.tsx(22,17): error TS7006: Parameter 'orderId' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesInvoiceStore.tsx(22,26): error TS7006: Parameter 'invoiceId' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesInvoiceStore.tsx(40,34): error TS7006: Parameter 'result' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesInvoiceStore.tsx(45,21): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Sales/SalesInvoiceStore.tsx(54,17): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Sales/SalesInvoiceStore.tsx(55,17): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Sales/SalesInvoiceStore.tsx(56,17): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Sales/SalesInvoiceStore.tsx(57,17): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Sales/SalesInvoiceStore.tsx(58,17): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Sales/SalesInvoiceStore.tsx(59,17): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Sales/SalesInvoiceStore.tsx(60,17): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Sales/SalesInvoiceStore.tsx(65,34): error TS7006: Parameter 'result' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesInvoiceStore.tsx(67,21): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Sales/SalesInvoiceStore.tsx(75,21): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Sales/SalesInvoiceStore.tsx(75,52): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Sales/SalesInvoiceStore.tsx(78,17): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Sales/SalesInvoiceStore.tsx(79,17): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Sales/SalesInvoiceStore.tsx(80,17): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Sales/SalesInvoiceStore.tsx(81,17): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Sales/SalesInvoiceStore.tsx(82,17): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Sales/SalesInvoiceStore.tsx(83,17): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Sales/SalesInvoiceStore.tsx(84,17): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Sales/SalesInvoiceStore.tsx(85,17): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Sales/SalesInvoiceStore.tsx(87,29): error TS2531: Object is possibly 'null'.
+src/components/Shared/Stores/Sales/SalesInvoiceStore.tsx(105,13): error TS6133: 'gtotal' is declared but its value is never read.
+src/components/Shared/Stores/Sales/SalesInvoiceStore.tsx(111,33): error TS7006: Parameter 'result' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesInvoiceStore.tsx(113,43): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Sales/SalesInvoiceStore.tsx(115,21): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Sales/SalesInvoiceStore.tsx(116,21): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Sales/SalesInvoiceStore.tsx(125,13): error TS2322: Type 'string' is not assignable to type 'Date'.
+src/components/Shared/Stores/Sales/SalesInvoiceStore.tsx(134,33): error TS6133: 'response' is declared but its value is never read.
+src/components/Shared/Stores/Sales/SalesInvoiceStore.tsx(137,34): error TS7006: Parameter 'error' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesInvoiceStore.tsx(138,46): error TS7006: Parameter 'err' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesInvoiceStore.tsx(139,25): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Sales/SalesInvoiceStore.tsx(140,28): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Sales/SalesInvoiceStore.tsx(164,33): error TS6133: 'response' is declared but its value is never read.
+src/components/Shared/Stores/Sales/SalesInvoiceStore.tsx(167,34): error TS7006: Parameter 'error' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesInvoiceStore.tsx(168,46): error TS7006: Parameter 'err' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesInvoiceStore.tsx(169,25): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Sales/SalesInvoiceStore.tsx(170,28): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Sales/SalesInvoiceStore.tsx(225,58): error TS6133: 'discount' is declared but its value is never read.
+src/components/Shared/Stores/Sales/SalesInvoiceStore.tsx(243,58): error TS6133: 'discount' is declared but its value is never read.
+src/components/Shared/Stores/Sales/SalesInvoiceStore.tsx(265,24): error TS7006: Parameter 'refNo' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesInvoiceStore.tsx(268,21): error TS7006: Parameter 'custId' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesInvoiceStore.tsx(272,24): error TS7006: Parameter 'date' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesInvoiceStore.tsx(276,24): error TS7006: Parameter 'termId' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesInvoiceStore.tsx(280,17): error TS7006: Parameter 'id' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesInvoiceStore.tsx(280,21): error TS7006: Parameter 'itemId' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesInvoiceStore.tsx(280,29): error TS7006: Parameter 'measurementId' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesInvoiceStore.tsx(280,44): error TS7006: Parameter 'quantity' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesInvoiceStore.tsx(280,54): error TS7006: Parameter 'amount' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesInvoiceStore.tsx(280,62): error TS7006: Parameter 'discount' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesInvoiceStore.tsx(280,72): error TS7006: Parameter 'code' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesInvoiceStore.tsx(285,20): error TS7006: Parameter 'row' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesInvoiceStore.tsx(289,20): error TS7006: Parameter 'row' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesInvoiceStore.tsx(289,25): error TS7006: Parameter 'targetProperty' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesInvoiceStore.tsx(289,41): error TS7006: Parameter 'value' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesInvoiceStore.tsx(291,13): error TS7053: Element implicitly has an 'any' type because expression of type 'any' can't be used to index type 'SalesInvoiceLine'.
+src/components/Shared/Stores/Sales/SalesInvoiceStore.tsx(296,18): error TS7006: Parameter 'row' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesInvoiceStore.tsx(303,21): error TS7006: Parameter 'editMode' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesInvoiceStore.tsx(307,20): error TS7006: Parameter 'itemId' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesInvoiceStore.tsx(310,43): error TS2339: Property 'id' does not exist on type 'never'.
+src/components/Shared/Stores/Sales/SalesInvoiceStore.tsx(311,50): error TS2339: Property 'code' does not exist on type 'never'.
+src/components/Shared/Stores/Sales/SalesOrder.tsx(13,5): error TS2564: Property 'id' has no initializer and is not definitely assigned in the constructor.
+src/components/Shared/Stores/Sales/SalesOrder.tsx(14,5): error TS2564: Property 'customerId' has no initializer and is not definitely assigned in the constructor.
+src/components/Shared/Stores/Sales/SalesOrder.tsx(15,5): error TS2564: Property 'orderDate' has no initializer and is not definitely assigned in the constructor.
+src/components/Shared/Stores/Sales/SalesOrder.tsx(16,5): error TS2564: Property 'paymentTermId' has no initializer and is not definitely assigned in the constructor.
+src/components/Shared/Stores/Sales/SalesOrder.tsx(17,5): error TS2564: Property 'referenceNo' has no initializer and is not definitely assigned in the constructor.
+src/components/Shared/Stores/Sales/SalesOrder.tsx(18,5): error TS2564: Property 'statusId' has no initializer and is not definitely assigned in the constructor.
+src/components/Shared/Stores/Sales/SalesOrder.tsx(19,5): error TS2564: Property 'quotationId' has no initializer and is not definitely assigned in the constructor.
+src/components/Shared/Stores/Sales/SalesOrderLine.tsx(9,17): error TS7006: Parameter 'id' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesOrderLine.tsx(9,21): error TS7006: Parameter 'itemId' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesOrderLine.tsx(9,29): error TS7006: Parameter 'measurementId' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesOrderLine.tsx(9,44): error TS7006: Parameter 'quantity' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesOrderLine.tsx(9,54): error TS7006: Parameter 'amount' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesOrderLine.tsx(9,62): error TS7006: Parameter 'discount' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesOrderLine.tsx(9,72): error TS7006: Parameter 'code' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesOrderStore.tsx(1,39): error TS6133: 'action' is declared but its value is never read.
+src/components/Shared/Stores/Sales/SalesOrderStore.tsx(1,56): error TS6133: 'computed' is declared but its value is never read.
+src/components/Shared/Stores/Sales/SalesOrderStore.tsx(18,17): error TS7008: Member 'validationErrors' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesOrderStore.tsx(19,17): error TS7008: Member 'salesOrderStatus' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesOrderStore.tsx(20,17): error TS7008: Member 'salesQuotationStatus' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesOrderStore.tsx(23,17): error TS7006: Parameter 'quotationId' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesOrderStore.tsx(23,30): error TS7006: Parameter 'orderId' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesOrderStore.tsx(39,35): error TS7006: Parameter 'result' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesOrderStore.tsx(40,17): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Sales/SalesOrderStore.tsx(41,17): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Sales/SalesOrderStore.tsx(42,17): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Sales/SalesOrderStore.tsx(43,17): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Sales/SalesOrderStore.tsx(44,17): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Sales/SalesOrderStore.tsx(45,17): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Sales/SalesOrderStore.tsx(47,17): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Sales/SalesOrderStore.tsx(49,21): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Sales/SalesOrderStore.tsx(58,17): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Sales/SalesOrderStore.tsx(59,29): error TS2531: Object is possibly 'null'.
+src/components/Shared/Stores/Sales/SalesOrderStore.tsx(67,35): error TS7006: Parameter 'result' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesOrderStore.tsx(68,17): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Sales/SalesOrderStore.tsx(69,17): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Sales/SalesOrderStore.tsx(70,17): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Sales/SalesOrderStore.tsx(71,17): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Sales/SalesOrderStore.tsx(72,17): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Sales/SalesOrderStore.tsx(73,17): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Sales/SalesOrderStore.tsx(75,21): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Sales/SalesOrderStore.tsx(83,21): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Sales/SalesOrderStore.tsx(83,52): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Sales/SalesOrderStore.tsx(85,17): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Sales/SalesOrderStore.tsx(86,29): error TS2531: Object is possibly 'null'.
+src/components/Shared/Stores/Sales/SalesOrderStore.tsx(105,13): error TS6133: 'gtotal' is declared but its value is never read.
+src/components/Shared/Stores/Sales/SalesOrderStore.tsx(111,33): error TS7006: Parameter 'result' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesOrderStore.tsx(113,43): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Sales/SalesOrderStore.tsx(115,21): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Sales/SalesOrderStore.tsx(116,21): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Sales/SalesOrderStore.tsx(126,13): error TS2322: Type 'string' is not assignable to type 'Date'.
+src/components/Shared/Stores/Sales/SalesOrderStore.tsx(136,33): error TS6133: 'response' is declared but its value is never read.
+src/components/Shared/Stores/Sales/SalesOrderStore.tsx(139,34): error TS7006: Parameter 'error' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesOrderStore.tsx(140,46): error TS7006: Parameter 'err' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesOrderStore.tsx(141,25): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Sales/SalesOrderStore.tsx(142,28): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+src/components/Shared/Stores/Sales/SalesOrderStore.tsx(197,58): error TS6133: 'discount' is declared but its value is never read.
+src/components/Shared/Stores/Sales/SalesOrderStore.tsx(215,58): error TS6133: 'discount' is declared but its value is never read.
+src/components/Shared/Stores/Sales/SalesOrderStore.tsx(236,24): error TS7006: Parameter 'statusId' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesOrderStore.tsx(252,20): error TS7006: Parameter 'statusId' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesOrderStore.tsx(271,20): error TS7006: Parameter 'itemId' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesOrderStore.tsx(274,43): error TS2339: Property 'id' does not exist on type 'never'.
+src/components/Shared/Stores/Sales/SalesOrderStore.tsx(275,50): error TS2339: Property 'code' does not exist on type 'never'.
+src/components/Shared/Stores/Sales/SalesOrderStore.tsx(280,24): error TS7006: Parameter 'refNo' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesOrderStore.tsx(283,21): error TS7006: Parameter 'custId' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesOrderStore.tsx(287,22): error TS7006: Parameter 'date' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesOrderStore.tsx(291,24): error TS7006: Parameter 'termId' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesOrderStore.tsx(295,17): error TS7006: Parameter 'id' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesOrderStore.tsx(295,21): error TS7006: Parameter 'itemId' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesOrderStore.tsx(295,29): error TS7006: Parameter 'measurementId' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesOrderStore.tsx(295,44): error TS7006: Parameter 'quantity' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesOrderStore.tsx(295,54): error TS7006: Parameter 'amount' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesOrderStore.tsx(295,62): error TS7006: Parameter 'discount' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesOrderStore.tsx(295,72): error TS7006: Parameter 'code' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesOrderStore.tsx(300,20): error TS7006: Parameter 'row' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesOrderStore.tsx(304,20): error TS7006: Parameter 'row' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesOrderStore.tsx(304,25): error TS7006: Parameter 'targetProperty' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesOrderStore.tsx(304,41): error TS7006: Parameter 'value' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesOrderStore.tsx(306,13): error TS7053: Element implicitly has an 'any' type because expression of type 'any' can't be used to index type 'SalesOrderLine'.
+src/components/Shared/Stores/Sales/SalesOrderStore.tsx(311,18): error TS7006: Parameter 'row' implicitly has an 'any' type.
+src/components/Shared/Stores/Sales/SalesOrderStore.tsx(318,21): error TS7006: Parameter 'editMode' implicitly has an 'any' type.
+src/components/Shared/Stores/TaxSystem/Tax.tsx(2,5): error TS2564: Property 'id' has no initializer and is not definitely assigned in the constructor.
+src/components/Shared/Stores/TaxSystem/Tax.tsx(3,5): error TS2564: Property 'code' has no initializer and is not definitely assigned in the constructor.
+src/components/Shared/Stores/TaxSystem/Tax.tsx(4,5): error TS2564: Property 'name' has no initializer and is not definitely assigned in the constructor.
+src/components/Shared/Stores/TaxSystem/Tax.tsx(5,5): error TS2564: Property 'rate' has no initializer and is not definitely assigned in the constructor.
