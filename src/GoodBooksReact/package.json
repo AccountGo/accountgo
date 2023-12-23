@@ -27,6 +27,7 @@
   "devDependencies": {
     "@coreui/coreui": "^4.3.2",
     "@coreui/icons": "^3.0.1",
+    "@types/accounting": "^0.4.5",
     "@types/react": "^18.2.43",
     "@types/react-dom": "^18.2.17",
     "@typescript-eslint/eslint-plugin": "^6.14.0",
