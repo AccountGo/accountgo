@@ -2,7 +2,8 @@ import Heading from "./components/Heading"
 import Section from "./components/Section"
 import Counter from "./components/Counter"
 import List from "./components/List"
-import Home from "./components/Home/Index"
+// import Home from "./components/Home/Index"
+import JournalEntry from "./components/Financials/JournalEntry"
 
 function App() {
 
@@ -17,7 +18,7 @@ function App() {
         items={["Coffee", "Tacos", "Code"]}
         render={(item: string) => <strong>{item}</strong>}
       />
-      <Home />
+      <JournalEntry />  
     </>
   )
 }
