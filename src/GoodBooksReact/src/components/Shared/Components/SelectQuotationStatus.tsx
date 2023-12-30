@@ -1,8 +1,7 @@
 ﻿import * as React from "react";
 import {observer} from "mobx-react";
 
-@observer
-export default class SelectQuotationStatus extends React.Component<any, {}> {
+class SelectQuotationStatus extends React.Component<any, {}> {
     onChangeQuoteStatus(e: any) {
         this.props.store.changedQuoteStatus(e.target.value);    
     }
@@ -24,6 +23,7 @@ export default class SelectQuotationStatus extends React.Component<any, {}> {
         );
 
     }
-
-
 }
+const ObservedSelectQuotationStatus = observer(SelectQuotationStatus);
+
+export default ObservedSelectQuotationStatus;

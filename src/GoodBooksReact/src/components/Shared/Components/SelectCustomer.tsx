@@ -1,8 +1,7 @@
 ﻿import * as React from "react";
 import {observer} from "mobx-react";
 
-@observer
-export default class SelectCustomer extends React.Component<any, {}>{
+class SelectCustomer extends React.Component<any, {}>{
     onChangeCustomer(e: any) {
         this.props.store.changedCustomer(e.target.value);
  
@@ -34,3 +33,6 @@ export default class SelectCustomer extends React.Component<any, {}>{
         );
     }
 }
+const ObservedSelectCustomer = observer(SelectCustomer);
+
+export default ObservedSelectCustomer;

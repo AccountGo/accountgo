@@ -1,4 +1,4 @@
-﻿import {observable, extendObservable, autorun} from 'mobx';
+﻿import {observable, extendObservable, autorun, makeObservable} from 'mobx';
 import axios from "axios";
 import Config from '../../Config';
 
@@ -15,9 +15,13 @@ let baseUrl = location.protocol
 export default class PurchaseOrderStore {
     purchaseOrder: PurchaseOrder;
     commonStore: CommonStore;
-    @observable validationErrors: string[] = [];
-    @observable editMode = false;
-    @observable purchaseOrderStatus: string = "";
+    validationErrors: string[] = [];
+    editMode = false;
+    purchaseOrderStatus: string = "";
+
+    RTotal = 0;
+    GTotal = 0;
+    TTotal = 0;
 
     constructor(purchId: any) {
         this.commonStore = new CommonStore();
@@ -29,6 +33,15 @@ export default class PurchaseOrderStore {
             referenceNo: this.purchaseOrder.referenceNo,
             statusId: this.purchaseOrder.statusId,
             purchaseOrderLines: []
+        });
+
+        makeObservable(this, {
+            validationErrors: observable,
+            editMode: observable,
+            purchaseOrderStatus: observable,
+            RTotal: observable,
+            GTotal: observable,
+            TTotal: observable,
         });
 
         autorun(() => this.computeTotals());
@@ -67,11 +80,7 @@ export default class PurchaseOrderStore {
         else {
             this.changedEditMode(true);
         }
-        }
-
-    @observable RTotal = 0;
-    @observable GTotal = 0;
-    @observable TTotal = 0;
+    }
 
     changeItemCode(itemId: any) {
         for (var x = 0; x < this.commonStore.items.length; x++) {

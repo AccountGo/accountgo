@@ -1,8 +1,7 @@
 ﻿import * as React from "react";
 import {observer} from "mobx-react";
 
-@observer
-export default class SelectVendor extends React.Component<any, {}>{
+class SelectVendor extends React.Component<any, {}>{
     onChangeVendor(e: any) {
         this.props.store.changedVendor(e.target.value);
 
@@ -33,3 +32,6 @@ export default class SelectVendor extends React.Component<any, {}>{
         );
     }
 }
+const ObservedSelectVendor = observer(SelectVendor);
+
+export default ObservedSelectVendor;

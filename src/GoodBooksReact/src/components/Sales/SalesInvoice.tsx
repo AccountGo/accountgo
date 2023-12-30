@@ -16,7 +16,6 @@ let invoiceId = window.location.search.split("?invoiceId=")[1];
 
 let store = new SalesInvoiceStore(orderId, invoiceId);
 
-@observer
 class ValidationErrors extends React.Component<any, {}>{
     render() {
         if (store.validationErrors !== undefined && store.validationErrors.length > 0) {
@@ -37,7 +36,8 @@ class ValidationErrors extends React.Component<any, {}>{
         return null;
     }
 }
-@observer
+const ObservedValidationErrors = observer(ValidationErrors);
+
 class EditButton extends React.Component<any, {}>{
     onClickEditButton() {
         // Remove " disabledControl" from current className
@@ -60,8 +60,8 @@ class EditButton extends React.Component<any, {}>{
         );
     }
 }
+const ObservedEditButton = observer(EditButton);
 
-@observer
 class SaveInvoiceButton extends React.Component<any, {}>{
     saveNewSalesInvoice() {
         store.saveNewSalesInvoice();
@@ -79,6 +79,7 @@ class SaveInvoiceButton extends React.Component<any, {}>{
             );
     }
 }
+const ObservedSaveInvoiceButton = observer(SaveInvoiceButton);
 
 class CancelInvoiceButton extends React.Component<any, {}>{
     cancelOnClick() {
@@ -98,8 +99,8 @@ class CancelInvoiceButton extends React.Component<any, {}>{
         );
     }
 }
+const ObservedCancelInvoiceButton = observer(CancelInvoiceButton);
 
-@observer
 class PrintButton extends React.Component<any, {}>{
     printOnClick() {
         store.printInvoice();
@@ -115,8 +116,8 @@ class PrintButton extends React.Component<any, {}>{
         );
     }
 }
+const ObservedPrintButton = observer(PrintButton);
 
-@observer
 class PostButton extends React.Component<any, {}>{
     postOnClick() {
         store.postInvoice();
@@ -132,8 +133,8 @@ class PostButton extends React.Component<any, {}>{
         );
     }
 }
+const ObservedPostButton = observer(PostButton);
 
-@observer
 class SalesInvoiceHeader extends React.Component<any, {}>{
     onChangeInvoiceDate(e: any) {
         store.changedInvoiceDate(e.target.value);
@@ -174,8 +175,8 @@ class SalesInvoiceHeader extends React.Component<any, {}>{
         );
     }
 }
+const ObservedSalesInvoiceHeader = observer(SalesInvoiceHeader);
 
-@observer
 class SalesInvoiceLines extends React.Component<any, {}>{
     addLineItem() {
 
@@ -323,8 +324,8 @@ class SalesInvoiceLines extends React.Component<any, {}>{
         );
     }
 }
+const ObservedSalesInvoiceLines = observer(SalesInvoiceLines);
 
-@observer
 class SalesInvoiceTotals extends React.Component<any, {}>{
     render() {
         return (
@@ -343,30 +344,33 @@ class SalesInvoiceTotals extends React.Component<any, {}>{
         );
     }
 }
+const ObservedSalesInvoiceTotals = observer(SalesInvoiceTotals);
 
-@observer
-export default class SalesInvoice extends React.Component<any, {}> {
+class SalesInvoice extends React.Component<any, {}> {
     render() {
         return (
             <div>
                 <div id="divActionsTop">
-                    <EditButton />
+                    <ObservedEditButton />
                 </div>
                 <div id="divSalesInvoiceForm">
-                    <ValidationErrors />
-                    <SalesInvoiceHeader />
-                    <SalesInvoiceLines />
-                    <SalesInvoiceTotals />
+                    <ObservedValidationErrors />
+                    <ObservedSalesInvoiceHeader />
+                    <ObservedSalesInvoiceLines />
+                    <ObservedSalesInvoiceTotals />
                 </div>
                 <div id="divActionsBottom">
-                    <SaveInvoiceButton />
-                    <CancelInvoiceButton />
-                    <PrintButton />
-                    <PostButton />
+                    <ObservedSaveInvoiceButton />
+                    <ObservedCancelInvoiceButton />
+                    <ObservedPrintButton />
+                    <ObservedPostButton />
                 </div>
             </div>
             );
     }
 }
+const ObservedSalesInvoice = observer(SalesInvoice);
 
-ReactDOM.render(<SalesInvoice />, document.getElementById("divSalesInvoice"));
+export default ObservedSalesInvoice;
+
+ReactDOM.render(<ObservedSalesInvoice />, document.getElementById("divSalesInvoice"));

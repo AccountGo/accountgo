@@ -10,7 +10,6 @@ import JournalEntryStore from "../Shared/Stores/Financials/JournalEntryStore";
 
 let store = new JournalEntryStore();
 
-@observer
 class ValidationErrors extends React.Component<any, {}>{
     render() {
         if (store.validationErrors !== undefined && store.validationErrors.length > 0) {
@@ -30,8 +29,8 @@ class ValidationErrors extends React.Component<any, {}>{
         return null;
     }
 }
+const ObservedValidationErrors = observer(ValidationErrors);
 
-@observer
 class EditButton extends React.Component<any, {}>{
     onClickEditButton() {
         // Remove " disabledControl" from current className
@@ -54,8 +53,8 @@ class EditButton extends React.Component<any, {}>{
         );
     }
 }
+const ObservedEditButton = observer(EditButton);
 
-@observer
 class SaveJournalEntryButton extends React.Component<any, {}>{
     onClickSaveNewJournalEntry() {
         store.saveNewJournalEntry();
@@ -70,6 +69,7 @@ class SaveJournalEntryButton extends React.Component<any, {}>{
         );
     }
 }
+const ObservedSaveJournalEntryButton = observer(SaveJournalEntryButton);
 
 class CancelJournalEntryButton extends React.Component<any, {}>{
     cancelOnClick() {
@@ -89,7 +89,6 @@ class CancelJournalEntryButton extends React.Component<any, {}>{
     }
 }
 
-@observer
 class PostJournalEntryButton extends React.Component<any, {}>{
     postOnClick() {
         store.postJournal();
@@ -104,8 +103,8 @@ class PostJournalEntryButton extends React.Component<any, {}>{
         );
     }
 }
+const ObservedPostJournalEntryButton = observer(PostJournalEntryButton);
 
-@observer
 class JournalEntryHeader extends React.Component<any, {}>{
     onChangeJournalDate(e: any) {
         store.changedJournalDate(e.target.value);
@@ -156,8 +155,8 @@ class JournalEntryHeader extends React.Component<any, {}>{
         );
     }
 }
+const ObservedJournalEntryHeader = observer(JournalEntryHeader);
 
-@observer
 class JournalEntryLines extends React.Component<any, {}>{
     onChangeAmount(e: any) {
         store.updateLineItem(e.target.name, "amount", e.target.value);
@@ -232,28 +231,32 @@ class JournalEntryLines extends React.Component<any, {}>{
         );
     }
 }
+const ObservedJournalEntryLines = observer(JournalEntryLines);
 
-@observer
-export default class JournalEntry extends React.Component<any, {}> {
+class JournalEntry extends React.Component<any, {}> {
     render() {
         return (
             <div>
                 <div id="divActionsTop">
-                    <EditButton />
+                    <ObservedEditButton />
                 </div>
                 <div id="divJournalEntryForm">
-                    <ValidationErrors />
-                    <JournalEntryHeader />
-                    <JournalEntryLines />
+                    <ObservedValidationErrors />
+                    <ObservedJournalEntryHeader />
+                    <ObservedJournalEntryLines />
                 </div>
                 <div id="divActionsBottom">
-                    <SaveJournalEntryButton />
+                    <ObservedSaveJournalEntryButton />
                     <CancelJournalEntryButton />
-                    <PostJournalEntryButton />
+                    <ObservedPostJournalEntryButton />
                 </div>
             </div>
         );
     }
 }
+const ObservedJournalEntry = observer(JournalEntry);
 
-ReactDOM.render(<JournalEntry />, document.getElementById("divJournalEntry"));
+export default ObservedJournalEntry;
+
+
+ReactDOM.render(<ObservedJournalEntry />, document.getElementById("divJournalEntry"));

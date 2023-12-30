@@ -1,8 +1,7 @@
 ﻿import * as React from "react";
 import {observer} from "mobx-react";
 
-@observer
-export default class SelectLineMeasurement extends React.Component<any, {}>{
+class SelectLineMeasurement extends React.Component<any, {}>{
     onChangeMeasurement(e: any) {
         if (this.props.row !== undefined)
             this.props.store.updateLineItem(this.props.row, "measurementId", e.target.value);
@@ -23,3 +22,6 @@ export default class SelectLineMeasurement extends React.Component<any, {}>{
         );
     }
 }
+const ObservedSelectLineMeasurement = observer(SelectLineMeasurement);
+
+export default ObservedSelectLineMeasurement;

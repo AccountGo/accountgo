@@ -1,8 +1,7 @@
 ﻿import * as React from "react";
 import {observer} from "mobx-react";
 
-@observer
-export default class SelectDebiCredit extends React.Component<any, {}>{
+class SelectDebiCredit extends React.Component<any, {}>{
     onChangeDebitCredit(e: any) {
         if (this.props.row !== undefined)
             this.props.store.updateLineItem(this.props.row, "drcr", e.target.value);
@@ -20,3 +19,6 @@ export default class SelectDebiCredit extends React.Component<any, {}>{
         );
     }
 }
+const ObservedSelectDebiCredit = observer(SelectDebiCredit);
+
+export default ObservedSelectDebiCredit;
