@@ -4,6 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "webpack": "webpack",
+    "gulp": "gulp",
     "tsc": "tsc",
     "dev": "vite",
     "build": "tsc && vite build",
@@ -23,8 +25,10 @@
     "react-router": "^6.21.1"
   },
   "devDependencies": {
+    "@babel/core": "^7.23.6",
     "@babel/plugin-proposal-decorators": "^7.23.6",
     "@babel/plugin-syntax-decorators": "^7.23.3",
+    "@babel/preset-env": "^7.23.6",
     "@coreui/coreui": "^4.3.2",
     "@coreui/icons": "^3.0.1",
     "@types/accounting": "^0.4.5",
@@ -55,5 +59,24 @@
     "vite": "^5.0.8",
     "webpack": "^5.89.0",
     "webpack-cli": "^5.1.4"
+  },
+  "babel": {
+    "presets": [
+      "@babel/preset-env",
+      "@babel/preset-react",
+      "@babel/preset-env", 
+      "@babel/preset-react"
+    ],
+    "plugins": [
+      "@babel/plugin-transform-runtime",
+      "@babel/plugin-transform-object-assign",
+      [
+        "@babel/plugin-proposal-decorators",
+        {
+          "legacy": true
+        }
+      ],
+      ["@babel/plugin-proposal-class-properties", { "loose": true }]
+    ]
   }
 }

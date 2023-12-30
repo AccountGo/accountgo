@@ -1,8 +1,7 @@
 ﻿import * as React from "react";
 import {observer} from "mobx-react";
 
-@observer
-export default class SelectLineItem extends React.Component<any, {}>{
+class SelectLineItem extends React.Component<any, {}>{
     onChangeItem(e: any) {
         if (this.props.row !== undefined)
             this.props.store.updateLineItem(this.props.row, "itemId", e.target.value);
@@ -75,3 +74,6 @@ export default class SelectLineItem extends React.Component<any, {}>{
         );
     }
 }
+const ObservedSelectLineItem = observer(SelectLineItem);
+
+export default ObservedSelectLineItem;

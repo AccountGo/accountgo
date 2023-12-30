@@ -1,4 +1,4 @@
-﻿import {observable, extendObservable, autorun} from 'mobx';
+﻿import {observable, extendObservable, autorun, makeObservable} from 'mobx';
 import axios from "axios";
 import Config from '../../Config';
 
@@ -15,11 +15,16 @@ let baseUrl = location.protocol
 export default class SalesOrderStore {
     salesOrder;
     commonStore;
-    @observable validationErrors: any;
-    @observable salesOrderStatus: any;
-    @observable salesQuotationStatus: any;
-    @observable editMode = false;
-    @observable hasQuotation = false;
+    validationErrors: any;
+    salesOrderStatus: any;
+    salesQuotationStatus: any;
+    editMode = false;
+    hasQuotation = false;
+
+    RTotal = 0;
+    GTotal = 0;
+    TTotal = 0;
+    
     constructor(quotationId: any, orderId: any) {
         this.commonStore = new CommonStore();
         this.salesOrder = new SalesOrder();
@@ -30,6 +35,17 @@ export default class SalesOrderStore {
             referenceNo: this.salesOrder.referenceNo,
             statusId: this.salesOrder.statusId,
             salesOrderLines: []
+        });
+
+        makeObservable(this, {
+            validationErrors: observable,
+            salesOrderStatus: observable,
+            salesQuotationStatus: observable,
+            editMode: observable,
+            hasQuotation: observable,
+            RTotal: observable,
+            GTotal: observable,
+            TTotal: observable,
         });
 
         autorun(() => this.computeTotals());
@@ -96,10 +112,6 @@ export default class SalesOrderStore {
             this.changedEditMode(true);
         }
     }
-
-    @observable RTotal = 0;
-    @observable GTotal = 0;
-    @observable TTotal = 0;
 
     computeTotals() {
         var rtotal = 0;

@@ -1,15 +1,15 @@
-﻿import {observable} from 'mobx';
+﻿import {makeObservable, observable} from 'mobx';
 import axios from "axios";
 import Config  from '../../Config';
 
 export default class CommonStore {
-    @observable customers = [];
-    @observable paymentTerms = [];
-    @observable items = [];
-    @observable measurements = [];
-    @observable vendors = [];
-    @observable accounts = [];
-    @observable salesQuotationStatus = [];
+    customers = [];
+    paymentTerms = [];
+    items = [];
+    measurements = [];
+    vendors = [];
+    accounts = [];
+    salesQuotationStatus = [];
 
     constructor() {
         this.loadCustomersLookup();
@@ -19,6 +19,16 @@ export default class CommonStore {
         this.loadVendorsLookup();
         this.loadAccountsLookup();
         this.loadQuotationStatusLookup();
+
+        makeObservable(this, {
+            customers: observable,
+            paymentTerms: observable,
+            items: observable,
+            measurements: observable,
+            vendors: observable,
+            accounts: observable,
+            salesQuotationStatus: observable,
+        });
     }
 
     loadCustomersLookup() {

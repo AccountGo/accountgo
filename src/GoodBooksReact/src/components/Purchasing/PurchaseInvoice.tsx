@@ -21,7 +21,6 @@ let store = new PurchaseInvoiceStore(purchId, invoiceId);
 //     + (location.port && ":" + location.port)
 //     + "/";
 
-@observer
 class ValidationErrors extends React.Component<any, {}>{
     render() {
         if (store.validationErrors !== undefined && store.validationErrors.length > 0) {
@@ -42,8 +41,8 @@ class ValidationErrors extends React.Component<any, {}>{
         return null;
     }
 }
+const ObservedValidationErrors = observer(ValidationErrors);
 
-@observer
 class EditButton extends React.Component<any, {}>{
     onClickEditButton() {
         // Remove " disabledControl" from current className
@@ -66,8 +65,8 @@ class EditButton extends React.Component<any, {}>{
         );
     }
 }
+const ObservedEditButton = observer(EditButton);
 
-@observer
 class SavePurchaseInvoiceButton extends React.Component<any, {}>{
     saveNewPurchaseInvoice() {
         store.savePurchaseInvoice();
@@ -83,6 +82,7 @@ class SavePurchaseInvoiceButton extends React.Component<any, {}>{
         );
     }
 }
+const ObservedSavePurchaseInvoiceButton = observer(SavePurchaseInvoiceButton);
 
 class CancelPurchaseInvoiceButton extends React.Component<any, {}>{
     cancelOnClick() {
@@ -103,7 +103,6 @@ class CancelPurchaseInvoiceButton extends React.Component<any, {}>{
     }
 }
 
-@observer
 class PostButton extends React.Component<any, {}>{
     postOnClick() {
         store.postInvoice();
@@ -118,8 +117,8 @@ class PostButton extends React.Component<any, {}>{
         );
     }
 }
+const ObservedPostButton = observer(PostButton);
 
-@observer
 class PurchaseInvoiceHeader extends React.Component<any, {}>{
     onChangeInvoiceDate(e: any) {
         store.changedInvoiceDate(e.target.value);
@@ -168,8 +167,8 @@ class PurchaseInvoiceHeader extends React.Component<any, {}>{
         );
     }
 }
+const ObservedPurchaseInvoiceHeader = observer(PurchaseInvoiceHeader);
 
-@observer
 class PurchaseInvoiceLines extends React.Component<any, {}>{
     addLineItem() {
 
@@ -332,8 +331,8 @@ class PurchaseInvoiceLines extends React.Component<any, {}>{
         );
     }
 }
+const ObservedPurchaseInvoiceLines = observer(PurchaseInvoiceLines);
 
-@observer
 class PurchaseInvoiceTotals extends React.Component<any, {}>{
     render() {
         return (
@@ -353,28 +352,30 @@ class PurchaseInvoiceTotals extends React.Component<any, {}>{
     }
 }
 
-@observer
-export default class PurchaseInvoice extends React.Component<any, {}> {
+class PurchaseInvoice extends React.Component<any, {}> {
     render() {
         return (
             <div>
                 <div id="divActionsTop">
-                    <EditButton />
+                    <ObservedEditButton />
                 </div>
                 <div id="divPurchaseInvoiceForm">
-                    <ValidationErrors />
-                    <PurchaseInvoiceHeader />
-                    <PurchaseInvoiceLines />
+                    <ObservedValidationErrors />
+                    <ObservedPurchaseInvoiceHeader />
+                    <ObservedPurchaseInvoiceLines />
                     <PurchaseInvoiceTotals />
                 </div>
                 <div id="divActionsBottom">
-                    <SavePurchaseInvoiceButton />
+                    <ObservedSavePurchaseInvoiceButton />
                     <CancelPurchaseInvoiceButton />
-                    <PostButton />
+                    <ObservedPostButton />
                 </div>
             </div>
             );
     }
 }
+const ObservedPurchaseInvoice = observer(PurchaseInvoice);
 
-ReactDOM.render(<PurchaseInvoice />, document.getElementById("divPurchaseInvoice"));
+export default ObservedPurchaseInvoice;
+
+ReactDOM.render(<ObservedPurchaseInvoice />, document.getElementById("divPurchaseInvoice"));

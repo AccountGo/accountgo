@@ -16,7 +16,6 @@ let orderId = window.location.search.split("?orderId=")[1];
 
 let store = new SalesOrderStore(quotationId, orderId);
 
-@observer
 class ValidationErrors extends React.Component<any, {}> {
   render() {
     if (store.validationErrors !== undefined && store.validationErrors.length > 0) {
@@ -34,6 +33,7 @@ class ValidationErrors extends React.Component<any, {}> {
     return null;
   }
 }
+const ObservedValidationErrors = observer(ValidationErrors);
 
 class SaveOrderButton extends React.Component<any, {}> {
   saveNewSalesOrder() {
@@ -73,7 +73,6 @@ class CancelOrderButton extends React.Component<any, {}> {
   }
 }
 
-@observer
 class SalesOrderHeader extends React.Component<any, {}> {
   onChangeOrderDate(e: any) {
     store.changedOrderDate(e.target.value);
@@ -118,8 +117,8 @@ class SalesOrderHeader extends React.Component<any, {}> {
     );
   }
 }
+const ObservedSalesOrderHeader = observer(SalesOrderHeader);
 
-@observer
 class SalesOrderLines extends React.Component<any, {}> {
   addLineItem() {
     if (store.validationLine()) {
@@ -328,8 +327,8 @@ class SalesOrderLines extends React.Component<any, {}> {
     );
   }
 }
+const ObservedSalesOrderLines = observer(SalesOrderLines);
 
-@observer
 class SalesOrderTotals extends React.Component<any, {}> {
   render() {
     return (
@@ -354,8 +353,8 @@ class SalesOrderTotals extends React.Component<any, {}> {
     );
   }
 }
+const ObservedSalesOrderTotals = observer(SalesOrderTotals);
 
-@observer
 class EditButton extends React.Component<any, {}> {
   onClickEditButton() {
     // Remove " disabledControl" from current className
@@ -386,19 +385,20 @@ class EditButton extends React.Component<any, {}> {
     );
   }
 }
+const ObservedEditButton = observer(EditButton);
 
-export default class SalesOrder extends React.Component<any, {}> {
+class SalesOrder extends React.Component<any, {}> {
   render() {
     return (
       <div>
         <div id="divActionsTop">
-          <EditButton />
+          <ObservedEditButton />
         </div>
         <div id="divSalesOrderForm">
-          <ValidationErrors />
-          <SalesOrderHeader />
-          <SalesOrderLines />
-          <SalesOrderTotals />
+          <ObservedValidationErrors />
+          <ObservedSalesOrderHeader />
+          <ObservedSalesOrderLines />
+          <ObservedSalesOrderTotals />
         </div>
         <div>
           <SaveOrderButton />
@@ -408,5 +408,8 @@ export default class SalesOrder extends React.Component<any, {}> {
     );
   }
 }
+const ObservedSalesOrder = observer(SalesOrder);
 
-ReactDOM.render(<SalesOrder />, document.getElementById("divSalesOrder"));
+export default ObservedSalesOrder;
+
+ReactDOM.render(<ObservedSalesOrder />, document.getElementById("divSalesOrder"));

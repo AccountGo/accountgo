@@ -1,4 +1,4 @@
-﻿import {observable, extendObservable} from 'mobx';
+﻿import {observable, extendObservable, makeObservable} from 'mobx';
 import axios from "axios";
 import Config from '../../Config';
 
@@ -16,10 +16,10 @@ export default class JournalEntryStore {
     originalJournalEntry: JournalEntry = new JournalEntry();
     journalEntry: JournalEntry = new JournalEntry();
     commonStore: CommonStore = new CommonStore();
-    @observable validationErrors: string[] = [];
-    @observable isDirty = false;
-    @observable initialized = false;
-    @observable editMode = false;
+    validationErrors: string[] = [];
+    isDirty = false;
+    initialized = false;
+    editMode = false;
 
     constructor() {
         this.commonStore = new CommonStore();
@@ -32,6 +32,13 @@ export default class JournalEntryStore {
             posted: this.journalEntry.posted,
             readyForPosting: this.journalEntry.readyForPosting,
             journalEntryLines: this.journalEntry.journalEntryLines
+        });
+
+        makeObservable(this, {
+            validationErrors: observable,
+            isDirty: observable,
+            initialized: observable,
+            editMode: observable,
         });
 
         let journalEntryId = window.location.search.split("?id=")[1];

@@ -1,8 +1,7 @@
 ﻿import * as React from "react";
 import {observer} from "mobx-react";
 
-@observer
-export default class SelectVoucherType extends React.Component<any, {}>{
+class SelectVoucherType extends React.Component<any, {}>{
     onChangeVoucherType(e: any) {
         this.props.store.changedVoucherType(e.target.value);
     }
@@ -23,3 +22,7 @@ export default class SelectVoucherType extends React.Component<any, {}>{
         );
     }
 }
+
+const ObservedSelectVoucherType = observer(SelectVoucherType);
+
+export default ObservedSelectVoucherType;

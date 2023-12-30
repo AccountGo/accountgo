@@ -1,4 +1,4 @@
-﻿import {observable, extendObservable, autorun} from 'mobx';
+﻿import {observable, extendObservable, autorun, makeObservable} from 'mobx';
 import axios from "axios";
 import Config from '../../Config';
 
@@ -15,9 +15,12 @@ let baseUrl = location.protocol
 export default class SalesStore {
     salesInvoice;
     commonStore;
-    @observable validationErrors: any[] = [];
-    @observable editMode = false;
-
+    validationErrors: any[] = [];
+    editMode = false;
+    
+    RTotal = 0;
+    GTotal = 0;
+    TTotal = 0;
 
     constructor(orderId: any, invoiceId: any) {
         this.commonStore = new CommonStore();
@@ -30,6 +33,14 @@ export default class SalesStore {
             posted: this.salesInvoice.posted,
             readyForPosting: this.salesInvoice.readyForPosting,
             salesInvoiceLines: []
+        });
+
+        makeObservable(this, {
+            validationErrors: observable,
+            editMode: observable,
+            RTotal: observable,
+            GTotal: observable,
+            TTotal: observable,
         });
 
         autorun(() => this.computeTotals());
@@ -94,11 +105,6 @@ export default class SalesStore {
         else
             this.changedEditMode(true);           
     }
-
-
-    @observable RTotal = 0;
-    @observable GTotal = 0;
-    @observable TTotal = 0;
 
     computeTotals() {
         var rtotal = 0;
