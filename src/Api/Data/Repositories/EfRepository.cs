@@ -14,9 +14,10 @@ namespace Api.Data
         private readonly ILogger<T> _logger;
         private DbSet<T> _entities;
 
-        public EfRepository(ILogger<T> logger)
+        public EfRepository(ILogger<T> logger, ApiDbContext context)
         {
             _logger = logger;
+            _context = context;
         }
 
         #region Properties
@@ -59,14 +60,6 @@ namespace Api.Data
         #endregion
         #region Ctor
 
-        /// <summary>
-        /// Ctor
-        /// </summary>
-        /// <param name="context">Object context</param>
-        public EfRepository(ApiDbContext context)
-        {
-            this._context = context;
-        }
 
         #endregion
         #region Methods
