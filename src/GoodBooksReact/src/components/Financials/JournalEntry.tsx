@@ -1,5 +1,5 @@
 ﻿import * as React from "react";
-import * as ReactDOM from "react-dom";
+//import * as ReactDOM from "react-dom";
 import {observer} from "mobx-react";
 
 import SelectVoucherType from "../Shared/Components/SelectVoucherType";
@@ -168,19 +168,19 @@ class JournalEntryLines extends React.Component<any, {}>{
         store.removeLineItem(i);
     }
     addLineItem() {
-        var accountId: any = (document.getElementById("optNewAccountId") as HTMLInputElement).value;;
-        var drcr: any = (document.getElementById("optNewDebitCredit") as HTMLInputElement).value;
-        var amount: any = (document.getElementById("txtNewAmount") as HTMLInputElement).value;
-        var memo: any = (document.getElementById("txtNewMemo") as HTMLInputElement).value;
+        const accountId: string = (document.getElementById("optNewAccountId") as HTMLInputElement).value;
+        const drcr: string = (document.getElementById("optNewDebitCredit") as HTMLInputElement).value;
+        const amount: string = (document.getElementById("txtNewAmount") as HTMLInputElement).value;
+        const memo: string = (document.getElementById("txtNewMemo") as HTMLInputElement).value;
 
-        store.addLineItem(0, accountId, drcr, amount, memo);
+        store.addLineItem(0, accountId, drcr, Number(amount), memo);
         
         (document.getElementById("txtNewAmount") as HTMLInputElement).value = "0";
         (document.getElementById("txtNewMemo") as HTMLInputElement).value = "";
     }
     render() {
-        var lineItems = [];
-        for (var i = 0; i < store.journalEntry.journalEntryLines.length; i++) {
+        const lineItems: any[] = [];
+        for (let i = 0; i < store.journalEntry.journalEntryLines.length; i++) {
             lineItems.push(
                 <tr key={i}>
                     <td><SelectAccount store={store} row={i} selected={store.journalEntry.journalEntryLines[i].accountId} /></td>
