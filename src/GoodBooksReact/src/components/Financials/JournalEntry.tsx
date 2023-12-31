@@ -258,5 +258,3 @@ const ObservedJournalEntry = observer(JournalEntry);
 
 export default ObservedJournalEntry;
 
-
-ReactDOM.render(<ObservedJournalEntry />, document.getElementById("divJournalEntry"));
