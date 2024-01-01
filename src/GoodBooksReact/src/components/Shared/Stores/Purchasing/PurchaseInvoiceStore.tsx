@@ -7,7 +7,7 @@ import PurchaseInvoiceLine from './PurchaseInvoiceLine';
 
 import CommonStore from "../Common/CommonStore";
 
-let baseUrl = location.protocol
+const baseUrl = location.protocol
     + "//" + location.hostname
     + (location.port && ":" + location.port)
     + "/";
@@ -23,7 +23,7 @@ export default class PurchaseOrderStore {
     GTotal = 0;
     TTotal = 0;
 
-    constructor(purchId: any, invoiceId: any) {
+    constructor(purchId: number, invoiceId: number) {
 
         makeObservable(this, {
             validationErrors: observable,
@@ -50,8 +50,8 @@ export default class PurchaseOrderStore {
 
         if (purchId !== undefined) {
             axios.get(Config.API_URL + "api/purchasing/purchaseorder?id=" + purchId)
-                .then((result: any) => {
-                    for (var i = 0; i < result.data.purchaseOrderLines.length; i++) {
+                .then((result) => {
+                    for (let i = 0; i < result.data.purchaseOrderLines.length; i++) {
                         if (result.data.purchaseOrderLines[i].remainingQtyToInvoice == 0)
                             continue;
                         this.addLineItem(
@@ -77,8 +77,8 @@ export default class PurchaseOrderStore {
         }
         else if (invoiceId !== undefined) {
             axios.get(Config.API_URL + "purchasing/purchaseinvoice?id=" + invoiceId)
-                .then((result: any) => {
-                    for (var i = 0; i < result.data.purchaseInvoiceLines.length; i++) {
+                .then((result) => {
+                    for (let i = 0; i < result.data.purchaseInvoiceLines.length; i++) {
                         this.addLineItem(
                             result.data.purchaseInvoiceLines[i].id,
                             result.data.purchaseInvoiceLines[i].itemId,
@@ -116,14 +116,14 @@ export default class PurchaseOrderStore {
     }
 
     computeTotals() {
-        var rtotal = 0;
-        var ttotal = 0;
+        let rtotal = 0;
+        let ttotal = 0;
 
-        for (var i = 0; i < this.purchaseInvoice.purchaseInvoiceLines.length; i++) {
-            var lineItem = this.purchaseInvoice.purchaseInvoiceLines[i];
+        for (let i = 0; i < this.purchaseInvoice.purchaseInvoiceLines.length; i++) {
+            const lineItem = this.purchaseInvoice.purchaseInvoiceLines[i];
             rtotal = rtotal + this.getLineTotal(i);
             axios.get(Config.API_URL + "tax/gettax?itemId=" + lineItem.itemId + "&partyId=" + this.purchaseInvoice.vendorId + "&type=2")
-                .then((result: any) => {
+                .then((result) => {
                     if (result.data.length > 0) {
                         ttotal = ttotal + this.commonStore.getPurhcaseLineTaxAmount(lineItem.quantity, lineItem.amount, lineItem.discount, result.data);
                     }
@@ -145,10 +145,13 @@ export default class PurchaseOrderStore {
                 .then(() => {
                     window.location.href = baseUrl + 'purchasing/purchaseinvoices';
                 })
-                .catch((error: any) => {
-                    error.data.map((err: any) => {
-                        this.validationErrors.push(err);
-                    });
+                .catch((error) => {
+                    if (axios.isAxiosError(error)) {
+                        this.validationErrors.push(`Status: ${error.status} - Message: ${error.response?.data}`);
+                      } else {
+                        console.error(error);
+                        this.validationErrors.push(`Error: ${error}`);
+                      }
                 })
         }
     }
@@ -164,10 +167,13 @@ export default class PurchaseOrderStore {
                 .then(() => {
                     window.location.href = baseUrl + 'purchasing/purchaseinvoices';
                 })
-                .catch((error: any) => {
-                    error.data.map((err: any) => {
-                        this.validationErrors.push(err);
-                    });
+                .catch((error) => {
+                    if (axios.isAxiosError(error)) {
+                        this.validationErrors.push(`Status: ${error.status} - Message: ${error.response?.data}`);
+                      } else {
+                        console.error(error);
+                        this.validationErrors.push(`Error: ${error}`);
+                      }
                 })
         }
     }
@@ -242,10 +248,10 @@ export default class PurchaseOrderStore {
         }
 
         if (document.getElementById("optNewItemId")) {
-            var itemId: any = (document.getElementById("optNewItemId") as HTMLInputElement).value;
-            var measurementId: any = (document.getElementById("optNewMeasurementId") as HTMLInputElement).value;
-            var quantity: any = (document.getElementById("txtNewQuantity") as HTMLInputElement).value;
-            var amount: any = (document.getElementById("txtNewAmount") as HTMLInputElement).value;
+            const itemId: string = (document.getElementById("optNewItemId") as HTMLInputElement).value;
+            const measurementId: string = (document.getElementById("optNewMeasurementId") as HTMLInputElement).value;
+            const quantity: string = (document.getElementById("txtNewQuantity") as HTMLInputElement).value;
+            const amount: string = (document.getElementById("txtNewAmount") as HTMLInputElement).value;
 
             if (itemId == "" || itemId === undefined)
                 this.validationErrors.push("Item is required.");
@@ -262,17 +268,19 @@ export default class PurchaseOrderStore {
     }
 
 
-    changedReferenceNo(refNo: any) {
+    changedReferenceNo(refNo: string) {
         this.purchaseInvoice.referenceNo = refNo;
     }
-    changedVendor(vendorId: any) {
+
+    changedVendor(vendorId: number) {
         this.purchaseInvoice.vendorId = vendorId;
     }
 
-    changedPaymentTerm(paymentTermId: any) {
+    changedPaymentTerm(paymentTermId: number) {
         this.purchaseInvoice.paymentTermId = paymentTermId;
     }
-    changedInvoiceDate(date: any) {
+
+    changedInvoiceDate(date: Date) {
         this.purchaseInvoice.invoiceDate = date;
     }
 
@@ -282,7 +290,7 @@ export default class PurchaseOrderStore {
         this.purchaseInvoice.purchaseInvoiceLines.push(extendObservable(newLineItem, newLineItem));        
     }
 
-    removeLineItem(row: any) {
+    removeLineItem(row: number) {
         this.purchaseInvoice.purchaseInvoiceLines.splice(row, 1);
     }
 
@@ -295,7 +303,7 @@ export default class PurchaseOrderStore {
 
     getLineTotal(row: number) {
         let lineSum = 0;
-        let lineItem = this.purchaseInvoice.purchaseInvoiceLines[row];
+        const lineItem = this.purchaseInvoice.purchaseInvoiceLines[row];
         lineSum = (lineItem.quantity * lineItem.amount) - lineItem.discount;
         return lineSum;
     }
@@ -305,7 +313,7 @@ export default class PurchaseOrderStore {
     }
 
     getPurchaseInvoiceStatus(statusId: number) {
-        var status = "";
+        let status = "";
         if (statusId === 0)
             status = "Draft";
         else if (statusId === 1)
@@ -315,11 +323,11 @@ export default class PurchaseOrderStore {
         this.purchaseInvoiceStatus = status;
     }
 
-    changeItemCode(itemId: any) {
+    changeItemCode(itemId: number) {
 
-        for (var x = 0; x < this.commonStore.items.length; x++) {
-            let lineItem = this.commonStore.items[x] as PurchaseInvoiceLine
-            if (lineItem.id === parseInt(itemId)) {
+        for (let x = 0; x < this.commonStore.items.length; x++) {
+            const lineItem = this.commonStore.items[x] as PurchaseInvoiceLine
+            if (lineItem.id === itemId) {
                 return lineItem.code;
             }
         }

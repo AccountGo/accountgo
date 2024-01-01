@@ -13,7 +13,7 @@ import SalesInvoiceStore from "../Shared/Stores/Sales/SalesInvoiceStore";
 
 const orderId = window.location.search.split("?orderId=")[1];
 const invoiceId = window.location.search.split("?invoiceId=")[1];
-const store = new SalesInvoiceStore(orderId, invoiceId);
+const store = new SalesInvoiceStore(Number(orderId), Number(invoiceId));
 
 class ValidationErrors extends React.Component {
     render() {
@@ -136,7 +136,7 @@ const ObservedPostButton = observer(PostButton);
 
 class SalesInvoiceHeader extends React.Component {
     onChangeInvoiceDate(e: React.ChangeEvent<HTMLInputElement>) {
-        store.changedInvoiceDate(e.target.value);
+        store.changedInvoiceDate(new Date(e.target.value));
     }
     onChangeReferenceNo(e: React.ChangeEvent<HTMLInputElement>) {
         store.changedReferenceNo(e.target.value);
@@ -188,7 +188,7 @@ class SalesInvoiceLines extends React.Component {
             const code: string = (document.getElementById("txtNewCode") as HTMLInputElement).value;
 
             //console.log(`itemId: ${itemId} | measurementId: ${measurementId} | quantity: ${quantity} | amount: ${amount} | discount: ${discount}`);
-            store.addLineItem(0, itemId, measurementId, Number(quantity), Number(amount), Number(discount), code);
+            store.addLineItem(0, Number(itemId), Number(measurementId), Number(quantity), Number(amount), Number(discount), code);
 
             (document.getElementById("optNewItemId") as HTMLInputElement).value = "";
             (document.getElementById("txtNewCode") as HTMLInputElement).value = "";

@@ -2,7 +2,7 @@
 
 export default class SalesInvoice {
     id: number;
-    fromSalesOrderId: any;
+    fromSalesOrderId: number = 0;
     customerId: number = 0;
     invoiceDate: Date = new Date();
     paymentTermId: number = 0;

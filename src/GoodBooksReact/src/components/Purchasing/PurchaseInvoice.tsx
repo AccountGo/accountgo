@@ -14,7 +14,7 @@ import PurchaseInvoiceLine from "../Shared/Stores/Purchasing/PurchaseInvoiceLine
 const purchId = window.location.search.split("?purchId=")[1];
 const invoiceId = window.location.search.split("?invoiceId=")[1];
 
-const store = new PurchaseInvoiceStore(purchId, invoiceId);
+const store = new PurchaseInvoiceStore(Number(purchId), Number(invoiceId));
 
 // let baseUrl: string = location.protocol
 //     + "//" + location.hostname
@@ -121,14 +121,17 @@ const ObservedPostButton = observer(PostButton);
 
 class PurchaseInvoiceHeader extends React.Component {
     onChangeInvoiceDate(e: React.ChangeEvent<HTMLInputElement>) {
-        store.changedInvoiceDate(e.target.value);
+        store.changedInvoiceDate(new Date(e.target.value));
     }
+
     onChangeVendor(e: React.ChangeEvent<HTMLInputElement>) {
-        store.changedVendor(e.target.value);
+        store.changedVendor(Number(e.target.value));
     }
+
     onChangeReferenceNo(e: React.ChangeEvent<HTMLInputElement>) {
         store.changedReferenceNo(e.target.value);
     }
+    
     render() {        
         return (
             <div className="box">
