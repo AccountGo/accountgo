@@ -3,13 +3,13 @@ import axios from "axios";
 import Config  from '../../Config';
 
 export default class CommonStore {
-    customers = [];
-    paymentTerms = [];
-    items = [];
-    measurements = [];
-    vendors = [];
-    accounts = [];
-    salesQuotationStatus = [];
+    customers: string[] = [];
+    paymentTerms: string[] = [];
+    items: object[] = [];
+    measurements: string[] = [];
+    vendors: string[] = [];
+    accounts: string[] = [];
+    salesQuotationStatus: string[] = [];
 
     constructor() {
         this.loadCustomersLookup();
@@ -32,56 +32,56 @@ export default class CommonStore {
     }
 
     loadCustomersLookup() {
-        let customers: any[] = this.customers;
+        const customers: string[] = this.customers;
 
         axios.get(Config.API_URL + "common/customers")
             .then(function (result) {
                 const data = result.data;
-                for (var i = 0; i < Object.keys(data).length; i++) {
+                for (let i = 0; i < Object.keys(data).length; i++) {
                     customers.push(data[i]);
                 }
             });
     }
 
     loadPaymentTermsLookup() {
-        let paymentTerms: any[] = this.paymentTerms;
+        const paymentTerms: string[] = this.paymentTerms;
         axios.get(Config.API_URL + "common/paymentterms")
             .then(function (result) {
                 const data = result.data;
-                for (var i = 0; i < Object.keys(data).length; i++) {
+                for (let i = 0; i < Object.keys(data).length; i++) {
                     paymentTerms.push(data[i]);
                 }
             });
     }
 
     loadVendorsLookup() {
-        let vendors: any[] = this.vendors;
+        const vendors: string[] = this.vendors;
         axios.get(Config.API_URL + "common/vendors")
             .then(function (result: any) {
                 const data = result.data;
-                for (var i = 0; i < Object.keys(data).length; i++) {
+                for (let i = 0; i < Object.keys(data).length; i++) {
                     vendors.push(data[i]);
                 }
             }.bind(this));
     }
 
     loadItemsLookup() {
-        let items: any[] = this.items;
+        const items: object[] = this.items;
         axios.get(Config.API_URL + "common/items")
             .then(function (result: any) {
                 const data = result.data;
-                for (var i = 0; i < Object.keys(data).length; i++) {
+                for (let i = 0; i < Object.keys(data).length; i++) {
                     items.push(data[i]);
                 }
             });
     }
 
     loadMeasurementsLookup() {
-        let measurements: any[] = this.measurements;
+        const measurements: string[] = this.measurements;
         axios.get(Config.API_URL + "common/measurements")
             .then(function (result: any) {
                 const data = result.data;
-                for (var i = 0; i < Object.keys(data).length; i++) {
+                for (let i = 0; i < Object.keys(data).length; i++) {
                     measurements.push(data[i]);
                 }
             });
@@ -91,11 +91,11 @@ export default class CommonStore {
     }
 
     loadQuotationStatusLookup() {
-        let quotationStatus: any[] = this.salesQuotationStatus;
+        const quotationStatus: string[] = this.salesQuotationStatus;
         axios.get(Config.API_URL + "common/salesquotationstatus")
             .then(function (result: any) {
                 const data = result.data;
-                for (var i = 0; i < Object.keys(data).length; i++)
+                for (let i = 0; i < Object.keys(data).length; i++)
                 {
                     quotationStatus.push(data[i]);
                 }
@@ -103,25 +103,25 @@ export default class CommonStore {
     }
 
     loadAccountsLookup() {
-        let accounts: any[] = this.accounts; 
+        const accounts: string[] = this.accounts; 
         axios.get(Config.API_URL + "common/postingaccounts")
             .then(function (result: any) {
                 const data: string[] = result.data;
-                for (var i = 0; i < Object.keys(data).length; i++) {
+                for (let i = 0; i < Object.keys(data).length; i++) {
                     accounts.push(data[i]);
                 }
             });
     }
 
     getApplicableTaxes(itemId: number, partyId: number) {
-        var result = axios.get(Config.API_URL + "tax/gettax?itemId=" + itemId + "&partyId=" + partyId);
+        const result = axios.get(Config.API_URL + "tax/gettax?itemId=" + itemId + "&partyId=" + partyId);
         result.then(function (result: any) {
             return result.data;
         });
     }
 
     getSalesLineTaxAmount(quantity: number, amount: number, discount: number, taxes: any) {
-        var lineTaxTotal = 0;
+        let lineTaxTotal = 0;
         amount = (amount * quantity) - discount;
         taxes.map(function (tax: any) {
             lineTaxTotal = lineTaxTotal + (amount - (amount / (1 + (tax.rate / 100))));
@@ -130,7 +130,7 @@ export default class CommonStore {
     }
 
     getPurhcaseLineTaxAmount(quantity: number, amount: number, discount: number, taxes: any) {
-        var lineTaxTotal = 0;
+        let lineTaxTotal = 0;
         amount = (amount * quantity) - discount;
         taxes.map(function (tax: any) {
             lineTaxTotal = lineTaxTotal + (amount - (amount / (1 + (tax.rate / 100))));

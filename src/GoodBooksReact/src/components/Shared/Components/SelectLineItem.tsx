@@ -35,7 +35,7 @@ class SelectLineItem extends React.Component<any, {}>{
             }
         }
         
-        for (var i = 0; i < this.props.store.commonStore.items.length; i++) {
+        for (let i = 0; i < this.props.store.commonStore.items.length; i++) {
             if (this.props.store.commonStore.items[i].id === parseInt(e.target.value)) {
 
                 if (this.props.row !== undefined) {
@@ -59,7 +59,7 @@ class SelectLineItem extends React.Component<any, {}>{
     }
 
     render() {
-        var options: any = [];
+        const options: JSX.Element[] = [];
         this.props.store.commonStore.items.map(function (item: any) {
             return (
                 options.push(<option key={ item.id } value={ item.id } > { item.description } </option>)

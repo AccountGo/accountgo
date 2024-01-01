@@ -5,7 +5,7 @@ class SelectCustomer extends React.Component<any, {}>{
     onChangeCustomer(e: any) {
         this.props.store.changedCustomer(e.target.value);
  
-        for (var i = 0; i < this.props.store.commonStore.customers.length; i++) {
+        for (let i = 0; i < this.props.store.commonStore.customers.length; i++) {
             if (this.props.store.commonStore.customers[i].id === parseInt(e.target.value)) {
                 this.props.store.changedPaymentTerm(this.props.store.commonStore.customers[i].paymentTermId);
             }
@@ -17,7 +17,7 @@ class SelectCustomer extends React.Component<any, {}>{
      
     }    
     render() {
-        var options: any = [];
+        const options: JSX.Element[] = [];
         this.props.store.commonStore.customers.map(function (customer: any) {
  
             return (

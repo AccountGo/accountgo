@@ -34,9 +34,9 @@ const ObservedValidationErrors = observer(ValidationErrors);
 class EditButton extends React.Component {
     onClickEditButton() {
         // Remove " disabledControl" from current className
-        var nodes = document.getElementById("divJournalEntryForm")?.getElementsByTagName('*');
+        const nodes = document.getElementById("divJournalEntryForm")?.getElementsByTagName('*');
         for (let i = 0; i < nodes!.length; i++) {
-            var subStringLength = nodes![i].className.length - " disabledControl".length;
+            const subStringLength = nodes![i].className.length - " disabledControl".length;
             nodes![i].className = nodes![i].className.substring(0, subStringLength);
         }
         store.changedEditMode(true)
@@ -107,7 +107,8 @@ const ObservedPostJournalEntryButton = observer(PostJournalEntryButton);
 
 class JournalEntryHeader extends React.Component {
     onChangeJournalDate(e: React.ChangeEvent<HTMLInputElement>) {
-        store.changedJournalDate(e.target.value);
+        const dateValue = new Date(e.target.value);
+        store.changedJournalDate(dateValue);
     }
     
     onChangeReferenceNo(e: React.ChangeEvent<HTMLInputElement>) {
@@ -173,7 +174,7 @@ class JournalEntryLines extends React.Component {
         const amount: string = (document.getElementById("txtNewAmount") as HTMLInputElement).value;
         const memo: string = (document.getElementById("txtNewMemo") as HTMLInputElement).value;
 
-        store.addLineItem(0, accountId, drcr, Number(amount), memo);
+        store.addLineItem(0, Number(accountId), Number(drcr), Number(amount), memo);
         
         (document.getElementById("txtNewAmount") as HTMLInputElement).value = "0";
         (document.getElementById("txtNewMemo") as HTMLInputElement).value = "";

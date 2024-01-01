@@ -1,15 +1,15 @@
 ﻿export default class PurchaseInvoiceLine {
     id: number = 0;
-    itemId: any;
-    measurementId: any;
+    itemId: number;
+    measurementId: number;
     quantity: number;
     amount: number;
     discount: number;
     remainingQtyToInvoice: number;
-    code: any;
+    code: string;
 
-    constructor(id: number, itemId: any, measurementId: any, 
-        quantity: number, amount: number, discount: number, code: any) {
+    constructor(id: number, itemId: number, measurementId: number, 
+        quantity: number, amount: number, discount: number, code: string) {
         this.id = id;
         this.itemId = itemId;
         this.measurementId = measurementId;

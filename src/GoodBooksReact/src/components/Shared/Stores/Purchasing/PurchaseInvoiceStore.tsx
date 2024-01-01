@@ -88,7 +88,8 @@ export default class PurchaseOrderStore {
                             result.data.purchaseInvoiceLines[i].discount,
                             result.data.purchaseInvoiceLines[i].code
                         );
-                        this.updateLineItem(i, 'code', this.changeItemCode(result.data.purchaseInvoiceLines[i].itemId));
+                        const itemCode = this.changeItemCode(result.data.purchaseInvoiceLines[i].itemId) || ''; // Provide a default value if the item code is undefined
+                        this.updateLineItem(i, 'code', itemCode);
                     }
 
                     this.purchaseInvoice.id = result.data.id;
@@ -102,8 +103,8 @@ export default class PurchaseOrderStore {
 
                     this.computeTotals();
 
-                    var nodes = document.getElementById("divPurchaseInvoiceForm")!.getElementsByTagName('*');
-                    for (var i = 0; i < nodes.length; i++) {
+                    const nodes = document.getElementById("divPurchaseInvoiceForm")!.getElementsByTagName('*');
+                    for (let i = 0; i < nodes.length; i++) {
                         nodes[i].className += " disabledControl";
                     }
                 })
@@ -182,12 +183,12 @@ export default class PurchaseOrderStore {
         if (this.purchaseInvoice.purchaseInvoiceLines === undefined || this.purchaseInvoice.purchaseInvoiceLines.length < 1)
             this.validationErrors.push("Enter at least 1 line item.");
         if (this.purchaseInvoice.purchaseInvoiceLines !== undefined && this.purchaseInvoice.purchaseInvoiceLines.length > 0) {
-            for (var i = 0; i < this.purchaseInvoice.purchaseInvoiceLines.length; i++) {
+            for (let i = 0; i < this.purchaseInvoice.purchaseInvoiceLines.length; i++) {
                 if (this.purchaseInvoice.purchaseInvoiceLines[i].itemId === undefined
-                    || this.purchaseInvoice.purchaseInvoiceLines[i].itemId === "")
+                    || Number(this.purchaseInvoice.purchaseInvoiceLines[i].itemId) === 0)
                     this.validationErrors.push("Item is required.");
                 if (this.purchaseInvoice.purchaseInvoiceLines[i].measurementId === undefined
-                    || this.purchaseInvoice.purchaseInvoiceLines[i].measurementId === "")
+                    || Number(this.purchaseInvoice.purchaseInvoiceLines[i].measurementId) === 0)
                     this.validationErrors.push("Uom is required.");
                 if (this.purchaseInvoice.purchaseInvoiceLines[i].quantity === undefined
                     || this.purchaseInvoice.purchaseInvoiceLines[i].quantity.toString() === ""
@@ -210,7 +211,7 @@ export default class PurchaseOrderStore {
     validationLine() {
         this.validationErrors = [];
         if (this.purchaseInvoice.purchaseInvoiceLines !== undefined && this.purchaseInvoice.purchaseInvoiceLines.length > 0) {
-            for (var i = 0; i < this.purchaseInvoice.purchaseInvoiceLines.length; i++) {
+            for (let i = 0; i < this.purchaseInvoice.purchaseInvoiceLines.length; i++) {
                 if (this.purchaseInvoice.purchaseInvoiceLines[i].itemId === undefined)
                     this.validationErrors.push("Item is required.");
                 if (this.purchaseInvoice.purchaseInvoiceLines[i].measurementId === undefined)
@@ -225,18 +226,18 @@ export default class PurchaseOrderStore {
             }
         }
         else {
-            var itemId: any = (document.getElementById("optNewItemId") as HTMLInputElement).value;
-            var measurementId: any = (document.getElementById("optNewMeasurementId") as HTMLInputElement).value;
-            var quantity: any = (document.getElementById("txtNewQuantity") as HTMLInputElement).value;
-            var amount: any = (document.getElementById("txtNewAmount") as HTMLInputElement).value;
+            const itemId: number = Number((document.getElementById("optNewItemId") as HTMLInputElement).value);
+            const measurementId: number = Number((document.getElementById("optNewMeasurementId") as HTMLInputElement).value);
+            const quantity: number = Number((document.getElementById("txtNewQuantity") as HTMLInputElement).value);
+            const amount: number = Number((document.getElementById("txtNewAmount") as HTMLInputElement).value);
 
-            if (itemId == "" || itemId === undefined)
+            if (itemId == 0 || itemId === undefined)
                 this.validationErrors.push("Item is required.");
-            if (measurementId == "" || measurementId === undefined)
+            if (measurementId == 0 || measurementId === undefined)
                 this.validationErrors.push("Uom is required.");
-            if (quantity == "" || quantity === undefined)
+            if (quantity == 0 || quantity === undefined)
                 this.validationErrors.push("Quantity is required.");
-            if (amount == "" || amount === undefined)
+            if (amount == 0 || amount === undefined)
                 this.validationErrors.push("Amount is required.");
         }
 
@@ -276,8 +277,8 @@ export default class PurchaseOrderStore {
     }
 
     addLineItem(id: number, itemId: number, measurementId: number, 
-        quantity: number, amount: number, discount: number, code: any) {
-        var newLineItem = new PurchaseInvoiceLine(id, itemId, measurementId, quantity, amount, discount, code);
+        quantity: number, amount: number, discount: number, code: string) {
+        const newLineItem = new PurchaseInvoiceLine(id, itemId, measurementId, quantity, amount, discount, code);
         this.purchaseInvoice.purchaseInvoiceLines.push(extendObservable(newLineItem, newLineItem));        
     }
 
@@ -285,9 +286,9 @@ export default class PurchaseOrderStore {
         this.purchaseInvoice.purchaseInvoiceLines.splice(row, 1);
     }
 
-    updateLineItem(row: number, targetProperty: keyof PurchaseInvoiceLine, value: any) {
+    updateLineItem(row: number, targetProperty: keyof PurchaseInvoiceLine, value: string | number) {
         if (this.purchaseInvoice.purchaseInvoiceLines.length > 0)
-            this.purchaseInvoice.purchaseInvoiceLines[row][targetProperty] = value;
+            (this.purchaseInvoice.purchaseInvoiceLines[row] as Record<keyof PurchaseInvoiceLine, string | number>)[targetProperty] = value;
 
         this.computeTotals();
     }

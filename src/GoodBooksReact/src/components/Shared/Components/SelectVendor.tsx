@@ -17,7 +17,7 @@ class SelectVendor extends React.Component<any, {}>{
 
     }
     render() {
-        var options: any = [];
+        const options: JSX.Element[] = [];
         this.props.store.commonStore.vendors.map(function (vendor: any) {
             return (
             options.push(<option key={ vendor.id } value={ vendor.id }> { vendor.name }</option>)

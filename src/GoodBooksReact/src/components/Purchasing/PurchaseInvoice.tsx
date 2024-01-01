@@ -225,7 +225,7 @@ class PurchaseInvoiceLines extends React.Component {
                 isExisting = true;
                 if (isNew) {
                     (document.getElementById("optNewItemId") as HTMLInputElement).value = lineItem.id.toString();
-                    (document.getElementById("optNewMeasurementId") as HTMLInputElement).value = lineItem.measurementId;
+                    (document.getElementById("optNewMeasurementId") as HTMLInputElement).value = lineItem.measurementId.toString();
                     (document.getElementById("txtNewAmount") as HTMLInputElement).value = lineItem.amount.toString();
                     (document.getElementById("txtNewQuantity") as HTMLInputElement).value = "1";
                     document.getElementById("txtNewCode")!.style.borderColor = "";
