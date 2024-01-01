@@ -8,13 +8,13 @@ import SelectDebitCredit from "../Shared/Components/SelectDebitCredit";
 
 import JournalEntryStore from "../Shared/Stores/Financials/JournalEntryStore";
 
-let store = new JournalEntryStore();
+const store = new JournalEntryStore();
 
-class ValidationErrors extends React.Component<any, {}>{
+class ValidationErrors extends React.Component {
     render() {
         if (store.validationErrors !== undefined && store.validationErrors.length > 0) {
-            var errors: any = [];
-            store.validationErrors.map(function (item: any, index: any) {
+            const errors: string[] = [];
+            store.validationErrors.map(function (item: any, index: number) {
                 const errors: React.ReactNode[] = [];
                 errors.push(<li key={index}>{item}</li>);
             });
@@ -31,11 +31,11 @@ class ValidationErrors extends React.Component<any, {}>{
 }
 const ObservedValidationErrors = observer(ValidationErrors);
 
-class EditButton extends React.Component<any, {}>{
+class EditButton extends React.Component {
     onClickEditButton() {
         // Remove " disabledControl" from current className
         var nodes = document.getElementById("divJournalEntryForm")?.getElementsByTagName('*');
-        for (var i = 0; i < nodes!.length; i++) {
+        for (let i = 0; i < nodes!.length; i++) {
             var subStringLength = nodes![i].className.length - " disabledControl".length;
             nodes![i].className = nodes![i].className.substring(0, subStringLength);
         }
@@ -55,7 +55,7 @@ class EditButton extends React.Component<any, {}>{
 }
 const ObservedEditButton = observer(EditButton);
 
-class SaveJournalEntryButton extends React.Component<any, {}>{
+class SaveJournalEntryButton extends React.Component {
     onClickSaveNewJournalEntry() {
         store.saveNewJournalEntry();
     }
@@ -71,9 +71,9 @@ class SaveJournalEntryButton extends React.Component<any, {}>{
 }
 const ObservedSaveJournalEntryButton = observer(SaveJournalEntryButton);
 
-class CancelJournalEntryButton extends React.Component<any, {}>{
+class CancelJournalEntryButton extends React.Component {
     cancelOnClick() {
-        let baseUrl = location.protocol
+        const baseUrl = location.protocol
             + "//" + location.hostname
             + (location.port && ":" + location.port)
             + "/";
@@ -89,7 +89,7 @@ class CancelJournalEntryButton extends React.Component<any, {}>{
     }
 }
 
-class PostJournalEntryButton extends React.Component<any, {}>{
+class PostJournalEntryButton extends React.Component {
     postOnClick() {
         store.postJournal();
     }
@@ -105,16 +105,16 @@ class PostJournalEntryButton extends React.Component<any, {}>{
 }
 const ObservedPostJournalEntryButton = observer(PostJournalEntryButton);
 
-class JournalEntryHeader extends React.Component<any, {}>{
-    onChangeJournalDate(e: any) {
+class JournalEntryHeader extends React.Component {
+    onChangeJournalDate(e: React.ChangeEvent<HTMLInputElement>) {
         store.changedJournalDate(e.target.value);
     }
     
-    onChangeReferenceNo(e: any) {
+    onChangeReferenceNo(e: React.ChangeEvent<HTMLInputElement>) {
         store.changedReferenceNo(e.target.value);
     }
 
-    onChangeMemo(e: any) {
+    onChangeMemo(e: React.ChangeEvent<HTMLInputElement>) {
         store.changedMemo(e.target.value);
     }
 
@@ -157,14 +157,14 @@ class JournalEntryHeader extends React.Component<any, {}>{
 }
 const ObservedJournalEntryHeader = observer(JournalEntryHeader);
 
-class JournalEntryLines extends React.Component<any, {}>{
+class JournalEntryLines extends React.Component {
     onChangeAmount(e: any) {
         store.updateLineItem(e.target.name, "amount", e.target.value);
     }
     onChangeMemo(e: any) {
         store.updateLineItem(e.target.name, "memo", e.target.value);
     }
-    onClickRemoveLineItem(i: any) {
+    onClickRemoveLineItem(i: number) {
         store.removeLineItem(i);
     }
     addLineItem() {
@@ -233,7 +233,7 @@ class JournalEntryLines extends React.Component<any, {}>{
 }
 const ObservedJournalEntryLines = observer(JournalEntryLines);
 
-class JournalEntry extends React.Component<any, {}> {
+class JournalEntry extends React.Component {
     render() {
         return (
             <div>

@@ -11,20 +11,20 @@ import SelectLineMeasurement from "../Shared/Components/SelectLineMeasurement";
 import PurchaseInvoiceStore from "../Shared/Stores/Purchasing/PurchaseInvoiceStore";
 import PurchaseInvoiceLine from "../Shared/Stores/Purchasing/PurchaseInvoiceLine";
 
-let purchId = window.location.search.split("?purchId=")[1];
-let invoiceId = window.location.search.split("?invoiceId=")[1];
+const purchId = window.location.search.split("?purchId=")[1];
+const invoiceId = window.location.search.split("?invoiceId=")[1];
 
-let store = new PurchaseInvoiceStore(purchId, invoiceId);
+const store = new PurchaseInvoiceStore(purchId, invoiceId);
 
 // let baseUrl: string = location.protocol
 //     + "//" + location.hostname
 //     + (location.port && ":" + location.port)
 //     + "/";
 
-class ValidationErrors extends React.Component<any, {}>{
+class ValidationErrors extends React.Component {
     render() {
         if (store.validationErrors !== undefined && store.validationErrors.length > 0) {
-            var errors: string[] = [];
+            const errors: string[] = [];
             store.validationErrors.map(function (item, index) {
                 const errors: React.ReactNode[] = [];
                 errors.push(<li key={index}>{item}</li>);
@@ -43,12 +43,12 @@ class ValidationErrors extends React.Component<any, {}>{
 }
 const ObservedValidationErrors = observer(ValidationErrors);
 
-class EditButton extends React.Component<any, {}>{
+class EditButton extends React.Component {
     onClickEditButton() {
         // Remove " disabledControl" from current className
-        var nodes = document.getElementById("divPurchaseInvoiceForm")?.getElementsByTagName('*');
-        for (var i = 0; i < nodes!.length; i++) {
-            var subStringLength = nodes![i].className.length - " disabledControl".length;
+        const nodes = document.getElementById("divPurchaseInvoiceForm")?.getElementsByTagName('*');
+        for (let i = 0; i < nodes!.length; i++) {
+            const subStringLength = nodes![i].className.length - " disabledControl".length;
             nodes![i].className = nodes![i].className.substring(0, subStringLength);
         }
         store.changedEditMode(true);
@@ -86,7 +86,7 @@ const ObservedSavePurchaseInvoiceButton = observer(SavePurchaseInvoiceButton);
 
 class CancelPurchaseInvoiceButton extends React.Component<any, {}>{
     cancelOnClick() {
-        let baseUrl = location.protocol
+        const baseUrl = location.protocol
             + "//" + location.hostname
             + (location.port && ":" + location.port)
             + "/";
@@ -103,7 +103,7 @@ class CancelPurchaseInvoiceButton extends React.Component<any, {}>{
     }
 }
 
-class PostButton extends React.Component<any, {}>{
+class PostButton extends React.Component {
     postOnClick() {
         store.postInvoice();
     }
@@ -119,14 +119,14 @@ class PostButton extends React.Component<any, {}>{
 }
 const ObservedPostButton = observer(PostButton);
 
-class PurchaseInvoiceHeader extends React.Component<any, {}>{
-    onChangeInvoiceDate(e: any) {
+class PurchaseInvoiceHeader extends React.Component {
+    onChangeInvoiceDate(e: React.ChangeEvent<HTMLInputElement>) {
         store.changedInvoiceDate(e.target.value);
     }
-    onChangeVendor(e: any) {
+    onChangeVendor(e: React.ChangeEvent<HTMLInputElement>) {
         store.changedVendor(e.target.value);
     }
-    onChangeReferenceNo(e: any) {
+    onChangeReferenceNo(e: React.ChangeEvent<HTMLInputElement>) {
         store.changedReferenceNo(e.target.value);
     }
     render() {        
@@ -169,19 +169,19 @@ class PurchaseInvoiceHeader extends React.Component<any, {}>{
 }
 const ObservedPurchaseInvoiceHeader = observer(PurchaseInvoiceHeader);
 
-class PurchaseInvoiceLines extends React.Component<any, {}>{
+class PurchaseInvoiceLines extends React.Component {
     addLineItem() {
 
         if (store.validationLine()) {
-            var itemId: any = (document.getElementById("optNewItemId") as HTMLInputElement).value;
-            var measurementId: any = (document.getElementById("optNewMeasurementId") as HTMLInputElement).value;
-            var quantity: any = (document.getElementById("txtNewQuantity") as HTMLInputElement).value;
-            var amount: any = (document.getElementById("txtNewAmount") as HTMLInputElement).value;
-            var discount: any = (document.getElementById("txtNewDiscount") as HTMLInputElement).value;
-            var code = (document.getElementById("txtNewCode") as HTMLInputElement).value;
+            const itemId: string = (document.getElementById("optNewItemId") as HTMLInputElement).value;
+            const measurementId: string = (document.getElementById("optNewMeasurementId") as HTMLInputElement).value;
+            const quantity: string = (document.getElementById("txtNewQuantity") as HTMLInputElement).value;
+            const amount: string = (document.getElementById("txtNewAmount") as HTMLInputElement).value;
+            const discount: string = (document.getElementById("txtNewDiscount") as HTMLInputElement).value;
+            const code = (document.getElementById("txtNewCode") as HTMLInputElement).value;
 
-            //console.log(`itemId: ${itemId} | measurementId: ${measurementId} | quantity: ${quantity} | amount: ${amount} | discount: ${discount}`);
-            store.addLineItem(0, itemId, measurementId, quantity, amount, discount, code);
+            store.addLineItem(0, Number(itemId), Number(measurementId), 
+            Number(quantity), Number(amount), Number(discount), code);
 
             (document.getElementById("optNewItemId") as HTMLInputElement).value = "";
             (document.getElementById("txtNewCode") as HTMLInputElement).value = "";
@@ -192,7 +192,7 @@ class PurchaseInvoiceLines extends React.Component<any, {}>{
         }
     }
 
-    onClickRemoveLineItem(i: any) {
+    onClickRemoveLineItem(i: number) {
         store.removeLineItem(i);
     }
 
@@ -218,9 +218,9 @@ class PurchaseInvoiceLines extends React.Component<any, {}>{
 
 
     onFocusOutItem(e: any, isNew: boolean, i: any) {
-        var isExisting = false;
-        for (var x = 0; x < store.commonStore.items.length; x++) {
-            let lineItem = store.commonStore.items[x] as PurchaseInvoiceLine;
+        let isExisting = false;
+        for (let x = 0; x < store.commonStore.items.length; x++) {
+            const lineItem = store.commonStore.items[x] as PurchaseInvoiceLine;
             if (lineItem.code == i.target.value) {
                 isExisting = true;
                 if (isNew) {
@@ -265,9 +265,10 @@ class PurchaseInvoiceLines extends React.Component<any, {}>{
     }   
 
     render() {        
-        var newLine = 0;
-        var lineItems = [];
-        for (var i = 0; i < store.purchaseInvoice.purchaseInvoiceLines.length; i++) {
+        let newLine = 0;
+        const lineItems = [];
+        let lastIndex = 0;
+        for (let i = 0; i < store.purchaseInvoice.purchaseInvoiceLines.length; i++) {
             newLine = newLine + 10;
             lineItems.push(
                 <tr key={i}>
@@ -286,6 +287,7 @@ class PurchaseInvoiceLines extends React.Component<any, {}>{
                     </td>
                 </tr>
             );
+            lastIndex = i;
         }
         return (
             <div className="card">
@@ -312,7 +314,7 @@ class PurchaseInvoiceLines extends React.Component<any, {}>{
                             <tr>
                                 <td></td>
                                 <td><SelectLineItem store={store} controlId="optNewItemId" /></td>
-                                <td><input className="form-control" type="text" id="txtNewCode" onBlur={this.onFocusOutItem.bind(this, i, true) } /></td>
+                                <td><input className="form-control" type="text" id="txtNewCode" onBlur={this.onFocusOutItem.bind(this, lastIndex, true) } /></td>
                                 <td><SelectLineMeasurement store={store} controlId="optNewMeasurementId" /></td>
                                 <td><input type="text" className="form-control" id="txtNewQuantity" /></td>
                                 <td><input type="text" className="form-control" id="txtNewAmount" /></td>
@@ -333,7 +335,7 @@ class PurchaseInvoiceLines extends React.Component<any, {}>{
 }
 const ObservedPurchaseInvoiceLines = observer(PurchaseInvoiceLines);
 
-class PurchaseInvoiceTotals extends React.Component<any, {}>{
+class PurchaseInvoiceTotals extends React.Component {
     render() {
         return (
             <div className="card">
@@ -352,7 +354,7 @@ class PurchaseInvoiceTotals extends React.Component<any, {}>{
     }
 }
 
-class PurchaseInvoice extends React.Component<any, {}> {
+class PurchaseInvoice extends React.Component {
     render() {
         return (
             <div>
