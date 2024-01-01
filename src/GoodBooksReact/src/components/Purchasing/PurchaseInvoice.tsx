@@ -67,7 +67,7 @@ class EditButton extends React.Component {
 }
 const ObservedEditButton = observer(EditButton);
 
-class SavePurchaseInvoiceButton extends React.Component<any, {}>{
+class SavePurchaseInvoiceButton extends React.Component{
     saveNewPurchaseInvoice() {
         store.savePurchaseInvoice();
     }
@@ -84,7 +84,7 @@ class SavePurchaseInvoiceButton extends React.Component<any, {}>{
 }
 const ObservedSavePurchaseInvoiceButton = observer(SavePurchaseInvoiceButton);
 
-class CancelPurchaseInvoiceButton extends React.Component<any, {}>{
+class CancelPurchaseInvoiceButton extends React.Component {
     cancelOnClick() {
         const baseUrl = location.protocol
             + "//" + location.hostname

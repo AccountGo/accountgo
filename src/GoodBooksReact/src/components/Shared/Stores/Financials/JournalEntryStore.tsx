@@ -58,7 +58,7 @@ export default class JournalEntryStore {
 
     getJournalEntry(journalEntryId: number) {
         axios.get(Config.API_URL + "financials/journalentry?id=" + journalEntryId)
-            .then((result: any) => {
+            .then((result) => {
                 for (let i = 0; i < result.data.journalEntryLines.length; i++) {
                     const item = result.data.journalEntryLines[i];
                     this.addLineItem(item.id, item.accountId, item.drCr, item.amount, item.memo);

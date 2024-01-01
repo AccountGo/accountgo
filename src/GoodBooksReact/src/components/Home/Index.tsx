@@ -1,6 +1,14 @@
 ﻿import * as React from "react";
 
-class Home extends React.Component<any, {}> {
+type HomeProps = {
+    // specify the props type here
+};
+
+type HomeState = {
+    // specify the state type here
+};
+
+class Home extends React.Component<HomeProps, HomeState> {
     render() {
         return (
             <div>

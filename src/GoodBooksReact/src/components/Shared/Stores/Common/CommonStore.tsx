@@ -56,13 +56,14 @@ export default class CommonStore {
 
     loadVendorsLookup() {
         const vendors: string[] = this.vendors;
+        
         axios.get(Config.API_URL + "common/vendors")
             .then(function (result: any) {
                 const data = result.data;
                 for (let i = 0; i < Object.keys(data).length; i++) {
                     vendors.push(data[i]);
                 }
-            }.bind(this));
+            }.bind(this));        
     }
 
     loadItemsLookup() {
