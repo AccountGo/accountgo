@@ -13,7 +13,7 @@ import SalesOrderLine from "../Shared/Stores/Sales/SalesOrderLine";
 
 const quotationId = window.location.search.split("?quotationId=")[1];
 const orderId = window.location.search.split("?orderId=")[1];
-const store = new SalesOrderStore(quotationId, orderId);
+const store = new SalesOrderStore(Number(quotationId), Number(orderId));
 
 class ValidationErrors extends React.Component {
   render() {
@@ -76,7 +76,7 @@ class CancelOrderButton extends React.Component {
 
 class SalesOrderHeader extends React.Component {
   onChangeOrderDate(e: React.ChangeEvent<HTMLInputElement>) {
-    store.changedOrderDate(e.target.value);
+    store.changedOrderDate(new Date(e.target.value));
   }
   onChangeReferenceNo(e: React.ChangeEvent<HTMLInputElement>) {
     store.changedReferenceNo(e.target.value);
@@ -130,7 +130,7 @@ class SalesOrderLines extends React.Component {
       const discount: string = (document.getElementById("txtNewDiscount") as HTMLInputElement).value;
       const code: string = (document.getElementById("txtNewCode") as HTMLInputElement).value;
      
-      store.addLineItem(0, itemId, measurementId, Number(quantity), Number(amount), Number(discount), code);
+      store.addLineItem(0, Number(itemId), Number(measurementId), Number(quantity), Number(amount), Number(discount), code);
 
       (document.getElementById("optNewItemId") as HTMLInputElement).value = "";
       (document.getElementById("txtNewCode") as HTMLInputElement).value = "";

@@ -7,7 +7,7 @@ import SalesOrderLine from './SalesOrderLine';
 
 import CommonStore from "../Common/CommonStore";
 
-let baseUrl = location.protocol
+const baseUrl = location.protocol
     + "//" + location.hostname
     + (location.port && ":" + location.port)
     + "/";
@@ -15,9 +15,9 @@ let baseUrl = location.protocol
 export default class SalesOrderStore {
     salesOrder;
     commonStore;
-    validationErrors: any;
-    salesOrderStatus: any;
-    salesQuotationStatus: any;
+    validationErrors: string[] = [];
+    salesOrderStatus: string = "";
+    salesQuotationStatus: string = "";
     editMode = false;
     hasQuotation = false;
 
@@ -25,7 +25,7 @@ export default class SalesOrderStore {
     GTotal = 0;
     TTotal = 0;
     
-    constructor(quotationId: any, orderId: any) {
+    constructor(quotationId: number, orderId: number) {
         this.commonStore = new CommonStore();
         this.salesOrder = new SalesOrder();
         extendObservable(this.salesOrder, {
@@ -51,8 +51,8 @@ export default class SalesOrderStore {
         autorun(() => this.computeTotals());
 
         if (quotationId !== undefined) {
-            var result = axios.get(Config.API_URL + "sales/quotation?id=" + quotationId);
-            result.then((result: any) => {
+            const result = axios.get(Config.API_URL + "sales/quotation?id=" + quotationId);
+            result.then((result) => {
                 this.changedCustomer(result.data.customerId);
                 this.salesOrder.paymentTermId = result.data.paymentTermId;
                 this.salesOrder.referenceNo = result.data.referenceNo;
@@ -61,7 +61,7 @@ export default class SalesOrderStore {
                 this.hasQuotation = true; // this variable will serve as the footprint that it has a quotation and the edit button wil be disable.
                 //for addition to save quotation to set status closed - order created
                 this.salesOrder.quotationId = quotationId;
-                for (var i = 0; i < result.data.salesQuotationLines.length; i++) {
+                for (let i = 0; i < result.data.salesQuotationLines.length; i++) {
                     this.addLineItem(
                         result.data.salesQuotationLines[i].id,
                         result.data.salesQuotationLines[i].itemId,
@@ -73,22 +73,22 @@ export default class SalesOrderStore {
                     );
                 }
                 this.computeTotals();
-                var nodes = document.getElementById("divSalesOrderForm")!.getElementsByTagName('*');
-                for (var i = 0; i < nodes.length; i++) {
+                const nodes = document.getElementById("divSalesOrderForm")!.getElementsByTagName('*');
+                for (let i = 0; i < nodes.length; i++) {
                     nodes[i].className += " disabledControl";
                 }
             });
         }
         else if (orderId !== undefined) {
-            var result = axios.get(Config.API_URL + "sales/salesorder?id=" + orderId);
-            result.then((result: any) => {
+            const result = axios.get(Config.API_URL + "sales/salesorder?id=" + orderId);
+            result.then((result) => {
                 this.salesOrder.id = result.data.id;
                 this.changedCustomer(result.data.customerId);
                 this.salesOrder.paymentTermId = result.data.paymentTermId;
                 this.salesOrder.referenceNo = result.data.referenceNo;
                 this.changedOrderDate(result.data.orderDate);
                 this.getOrderStatus(result.data.statusId);
-                for (var i = 0; i < result.data.salesOrderLines.length; i++) {
+                for (let i = 0; i < result.data.salesOrderLines.length; i++) {
                     this.addLineItem(
                         result.data.salesOrderLines[i].id,
                         result.data.salesOrderLines[i].itemId,
@@ -98,11 +98,11 @@ export default class SalesOrderStore {
                         result.data.salesOrderLines[i].discount,
                         result.data.salesOrderLines[i].code
                     );
-                    this.updateLineItem(i, 'code', this.changeItemCode(result.data.salesOrderLines[i].itemId));
+                    this.updateLineItem(i, 'code', this.changeItemCode(result.data.salesOrderLines[i].itemId)!);
                 }
                 this.computeTotals();
-                var nodes = document.getElementById("divSalesOrderForm")!.getElementsByTagName('*');
-                for (var i = 0; i < nodes.length; i++) {
+                const nodes = document.getElementById("divSalesOrderForm")!.getElementsByTagName('*');
+                for (let i = 0; i < nodes.length; i++) {
                     nodes[i].className += " disabledControl";
                 }
             });
@@ -114,14 +114,14 @@ export default class SalesOrderStore {
     }
 
     computeTotals() {
-        var rtotal = 0;
-        var ttotal = 0;
+        let rtotal = 0;
+        let ttotal = 0;
 
-        for (var i = 0; i < this.salesOrder.salesOrderLines.length; i++) {
-            var lineItem = this.salesOrder.salesOrderLines[i];
+        for (let i = 0; i < this.salesOrder.salesOrderLines.length; i++) {
+            const lineItem = this.salesOrder.salesOrderLines[i];
             rtotal = rtotal + this.getLineTotal(i);
             axios.get(Config.API_URL + "tax/gettax?itemId=" + lineItem.itemId + "&partyId=" + this.salesOrder.customerId + "&type=1")
-                .then((result: any) => {
+                .then((result) => {
                     if (result.data.length > 0) {
                         ttotal = ttotal + this.commonStore.getSalesLineTaxAmount(lineItem.quantity, lineItem.amount, lineItem.discount, result.data);
                     }
@@ -147,11 +147,14 @@ export default class SalesOrderStore {
                 .then(() => {
                     window.location.href = baseUrl + 'sales/salesorders';
                 })
-                .catch((error: any) => {
-                    error.data.map((err: any) => {
-                        this.validationErrors.push(err);
-                    });
-                });
+                .catch((error) => {
+                    if (axios.isAxiosError(error)) {
+                        this.validationErrors.push(`Status: ${error.status} - Message: ${error.response?.data}`);
+                      } else {
+                        console.error(error);
+                        this.validationErrors.push(`Error: ${error}`);
+                      }
+                })
         }
     }
 
@@ -166,7 +169,7 @@ export default class SalesOrderStore {
         if (this.salesOrder.salesOrderLines === undefined || this.salesOrder.salesOrderLines.length < 1)
             this.validationErrors.push("Enter at least 1 line item.");
         if (this.salesOrder.salesOrderLines !== undefined && this.salesOrder.salesOrderLines.length > 0) {
-            for (var i = 0; i < this.salesOrder.salesOrderLines.length; i++) {
+            for (let i = 0; i < this.salesOrder.salesOrderLines.length; i++) {
                 if (this.salesOrder.salesOrderLines[i].itemId === undefined)
                     this.validationErrors.push("Item is required.");
                 if (this.salesOrder.salesOrderLines[i].measurementId === undefined)
@@ -190,7 +193,7 @@ export default class SalesOrderStore {
     validationLine() {
         this.validationErrors = [];
         if (this.salesOrder.salesOrderLines !== undefined && this.salesOrder.salesOrderLines.length > 0) {
-            for (var i = 0; i < this.salesOrder.salesOrderLines.length; i++) {
+            for (let i = 0; i < this.salesOrder.salesOrderLines.length; i++) {
                 if (this.salesOrder.salesOrderLines[i].itemId === undefined)
                     this.validationErrors.push("Item is required.");
                 if (this.salesOrder.salesOrderLines[i].measurementId === undefined)
@@ -205,10 +208,10 @@ export default class SalesOrderStore {
             }
         }
         else {
-            var itemId: any = (document.getElementById("optNewItemId") as HTMLInputElement).value;
-            var measurementId: any = (document.getElementById("optNewMeasurementId") as HTMLInputElement).value;
-            var quantity: any = (document.getElementById("txtNewQuantity") as HTMLInputElement).value;
-            var amount: any = (document.getElementById("txtNewAmount") as HTMLInputElement).value;
+            const itemId: string = (document.getElementById("optNewItemId") as HTMLInputElement).value;
+            const measurementId: string = (document.getElementById("optNewMeasurementId") as HTMLInputElement).value;
+            const quantity: string = (document.getElementById("txtNewQuantity") as HTMLInputElement).value;
+            const amount: string = (document.getElementById("txtNewAmount") as HTMLInputElement).value;
 
             if (itemId == "" || itemId === undefined)
                 this.validationErrors.push("Item is required.");
@@ -221,10 +224,10 @@ export default class SalesOrderStore {
         }
 
         if (document.getElementById("optNewItemId")) {
-            var itemId: any = (document.getElementById("optNewItemId") as HTMLInputElement).value;
-            var measurementId: any = (document.getElementById("optNewMeasurementId") as HTMLInputElement).value;
-            var quantity: any = (document.getElementById("txtNewQuantity") as HTMLInputElement).value;
-            var amount: any = (document.getElementById("txtNewAmount") as HTMLInputElement).value;
+            const itemId: string = (document.getElementById("optNewItemId") as HTMLInputElement).value;
+            const measurementId: string = (document.getElementById("optNewMeasurementId") as HTMLInputElement).value;
+            const quantity: string = (document.getElementById("txtNewQuantity") as HTMLInputElement).value;
+            const amount: string = (document.getElementById("txtNewAmount") as HTMLInputElement).value;
 
             if (itemId == "" || itemId === undefined)
                 this.validationErrors.push("Item is required.");
@@ -241,7 +244,7 @@ export default class SalesOrderStore {
     }
 
     getQuotationStatus(statusId: number) {
-        var status = "";
+        let status = "";
         if (statusId === 0)
             status = "Draft";
         else if (statusId === 1)
@@ -257,7 +260,7 @@ export default class SalesOrderStore {
  
 
     getOrderStatus(statusId: number) {
-        var status = "";
+        let status = "";
         if (statusId === 0)
             status = "Draft";
         else if (statusId === 1)
@@ -275,54 +278,55 @@ export default class SalesOrderStore {
         this.salesOrderStatus = status;
     }
 
-    changeItemCode(itemId: any) {
-        for (var x = 0; x < this.commonStore.items.length; x++) {
-            var lineItem = this.commonStore.items[x] as SalesOrderLine;
-            if (lineItem.id === parseInt(itemId)) {
+    changeItemCode(itemId: number) {
+        for (let x = 0; x < this.commonStore.items.length; x++) {
+            const lineItem = this.commonStore.items[x] as SalesOrderLine;
+            if (lineItem.id === itemId) {
                 return lineItem.code;
             }
         }
     }
 
-    changedReferenceNo(refNo: any) {
+    changedReferenceNo(refNo: string) {
         this.salesOrder.referenceNo = refNo;
     }
-    changedCustomer(custId: any) {
+
+    changedCustomer(custId: number) {
         this.salesOrder.customerId = custId;
     }
 
-    changedOrderDate(date: any) {
+    changedOrderDate(date: Date) {
         this.salesOrder.orderDate = date;
     }
 
-    changedPaymentTerm(termId: any) {
+    changedPaymentTerm(termId: number) {
         this.salesOrder.paymentTermId = termId;
     }
 
-    addLineItem(id: any, itemId: any, measurementId: any, quantity: number, amount: number, discount: number, code: any) {
-        var newLineItem = new SalesOrderLine(id, itemId, measurementId, quantity, amount, discount, code);
+    addLineItem(id: number, itemId: number, measurementId: number, quantity: number, amount: number, discount: number, code: string) {
+        const newLineItem = new SalesOrderLine(id, itemId, measurementId, quantity, amount, discount, code);
         this.salesOrder.salesOrderLines.push(extendObservable(newLineItem, newLineItem));        
     }
 
-    removeLineItem(row: any) {
+    removeLineItem(row: number) {
         this.salesOrder.salesOrderLines.splice(row, 1);
     }
 
-    updateLineItem(row: any, targetProperty: keyof SalesOrderLine, value: any) {
+    updateLineItem(row: number, targetProperty: keyof SalesOrderLine, value: string | number) {
         if (this.salesOrder.salesOrderLines.length > 0)
-            this.salesOrder.salesOrderLines[row][targetProperty] = value;
+            (this.salesOrder.salesOrderLines[row] as Record<keyof SalesOrderLine, string | number>)[targetProperty] = value;
 
         this.computeTotals();
     }
 
-    getLineTotal(row: any) {
+    getLineTotal(row: number) {
         let lineSum = 0;
-        let lineItem = this.salesOrder.salesOrderLines[row];
+        const lineItem = this.salesOrder.salesOrderLines[row];
         lineSum = (lineItem.quantity * lineItem.amount) - lineItem.discount;
         return lineSum;
     }
 
-    changedEditMode(editMode: any) {
+    changedEditMode(editMode: boolean) {
         this.editMode = editMode;
     }
 }
