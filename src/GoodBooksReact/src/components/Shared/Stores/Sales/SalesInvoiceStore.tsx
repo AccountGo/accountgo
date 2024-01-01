@@ -4,10 +4,9 @@ import Config from '../../Config';
 
 import SalesInvoice from './SalesInvoice';
 import SalesInvoiceLine from './SalesInvoiceLine';
-
 import CommonStore from "../Common/CommonStore";
 
-let baseUrl = location.protocol
+const baseUrl = location.protocol
     + "//" + location.hostname
     + (location.port && ":" + location.port)
     + "/";
@@ -15,14 +14,14 @@ let baseUrl = location.protocol
 export default class SalesStore {
     salesInvoice;
     commonStore;
-    validationErrors: any[] = [];
+    validationErrors: string[] = [];
     editMode = false;
     
     RTotal = 0;
     GTotal = 0;
     TTotal = 0;
 
-    constructor(orderId: any, invoiceId: any) {
+    constructor(orderId: number, invoiceId: number) {
         this.commonStore = new CommonStore();
         this.salesInvoice = new SalesInvoice();
         extendObservable(this.salesInvoice, {
@@ -46,10 +45,10 @@ export default class SalesStore {
         autorun(() => this.computeTotals());
 
         if (orderId !== undefined) {
-            var result = axios.get(Config.API_URL + "sales/salesorder?id=" + orderId);
-            result.then((result: any) => {
+            const result = axios.get(Config.API_URL + "sales/salesorder?id=" + orderId);
+            result.then((result) => {
 
-                for (var i = 0; i < result.data.salesOrderLines.length; i++) {
+                for (let i = 0; i < result.data.salesOrderLines.length; i++) {
                     if (result.data.salesOrderLines[i].remainingQtyToInvoice == 0)
                         continue;
                     this.addLineItem(
@@ -72,9 +71,9 @@ export default class SalesStore {
 
             });
         } else if (invoiceId !== undefined) {
-            var result = axios.get(Config.API_URL + "sales/salesinvoice?id=" + invoiceId);
-            result.then((result: any) => {
-                for (var i = 0; i < result.data.salesInvoiceLines.length; i++) {
+            const result = axios.get(Config.API_URL + "sales/salesinvoice?id=" + invoiceId);
+            result.then((result) => {
+                for (let i = 0; i < result.data.salesInvoiceLines.length; i++) {
                     this.addLineItem(
                         result.data.salesInvoiceLines[i].id,
                         result.data.salesInvoiceLines[i].itemId,
@@ -84,7 +83,7 @@ export default class SalesStore {
                         result.data.salesInvoiceLines[i].discount,
                         result.data.salesInvoiceLines[i].code
                     );
-                    this.updateLineItem(i, 'code', this.changeItemCode(result.data.salesInvoiceLines[i].itemId));
+                    this.updateLineItem(i, 'code', this.changeItemCode(result.data.salesInvoiceLines[i].itemId)!);
                 }
 
                 this.salesInvoice.id = result.data.id;
@@ -96,8 +95,8 @@ export default class SalesStore {
                 this.salesInvoice.readyForPosting = result.data.readyForPosting;
                 this.computeTotals();
 
-                var nodes = document.getElementById("divSalesInvoiceForm")!.getElementsByTagName('*');
-                for (var i = 0; i < nodes.length; i++) {
+                const nodes = document.getElementById("divSalesInvoiceForm")!.getElementsByTagName('*');
+                for (let i = 0; i < nodes.length; i++) {
                     nodes[i].className += " disabledControl";
                 }
             });
@@ -107,14 +106,14 @@ export default class SalesStore {
     }
 
     computeTotals() {
-        var rtotal = 0;
-        var ttotal = 0;
+        let rtotal = 0;
+        let ttotal = 0;
 
-        for (var i = 0; i < this.salesInvoice.salesInvoiceLines.length; i++) {
-            var lineItem = this.salesInvoice.salesInvoiceLines[i];
+        for (let i = 0; i < this.salesInvoice.salesInvoiceLines.length; i++) {
+            const lineItem = this.salesInvoice.salesInvoiceLines[i];
             rtotal = rtotal + this.getLineTotal(i);
             axios.get(Config.API_URL + "tax/gettax?itemId=" + lineItem.itemId + "&partyId=" + this.salesInvoice.customerId + "&type=1")
-                .then((result: any) => {
+                .then((result) => {
                     if (result.data.length > 0) {
                         ttotal = ttotal + this.commonStore.getSalesLineTaxAmount(lineItem.quantity, lineItem.amount, lineItem.discount, result.data);
                     }
@@ -140,22 +139,25 @@ export default class SalesStore {
                 .then(() => {
                     window.location.href = baseUrl + 'sales/salesinvoices';
                 })
-                .catch((error: any) => {
-                    error.data.map((err: any) => {
-                        this.validationErrors.push(err);
-                    });
-                });
+                .catch((error) => {
+                    if (axios.isAxiosError(error)) {
+                        this.validationErrors.push(`Status: ${error.status} - Message: ${error.response?.data}`);
+                      } else {
+                        console.error(error);
+                        this.validationErrors.push(`Error: ${error}`);
+                      }
+                })
         }
     }
 
     printInvoice() {
-        var w = 800;
-        var h = 600;
-        var wLeft = window.screenLeft ? window.screenLeft : window.screenX;
-        var wTop = window.screenTop ? window.screenTop : window.screenY;
+        const w = 800;
+        const h = 600;
+        const wLeft = window.screenLeft ? window.screenLeft : window.screenX;
+        const wTop = window.screenTop ? window.screenTop : window.screenY;
 
-        var left = wLeft + (window.innerWidth / 2) - (w / 2);
-        var top = wTop + (window.innerHeight / 2) - (h / 2);
+        const left = wLeft + (window.innerWidth / 2) - (w / 2);
+        const top = wTop + (window.innerHeight / 2) - (h / 2);
         window.open(baseUrl + 'sales/salesinvoicepdf?id=' + this.salesInvoice.id, "_blank", 'toolbar=no, location=no, directories=no, status=no, menubar=no, scrollbars=no, resizable=no, copyhistory=no, width=' + w + ', height=' + h + ', top=' + top + ', left=' + left);
     }
 
@@ -170,10 +172,13 @@ export default class SalesStore {
                 .then(() => {
                     window.location.href = baseUrl + 'sales/salesinvoices';
                 })
-                .catch((error: any) => {
-                    error.data.map((err: any) => {
-                        this.validationErrors.push(err);
-                    });
+                .catch((error) => {
+                    if (axios.isAxiosError(error)) {
+                        this.validationErrors.push(`Status: ${error.status} - Message: ${error.response?.data}`);
+                      } else {
+                        console.error(error);
+                        this.validationErrors.push(`Error: ${error}`);
+                      }
                 })
         }
     }
@@ -189,7 +194,7 @@ export default class SalesStore {
         if (this.salesInvoice.salesInvoiceLines === undefined || this.salesInvoice.salesInvoiceLines.length < 1)
             this.validationErrors.push("Enter at least 1 line item.");
         if (this.salesInvoice.salesInvoiceLines !== undefined && this.salesInvoice.salesInvoiceLines.length > 0) {
-            for (var i = 0; i < this.salesInvoice.salesInvoiceLines.length; i++) {
+            for (let i = 0; i < this.salesInvoice.salesInvoiceLines.length; i++) {
                 if (this.salesInvoice.salesInvoiceLines[i].itemId === undefined)
                     this.validationErrors.push("Item is required.");
                 if (this.salesInvoice.salesInvoiceLines[i].measurementId === undefined)
@@ -213,7 +218,7 @@ export default class SalesStore {
     validationLine() {
         this.validationErrors = [];
         if (this.salesInvoice.salesInvoiceLines !== undefined && this.salesInvoice.salesInvoiceLines.length > 0) {
-            for (var i = 0; i < this.salesInvoice.salesInvoiceLines.length; i++) {
+            for (let i = 0; i < this.salesInvoice.salesInvoiceLines.length; i++) {
                 if (this.salesInvoice.salesInvoiceLines[i].itemId === undefined)
                     this.validationErrors.push("Item is required.");
                 if (this.salesInvoice.salesInvoiceLines[i].measurementId === undefined)
@@ -228,10 +233,10 @@ export default class SalesStore {
             }
         }
         else {
-            var itemId: any = (document.getElementById("optNewItemId") as HTMLInputElement).value;
-            var measurementId: any = (document.getElementById("optNewMeasurementId") as HTMLInputElement).value;
-            var quantity: any = (document.getElementById("txtNewQuantity") as HTMLInputElement).value;
-            var amount: any = (document.getElementById("txtNewAmount") as HTMLInputElement).value;
+            const itemId: string = (document.getElementById("optNewItemId") as HTMLInputElement).value;
+            const measurementId: string = (document.getElementById("optNewMeasurementId") as HTMLInputElement).value;
+            const quantity: string = (document.getElementById("txtNewQuantity") as HTMLInputElement).value;
+            const amount: string = (document.getElementById("txtNewAmount") as HTMLInputElement).value;
 
             if (itemId == "" || itemId === undefined)
                 this.validationErrors.push("Item is required.");
@@ -244,10 +249,10 @@ export default class SalesStore {
         }
 
         if (document.getElementById("optNewItemId")) {
-            var itemId: any = (document.getElementById("optNewItemId") as HTMLInputElement).value;
-            var measurementId: any = (document.getElementById("optNewMeasurementId") as HTMLInputElement).value;
-            var quantity: any = (document.getElementById("txtNewQuantity") as HTMLInputElement).value;
-            var amount: any = (document.getElementById("txtNewAmount") as HTMLInputElement).value;
+            const itemId: string = (document.getElementById("optNewItemId") as HTMLInputElement).value;
+            const measurementId: string = (document.getElementById("optNewMeasurementId") as HTMLInputElement).value;
+            const quantity: string = (document.getElementById("txtNewQuantity") as HTMLInputElement).value;
+            const amount: string = (document.getElementById("txtNewAmount") as HTMLInputElement).value;
 
             if (itemId == "" || itemId === undefined)
                 this.validationErrors.push("Item is required.");
@@ -264,40 +269,41 @@ export default class SalesStore {
     }
 
 
-    changedReferenceNo(refNo: any) {
+    changedReferenceNo(refNo: string) {
         this.salesInvoice.referenceNo = refNo;
     }
-    changedCustomer(custId: any) {
+
+    changedCustomer(custId: number) {
         this.salesInvoice.customerId = custId;
     }
 
-    changedInvoiceDate(date: any) {
+    changedInvoiceDate(date: Date) {
         this.salesInvoice.invoiceDate = date;
     }
 
-    changedPaymentTerm(termId: any) {
+    changedPaymentTerm(termId: number) {
         this.salesInvoice.paymentTermId = termId;
     }
 
-    addLineItem(id: any, itemId: any, measurementId: any, quantity: number, amount: number, discount: number, code: any) {
-        var newLineItem = new SalesInvoiceLine(id, itemId, measurementId, quantity, amount, discount, code);
+    addLineItem(id: number, itemId: number, measurementId: number, quantity: number, amount: number, discount: number, code: string) {
+        const newLineItem = new SalesInvoiceLine(id, itemId, measurementId, quantity, amount, discount, code);
         this.salesInvoice.salesInvoiceLines.push(extendObservable(newLineItem, newLineItem));        
     }
 
-    removeLineItem(row: any) {
+    removeLineItem(row: number) {
         this.salesInvoice.salesInvoiceLines.splice(row, 1);
     }
 
-    updateLineItem(row: number, targetProperty: keyof SalesInvoiceLine, value: any) {
+    updateLineItem(row: number, targetProperty: keyof SalesInvoiceLine, value: string | number) {
         if (this.salesInvoice.salesInvoiceLines.length > 0)
-            (this.salesInvoice.salesInvoiceLines[row] as any)[targetProperty] = value;
+            (this.salesInvoice.salesInvoiceLines[row] as Record<keyof SalesInvoiceLine, string | number>)[targetProperty] = value;
 
         this.computeTotals();
     }
 
-    getLineTotal(row: any) {
+    getLineTotal(row: number) {
         let lineSum = 0;
-        let lineItem = this.salesInvoice.salesInvoiceLines[row];
+        const lineItem = this.salesInvoice.salesInvoiceLines[row];
         lineSum = (lineItem.quantity * lineItem.amount) - lineItem.discount;
         return lineSum;
     }
@@ -306,11 +312,11 @@ export default class SalesStore {
         this.editMode = editMode;
     }
 
-    changeItemCode(itemId: any) {
+    changeItemCode(itemId: number) {
 
-        for (var x = 0; x < this.commonStore.items.length; x++) {
-            var lineItem = this.commonStore.items[x] as SalesInvoiceLine;
-            if (lineItem.id === parseInt(itemId)) {
+        for (let x = 0; x < this.commonStore.items.length; x++) {
+            const lineItem = this.commonStore.items[x] as SalesInvoiceLine;
+            if (lineItem.id === itemId) {
                 return lineItem.code;
             }
         }

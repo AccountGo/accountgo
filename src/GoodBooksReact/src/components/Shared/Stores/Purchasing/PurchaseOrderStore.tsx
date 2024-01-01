@@ -7,7 +7,7 @@ import PurchaseOrderLine from './PurchaseOrderLine';
 
 import CommonStore from "../Common/CommonStore";
 
-let baseUrl = location.protocol
+const baseUrl = location.protocol
     + "//" + location.hostname
     + (location.port && ":" + location.port)
     + "/";
@@ -23,7 +23,7 @@ export default class PurchaseOrderStore {
     GTotal = 0;
     TTotal = 0;
 
-    constructor(purchId: any) {
+    constructor(purchId: number) {
         this.commonStore = new CommonStore();
         this.purchaseOrder = new PurchaseOrder();
         extendObservable(this.purchaseOrder, {
@@ -48,7 +48,7 @@ export default class PurchaseOrderStore {
 
         if (purchId !== undefined) {
             axios.get(Config.API_URL + "purchasing/purchaseorder?id=" + purchId)
-                .then((result: any) => {
+                .then((result) => {
                     this.purchaseOrder.id = result.data.id;
                     this.purchaseOrder.paymentTermId = result.data.paymentTermId;
                     this.purchaseOrder.referenceNo = result.data.referenceNo;
@@ -56,7 +56,7 @@ export default class PurchaseOrderStore {
                     this.changedVendor(result.data.vendorId);
                     this.getPurchaseOrderStatus(result.data.statusId);
                     this.purchaseOrder.orderDate = result.data.orderDate;
-                    for (var i = 0; i < result.data.purchaseOrderLines.length; i++) {
+                    for (let i = 0; i < result.data.purchaseOrderLines.length; i++) {
                         this.addLineItem(
                             result.data.purchaseOrderLines[i].id,
                             result.data.purchaseOrderLines[i].itemId,
@@ -66,11 +66,11 @@ export default class PurchaseOrderStore {
                             result.data.purchaseOrderLines[i].discount,
                             result.data.purchaseOrderLines[i].code // Add the missing argument
                         );
-                        this.updateLineItem(i, 'code', this.changeItemCode(result.data.purchaseOrderLines[i].itemId));
+                        this.updateLineItem(i, 'code', Number(this.changeItemCode(result.data.purchaseOrderLines[i].itemId)));
                     }
                     this.computeTotals();
-                    var nodes = document.getElementById("divPurchaseOrderForm")?.getElementsByTagName('*');
-                    for (var i = 0; nodes && i < nodes.length; i++) {
+                    const nodes = document.getElementById("divPurchaseOrderForm")?.getElementsByTagName('*');
+                    for (let i = 0; nodes && i < nodes.length; i++) {
                         nodes[i].className += " disabledControl";
                     }
                 })
@@ -82,9 +82,9 @@ export default class PurchaseOrderStore {
         }
     }
 
-    changeItemCode(itemId: any) {
-        for (var x = 0; x < this.commonStore.items.length; x++) {
-            let item = this.commonStore.items[x] as PurchaseOrderLine
+    changeItemCode(itemId: string) {
+        for (let x = 0; x < this.commonStore.items.length; x++) {
+            const item = this.commonStore.items[x] as PurchaseOrderLine
             if (item.id === parseInt(itemId)) {
                 return item.code;
             }
@@ -92,14 +92,14 @@ export default class PurchaseOrderStore {
     }
 
     computeTotals() {
-        var rtotal = 0;
-        var ttotal = 0;
+        let rtotal = 0;
+        let ttotal = 0;
 
-        for (var i = 0; i < this.purchaseOrder.purchaseOrderLines.length; i++) {
-            var lineItem = this.purchaseOrder.purchaseOrderLines[i];
+        for (let i = 0; i < this.purchaseOrder.purchaseOrderLines.length; i++) {
+            const lineItem = this.purchaseOrder.purchaseOrderLines[i];
             rtotal = rtotal + this.getLineTotal(i);
             axios.get(Config.API_URL + "tax/gettax?itemId=" + lineItem.itemId + "&partyId=" + this.purchaseOrder.vendorId + "&type=2")
-                .then((result: any) => {
+                .then((result) => {
                     if (result.data.length > 0) {
                         ttotal = ttotal + this.commonStore.getPurhcaseLineTaxAmount(lineItem.quantity, lineItem.amount, lineItem.discount, result.data);
                     }
@@ -124,11 +124,14 @@ export default class PurchaseOrderStore {
                 .then(() => {
                     window.location.href = baseUrl + 'purchasing/purchaseorders';
                 })
-                .catch((error: any) => {
-                    error.data.map((err: any) => {
-                        this.validationErrors.push(err);
-                    });
-                });
+                .catch((error) => {
+                    if (axios.isAxiosError(error)) {
+                        this.validationErrors.push(`Status: ${error.status} - Message: ${error.response?.data}`);
+                      } else {
+                        console.error(error);
+                        this.validationErrors.push(`Error: ${error}`);
+                      }
+                })
         }
     }
 
@@ -143,7 +146,7 @@ export default class PurchaseOrderStore {
         if (this.purchaseOrder.purchaseOrderLines === undefined || this.purchaseOrder.purchaseOrderLines.length < 1)
             this.validationErrors.push("Enter at least 1 line item.");
         if (this.purchaseOrder.purchaseOrderLines !== undefined && this.purchaseOrder.purchaseOrderLines.length > 0) {
-            for (var i = 0; i < this.purchaseOrder.purchaseOrderLines.length; i++) {
+            for (let i = 0; i < this.purchaseOrder.purchaseOrderLines.length; i++) {
                 if (this.purchaseOrder.purchaseOrderLines[i].itemId === undefined
                     || this.purchaseOrder.purchaseOrderLines[i].itemId.toString() === "")
                     this.validationErrors.push("Item is required.");
@@ -171,7 +174,7 @@ export default class PurchaseOrderStore {
     validationLine() {
         this.validationErrors = [];
         if (this.purchaseOrder.purchaseOrderLines !== undefined && this.purchaseOrder.purchaseOrderLines.length > 0) {
-            for (var i = 0; i < this.purchaseOrder.purchaseOrderLines.length; i++) {
+            for (let i = 0; i < this.purchaseOrder.purchaseOrderLines.length; i++) {
                 if (this.purchaseOrder.purchaseOrderLines[i].itemId === undefined)
                     this.validationErrors.push("Item is required.");
                 if (this.purchaseOrder.purchaseOrderLines[i].measurementId === undefined)
@@ -186,10 +189,10 @@ export default class PurchaseOrderStore {
             }
         }
         else {
-            var itemId: any = (document.getElementById("optNewItemId") as HTMLInputElement).value;
-            var measurementId: any = (document.getElementById("optNewMeasurementId") as HTMLInputElement).value;
-            var quantity: any = (document.getElementById("txtNewQuantity") as HTMLInputElement).value;
-            var amount: any = (document.getElementById("txtNewAmount") as HTMLInputElement).value;
+            const itemId: string = (document.getElementById("optNewItemId") as HTMLInputElement).value;
+            const measurementId: string = (document.getElementById("optNewMeasurementId") as HTMLInputElement).value;
+            const quantity: string = (document.getElementById("txtNewQuantity") as HTMLInputElement).value;
+            const amount: string = (document.getElementById("txtNewAmount") as HTMLInputElement).value;
 
             if (itemId == "" || itemId === undefined)
                 this.validationErrors.push("Item is required.");
@@ -203,10 +206,10 @@ export default class PurchaseOrderStore {
 
         if (document.getElementById("optNewItemId")) {
 
-            var itemId: any = (document.getElementById("optNewItemId") as HTMLInputElement).value;
-            var measurementId: any = (document.getElementById("optNewMeasurementId") as HTMLInputElement).value;
-            var quantity: any = (document.getElementById("txtNewQuantity") as HTMLInputElement).value;
-            var amount: any = (document.getElementById("txtNewAmount") as HTMLInputElement).value;
+            const itemId: string = (document.getElementById("optNewItemId") as HTMLInputElement).value;
+            const measurementId: string = (document.getElementById("optNewMeasurementId") as HTMLInputElement).value;
+            const quantity: string = (document.getElementById("txtNewQuantity") as HTMLInputElement).value;
+            const amount: string = (document.getElementById("txtNewAmount") as HTMLInputElement).value;
  
             if (itemId == "" || itemId === undefined)
                 this.validationErrors.push("Item is required.");
@@ -222,50 +225,58 @@ export default class PurchaseOrderStore {
         return this.validationErrors.length === 0;
     }
 
-    changedReferenceNo(refNo: any) {
+    changedReferenceNo(refNo: string) {
         this.purchaseOrder.referenceNo = refNo;
     }
-    changedVendor(vendorId: any) {
+
+    changedVendor(vendorId: number) {
         this.purchaseOrder.vendorId = vendorId;
     }
 
-    changedPaymentTerm(paymentTermId: any) {
+    changedPaymentTerm(paymentTermId: number) {
         this.purchaseOrder.paymentTermId = paymentTermId;
     }
 
-    changedOrderDate(date: any) {
+    changedOrderDate(date: Date) {
         this.purchaseOrder.orderDate = date;
     }
 
     addLineItem(id: number, itemId: number, measurementId: number, quantity: number, amount: number, discount: number, code: any) {
-        var newLineItem = new PurchaseOrderLine(id, itemId, measurementId, quantity, amount, discount, code);
+        const newLineItem = new PurchaseOrderLine(id, itemId, measurementId, quantity, amount, discount, code);
         this.purchaseOrder.purchaseOrderLines.push(extendObservable(newLineItem, newLineItem));        
     }
 
-    removeLineItem(row: any) {
+    removeLineItem(row: number) {
         this.purchaseOrder.purchaseOrderLines.splice(row, 1);
     }
 
-    updateLineItem(row: number, targetProperty: keyof PurchaseOrderLine, value: any) {
+    updateLineItem(row: number, targetProperty: keyof PurchaseOrderLine, value: string | number) {
         if (this.purchaseOrder.purchaseOrderLines.length > 0)
-            this.purchaseOrder.purchaseOrderLines[row][targetProperty] = value;
+            (this.purchaseOrder.purchaseOrderLines[row] as Record<keyof PurchaseOrderLine, string | number>)[targetProperty] = value;
 
         this.computeTotals();
     }
 
-    getLineTotal(row: any) {
+    // updateLineItem(row: number, targetProperty: keyof PurchaseInvoiceLine, value: string | number) {
+    //     if (this.purchaseInvoice.purchaseInvoiceLines.length > 0)
+    //         (this.purchaseInvoice.purchaseInvoiceLines[row] as Record<keyof PurchaseInvoiceLine, string | number>)[targetProperty] = value;
+
+    //     this.computeTotals();
+    // }
+
+    getLineTotal(row: number) {
         let lineSum = 0;
-        let lineItem = this.purchaseOrder.purchaseOrderLines[row];
+        const lineItem = this.purchaseOrder.purchaseOrderLines[row];
         lineSum = (lineItem.quantity * lineItem.amount) - lineItem.discount;
         return lineSum;
     }
 
-    changedEditMode(editMode: any) {
+    changedEditMode(editMode: boolean) {
         this.editMode = editMode;
     }
 
-    getPurchaseOrderStatus(statusId: any) {
-        var status = "";
+    getPurchaseOrderStatus(statusId: number) {
+        let status = "";
         if (statusId === 0)
             status = "Draft";
         else if (statusId === 1)

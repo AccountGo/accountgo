@@ -13,7 +13,7 @@ import PurchaseOrderLine from "../Shared/Stores/Purchasing/PurchaseOrderLine";
 
 const purchId = window.location.search.split("?purchId=")[1];
 
-const store = new PurchaseOrderStore(purchId);
+const store = new PurchaseOrderStore(Number(purchId));
 
 // let baseUrl: string = location.protocol
 //     + "//" + location.hostname
@@ -44,7 +44,7 @@ const ObservedValidationErrors = observer(ValidationErrors);
 
 class PurchaseOrderHeader extends React.Component {
     onChangeOrderDate(e: React.ChangeEvent<HTMLInputElement>) {
-        store.changedOrderDate(e.target.value);
+        store.changedOrderDate(new Date(e.target.value));
     }
 
     onChangeReferenceNo(e: React.ChangeEvent<HTMLInputElement>) {
@@ -142,7 +142,7 @@ class PurchaseOrderLines extends React.Component {
                 isExisting = true;
                 if (isNew) {
                     (document.getElementById("optNewItemId") as HTMLInputElement).value = lineItem.id.toString();
-                    (document.getElementById("optNewMeasurementId") as HTMLInputElement).value = lineItem.measurementId;
+                    (document.getElementById("optNewMeasurementId") as HTMLInputElement).value = lineItem.measurementId.toString();
                     (document.getElementById("txtNewAmount") as HTMLInputElement).value = lineItem.amount.toString();
                     (document.getElementById("txtNewQuantity") as HTMLInputElement).value = "1";
                     document.getElementById("txtNewCode")!.style.borderColor = "";
