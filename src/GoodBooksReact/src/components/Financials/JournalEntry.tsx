@@ -159,15 +159,19 @@ class JournalEntryHeader extends React.Component {
 const ObservedJournalEntryHeader = observer(JournalEntryHeader);
 
 class JournalEntryLines extends React.Component {
+
     onChangeAmount(e: any) {
         store.updateLineItem(e.target.name, "amount", e.target.value);
     }
+
     onChangeMemo(e: any) {
         store.updateLineItem(e.target.name, "memo", e.target.value);
     }
+
     onClickRemoveLineItem(i: number) {
         store.removeLineItem(i);
     }
+    
     addLineItem() {
         const accountId: string = (document.getElementById("optNewAccountId") as HTMLInputElement).value;
         const drcr: string = (document.getElementById("optNewDebitCredit") as HTMLInputElement).value;
@@ -180,7 +184,7 @@ class JournalEntryLines extends React.Component {
         (document.getElementById("txtNewMemo") as HTMLInputElement).value = "";
     }
     render() {
-        const lineItems: any[] = [];
+        const lineItems: JSX.Element[] = [];
         for (let i = 0; i < store.journalEntry.journalEntryLines.length; i++) {
             lineItems.push(
                 <tr key={i}>

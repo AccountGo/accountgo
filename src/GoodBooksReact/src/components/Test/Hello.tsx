@@ -5,7 +5,7 @@ interface HelloProps {
     name: string;
 }
 
-class Hello extends React.Component<HelloProps, {}> {
+class Hello extends React.Component<HelloProps, Record<string, never>> {
     render() {
         return <div>Hello, {this.props.name}. If you can see this message means you have successfully configured reactjs+typescript+webpack+babel-loader.</div>;
     }

@@ -308,7 +308,7 @@ export default class SalesStore {
         return lineSum;
     }
 
-    changedEditMode(editMode: any) {
+    changedEditMode(editMode: boolean) {
         this.editMode = editMode;
     }
 

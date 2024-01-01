@@ -5,7 +5,7 @@ class SelectVendor extends React.Component<any, {}>{
     onChangeVendor(e: any) {
         this.props.store.changedVendor(e.target.value);
 
-        for (var i = 0; i < this.props.store.commonStore.vendors.length; i++) {
+        for (let i = 0; i < this.props.store.commonStore.vendors.length; i++) {
             if (this.props.store.commonStore.vendors[i].id === parseInt(e.target.value)) {
    
                 this.props.store.changedPaymentTerm(this.props.store.commonStore.vendors[i].paymentTermId);

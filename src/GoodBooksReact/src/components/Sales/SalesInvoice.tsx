@@ -117,7 +117,7 @@ class PrintButton extends React.Component {
 }
 const ObservedPrintButton = observer(PrintButton);
 
-class PostButton extends React.Component<any, {}>{
+class PostButton extends React.Component {
     postOnClick() {
         store.postInvoice();
     }

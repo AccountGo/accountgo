@@ -161,7 +161,7 @@ class SalesOrderLines extends React.Component {
     store.updateLineItem(e.target.name, "code", e.target.value);
   }
 
-  onFocusOutItem(e: any, isNew: any, i: any) {
+  onFocusOutItem(e: any, isNew: boolean, i: any) {
     let isExisting = false;
     for (let x = 0; x < store.commonStore.items.length; x++) {
       const lineItem = store.commonStore.items[x] as SalesOrderLine;
