@@ -11,19 +11,19 @@ import SelectLineMeasurement from "../Shared/Components/SelectLineMeasurement";
 import PurchaseOrderStore from "../Shared/Stores/Purchasing/PurchaseOrderStore";
 import PurchaseOrderLine from "../Shared/Stores/Purchasing/PurchaseOrderLine";
 
-let purchId = window.location.search.split("?purchId=")[1];
+const purchId = window.location.search.split("?purchId=")[1];
 
-let store = new PurchaseOrderStore(purchId);
+const store = new PurchaseOrderStore(purchId);
 
 // let baseUrl: string = location.protocol
 //     + "//" + location.hostname
 //     + (location.port && ":" + location.port)
 //     + "/";
 
-class ValidationErrors extends React.Component<any, {}>{
+class ValidationErrors extends React.Component {
     render() {
         if (store.validationErrors !== undefined && store.validationErrors.length > 0) {
-            var errors: string[] = [];
+            const errors: string[] = [];
             store.validationErrors.map(function (item, index) {
                 const errors: React.ReactNode[] = [];
                 errors.push(<li key={index}>{item}</li>);                
@@ -42,13 +42,15 @@ class ValidationErrors extends React.Component<any, {}>{
 }
 const ObservedValidationErrors = observer(ValidationErrors);
 
-class PurchaseOrderHeader extends React.Component<any, {}>{
-    onChangeOrderDate(e: any) {
+class PurchaseOrderHeader extends React.Component {
+    onChangeOrderDate(e: React.ChangeEvent<HTMLInputElement>) {
         store.changedOrderDate(e.target.value);
     }
-    onChangeReferenceNo(e: any) {
+
+    onChangeReferenceNo(e: React.ChangeEvent<HTMLInputElement>) {
         store.changedReferenceNo(e.target.value);
     }
+
     render() {        
         return (
             <div className="card">
@@ -90,30 +92,29 @@ class PurchaseOrderHeader extends React.Component<any, {}>{
 }
 const ObservedPurchaseOrderHeader = observer(PurchaseOrderHeader);
 
-class PurchaseOrderLines extends React.Component<any, {}>{
+class PurchaseOrderLines extends React.Component {
     addLineItem() {
 
         if (store.validationLine()) {
-        var itemId: any = (document.getElementById("optNewItemId") as HTMLInputElement).value;
-        var measurementId: any = (document.getElementById("optNewMeasurementId") as HTMLInputElement).value;
-        var quantity: any = (document.getElementById("txtNewQuantity") as HTMLInputElement).value;
-        var amount: any = (document.getElementById("txtNewAmount") as HTMLInputElement).value;
-        var discount: any = (document.getElementById("txtNewDiscount") as HTMLInputElement).value;
-        var code: any = (document.getElementById("txtNewCode") as HTMLInputElement).value;
+            const itemId: string = (document.getElementById("optNewItemId") as HTMLInputElement).value;
+            const measurementId: string = (document.getElementById("optNewMeasurementId") as HTMLInputElement).value;
+            const quantity: string = (document.getElementById("txtNewQuantity") as HTMLInputElement).value;
+            const amount: string = (document.getElementById("txtNewAmount") as HTMLInputElement).value;
+            const discount: string = (document.getElementById("txtNewDiscount") as HTMLInputElement).value;
+            const code: string = (document.getElementById("txtNewCode") as HTMLInputElement).value;
 
-        //console.log(`itemId: ${itemId} | measurementId: ${measurementId} | quantity: ${quantity} | amount: ${amount} | discount: ${discount}`);
-        store.addLineItem(0, itemId, measurementId, quantity, amount, discount, code);
+            store.addLineItem(0, Number(itemId), Number(measurementId), Number(quantity), Number(amount), Number(discount), code);
 
-        (document.getElementById("optNewItemId") as HTMLInputElement).value = "";
-        (document.getElementById("txtNewCode") as HTMLInputElement).value = "";
-        (document.getElementById("optNewMeasurementId") as HTMLInputElement).value = "";
-        (document.getElementById("txtNewQuantity") as HTMLInputElement).value = "1";
-        (document.getElementById("txtNewAmount") as HTMLInputElement).value = "";
-        (document.getElementById("txtNewDiscount") as HTMLInputElement).value = "";
-            }
+            (document.getElementById("optNewItemId") as HTMLInputElement).value = "";
+            (document.getElementById("txtNewCode") as HTMLInputElement).value = "";
+            (document.getElementById("optNewMeasurementId") as HTMLInputElement).value = "";
+            (document.getElementById("txtNewQuantity") as HTMLInputElement).value = "1";
+            (document.getElementById("txtNewAmount") as HTMLInputElement).value = "";
+            (document.getElementById("txtNewDiscount") as HTMLInputElement).value = "";
+        }
     }
 
-    onClickRemoveLineItem(i: any) {
+    onClickRemoveLineItem(i: number) {
         store.removeLineItem(i);
     }
 
@@ -134,9 +135,9 @@ class PurchaseOrderLines extends React.Component<any, {}>{
     }
 
     onFocusOutItem(e: any, isNew: boolean, i: any) {
-        var isExisting = false;
-        for (var x = 0; x < store.commonStore.items.length; x++) {
-            let lineItem = store.commonStore.items[x] as PurchaseOrderLine;
+        let isExisting = false;
+        for (let x = 0; x < store.commonStore.items.length; x++) {
+            const lineItem = store.commonStore.items[x] as PurchaseOrderLine;
             if (lineItem.code == i.target.value) {
                 isExisting = true;
                 if (isNew) {
@@ -181,9 +182,10 @@ class PurchaseOrderLines extends React.Component<any, {}>{
     }   
 
     render() {        
-        var newLine = 0;
-        var lineItems = [];
-        for (var i = 0; i < store.purchaseOrder.purchaseOrderLines.length; i++) {
+        let newLine = 0;
+        const lineItems: JSX.Element[] = [];
+        let lastIndex: number = 0;
+        for (let i = 0; i < store.purchaseOrder.purchaseOrderLines.length; i++) {
             newLine = newLine + 10;
             lineItems.push(
                 <tr key={i}>
@@ -202,6 +204,7 @@ class PurchaseOrderLines extends React.Component<any, {}>{
                     </td>
                 </tr>
             );
+            lastIndex = i;
         }
         return (
             <div className="card">
@@ -228,7 +231,7 @@ class PurchaseOrderLines extends React.Component<any, {}>{
                             <tr>
                                 <td></td>
                                 <td><SelectLineItem store={store} controlId="optNewItemId" /></td>
-                                <td><input className="form-control" type="text" id="txtNewCode" onBlur={this.onFocusOutItem.bind(this, i, true) } /></td>
+                                <td><input className="form-control" type="text" id="txtNewCode" onBlur={this.onFocusOutItem.bind(this, lastIndex, true) } /></td>
                                 <td><SelectLineMeasurement store={store} controlId="optNewMeasurementId" /></td>
                                 <td><input className="form-control" type="text" id="txtNewQuantity" defaultValue="1" /></td>
                                 <td><input className="form-control" type="text" id="txtNewAmount" /></td>
@@ -249,7 +252,7 @@ class PurchaseOrderLines extends React.Component<any, {}>{
 }
 const ObservedPurchaseOrderLines = observer(PurchaseOrderLines);
 
-class PurchaseOrderTotals extends React.Component<any, {}>{
+class PurchaseOrderTotals extends React.Component {
     render() {
         return (
             <div className="card">
@@ -269,12 +272,12 @@ class PurchaseOrderTotals extends React.Component<any, {}>{
 }
 const ObservedPurchaseOrderTotals = observer(PurchaseOrderTotals);
 
-class EditButton extends React.Component<any, {}> {
+class EditButton extends React.Component {
     onClickEditButton() {
         // Remove " disabledControl" from current className
-        var nodes = document.getElementById("divPurchaseOrderForm")?.getElementsByTagName('*');
-        for (var i = 0; i < nodes!.length; i++) {
-            var subStringLength = nodes![i].className.length - " disabledControl".length;
+        const nodes = document.getElementById("divPurchaseOrderForm")?.getElementsByTagName('*');
+        for (let i = 0; i < nodes!.length; i++) {
+            const subStringLength = nodes![i].className.length - " disabledControl".length;
             nodes![i].className = nodes![i].className.substring(0, subStringLength);
         }
 
@@ -295,7 +298,7 @@ class EditButton extends React.Component<any, {}> {
 }
 const ObservedEditButton = observer(EditButton);
 
-class SavePurchaseOrderButton extends React.Component<any, {}>{
+class SavePurchaseOrderButton extends React.Component {
     saveNewPurchaseOrder() {
         store.savePurchaseOrder();
     }
@@ -307,9 +310,9 @@ class SavePurchaseOrderButton extends React.Component<any, {}>{
     }
 }
 
-class CancelPurchaseOrderButton extends React.Component<any, {}>{
+class CancelPurchaseOrderButton extends React.Component {
     cancelOnClick() {
-        let baseUrl = location.protocol
+        const baseUrl = location.protocol
             + "//" + location.hostname
             + (location.port && ":" + location.port)
             + "/";
@@ -326,7 +329,7 @@ class CancelPurchaseOrderButton extends React.Component<any, {}>{
     }
 }
 
-class AddPurchaseOrder extends React.Component<any, {}> {
+class AddPurchaseOrder extends React.Component  {
     render() {
         return (
             <div>
