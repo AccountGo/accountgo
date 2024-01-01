@@ -7,7 +7,7 @@ import JournalEntryLine from './JournalEntryLine';
 
 import CommonStore from "../Common/CommonStore";
 
-let baseUrl = location.protocol
+const baseUrl = location.protocol
     + "//" + location.hostname
     + (location.port && ":" + location.port)
     + "/";
@@ -41,26 +41,26 @@ export default class JournalEntryStore {
             editMode: observable,
         });
 
-        let journalEntryId = window.location.search.split("?id=")[1];
+        const journalEntryId = window.location.search.split("?id=")[1];
         if (journalEntryId !== undefined)
             this.getJournalEntry(parseInt(journalEntryId))
         else
             this.changedEditMode(true);
     }
 
-    changeIsDirty(dirty: any) {
+    changeIsDirty(dirty: boolean) {
         this.isDirty = dirty;
     }
 
-    changeInitialized(initialized: any) {
+    changeInitialized(initialized: boolean) {
         this.initialized = initialized;
     }
 
     getJournalEntry(journalEntryId: number) {
         axios.get(Config.API_URL + "financials/journalentry?id=" + journalEntryId)
             .then((result: any) => {
-                for (var i = 0; i < result.data.journalEntryLines.length; i++) {
-                    var item = result.data.journalEntryLines[i];
+                for (let i = 0; i < result.data.journalEntryLines.length; i++) {
+                    const item = result.data.journalEntryLines[i];
                     this.addLineItem(item.id, item.accountId, item.drCr, item.amount, item.memo);
                 }
                 this.journalEntry.id = result.data.id;                
@@ -71,8 +71,8 @@ export default class JournalEntryStore {
                 this.journalEntry.posted = result.data.posted;
                 this.journalEntry.readyForPosting = result.data.readyForPosting;
 
-                var nodes = document.getElementById("divJournalEntryForm")!.getElementsByTagName('*');
-                for (var i = 0; i < nodes.length; i++) {
+                const nodes = document.getElementById("divJournalEntryForm")!.getElementsByTagName('*');
+                for (let i = 0; i < nodes.length; i++) {
                     nodes[i].className += " disabledControl";
                 }
             });
@@ -89,10 +89,13 @@ export default class JournalEntryStore {
                 .then(() => {
                     window.location.href = baseUrl + 'financials/journalentries';
                 })
-                .catch((error: any) => {
-                    error.data.map((err: any) => {
-                        this.validationErrors.push(err);
-                    });
+                .catch((error) => {
+                    if (axios.isAxiosError(error)) {
+                        this.validationErrors.push(`Status: ${error.status} - Message: ${error.response?.data}`);
+                      } else {
+                        console.error(error);
+                        this.validationErrors.push(`Error: ${error}`);
+                      }
                 })
         }
     }
@@ -111,7 +114,7 @@ export default class JournalEntryStore {
         if (this.journalEntry.journalEntryLines.length < 2)
             this.validationErrors.push("You need at lest 2 journal entry lines for debit and credit.");
         if (this.journalEntry.journalEntryLines !== undefined && this.journalEntry.journalEntryLines.length > 0) {
-            for (var i = 0; i < this.journalEntry.journalEntryLines.length; i++) {
+            for (let i = 0; i < this.journalEntry.journalEntryLines.length; i++) {
                 if (this.journalEntry.journalEntryLines[i].accountId === undefined)
                     this.validationErrors.push("Account is required.");
                 if (this.journalEntry.journalEntryLines[i].drcr === undefined)
@@ -136,46 +139,49 @@ export default class JournalEntryStore {
                 .then(() => {
                     window.location.href = baseUrl + 'financials/journalentries';
                 })
-                .catch((error: any) => {
-                    error.data.map((err: any) => {
-                        this.validationErrors.push(err);
-                    });
+                .catch((error) => {
+                    if (axios.isAxiosError(error)) {
+                        this.validationErrors.push(`Status: ${error.status} - Message: ${error.response?.data}`);
+                      } else {
+                        console.error(error);
+                        this.validationErrors.push(`Error: ${error}`);
+                      }
                 })
         }
     }
 
-    addLineItem(id: any, accountId: any, drcr: any, amount: number, memo: string) {
-        var newLineItem = new JournalEntryLine(id, accountId, drcr, amount, memo);
+    addLineItem(id: number, accountId: number, drcr: number, amount: number, memo: string) {
+        const newLineItem = new JournalEntryLine(id, accountId, drcr, amount, memo);
         this.journalEntry.journalEntryLines.push(extendObservable(newLineItem, newLineItem));
     }
 
-    updateLineItem(row: number, targetProperty: keyof JournalEntryLine, value: any) {
+    updateLineItem(row: number, targetProperty: keyof JournalEntryLine, value: string | number) {
         if (this.journalEntry.journalEntryLines.length > 0) {
-            (this.journalEntry.journalEntryLines[row] as any)[targetProperty] = value;
+            (this.journalEntry.journalEntryLines[row] as Record<keyof JournalEntryLine, string | number>)[targetProperty] = value;
         }
     }
 
-    removeLineItem(row: any) {
+    removeLineItem(row: number) {
         this.journalEntry.journalEntryLines.splice(row, 1);
     }
 
-    changedJournalDate(date: any) {
+    changedJournalDate(date: Date) {
         this.journalEntry.journalDate = date;
     }
 
-    changedReferenceNo(refNo: any) {
+    changedReferenceNo(refNo: string) {
         this.journalEntry.referenceNo = refNo;
     }
 
-    changedMemo(memo: any) {
+    changedMemo(memo: string) {
         this.journalEntry.memo = memo;
     }
 
-    changedVoucherType(type: any) {
+    changedVoucherType(type: number) {
         this.journalEntry.voucherType = type;
     }
 
-    changedEditMode(editMode: any) {
+    changedEditMode(editMode: boolean) {
         this.editMode = editMode;
     }
 }

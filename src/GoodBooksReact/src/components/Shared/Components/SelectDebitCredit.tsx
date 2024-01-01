@@ -7,7 +7,7 @@ class SelectDebiCredit extends React.Component<any, {}>{
             this.props.store.updateLineItem(this.props.row, "drcr", e.target.value);
     }
     render() {
-        var options: any = [];
+        const options: JSX.Element[] = [];
         options.push(<option key={1} value="1">Debit</option>);
         options.push(<option key={2} value="2">Credit</option>);
 

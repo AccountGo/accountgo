@@ -7,7 +7,7 @@ class SelectVoucherType extends React.Component<any, {}>{
             this.props.store.updateLineItem(this.props.row, "accountId", e.target.value);
     }
     render() {
-        var options: any = [];
+        const options: JSX.Element[] = [];
         this.props.store.commonStore.accounts.map(function (account: any) {
             return (
                 options.push(<option key={ account.id } value={ account.id } > { account.accountName } </option>)

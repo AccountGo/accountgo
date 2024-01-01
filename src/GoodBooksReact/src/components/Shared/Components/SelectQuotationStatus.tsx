@@ -7,7 +7,7 @@ class SelectQuotationStatus extends React.Component<any, {}> {
     }
 
     render() {
-        var options: any = [];
+        const options: React.ReactNode[] = [];
         this.props.store.commonStore.salesQuotationStatus.map(function (item: any) {
             return (
                 options.push(<option key={ item.id } value={ item.id } > { item.description } </option>)

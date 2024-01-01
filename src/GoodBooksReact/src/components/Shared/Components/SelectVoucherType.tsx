@@ -7,7 +7,7 @@ class SelectVoucherType extends React.Component<any, {}>{
     }
 
     render() {
-        var options: any = [];
+        const options: JSX.Element[] = [];
         options.push(<option key="1" value="1"> Opening Balances</option>);
         options.push(<option key="2" value="2"> Closing Entries </option>);
         options.push(<option key="3" value="3"> Adjustment Entries </option>);

@@ -7,7 +7,7 @@ class SelectPaymentTerm extends React.Component<any, {}>{
     }
 
     render() {
-        var options: any = [];
+        const options: JSX.Element[] = [];
         this.props.store.commonStore.paymentTerms.map(function (term: any) {
             return (
                 options.push(<option key={ term.id } value={ term.id } > { term.description } </option>)

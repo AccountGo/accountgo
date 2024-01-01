@@ -7,7 +7,7 @@ class SelectLineMeasurement extends React.Component<any, {}>{
             this.props.store.updateLineItem(this.props.row, "measurementId", e.target.value);
     }
     render() {
-        var options: any = [];
+        const options: JSX.Element[] = [];
         this.props.store.commonStore.measurements.map(function (measurement: any) {
             return (
                 options.push(<option key={ measurement.id } value={ measurement.id } > { measurement.description } </option>)
