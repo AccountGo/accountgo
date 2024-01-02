@@ -42,7 +42,6 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        // [Route("[action]")]
         [Route("Setup")]
         public IActionResult Setup()
         {

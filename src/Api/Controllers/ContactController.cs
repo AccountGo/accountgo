@@ -154,13 +154,7 @@ namespace Api.Controllers
                         _purchasingService.UpdateVendor(vendor);
 
                     }
-
-
                 }
-
-
-
-
                 return new ObjectResult(Ok());
             }
             catch (Exception ex)
@@ -168,9 +162,6 @@ namespace Api.Controllers
                 errors = new string[1] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
                 return new BadRequestObjectResult(errors);
             }
-
         }
-
-
     }
 }
