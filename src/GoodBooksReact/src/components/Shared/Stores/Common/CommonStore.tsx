@@ -32,7 +32,7 @@ export default class CommonStore {
     }
 
     loadCustomersLookup() {
-        const customers: string[] = this.customers;
+        const customers: string[] = [];
 
         axios.get(Config.API_URL + "common/customers")
             .then(function (result) {
@@ -44,7 +44,7 @@ export default class CommonStore {
     }
 
     loadPaymentTermsLookup() {
-        const paymentTerms: string[] = this.paymentTerms;
+        const paymentTerms: string[] = [];
         axios.get(Config.API_URL + "common/paymentterms")
             .then(function (result) {
                 const data = result.data;
@@ -54,18 +54,37 @@ export default class CommonStore {
             });
     }
 
+    /*
     loadVendorsLookup() {
-        const vendors: string[] = this.vendors;
+        const localVendors: string[] = [];
         
         axios.get(Config.API_URL + "common/vendors")
             .then(function (result: any) {
                 const data = result.data;
                 for (let i = 0; i < Object.keys(data).length; i++) {
-                    vendors.push(data[i]);
+                    localVendors.push(data[i]);
                 }
-            }.bind(this));        
+            }.bind(this));    
+    }
+    */    
+   
+    loadVendorsLookup() {
+        const localVendors: string[] = [];
+        
+        axios.get(Config.API_URL + "common/vendors")
+        .then(response => {
+            const data = response.data;
+            for (let i = 0; i < Object.keys(data).length; i++) {
+                localVendors.push(data[i]);
+            }
+            this.vendors = localVendors;
+        })
+        .catch(error => {
+          console.error(error);
+        });   
     }
 
+    /*
     loadItemsLookup() {
         const items: object[] = this.items;
         axios.get(Config.API_URL + "common/items")
@@ -76,9 +95,26 @@ export default class CommonStore {
                 }
             });
     }
+    */
+
+    loadItemsLookup() {
+        const localItems: object[] = [];
+        
+        axios.get(Config.API_URL + "common/items")
+        .then(response => {
+            const data = response.data;
+            for (let i = 0; i < Object.keys(data).length; i++) {
+                localItems.push(data[i]);
+            }
+            this.items = localItems;
+        })
+        .catch(error => {
+          console.error(error);
+        });   
+    }
 
     loadMeasurementsLookup() {
-        const measurements: string[] = this.measurements;
+        const measurements: string[] = [];
         axios.get(Config.API_URL + "common/measurements")
             .then(function (result: any) {
                 const data = result.data;
@@ -88,11 +124,8 @@ export default class CommonStore {
             });
     }
 
-    loadVoucherTypesLookup() {
-    }
-
     loadQuotationStatusLookup() {
-        const quotationStatus: string[] = this.salesQuotationStatus;
+        const quotationStatus: string[] = [];
         axios.get(Config.API_URL + "common/salesquotationstatus")
             .then(function (result: any) {
                 const data = result.data;
@@ -104,7 +137,7 @@ export default class CommonStore {
     }
 
     loadAccountsLookup() {
-        const accounts: string[] = this.accounts; 
+        const accounts: string[] = []; 
         axios.get(Config.API_URL + "common/postingaccounts")
             .then(function (result: any) {
                 const data: string[] = result.data;
