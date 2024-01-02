@@ -373,5 +373,3 @@ class SalesInvoice extends React.Component {
 const ObservedSalesInvoice = observer(SalesInvoice);
 
 export default ObservedSalesInvoice;
-
-ReactDOM.render(<ObservedSalesInvoice />, document.getElementById("divSalesInvoice"));

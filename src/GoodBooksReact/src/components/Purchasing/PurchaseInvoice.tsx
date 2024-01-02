@@ -382,5 +382,3 @@ class PurchaseInvoice extends React.Component {
 const ObservedPurchaseInvoice = observer(PurchaseInvoice);
 
 export default ObservedPurchaseInvoice;
-
-ReactDOM.render(<ObservedPurchaseInvoice />, document.getElementById("divPurchaseInvoice"));
