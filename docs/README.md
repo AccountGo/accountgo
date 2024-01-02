@@ -128,7 +128,7 @@ At this point, your database has no data on it. But there is already an initial 
 - Items
 - Banks
 
-To initialize a company, call the api endpoint directly http://localhost:8001/api/administration/initializedcompany from the browser or by using curl e.g. `curl http://localhost:8001/api/administration/initializedcompany`. If you encounter some issues, the easy way for now is recreate your database and repeat the `Publish Database` section.
+To initialize a company, call the api endpoint directly http://localhost:8001/api/administration/setup from the browser or by using curl e.g. `curl http://localhost:8001/api/administration/setup`. If you encounter some issues, the easy way for now is recreate your database and repeat the `Publish Database` section.
 
 ## Build and Run "Api" (Back-end)
 1. Navigate directory to `src/Api` project
