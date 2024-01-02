@@ -136,7 +136,7 @@ export default class CommonStore {
         return lineTaxTotal;
     }
 
-    getPurhcaseLineTaxAmount(quantity: number, amount: number, discount: number, taxes: Array<any>) {
+    getPurhcaseLineTaxAmount(quantity: number, amount: number, discount: number, taxes: Array<{ rate: number }>) {
         let lineTaxTotal = 0;
         amount = (amount * quantity) - discount;
         taxes.map(function (tax) {
