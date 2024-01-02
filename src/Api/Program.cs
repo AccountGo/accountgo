@@ -50,13 +50,26 @@ builder.Services
     .AddDefaultTokenProviders();
 
 // Add cors
-builder.Services.AddCors(o => o.AddPolicy("AllowAll", builder =>
+// builder.Services.AddCors(o => o.AddPolicy("AllowAll", builder =>
+// {
+//     builder
+//     .AllowAnyOrigin()
+//     .AllowAnyMethod()
+//     .AllowAnyHeader();
+// }));
+
+var AllowAllOrigins = "AllowAll";
+builder.Services.AddCors(options =>
 {
-    builder
-    .AllowAnyOrigin()
-    .AllowAnyMethod()
-    .AllowAnyHeader();
-}));
+    options.AddPolicy(name: AllowAllOrigins,
+                      policy =>
+                      {
+                          policy.AllowAnyOrigin()
+                                .AllowAnyMethod()
+                                .AllowAnyHeader();
+                      });
+});
+
 
 // generic repository
 builder.Services.AddScoped(typeof(Core.Data.IRepository<>), typeof(EfRepository<>));
@@ -87,6 +100,7 @@ if (app.Environment.IsDevelopment())
 
 //app.UseHttpsRedirection();
 app.UseRouting();
+app.UseCors(AllowAllOrigins);
 app.UseAuthorization();
 
 app.MapControllers();
