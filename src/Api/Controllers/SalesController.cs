@@ -1099,12 +1099,6 @@ namespace Api.Controllers
             return Json(finalmonthlySalesDto);
         }
 
-
-
-
-
-
-
         [HttpGet]
         [Route("SalesInvoiceForPrinting")]
         public IActionResult SalesInvoiceForPrinting(int id)
@@ -1170,7 +1164,6 @@ namespace Api.Controllers
         [Route("BookQuotation")]
         public IActionResult BookQuotation(int id)
         {
-
             try
             {
                 _salesService.BookQuotation(id);
@@ -1180,8 +1173,6 @@ namespace Api.Controllers
             {
                 return new BadRequestObjectResult(ex.Message);
             }
-
-
         }
     }
 }

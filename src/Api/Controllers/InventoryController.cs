@@ -7,7 +7,6 @@ using System.Linq;
 
 namespace Api.Controllers
 {
-    //[ApiController]
     [Route("api/[controller]")]
     public class InventoryController : BaseController
     {
