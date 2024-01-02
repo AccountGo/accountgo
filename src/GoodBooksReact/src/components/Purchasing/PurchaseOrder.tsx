@@ -353,5 +353,3 @@ class AddPurchaseOrder extends React.Component  {
 const ObservedAddPurchaseOrder = observer(AddPurchaseOrder);
 
 export default ObservedAddPurchaseOrder;
-
-ReactDOM.render(<ObservedAddPurchaseOrder />, document.getElementById("divPurchaseOrder"));

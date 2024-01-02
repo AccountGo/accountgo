@@ -415,4 +415,3 @@ const ObservedSalesOrder = observer(SalesOrder);
 
 export default ObservedSalesOrder;
 
-ReactDOM.render(<ObservedSalesOrder />, document.getElementById("divSalesOrder"));

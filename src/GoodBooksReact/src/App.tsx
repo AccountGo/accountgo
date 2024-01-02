@@ -3,22 +3,17 @@
 // import Counter from "./components/Counter"
 // import List from "./components/List"
 // import Home from "./components/Home/Index"
-import JournalEntry from "./components/Financials/JournalEntry"
+import { Outlet } from "react-router"
+import Home from "./components/Home/Index"
+
+// https://www.youtube.com/watch?v=G7UzhrNX60o
 
 function App() {
 
   return (
     <>
-      {/* <Heading title={"HELLO"} />
-      <Section title={"This is the section title"}>
-        <p>Whatever is here is considered children</p>
-      </Section>
-      <Counter />
-      <List
-        items={["Coffee", "Tacos", "Code"]}
-        render={(item: string) => <strong>{item}</strong>}
-      /> */}
-      <JournalEntry />  
+      <Home />
+      <Outlet />
     </>
   )
 }
