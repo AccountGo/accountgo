@@ -1,5 +1,4 @@
 ﻿import * as React from "react";
-import * as ReactDOM from "react-dom";
 import {observer} from "mobx-react";
 // import from "accounting" npm package
 import * as accounting from "accounting";
