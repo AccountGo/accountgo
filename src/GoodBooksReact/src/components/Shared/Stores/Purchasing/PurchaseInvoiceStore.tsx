@@ -49,7 +49,7 @@ export default class PurchaseOrderStore {
         autorun(() => this.computeTotals());
 
         if (purchId !== undefined) {
-            axios.get(Config.API_URL + "api/purchasing/purchaseorder?id=" + purchId)
+            axios.get(Config.API_URL + "purchasing/purchaseorder?id=" + purchId)
                 .then((result) => {
                     for (let i = 0; i < result.data.purchaseOrderLines.length; i++) {
                         if (result.data.purchaseOrderLines[i].remainingQtyToInvoice == 0)

@@ -42,6 +42,7 @@ namespace Api.Controllers
         public IActionResult Customers()
         {
             var customers = _salesService.GetCustomers();
+            
             ICollection<Customer> customersDto = new HashSet<Customer>();
 
             foreach (var customer in customers)
@@ -65,7 +66,7 @@ namespace Api.Controllers
         [Route("Items")] // api/Common/Items
         public IActionResult Items()
         {
-            var items = _inventoryService.GetAllItems();
+            var items = _inventoryService.GetAllItems().OrderBy(i => i.Description);
             ICollection<Item> itemsDto = new HashSet<Item>();
 
             foreach (var item in items)
@@ -78,7 +79,7 @@ namespace Api.Controllers
         [Route("Measurements")] // api/Common/Measurements
         public IActionResult Measurements()
         {
-            return new ObjectResult(_inventoryService.GetMeasurements());
+            return new ObjectResult(_inventoryService.GetMeasurements().OrderBy(m => m.Description));
         }
 
         [HttpGet]
@@ -123,7 +124,8 @@ namespace Api.Controllers
         public IActionResult PostingAccounts()
         {
             var accounts = _financialService.GetAccounts()
-                .Where(a => a.ChildAccounts.Count == 0);
+                .Where(a => a.ChildAccounts.Count == 0)
+                .OrderBy(a => a.AccountName);
 
             ICollection<Account> accountsDto = new HashSet<Account>();
 
