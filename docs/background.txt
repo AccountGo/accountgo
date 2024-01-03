@@ -1,0 +1,41 @@
+I was asked by a non-profit organization to help them find a cheap accounting system instead of paying high subscription fees from a current vendor. I stumbled upon this open source project on GitHub:
+ 
+https://github.com/AccountGo/accountgo
+ 
+It is based on the following technologies:
+ 
+Backend: ASP.NET WebAPI and MVC
+Frontend: React with TypeScript
+Database: SQL Server
+ 
+It seems that development on this app stopped about seven years ago. When I looked at it, I figured that it has most of what is needed and could be brought up to snuff by upgrading the application to the latest state of .NET and React. Therefore, I forked it and updated it to the latest versions of .NET, React, and TypeScript.
+ 
+The forked app is at https://github.com/medhatelmasry/GoodBooks
+ 
+You can run it by following these steps:
+ 
+Clone the repo
+Start SQL Server in a docker container with:
+
+	docker run --cap-add SYS_PTRACE -e ACCEPT_EULA=1 -e MSSQL_SA_PASSWORD=SqlPassword! -p 1444:1433 --name azsql -d mcr.microsoft.com/azure-sql-edge
+
+In root directory of the code, run the following commands:
+
+	dotnet ef migrations add M1 --project ./src/Api/ --startup-project ./src/Api/Api.csproj --msbuildprojectextensionspath .build/obj/Api/ --context ApplicationIdentityDbContext --output-dir Data/Migrations/IdentityDb
+ 
+	dotnet ef migrations add M2 --project ./src/Api/ --startup-project ./src/Api/Api.csproj --msbuildprojectextensionspath .build/obj/Api/ --context ApiDbContext --output-dir Data/Migrations/ApiDb
+ 
+	dotnet ef database update --project ./src/Api/ --msbuildprojectextensionspath .build/obj/Api/ --context ApplicationIdentityDbContext
+ 
+	dotnet ef database update --project ./src/Api/ --msbuildprojectextensionspath .build/obj/Api/ --context ApiDbContext
+ 
+Update to the latest versions of Node & Npm
+Go to the src/Api folder and start the WebAPI app with: dotnet watch
+Hit this endpoint in order to populate the database with some sample data: http://localhost:8001/api/administration/setup
+In a separate terminal window, go to the src/GoodBooksReact folder run these commands:
+
+	npm install
+	npm run dev
+ 
+The React app will run. It is a rudimentary frontend menu system and is a work in progress.
+ 
