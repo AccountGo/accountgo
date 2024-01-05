@@ -1,4 +1,7 @@
-﻿@{ Layout = ""; }
+﻿@{ 
+    Layout = "";
+}
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -11,9 +14,9 @@
     <!-- Icons-->
     <link href="~/lib/@@coreui/icons/css/coreui-icons.min.css" rel="stylesheet">
     <link href="~/lib/font-awesome/css/font-awesome.min.css" rel="stylesheet">
-    <!-- <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css"> -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
     <link href="~/lib/simple-line-icons/css/simple-line-icons.css" rel="stylesheet">
-    <!-- <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/simple-line-icons/2.4.1/css/simple-line-icons.css"> -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/simple-line-icons/2.4.1/css/simple-line-icons.css">
     <!-- Main styles for this application-->
     <link href="~/css/dark.css" rel="stylesheet">
     <link href="~/css/vendors/pace-progress/pace.css" rel="stylesheet">
@@ -32,7 +35,7 @@
         </button>
         <ul class="nav navbar-nav d-md-down-none">
             <li class="nav-item px-3">
-                <a class="nav-link" href="#">Dashboard</a>
+                <a class="nav-link" asp-area="" asp-controller="Dashboard" asp-action="MonthlySales">Dashboard</a>
             </li>
             <li class="nav-item px-3">
                 <a class="nav-link" href="#">Users</a>
@@ -121,13 +124,13 @@
             <nav class="sidebar-nav">
                 <ul class="nav">
                     <li class="nav-item">
-                        <a class="nav-link" href="~/">
+                        <a class="nav-link" asp-area="" asp-controller="Dashboard" asp-action="MonthlySales">
                             <i class="nav-icon fa fa-dashboard"></i> Dashboard
                             <!-- <span class="badge badge-primary">NEW</span> -->
                         </a>
                     </li>
-                    <li class="nav-item nav-dropdown">
-                        <a class="nav-link nav-dropdown-toggle" href="#">
+                    <li class="nav-item nav-dropdown open">
+                        <a class="nav-link nav-dropdown-toggle">
                             <i class="nav-icon fa fa-industry"></i> Accounts Receivable
                         </a>
                         <ul class="nav-dropdown-items">
@@ -158,7 +161,7 @@
                             </li>
                         </ul>
                     </li>
-                    <li class="nav-item nav-dropdown">
+                    <li class="nav-item nav-dropdown open">
                         <a class="nav-link nav-dropdown-toggle" href="#">
                             <i class="nav-icon fa fa-link"></i> Accounts Payable
                         </a>
@@ -180,7 +183,7 @@
                             </li>
                         </ul>
                     </li>
-                    <li class="nav-item nav-dropdown">
+                    <li class="nav-item nav-dropdown open">
                         <a class="nav-link nav-dropdown-toggle" href="#">
                             <i class="nav-icon fa fa-wrench"></i> Inventory Control
                         </a>
@@ -197,7 +200,7 @@
                             </li>
                         </ul>
                     </li>
-                    <li class="nav-item nav-dropdown">
+                    <li class="nav-item nav-dropdown open">
                         <a class="nav-link nav-dropdown-toggle" href="#">
                             <i class="nav-icon fa fa-bank"></i> Financials
                         </a>
@@ -229,7 +232,7 @@
                             </li>
                         </ul>
                     </li>
-                    <li class="nav-item nav-dropdown">
+                    <li class="nav-item nav-dropdown open">
                         <a class="nav-link nav-dropdown-toggle" href="#">
                             <i class="nav-icon fa fa-line-chart"></i> Reports
                         </a>
@@ -251,7 +254,7 @@
                             </li>
                         </ul>
                     </li>
-                    <li class="nav-item nav-dropdown">
+                    <li class="nav-item nav-dropdown open">
                         <a class="nav-link nav-dropdown-toggle" href="#">
                             <i class="nav-icon fa fa-group"></i> Organization Settings
                         </a>
@@ -268,7 +271,7 @@
                             </li>
                         </ul>
                     </li>
-                    <li class="nav-item nav-dropdown">
+                    <li class="nav-item nav-dropdown open">
                         <a class="nav-link nav-dropdown-toggle" href="#">
                             <i class="nav-icon fa fa-desktop"></i> System Administration
                         </a>
@@ -300,33 +303,34 @@
         </div>
         <main class="main">
             <!-- Breadcrumb-->
-            <!-- <ol class="breadcrumb"> -->
-                <!-- <li class="breadcrumb-item">Home</li>
-                <li class="breadcrumb-item">
-                    <a href="#">Admin</a>
-                </li>
-                <li class="breadcrumb-item active">Dashboard</li> -->
-                <!-- Breadcrumb Menu-->
-                <!-- <li class="breadcrumb-menu d-md-down-none">
-                    <div class="btn-group" role="group" aria-label="Button group">
-                        <a class="btn" href="#">
-                            <i class="icon-speech"></i>
-                        </a>
-                        <a class="btn" asp-area="" asp-controller="/" asp-action="Index" asp-route-view="">
-                            <i class="icon-graph"></i>  Dashboard
-                        </a>
-                        <a class="btn" href="#">
-                            <i class="icon-settings"></i>  Settings
-                        </a>
-                    </div>
-                </li> -->
-            <!-- </ol> -->
+            @* <ol class="breadcrumb">
+    <li class="breadcrumb-item">Home</li>
+    <li class="breadcrumb-item">
+        <a href="#">Admin</a>
+    </li>
+    <li class="breadcrumb-item active">Dashboard</li>
+    <!-- Breadcrumb Menu-->
+    <li class="breadcrumb-menu d-md-down-none">
+        <div class="btn-group" role="group" aria-label="Button group">
+            <a class="btn" href="#">
+                <i class="icon-speech"></i>
+            </a>
+            <a class="btn" asp-area="" asp-controller="/" asp-action="Index" asp-route-view="">
+                <i class="icon-graph"></i>  Dashboard
+            </a>
+            <a class="btn" href="#">
+                <i class="icon-settings"></i>  Settings
+            </a>
+        </div>
+    </li>
+</ol> *@
+
             <div class="container-fluid">
                 <div class="animated fadeIn">
                     <!-- PAGE CONTENT -->
-                    <!-- <h2>
+                    <h2>
             @Html.Raw(ViewBag.PageContentHeader)
-                    </h2> -->
+                    </h2>
                     @RenderBody()
                     <!-- /PAGE CONTENT -->
                 </div>
