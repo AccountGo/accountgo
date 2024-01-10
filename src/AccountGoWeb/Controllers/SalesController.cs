@@ -4,16 +4,21 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using System.Collections.Generic;
 using System.Net.Http;
+using Microsoft.Extensions.Logging;
 
 namespace AccountGoWeb.Controllers
 {
     //[Microsoft.AspNetCore.Authorization.Authorize]
     public class SalesController : GoodController
     {
-        public SalesController(IConfiguration config)
+
+        private ILogger<SalesController> _logger;
+
+        public SalesController(IConfiguration config, ILogger<SalesController> logger)
         {
             _configuration = config;
             Models.SelectListItemHelper._config = config;
+            _logger = logger;
         }
 
         public IActionResult Index()
@@ -107,11 +112,23 @@ namespace AccountGoWeb.Controllers
             return View();
         }
 
+        [HttpGet]
         public IActionResult AddReceipt()
         {
-            ViewBag.PageContentHeader = "New Receipt";
 
             var model = new Models.Sales.AddReceipt();
+
+            if (ModelState.IsValid)
+            {
+                var serialize = Newtonsoft.Json.JsonConvert.SerializeObject(model);
+                var content = new StringContent(serialize);
+                content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+                var response = Post("Sales/SaveReceipt", content);
+                if(response.IsSuccessStatusCode)
+                    return RedirectToAction("salesreceipts");                
+            }
+
+            ViewBag.PageContentHeader = "New Receipt";
 
             ViewBag.Customers = Models.SelectListItemHelper.Customers();
             ViewBag.DebitAccounts = Models.SelectListItemHelper.CashBanks();
@@ -130,6 +147,7 @@ namespace AccountGoWeb.Controllers
                 var content = new StringContent(serialize);
                 content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
                 var response = Post("sales/savereceipt", content);
+                _logger.LogInformation("Response: " + response);
                 if(response.IsSuccessStatusCode)
                     return RedirectToAction("salesreceipts");                
             }
