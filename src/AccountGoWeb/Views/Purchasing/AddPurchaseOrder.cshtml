@@ -1,2 +1,51 @@
-﻿<div id="divPurchaseOrder"></div>
-<script src="~/scripts/purchasing/purchaseorder.chunk.js" type="text/javascript"></script>
+﻿@model AccountGoWeb.Models.Purchasing.Payment
+
+<form action="~/purchasing/addpurchaseorder" method="post">
+    <div class="col-sm-6">
+        @Html.ValidationSummary(true)
+        <div class="card">
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-sm-3">Vendor Name</div>
+                    <div class="col-sm-9">
+                        <select class="form-control" asp-for="VendorId" asp-items="@ViewBag.Vendors"></select>
+                        <span asp-validation-for="VendorId" class="text-danger"></span>
+                </div>
+                <div class="row">
+                    <div class="col-sm-3">Invoice Amount</div>
+                    <div class="col-sm-9">
+                        <input class="form-control" asp-for="InvoiceAmount" type="text" placeholder="0.0 ..." />
+                        <span asp-validation-for="InvoiceAmount" class="danger"></span>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-sm-3">Amount Paid</div>
+                    <div class="col-sm-9">
+                        <input class="form-control" asp-for="AmountPaid" type="text" placeholder="0.0 ..." />
+                        <span asp-validation-for="AmountPaid" class="danger"></span>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-sm-3">Amount To Pay</div>
+                    <div class="col-sm-9">
+                        <input class="form-control" asp-for="AmountToPay" type="text" placeholder="0.0 ..." />
+                        <span asp-validation-for="AmountToPay" class="danger"></span>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-sm-4">Date</div>
+                    <div class="col-sm-8">
+                        <input class="form-control pull-right" type="date" asp-for="Date">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-9">
+        <input id="btnSave" class="btn btn-sm btn-primary btn-flat pull-left" type="submit" value="Save" />
+        <a href="~/Purchasing/PurchaseOrders" class="btn btn-sm btn-default btn-flat pull-left">Close</a>
+    </div>
+</form>
+@* <div id="divPurchaseOrder"></div> *@
+@* <script src="~/scripts/purchasing/purchaseorder.chunk.js" type="text/javascript"></script> *@

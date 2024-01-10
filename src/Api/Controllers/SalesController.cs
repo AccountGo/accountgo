@@ -10,6 +10,7 @@ using Core.Domain.Sales;
 using Services.Inventory;
 using Dto.Sales;
 using Services.TaxSystem;
+using Microsoft.Extensions.Logging;
 
 namespace Api.Controllers
 {
@@ -21,16 +22,18 @@ namespace Api.Controllers
         private readonly IFinancialService _financialService;
         private readonly IInventoryService _inventoryService;
         private readonly ITaxService _taxService;
+        private ILogger<SalesController> _logger;
 
         public SalesController(IAdministrationService adminService,
             ISalesService salesService,
-            IFinancialService financialService, IInventoryService inventoryService, ITaxService taxService)
+            IFinancialService financialService, IInventoryService inventoryService, ITaxService taxService, ILogger<SalesController> logger)
         {
             _adminService = adminService;
             _salesService = salesService;
             _financialService = financialService;
             _inventoryService = inventoryService;
             _taxService = taxService;
+            _logger = logger;
         }
 
         [HttpPost]
@@ -1013,6 +1016,7 @@ namespace Api.Controllers
             catch (Exception ex)
             {
                 errors = new string[1] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
+                _logger.LogError("Error is " + ex.Message);
                 return new BadRequestObjectResult(errors);
             }
         }
