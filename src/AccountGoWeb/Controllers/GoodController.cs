@@ -59,12 +59,14 @@ namespace AccountGoWeb.Controllers
             string responseJson = string.Empty;
             using (var client = new HttpClient())
             {
-                var baseUri = _configuration["ApiUrl"];
+                // TODO: Move this to appsettings.json
+                var baseUri = "http://localhost:8001/api/";
                 client.BaseAddress = new System.Uri(baseUri);
                 client.DefaultRequestHeaders.Accept.Clear();
                 //client.DefaultRequestHeaders.Add("UserName", GetCurrentUserName());
 
                 var response = await client.PostAsync(baseUri + uri, data);
+                
                 if (response.IsSuccessStatusCode)
                 {
                     responseJson = await response.Content.ReadAsStringAsync();

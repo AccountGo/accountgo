@@ -1,4 +1,14 @@
-﻿using System.Net.Http;
+﻿using AccountGoWeb.Models;
+using Dto.Sales;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
+using System.Collections.Generic;
+using System.Net.Http;
+using Microsoft.Extensions.Logging;
+using System;
+using System.Net.Http;
+using System.Text;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 
@@ -37,9 +47,32 @@ namespace AccountGoWeb.Controllers
             return View();
         }
 
-        public IActionResult AddSalesQuotation()
+        public async Task<IActionResult> AddSalesQuotation()
         {
+            var model = new Models.Sales.SalesQuotations();
+
+            if (ModelState.IsValid)
+            {
+                var serialize = Newtonsoft.Json.JsonConvert.SerializeObject(model);
+                var content = new StringContent(serialize);
+                
+                using (var client = new HttpClient())
+                {
+                    var baseUri = _configuration["ApiUrl"];
+                    client.BaseAddress = new Uri(baseUri);
+
+                    var response = await client.PostAsync("Sales/SaveQuotation", content);
+
+                    if (response.IsSuccessStatusCode)
+                        return RedirectToAction("quotations");
+                }
+            }
+
             ViewBag.PageContentHeader = "Add Sales Quotation";
+
+            ViewBag.Customers = Models.SelectListItemHelper.Customers();
+            ViewBag.Items = Models.SelectListItemHelper.Items();
+            ViewBag.PaymentTerms = Models.SelectListItemHelper.PaymentTerms();
 
             return View();
         }

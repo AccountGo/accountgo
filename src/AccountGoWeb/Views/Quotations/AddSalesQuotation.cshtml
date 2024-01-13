@@ -1,2 +1,63 @@
-﻿<div id="divSalesQuotation"></div>
-<script src="~/scripts/quotations/salesquotation.chunk.js" type="text/javascript"></script>
+﻿@model AccountGoWeb.Models.Sales.SalesQuotations
+
+<form action="~/Quotations/AddSalesQuotation" method="post">
+    <div class="col-sm-8">
+        @Html.ValidationSummary(true)
+        <div class="card">
+            <div class="card-body">
+                @* Customer *@
+                <div class="row">
+                    <div class="col-sm-2">Customer</div>
+                    <div class="col-sm-10">
+                        <select class="form-control" asp-for="CustomerId" asp-items="@ViewBag.Customers" id="optCustomer"></select>
+                        <span asp-validation-for="CustomerId" class="danger"></span>
+                    </div>
+                </div>
+                @* ItemId *@
+                <div class="row">
+                    <div class="col-sm-2">Item Name</div>
+                    <div class="col-sm-10">
+                        <select class="form-control" asp-for="ItemId" asp-items="@ViewBag.Items" id="optCustomer"></select>
+                        <span asp-validation-for="ItemId" class="danger"></span>
+                    </div>
+                </div>
+                @* Payment Term *@
+                <div class="row">
+                    <div class="col-sm-2">Payment Term</div>
+                    <div class="col-sm-10">
+                        <select class="form-control" asp-for="PaymentTermId" asp-items="@ViewBag.PaymentTerms" id="optCustomer"></select>
+                        <span asp-validation-for="PaymentTermId" class="danger"></span>
+                    </div>
+                </div>
+                @* Quantity *@
+                <div class="row">
+                    <div class="col-sm-2">Quantity</div>
+                    <div class="col-sm-10">
+                        <input class="form-control" asp-for="Quantity" type="text" placeholder="1" />
+                        <span asp-validation-for="Quantity" class="danger"></span>
+                    </div>
+                </div>
+                @* Amount *@
+                <div class="row">
+                    <div class="col-sm-2">Amount</div>
+                    <div class="col-sm-10">
+                        <input class="form-control" asp-for="Amount" type="text" placeholder="0.0" />
+                        <span asp-validation-for="Amount" class="danger"></span>
+                    </div>
+                </div>
+                @* Discount *@
+                <div class="row">
+                    <div class="col-sm-2">Discount</div>
+                    <div class="col-sm-10">
+                        <input class="form-control" asp-for="Discount" type="text" placeholder="0.0" />
+                        <span asp-validation-for="Discount" class="danger"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-9">
+        <input id="btnSave" class="btn btn-sm btn-primary btn-flat pull-left" type="submit" value="Save" />
+        <a href="~/Quotations/Quotations" class="btn btn-sm btn-default btn-flat pull-left">Close</a>
+    </div>
+</form>
