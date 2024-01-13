@@ -13,13 +13,11 @@ namespace AccountGoWeb.Controllers
     public class SalesController : GoodController
     {
         private readonly IConfiguration _configuration;
-        private ILogger<SalesController> _logger;
 
-        public SalesController(IConfiguration config, ILogger<SalesController> logger)
+        public SalesController(IConfiguration config)
         {
             _configuration = config;
             Models.SelectListItemHelper._config = config;
-            _logger = logger;
         }
 
         public IActionResult Index()
@@ -211,9 +209,7 @@ namespace AccountGoWeb.Controllers
                 var content = new StringContent(serialize);
                 content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
                 string ReadAsStringAsync = await content.ReadAsStringAsync();
-                _logger.LogInformation("Content: " + ReadAsStringAsync);
                 var response = await PostAsync("Sales/SaveCustomer", content);
-                _logger.LogInformation($"Status Code: {response}");
                 return RedirectToAction("Customers");
             }
             else

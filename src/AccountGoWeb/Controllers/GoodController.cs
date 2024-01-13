@@ -13,7 +13,7 @@ namespace AccountGoWeb.Controllers
             string responseJson = string.Empty;
             using (var client = new HttpClient())
             {
-                var baseUri = _configuration["ApiUrl"];
+                var baseUri = "http://localhost:8001/api/";
                 client.BaseAddress = new System.Uri(baseUri);
                 client.DefaultRequestHeaders.Accept.Clear();
                 var response = client.GetAsync(baseUri + uri);
@@ -26,7 +26,7 @@ namespace AccountGoWeb.Controllers
             string responseJson = string.Empty;
             using (var client = new HttpClient())
             {
-                var baseUri = _configuration["ApiUrl"];
+                var baseUri = "http://localhost:8001/api/";
                 client.BaseAddress = new System.Uri(baseUri);
                 client.DefaultRequestHeaders.Accept.Clear();
                 client.DefaultRequestHeaders.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
@@ -42,7 +42,7 @@ namespace AccountGoWeb.Controllers
             string responseJson = string.Empty;
             using (var client = new HttpClient())
             {
-                var baseUri = _configuration["ApiUrl"];
+                var baseUri = "http://localhost:8001/api/";
                 client.BaseAddress = new System.Uri(baseUri);
                 client.DefaultRequestHeaders.Accept.Clear();
                 var response = await client.GetAsync(baseUri + uri);
@@ -66,15 +66,12 @@ namespace AccountGoWeb.Controllers
                 //client.DefaultRequestHeaders.Add("UserName", GetCurrentUserName());
 
                 var response = await client.PostAsync(baseUri + uri, data);
-                
                 if (response.IsSuccessStatusCode)
                 {
                     responseJson = await response.Content.ReadAsStringAsync();
                 }
             }
-
             return Newtonsoft.Json.JsonConvert.DeserializeObject<string>(responseJson);
         }
-
     }
 }

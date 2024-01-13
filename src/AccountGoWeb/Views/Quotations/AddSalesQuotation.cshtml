@@ -9,7 +9,7 @@
                 <div class="row">
                     <div class="col-sm-2">Customer</div>
                     <div class="col-sm-10">
-                        <select class="form-control" asp-for="CustomerId" asp-items="@ViewBag.Customers" id="optCustomer"></select>
+                        <select class="form-control" asp-for="CustomerId" asp-items="@ViewBag.Customers" id="optCustomer" onchange="customerOnChange();"></select>
                         <span asp-validation-for="CustomerId" class="danger"></span>
                     </div>
                 </div>
@@ -61,3 +61,31 @@
         <a href="~/Quotations/Quotations" class="btn btn-sm btn-default btn-flat pull-left">Close</a>
     </div>
 </form>
+
+@section scripts{
+    <script>
+        var customers = @Html.Raw(ViewBag.CustomersDetail);
+
+        function customerOnChange() {
+            var customerId = document.getElementById("optCustomer").value;
+            var element = document.getElementById("optAccountToCreditId");
+
+            for(var i = 0; i < customers.length; i++){
+                if(customerId === customers[i].Id.toString())
+                {
+                    var customer = customers[i];
+                    for(var i=0; i < element.options.length; i++)
+                    {
+                        if(element.options[i].value === customer.PrepaymentAccountId.toString()) {
+                            element.selectedIndex = i;
+                            document.getElementById("optAccountToCreditId").value = customer.PrepaymentAccountId;
+                            break;
+                        }
+                    }
+                }
+                else
+                    element.selectedIndex = element.options.length - element.options.length;
+            }
+        }
+    </script>
+}
