@@ -95,7 +95,6 @@ namespace AccountGoWeb.Controllers
             ViewBag.Measurements = Models.SelectListItemHelper.UnitOfMeasurements();
             ViewBag.ItemCategories = Models.SelectListItemHelper.ItemCategories();
 
-
             if (itemModel.Id > 0)
                 ViewBag.PageContentHeader = "Item Item";
             else

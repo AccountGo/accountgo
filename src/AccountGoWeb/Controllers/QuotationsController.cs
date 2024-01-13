@@ -18,8 +18,10 @@ namespace AccountGoWeb.Controllers
     public class QuotationsController : Controller
     {
         private readonly IConfiguration _configuration;
-        public QuotationsController(IConfiguration config) {
+        private readonly ILogger<QuotationsController> _logger;
+        public QuotationsController(IConfiguration config, ILogger<QuotationsController> logger) {
             _configuration = config;
+            _logger = logger;
         }
 
         public IActionResult Index()
@@ -47,21 +49,23 @@ namespace AccountGoWeb.Controllers
             return View();
         }
 
-        public async Task<IActionResult> AddSalesQuotation()
+        public async Task<IActionResult> AddSalesQuotation(Models.Sales.SalesQuotations model)
         {
-            var model = new Models.Sales.SalesQuotations();
 
             if (ModelState.IsValid)
             {
                 var serialize = Newtonsoft.Json.JsonConvert.SerializeObject(model);
                 var content = new StringContent(serialize);
+                content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
                 
                 using (var client = new HttpClient())
                 {
                     var baseUri = _configuration["ApiUrl"];
                     client.BaseAddress = new Uri(baseUri);
+                    _logger.LogInformation("AddSalesQuotation Content: " + await content.ReadAsStringAsync());
 
-                    var response = await client.PostAsync("Sales/SaveQuotation", content);
+                    var response = await client.PostAsync("sales/savequotation", content);
+                    _logger.LogInformation($"AddSalesQuotation Response: { response.ToString()}");
 
                     if (response.IsSuccessStatusCode)
                         return RedirectToAction("quotations");

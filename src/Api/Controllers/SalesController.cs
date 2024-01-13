@@ -22,7 +22,7 @@ namespace Api.Controllers
         private readonly IFinancialService _financialService;
         private readonly IInventoryService _inventoryService;
         private readonly ITaxService _taxService;
-        private ILogger<SalesController> _logger;
+        private readonly ILogger<SalesController> _logger;
 
         public SalesController(IAdministrationService adminService,
             ISalesService salesService,
@@ -40,7 +40,6 @@ namespace Api.Controllers
         [Route("SaveCustomer")]
         public IActionResult SaveCustomer([FromBody]Dto.Sales.Customer customerDto)
         {
-            _logger.LogInformation("SaveCustomer");
             bool isNew = customerDto.Id == 0;
             Core.Domain.Sales.Customer customer = null;
 
@@ -69,7 +68,6 @@ namespace Api.Controllers
 
             customer.No = customerDto.No;
             customer.Party.Name = customerDto.Name;
-            _logger.LogInformation("SaveCustomer: " + customerDto.Name);
             customer.Party.Phone = customerDto.Phone;
             customer.Party.Email = customerDto.Email;
             customer.Party.Fax = customerDto.Fax;
@@ -873,8 +871,8 @@ namespace Api.Controllers
         [Route("SaveQuotation")]
         public IActionResult SaveQuotation([FromBody]Dto.Sales.SalesQuotation quotationDto)
         {
-            _logger.LogInformation("SaveQuotation");
             string[] errors = null;
+            _logger.LogInformation("SaveQuotation");
 
             try
             {
@@ -1019,7 +1017,6 @@ namespace Api.Controllers
             catch (Exception ex)
             {
                 errors = new string[1] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
-                _logger.LogError("Error is " + ex.Message);
                 return new BadRequestObjectResult(errors);
             }
         }
