@@ -5,13 +5,14 @@ using Microsoft.Extensions.Configuration;
 using System.Collections.Generic;
 using System.Net.Http;
 using Microsoft.Extensions.Logging;
+using System.Threading.Tasks;
 
 namespace AccountGoWeb.Controllers
 {
     //[Microsoft.AspNetCore.Authorization.Authorize]
     public class SalesController : GoodController
     {
-
+        private readonly IConfiguration _configuration;
         private ILogger<SalesController> _logger;
 
         public SalesController(IConfiguration config, ILogger<SalesController> logger)
@@ -56,7 +57,7 @@ namespace AccountGoWeb.Controllers
         {
             return Ok();
         }
-        
+
         public IActionResult SalesOrder(int id)
         {
             ViewBag.PageContentHeader = "Sales Order";
@@ -124,8 +125,8 @@ namespace AccountGoWeb.Controllers
                 var content = new StringContent(serialize);
                 content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
                 var response = Post("Sales/SaveReceipt", content);
-                if(response.IsSuccessStatusCode)
-                    return RedirectToAction("salesreceipts");                
+                if (response.IsSuccessStatusCode)
+                    return RedirectToAction("salesreceipts");
             }
 
             ViewBag.PageContentHeader = "New Receipt";
@@ -147,9 +148,8 @@ namespace AccountGoWeb.Controllers
                 var content = new StringContent(serialize);
                 content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
                 var response = Post("sales/savereceipt", content);
-                _logger.LogInformation("Response: " + response);
-                if(response.IsSuccessStatusCode)
-                    return RedirectToAction("salesreceipts");                
+                if (response.IsSuccessStatusCode)
+                    return RedirectToAction("salesreceipts");
             }
 
             ViewBag.PageContentHeader = "New Receipt";
@@ -180,7 +180,7 @@ namespace AccountGoWeb.Controllers
             }
             return View();
         }
-        
+
         public IActionResult Customer(int id = -1)
         {
             Customer customerModel = null;
@@ -203,30 +203,34 @@ namespace AccountGoWeb.Controllers
             return View(customerModel);
         }
 
-        public IActionResult SaveCustomer(Customer customerModel)
+        public async Task<IActionResult> SaveCustomer(Customer customerModel)
         {
             if (ModelState.IsValid)
             {
                 var serialize = Newtonsoft.Json.JsonConvert.SerializeObject(customerModel);
                 var content = new StringContent(serialize);
                 content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
-                var response = PostAsync("sales/savecustomer", content);
-
+                string ReadAsStringAsync = await content.ReadAsStringAsync();
+                _logger.LogInformation("Content: " + ReadAsStringAsync);
+                var response = await PostAsync("Sales/SaveCustomer", content);
+                _logger.LogInformation($"Status Code: {response}");
                 return RedirectToAction("Customers");
             }
-            else {
+            else
+            {
                 ViewBag.Accounts = SelectListItemHelper.Accounts();
                 ViewBag.TaxGroups = SelectListItemHelper.TaxGroups();
                 ViewBag.PaymentTerms = SelectListItemHelper.PaymentTerms();
             }
 
-            if(customerModel.Id == -1)
+            if (customerModel.Id == -1)
                 ViewBag.PageContentHeader = "New Customer";
             else
                 ViewBag.PageContentHeader = "Customer Card";
 
             return View("Customer", customerModel);
         }
+
 
         public IActionResult CustomerAllocations(int id)
         {
@@ -252,9 +256,10 @@ namespace AccountGoWeb.Controllers
             model.Amount = receipt.Amount;
             model.RemainingAmountToAllocate = receipt.RemainingAmountToAllocate;
 
-             var invoices = GetAsync<IEnumerable<Dto.Sales.SalesInvoice>>("sales/customerinvoices?id=" + receipt.CustomerId).Result;
+            var invoices = GetAsync<IEnumerable<Dto.Sales.SalesInvoice>>("sales/customerinvoices?id=" + receipt.CustomerId).Result;
 
-            foreach (var invoice in invoices) {
+            foreach (var invoice in invoices)
+            {
                 if (invoice.Posted && invoice.TotalAllocatedAmount < invoice.Amount)
                 {
                     model.AllocationLines.Add(new Models.Sales.AllocationLine()
@@ -274,7 +279,8 @@ namespace AccountGoWeb.Controllers
         {
             if (ModelState.IsValid)
             {
-                if (model.IsValid()) {
+                if (model.IsValid())
+                {
                     var serialize = Newtonsoft.Json.JsonConvert.SerializeObject(model);
                     var content = new StringContent(serialize);
                     content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
@@ -307,5 +313,5 @@ namespace AccountGoWeb.Controllers
             return View(salesInvoiceModel);
         }
 
-     }
+    }
 }

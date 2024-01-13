@@ -40,6 +40,7 @@ namespace Api.Controllers
         [Route("SaveCustomer")]
         public IActionResult SaveCustomer([FromBody]Dto.Sales.Customer customerDto)
         {
+            _logger.LogInformation("SaveCustomer");
             bool isNew = customerDto.Id == 0;
             Core.Domain.Sales.Customer customer = null;
 
@@ -68,6 +69,7 @@ namespace Api.Controllers
 
             customer.No = customerDto.No;
             customer.Party.Name = customerDto.Name;
+            _logger.LogInformation("SaveCustomer: " + customerDto.Name);
             customer.Party.Phone = customerDto.Phone;
             customer.Party.Email = customerDto.Email;
             customer.Party.Fax = customerDto.Fax;
@@ -871,6 +873,7 @@ namespace Api.Controllers
         [Route("SaveQuotation")]
         public IActionResult SaveQuotation([FromBody]Dto.Sales.SalesQuotation quotationDto)
         {
+            _logger.LogInformation("SaveQuotation");
             string[] errors = null;
 
             try
