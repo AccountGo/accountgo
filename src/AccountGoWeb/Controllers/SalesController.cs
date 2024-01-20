@@ -13,11 +13,13 @@ namespace AccountGoWeb.Controllers
     public class SalesController : GoodController
     {
         private readonly IConfiguration _configuration;
+        private readonly ILogger<SalesController> _logger;
 
-        public SalesController(IConfiguration config)
+        public SalesController(IConfiguration config, ILogger<SalesController> logger)
         {
             _configuration = config;
             Models.SelectListItemHelper._config = config;
+            _logger = logger;
         }
 
         public IActionResult Index()
@@ -46,14 +48,43 @@ namespace AccountGoWeb.Controllers
         public IActionResult AddSalesOrder()
         {
             ViewBag.PageContentHeader = "Add Sales Order";
+            SalesOrder salesOrderModel = new SalesOrder();
+            salesOrderModel.SalesOrderLines = new List<SalesOrderLine> { new SalesOrderLine {
+                Amount = 0,
+                Discount = 0,
+                ItemId = 1,
+                Quantity = 1,
+            } };
+            salesOrderModel.No = new System.Random().Next(1, 99999).ToString(); 
 
-            return View();
+            @ViewBag.Customers = Models.SelectListItemHelper.Customers();
+            @ViewBag.PaymentTerms = Models.SelectListItemHelper.PaymentTerms();
+            @ViewBag.Items = Models.SelectListItemHelper.Items();
+            @ViewBag.Measurements = Models.SelectListItemHelper.Measurements();
+
+            return View(salesOrderModel);
         }
 
         [HttpPost]
-        public IActionResult AddSalesOrder(object Dto)
+        public async System.Threading.Tasks.Task<IActionResult> AddSalesOrder(SalesOrder Dto)
         {
-            return Ok();
+            
+            if (ModelState.IsValid)
+            {
+                var serialize = Newtonsoft.Json.JsonConvert.SerializeObject(Dto);
+                var content = new StringContent(serialize);
+                content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+                
+                var response = Post("Sales/addsalesorder", content);
+                _logger.LogInformation("Add Sales Order Response : " + response.ToString());
+                if (response.IsSuccessStatusCode)
+                    return RedirectToAction("salesorders");
+            }
+            @ViewBag.Customers = Models.SelectListItemHelper.Customers();
+            @ViewBag.PaymentTerms = Models.SelectListItemHelper.PaymentTerms();
+            @ViewBag.Measurements = Models.SelectListItemHelper.Measurements();
+
+            return RedirectToAction("salesorders");
         }
 
         public IActionResult SalesOrder(int id)
