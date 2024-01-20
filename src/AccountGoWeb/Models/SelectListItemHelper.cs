@@ -121,7 +121,7 @@ namespace AccountGoWeb.Models
 
         public static IEnumerable<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem> Measurements()
         {
-            var measurements = GetAsync<IEnumerable<Dto.Inventory.Measurement>>("inventory/items").Result;
+            var measurements = GetAsync<IEnumerable<Dto.Inventory.Measurement>>("common/measurements").Result;
             var selectMeasurements = new HashSet<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>();
             selectMeasurements.Add(new Microsoft.AspNetCore.Mvc.Rendering.SelectListItem() { Value = "", Text = "" });
             foreach (var item in measurements)

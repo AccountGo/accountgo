@@ -1,3 +1,115 @@
-﻿<div id="divSalesOrder"></div>
+﻿@model Dto.Sales.SalesOrder
+<style>
+    tr th {
+        color: #fff;
+    }
 
-<script src="~/scripts/sales/salesorder.chunk.js" type="text/javascript"></script>
+    tr td {
+        color: #fff;
+    }
+</style>
+<form action="~/Sales/AddSalesOrder" method="post">
+    <div class="col-sm-10">
+        @Html.AntiForgeryToken()
+        @Html.ValidationSummary(true)
+        <div class="card">
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-sm-3">Customer</div>
+                    <div class="col-sm-8">
+                        <select class="form-control" asp-for="CustomerId" asp-items="@ViewBag.Customers"
+                            id="optCustomer"></select>
+                        <span asp-validation-for="CustomerId" class="danger"></span>
+                    </div>
+                </div>
+                @* Payment Term *@
+                <div class="row">
+                    <div class="col-sm-3">Payment Term</div>
+                    <div class="col-sm-8">
+                        <select class="form-control" asp-for="PaymentTermId" asp-items="@ViewBag.PaymentTerms"
+                            id="optPayment"></select>
+                        <span asp-validation-for="PaymentTermId" class="danger"></span>
+                    </div>
+                </div>
+                @* Amount *@
+                <div class="row">
+                    <div class="col-sm-3">Amount</div>
+                    <div class="col-sm-8">
+                        <input class="form-control" asp-for="Amount" type="text" placeholder="0.0 ..." />
+                        <span asp-validation-for="Amount" class="danger"></span>
+                    </div>
+                </div>
+            </div>
+            <table class="table">
+                <thead>
+                    <th>Item</th>
+                    <th>Quantity</th>
+                    <th>Amount</th>
+                    <th>Discount</th>
+                    <th>Measurement</th>
+                </thead>
+                <tbody>@for (int i = 0; i < Model.SalesOrderLines.Count; i++)
+                    {
+                        <tr>
+                            <td>
+                                @Html.DropDownListFor(model => model.SalesOrderLines[i].ItemId,
+                                         (IEnumerable<SelectListItem>)ViewBag.Items, new { @class = "form-control", id = "optItem" })
+                                <span asp-validation-for="SalesOrderLines[i].ItemId" class="danger"></span>
+                            </td>
+                            <td>
+                                @Html.EditorFor(model => model.SalesOrderLines[i].Quantity, new
+                                    {
+                                        htmlAttributes = new
+                                        {
+                                            @class = "form-control"
+                                        }
+                                    })
+                            </td>
+                            <td>
+                                @Html.EditorFor(model => model.SalesOrderLines[i].Amount, new
+                                    {
+                                        htmlAttributes = new
+                                        {
+                                            @class = "form-control"
+                                        }
+                                    })
+                            </td>
+                            <td>
+                                @Html.EditorFor(model => model.SalesOrderLines[i].Discount, new
+                                    {
+                                        htmlAttributes = new
+                                        {
+                                            @class = "form-control"
+                                        }
+                                    })
+                            </td>
+                            <td>
+                                @Html.DropDownListFor(model => model.SalesOrderLines[i].MeasurementId,
+                                                    (IEnumerable<SelectListItem>)ViewBag.Measurements,
+                                                    new { @class = "form-control", id = $"optMeasurement_{i}" })
+                                <span asp-validation-for="SalesOrderLines[i].MeasurementId" class="danger"></span>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            <button type="button" class="btn btn-sm btn-primary btn-flat" id="btnAddRow" onclick="addRow()">Add
+                Row</button>
+        </div>
+    </div>
+    <div class="col-md-9">
+        <input id="btnSave" class="btn btn-sm btn-primary btn-flat pull-left" type="submit" value="Save" />
+        <a href="~/sales/addsalesorder" class="btn btn-sm btn-default btn-flat pull-left">Close</a>
+    </div>
+</form>
+@section Scripts {
+    <script>
+        function addRow() {
+            const table = document.getElementsByClassName('table');
+            const rows = table.getElementsByTagName('tr');
+
+            const rowOuterHtml = rows[rows.length - 1].outerHTML;
+            const lastRowIdx = document.getElementById()
+        }
+    </script>
+}
