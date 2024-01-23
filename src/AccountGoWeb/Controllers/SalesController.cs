@@ -89,7 +89,27 @@ namespace AccountGoWeb.Controllers
         public IActionResult SalesOrder(int id)
         {
             ViewBag.PageContentHeader = "Sales Order";
-            return View();
+            _logger.LogInformation("SalesOrder: " + id);
+            SalesOrder salesOrderModel = null;
+            if (id == -1) {
+                ViewBag.PageContentHeader = "Add Sales Order";
+                return View("AddSalesOrder");
+                
+            } else {
+                salesOrderModel = GetAsync<SalesOrder>("Sales/SalesOrder?id=" + id).Result;
+                _logger.LogInformation("SalesOrder: " + salesOrderModel.CustomerId.ToString());
+                ViewBag.CustomerName = salesOrderModel.CustomerName;
+                ViewBag.OrderDate = salesOrderModel.OrderDate;
+                ViewBag.SalesOrderLines = salesOrderModel.SalesOrderLines;
+                _logger.LogInformation("SalesOrder: " + salesOrderModel.SalesOrderLines.Count.ToString());
+            }
+
+            @ViewBag.Customers = Models.SelectListItemHelper.Customers();
+            @ViewBag.PaymentTerms = Models.SelectListItemHelper.PaymentTerms();
+            @ViewBag.Items = Models.SelectListItemHelper.Items();
+            @ViewBag.Measurements = Models.SelectListItemHelper.Measurements();
+
+            return View(salesOrderModel);
         }
 
         public IActionResult SalesInvoice(int id)
