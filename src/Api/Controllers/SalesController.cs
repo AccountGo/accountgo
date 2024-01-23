@@ -26,7 +26,10 @@ namespace Api.Controllers
 
         public SalesController(IAdministrationService adminService,
             ISalesService salesService,
-            IFinancialService financialService, IInventoryService inventoryService, ITaxService taxService, ILogger<SalesController> logger)
+            IFinancialService financialService, 
+            IInventoryService inventoryService, 
+            ITaxService taxService, 
+            ILogger<SalesController> logger)
         {
             _adminService = adminService;
             _salesService = salesService;
@@ -679,6 +682,8 @@ namespace Api.Controllers
         public IActionResult PostSalesInvoice([FromBody]Dto.Sales.SalesInvoice salesInvoiceDto)
         {
             string[] errors = null;
+
+            _logger.LogInformation("PostSalesInvoice");
 
             try
             {

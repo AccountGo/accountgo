@@ -21,6 +21,7 @@ namespace Dto.Sales
         public SalesOrder()
         {
             SalesOrderLines = new List<SalesOrderLine>();
+            OrderDate = DateTime.Now; // TODO: Can be set by user
         }
 
         private decimal GetTotalAmount()

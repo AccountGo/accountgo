@@ -76,7 +76,6 @@ namespace AccountGoWeb.Controllers
                 content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
                 
                 var response = Post("Sales/addsalesorder", content);
-                _logger.LogInformation("Add Sales Order Response : " + response.ToString());
                 if (response.IsSuccessStatusCode)
                     return RedirectToAction("salesorders");
             }
@@ -117,9 +116,42 @@ namespace AccountGoWeb.Controllers
             return View();
         }
 
+        [HttpGet]
         public IActionResult AddSalesInvoice()
         {
             ViewBag.PageContentHeader = "Add Sales Invoice";
+
+            SalesInvoice salesInvoiceModel = new SalesInvoice();
+            salesInvoiceModel.SalesInvoiceLines = new List<SalesInvoiceLine> { new SalesInvoiceLine {
+                Amount = 0,
+                Discount = 0,
+                ItemId = 1,
+                Quantity = 1,
+            } };
+            salesInvoiceModel.No = new System.Random().Next(1, 99999).ToString(); // TODO: Replace with system generated numbering.
+
+            @ViewBag.Customers = Models.SelectListItemHelper.Customers();
+            @ViewBag.PaymentTerms = Models.SelectListItemHelper.PaymentTerms();
+            @ViewBag.Items = Models.SelectListItemHelper.Items();
+            @ViewBag.Measurements = Models.SelectListItemHelper.Measurements();
+
+            return View(salesInvoiceModel);
+        }
+
+        [HttpPost]
+        public async System.Threading.Tasks.Task<IActionResult> AddSalesInvoice(SalesInvoice Dto)
+        {
+            if (ModelState.IsValid)
+            {
+                var serialize = Newtonsoft.Json.JsonConvert.SerializeObject(Dto);
+                var content = new StringContent(serialize);
+                content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+                _logger.LogInformation("AddSalesInvoice: " + await content.ReadAsStringAsync());
+                var response = Post("Sales/SaveSalesInvoice", content);
+                _logger.LogInformation("AddSalesInvoice response: " + response.ToString());
+                if (response.IsSuccessStatusCode)
+                    return RedirectToAction("salesinvoices");
+            }
 
             return View();
         }
