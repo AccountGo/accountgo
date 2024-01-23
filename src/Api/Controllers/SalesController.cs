@@ -232,6 +232,7 @@ namespace Api.Controllers
         [Route("SalesOrder")]
         public IActionResult SalesOrder(int id)
         {
+            _logger.LogInformation("SalesOrder id: " + id.ToString());
             try
             {
                 var salesOrder = _salesService.GetSalesOrderById(id);
@@ -264,6 +265,7 @@ namespace Api.Controllers
 
                     salesOrderDto.SalesOrderLines.Add(lineDto);
                 }
+
 
                 return new ObjectResult(salesOrderDto);
             }
