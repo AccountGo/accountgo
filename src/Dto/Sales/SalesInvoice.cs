@@ -27,6 +27,7 @@ namespace Dto.Sales
         public SalesInvoice()
         {
             SalesInvoiceLines = new List<SalesInvoiceLine>();
+            InvoiceDate = DateTime.Now;
         }
 
         private decimal GetTotalAmount()

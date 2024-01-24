@@ -14,7 +14,6 @@ namespace Dto.Sales
         public string CustomerNo { get; set; }
         public string CustomerName { get; set; }
         public int StatusId { get; set; }
-
         public int? QuotationId { get; set; }
         public IList<SalesOrderLine> SalesOrderLines { get; set; }
 
