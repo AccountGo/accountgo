@@ -1,2 +1,60 @@
-﻿<div id="divSalesInvoice"></div>
-<script type="text/javascript" src="~/scripts/sales/salesinvoice.chunk.js"></script>
+﻿@model Dto.Sales.SalesInvoice
+
+<style>
+    tr th {
+        color: #fff;
+    }
+
+    tr td {
+        color: #fff;
+    }
+</style>
+
+<form action="#" method="post">
+    <div id="divSalesInvoiceCard" class="col-md-9">
+        <div class="card">
+            <div class="card-body show row" id="general">
+                <div class="col-sm-6">
+                    @* Customer Name *@
+                    <div class="row">
+                        <div class="col-sm-5">Customer Name</div>
+                        <div class="col-sm-7">@ViewBag.CustomerName</div>
+                        @Html.HiddenFor(m => m.CustomerId)
+                    </div>
+                    @* Invoice Date *@
+                    <div class="row">
+                        <div class="col-sm-5">Order Date</div>
+                        <div class="col-sm-7">@ViewBag.InvoiceDate</div>
+                    </div>
+                    @* Total Amount *@
+                    <div class="row">
+                        <div class="col-sm-5">Total Amount</div>
+                        <div class="col-sm-7">@ViewBag.TotalAmount</div>
+                    </div>
+                    @* Table *@
+                    <table class="table">
+                        <thead>
+                            <th>Item</th>
+                            <th>Quantity</th>
+                            <th>Amount</th>
+                            <th>Discount</th>
+                            <th>Measurement</th>
+                        </thead>
+                        <tbody>
+                            @for (int i = 0; i < Model.SalesInvoiceLines.Count; i++)
+                            {
+                                <tr>
+                                    <td>@Model.SalesInvoiceLines[i].ItemDescription</td>
+                                    <td>@Model.SalesInvoiceLines[i].Quantity</td>
+                                    <td>@Model.SalesInvoiceLines[i].Amount</td>
+                                    <td>@Model.SalesInvoiceLines[i].Discount</td>
+                                    <td>@Model.SalesInvoiceLines[i].MeasurementDescription</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>

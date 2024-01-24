@@ -326,6 +326,14 @@ namespace Services.Sales
                 .Where(inv => inv.Id == id)
                 .FirstOrDefault();
 
+            if (invoice != null) {
+                foreach (var line in invoice.SalesInvoiceLines)
+                {
+                    line.Item = _itemRepo.GetById(line.ItemId);
+                    line.Measurement = _measurementRepo.GetById(line.MeasurementId);
+                }
+            }
+
             return invoice;
         }
 

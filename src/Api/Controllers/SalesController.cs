@@ -232,7 +232,6 @@ namespace Api.Controllers
         [Route("SalesOrder")]
         public IActionResult SalesOrder(int id)
         {
-            _logger.LogInformation("SalesOrder id: " + id.ToString());
             try
             {
                 var salesOrder = _salesService.GetSalesOrderById(id);
@@ -283,7 +282,7 @@ namespace Api.Controllers
             {
                 var salesInvoice = _salesService.GetSalesInvoiceById(id);
 
-                var salesOrderDto = new Dto.Sales.SalesInvoice()
+                var salesInvoiceDto = new Dto.Sales.SalesInvoice()
                 {
                     Id = salesInvoice.Id,
                     CustomerId = salesInvoice.CustomerId,
@@ -304,17 +303,19 @@ namespace Api.Controllers
                     lineDto.Quantity = line.Quantity;
                     lineDto.ItemId = line.ItemId;
                     lineDto.MeasurementId = line.MeasurementId;
-
-                    salesOrderDto.SalesInvoiceLines.Add(lineDto);
+                    lineDto.ItemDescription = line.Item.Description;
+                    lineDto.MeasurementDescription = line.Measurement.Description;
+                    
+                    salesInvoiceDto.SalesInvoiceLines.Add(lineDto);
                 }
 
                 // is this journal entry ready for posting?
-                if (!salesOrderDto.Posted && salesOrderDto.SalesInvoiceLines.Count >= 1)
+                if (!salesInvoiceDto.Posted && salesInvoiceDto.SalesInvoiceLines.Count >= 1)
                 {
-                    salesOrderDto.ReadyForPosting = true;
+                    salesInvoiceDto.ReadyForPosting = true;
                 }
 
-                return new ObjectResult(salesOrderDto);
+                return new ObjectResult(salesInvoiceDto);
             }
             catch (Exception ex)
             {

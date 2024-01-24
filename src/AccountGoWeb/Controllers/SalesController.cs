@@ -89,7 +89,6 @@ namespace AccountGoWeb.Controllers
         public IActionResult SalesOrder(int id)
         {
             ViewBag.PageContentHeader = "Sales Order";
-            _logger.LogInformation("SalesOrder: " + id);
             SalesOrder salesOrderModel = null;
             if (id == -1) {
                 ViewBag.PageContentHeader = "Add Sales Order";
@@ -97,11 +96,10 @@ namespace AccountGoWeb.Controllers
                 
             } else {
                 salesOrderModel = GetAsync<SalesOrder>("Sales/SalesOrder?id=" + id).Result;
-                _logger.LogInformation("SalesOrder: " + salesOrderModel.CustomerId.ToString());
                 ViewBag.CustomerName = salesOrderModel.CustomerName;
                 ViewBag.OrderDate = salesOrderModel.OrderDate;
                 ViewBag.SalesOrderLines = salesOrderModel.SalesOrderLines;
-                _logger.LogInformation("SalesOrder: " + salesOrderModel.SalesOrderLines.Count.ToString());
+                ViewBag.TotalAmount = salesOrderModel.Amount;
             }
 
             @ViewBag.Customers = Models.SelectListItemHelper.Customers();
@@ -115,7 +113,25 @@ namespace AccountGoWeb.Controllers
         public IActionResult SalesInvoice(int id)
         {
             ViewBag.PageContentHeader = "Sales Invoice";
-            return View();
+            SalesInvoice salesInvoiceModel = null;
+
+            if (id == -1) {
+                ViewBag.PageContentHeader = "Add Sales Invoice";
+                return View("AddSalesInvoice");
+            } else {
+                salesInvoiceModel = GetAsync<SalesInvoice>("Sales/SalesInvoice?id=" + id).Result;
+                ViewBag.CustomerName = salesInvoiceModel.CustomerName;
+                ViewBag.InvoiceDate = salesInvoiceModel.InvoiceDate;
+                ViewBag.SalesInvoiceLines = salesInvoiceModel.SalesInvoiceLines;
+                ViewBag.TotalAmount = salesInvoiceModel.Amount;
+            }
+
+            @ViewBag.Customers = Models.SelectListItemHelper.Customers();
+            @ViewBag.PaymentTerms = Models.SelectListItemHelper.PaymentTerms();
+            @ViewBag.Items = Models.SelectListItemHelper.Items();
+            @ViewBag.Measurements = Models.SelectListItemHelper.Measurements();
+
+            return View(salesInvoiceModel);
         }
 
         public async System.Threading.Tasks.Task<IActionResult> SalesInvoices()
