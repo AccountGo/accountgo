@@ -49,34 +49,48 @@ namespace AccountGoWeb.Controllers
             return View();
         }
 
-        public async Task<IActionResult> AddSalesQuotation(Models.Sales.SalesQuotations model)
+        [HttpGet]
+        public IActionResult AddSalesQuotation()
         {
+            ViewBag.PageContentHeader = "Add Sales Quotation";
 
+            SalesQuotation model = new SalesQuotation();
+            model.SalesQuotationLines = new List<SalesQuotationLine> { new SalesQuotationLine {
+                Amount = 0,
+                Quantity = 1,
+                Discount = 0,
+                ItemId = 1,
+                MeasurementId = 1,
+            } };
+            model.No = new System.Random().Next(1, 99999).ToString(); // TODO: Replace with system generated numbering.
+
+            ViewBag.Customers = Models.SelectListItemHelper.Customers();
+            ViewBag.Items = Models.SelectListItemHelper.Items();
+            ViewBag.PaymentTerms = Models.SelectListItemHelper.PaymentTerms();
+            ViewBag.Measurements = Models.SelectListItemHelper.Measurements();
+
+            return View(model);
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> AddSalesQuotation(SalesQuotation model)
+        {
+            _logger.LogInformation("Saving sales quotation");
             if (ModelState.IsValid)
             {
                 var serialize = Newtonsoft.Json.JsonConvert.SerializeObject(model);
                 var content = new StringContent(serialize);
                 content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
-                
+                _logger.LogInformation("Sending request to API");
                 using (var client = new HttpClient())
                 {
                     var baseUri = _configuration["ApiUrl"];
                     client.BaseAddress = new Uri(baseUri);
-                    _logger.LogInformation("AddSalesQuotation Content: " + await content.ReadAsStringAsync());
-
                     var response = await client.PostAsync("sales/savequotation", content);
-                    _logger.LogInformation($"AddSalesQuotation Response: { response.ToString()}");
-
                     if (response.IsSuccessStatusCode)
                         return RedirectToAction("quotations");
                 }
             }
-
-            ViewBag.PageContentHeader = "Add Sales Quotation";
-
-            ViewBag.Customers = Models.SelectListItemHelper.Customers();
-            ViewBag.Items = Models.SelectListItemHelper.Items();
-            ViewBag.PaymentTerms = Models.SelectListItemHelper.PaymentTerms();
 
             return View();
         }

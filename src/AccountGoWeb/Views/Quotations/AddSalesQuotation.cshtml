@@ -1,4 +1,14 @@
-﻿@model AccountGoWeb.Models.Sales.SalesQuotations
+﻿@model Dto.Sales.SalesQuotation
+
+<style>
+    tr th {
+        color: #fff;
+    }
+
+    tr td {
+        color: #fff;
+    }
+</style>
 
 <form action="~/Quotations/AddSalesQuotation" method="post">
     <div class="col-sm-8">
@@ -9,51 +19,75 @@
                 <div class="row">
                     <div class="col-sm-2">Customer</div>
                     <div class="col-sm-10">
-                        <select class="form-control" asp-for="CustomerId" asp-items="@ViewBag.Customers" id="optCustomer" onchange="customerOnChange();"></select>
+                        <select class="form-control" asp-for="CustomerId" asp-items="@ViewBag.Customers"
+                            id="optCustomer" onchange="customerOnChange();"></select>
                         <span asp-validation-for="CustomerId" class="danger"></span>
-                    </div>
-                </div>
-                @* ItemId *@
-                <div class="row">
-                    <div class="col-sm-2">Item Name</div>
-                    <div class="col-sm-10">
-                        <select class="form-control" asp-for="ItemId" asp-items="@ViewBag.Items" id="optCustomer"></select>
-                        <span asp-validation-for="ItemId" class="danger"></span>
                     </div>
                 </div>
                 @* Payment Term *@
                 <div class="row">
                     <div class="col-sm-2">Payment Term</div>
                     <div class="col-sm-10">
-                        <select class="form-control" asp-for="PaymentTermId" asp-items="@ViewBag.PaymentTerms" id="optCustomer"></select>
+                        <select class="form-control" asp-for="PaymentTermId" asp-items="@ViewBag.PaymentTerms"
+                            id="optCustomer"></select>
                         <span asp-validation-for="PaymentTermId" class="danger"></span>
                     </div>
                 </div>
-                @* Quantity *@
-                <div class="row">
-                    <div class="col-sm-2">Quantity</div>
-                    <div class="col-sm-10">
-                        <input class="form-control" asp-for="Quantity" type="text" placeholder="1" />
-                        <span asp-validation-for="Quantity" class="danger"></span>
-                    </div>
-                </div>
-                @* Amount *@
-                <div class="row">
-                    <div class="col-sm-2">Amount</div>
-                    <div class="col-sm-10">
-                        <input class="form-control" asp-for="Amount" type="text" placeholder="0.0" />
-                        <span asp-validation-for="Amount" class="danger"></span>
-                    </div>
-                </div>
-                @* Discount *@
-                <div class="row">
-                    <div class="col-sm-2">Discount</div>
-                    <div class="col-sm-10">
-                        <input class="form-control" asp-for="Discount" type="text" placeholder="0.0" />
-                        <span asp-validation-for="Discount" class="danger"></span>
-                    </div>
-                </div>
             </div>
+            <table class="table">
+                <thead>
+                    <th>Item</th>
+                    <th>Quantity</th>
+                    <th>Amount</th>
+                    <th>Discount</th>
+                    <th>Measurement</th>
+                </thead>
+                <tbody>
+                    @for (int i = 0; i < Model.SalesQuotationLines.Count; i++)
+                    {
+                        <tr>
+                            <td>
+                                @Html.DropDownListFor(model => model.SalesQuotationLines[i].ItemId,
+                                         (IEnumerable<SelectListItem>)ViewBag.Items, new { @class = "form-control", id = "optItem" })
+                                <span asp-validation-for="SalesQuotationLines[i].ItemId" class="danger"></span>
+                            </td>
+                            <td>
+                                @Html.EditorFor(model => model.SalesQuotationLines[i].Quantity, new
+                                    {
+                                        htmlAttributes = new
+                                        {
+                                            @class = "form-control"
+                                        }
+                                    })
+                            </td>
+                            <td>
+                                @Html.EditorFor(model => model.SalesQuotationLines[i].Amount, new
+                                    {
+                                        htmlAttributes = new
+                                        {
+                                            @class = "form-control"
+                                        }
+                                    })
+                            </td>
+                            <td>
+                                @Html.EditorFor(model => model.SalesQuotationLines[i].Discount, new
+                                    {
+                                        htmlAttributes = new
+                                        {
+                                            @class = "form-control"
+                                        }
+                                    })
+                            </td>
+                            <td>
+                                @Html.DropDownListFor(model => model.SalesQuotationLines[i].MeasurementId,
+                                         (IEnumerable<SelectListItem>)ViewBag.Measurements,
+                                         new { @class = "form-control", id = $"optMeasurement_{i}" })
+                                <span asp-validation-for="SalesQuotationLines[i].MeasurementId" class="danger"></span>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
         </div>
     </div>
     <div class="col-md-9">
@@ -62,7 +96,7 @@
     </div>
 </form>
 
-@section scripts{
+@section scripts {
     <script>
         var customers = @Html.Raw(ViewBag.CustomersDetail);
 
@@ -70,13 +104,11 @@
             var customerId = document.getElementById("optCustomer").value;
             var element = document.getElementById("optAccountToCreditId");
 
-            for(var i = 0; i < customers.length; i++){
-                if(customerId === customers[i].Id.toString())
-                {
+            for (var i = 0; i < customers.length; i++) {
+                if (customerId === customers[i].Id.toString()) {
                     var customer = customers[i];
-                    for(var i=0; i < element.options.length; i++)
-                    {
-                        if(element.options[i].value === customer.PrepaymentAccountId.toString()) {
+                    for (var i = 0; i < element.options.length; i++) {
+                        if (element.options[i].value === customer.PrepaymentAccountId.toString()) {
                             element.selectedIndex = i;
                             document.getElementById("optAccountToCreditId").value = customer.PrepaymentAccountId;
                             break;
