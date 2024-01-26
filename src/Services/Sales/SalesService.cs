@@ -750,6 +750,7 @@ namespace Services.Sales
                 }
                 else
                 {
+                    _logger.LogInformation("Invoice " + salesInvoice.CustomerId + " is being updated.");
                     _salesInvoiceRepo.Update(salesInvoice);
                 }
 

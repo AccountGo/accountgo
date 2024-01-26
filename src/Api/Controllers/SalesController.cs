@@ -740,7 +740,6 @@ namespace Api.Controllers
                 // Creating a new invoice
                 if (isNew)
                 {
-                    // if fromsalesorderid has NO value, then create automatically a new sales order.
                     if (!salesInvoiceDto.FromSalesOrderId.HasValue)
                     {
                         salesOrder = new Core.Domain.Sales.SalesOrderHeader();
@@ -758,7 +757,7 @@ namespace Api.Controllers
 
                     // populate invoice header
                     salesInvoice = new Core.Domain.Sales.SalesInvoiceHeader();
-                    salesInvoice.CustomerId = salesInvoiceDto.CustomerId.GetValueOrDefault();
+                    salesInvoice.CustomerId = salesInvoiceDto.CustomerId;
                     salesInvoice.Date = salesInvoiceDto.InvoiceDate;
                     salesInvoice.PaymentTermId = salesInvoiceDto.PaymentTermId;
                     salesInvoice.ReferenceNo = salesInvoiceDto.ReferenceNo;
@@ -807,6 +806,7 @@ namespace Api.Controllers
                     salesInvoice.Date = salesInvoiceDto.InvoiceDate;
                     salesInvoice.PaymentTermId = salesInvoiceDto.PaymentTermId;
                     salesInvoice.ReferenceNo = salesInvoiceDto.ReferenceNo;
+                    salesInvoice.CustomerId = salesInvoiceDto.CustomerId;
 
                     foreach (var line in salesInvoiceDto.SalesInvoiceLines)
                     {
@@ -867,6 +867,8 @@ namespace Api.Controllers
                         salesInvoice.SalesInvoiceLines.Remove(line);
                     }
                 }
+
+                _logger.LogInformation("SaveSalesInvoice API " + salesInvoice.CustomerId);
 
                 _salesService.SaveSalesInvoice(salesInvoice, salesOrder);
 

@@ -120,6 +120,7 @@ namespace AccountGoWeb.Controllers
                 return View("AddSalesInvoice");
             } else {
                 salesInvoiceModel = GetAsync<SalesInvoice>("Sales/SalesInvoice?id=" + id).Result;
+                ViewBag.Id = salesInvoiceModel.Id;
                 ViewBag.CustomerName = salesInvoiceModel.CustomerName;
                 ViewBag.InvoiceDate = salesInvoiceModel.InvoiceDate;
                 ViewBag.SalesInvoiceLines = salesInvoiceModel.SalesInvoiceLines;
@@ -131,7 +132,7 @@ namespace AccountGoWeb.Controllers
             @ViewBag.Items = Models.SelectListItemHelper.Items();
             @ViewBag.Measurements = Models.SelectListItemHelper.Measurements();
 
-            return View(salesInvoiceModel);
+            return View("SalesInvoice", salesInvoiceModel);
         }
 
         public async System.Threading.Tasks.Task<IActionResult> SalesInvoices()
@@ -148,6 +149,11 @@ namespace AccountGoWeb.Controllers
                     var responseJson = await response.Content.ReadAsStringAsync();
                     return View(model: responseJson);
                 }
+
+                @ViewBag.Customers = Models.SelectListItemHelper.Customers();
+            @ViewBag.PaymentTerms = Models.SelectListItemHelper.PaymentTerms();
+            @ViewBag.Items = Models.SelectListItemHelper.Items();
+            @ViewBag.Measurements = Models.SelectListItemHelper.Measurements();
             }
             return View();
         }
@@ -298,6 +304,26 @@ namespace AccountGoWeb.Controllers
             ViewBag.PaymentTerms = SelectListItemHelper.PaymentTerms();
 
             return View(customerModel);
+        }
+
+        [HttpPost]
+        public async System.Threading.Tasks.Task<IActionResult> SaveSalesInvoice(SalesInvoice salesInvoiceModel)
+        {
+            if (ModelState.IsValid)
+            {
+                var serialize = Newtonsoft.Json.JsonConvert.SerializeObject(salesInvoiceModel);
+                var content = new StringContent(serialize);
+                content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+                string ReadAsStringAsync = await content.ReadAsStringAsync();
+                _logger.LogInformation("SaveSalesInvoice: " + ReadAsStringAsync);
+                var response = Post("Sales/SaveSalesInvoice", content);
+            }
+                ViewBag.Customers = SelectListItemHelper.Customers();
+                ViewBag.PaymentTerms = SelectListItemHelper.PaymentTerms();
+                ViewBag.Items = SelectListItemHelper.Items();
+                ViewBag.Measurements = SelectListItemHelper.Measurements();
+
+            return View("SalesInvoice", salesInvoiceModel);
         }
 
         public async Task<IActionResult> SaveCustomer(Customer customerModel)
