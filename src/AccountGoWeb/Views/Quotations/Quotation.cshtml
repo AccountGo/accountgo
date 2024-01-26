@@ -1,2 +1,65 @@
-﻿<div id="divSalesQuotation"></div>
-<script type="text/javascript" src="~/scripts/quotations/salesquotation.chunk.js"></script>
+﻿@model Dto.Sales.SalesQuotation
+
+<style>
+    tr th {
+        color: #fff;
+    }
+
+    tr td {
+        color: #fff;
+    }
+</style>
+
+<form action="#" method="post">
+    <div id="divSalesQuotationCard" class="col-md-9">
+        <div class="card">
+            <div class="card-body show row" id="general">
+                <div class="col-sm-6">
+                    @* Customer Name *@
+                    <div class="row">
+                        <div class="col-sm-5">Customer Name</div>
+                        <div class="col-sm-7">@ViewBag.CustomerName</div>
+                        @Html.HiddenFor(m => m.CustomerId)
+                    </div>
+                    @* Sales Quotation Date *@
+                    <div class="row">
+                        <div class="col-sm-5">Quotation Date</div>
+                        <div class="col-sm-7">@ViewBag.QuotationDate</div>
+                    </div>
+                    @* Payment Term *@
+                    <div class="row">
+                        <div class="col-sm-5">Payment Term</div>
+                        <div class="col-sm-7">@ViewBag.PaymentTermId</div>
+                    </div>
+                    @* Total Amount *@
+                    <div class="row">
+                        <div class="col-sm-5">Total Amount</div>
+                        <div class="col-sm-7">@ViewBag.TotalAmount</div>
+                    </div>
+                </div>
+                @* Table *@
+                <table class="table">
+                    <thead>
+                        <th>Item</th>
+                        <th>Quantity</th>
+                        <th>Amount</th>
+                        <th>Discount</th>
+                        <th>Measurement</th>
+                    </thead>
+                    <tbody>
+                        @for (int i = 0; i < Model.SalesQuotationLines.Count; i++)
+                        {
+                            <tr>
+                                <td>@Model.SalesQuotationLines[i].ItemDescription</td>
+                                <td>@Model.SalesQuotationLines[i].Quantity</td>
+                                <td>@Model.SalesQuotationLines[i].Amount</td>
+                                <td>@Model.SalesQuotationLines[i].Discount</td>
+                                <td>@Model.SalesQuotationLines[i].MeasurementDescription</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</form>

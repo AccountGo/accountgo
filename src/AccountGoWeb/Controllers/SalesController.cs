@@ -115,7 +115,7 @@ namespace AccountGoWeb.Controllers
             ViewBag.PageContentHeader = "Sales Invoice";
             SalesInvoice salesInvoiceModel = null;
 
-            if (id == -1) {
+            if (id == 0) {
                 ViewBag.PageContentHeader = "Add Sales Invoice";
                 return View("AddSalesInvoice");
             } else {

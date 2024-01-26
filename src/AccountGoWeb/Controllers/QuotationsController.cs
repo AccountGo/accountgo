@@ -15,7 +15,7 @@ using Microsoft.Extensions.Configuration;
 namespace AccountGoWeb.Controllers
 {
     //[Microsoft.AspNetCore.Authorization.Authorize]
-    public class QuotationsController : Controller
+    public class QuotationsController : GoodController
     {
         private readonly IConfiguration _configuration;
         private readonly ILogger<QuotationsController> _logger;
@@ -95,11 +95,31 @@ namespace AccountGoWeb.Controllers
             return View();
         }
 
-        public IActionResult Quotation()
+        [HttpGet]
+        public IActionResult Quotation(int id)
         {
-            ViewBag.PageContentHeader = "Sales Quotation";
+            ViewBag.PageContentHeader = "Sales";
 
-            return View();
+            SalesQuotation model = null;
+
+            if (id == 0) {
+                ViewBag.PageContentHeader = "Add Sales Quotation";
+                return View("AddSalesQuotation");
+            } else {
+                model = GetAsync<SalesQuotation>("Sales/Quotation?id=" + id).Result;
+                _logger.LogInformation("Quotation retrieved from API" + model.Id);
+                @ViewBag.QuotationDate = model.QuotationDate;
+                @ViewBag.PaymentTermId = model.PaymentTermId;
+                @ViewBag.SalesQuotationLines = model.SalesQuotationLines;
+                @ViewBag.TotalAmount = model.Amount;
+            }
+
+            @ViewBag.Customers = Models.SelectListItemHelper.Customers();
+            @ViewBag.Items = Models.SelectListItemHelper.Items();
+            @ViewBag.PaymentTerms = Models.SelectListItemHelper.PaymentTerms();
+            @ViewBag.Measurements = Models.SelectListItemHelper.Measurements();
+
+            return View(model);
         }
     }
 }

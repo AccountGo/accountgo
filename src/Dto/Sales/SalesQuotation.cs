@@ -48,5 +48,7 @@ namespace Dto.Sales
         public decimal? Quantity { get; set; }
         public decimal? Amount { get; set; }
         public decimal? Discount { get; set; }
+        public string ItemDescription { get; set; }
+        public string MeasurementDescription { get; set; }
     }
 }
