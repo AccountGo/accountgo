@@ -713,6 +713,14 @@ namespace Services.Sales
                 .Where(q => q.Id == id)
                 .FirstOrDefault();
 
+            if (quotation != null) {
+                foreach (var line in quotation.SalesQuoteLines)
+                {
+                    line.Item = _itemRepo.GetById(line.ItemId);
+                    line.Measurement = _measurementRepo.GetById(line.MeasurementId);
+                }
+            }
+
             return quotation;
         }
 

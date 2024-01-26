@@ -418,7 +418,6 @@ namespace Api.Controllers
                 StatusId = (int)quote.Status
             };
 
-
             foreach (var line in quote.SalesQuoteLines)
             {
                 var lineDto = new Dto.Sales.SalesQuotationLine()
@@ -428,8 +427,13 @@ namespace Api.Controllers
                     MeasurementId = line.MeasurementId,
                     Quantity = line.Quantity,
                     Amount = line.Amount,
-                    Discount = line.Discount
+                    Discount = line.Discount,
+                    ItemDescription = line.Item.Description,
+                    MeasurementDescription = line.Measurement.Description
                 };
+
+                _logger.LogInformation("Quotation line: " + lineDto.ItemDescription);
+
                 quoteDto.SalesQuotationLines.Add(lineDto);
             }
 
