@@ -19,7 +19,7 @@
 
 <form action="~/Sales/SaveSalesInvoice" method="post">
     <div id="divSalesInvoiceCard" class="col-md-11">
-@Html.HiddenFor(m => m.Id)
+        @Html.HiddenFor(m => m.Id)
         <div class="card">
             <div class="card-body show row" id="general">
                 <div class="col-sm-10">
@@ -56,7 +56,6 @@
             @* Table *@
             <table class="table">
                 <thead>
-                    <th>ID</th>
                     <th>Item</th>
                     <th>Quantity</th>
                     <th>Amount</th>
@@ -67,10 +66,6 @@
                     @for (int i = 0; i < Model.SalesInvoiceLines.Count; i++)
                     {
                         <tr>
-                            <td>
-                                @Model.SalesInvoiceLines[i].Id
-                                @Html.HiddenFor(m => m.SalesInvoiceLines[i].Id)
-                            </td>
                             <td>
                                 <select class="form-control" asp-for="@Model.SalesInvoiceLines[i].ItemId" asp-items="@ViewBag.Items"
                                     id="optCustomer" required></select>
@@ -108,7 +103,6 @@
 @section scripts{
     <script src="~/js/custom.js" type="text/javascript"></script>
     <script>
- 
 
         if (@Model.Id > 0) {
             setFormDisabled("divSalesInvoiceCard");

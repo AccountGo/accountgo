@@ -97,6 +97,7 @@ namespace AccountGoWeb.Controllers
             } else {
                 salesOrderModel = GetAsync<SalesOrder>("Sales/SalesOrder?id=" + id).Result;
                 ViewBag.CustomerName = salesOrderModel.CustomerName;
+                _logger.LogInformation("SalesOrder: " + salesOrderModel.CustomerName);
                 ViewBag.OrderDate = salesOrderModel.OrderDate;
                 ViewBag.SalesOrderLines = salesOrderModel.SalesOrderLines;
                 ViewBag.TotalAmount = salesOrderModel.Amount;

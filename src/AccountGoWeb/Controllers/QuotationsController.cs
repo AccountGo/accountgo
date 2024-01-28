@@ -73,7 +73,7 @@ namespace AccountGoWeb.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> AddSalesQuotation(SalesQuotation model)
+        public async Task<IActionResult> AddSalesQuotation(Dto.Sales.SalesQuotation model)
         {
             _logger.LogInformation("Saving sales quotation");
             if (ModelState.IsValid)
@@ -81,12 +81,13 @@ namespace AccountGoWeb.Controllers
                 var serialize = Newtonsoft.Json.JsonConvert.SerializeObject(model);
                 var content = new StringContent(serialize);
                 content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
-                _logger.LogInformation("Sending request to API");
+                _logger.LogInformation("Quotation ID is is : " + model.Id);
                 using (var client = new HttpClient())
                 {
                     var baseUri = _configuration["ApiUrl"];
                     client.BaseAddress = new Uri(baseUri);
                     var response = await client.PostAsync("sales/savequotation", content);
+
                     if (response.IsSuccessStatusCode)
                         return RedirectToAction("quotations");
                 }
@@ -107,8 +108,9 @@ namespace AccountGoWeb.Controllers
                 return View("AddSalesQuotation");
             } else {
                 model = GetAsync<SalesQuotation>("Sales/Quotation?id=" + id).Result;
-                _logger.LogInformation("Quotation retrieved from API" + model.Id);
+                @ViewBag.Id = model.Id;
                 @ViewBag.QuotationDate = model.QuotationDate;
+                @ViewBag.CustomerName = model.CustomerName;
                 @ViewBag.PaymentTermId = model.PaymentTermId;
                 @ViewBag.SalesQuotationLines = model.SalesQuotationLines;
                 @ViewBag.TotalAmount = model.Amount;
