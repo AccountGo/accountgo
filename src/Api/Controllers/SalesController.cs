@@ -235,10 +235,17 @@ namespace Api.Controllers
             try
             {
                 var salesOrder = _salesService.GetSalesOrderById(id);
+                
+                _logger.LogInformation("SalesOrder API " + salesOrder.Customer.No);
+                _logger.LogInformation("SalesOrder API " + _salesService.GetCustomerById(salesOrder.CustomerId.Value).Party.Name);
+                _logger.LogInformation("SalesOrder API " + salesOrder.SalesOrderLines.Count());
+                _logger.LogInformation("SalesOrder API " + salesOrder.PaymentTermId);
+                _logger.LogInformation("SalesOrder API " + salesOrder.ReferenceNo);
 
-                var salesOrderDto = new Dto.Sales.SalesOrder()
+                _logger.LogInformation("SalesOrder API Hello");
+
+                Dto.Sales.SalesOrder salesOrderDto = new Dto.Sales.SalesOrder()
                 {
-                    Id = salesOrder.Id,
                     CustomerId = salesOrder.CustomerId.Value,
                     CustomerNo = salesOrder.Customer.No,
                     CustomerName = _salesService.GetCustomerById(salesOrder.CustomerId.Value).Party.Name,
@@ -270,6 +277,7 @@ namespace Api.Controllers
             }
             catch (Exception ex)
             {
+                _logger.LogInformation(ex.ToString());
                 return new ObjectResult(ex);
             }
         }

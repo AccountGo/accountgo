@@ -10,6 +10,12 @@
     }
 </style>
 
+<div>
+    <a href="#" id="linkEdit" class="btn" onclick="onClickEditButton();">
+        <i class="fa fa-edit"></i>
+        Edit
+    </a>
+</div>
 <form action="#" method="post">
     <div id="divSlaesOrderCard" class="col-md-9">
         <div class="card">
@@ -18,7 +24,6 @@
                     <div class="row">
                         <div class="col-sm-5">Customer Name</div>
                         <div class="col-sm-7">@ViewBag.CustomerName</div>
-                        @Html.HiddenFor(m => m.CustomerId)
                     </div>
                     @* Order Date *@
                     <div class="row">
@@ -39,7 +44,8 @@
                             <th>Measurement</th>
                         </thead>
                         <tbody>
-                            @for (int i = 0; i < Model.SalesOrderLines.Count; i++) {
+                            @for (int i = 0; i < Model.SalesOrderLines.Count; i++)
+                            {
                                 <tr>
                                     <td>@Model.SalesOrderLines[i].ItemDescription</td>
                                     <td>@Model.SalesOrderLines[i].Quantity</td>
