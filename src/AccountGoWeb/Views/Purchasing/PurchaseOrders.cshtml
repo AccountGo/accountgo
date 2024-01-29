@@ -42,7 +42,7 @@
 
         //document.getElementById('linkNewReceipt').setAttribute('href', 'addreceipt?purchId=' + selectedRow.id);
         document.getElementById('linkCreateInvoice').setAttribute('href', 'addpurchaseinvoice?purchId=' + selectedRow.id);
-        document.getElementById('linkViewOrder').setAttribute('href', 'purchaseorder?purchId=' + selectedRow.id);
+        document.getElementById('linkViewOrder').setAttribute('href', 'purchaseorder?id=' + selectedRow.id);
 
         if(selectedRow.purchaseInvoiceHeaderId === undefined){
             document.getElementById('linkCreateInvoice').setAttribute('class', 'btn');
@@ -60,16 +60,16 @@
 
         }
 
-        //if(selectedRow.completed)
-        //{
-        //    document.getElementById('linkCreateInvoice').setAttribute('class', '');
-        //    document.getElementById('linkNewReceipt').setAttribute('class', 'inactiveLink');
-        //}
-        //else
-        //{
-        //    document.getElementById('linkCreateInvoice').setAttribute('class', 'inactiveLink');
-        //    document.getElementById('linkNewReceipt').setAttribute('class', '');
-        //}
+        if(selectedRow.completed)
+        {
+            document.getElementById('linkCreateInvoice').setAttribute('class', '');
+            document.getElementById('linkNewReceipt').setAttribute('class', 'inactiveLink');
+        }
+        else
+        {
+            document.getElementById('linkCreateInvoice').setAttribute('class', 'inactiveLink');
+            document.getElementById('linkNewReceipt').setAttribute('class', '');
+        }
     }
 
     // wait for the document to be loaded, otherwise
