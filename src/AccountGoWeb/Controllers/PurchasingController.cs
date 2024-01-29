@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using System.Net.Http;
+using Microsoft.Extensions.Logging;
 using Dto.Purchasing;
 using System.Collections.Generic;
 
@@ -67,18 +68,31 @@ namespace AccountGoWeb.Controllers
                 return RedirectToAction("PurchaseOrders");
             }
 
-            return RedirectToAction("PurchaseOrders");
+            return View("PurchaseOrders");
         }
 
-        public IActionResult PurchaseOrder(int purchId = 0)
+        public IActionResult PurchaseOrder(int id)
         {
             ViewBag.PageContentHeader = "Purchase Order";
 
-            var purchOrderDto = GetAsync<Dto.Purchasing.PurchaseOrder>("purchasing/purchaseorder?id=" + purchId).Result;
+            PurchaseOrder purchaseOrderModel = null;
+
+            if (id == 0)
+            {
+                ViewBag.PageContentHeader = "New Purchase Order";
+                return View();
+            }
+            else
+            {
+                purchaseOrderModel = GetAsync<PurchaseOrder>("Purchasing/PurchaseOrder?id=" + id).Result;
+            }
 
             ViewBag.Vendors = Models.SelectListItemHelper.Vendors();
+            ViewBag.PaymentTerms = Models.SelectListItemHelper.PaymentTerms();
+            ViewBag.Items = Models.SelectListItemHelper.Items();
+            ViewBag.Measurements = Models.SelectListItemHelper.Measurements();
 
-            return View();
+            return View(purchaseOrderModel);
         }
 
         public async System.Threading.Tasks.Task<IActionResult> PurchaseInvoices()
