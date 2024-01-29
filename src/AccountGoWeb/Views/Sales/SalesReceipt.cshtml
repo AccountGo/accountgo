@@ -1,0 +1,27 @@
+@model Dto.Sales.SalesReceipt
+
+<style>
+    tr th {
+        color: #fff;
+    }
+
+    tr td {
+        color: #fff;
+    }
+</style>
+
+<form>
+    <div id="divSalesReceiptCard" class="col-md-11">
+        @Html.HiddenFor(m => m.Id)
+        <div class="card">
+            <div class="card-body show row" id="general">
+                <div class="col-sm-10">
+                    <div class="row">
+                        <div class="col-sm-5">ID</div>
+                        <div class="col-sm-7">@Model.Id</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>

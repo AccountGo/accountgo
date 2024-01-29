@@ -1,6 +1,8 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using System.Net.Http;
+using Dto.Purchasing;
+using System.Collections.Generic;
 
 namespace AccountGoWeb.Controllers
 {
@@ -32,10 +34,40 @@ namespace AccountGoWeb.Controllers
         public IActionResult AddPurchaseOrder()
         {
             ViewBag.PageContentHeader = "Add Purchase Order";
+            PurchaseOrder purchaseOrderModel = new PurchaseOrder();
+            purchaseOrderModel.PurchaseOrderLines = new List<PurchaseOrderLine> { new PurchaseOrderLine {
+                Amount = 0,
+                Discount = 0,
+                ItemId = 1,
+                Quantity = 1,
+            } };
+            purchaseOrderModel.No = new System.Random().Next(1, 99999).ToString();
 
             ViewBag.Vendors = Models.SelectListItemHelper.Vendors();
+            ViewBag.PaymentTerms = Models.SelectListItemHelper.PaymentTerms();
+            ViewBag.Items = Models.SelectListItemHelper.Items();
+            ViewBag.Measurements = Models.SelectListItemHelper.Measurements();
 
-            return View();
+            return View(purchaseOrderModel);
+        }
+
+        [HttpPost]
+        public IActionResult AddPurchaseOrder(PurchaseOrder purchaseOrder)
+        {
+            ViewBag.PageContentHeader = "Add Purchase Order";
+
+            if (ModelState.IsValid)
+            {
+                var serialize = Newtonsoft.Json.JsonConvert.SerializeObject(purchaseOrder);
+                var content = new StringContent(serialize);
+                content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+
+                var response = PostAsync("purchasing/savepurchaseorder", content);
+
+                return RedirectToAction("PurchaseOrders");
+            }
+
+            return RedirectToAction("PurchaseOrders");
         }
 
         public IActionResult PurchaseOrder(int purchId = 0)
@@ -169,7 +201,7 @@ namespace AccountGoWeb.Controllers
                 VendorId = invoice.VendorId,
                 VendorName = invoice.VendorName,
                 InvoiceAmount = invoice.Amount,
-                AmountPaid = invoice.AmountPaid,                
+                AmountPaid = invoice.AmountPaid,
                 Date = invoice.InvoiceDate
             };
 
@@ -177,7 +209,7 @@ namespace AccountGoWeb.Controllers
 
             return View(model);
         }
-        
+
         [HttpPost]
         public IActionResult Payment(Models.Purchasing.Payment model)
         {
