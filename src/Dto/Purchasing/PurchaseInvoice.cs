@@ -12,7 +12,7 @@ namespace Dto.Purchasing
         public DateTime InvoiceDate { get; set; }
         public decimal Amount { get { return GetTotalAmount(); } }
         public decimal AmountPaid { get; set; }
-        public bool IsPaid { get; set; }
+        public bool IsPaid { get; set; } = false;
         public bool Posted { get; set; }
         public int? FromPurchaseOrderId { get; set; }
         public int? PaymentTermId { get; set; }

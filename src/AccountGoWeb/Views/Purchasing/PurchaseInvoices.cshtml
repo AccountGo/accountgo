@@ -45,7 +45,7 @@
         selectedRow = selectedRows[0];
 
         document.getElementById('linkMakePayment').setAttribute('href', 'payment/' + selectedRow.id);
-        document.getElementById('linkViewInvoice').setAttribute('href', 'purchaseinvoice?invoiceId=' + selectedRow.id);
+        document.getElementById('linkViewInvoice').setAttribute('href', 'purchaseinvoice?id=' + selectedRow.id);
 
         if(!selectedRow.isPaid && selectedRow.posted)
             document.getElementById('linkMakePayment').setAttribute('class', 'btn');
