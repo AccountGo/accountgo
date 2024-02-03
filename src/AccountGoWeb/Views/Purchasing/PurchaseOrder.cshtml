@@ -32,6 +32,13 @@
                         @Html.HiddenFor(m => m.VendorId)
                     </div>
                 </div>
+                @* Amount *@
+                <div class="row">
+                    <div class="col-sm-3" id="amount">Amount</div>
+                    <div class="col-sm-7">
+                        @Model.Amount
+                    </div>
+                </div>
                 @* Order Date *@
                 <div class="row">
                     <div class="col-sm-3" id="date">Order Date</div>

@@ -19,7 +19,8 @@ namespace AccountGoWeb.Controllers
     {
         private readonly IConfiguration _configuration;
         private readonly ILogger<QuotationsController> _logger;
-        public QuotationsController(IConfiguration config, ILogger<QuotationsController> logger) {
+        public QuotationsController(IConfiguration config, ILogger<QuotationsController> logger)
+        {
             _configuration = config;
             _logger = logger;
         }
@@ -73,10 +74,28 @@ namespace AccountGoWeb.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> AddSalesQuotation(Dto.Sales.SalesQuotation model)
+        public async Task<IActionResult> AddSalesQuotation(Dto.Sales.SalesQuotation model, string addRowBtn)
         {
-            _logger.LogInformation("Saving sales quotation");
-            if (ModelState.IsValid)
+            if (!string.IsNullOrEmpty(addRowBtn))
+            {
+                _logger.LogInformation("Add Row Button Clicked");
+                model.SalesQuotationLines.Add(new SalesQuotationLine
+                {
+                    Amount = 0,
+                    Quantity = 1,
+                    Discount = 0,
+                    ItemId = 1,
+                    MeasurementId = 1,
+                });
+
+                ViewBag.Customers = Models.SelectListItemHelper.Customers();
+                ViewBag.Items = Models.SelectListItemHelper.Items();
+                ViewBag.PaymentTerms = Models.SelectListItemHelper.PaymentTerms();
+                ViewBag.Measurements = Models.SelectListItemHelper.Measurements();
+
+                return View(model);
+            }
+            else if (ModelState.IsValid)
             {
                 var serialize = Newtonsoft.Json.JsonConvert.SerializeObject(model);
                 var content = new StringContent(serialize);
@@ -103,10 +122,13 @@ namespace AccountGoWeb.Controllers
 
             SalesQuotation model = null;
 
-            if (id == 0) {
+            if (id == 0)
+            {
                 ViewBag.PageContentHeader = "Add Sales Quotation";
                 return View("AddSalesQuotation");
-            } else {
+            }
+            else
+            {
                 model = GetAsync<SalesQuotation>("Sales/Quotation?id=" + id).Result;
                 @ViewBag.Id = model.Id;
                 @ViewBag.QuotationDate = model.QuotationDate;
@@ -117,7 +139,7 @@ namespace AccountGoWeb.Controllers
             }
 
             @ViewBag.Customers = Models.SelectListItemHelper.Customers();
-            @ViewBag.Items = Models.SelectListItemHelper.Items();
+            ViewBag.Items = Models.SelectListItemHelper.Items();
             @ViewBag.PaymentTerms = Models.SelectListItemHelper.PaymentTerms();
             @ViewBag.Measurements = Models.SelectListItemHelper.Measurements();
 

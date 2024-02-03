@@ -55,7 +55,7 @@ namespace AccountGoWeb.Controllers
                 ItemId = 1,
                 Quantity = 1,
             } };
-            salesOrderModel.No = new System.Random().Next(1, 99999).ToString(); 
+            salesOrderModel.No = new System.Random().Next(1, 99999).ToString();
 
             @ViewBag.Customers = Models.SelectListItemHelper.Customers();
             @ViewBag.PaymentTerms = Models.SelectListItemHelper.PaymentTerms();
@@ -68,13 +68,13 @@ namespace AccountGoWeb.Controllers
         [HttpPost]
         public async System.Threading.Tasks.Task<IActionResult> AddSalesOrder(SalesOrder Dto)
         {
-            
+
             if (ModelState.IsValid)
             {
                 var serialize = Newtonsoft.Json.JsonConvert.SerializeObject(Dto);
                 var content = new StringContent(serialize);
                 content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
-                
+
                 var response = Post("Sales/addsalesorder", content);
                 if (response.IsSuccessStatusCode)
                     return RedirectToAction("salesorders");
@@ -90,11 +90,14 @@ namespace AccountGoWeb.Controllers
         {
             ViewBag.PageContentHeader = "Sales Order";
             SalesOrder salesOrderModel = null;
-            if (id == -1) {
+            if (id == -1)
+            {
                 ViewBag.PageContentHeader = "Add Sales Order";
                 return View("AddSalesOrder");
-                
-            } else {
+
+            }
+            else
+            {
                 salesOrderModel = GetAsync<SalesOrder>("Sales/SalesOrder?id=" + id).Result;
                 ViewBag.CustomerName = salesOrderModel.CustomerName;
                 ViewBag.OrderDate = salesOrderModel.OrderDate;
@@ -115,10 +118,13 @@ namespace AccountGoWeb.Controllers
             ViewBag.PageContentHeader = "Sales Invoice";
             SalesInvoice salesInvoiceModel = null;
 
-            if (id == 0) {
+            if (id == 0)
+            {
                 ViewBag.PageContentHeader = "Add Sales Invoice";
                 return View("AddSalesInvoice");
-            } else {
+            }
+            else
+            {
                 salesInvoiceModel = GetAsync<SalesInvoice>("Sales/SalesInvoice?id=" + id).Result;
                 ViewBag.Id = salesInvoiceModel.Id;
                 ViewBag.CustomerName = salesInvoiceModel.CustomerName;
@@ -151,9 +157,9 @@ namespace AccountGoWeb.Controllers
                 }
 
                 @ViewBag.Customers = Models.SelectListItemHelper.Customers();
-            @ViewBag.PaymentTerms = Models.SelectListItemHelper.PaymentTerms();
-            @ViewBag.Items = Models.SelectListItemHelper.Items();
-            @ViewBag.Measurements = Models.SelectListItemHelper.Measurements();
+                @ViewBag.PaymentTerms = Models.SelectListItemHelper.PaymentTerms();
+                @ViewBag.Items = Models.SelectListItemHelper.Items();
+                @ViewBag.Measurements = Models.SelectListItemHelper.Measurements();
             }
             return View();
         }
@@ -181,9 +187,27 @@ namespace AccountGoWeb.Controllers
         }
 
         [HttpPost]
-        public async System.Threading.Tasks.Task<IActionResult> AddSalesInvoice(SalesInvoice Dto)
+        public async System.Threading.Tasks.Task<IActionResult> AddSalesInvoice(SalesInvoice Dto, string addRowBtn)
         {
-            if (ModelState.IsValid)
+            if (!string.IsNullOrEmpty(addRowBtn))
+            {
+                Dto.SalesInvoiceLines.Add(new SalesInvoiceLine
+                {
+                    Amount = 0,
+                    Quantity = 1,
+                    Discount = 0,
+                    ItemId = 1,
+                    MeasurementId = 1,
+                });
+
+                ViewBag.Customers = Models.SelectListItemHelper.Customers();
+                ViewBag.Items = Models.SelectListItemHelper.Items();
+                ViewBag.PaymentTerms = Models.SelectListItemHelper.PaymentTerms();
+                ViewBag.Measurements = Models.SelectListItemHelper.Measurements();
+
+                return View(Dto);
+            }
+            else if (ModelState.IsValid)
             {
                 var serialize = Newtonsoft.Json.JsonConvert.SerializeObject(Dto);
                 var content = new StringContent(serialize);
@@ -318,10 +342,10 @@ namespace AccountGoWeb.Controllers
                 _logger.LogInformation("SaveSalesInvoice: " + ReadAsStringAsync);
                 var response = Post("Sales/SaveSalesInvoice", content);
             }
-                ViewBag.Customers = SelectListItemHelper.Customers();
-                ViewBag.PaymentTerms = SelectListItemHelper.PaymentTerms();
-                ViewBag.Items = SelectListItemHelper.Items();
-                ViewBag.Measurements = SelectListItemHelper.Measurements();
+            ViewBag.Customers = SelectListItemHelper.Customers();
+            ViewBag.PaymentTerms = SelectListItemHelper.PaymentTerms();
+            ViewBag.Items = SelectListItemHelper.Items();
+            ViewBag.Measurements = SelectListItemHelper.Measurements();
 
             return View("SalesInvoice", salesInvoiceModel);
         }

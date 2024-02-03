@@ -406,6 +406,7 @@ namespace Api.Controllers
                     purchaseInvoice.VendorInvoiceNo = purchaseInvoice.VendorId.GetValueOrDefault().ToString(); // TO BE REPLACE BY INVOICE NO FROM VENDOR
                     purchaseInvoice.ReferenceNo = purchaseInvoiceDto.ReferenceNo;
                     purchaseInvoice.PaymentTermId = purchaseInvoiceDto.PaymentTermId;
+                    purchaseInvoice.VendorId = purchaseInvoiceDto.VendorId;
 
                     foreach (var line in purchaseInvoiceDto.PurchaseInvoiceLines)
                     {

@@ -1,5 +1,6 @@
 ﻿@model Dto.Sales.SalesQuotation
 
+
 <style>
     tr th {
         color: #fff;
@@ -34,7 +35,7 @@
                     </div>
                 </div>
             </div>
-            <table class="table">
+            <table class="table" id="table">
                 <thead>
                     <th>Item</th>
                     <th>Quantity</th>
@@ -84,8 +85,14 @@
                                          new { @class = "form-control", id = $"optMeasurement_{i}" })
                                 <span asp-validation-for="SalesQuotationLines[i].MeasurementId" class="danger"></span>
                             </td>
+
                         </tr>
                     }
+                    <tr>
+                        <td>
+                            <button type="submit" name="addRowBtn" value="true" class="btn btn-primary">Add Row</button>
+                        </td>
+                    </tr>
                 </tbody>
             </table>
         </div>
@@ -97,7 +104,7 @@
 </form>
 
 @section scripts {
-    <script>
+    <script type="text/javascript">
         var customers = @Html.Raw(ViewBag.CustomersDetail);
 
         function customerOnChange() {
