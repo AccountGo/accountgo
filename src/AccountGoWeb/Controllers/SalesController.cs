@@ -66,10 +66,27 @@ namespace AccountGoWeb.Controllers
         }
 
         [HttpPost]
-        public async System.Threading.Tasks.Task<IActionResult> AddSalesOrder(SalesOrder Dto)
+        public async System.Threading.Tasks.Task<IActionResult> AddSalesOrder(SalesOrder Dto, string addRowBtn)
         {
+            if (!string.IsNullOrEmpty(addRowBtn))
+            {
+                Dto.SalesOrderLines.Add(new SalesOrderLine
+                {
+                    Amount = 0,
+                    Quantity = 1,
+                    Discount = 0,
+                    ItemId = 1,
+                    MeasurementId = 1,
+                });
 
-            if (ModelState.IsValid)
+                ViewBag.Customers = Models.SelectListItemHelper.Customers();
+                ViewBag.Items = Models.SelectListItemHelper.Items();
+                ViewBag.PaymentTerms = Models.SelectListItemHelper.PaymentTerms();
+                ViewBag.Measurements = Models.SelectListItemHelper.Measurements();
+
+                return View(Dto);
+            }
+            else if (ModelState.IsValid)
             {
                 var serialize = Newtonsoft.Json.JsonConvert.SerializeObject(Dto);
                 var content = new StringContent(serialize);
