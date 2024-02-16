@@ -1,0 +1,204 @@
+﻿@page "/"
+@attribute [Authorize]
+
+@using System.Globalization
+
+<div class="container-fluid content-padding">
+    <div class="row">
+        <div class="col-xl-12 col-lg-12 col-12 col-sm-12">
+            <RadzenCard class="w-100">
+                <RadzenCheckBox @bind-Value="@showDataLabels" Name="dataLabels"></RadzenCheckBox>
+                <RadzenLabel Text="Show Data Labels" Component="dataLabels" Style="margin-left: 8px; vertical-align: middle;" />
+                <h4 class="mt-3">Sales (2023 vs 2022)</h4>
+                <RadzenChart >
+                    <RadzenColumnSeries Data="@revenue2020" CategoryProperty="Month" Title="2023" LineType="LineType.Dashed" ValueProperty="Revenue">
+                        <RadzenSeriesDataLabels Visible="@showDataLabels" />
+                    </RadzenColumnSeries>
+                    <RadzenColumnSeries Data="@revenue2019"CategoryProperty="Month" Title="2022" ValueProperty="Revenue">
+                        <RadzenSeriesDataLabels Visible="@showDataLabels" />
+                    </RadzenColumnSeries>
+                    <RadzenColumnOptions Radius="5" />
+                    <RadzenValueAxis Formatter="@FormatNumber">
+                        <RadzenGridLines Visible="true" />
+                        <RadzenAxisTitle Text="Revenue in PHP" />
+                    </RadzenValueAxis>
+                </RadzenChart>
+            </RadzenCard>
+           
+        </div>
+    </div>
+</div>
+
+@code {
+    bool showDataLabels = false;
+
+    class DataItem
+    {
+        public string Month { get; set; }
+        public double Revenue { get; set; }
+    }
+
+    string FormatAsPHP(object value)
+    {
+        return ((double)value).ToString("C0", CultureInfo.CreateSpecificCulture("en-PH"));
+    }
+    string FormatNumber(object value)
+    {
+        double n = (double)value;
+        if (n < 1000)
+            return n.ToString();
+
+        if (n < 10000)
+            return String.Format("{0:#,.##}K", n - 5);
+
+        if (n < 100000)
+            return String.Format("{0:#,.#}K", n - 50);
+
+        if (n < 1000000)
+            return String.Format("{0:#,.}K", n - 500);
+
+        if (n < 10000000)
+            return String.Format("{0:#,,.##}M", n - 5000);
+
+        if (n < 100000000)
+            return String.Format("{0:#,,.#}M", n - 50000);
+
+        if (n < 1000000000)
+            return String.Format("{0:#,,.}M", n - 500000);
+
+        return String.Format("{0:#,,,.##}B", n - 5000000);
+    }
+
+    List<SeriesColorRange> fillRange = new List<SeriesColorRange>()
+    {
+        new SeriesColorRange() {Min = 0, Max = 275000, Color = "red"},
+        new SeriesColorRange() {Min = 275000, Max = 324000, Color = "orange"},
+        new SeriesColorRange() {Min = 324000, Max = 10000000, Color = "#06cd06"},
+    };
+
+    DataItem[] revenue2019 = new DataItem[] {
+        new DataItem
+        {
+            Month = "January",
+            Revenue = 234000
+        },
+        new DataItem
+        {
+            Month = "February",
+            Revenue = 284000
+        },
+        new DataItem
+        {
+            Month = "March",
+            Revenue = 274000
+        },
+        new DataItem
+        {
+            Month = "April",
+            Revenue = 294000
+        },
+        new DataItem
+        {
+            Month = "May",
+            Revenue = 294000
+        },
+        new DataItem
+        {
+            Month = "June",
+            Revenue = 294000
+        },
+        new DataItem
+        {
+            Month = "July",
+            Revenue = 234000
+        },
+        new DataItem
+        {
+            Month = "August",
+            Revenue = 284000
+        },
+        new DataItem
+        {
+            Month = "September",
+            Revenue = 274000
+        },
+        new DataItem
+        {
+            Month = "October",
+            Revenue = 294000
+        },
+        new DataItem
+        {
+            Month = "November",
+            Revenue = 160000
+        },
+        new DataItem
+        {
+            Month = "December",
+            Revenue = 200000
+        },
+    };
+
+    DataItem[] revenue2020 = new DataItem[] {
+        new DataItem
+        {
+            Month = "January",
+            Revenue = 254000
+        },
+        new DataItem
+        {
+            Month = "February",
+            Revenue = 324000
+        },
+        new DataItem
+        {
+            Month = "March",
+            Revenue = 354000
+        },
+        new DataItem
+        {
+            Month = "April",
+            Revenue = 394000
+        },
+                new DataItem
+        {
+            Month = "May",
+            Revenue = 234000
+        },
+        new DataItem
+        {
+            Month = "June",
+            Revenue = 284000
+        },
+        new DataItem
+        {
+            Month = "July",
+            Revenue = 274000
+        },
+        new DataItem
+        {
+            Month = "August",
+            Revenue = 294000
+        },
+        new DataItem
+        {
+            Month = "September",
+            Revenue = 294000
+        },
+        new DataItem
+        {
+            Month = "October",
+            Revenue = 284000
+        },
+        new DataItem
+        {
+            Month = "November",
+            Revenue = 274000
+        },
+        new DataItem
+        {
+            Month = "December",
+            Revenue = 100000
+        },
+    };
+}

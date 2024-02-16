@@ -21,6 +21,7 @@ namespace Services.Financial
         GeneralLedgerLine CreateGeneralLedgerLine(DrOrCrSide DrCr, int accountId, decimal amount);
         GeneralLedgerHeader CreateGeneralLedgerHeader(DocumentTypes documentType, DateTime Date, string description);
         IEnumerable<Account> GetAccounts();
+        IEnumerable<Account> GetAccountsLookup();
         IEnumerable<JournalEntryHeader> GetJournalEntries();
         IEnumerable<JournalEntryLine> GetJournalEntryLines();
         void AddJournalEntry(JournalEntryHeader journalEntry);

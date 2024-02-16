@@ -33,7 +33,7 @@ namespace Services
             _bankRepo = bankRepo;
         }
 
-        protected int GetNextNumber(SequenceNumberTypes type)
+        protected string GetNextNumber(SequenceNumberTypes type)
         {
             int nextNumber = 1;
             var sequence = (from n in _sequenceNumberRepo.Table
@@ -54,7 +54,13 @@ namespace Services
                 sequence.NextNumber += 1;
                 _sequenceNumberRepo.Update(sequence);
             }
-            return nextNumber;
+
+            if (sequence.UsePrefix)
+            {
+                return $"{sequence.Prefix}{sequence.NextNumber}";
+            }
+
+            return nextNumber.ToString();
         }
 
         protected GeneralLedgerSetting GetGeneralLedgerSetting()

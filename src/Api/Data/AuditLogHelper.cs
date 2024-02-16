@@ -154,11 +154,14 @@ namespace Api.Data
 
         private static bool IsAttributeAuditable(string tablename, string columnname)
         {
-            bool auditable = true;
+            bool auditable = false;
 
-            if (null == _auditableEntity.AuditableAttributes
-                .FirstOrDefault(attr => attr.AttributeName == columnname && attr.AuditableEntity.EntityName == tablename))
-                auditable = false;
+            if(_auditableEntity != null)
+            {
+                if (_auditableEntity.AuditableAttributes
+                .FirstOrDefault(attr => attr.AttributeName == columnname && attr.AuditableEntity.EntityName == tablename) != null)
+                                auditable = true;
+            }
 
             return auditable;
         }

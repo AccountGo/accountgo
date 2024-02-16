@@ -121,6 +121,16 @@ namespace Services.Financial
             return line;
         }
 
+        public IEnumerable<Account> GetAccountsLookup()
+        {
+            var accounts = _accountRepo.GetAllIncluding(c => c.Company, 
+                a => a.AccountClass,
+                c => c.ChildAccounts,
+                p => p.ParentAccount)
+                .AsEnumerable();
+
+            return accounts;
+        }
         public IEnumerable<Account> GetAccounts()
         {
             var accounts = _accountRepo.GetAllIncluding(c => c.Company, 
@@ -576,6 +586,8 @@ namespace Services.Financial
 
         public void SaveGeneralLedgerSetting(GeneralLedgerSetting setting)
         {
+            if (setting == null)
+                throw new ArgumentNullException(nameof(GeneralLedgerSetting));
             if (setting.Id == 0)
                 _glSettingRepo.Insert(setting);
             else

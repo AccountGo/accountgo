@@ -1,0 +1,205 @@
+﻿@attribute [Route(PageRoutes.Inventory.CreateItem)]
+@inherits CreateItemBase
+@attribute [Authorize(Roles = "Admin")]
+@using Dto.Financial
+@using Dto.Inventory
+@using Dto.TaxSystem
+@using Dto.Purchasing.Response
+<div class="container-fluid content-padding">
+
+    <EditForm Model="formModel" OnValidSubmit="Submit">
+        <DataAnnotationsValidator />
+        
+        <div class="row">
+            <RadzenText class="m-0 mb-1 text-success" TextAlign="TextAlign.Start" TextStyle="TextStyle.H5" TagName="TagName.H5" Text="Create Item Form" />
+            <div class="col-xl-8 col-lg-12 col-md-12 col-sm-12 col-12">
+                <RadzenCard class="p-4" Variant="Variant.Filled">
+                    <div class="row gy-3">
+                        <div class="col-xl-4">
+                            @*  item name *@
+                            <RadzenStack Gap="1px">
+                                <RadzenStack Gap="1px" Orientation="Orientation.Horizontal">
+                                    <RadzenText TextStyle="TextStyle.Subtitle1" TagName="TagName.P" Text="Name" />
+                                    <RadzenText class="text-danger" TextStyle="TextStyle.Subtitle1" TagName="TagName.P" Text="*" />
+                                </RadzenStack>
+                                <RadzenTextBox @bind-Value=formModel.Name />
+                                <ValidationMessage For="@(()=> formModel.Name)" />
+                            </RadzenStack>
+                        </div>
+                        <div class="col-xl-3">
+                            @*  sku *@
+                            <RadzenStack Gap="1px">
+                                <RadzenText TextStyle="TextStyle.Subtitle1" TagName="TagName.P" Text="SKU" />
+                                <RadzenTextBox class="w-75" @bind-Value=formModel.SKU />
+                                <ValidationMessage For="@(()=> formModel.SKU)" />
+                            </RadzenStack>
+                        </div>
+                        <div class="col-xl-5"></div>
+
+                        <div class="col-xl-4">
+                            @*  category *@
+                            <RadzenStack Gap="1px">
+                                <RadzenStack Gap="1px" Orientation="Orientation.Horizontal">
+                                    <RadzenText TextStyle="TextStyle.Subtitle1" TagName="TagName.P" Text="Category" />
+                                    <RadzenText class="text-danger" TextStyle="TextStyle.Subtitle1" TagName="TagName.P" Text="*" />
+                                </RadzenStack>
+                               
+                                <RadzenDropDown LoadData=@ItemCategoryDropdownLoadData AllowFiltering="true" FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive"
+                                                Data=@itemCategoriesDropdown TextProperty="@nameof(ItemCategory.Name)" ValueProperty="@nameof(ItemCategory.Id)" AllowClear="false"
+                                                @bind-Value=formModel.ItemCategoryId />
+                                <ValidationMessage For="@(()=> formModel.ItemCategoryId)" />
+                            </RadzenStack>
+                        </div>
+                        <div class="col-xl-4">
+                            @*  MeasureMent *@
+                            <RadzenStack Gap="1px">
+                                <RadzenStack Gap="1px" Orientation="Orientation.Horizontal">
+                                    <RadzenText TextStyle="TextStyle.Subtitle1" TagName="TagName.P" Text="Unit of measurement" />
+                                    <RadzenText class="text-danger" TextStyle="TextStyle.Subtitle1" TagName="TagName.P" Text="*" />
+                                </RadzenStack>
+                                
+                                <RadzenDropDown LoadData=@MeasurementsDropdownLoadData AllowFiltering="true" FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive"
+                                                Data=@measurementDropdown TextProperty="@nameof(Measurement.Description)" ValueProperty="@nameof(Measurement.Id)" AllowClear="false"
+                                                @bind-Value="formModel.SmallestMeasurementId" />
+                                <ValidationMessage For="@(()=> formModel.SmallestMeasurementId)" />
+                            </RadzenStack>
+                        </div>
+                        <div class="col-xl-4"></div>
+
+                        <div class="col-xl-4">
+                            @*  Intial quantity on hand *@
+                            <RadzenStack Gap="1px">
+                                <RadzenText TextStyle="TextStyle.Subtitle1" TagName="TagName.P" Text="Initial quantity on hand" />
+                                <RadzenNumeric @bind-Value="formModel.InitialQtyOnHand" />
+                                <ValidationMessage For="@(()=> formModel.InitialQtyOnHand)" />
+                            </RadzenStack>
+                        </div>
+
+                        <div class="col-xl-4">
+                            @*  Reorder point *@
+                            <RadzenStack Gap="1px">
+                                <RadzenText TextStyle="TextStyle.Subtitle1" TagName="TagName.P" Text="Reorder point" />
+                                <RadzenNumeric @bind-Value="formModel.ReorderPoint" />
+                                <ValidationMessage For="@(()=> formModel.ReorderPoint)" />
+                            </RadzenStack>
+                        </div>
+
+                        <div class="col-xl-4">
+
+                            @*  Preffered Vendor *@
+                            <RadzenStack Gap="1px">
+                                <RadzenText TextStyle="TextStyle.Subtitle1" TagName="TagName.P" Text="Preffered Vendor" />
+                                <RadzenDropDown LoadData=@VendorsDropdownLoadData AllowFiltering="true" FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive"
+                                                Data=@vendorsDropdown TextProperty="@nameof(GetVendorResponse.Name)" ValueProperty="@nameof(GetVendorResponse.Id)" AllowClear="false"
+                                                @bind-Value=formModel.PreferredVendorId />
+                                <ValidationMessage For="@(()=> formModel.PreferredVendorId)" />
+                            </RadzenStack>
+                        </div>
+
+                        <div class="col-xl-12 ">
+                            <RadzenStack>
+                                <div class="divider"></div>
+                            </RadzenStack>
+                        </div>
+
+                        <div class="col-xl-4">
+                            @*  Cost *@
+                            <RadzenStack Gap="1px">
+                                <RadzenStack Gap="1px" Orientation="Orientation.Horizontal">
+                                    <RadzenText TextStyle="TextStyle.Subtitle1" TagName="TagName.P" Text="Cost" />
+                                    <RadzenText class="text-danger" TextStyle="TextStyle.Subtitle1" TagName="TagName.P" Text="*" />
+                                </RadzenStack>
+                                <RadzenNumeric @bind-Value="formModel.Cost" />
+                                <ValidationMessage For="@(()=> formModel.Cost)" />
+                            </RadzenStack>
+                        </div>
+                        <div class="col-xl-4">
+                            @*  Price *@
+                            <RadzenStack Gap="1px">
+                                <RadzenStack Gap="1px" Orientation="Orientation.Horizontal">
+                                    <RadzenText TextStyle="TextStyle.Subtitle1" TagName="TagName.P" Text="Sales Price" />
+                                    <RadzenText class="text-danger" TextStyle="TextStyle.Subtitle1" TagName="TagName.P" Text="*" />
+                                </RadzenStack>
+                                <RadzenNumeric @bind-Value="formModel.Price" />
+                                <ValidationMessage For="@(()=> formModel.Price)" />
+                            </RadzenStack>
+                        </div>
+                        <div class="col-xl-4">
+                            @* Item Tax Group *@
+                            <RadzenStack Gap="1px">
+                                <RadzenStack Gap="1px" Orientation="Orientation.Horizontal">
+                                    <RadzenText TextStyle="TextStyle.Subtitle1" TagName="TagName.P" Text="Tax" />
+                                    <RadzenText class="text-danger" TextStyle="TextStyle.Subtitle1" TagName="TagName.P" Text="*" />
+                                </RadzenStack>
+                                <RadzenDropDown LoadData=@ItemTaxGroupDropdownLoadData AllowFiltering="true" FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive"
+                                                Data=@itemTaxGroupDropdown TextProperty="@nameof(ItemTaxGroup.Name)" ValueProperty="@nameof(ItemTaxGroup.Id)" AllowClear="false"
+                                                @bind-Value=formModel.ItemTaxGroupId />
+                                <ValidationMessage For="@(()=> formModel.ItemTaxGroupId)" />
+                            </RadzenStack>
+                        </div>
+
+                        <div class="col-xl-4">
+                            @*  Income Account *@
+                            <RadzenStack Gap="1px">
+                                <RadzenStack Gap="1px" Orientation="Orientation.Horizontal">
+                                    <RadzenText TextStyle="TextStyle.Subtitle1" TagName="TagName.P" Text="Income Account" />
+                                    <RadzenText class="text-danger" TextStyle="TextStyle.Subtitle1" TagName="TagName.P" Text="*" />
+                                </RadzenStack>
+                                <RadzenDropDown LoadData=@SalesDropdownLoadData AllowFiltering="true" FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive"
+                                                Data=@salesAccountDropdown TextProperty="@nameof(BaseAccount.AccountName)" ValueProperty="@nameof(BaseAccount.Id)" AllowClear="false" 
+                                                @bind-Value=formModel.SalesAccountId />
+                                <ValidationMessage For="@(()=> formModel.SalesAccountId)" />
+                            </RadzenStack>
+                        </div>
+                        <div class="col-xl-4">
+                            @*  Expense Account *@
+                            <RadzenStack Gap="1px">
+                                <RadzenStack Gap="1px" Orientation="Orientation.Horizontal">
+                                    <RadzenText TextStyle="TextStyle.Subtitle1" TagName="TagName.P" Text="Expense Account" />
+                                    <RadzenText class="text-danger" TextStyle="TextStyle.Subtitle1" TagName="TagName.P" Text="*" />
+                                </RadzenStack>
+                                <RadzenDropDown LoadData=@ExpenseDropdownLoadData AllowFiltering="true" FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive"
+                                                Data=@expenseAccountDropdown TextProperty="@nameof(BaseAccount.AccountName)" ValueProperty="@nameof(BaseAccount.Id)" AllowClear="false" 
+                                                @bind-Value=formModel.CostOfGoodsSoldAccountId />
+                                <ValidationMessage For="@(()=> formModel.CostOfGoodsSoldAccountId)" />
+                            </RadzenStack>
+                        </div>
+                        <div class="col-xl-4">
+                            @*  Expense Account *@
+                            <RadzenStack Gap="1px">
+                                <RadzenStack Gap="1px" Orientation="Orientation.Horizontal">
+                                    <RadzenText TextStyle="TextStyle.Subtitle1" TagName="TagName.P" Text="Inventory Account" />
+                                    <RadzenText class="text-danger" TextStyle="TextStyle.Subtitle1" TagName="TagName.P" Text="*" />
+                                </RadzenStack>
+                                <RadzenDropDown  LoadData=@InventoryDropdownLoadData AllowFiltering="true" FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive"
+                                                Data=@inventoryAccountDropdown TextProperty="@nameof(BaseAccount.AccountName)" ValueProperty="@nameof(BaseAccount.Id)" AllowClear="false" 
+                                                @bind-Value=formModel.InventoryAccountId />
+                                <ValidationMessage For="@(()=> formModel.InventoryAccountId)" />
+                            </RadzenStack>
+                        </div>
+                        <div class="col-12">
+                            <RadzenStack AlignItems="AlignItems.End">
+                                <RadzenButton Disabled="SubmitBtnDisabled" Text="Submit" ButtonStyle="ButtonStyle.Success" ButtonType="ButtonType.Submit" />
+                            </RadzenStack>
+                        </div>
+                    </div>
+                </RadzenCard>
+
+            </div>
+
+
+        </div>
+    </EditForm>
+
+</div>
+<style>
+    .divider{
+        border: 1px solid var(--rz-base-400);
+        margin-top:15px;
+        margin-bottom:15px;
+      
+    }
+</style>
+@code {
+
+}

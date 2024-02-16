@@ -4,6 +4,10 @@ using Services.Administration;
 using Services.Inventory;
 using System.Collections.Generic;
 using System.Linq;
+using Dto.Inventory.Request;
+using static Dto.Response.ServiceResponses;
+using Azure;
+using Dto.Inventory.Response;
 
 namespace Api.Controllers
 {
@@ -22,9 +26,9 @@ namespace Api.Controllers
 
         [HttpPost]
         [Route("[action]")]
-        public IActionResult SaveItem([FromBody]Item itemDto)
+        public IActionResult SaveItem([FromBody]CreateItemRequest request)
         {
-            bool isNew = itemDto.Id == 0;
+            bool isNew = request.Id == 0;
             Core.Domain.Items.Item item = null;
 
             if (isNew)
@@ -33,36 +37,45 @@ namespace Api.Controllers
             }
             else
             {
-                item = _inventoryService.GetItemById(itemDto.Id);
+                item = _inventoryService.GetItemById(request.Id);
             }
 
-            item.No = itemDto.No;
-            item.Code = itemDto.Code;
-            item.Description = itemDto.Description;
-            item.SellDescription = itemDto.SellDescription;
-            item.PurchaseDescription = itemDto.PurchaseDescription;
-            item.Cost = itemDto.Cost;
-            item.Price = itemDto.Price;
-            item.SmallestMeasurementId = itemDto.SmallestMeasurementId;
-            item.SellMeasurementId = itemDto.SellMeasurementId;
-            item.PurchaseMeasurementId = itemDto.PurchaseMeasurementId;
-            item.ItemCategoryId = itemDto.ItemCategoryId;
-            item.ItemTaxGroupId = itemDto.ItemTaxGroupId;
-            item.SalesAccountId = itemDto.SalesAccountId;
-            item.InventoryAccountId = itemDto.InventoryAccountId;
-            item.InventoryAdjustmentAccountId = itemDto.InventoryAdjustmentAccountId;
-            item.CostOfGoodsSoldAccountId = itemDto.CostOfGoodsSoldAccountId;
-            
+            item.Code = request.SKU;
+            item.Description = request.Name;
+            item.SellDescription = request.SellDescription;
+            item.PurchaseDescription = request.PurchaseDescription;
+            item.Cost = request.Cost;
+            item.Price = request.Price;
+            item.ReorderPoint = (decimal)request.ReorderPoint;
+            item.SmallestMeasurementId = request.SmallestMeasurementId;
+            item.SellMeasurementId = request.SellMeasurementId;
+            item.PurchaseMeasurementId = request.PurchaseMeasurementId;
+            item.ItemCategoryId = request.ItemCategoryId;
+            item.ItemTaxGroupId = request.ItemTaxGroupId;
+            item.SalesAccountId = request.SalesAccountId;
+            item.InventoryAccountId = request.InventoryAccountId;
+            item.InventoryAdjustmentAccountId = request.InventoryAdjustmentAccountId;
+            item.CostOfGoodsSoldAccountId = request.CostOfGoodsSoldAccountId;
+
+            var response = new CreatedResponse(false, "-1", "Something went wrong");
+
             if (isNew)
             {
-                _inventoryService.AddItem(item);
+                int createdId = _inventoryService.AddItem(item, request.InitialQtyOnHand);
+
+                if(createdId > 0)
+                {
+                   response = new CreatedResponse(true, createdId.ToString(), "Created");
+                }
             }
             else
             {
                 _inventoryService.UpdateItem(item);
+
+                return Ok();
             }
 
-            return Ok();
+            return response.Flag ? Ok(response) : BadRequest(response); 
         }
 
         [HttpGet]
@@ -71,29 +84,26 @@ namespace Api.Controllers
         {
             var items = _inventoryService.GetAllItems();
             
-            ICollection<Item> itemsDto = new HashSet<Item>();
+            ICollection<GetItemResponse> itemsDto = new HashSet<GetItemResponse>();
 
             foreach (var item in items)
             {
-                var measurments = _inventoryService.GetMeasurements();
-
-                itemsDto.Add(new Item()
+                itemsDto.Add(new GetItemResponse()
                 {
 
                     Id = item.Id,
-                    Code = item.Code,
-                    Description = item.Description,
-                    ItemTaxGroupName = item.ItemTaxGroup == null ? "" : item.ItemTaxGroup.Name,
+                    Name = item.Description,
+                    ProductNo = item.No,
+                    SKU = item.Code,
+                    ItemTaxGroup = item.ItemTaxGroup == null ? "" : item.ItemTaxGroup.Name,
                     Measurement = item.PurchaseMeasurement == null ? "" : item.PurchaseMeasurement.Description,
-                    Cost = item.Cost,
-                    Price = item.Price,
-                    QuantityOnHand = item.ComputeQuantityOnHand()
+                    Cost = item.Cost ?? 0,
+                    Price = item.Price ?? 0,
+                    QtyOnHand = item.ComputeQuantityOnHand()
                 });
-
-                
             }
 
-            return new ObjectResult(itemsDto.AsEnumerable());
+            return Ok(itemsDto);
         }
 
         [HttpGet]

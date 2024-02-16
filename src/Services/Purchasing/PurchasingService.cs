@@ -88,7 +88,7 @@ namespace Services.Purchasing
                 var po = new PurchaseOrderHeader()
                 {
                     Date = purchaseIvoice.Date,
-                    No = GetNextNumber(SequenceNumberTypes.PurchaseOrder).ToString(),
+                    No = GetNextNumber(SequenceNumberTypes.PurchaseOrder),
                     Vendor = purchaseIvoice.Vendor,
                     VendorId = purchaseIvoice.VendorId.Value,
                     Description = purchaseIvoice.Description,
@@ -206,7 +206,7 @@ namespace Services.Purchasing
             {
                 purchaseIvoice.GeneralLedgerHeader = glHeader;
 
-                purchaseIvoice.No = GetNextNumber(SequenceNumberTypes.PurchaseInvoice).ToString();
+                purchaseIvoice.No = GetNextNumber(SequenceNumberTypes.PurchaseInvoice);
                 _purchaseInvoiceRepo.Insert(purchaseIvoice);
 
                 if (purchaseOrderId.HasValue)
@@ -221,7 +221,7 @@ namespace Services.Purchasing
 
         public void AddPurchaseOrder(PurchaseOrderHeader purchaseOrder, bool toSave)
         {
-            purchaseOrder.No = GetNextNumber(SequenceNumberTypes.PurchaseOrder).ToString();
+            purchaseOrder.No = GetNextNumber(SequenceNumberTypes.PurchaseOrder);
             
             if(toSave)
                 _purchaseOrderRepo.Insert(purchaseOrder);
@@ -274,9 +274,16 @@ namespace Services.Purchasing
             {
                 purchaseOrderReceipt.GeneralLedgerHeader = glHeader;
 
-                purchaseOrderReceipt.No = GetNextNumber(SequenceNumberTypes.PurchaseReceipt).ToString();
+                purchaseOrderReceipt.No = GetNextNumber(SequenceNumberTypes.PurchaseReceipt);
                 _purchaseReceiptRepo.Insert(purchaseOrderReceipt);
             }
+        }
+
+        public IEnumerable<Vendor> GetVendorLookup()
+        {
+            var vendors = _vendorRepo.GetAllIncluding(x=> x.PrimaryContact,x=> x.Party, x=> x.TaxGroup);
+
+            return vendors;
         }
 
         public IEnumerable<Vendor> GetVendors()
@@ -387,7 +394,7 @@ namespace Services.Purchasing
             vendor.PurchaseAccountId = _accountRepo.Table.Where(a => a.AccountCode == "50200").FirstOrDefault().Id;
             vendor.PurchaseDiscountAccountId = _accountRepo.Table.Where(a => a.AccountCode == "50400").FirstOrDefault().Id;
 
-            vendor.No = GetNextNumber(SequenceNumberTypes.Vendor).ToString();
+            vendor.No = GetNextNumber(SequenceNumberTypes.Vendor);
             _vendorRepo.Insert(vendor);
         }
 
@@ -442,7 +449,7 @@ namespace Services.Purchasing
             if(_financialService.ValidateGeneralLedgerEntry(glHeader))
             {
                 payment.GeneralLedgerHeader = glHeader;
-                payment.No = GetNextNumber(SequenceNumberTypes.VendorPayment).ToString();
+                payment.No = GetNextNumber(SequenceNumberTypes.VendorPayment);
                 _vendorPaymentRepo.Insert(payment);
             }
         }
@@ -457,7 +464,7 @@ namespace Services.Purchasing
                 {
                     if (purchaseOrder.Id == 0)
                     {
-                        purchaseOrder.No = GetNextNumber(SequenceNumberTypes.SalesOrder).ToString();
+                        purchaseOrder.No = GetNextNumber(SequenceNumberTypes.PurchaseOrder);
                         purchaseOrder.Status = (int)PurchaseOrderStatus.Draft;
                         _purchaseOrderRepo.Insert(purchaseOrder);
                     }
@@ -469,7 +476,7 @@ namespace Services.Purchasing
 
                 if (purchaseInvoice.Id == 0)
                 {
-                    purchaseInvoice.No = GetNextNumber(SequenceNumberTypes.SalesInvoice).ToString();
+                    purchaseInvoice.No = GetNextNumber(SequenceNumberTypes.SalesInvoice);
                     _purchaseInvoiceRepo.Insert(purchaseInvoice);
                 }
                 else
@@ -602,7 +609,7 @@ namespace Services.Purchasing
             {
                 purchaseInvoice.GeneralLedgerHeader = glHeader;
 
-                purchaseInvoice.No = GetNextNumber(SequenceNumberTypes.PurchaseInvoice).ToString();
+                purchaseInvoice.No = GetNextNumber(SequenceNumberTypes.PurchaseInvoice);
                 _purchaseInvoiceRepo.Update(purchaseInvoice);
             }
         }

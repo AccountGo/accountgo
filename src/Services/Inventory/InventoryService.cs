@@ -15,6 +15,7 @@ using System.Threading;
 using System.Collections.Generic;
 using Core.Domain.Financials;
 using Core.Domain.TaxSystem;
+using System.Data;
 
 namespace Services.Inventory
 {
@@ -28,6 +29,7 @@ namespace Services.Inventory
         private readonly IRepository<Bank> _bankRepo;
         private readonly IRepository<Account> _accountRepo;
         private readonly IRepository<ItemTaxGroup> _itemTaxGroup;
+        readonly IEfTransaction _dbTransaction;
 
         public InventoryService(IRepository<Item> itemRepo, 
             IRepository<Measurement> measurementRepo, 
@@ -36,7 +38,8 @@ namespace Services.Inventory
             IRepository<SequenceNumber> sequenceNumberRepo,
             IRepository<Bank> bankRepo,
             IRepository<Account> accountRepo,
-            IRepository<ItemTaxGroup> itemTaxGroup
+            IRepository<ItemTaxGroup> itemTaxGroup,
+            IEfTransaction dbTransaction
             )
             : base(sequenceNumberRepo, null, null, bankRepo)
         {
@@ -48,6 +51,7 @@ namespace Services.Inventory
             _bankRepo = bankRepo;
             _accountRepo = accountRepo;
             _itemTaxGroup = itemTaxGroup;
+            _dbTransaction = dbTransaction;
         }
 
         public InventoryControlJournal CreateInventoryControlJournal(int itemId, int measurementId, DocumentTypes documentType, decimal? inQty, decimal? outQty, decimal? totalCost, decimal? totalAmount)
@@ -69,24 +73,40 @@ namespace Services.Inventory
             return icj;
         }
 
-        public void AddItem(Item item)
+        public int AddItem(Item item, decimal initialQuantityOnhand)
         {
-            item.No = GetNextNumber(SequenceNumberTypes.Item).ToString();
+            using (_dbTransaction.BeginTransaction())
+            {
+                try
+                {
+                    item.No = GetNextNumber(SequenceNumberTypes.Item);
 
-            var sales = _accountRepo.Table.Where(a => a.AccountCode == "40100").FirstOrDefault();
-            var inventory = _accountRepo.Table.Where(a => a.AccountCode == "10800").FirstOrDefault();
-            var invAdjusment = _accountRepo.Table.Where(a => a.AccountCode == "50500").FirstOrDefault();
-            var cogs = _accountRepo.Table.Where(a => a.AccountCode == "50300").FirstOrDefault();
-            var assemblyCost = _accountRepo.Table.Where(a => a.AccountCode == "10900").FirstOrDefault();
+                    _itemRepo.Insert(item);
 
-            item.SalesAccount = sales;
-            item.InventoryAccount = inventory;
-            item.CostOfGoodsSoldAccount = cogs;
-            item.InventoryAdjustmentAccount = invAdjusment;
+                    var invJournalCtrl = CreateInventoryControlJournal(item.Id,
+                        item.SmallestMeasurementId.Value,
+                        DocumentTypes.InitialInventory,
+                        inQty: initialQuantityOnhand,
+                        outQty: 0,
+                        totalCost: initialQuantityOnhand * item.Cost,
+                        totalAmount: initialQuantityOnhand * item.Price);
 
-            item.ItemTaxGroup = _itemTaxGroup.Table.Where(m => m.Name == "Regular").FirstOrDefault();
-            
-            _itemRepo.Insert(item);
+                    _icjRepo.Insert(invJournalCtrl);
+
+                    _dbTransaction.Commit();
+
+                    return item.Id;
+                }
+                catch (Exception ex)
+                {
+                    //TODO: Implement error logging
+                    Console.WriteLine(ex.ToString());
+                    _dbTransaction.Rollback();
+
+                    return -1;
+                }
+            }
+
         }
 
         public void UpdateItem(Item item)
@@ -178,7 +198,7 @@ namespace Services.Inventory
             foreach(var item in itemCategory.Items)
             {
                 if (item.Id == 0)
-                    item.No = GetNextNumber(SequenceNumberTypes.Item).ToString();
+                    item.No = GetNextNumber(SequenceNumberTypes.Item);
             }
 
             if (itemCategory.Id == 0)

@@ -1,0 +1,56 @@
+﻿@using Blazored.Toast
+@using Blazored.Toast.Configuration
+
+@inherits LayoutBase
+<div class="page">
+
+    <BlazoredToasts Position="ToastPosition.TopRight"
+                    Timeout="8"
+                    IconType="IconType.FontAwesome"
+                    ErrorIcon="fa-solid fa-bug"
+                    SuccessIcon="fa-regular fa-circle-check"
+                    InfoIcon="fa-solid fa-info"
+                    RemoveToastsOnNavigation =true/>
+
+    <div class="sidebar" style="@IconMenuCssClass">
+        <NavMenu ShowIconMenu="ToggleIconMenu" />
+    </div>
+
+    <main>
+        @if (IsLoading)
+        {
+            <div class="radzen-loader">
+                <RadzenProgressBarCircular ProgressBarStyle="ProgressBarStyle.Info" Value="100" ShowValue="false" Mode="ProgressBarMode.Indeterminate" />
+            </div>
+        }
+        <div class="top-row px-4">
+            <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">About</a>
+        </div>
+
+        <article class="content">
+            @Body
+        </article>
+    </main>
+</div>
+@code {
+    private bool _iconMenuActive { get; set; }
+    private string? IconMenuCssClass => _iconMenuActive ? "width: 80px;" : null;
+
+    protected void ToggleIconMenu(bool iconMenuActive)
+    {
+        _iconMenuActive = iconMenuActive;
+    }
+}
+<style>
+    .blazored-toast-message {
+        font-size: 15px !important;
+    }
+
+    .blazored-toast-heading {
+        font-size: 15px !important;
+    }
+
+    .blazored-toast-container {
+        z-index: 999;
+    }
+</style>

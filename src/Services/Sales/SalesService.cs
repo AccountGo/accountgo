@@ -94,7 +94,7 @@ namespace Services.Sales
         public void AddSalesOrder(SalesOrderHeader salesOrder, bool toSave)
         {
             if (string.IsNullOrEmpty(salesOrder.No))
-                salesOrder.No = GetNextNumber(SequenceNumberTypes.SalesOrder).ToString();
+                salesOrder.No = GetNextNumber(SequenceNumberTypes.SalesOrder);
             if (toSave)
                 _salesOrderRepo.Insert(salesOrder);
         }
@@ -227,7 +227,7 @@ namespace Services.Sales
             {
                 salesInvoice.GeneralLedgerHeader = glHeader;
 
-                salesInvoice.No = GetNextNumber(SequenceNumberTypes.SalesInvoice).ToString();
+                salesInvoice.No = GetNextNumber(SequenceNumberTypes.SalesInvoice);
 
                 if (!salesDeliveryId.HasValue)
                 {
@@ -270,7 +270,7 @@ namespace Services.Sales
             {
                 salesReceipt.GeneralLedgerHeader = glHeader;
 
-                salesReceipt.No = GetNextNumber(SequenceNumberTypes.SalesReceipt).ToString();
+                salesReceipt.No = GetNextNumber(SequenceNumberTypes.SalesReceipt);
                 _salesReceiptRepo.Insert(salesReceipt);
             }
         }
@@ -296,7 +296,7 @@ namespace Services.Sales
             {
                 salesReceipt.GeneralLedgerHeader = glHeader;
 
-                salesReceipt.No = GetNextNumber(SequenceNumberTypes.SalesReceipt).ToString();
+                salesReceipt.No = GetNextNumber(SequenceNumberTypes.SalesReceipt);
                 _salesReceiptRepo.Insert(salesReceipt);
             }
         }
@@ -502,7 +502,7 @@ namespace Services.Sales
             customer.SalesDiscountAccountId = accountSalesDiscount != null ? (int?)accountSalesDiscount.Id : null;
             customer.TaxGroupId = _taxGroupRepo.Table.Where(tg => tg.Description == "VAT").FirstOrDefault().Id;
 
-            customer.No = GetNextNumber(SequenceNumberTypes.Customer).ToString();
+            customer.No = GetNextNumber(SequenceNumberTypes.Customer);
             _customerRepo.Insert(customer);
         }
 
@@ -544,7 +544,7 @@ namespace Services.Sales
             {
                 salesDelivery.GeneralLedgerHeader = glHeader;
 
-                salesDelivery.No = GetNextNumber(SequenceNumberTypes.SalesDelivery).ToString();
+                salesDelivery.No = GetNextNumber(SequenceNumberTypes.SalesDelivery);
 
                 //if(!salesDelivery.SalesOrderHeaderId.HasValue)
                 //{
@@ -667,7 +667,7 @@ namespace Services.Sales
 
         public void AddSalesQuote(SalesQuoteHeader salesQuoteHeader)
         {
-            salesQuoteHeader.No = GetNextNumber(SequenceNumberTypes.SalesQuote).ToString();
+            salesQuoteHeader.No = GetNextNumber(SequenceNumberTypes.SalesQuote);
             _salesQuoteRepo.Insert(salesQuoteHeader);
         }
 
@@ -714,7 +714,7 @@ namespace Services.Sales
                 {
                     if (salesOrder.Id == 0)
                     {
-                        salesOrder.No = GetNextNumber(SequenceNumberTypes.SalesOrder).ToString();
+                        salesOrder.No = GetNextNumber(SequenceNumberTypes.SalesOrder);
                         _salesOrderRepo.Insert(salesOrder);
                     }
                     else
@@ -725,7 +725,7 @@ namespace Services.Sales
 
                 if (salesInvoice.Id == 0)
                 {
-                    salesInvoice.No = GetNextNumber(SequenceNumberTypes.SalesInvoice).ToString();
+                    salesInvoice.No = GetNextNumber(SequenceNumberTypes.SalesInvoice);
                     _salesInvoiceRepo.Insert(salesInvoice);
                 }
                 else
@@ -874,7 +874,7 @@ namespace Services.Sales
 
             if (_financialService.ValidateGeneralLedgerEntry(glHeader))
             {
-                salesInvoice.No = GetNextNumber(SequenceNumberTypes.SalesInvoice).ToString();
+                salesInvoice.No = GetNextNumber(SequenceNumberTypes.SalesInvoice);
                 salesInvoice.GeneralLedgerHeader = glHeader;
 
                 // Debit = COGS, Credit = Inventory

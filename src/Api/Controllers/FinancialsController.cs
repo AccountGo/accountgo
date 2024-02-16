@@ -308,7 +308,7 @@ namespace Api.Controllers
         public ActionResult BalanceSheet()
         {
             var Dto = _financialService.BalanceSheet().ToList();
-            var dt = Helpers.CollectionHelper.ConvertTo<BalanceSheet>(Dto);
+           // var dt = Helpers.CollectionHelper.ConvertTo<BalanceSheet>(Dto);
             var incomestatement = _financialService.IncomeStatement();
             var netincome = incomestatement.Where(a => a.IsExpense == false).Sum(a => a.Amount) - incomestatement.Where(a => a.IsExpense == true).Sum(a => a.Amount);
 

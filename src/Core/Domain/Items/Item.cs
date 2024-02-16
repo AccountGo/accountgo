@@ -45,6 +45,7 @@ namespace Core.Domain.Items
         public string SellDescription { get; set; }
         public decimal? Cost { get; set; }
         public decimal? Price { get; set; }
+        public decimal? ReorderPoint { get; set; }
         public virtual ItemCategory ItemCategory { get; set; }
         public virtual ItemTaxGroup ItemTaxGroup { get; set; }
         public virtual Vendor PreferredVendor { get; set; }

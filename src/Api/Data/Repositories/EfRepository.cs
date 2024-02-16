@@ -4,14 +4,18 @@ using Core.Data;
 using Core.Domain;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
+using System.Threading.Tasks;
+using System.Data;
+using Api.Data.Repositories;
 
 namespace Api.Data
 {
-    public class EfRepository<T> : IRepository<T> where T : BaseEntity
+    public class EfRepository<T> :  IRepository<T> where T : BaseEntity
     {
         private readonly ApiDbContext _context;
         private DbSet<T> _entities;
-
+       
         #region Properties
 
         /// <summary>
@@ -48,6 +52,10 @@ namespace Api.Data
                 return _entities;
             }
         }
+
+        public IDbConnection Connection => throw new NotImplementedException();
+
+        public IsolationLevel IsolationLevel => throw new NotImplementedException();
 
         #endregion
         #region Ctor
@@ -236,6 +244,7 @@ namespace Api.Data
             return queryable;
         }
 
+       
         #endregion
     }
 }

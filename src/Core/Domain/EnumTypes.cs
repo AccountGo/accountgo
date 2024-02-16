@@ -36,7 +36,9 @@ namespace Core.Domain
         PurchaseCreditMemo,
         PurchaseInvoicePayment,
         JournalEntry,
-        CustomerAllocation
+        CustomerAllocation,
+        InitialInventory,
+        InventoryAdjustment
     }
 
     public enum AccountTypes
@@ -86,9 +88,11 @@ namespace Core.Domain
 
     public enum PurchaseInvoiceStatus
     {
-        Draft = 0,
-        Open = 1,
-        Paid = 2
+        Draft = 1,
+        Open ,
+        ItemPartiallyReceived,
+        ItemFullyReceived,
+        Paid 
     }
 
     public enum SequenceNumberTypes

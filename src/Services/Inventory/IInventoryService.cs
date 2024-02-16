@@ -22,7 +22,7 @@ namespace Services.Inventory
             decimal? totalCost,
             decimal? totalAmount);
 
-        void AddItem(Item item);
+        int AddItem(Item item, decimal initialQuantityOnhand);
         void UpdateItem(Item item);
         void DeleteItem(int itemId);
         Item GetItemById(int id);

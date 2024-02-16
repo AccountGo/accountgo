@@ -11,6 +11,8 @@ namespace Core.Data
     using Domain;
     using System;
     using System.Linq;
+    using System.Threading.Tasks;
+
     /// <summary>
     /// Repository
     /// </summary>
@@ -23,5 +25,15 @@ namespace Core.Data
         IQueryable<T> Table { get; }
 
         IQueryable<T> GetAllIncluding(params System.Linq.Expressions.Expression<Func<T, object>>[] includeProperties);
+    }
+
+    public interface IEfTransaction
+    {
+        IDisposable BeginTransaction();
+        Task<IDisposable> BeginTransactionAsync();
+        void Commit();
+        Task CommitAsync();
+        void Rollback();
+        Task RollbackAsync();
     }
 }

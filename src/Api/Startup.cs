@@ -1,17 +1,19 @@
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.HttpsPolicy;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
 using Microsoft.EntityFrameworkCore;
+using Core.Utilities;
+using Api.Data;
+using Dto.Contracts;
+using Api.ApiServices;
+using Microsoft.AspNetCore.Http;
+using System.Security.Claims;
+using Api.Data.Repositories;
+using Core.Data;
 
 namespace Api
 {
@@ -52,11 +54,17 @@ namespace Api
                 .AddDbContext<Data.ApiDbContext>(options => options.UseSqlServer(connectionString))
                 .AddDbContext<Data.ApplicationIdentityDbContext>(options => options.UseSqlServer(connectionString));
 
-            services
-                .AddIdentity<Data.ApplicationUser, IdentityRole>()
-                .AddEntityFrameworkStores<Data.ApplicationIdentityDbContext>()
-                .AddDefaultTokenProviders();
+            //Add Identity & JWT authentication
+            //Identity
+            services.AddIdentity<ApplicationUser, IdentityRole>()
+                .AddEntityFrameworkStores<ApplicationIdentityDbContext>()
+                .AddSignInManager()
+                .AddRoles<IdentityRole>();
 
+            services.AddJWTService(Configuration);
+
+            services.AddTransient(s => ClaimsPrincipal.Current);
+            services.AddTransient(s => s.GetService<IHttpContextAccessor>().HttpContext.User);
             // Add cors
             services.AddCors(o => o.AddPolicy("AllowAll", builder =>
             {
@@ -68,6 +76,9 @@ namespace Api
 
             // generic repository
             services.AddScoped(typeof(Core.Data.IRepository<>), typeof(Data.EfRepository<>));
+            services.AddTransient<IEfTransaction, EfTransaction>();
+
+            services.AddTransient<IDateTimeProvider, DateTimeProvider>();
 
             // custom repositories
             services.AddScoped(typeof(Core.Data.ISalesOrderRepository), typeof(Data.SalesOrderRepository));
@@ -82,6 +93,8 @@ namespace Api
             services.AddScoped(typeof(Services.Administration.IAdministrationService), typeof(Services.Administration.AdministrationService));
             services.AddScoped(typeof(Services.Security.ISecurityService), typeof(Services.Security.SecurityService));
             services.AddScoped(typeof(Services.TaxSystem.ITaxService), typeof(Services.TaxSystem.TaxService));
+
+            services.AddScoped<IUserAccount, UserAccountService>();
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
@@ -94,8 +107,9 @@ namespace Api
 
             // app.UseHttpsRedirection();
 
+            app.UseCors("AllowAll");
             app.UseRouting();
-
+            app.UseAuthentication();
             app.UseAuthorization();
 
             app.UseEndpoints(endpoints =>

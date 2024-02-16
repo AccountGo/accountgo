@@ -1,0 +1,106 @@
+﻿@page "/register"
+@using Dto.Contracts
+@inject IUserAccount accountService
+@inject IJSRuntime js
+
+<div class="container">
+    <div class="row">
+        <div class="col-md-6">
+            <EditForm Model="User" OnValidSubmit="HandleRegistration" Enhance>
+                <DataAnnotationsValidator />
+                <ValidationSummary />
+                <div class="card">
+                    <div class="card-header">Create An Account</div>
+                    <div class="card-body">
+
+                        @* Fullname *@
+                        <div class="form-group mb-3">
+                            <input @bind="User.FirstName"
+                                   class="form-control"
+                                   placeholder="First Name" />
+                   
+                        </div>
+                        <div class="form-group mb-3">
+                            <input @bind="User.LastName"
+                                   class="form-control"
+                                   placeholder="Last Name"/>
+            
+                        </div>
+                        @* Email Address *@
+                        <div class="form-group mb-3">
+                            <input @bind="User.Email"
+                                   class="form-control"
+                                   type="email"
+                                   placeholder="Email Address"/>
+                       
+                        </div>
+
+                        @* Password *@
+                        <div class="form-group">
+                            <div class="input-group mb-3">
+                                <input type="@(ShowPassword is true? "text":"password")"
+                                       class="form-control"
+                                       @bind="User.Password"
+                                       placeholder="Password"
+                                       aria-label="Password"
+                                       aria-describedby="Password">
+
+                                <span class="input-group-text cursorStyle"
+                                      id="Password"
+                                      @onclick="ShowPasswordEvent"> @(ShowPassword is true ? "Hide" : "Show") </span>
+                            </div>
+                        </div>
+
+                        @* Confirm Password *@
+                        <div class="form-group">
+                            <div class="input-group mb-3">
+                                <input type="@(ShowConfirmPassword is true? "text":"password")"
+                                       class="form-control"
+                                       @bind="User.ConfirmPassword"
+                                       placeholder="Confirm Password"
+                                       aria-label="ConfirmPassword"
+                                       aria-describedby="Confirm-Password">
+
+                                <span class="input-group-text cursorStyle"
+                                      id="ConfirmPassword"
+                                      @onclick="ShowConfirmPasswordEvent"> @(ShowConfirmPassword is true ? "Hide" : "Show") </span>
+                            </div>
+                        </div>
+                        <a class="text-primary cursorStyle text-center">Login Instead</a>
+
+                    </div>
+                    <div class="card-footer">
+                        <button class="btn btn-primary float-end"
+                                type="submit">
+                            Register
+                        </button>
+                    </div>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+</div>
+
+@code {
+    public bool ShowPassword { get; set; }
+    public bool ShowConfirmPassword { get; set; }
+
+    public UserDTO User { get; set; } = new();
+    private async Task HandleRegistration()
+    {
+        var response = await accountService.CreateAccount(User);
+        if (response.Flag)
+        {
+            await js.InvokeVoidAsync("alert", response.Message);
+            User = new();
+            return;
+        }
+
+        await js.InvokeVoidAsync("alert", response.Message);
+        return;
+
+    }
+
+    void ShowPasswordEvent() => ShowPassword = !ShowPassword;
+    void ShowConfirmPasswordEvent() => ShowConfirmPassword = !ShowConfirmPassword;
+}

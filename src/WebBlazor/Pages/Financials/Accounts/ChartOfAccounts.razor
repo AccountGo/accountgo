@@ -1,0 +1,57 @@
+﻿@attribute [Route(PageRoutes.Financials.Accounts)]
+@attribute [Authorize]
+@inherits ChartOfAccountsBase
+@using Dto.Financial
+
+<div class="container-fluid content-padding">
+    <RadzenStack class="mb-3" JustifyContent="JustifyContent.SpaceBetween" AlignItems="AlignItems.Center" Orientation="Orientation.Horizontal">
+        <RadzenText class="m-0 text-success" TextAlign="TextAlign.Start" TextStyle="TextStyle.H5" TagName="TagName.H5">Chart of Accounts</RadzenText>
+    </RadzenStack>
+
+    <RadzenStack>
+        <RadzenStack JustifyContent="JustifyContent.SpaceBetween" AlignItems="AlignItems.Center" Orientation="Orientation.Horizontal">
+            <RadzenTextBox Style="border-radius:7px" class="w-25" Placeholder="Search code or name"></RadzenTextBox>
+           
+            <RadzenStack Orientation="Orientation.Horizontal">
+                <RadzenButton Text="Create" Variant="Variant.Flat" ButtonStyle="ButtonStyle.Success"></RadzenButton>
+                <RadzenButton Icon="@("<i class=\"fa-solid fa-rotate-right\"></i>")" ButtonStyle="ButtonStyle.Light" Variant="Variant.Flat" />
+            </RadzenStack>
+         
+        </RadzenStack>
+
+        <RadzenDataGrid @ref="grid" style="height: 600px"
+                        AllowVirtualization="true"
+                        IsLoading=@isLoading
+                        Data="@accounts"
+                        FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive"
+                        AllowSorting="true"
+                        AllowFiltering="true"
+                        AllowPaging="false"
+                        PagerHorizontalAlign="HorizontalAlign.Center"
+                        TItem="BaseAccount" ColumnWidth="200px">
+            <Columns>
+                <RadzenDataGridColumn TItem="BaseAccount"
+                                      Property="@nameof(BaseAccount.AccountCode)"
+                                      Filterable="true" Title="Account Code"
+                                      Frozen="false"
+                                      TextAlign="TextAlign.Start" />
+                <RadzenDataGridColumn TItem="BaseAccount"
+                                      Property="@nameof(BaseAccount.AccountName)"
+                                      Filterable="true" Title="Account Name"
+                                      Frozen="false"
+                                      TextAlign="TextAlign.Start" />
+                <RadzenDataGridColumn TItem="BaseAccount"
+                                      Property="@nameof(BaseAccount.AccountClassName)"
+                                      Filterable="true" Title="Type"
+                                      Frozen="false"
+                                      TextAlign="TextAlign.Start" />
+            </Columns>
+        </RadzenDataGrid>
+    </RadzenStack>
+   
+</div>
+
+
+@code {
+
+}

@@ -1,0 +1,102 @@
+﻿@page "/login"
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager NavManager
+@using WebBlazor.Authentication
+@using Microsoft.AspNetCore.Components.Authorization
+@using WebBlazor.Rx;
+@inject IUserAccount accountService
+@inject IJSRuntime js
+
+<div class="container-fluid">
+    <div class="container-fluid content-padding">
+        <div class="row">
+           <div class="col">
+
+           </div>
+            <div class="col-xl-5 col-lg-8 col-md-12 col-sm-12 col-12">
+                <EditForm Model="User" OnValidSubmit="HandleLogin">
+                    <DataAnnotationsValidator />
+                    <div class="login-form-container">
+                        <RadzenCard>
+                            <RadzenText TextAlign="TextAlign.Center" TextStyle="TextStyle.H3" TagName="TagName.P">Login</RadzenText>
+
+                            <RadzenText TextStyle="TextStyle.Subtitle1" TagName="TagName.P">Email</RadzenText>
+                            <ValidationMessage For="@(()=> User.Email)" />
+                            <RadzenTextBox class="w-100 mb-3" aria-label="Email" @bind-Value="User.Email" />
+
+                           
+                            <RadzenText TextStyle="TextStyle.Subtitle1" TagName="TagName.P">Password</RadzenText>
+                            <ValidationMessage For="@(()=> User.Password)" />
+                            <RadzenPassword class="w-100 mb-3" @bind-Value=@User.Password aria-label="Password" />
+                            <RadzenStack AlignItems="AlignItems.End">
+                                <RadzenButton Disabled="DisableSubmitBtn" Text="Submit" ButtonStyle="ButtonStyle.Primary" ButtonType="ButtonType.Submit" />
+                            </RadzenStack>
+                            
+                        </RadzenCard>
+                    </div>
+                </EditForm>
+            </div>
+
+            <div class="col"></div>
+        </div>
+    </div>
+</div>
+
+@code {
+    public LoginDTO User { get; set; } = new();
+
+    [Inject]
+    protected AuthenticationStateProvider authStateProvider { get; set; } = default!;
+    [Inject]
+    protected NavigationManager _navManager { get; set; } = default!;
+    [Inject]
+    IToastService toastService { get; set; } = default!;
+    [Inject]
+    protected LoaderRx loaderRx { get; set; } = default!;
+    protected bool DisableSubmitBtn = false;
+    protected override async Task OnInitializedAsync()
+    {
+
+        var authState = await authStateProvider.GetAuthenticationStateAsync();
+        if(authState is not null)
+        {
+            if (authState.User.Identity!.IsAuthenticated)
+            {
+                _navManager.NavigateTo("/");
+            }
+        }
+    }
+
+    async Task HandleLogin()
+    {
+        DisableSubmitBtn = true;
+        loaderRx.IsLoading.OnNext(true);
+        try
+        {
+            var response = await accountService.LoginAccount(User);
+            if (response.Flag)
+            {
+                User = new();
+                var customAuthStateProvider = (CustomAuthenticationStateProvider)AuthStateProvider;
+                await customAuthStateProvider.UpdateAuthenticationState(response.Token);
+                NavManager.NavigateTo("/", forceLoad: true);
+            }
+            else
+            {
+                toastService.ShowError(response.Message);
+            }
+        }
+        catch(Exception ex)
+        {
+            toastService.ShowError("Unable to process request. Try again later.");
+            Console.WriteLine($"Error:{ex}");
+        }
+        finally
+        {
+            DisableSubmitBtn = false;
+            loaderRx.IsLoading.OnNext(false);
+        }
+
+        return;
+    }
+}

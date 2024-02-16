@@ -1,0 +1,11 @@
+﻿migration commands
+
+--add migration
+dotnet ef migrations add IntialMigration --project ./src/Api/ --startup-project ./src/Api/Api.csproj --msbuildprojectextensionspath .build/obj/Api/ --context ApplicationIdentityDbContext --output-dir Data/Migrations/IdentityDb
+
+dotnet ef migrations add IntialMigration --project ./src/Api/ --startup-project ./src/Api/Api.csproj --msbuildprojectextensionspath .build/obj/Api/ --context ApiDbContext --output-dir Data/Migrations/ApiDb
+
+--update database
+dotnet ef database update --project ./src/Api/ --msbuildprojectextensionspath .build/obj/Api/ --context ApplicationIdentityDbContext
+
+dotnet ef database update --project ./src/Api/ --msbuildprojectextensionspath .build/obj/Api/ --context ApiDbContext

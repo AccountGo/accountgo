@@ -1100,11 +1100,6 @@ namespace Api.Controllers
         }
 
 
-
-
-
-
-
         [HttpGet]
         [Route("[action]")]
         public IActionResult SalesInvoiceForPrinting(int id)
@@ -1170,7 +1165,6 @@ namespace Api.Controllers
         [Route("[action]")]
         public IActionResult BookQuotation(int id)
         {
-
             try
             {
                 _salesService.BookQuotation(id);
@@ -1180,8 +1174,6 @@ namespace Api.Controllers
             {
                 return new BadRequestObjectResult(ex.Message);
             }
-
-
         }
     }
 }

@@ -140,7 +140,7 @@ namespace Api.Data
             Console.WriteLine("Checking if there is already a default company.");
             var defaultCompany = _adminService.GetDefaultCompany();
             Console.WriteLine(defaultCompany == null ? "There is none." : "There is one.");
-            if (defaultCompany != null)
+            if (defaultCompany == null)
             {
                 defaultCompany = new Core.Domain.Company
                 {
@@ -287,12 +287,13 @@ namespace Api.Data
         private void SetupFinancialYear()
         {
             if (_adminService.GetFinancialYears().Count >= 1) return;
+
             var financialYear = new Core.Domain.Financials.FinancialYear
             {
-                FiscalYearCode = "FY1819",
-                FiscalYearName = "FY 2018/2019",
-                StartDate = new DateTime(2018, 01, 01),
-                EndDate = new DateTime(2018, 12, 31),
+                FiscalYearCode = "FY2425",
+                FiscalYearName = "FY 2024/2025",
+                StartDate = new DateTime(2024, 01, 01, 0, 0, 0, 0, DateTimeKind.Utc),
+                EndDate = new DateTime(2024, 12, 31, 0, 0, 0, 0, DateTimeKind.Utc),
                 IsActive = true
             };
             _financialService.SaveFinancialYear(financialYear);
@@ -342,8 +343,9 @@ namespace Api.Data
                     ShippingChargeAccount = _financialService.GetAccountByAccountCode("40500"),
                     SalesDiscountAccount = _financialService.GetAccountByAccountCode("40400"),
                 };
+                _financialService.SaveGeneralLedgerSetting(glSetting);
             }
-            _financialService.SaveGeneralLedgerSetting(glSetting);
+            
         }
 
         private void SetupTax()
