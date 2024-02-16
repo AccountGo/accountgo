@@ -25,7 +25,7 @@ namespace AccountGoWeb.Controllers
 
         public async System.Threading.Tasks.Task<IActionResult> Accounts()
         {
-            ViewBag.PageContentHeader = "Accounts";
+            ViewBag.PageContentHeader = "Chart of Accounts";
 
             using (var client = new System.Net.Http.HttpClient())
             {
