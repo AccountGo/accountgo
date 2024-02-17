@@ -2,16 +2,20 @@
 using Microsoft.AspNetCore.Mvc;
 using System.Net.Http;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 
 namespace AccountGoWeb.Controllers
 {
     // [Microsoft.AspNetCore.Authorization.Authorize]
     public class InventoryController : BaseController
     {
-        public InventoryController(Microsoft.Extensions.Configuration.IConfiguration config)
+        private readonly ILogger<InventoryController> _logger;
+        public InventoryController(Microsoft.Extensions.Configuration.IConfiguration config,
+            ILogger<InventoryController> logger)
         {
             _baseConfig = config;
             Models.SelectListItemHelper._config = config;
+            _logger = logger;
         }
 
         public async Task<IActionResult> Index()
@@ -73,6 +77,38 @@ namespace AccountGoWeb.Controllers
             ViewBag.ItemTaxGroups = Models.SelectListItemHelper.ItemTaxGroups();
             ViewBag.Measurements = Models.SelectListItemHelper.UnitOfMeasurements();
             ViewBag.ItemCategories = Models.SelectListItemHelper.ItemCategories();
+
+            return View(itemModel);
+        }
+
+        public IActionResult AddItem(){
+            ViewBag.PageContentHeader = "New Item";
+
+            ViewBag.ItemCategories = Models.SelectListItemHelper.ItemCategories();
+            ViewBag.Measurements = Models.SelectListItemHelper.UnitOfMeasurements();
+            ViewBag.ItemTaxGroups = Models.SelectListItemHelper.ItemTaxGroups();
+            ViewBag.PreferredVendorId = Models.SelectListItemHelper.Vendors();
+            ViewBag.Accounts = Models.SelectListItemHelper.Accounts();
+
+            Item itemModel = new Item();
+
+            return View(itemModel);
+        }
+
+        [HttpPost]
+        public IActionResult AddItem(Item itemModel){
+            ViewBag.PageContentHeader = "New Item";
+
+            if (ModelState.IsValid) {
+                _logger.LogInformation("Item Model is Valid: " + itemModel.Description);
+                var serialize = Newtonsoft.Json.JsonConvert.SerializeObject(itemModel);
+                var content = new StringContent(serialize);
+                content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+                var response = Post("Inventory/SaveItem", content);
+                _logger.LogInformation("Response: " + response);
+                if (response.IsSuccessStatusCode)
+                    return RedirectToAction("Items");
+            }
 
             return View(itemModel);
         }
