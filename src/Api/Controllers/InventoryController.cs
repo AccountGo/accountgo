@@ -4,6 +4,7 @@ using Services.Administration;
 using Services.Inventory;
 using System.Collections.Generic;
 using System.Linq;
+using Microsoft.Extensions.Logging;
 
 namespace Api.Controllers
 {
@@ -12,12 +13,15 @@ namespace Api.Controllers
     {
         private readonly IAdministrationService _adminService;
         private readonly IInventoryService _inventoryService;
+        private readonly ILogger<InventoryController> _logger;
 
         public InventoryController(IAdministrationService adminService,
-            IInventoryService inventoryService)
+            IInventoryService inventoryService,
+            ILogger<InventoryController> logger)
         {
             _adminService = adminService;
             _inventoryService = inventoryService;
+            _logger = logger;
         }
 
         [HttpPost]
@@ -35,6 +39,8 @@ namespace Api.Controllers
             {
                 item = _inventoryService.GetItemById(itemDto.Id);
             }
+
+            _logger.LogInformation("Item is New: " + isNew);
 
             item.No = itemDto.No;
             item.Code = itemDto.Code;
