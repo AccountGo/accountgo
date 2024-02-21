@@ -10,6 +10,10 @@
 </div>
 <script>
     var columnDefs = [
+        {
+            headerName: "Name",
+            field: "indentedName", // Use a computed field for indented name
+        },
         { headerName: "Group", cellRenderer: "agGroupCellRenderer", field: "accountClassId" },
         { headerName: "Code", field: "accountCode", width: 100 },
         { headerName: "Name", field: "accountName", width: 350 },
@@ -27,6 +31,10 @@
     ];
 
     var gridOptions = {
+        autoGroupColumnDef: {
+            headerName: 'Name', // Display indented name in auto group column
+            field: 'indentedName'
+        },
         columnDefs: columnDefs,
         rowData: null,
         getNodeChildDetails: function (data) {
@@ -50,9 +58,21 @@
         enableColResize: true,
     };
 
+    function flattenChildAccounts(value, depth = 0) {
+        const result = [];
+        value.forEach(item => {
+            result.push(item);
+            if (item.childAccounts) {
+                // Recursively flatten childAccounts with increased depth
+                result.push(...flattenChildAccounts(item.childAccounts, depth + 1));
+            }
+        });
+        return result;
+    }
+
     function autoSizeAll() {
         var allColumnIds = [];
-        columnDefs.forEach( function(columnDef) {
+        columnDefs.forEach(function (columnDef) {
             allColumnIds.push(columnDef.field);
         });
         gridOptions.columnApi.autoSizeColumns(allColumnIds);
@@ -60,11 +80,12 @@
 
     // wait for the document to be loaded, otherwise
     // ag-Grid will not find the div in the document.
-    document.addEventListener("DOMContentLoaded", function() {
+    document.addEventListener("DOMContentLoaded", function () {
         var eGridDiv = document.querySelector('#accounts');
-        new agGrid.Grid(eGridDiv, gridOptions);
-        console.log(@Html.Raw(Model));
-        gridOptions.api.setRowData(@Html.Raw(Model));
+        new agGrid.Grid(eGridDiv, gridOptions)
+        const value = flattenChildAccounts(@Html.Raw(Model));
+        console.log(value);
+        gridOptions.api.setRowData(value);
         autoSizeAll();
     });
 </script>
