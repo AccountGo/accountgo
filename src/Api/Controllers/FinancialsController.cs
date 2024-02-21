@@ -341,7 +341,7 @@ namespace Api.Controllers
 
         #region Private Methods
         private IList<Dto.Financial.Account> BuildAccountGrouping(IList<Core.Domain.Financials.Account> allAccounts,
-                                          int? parentAccountId)
+        int? parentAccountId)
         {
             var accountTree = new List<Dto.Financial.Account>();
             var childAccounts = allAccounts.Where(o => o.ParentAccountId == parentAccountId).ToList();
