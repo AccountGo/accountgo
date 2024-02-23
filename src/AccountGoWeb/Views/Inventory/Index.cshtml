@@ -16,7 +16,7 @@
 <script>
     var columnDefs = [
     {headerName: "Item", field: "id", width: 50, cellRenderer: function(params) {
-        return '<a href="item/' + params.value + '">' + params.value + '</a>';
+        return '<a href="Inventory/Item/' + params.value + '">' + params.value + '</a>';
     }},
     {headerName: "Code", field: "code", width: 100},
     {headerName: "Description", field: "description", width: 350},
@@ -40,7 +40,7 @@
         var selectedRows = gridOptions.api.getSelectedRows();
         selectedRow = selectedRows[0];
 
-        document.getElementById('linkViewItem').setAttribute('href', 'item/' + selectedRow.id);
+        document.getElementById('linkViewItem').setAttribute('href', 'Inventory/Item?id=' + selectedRow.id);
         document.getElementById('linkViewItem').setAttribute('class', 'btn');
     }
 
