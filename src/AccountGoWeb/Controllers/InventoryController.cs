@@ -58,8 +58,9 @@ namespace AccountGoWeb.Controllers
             return View();
         }
 
-        public IActionResult GetItem(int id = -1)
+        public IActionResult Item(int id)
         {
+            _logger.LogInformation("GetItem: " + id);
             Item itemModel = null;
             if (id == -1)
             {
@@ -113,6 +114,7 @@ namespace AccountGoWeb.Controllers
             return View(itemModel);
         }
 
+        [HttpPost]
         public IActionResult SaveItem(Item itemModel)
         {
             if (ModelState.IsValid)
@@ -123,7 +125,7 @@ namespace AccountGoWeb.Controllers
 
                 var response = PostAsync("inventory/saveitem", content);
 
-                return RedirectToAction("Items");
+                return RedirectToAction("Index");
             }
 
             ViewBag.Accounts = Models.SelectListItemHelper.Accounts();
@@ -136,7 +138,7 @@ namespace AccountGoWeb.Controllers
             else
                 ViewBag.PageContentHeader = "New Card";
 
-            return View("Item", itemModel);
+            return View("Index");
         }
     }
 }

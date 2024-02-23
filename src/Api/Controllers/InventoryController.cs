@@ -92,8 +92,6 @@ namespace Api.Controllers
                     Price = item.Price,
                     QuantityOnHand = item.ComputeQuantityOnHand()
                 });
-
-                
             }
 
             return new ObjectResult(itemsDto.AsEnumerable());
@@ -147,6 +145,8 @@ namespace Api.Controllers
                     Date = icj.Date
                 });
             }
+
+            _logger.LogInformation("ICJ Count: " + icjDto.Count);
             return new ObjectResult(icjDto.AsEnumerable());
         }    
     }
