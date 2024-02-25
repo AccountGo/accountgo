@@ -1,63 +1,123 @@
 ﻿using Blazored.LocalStorage;
 using Blazored.Toast.Services;
+using Dto.Common.Response;
 using Dto.Financial;
-using Dto.Inventory;
+using Dto.Inventory.Response;
 using Dto.Purchasing.Response;
+using Dto.TaxSystem;
 using System.Net.Http.Headers;
+using WebBlazor.Rx;
 using WebBlazor.Services.Contracts;
 
 namespace WebBlazor.Services
 {
-    public class LookupService(HttpClient httpClient) : ILookupService
+    public class LookupService(HttpClient httpClient, LookupRx lookupRx) : ILookupService
     {
         const string commonBaseUrl = "/api/lookup";
 
+        async Task<IEnumerable<T>> GetLookup<T>(string endpoint)
+        {
+            var httpResponse = await httpClient.GetAsync($"{commonBaseUrl}/{endpoint}");
+
+            if (!httpResponse.IsSuccessStatusCode)
+            {
+                return Enumerable.Empty<T>();
+            }
+
+            return Generics.DeserializeJsonString<IEnumerable<T>>(await httpResponse.Content.ReadAsStringAsync());
+        }
+
         public async Task<IEnumerable<BaseAccount>> GetAccounts()
         {
-            var httpResponse = await httpClient.GetAsync($"{commonBaseUrl}/accounts");
+            var lookup = lookupRx.ChartOfAcctsLookup.Value;
 
-            if (!httpResponse.IsSuccessStatusCode)
+            if (lookup.Any())
             {
-                return Enumerable.Empty<BaseAccount>();
+                return lookup;
             }
 
-            return Generics.DeserializeJsonString<IEnumerable<BaseAccount>>(await httpResponse.Content.ReadAsStringAsync());
+            var res = await GetLookup<BaseAccount>("accounts");
+            lookupRx.ChartOfAcctsLookup.OnNext(res);
+            return res;
         }
 
-        public async Task<IEnumerable<ItemCategory>> GetItemCategories()
+        public async Task<IEnumerable<GetItem>> GetItems()
         {
-            var httpResponse = await httpClient.GetAsync($"{commonBaseUrl}/itemcategories");
+            var lookup = lookupRx.ItemsLookup.Value;
 
-            if (!httpResponse.IsSuccessStatusCode)
+            if (lookup.Any())
             {
-                return Enumerable.Empty<ItemCategory>();
+                return lookup;
             }
 
-            return Generics.DeserializeJsonString<IEnumerable<ItemCategory>>(await httpResponse.Content.ReadAsStringAsync());
+            var res = await GetLookup<GetItem>("items");
+            lookupRx.ItemsLookup.OnNext(res);
+            return res;
         }
 
-        public async Task<IEnumerable<Measurement>> GetMeasurements()
+        public async Task<IEnumerable<GetItemCategory>> GetItemCategories()
         {
-            var httpResponse = await httpClient.GetAsync($"{commonBaseUrl}/measurements");
+            var lookup = lookupRx.ItemCategoriesLookup.Value;
 
-            if (!httpResponse.IsSuccessStatusCode)
+            if (lookup.Any())
             {
-                return Enumerable.Empty<Measurement>();
+                return lookup;
             }
-
-            return Generics.DeserializeJsonString<IEnumerable<Measurement>>(await httpResponse.Content.ReadAsStringAsync());
+            var res = await GetLookup<GetItemCategory>("itemcategories");
+            lookupRx.ItemCategoriesLookup.OnNext(res);
+            return res;
         }
 
-        public async Task<IEnumerable<GetVendorResponse>> GetVendors()
+        public async Task<IEnumerable<GetMeasurement>> GetMeasurements()
         {
-            var httpResponse = await httpClient.GetAsync($"{commonBaseUrl}/vendors");
+            var lookup = lookupRx.MeasurementsLookup.Value;
 
-            if (!httpResponse.IsSuccessStatusCode)
+            if (lookup.Any())
             {
-                return Enumerable.Empty<GetVendorResponse>();
+                return lookup;
             }
+            var res = await GetLookup<GetMeasurement>("measurements");
+            lookupRx.MeasurementsLookup.OnNext(res);
+            return res;
+        }
 
-            return Generics.DeserializeJsonString<IEnumerable<GetVendorResponse>>(await httpResponse.Content.ReadAsStringAsync());
+        public async Task<IEnumerable<GetVendor>> GetVendors()
+        {
+            var lookup = lookupRx.VendorsLookup.Value;
+
+            if (lookup.Any())
+            {
+                return lookup;
+            }
+            var res =  await GetLookup<GetVendor>("vendors");
+            lookupRx.VendorsLookup.OnNext(res);
+            return res;
+        }
+
+        public async Task<IEnumerable<GetPaymentTerm>> GetPaymentTerms()
+        {
+            var lookup = lookupRx.PaymentTermsLookup.Value;
+
+            if (lookup.Any())
+            {
+                return lookup;
+            }
+            var res = await GetLookup<GetPaymentTerm>("paymentterms");
+            lookupRx.PaymentTermsLookup.OnNext(res);
+            return res;
+        }
+
+        public async Task<IEnumerable<ItemTaxGroup>> GetItemTaxGroups()
+        {
+            var lookup = lookupRx.ItemTaxGroupLookup.Value;
+
+            if (lookup.Any())
+            {
+                return lookup;
+            }
+            var res = await GetLookup<ItemTaxGroup>("itemtaxgroups");
+            lookupRx.ItemTaxGroupLookup.OnNext(res);
+            return res;
         }
     }
 }

@@ -8,11 +8,5 @@ namespace WebBlazor.Pages.Inventory
 {
     public class InventoryComponentBase : SuperComponentBase
     {
-        [Inject]
-        public IInventoryService inventoryService { get; set; } = default!;
-
-
-       
-
     }
 }

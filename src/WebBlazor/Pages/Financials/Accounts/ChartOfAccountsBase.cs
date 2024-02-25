@@ -8,9 +8,6 @@ namespace WebBlazor.Pages.Financials.Accounts
 {
     public class ChartOfAccountsBase : FinancialsComponentBase
     {
-        [Inject]
-        ILookupService lookupService { get; set; } = default!;
-
         protected RadzenDataGrid<BaseAccount> grid;
         protected List<BaseAccount> accounts = new();
         protected bool isLoading = false;

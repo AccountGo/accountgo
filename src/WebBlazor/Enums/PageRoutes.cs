@@ -16,13 +16,6 @@
             public const string CreateItem = $"{baseUrl}/createitem";
         }
 
-        public static class Purchase
-        {
-            const string baseUrl = "purhcase";
-            public const string PurchaseOrders = $"{baseUrl}/orders";
-            public const string CreatePO = $"{baseUrl}/createpo";
-        }
-
         public static class Vendor
         {
             const string baseUrl = "vendor";

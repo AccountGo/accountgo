@@ -2,7 +2,7 @@
 
 namespace Dto.Purchasing.Response
 {
-    public class GetVendorResponse : BaseDto
+    public class GetVendor : BaseDto
     {
         public string No { get; set; }
         public string Name { get; set; }

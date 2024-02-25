@@ -16,8 +16,8 @@ namespace WebBlazor.Pages.Inventory.Items
         public IInventoryService inventoryService { get; set; } = default!;
         [Inject]
         public NavigationManager navigationManager { get; set; } = default!;
-        protected RadzenDataGrid<GetItemResponse> grid { get; set; } = default!;
-        protected IEnumerable<GetItemResponse> items = default!;
+        protected RadzenDataGrid<GetItem> grid { get; set; } = default!;
+        protected IEnumerable<GetItem> items = default!;
         protected bool isLoading = false;
 
         protected override async Task OnInitializedAsync()

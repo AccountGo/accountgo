@@ -4,7 +4,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace Dto.Purchasing.Request
 {
-    public class CreatePORequest : BaseDto
+    public class CreatePO : BaseDto
     {
         [Required(ErrorMessage = "Required")]
         public int? VendorId { get; set; }
@@ -12,6 +12,6 @@ namespace Dto.Purchasing.Request
         public DateTime OrderDate { get; set; }
         public int? PaymentTermId { get; set; }
         public string ReferenceNo { get; set; }
-        public List<CreatePOLineRequest> PurchaseOrderLines { get; set; } = new();
+        public List<CreatePOLine> PurchaseOrderLines { get; set; } = new();
     }
 }

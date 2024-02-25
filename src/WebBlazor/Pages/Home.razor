@@ -1,7 +1,8 @@
 ﻿@page "/"
 @attribute [Authorize]
-
+@inherits SuperComponentBase
 @using System.Globalization
+@using WebBlazor.Services.Contracts
 
 <div class="container-fluid content-padding">
     <div class="row">
@@ -30,12 +31,38 @@
 </div>
 
 @code {
+
     bool showDataLabels = false;
 
     class DataItem
     {
         public string Month { get; set; }
         public double Revenue { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        DispatchLoadingEvent(true);
+        try
+        {
+            var task1 = lookupService.GetAccounts();
+            var task2 = lookupService.GetItems();
+            var task3 = lookupService.GetVendors();
+            var task4 = lookupService.GetItemCategories();
+            var task5 = lookupService.GetMeasurements();
+            var task6 = lookupService.GetPaymentTerms();
+            var task7 = lookupService.GetItemTaxGroups();
+            await Task.WhenAll(task1, task2, task3, task4, task5, task6, task7);
+            StateHasChanged();
+        }
+        catch(Exception ex)
+        {
+
+        }
+        finally
+        {
+            DispatchLoadingEvent(false);
+        }
     }
 
     string FormatAsPHP(object value)

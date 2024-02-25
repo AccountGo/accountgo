@@ -79,27 +79,7 @@ namespace Api.Controllers
             return new ObjectResult(taxGroupsDto);
         }
 
-        [HttpGet]
-        [Route("[action]")]
-        public IActionResult ItemTaxGroups()
-        {
-            var itemTaxGroupsDto = new List<ItemTaxGroup>();
-            var itemTaxGroups = _taxService.GetItemTaxGroups();
 
-            foreach (var group in itemTaxGroups)
-            {
-                var groupDto = new ItemTaxGroup()
-                {
-                    Id = group.Id,
-                    Name = group.Name,
-                    IsFullyExempt = group.IsFullyExempt
-                };
-                
-                itemTaxGroupsDto.Add(groupDto);
-            }
-
-            return new ObjectResult(itemTaxGroupsDto);
-        }
 
         [HttpGet]
         [Route("[action]")]

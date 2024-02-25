@@ -1,0 +1,43 @@
+﻿@using System.Linq.Expressions;
+@using Dto.Common.Response
+@using WebBlazor.Rx
+
+<RadzenDropDown LoadData=@DropdownLoadData AllowFiltering="true" FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive"
+                Data=@data TextProperty="@nameof(GetPaymentTerm.Description)" ValueProperty="@nameof(GetPaymentTerm.Id)" AllowClear="false"
+                @bind-Value=SelectedId Change="()=> SelectedIdChanged.InvokeAsync(SelectedId)" class="w-100" />
+
+@code {
+    [Parameter]
+    public int? SelectedId { get; set; }
+    [Parameter]
+    public EventCallback<int?> SelectedIdChanged { get; set; }
+
+    [Inject] LookupRx lookupRx { get; set; } = default!;
+
+    protected IEnumerable<GetPaymentTerm> data { get; set; } = Enumerable.Empty<GetPaymentTerm>();
+
+    IEnumerable<GetPaymentTerm> lookup { get { return lookupRx.PaymentTermsLookup.Value; } }
+
+    protected override void OnInitialized()
+    {
+        data = lookup;
+    }
+
+    protected void DropdownLoadData(LoadDataArgs args)
+    {
+        data = SearchDropdown(args).ToArray();
+        InvokeAsync(StateHasChanged);
+    }
+
+    IQueryable<GetPaymentTerm> SearchDropdown(LoadDataArgs args)
+    {
+        var query = lookup.AsQueryable();
+
+        if (!string.IsNullOrEmpty(args.Filter))
+        {
+            query = query.Where(c => c.Description.ToLower().Contains(args.Filter.ToLower()));
+        }
+
+        return query;
+    }
+}

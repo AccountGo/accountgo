@@ -9,6 +9,7 @@
 using Core.Domain;
 using Core.Domain.Items;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Services.Inventory
 {
@@ -27,6 +28,7 @@ namespace Services.Inventory
         void DeleteItem(int itemId);
         Item GetItemById(int id);
         Item GetItemByNo(string itemNo);
+        IQueryable<Item> GetItemsLookup();
         IEnumerable<Item> GetAllItems();
         IEnumerable<Measurement> GetMeasurements();
         Measurement GetMeasurementById(int id);

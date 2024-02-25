@@ -1,6 +1,6 @@
 ﻿namespace Dto.Inventory.Response
 {
-    public class GetItemResponse
+    public class GetItem
     {
         public int Id { get; set; }
         /// <summary>
@@ -16,7 +16,9 @@
         /// </summary>
         public string SKU { get; set; }
         public string ItemTaxGroup { get; set; }
-        public string Measurement { get; set; }
+        public int MeasurementId { get; set; }
+        //public string Measurement { get; set; }
+        public GetMeasurement Measurement { get; set; } = new();
         public decimal Cost { get; set; }
         public decimal Price { get;set; }
         public decimal QtyOnHand { get; set; }

@@ -3,8 +3,10 @@
 @attribute [Authorize(Roles = "Admin")]
 @using Dto.Financial
 @using Dto.Inventory
+@using Dto.Inventory.Response
 @using Dto.TaxSystem
 @using Dto.Purchasing.Response
+@using WebBlazor.Components.Dropdown
 <div class="container-fluid content-padding">
 
     <EditForm Model="formModel" OnValidSubmit="Submit">
@@ -44,9 +46,7 @@
                                     <RadzenText class="text-danger" TextStyle="TextStyle.Subtitle1" TagName="TagName.P" Text="*" />
                                 </RadzenStack>
                                
-                                <RadzenDropDown LoadData=@ItemCategoryDropdownLoadData AllowFiltering="true" FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive"
-                                                Data=@itemCategoriesDropdown TextProperty="@nameof(ItemCategory.Name)" ValueProperty="@nameof(ItemCategory.Id)" AllowClear="false"
-                                                @bind-Value=formModel.ItemCategoryId />
+                                <ItemCategoriesDropdown @bind-SelectedId=@formModel.ItemCategoryId/>
                                 <ValidationMessage For="@(()=> formModel.ItemCategoryId)" />
                             </RadzenStack>
                         </div>
@@ -58,10 +58,8 @@
                                     <RadzenText class="text-danger" TextStyle="TextStyle.Subtitle1" TagName="TagName.P" Text="*" />
                                 </RadzenStack>
                                 
-                                <RadzenDropDown LoadData=@MeasurementsDropdownLoadData AllowFiltering="true" FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive"
-                                                Data=@measurementDropdown TextProperty="@nameof(Measurement.Description)" ValueProperty="@nameof(Measurement.Id)" AllowClear="false"
-                                                @bind-Value="formModel.SmallestMeasurementId" />
-                                <ValidationMessage For="@(()=> formModel.SmallestMeasurementId)" />
+                                <MeasurementDropdown @bind-SelectedId=@formModel.SellMeasurementId />
+                                <ValidationMessage For="@(()=> formModel.SellMeasurementId)" />
                             </RadzenStack>
                         </div>
                         <div class="col-xl-4"></div>
@@ -89,9 +87,7 @@
                             @*  Preffered Vendor *@
                             <RadzenStack Gap="1px">
                                 <RadzenText TextStyle="TextStyle.Subtitle1" TagName="TagName.P" Text="Preffered Vendor" />
-                                <RadzenDropDown LoadData=@VendorsDropdownLoadData AllowFiltering="true" FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive"
-                                                Data=@vendorsDropdown TextProperty="@nameof(GetVendorResponse.Name)" ValueProperty="@nameof(GetVendorResponse.Id)" AllowClear="false"
-                                                @bind-Value=formModel.PreferredVendorId />
+                                <VendorDropdown @bind-SelectedId=@formModel.PreferredVendorId/>
                                 <ValidationMessage For="@(()=> formModel.PreferredVendorId)" />
                             </RadzenStack>
                         </div>
@@ -131,9 +127,7 @@
                                     <RadzenText TextStyle="TextStyle.Subtitle1" TagName="TagName.P" Text="Tax" />
                                     <RadzenText class="text-danger" TextStyle="TextStyle.Subtitle1" TagName="TagName.P" Text="*" />
                                 </RadzenStack>
-                                <RadzenDropDown LoadData=@ItemTaxGroupDropdownLoadData AllowFiltering="true" FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive"
-                                                Data=@itemTaxGroupDropdown TextProperty="@nameof(ItemTaxGroup.Name)" ValueProperty="@nameof(ItemTaxGroup.Id)" AllowClear="false"
-                                                @bind-Value=formModel.ItemTaxGroupId />
+                                <ItemTaxGroupDropdown @bind-SelectedId=@formModel.ItemTaxGroupId />
                                 <ValidationMessage For="@(()=> formModel.ItemTaxGroupId)" />
                             </RadzenStack>
                         </div>
@@ -145,10 +139,8 @@
                                     <RadzenText TextStyle="TextStyle.Subtitle1" TagName="TagName.P" Text="Income Account" />
                                     <RadzenText class="text-danger" TextStyle="TextStyle.Subtitle1" TagName="TagName.P" Text="*" />
                                 </RadzenStack>
-                                <RadzenDropDown LoadData=@SalesDropdownLoadData AllowFiltering="true" FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive"
-                                                Data=@salesAccountDropdown TextProperty="@nameof(BaseAccount.AccountName)" ValueProperty="@nameof(BaseAccount.Id)" AllowClear="false" 
-                                                @bind-Value=formModel.SalesAccountId />
-                                <ValidationMessage For="@(()=> formModel.SalesAccountId)" />
+                                <ChartOfAccountsDropdown @bind-SelectedId="formModel.SalesAccountId"/>
+                                <ValidationMessage For="@(()=> formModel.SalesAccountId)" /> 
                             </RadzenStack>
                         </div>
                         <div class="col-xl-4">
@@ -158,9 +150,7 @@
                                     <RadzenText TextStyle="TextStyle.Subtitle1" TagName="TagName.P" Text="Expense Account" />
                                     <RadzenText class="text-danger" TextStyle="TextStyle.Subtitle1" TagName="TagName.P" Text="*" />
                                 </RadzenStack>
-                                <RadzenDropDown LoadData=@ExpenseDropdownLoadData AllowFiltering="true" FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive"
-                                                Data=@expenseAccountDropdown TextProperty="@nameof(BaseAccount.AccountName)" ValueProperty="@nameof(BaseAccount.Id)" AllowClear="false" 
-                                                @bind-Value=formModel.CostOfGoodsSoldAccountId />
+                                <ChartOfAccountsDropdown @bind-SelectedId="formModel.CostOfGoodsSoldAccountId" />
                                 <ValidationMessage For="@(()=> formModel.CostOfGoodsSoldAccountId)" />
                             </RadzenStack>
                         </div>
@@ -171,9 +161,7 @@
                                     <RadzenText TextStyle="TextStyle.Subtitle1" TagName="TagName.P" Text="Inventory Account" />
                                     <RadzenText class="text-danger" TextStyle="TextStyle.Subtitle1" TagName="TagName.P" Text="*" />
                                 </RadzenStack>
-                                <RadzenDropDown  LoadData=@InventoryDropdownLoadData AllowFiltering="true" FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive"
-                                                Data=@inventoryAccountDropdown TextProperty="@nameof(BaseAccount.AccountName)" ValueProperty="@nameof(BaseAccount.Id)" AllowClear="false" 
-                                                @bind-Value=formModel.InventoryAccountId />
+                                <ChartOfAccountsDropdown @bind-SelectedId="formModel.InventoryAccountId" />
                                 <ValidationMessage For="@(()=> formModel.InventoryAccountId)" />
                             </RadzenStack>
                         </div>

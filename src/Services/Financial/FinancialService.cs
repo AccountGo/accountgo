@@ -131,6 +131,7 @@ namespace Services.Financial
 
             return accounts;
         }
+
         public IEnumerable<Account> GetAccounts()
         {
             var accounts = _accountRepo.GetAllIncluding(c => c.Company, 

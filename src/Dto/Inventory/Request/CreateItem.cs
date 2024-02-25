@@ -3,7 +3,7 @@ using System.ComponentModel.Design;
 
 namespace Dto.Inventory.Request
 {
-    public class CreateItemRequest
+    public class CreateItem
     {
         public int Id { get; set; }
         /// <summary>
@@ -64,8 +64,8 @@ namespace Dto.Inventory.Request
         {
             PurchaseDescription = Name;
             SellDescription = Name;
-            SellMeasurementId = SmallestMeasurementId;
-            PurchaseMeasurementId = SmallestMeasurementId;
+            SmallestMeasurementId = SellMeasurementId;
+            PurchaseMeasurementId = SellMeasurementId;
         }
     
     }

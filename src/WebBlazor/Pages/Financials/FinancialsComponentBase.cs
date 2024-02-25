@@ -2,7 +2,7 @@
 
 namespace WebBlazor.Pages.Financials
 {
-    public class FinancialsComponentBase : ComponentBase
+    public class FinancialsComponentBase : SuperComponentBase
     {
     }
 }

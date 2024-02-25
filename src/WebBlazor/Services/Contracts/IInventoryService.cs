@@ -6,7 +6,7 @@ namespace WebBlazor.Services.Contracts
 {
     public interface IInventoryService
     {
-        Task<IEnumerable<GetItemResponse>> GetItems();
-        Task<CreatedResponse> CreateItem(CreateItemRequest request);
+        Task<IEnumerable<GetItem>> GetItems();
+        Task<CreatedResponse> CreateItem(CreateItem request);
     }
 }

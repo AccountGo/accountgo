@@ -24,4 +24,5 @@ builder.Services.AddScoped<ITaxService, TaxService>();
 builder.Services.AddScoped<ILookupService, LookupService>();
 builder.Services.AddScoped<IInventoryService, InventoryService>();
 builder.Services.AddSingleton<LoaderRx>();
+builder.Services.AddSingleton<LookupRx>();
 await builder.Build().RunAsync();

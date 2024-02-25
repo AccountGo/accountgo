@@ -16,6 +16,7 @@ using System.Collections.Generic;
 using Core.Domain.Financials;
 using Core.Domain.TaxSystem;
 using System.Data;
+using System.Threading.Tasks;
 
 namespace Services.Inventory
 {
@@ -119,6 +120,16 @@ namespace Services.Inventory
             throw new NotImplementedException();
         }
 
+        public IQueryable<Item> GetItemsLookup()
+        {
+            var items = _itemRepo.GetAllIncluding(
+                i => i.ItemTaxGroup,
+                i => i.SellMeasurement
+                );
+
+            return items;
+        }
+
         public IEnumerable<Item> GetAllItems()
         {
             var items = _itemRepo.GetAllIncluding(
@@ -129,7 +140,7 @@ namespace Services.Inventory
                 i => i.ItemTaxGroup,
                 i => i.ItemCategory,
                 i => i.InventoryControlJournals,
-                i => i.PurchaseMeasurement
+                i => i.SellMeasurement
                 );
 
             return items;

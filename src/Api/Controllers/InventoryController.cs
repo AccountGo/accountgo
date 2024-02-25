@@ -26,7 +26,7 @@ namespace Api.Controllers
 
         [HttpPost]
         [Route("[action]")]
-        public IActionResult SaveItem([FromBody]CreateItemRequest request)
+        public IActionResult SaveItem([FromBody]CreateItem request)
         {
             bool isNew = request.Id == 0;
             Core.Domain.Items.Item item = null;
@@ -84,11 +84,11 @@ namespace Api.Controllers
         {
             var items = _inventoryService.GetAllItems();
             
-            ICollection<GetItemResponse> itemsDto = new HashSet<GetItemResponse>();
+            ICollection<GetItem> itemsDto = new HashSet<GetItem>();
 
             foreach (var item in items)
             {
-                itemsDto.Add(new GetItemResponse()
+                itemsDto.Add(new GetItem()
                 {
 
                     Id = item.Id,
@@ -96,7 +96,12 @@ namespace Api.Controllers
                     ProductNo = item.No,
                     SKU = item.Code,
                     ItemTaxGroup = item.ItemTaxGroup == null ? "" : item.ItemTaxGroup.Name,
-                    Measurement = item.PurchaseMeasurement == null ? "" : item.PurchaseMeasurement.Description,
+                    Measurement = new GetMeasurement
+                    {
+                        Code = item.SellMeasurement.Code,
+                        Description = item.SellMeasurement?.Description,
+                        Id = item.SellMeasurement.Id
+                    },
                     Cost = item.Cost ?? 0,
                     Price = item.Price ?? 0,
                     QtyOnHand = item.ComputeQuantityOnHand()

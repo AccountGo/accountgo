@@ -14,19 +14,19 @@ namespace WebBlazor.Services
     {
         private const string baseUrl = "/api/inventory";
 
-        public async Task<IEnumerable<GetItemResponse>> GetItems()
+        public async Task<IEnumerable<GetItem>> GetItems()
         {
             var httpResponse = await httpClient.GetAsync($"{baseUrl}/items");
 
             if (!httpResponse.IsSuccessStatusCode)
             {
-                return Enumerable.Empty<GetItemResponse>();
+                return Enumerable.Empty<GetItem>();
             }
 
-            return Generics.DeserializeJsonString<IEnumerable<GetItemResponse>>(await httpResponse.Content.ReadAsStringAsync());
+            return Generics.DeserializeJsonString<IEnumerable<GetItem>>(await httpResponse.Content.ReadAsStringAsync());
         }
 
-        public async Task<CreatedResponse> CreateItem(CreateItemRequest request)
+        public async Task<CreatedResponse> CreateItem(CreateItem request)
         {
             var httpResponse = await httpClient
              .PostAsync($"{baseUrl}/saveitem",

@@ -13,6 +13,11 @@ using System.Linq;
 using System;
 using Core.Domain;
 using Dto.Purchasing.Response;
+using Dto.Common.Response;
+using Dto.Inventory.Response;
+using Microsoft.EntityFrameworkCore;
+using Dto.TaxSystem;
+using Services.TaxSystem;
 
 namespace Api.Controllers
 {
@@ -24,18 +29,20 @@ namespace Api.Controllers
         private readonly IInventoryService _inventoryService;
         private readonly IPurchasingService _purchasingService;
         private readonly IFinancialService _financialService;
-
+        private readonly ITaxService _taxService;
         public LookupController(ISalesService salesService,
             IAdministrationService administrationService,
             IInventoryService inventoryService,
             IPurchasingService purchasingService,
-            IFinancialService financialService)
+            IFinancialService financialService,
+            ITaxService taxService)
         {
             _salesService = salesService;
             _administrationService = administrationService;
             _inventoryService = inventoryService;
             _purchasingService = purchasingService;
             _financialService = financialService;
+            _taxService = taxService;
         }
 
         [HttpGet]
@@ -59,18 +66,44 @@ namespace Api.Controllers
         public IActionResult PaymentTerms()
         {
             var paymentterms = _administrationService.GetPaymentTerms();
-            return new ObjectResult(paymentterms);
+            return new ObjectResult(paymentterms.Select(x=> new GetPaymentTerm
+            {
+                Description = x.Description,
+                DueAfterDays = x.DueAfterDays,
+                IsActive = x.IsActive,
+                PaymentType = (int)x.PaymentType
+            }));
         }
 
         [HttpGet]
         [Route("[action]")]
         public IActionResult Items()
         {
-            var items = _inventoryService.GetAllItems();
-            ICollection<Item> itemsDto = new HashSet<Item>();
+            var items = _inventoryService.GetItemsLookup()
+                .AsNoTracking();
+
+            ICollection<GetItem> itemsDto = new HashSet<GetItem>();
 
             foreach (var item in items)
-                itemsDto.Add(new Item() { Id = item.Id, Description = item.Description , Code = item.Code, Price = item.Price, SellMeasurementId = item.SellMeasurementId});
+            {
+                itemsDto.Add(new GetItem()
+                {
+
+                    Id = item.Id,
+                    Name = item.Description,
+                    ProductNo = item.No,
+                    SKU = item.Code,
+                    ItemTaxGroup = item.ItemTaxGroup == null ? "" : item.ItemTaxGroup.Name,
+                    Measurement = new GetMeasurement
+                    {
+                        Code = item.SellMeasurement.Code,
+                        Description = item.SellMeasurement?.Description,
+                        Id = item.SellMeasurement.Id
+                    },
+                    Cost = item.Cost ?? 0,
+                    Price = item.Price ?? 0,
+                });
+            }
 
             return new ObjectResult(itemsDto);
         }
@@ -132,13 +165,13 @@ namespace Api.Controllers
         [Route("[action]")]
         public IActionResult Vendors()
         {
-            var vendorsDto = new List<GetVendorResponse>();
+            var vendorsDto = new List<GetVendor>();
             try
             {
                 var vendors = _purchasingService.GetVendorLookup();
                 foreach (var vendor in vendors)
                 {
-                    var vendorDto = new GetVendorResponse()
+                    var vendorDto = new GetVendor()
                     {
                         Id = vendor.Id,
                         No = vendor.No,
@@ -182,6 +215,27 @@ namespace Api.Controllers
  
         }
 
+        [HttpGet]
+        [Route("[action]")]
+        public IActionResult ItemTaxGroups()
+        {
+            var itemTaxGroupsDto = new List<ItemTaxGroup>();
+            var itemTaxGroups = _taxService.GetItemTaxGroups();
+
+            foreach (var group in itemTaxGroups)
+            {
+                var groupDto = new ItemTaxGroup()
+                {
+                    Id = group.Id,
+                    Name = group.Name,
+                    IsFullyExempt = group.IsFullyExempt
+                };
+
+                itemTaxGroupsDto.Add(groupDto);
+            }
+
+            return new ObjectResult(itemTaxGroupsDto);
+        }
 
     }
 }

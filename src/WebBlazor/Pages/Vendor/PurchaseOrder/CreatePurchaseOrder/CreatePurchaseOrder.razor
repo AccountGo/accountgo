@@ -1,1 +1,129 @@
-﻿@attribute [Route(PageRoutes.Purchase.CreatePO)]
+﻿@attribute [Route(PageRoutes.Vendor.CreatePO)]
+@attribute [Authorize]
+@inherits CreatePurchaseOrderBase
+@using Dto.Purchasing.Request
+@using Dto.Purchasing.Response
+@using Dto.Inventory.Response
+<div class="container-fluid main-container">
+    <EditForm Model="formModel" OnValidSubmit="Submit">
+        <DataAnnotationsValidator />
+    <div class="row gy-3">
+            <div class="col-xl-3">
+                <RadzenStack Gap="1px" Orientation="Orientation.Vertical">
+                    <RadzenStack Gap="1px" Orientation="Orientation.Horizontal">
+                        <RadzenText TextStyle="TextStyle.Subtitle1" TagName="TagName.P" Text="Vendor" />
+                        <RadzenText class="text-danger" TextStyle="TextStyle.Subtitle1" TagName="TagName.P" Text="*" />
+                    </RadzenStack>
+
+                    <VendorDropdown @bind-SelectedId="formModel.VendorId"  />
+                    <ValidationMessage For="@(()=> formModel.VendorId)" />
+                </RadzenStack>
+            </div>
+            <div class="col-xl-3">
+                <RadzenStack Gap="1px" Orientation="Orientation.Vertical">
+                    <RadzenStack Gap="1px" Orientation="Orientation.Horizontal">
+                        <RadzenText TextStyle="TextStyle.Subtitle1" TagName="TagName.P" Text="Date" />
+                        <RadzenText class="text-danger" TextStyle="TextStyle.Subtitle1" TagName="TagName.P" Text="*" />
+                    </RadzenStack>
+                    <RadzenDatePicker @bind-Value=@formModel.OrderDate ShowTime="true" HourFormat="12" DateFormat="MM/dd/yyyy h:mm tt" Name="DatePickerHourFormat" />
+                    <ValidationMessage For="@(()=> formModel.OrderDate)" />
+                </RadzenStack>
+            </div>
+            <div class="col-xl-6">
+                <RadzenStack AlignItems="AlignItems.End">
+                    <RadzenButton ButtonType="ButtonType.Submit" Icon="save" ButtonStyle="ButtonStyle.Info" Text="Save" />
+                </RadzenStack>
+
+            </div>
+
+            <div class="col-12">
+                <RadzenStack AlignItems="AlignItems.Start">
+                    <RadzenButton Icon="add_circle_outline" ButtonStyle="ButtonStyle.Success" Text="Add Line Item" Click="@InsertRow" />
+                </RadzenStack>
+            </div>
+
+
+            <div class="col-xl-12">
+                <RadzenStack>
+
+                    <RadzenDataGrid @ref="poLineGrid" style="height: 400px"
+                                    AllowVirtualization="false"
+                                    Data="@formModel.PurchaseOrderLines"
+                                    AllowSorting="false"
+                                    AllowFiltering="false"
+                                    AllowPaging="false"
+                                    PagerHorizontalAlign="HorizontalAlign.Center"
+                                    TItem="CreatePOLine"
+                                    EditMode="DataGridEditMode.Multiple"
+                                    RowUpdate="@OnUpdateRow" RowCreate="@OnCreateRow">
+
+                        <Columns>
+                            <RadzenDataGridColumn TItem="CreatePOLine"
+                                                  Property="@nameof(CreatePOLine.ItemName)"
+                                                  Filterable="true" Title="Name"
+                                                  Frozen="false"
+                                                  TextAlign="TextAlign.Start">
+                                <EditTemplate Context="poLine">
+                                    <ItemsDropdown @bind-SelectedId="poLine.ItemId" />
+                                </EditTemplate>
+                            </RadzenDataGridColumn>
+
+                            <RadzenDataGridColumn TItem="CreatePOLine"
+                                                  Property="@nameof(CreatePOLine.Quantity)"
+                                                  Filterable="true" Title="Quantity"
+                                                  Frozen="false"
+                                                  TextAlign="TextAlign.Start">
+                                <EditTemplate Context="poLine">
+                                    <RadzenNumeric @bind-Value="poLine.Quantity" class="w-100" />
+                                </EditTemplate>
+                            </RadzenDataGridColumn>
+
+                            <RadzenDataGridColumn TItem="CreatePOLine"
+                                                  Property="@nameof(CreatePOLine.Amount)"
+                                                  Filterable="true" Title="Amount"
+                                                  Frozen="false"
+                                                  TextAlign="TextAlign.Start">
+                                <EditTemplate Context="poLine">
+                                    <RadzenNumeric @bind-Value="poLine.Amount" class="w-100" />
+                                </EditTemplate>
+                            </RadzenDataGridColumn>
+
+                            <RadzenDataGridColumn TItem="CreatePOLine"
+                                                  Property="@nameof(CreatePOLine.MeasurementId)"
+                                                  Filterable="true" Title="UoM"
+                                                  Frozen="false"
+                                                  TextAlign="TextAlign.Start">
+                                <EditTemplate Context="poLine">
+                                    <MeasurementDropdown @bind-SelectedId="poLine.MeasurementId" />
+                                </EditTemplate>
+                            </RadzenDataGridColumn>
+
+                            <RadzenDataGridColumn TItem="CreatePOLine" Context="poLine" Filterable="false" Sortable="false" TextAlign="TextAlign.Right" Frozen="true" FrozenPosition="FrozenColumnPosition.Right">
+                                <Template Context="poLine">
+                                    <RadzenButton Icon="edit" ButtonStyle="ButtonStyle.Light" Variant="Variant.Flat" Size="ButtonSize.Medium" Click="@(args => EditRow(poLine))" @onclick:stopPropagation="true">
+                                    </RadzenButton>
+                                    <RadzenButton ButtonStyle="ButtonStyle.Danger" Icon="delete" Variant="Variant.Flat" Shade="Shade.Lighter" Size="ButtonSize.Medium" class="my-1 ms-1" Click="@(args => DeleteRow(poLine))" @onclick:stopPropagation="true">
+                                    </RadzenButton>
+                                </Template>
+                                <EditTemplate Context="poLine">
+                                    <RadzenButton Icon="check" ButtonStyle="ButtonStyle.Success" Variant="Variant.Flat" Size="ButtonSize.Medium" Click="@((args) => SaveRow(poLine))">
+                                    </RadzenButton>
+                                    <RadzenButton Icon="close" ButtonStyle="ButtonStyle.Light" Variant="Variant.Flat" Size="ButtonSize.Medium" class="my-1 ms-1" Click="@((args) => CancelEdit(poLine))">
+                                    </RadzenButton>
+                                    <RadzenButton ButtonStyle="ButtonStyle.Danger" Icon="delete" Variant="Variant.Flat" Shade="Shade.Lighter" Size="ButtonSize.Medium" class="my-1 ms-1" Click="@(args => DeleteRow(poLine))">
+                                    </RadzenButton>
+                                </EditTemplate>
+                            </RadzenDataGridColumn>
+                        </Columns>
+                    </RadzenDataGrid>
+                </RadzenStack>
+
+            </div>
+    </div>
+    </EditForm>
+</div>
+<style>
+    .main-container{
+        padding-top:10px;
+    }
+</style>

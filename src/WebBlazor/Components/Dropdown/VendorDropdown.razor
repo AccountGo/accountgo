@@ -1,0 +1,45 @@
+﻿@using System.Linq.Expressions;
+@using Dto.Purchasing.Response
+@using WebBlazor.Rx
+
+<RadzenDropDown LoadData=@DropdownLoadData AllowFiltering="true" FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive"
+                Data=@data TextProperty="@nameof(GetVendor.Name)" ValueProperty="@nameof(GetVendor.Id)" AllowClear="false"
+                @bind-Value=SelectedId Change="()=> SelectedIdChanged.InvokeAsync(SelectedId)" class="w-100" />
+
+@code {
+    [Parameter]
+    public int? SelectedId { get; set; }
+    [Parameter]
+    public EventCallback<int?> SelectedIdChanged { get; set; }
+    [Parameter]
+    public EventCallback<int?> OnIdChanged { get; set; }
+    [Inject] LookupRx lookupRx { get; set; } = default!;
+
+    protected IEnumerable<GetVendor> data { get; set; } = Enumerable.Empty<GetVendor>();
+
+    IEnumerable<GetVendor> vendorsLookup {get{ return lookupRx.VendorsLookup.Value; }}
+
+    protected override void OnInitialized()
+    {
+        data = vendorsLookup;
+    }
+
+    protected void DropdownLoadData(LoadDataArgs args)
+    {
+        
+        data = SearchDropdown(args).ToArray();
+        InvokeAsync(StateHasChanged);
+    }
+
+    IQueryable<GetVendor> SearchDropdown(LoadDataArgs args)
+    {
+        var query = vendorsLookup.AsQueryable();
+
+        if (!string.IsNullOrEmpty(args.Filter))
+        {
+            query = query.Where(c => c.Name.ToLower().Contains(args.Filter.ToLower()));
+        }
+
+        return query;
+    }
+}

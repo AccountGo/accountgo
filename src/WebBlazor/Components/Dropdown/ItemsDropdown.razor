@@ -1,0 +1,43 @@
+﻿@using System.Linq.Expressions;
+@using Dto.Inventory.Response;
+@using WebBlazor.Rx
+
+<RadzenDropDown LoadData=@DropdownLoadData AllowFiltering="true" FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive"
+                Data=@data TextProperty="@nameof(GetItem.Name)" ValueProperty="@nameof(GetItem.Id)" AllowClear="false"
+                @bind-Value=SelectedId Change="()=> SelectedIdChanged.InvokeAsync(SelectedId)" class="w-100" />
+
+@code {
+    [Parameter]
+    public int? SelectedId { get; set; }
+    [Parameter]
+    public EventCallback<int?> SelectedIdChanged { get; set; }
+
+    [Inject] LookupRx lookupRx { get; set; } = default!;
+
+    protected IEnumerable<GetItem> data { get; set; } = Enumerable.Empty<GetItem>();
+
+    IEnumerable<GetItem> lookup { get { return lookupRx.ItemsLookup.Value; } }
+
+    protected override void OnInitialized()
+    {
+        data = lookup;
+    }
+
+    protected void DropdownLoadData(LoadDataArgs args)
+    {
+        data = SearchDropdown(args).ToArray();
+        InvokeAsync(StateHasChanged);
+    }
+
+    IQueryable<GetItem> SearchDropdown(LoadDataArgs args)
+    {
+        var query = lookup.AsQueryable();
+
+        if (!string.IsNullOrEmpty(args.Filter))
+        {
+            query = query.Where(c => c.Name.ToLower().Contains(args.Filter.ToLower()));
+        }
+
+        return query;
+    }
+}

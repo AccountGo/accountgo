@@ -1,0 +1,42 @@
+﻿@using System.Linq.Expressions;
+@using Dto.Financial
+@using WebBlazor.Rx
+
+<RadzenDropDown LoadData=@DropdownLoadData AllowFiltering="true" FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive"
+                Data=@chartOfAccts TextProperty="@nameof(BaseAccount.AccountName)" ValueProperty="@nameof(BaseAccount.Id)" AllowClear="false"
+                @bind-Value=SelectedId Change="()=> SelectedIdChanged.InvokeAsync(SelectedId)" class="w-100" />
+
+
+@code {
+    [Parameter]
+    public int? SelectedId { get; set; }
+    [Parameter]
+    public EventCallback<int?> SelectedIdChanged{ get; set; }
+
+    [Inject] LookupRx lookupRx { get; set; } = default!;
+
+    protected IEnumerable<BaseAccount> chartOfAccts { get; set; } = Enumerable.Empty<BaseAccount>();
+    IEnumerable<BaseAccount> chartOfAcctsLookup{get{ return lookupRx.ChartOfAcctsLookup.Value; }}
+    protected override void OnInitialized()
+    {
+        chartOfAccts = chartOfAcctsLookup;
+    }
+
+    protected void DropdownLoadData(LoadDataArgs args)
+    {
+        chartOfAccts = SearchAccountsDropdown(args).ToArray();
+        InvokeAsync(StateHasChanged);
+    }
+
+    IQueryable<BaseAccount> SearchAccountsDropdown(LoadDataArgs args)
+    {
+        var query = chartOfAcctsLookup.AsQueryable();
+
+        if (!string.IsNullOrEmpty(args.Filter))
+        {
+            query = query.Where(c => c.AccountName.ToLower().Contains(args.Filter.ToLower()));
+        }
+
+        return query;
+    }
+}
