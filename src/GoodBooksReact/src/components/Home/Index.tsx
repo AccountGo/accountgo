@@ -12,7 +12,7 @@ class Home extends React.Component<HomeProps, HomeState> {
     render() {
         return (
            <div className="container">
-                <nav className="navbar navbar-expand-lg navbar-light bg-light p-3">
+                <nav className="navbar navbar-expand-sm navbar-light bg-info p-3">
                     <div className="container-fluid">
                         <a className="navbar-brand" href="/">Good Books</a>
                         <button
