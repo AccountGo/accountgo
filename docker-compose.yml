@@ -8,14 +8,7 @@ services:
         ports:
             - "8001:8001"
         environment:
-            # - ASPNETCORE_ENVIRONMENT=Production
             - ASPNETCORE_URLS=http://+:8001
-            # - DBSERVER=localhost
-            # - DBUSERID=dbuser
-            # - DBPASSWORD=Str0ngPassword
-            # - DBNAME=accountgodb
-    #     depends_on:
-    #         - db
     web:
         image: accountgo/accountgoweb
         build: 
@@ -24,13 +17,5 @@ services:
         ports:
             - "8000:8000"
         environment:
-            # - ASPNETCORE_ENVIRONMENT=Production
             - ASPNETCORE_URLS=http://+:8000
             - APIHOST=api
-    # db:
-    #     image: microsoft/mssql-server-linux
-    #     ports:
-    #         - "1433:1433"
-    #     environment:
-    #         SA_PASSWORD: "Str0ngPassword"
-    #         ACCEPT_EULA: "Y"
