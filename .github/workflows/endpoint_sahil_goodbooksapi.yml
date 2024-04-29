@@ -28,6 +28,18 @@ jobs:
           dotnet-version: '8.x'
           include-prerelease: true
 
+      - name: Install dotnet-ef tool
+        run: |
+          dotnet tool install --global dotnet-ef
+          dotnet ef --version
+      
+      - name: Add migrations
+        run: |
+          dotnet ef migrations add M1 --context ApplicationIdentityDbContext --output-dir ./Data/Migrations/IdentityDb
+          dotnet ef migrations add M2 --context ApiDbContext --output-dir ./Data/Migrations/ApiDb
+          ls ./Data/Migrations/IdentityDb
+          ls ./Data/Migrations/ApiDb
+          
       - name: Build with dotnet
         run: dotnet build --configuration Release
 
