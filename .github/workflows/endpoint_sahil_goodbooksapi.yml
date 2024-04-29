@@ -39,9 +39,15 @@ jobs:
       
       - name: Add migrations
         run: |
+          echo "++++ current directory"
+          pwd
+          echo "++++ add ApplicationIdentityDbContext migration M1"
           dotnet ef migrations add M1 --msbuildprojectextensionspath .build/obj/Api/ --context ApplicationIdentityDbContext --output-dir ./Data/Migrations/IdentityDb
+          echo "++++ add ApiDbContext migration M2"
           dotnet ef migrations add M2 --msbuildprojectextensionspath .build/obj/Api/ --context ApiDbContext --output-dir ./Data/Migrations/ApiDb
+          echo "++++ contents of ./Data/Migrations/IdentityDb"
           ls ./Data/Migrations/IdentityDb
+          echo "++++ contents of ./Data/Migrations/ApiDb"
           ls ./Data/Migrations/ApiDb
 
       - name: dotnet publish
