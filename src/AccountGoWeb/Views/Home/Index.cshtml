@@ -1,4 +1,8 @@
-﻿<div class="row">
+﻿<!-- select different layout for this page -->
+@{
+    Layout = "~/Views/Shared/_Layout_bootstrap.cshtml";
+}
+<div class="row">
     <div class="col-md-6">
         @* @Html.Partial("~/Views/Dashboard/_MonthlySales.cshtml") *@
         <partial name="~/Views/Dashboard/_MonthlySales.cshtml" />
