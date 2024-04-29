@@ -31,17 +31,18 @@ jobs:
       - name: Install dotnet-ef tool
         run: |
           dotnet tool install --global dotnet-ef
+          echo "++++ dotnet-ef version"
           dotnet ef --version
+            
+      - name: Build with dotnet
+        run: dotnet build --configuration Release
       
       - name: Add migrations
         run: |
-          dotnet ef migrations add M1 --context ApplicationIdentityDbContext --output-dir ./Data/Migrations/IdentityDb
-          dotnet ef migrations add M2 --context ApiDbContext --output-dir ./Data/Migrations/ApiDb
+          dotnet ef migrations add M1 --msbuildprojectextensionspath .build/obj/Api/ --context ApplicationIdentityDbContext --output-dir ./Data/Migrations/IdentityDb
+          dotnet ef migrations add M2 --msbuildprojectextensionspath .build/obj/Api/ --context ApiDbContext --output-dir ./Data/Migrations/ApiDb
           ls ./Data/Migrations/IdentityDb
           ls ./Data/Migrations/ApiDb
-          
-      - name: Build with dotnet
-        run: dotnet build --configuration Release
 
       - name: dotnet publish
         run: dotnet publish -c Release -o ${{env.DOTNET_ROOT}}/myapp
