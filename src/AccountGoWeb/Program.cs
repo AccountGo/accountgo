@@ -8,7 +8,8 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllersWithViews();
 
 string urlhost = System.Environment.GetEnvironmentVariable("APIHOST") ?? "localhost";
-builder.Configuration["ApiUrl"] = $"http://{urlhost}:8001/api/";
+string urlport = System.Environment.GetEnvironmentVariable("APIPORT") ?? "8001";
+builder.Configuration["ApiUrl"] = $"http://{urlhost}:{urlport}/api/";
 System.Console.WriteLine($"[ASPNETCORE SERVER] API URL {builder.Configuration["ApiUrl"]}");
 
 builder.Services.AddHttpClient();
