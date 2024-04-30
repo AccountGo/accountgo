@@ -1,20 +1,18 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Configuration;
-using System.Net.Http;
 
 namespace AccountGoWeb.Controllers
 {
     public class BaseController : Controller
     {
-        protected IConfiguration _baseConfig;
+        protected IConfiguration? _baseConfig;
 
         protected async System.Threading.Tasks.Task<T> GetAsync<T>(string uri)
         {
             string responseJson = string.Empty;
             using (var client = new HttpClient())
             {
-                var baseUri = _baseConfig["ApiUrl"];
-                client.BaseAddress = new System.Uri(baseUri);
+                var baseUri = _baseConfig!["ApiUrl"];
+                client.BaseAddress = new System.Uri(baseUri!);
                 client.DefaultRequestHeaders.Accept.Clear();
                 var response = await client.GetAsync(baseUri + uri);
                 if (response.IsSuccessStatusCode)
@@ -22,7 +20,7 @@ namespace AccountGoWeb.Controllers
                     responseJson = await response.Content.ReadAsStringAsync();
                 }
             }
-            return Newtonsoft.Json.JsonConvert.DeserializeObject<T>(responseJson);
+            return Newtonsoft.Json.JsonConvert.DeserializeObject<T>(responseJson)!;
         }
 
         protected HttpResponseMessage Get(string uri)
@@ -30,8 +28,8 @@ namespace AccountGoWeb.Controllers
             string responseJson = string.Empty;
             using (var client = new HttpClient())
             {
-                var baseUri = _baseConfig["ApiUrl"];
-                client.BaseAddress = new System.Uri(baseUri);
+                var baseUri = _baseConfig!["ApiUrl"];
+                client.BaseAddress = new System.Uri(baseUri!);
                 client.DefaultRequestHeaders.Accept.Clear();
                 var response = client.GetAsync(baseUri + uri);
                 return response.Result;
@@ -43,8 +41,8 @@ namespace AccountGoWeb.Controllers
             string responseJson = string.Empty;
             using (var client = new HttpClient())
             {
-                var baseUri = _baseConfig["ApiUrl"];
-                client.BaseAddress = new System.Uri(baseUri);
+                var baseUri = _baseConfig!["ApiUrl"];
+                client.BaseAddress = new System.Uri(baseUri!);
                 client.DefaultRequestHeaders.Accept.Clear();
                 client.DefaultRequestHeaders.Add("UserName", GetCurrentUserName());
 
@@ -55,7 +53,7 @@ namespace AccountGoWeb.Controllers
                 }
             }
 
-            return Newtonsoft.Json.JsonConvert.DeserializeObject<string>(responseJson);
+            return Newtonsoft.Json.JsonConvert.DeserializeObject<string>(responseJson)!;
         }
 
         protected HttpResponseMessage Post(string uri, StringContent data)
@@ -63,8 +61,8 @@ namespace AccountGoWeb.Controllers
             string responseJson = string.Empty;
             using (var client = new HttpClient())
             {
-                var baseUri = _baseConfig["ApiUrl"];
-                client.BaseAddress = new System.Uri(baseUri);
+                var baseUri = _baseConfig!["ApiUrl"];
+                client.BaseAddress = new System.Uri(baseUri!);
                 client.DefaultRequestHeaders.Accept.Clear();
                 client.DefaultRequestHeaders.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
                 client.DefaultRequestHeaders.Add("UserName", GetCurrentUserName());
@@ -76,7 +74,7 @@ namespace AccountGoWeb.Controllers
 
         protected bool HasPermission(string permission)
         {
-            if (HttpContext.User.Identity.IsAuthenticated)
+            if (HttpContext.User.Identity!.IsAuthenticated)
             {
                 System.Collections.Generic.IList<string> permissions = new System.Collections.Generic.List<string>();
 
@@ -87,11 +85,11 @@ namespace AccountGoWeb.Controllers
                     if (current.Type == System.Security.Claims.ClaimTypes.UserData)
                     {
                         Newtonsoft.Json.Linq.JObject userData = Newtonsoft.Json.Linq.JObject.Parse(current.Value);
-                        foreach(var r in userData["Roles"])
+                        foreach(var r in userData["Roles"]!)
                         {
-                            foreach(var p in r["Permissions"])
+                            foreach(var p in r["Permissions"]!)
                             {
-                                permissions.Add(p["Name"].ToString());
+                                permissions.Add(p["Name"]!.ToString());
                             }
                         }
                     }
@@ -105,7 +103,7 @@ namespace AccountGoWeb.Controllers
 
         protected string GetCurrentUserName()
         {
-            if (HttpContext.User.Identity.IsAuthenticated)
+            if (HttpContext.User.Identity!.IsAuthenticated)
             {
                 var claimsEnumerator = HttpContext.User.Claims.GetEnumerator();
                 while (claimsEnumerator.MoveNext())

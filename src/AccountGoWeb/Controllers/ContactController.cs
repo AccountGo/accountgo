@@ -35,8 +35,8 @@ namespace AccountGoWeb.Controllers
             //return View(model: contacts);
             using (var client = new HttpClient())
             {
-                var baseUri = _baseConfig["ApiUrl"];
-                client.BaseAddress = new System.Uri(baseUri);
+                var baseUri = _baseConfig!["ApiUrl"];
+                client.BaseAddress = new System.Uri(baseUri!);
                 client.DefaultRequestHeaders.Accept.Clear(); 
                 var response = await client.GetAsync(baseUri + "contact/contacts?partyId=" + partyId + "&partyType=" + partyType);
                 if (response.IsSuccessStatusCode)
@@ -57,7 +57,7 @@ namespace AccountGoWeb.Controllers
         /// <returns></returns>
         public IActionResult Contact(int id = 0, int partyId = 0, int partyType = 0)
         {
-            Contact contact = null;
+            Contact? contact = null;
 
             if (id == 0) // creating new contact
             {

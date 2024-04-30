@@ -33,7 +33,7 @@ namespace AccountGoWeb.Controllers
             using (var client = new HttpClient())
             {
                 var baseUri = _configuration["ApiUrl"];
-                client.BaseAddress = new System.Uri(baseUri);
+                client.BaseAddress = new System.Uri(baseUri!);
                 client.DefaultRequestHeaders.Accept.Clear();
                 var response = await client.GetAsync(baseUri + "sales/salesorders");
                 if (response.IsSuccessStatusCode)
@@ -66,7 +66,7 @@ namespace AccountGoWeb.Controllers
         }
 
         [HttpPost]
-        public async System.Threading.Tasks.Task<IActionResult> AddSalesOrder(SalesOrder Dto, string addRowBtn)
+        public IActionResult AddSalesOrder(SalesOrder Dto, string addRowBtn)
         {
             if (!string.IsNullOrEmpty(addRowBtn))
             {
@@ -106,7 +106,7 @@ namespace AccountGoWeb.Controllers
         public IActionResult SalesOrder(int id)
         {
             ViewBag.PageContentHeader = "Sales Order";
-            SalesOrder salesOrderModel = null;
+            SalesOrder? salesOrderModel = null;
             if (id == -1)
             {
                 ViewBag.PageContentHeader = "Add Sales Order";
@@ -133,7 +133,7 @@ namespace AccountGoWeb.Controllers
         public IActionResult SalesInvoice(int id)
         {
             ViewBag.PageContentHeader = "Sales Invoice";
-            SalesInvoice salesInvoiceModel = null;
+            SalesInvoice? salesInvoiceModel = null;
 
             if (id == 0)
             {
@@ -164,7 +164,7 @@ namespace AccountGoWeb.Controllers
             using (var client = new HttpClient())
             {
                 var baseUri = _configuration["ApiUrl"];
-                client.BaseAddress = new System.Uri(baseUri);
+                client.BaseAddress = new System.Uri(baseUri!);
                 client.DefaultRequestHeaders.Accept.Clear();
                 var response = await client.GetAsync(baseUri + "sales/salesinvoices");
                 if (response.IsSuccessStatusCode)
@@ -245,7 +245,7 @@ namespace AccountGoWeb.Controllers
             using (var client = new HttpClient())
             {
                 var baseUri = _configuration["ApiUrl"];
-                client.BaseAddress = new System.Uri(baseUri);
+                client.BaseAddress = new System.Uri(baseUri!);
                 client.DefaultRequestHeaders.Accept.Clear();
                 var response = await client.GetAsync(baseUri + "sales/salesreceipts");
                 if (response.IsSuccessStatusCode)
@@ -313,7 +313,7 @@ namespace AccountGoWeb.Controllers
             using (var client = new HttpClient())
             {
                 var baseUri = _configuration["ApiUrl"];
-                client.BaseAddress = new System.Uri(baseUri);
+                client.BaseAddress = new System.Uri(baseUri!);
                 client.DefaultRequestHeaders.Accept.Clear();
                 var response = await client.GetAsync(baseUri + "sales/customers");
                 if (response.IsSuccessStatusCode)
@@ -327,7 +327,7 @@ namespace AccountGoWeb.Controllers
 
         public IActionResult Customer(int id = -1)
         {
-            Customer customerModel = null;
+            Customer? customerModel = null;
             if (id == -1)
             {
                 ViewBag.PageContentHeader = "New Customer";

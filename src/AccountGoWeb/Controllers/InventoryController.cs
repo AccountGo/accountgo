@@ -24,8 +24,8 @@ namespace AccountGoWeb.Controllers
 
             using (var client = new System.Net.Http.HttpClient())
             {
-                var baseUri = _baseConfig["ApiUrl"];
-                client.BaseAddress = new System.Uri(baseUri);
+                var baseUri = _baseConfig!["ApiUrl"];
+                client.BaseAddress = new System.Uri(baseUri!);
                 client.DefaultRequestHeaders.Accept.Clear();
                 var response = await client.GetAsync(baseUri + "inventory/items");
                 if (response.IsSuccessStatusCode)
@@ -44,8 +44,8 @@ namespace AccountGoWeb.Controllers
 
             using (var client = new System.Net.Http.HttpClient())
             {
-                var baseUri = _baseConfig["ApiUrl"];
-                client.BaseAddress = new System.Uri(baseUri);
+                var baseUri = _baseConfig!["ApiUrl"];
+                client.BaseAddress = new System.Uri(baseUri!);
                 client.DefaultRequestHeaders.Accept.Clear();
                 var response = await client.GetAsync(baseUri + "inventory/icj");
                 if (response.IsSuccessStatusCode)
@@ -61,7 +61,7 @@ namespace AccountGoWeb.Controllers
         public IActionResult Item(int id)
         {
             _logger.LogInformation("GetItem: " + id);
-            Item itemModel = null;
+            Item? itemModel = null;
             if (id == -1)
             {
                 ViewBag.PageContentHeader = "Item Customer";

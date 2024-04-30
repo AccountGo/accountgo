@@ -6,9 +6,12 @@ namespace AccountGoWeb.Controllers
     //[Microsoft.AspNetCore.Authorization.Authorize]
     public class FinancialsController : BaseController
     {
-        public FinancialsController(Microsoft.Extensions.Configuration.IConfiguration config)
+        private readonly ILogger<FinancialsController> _logger;
+
+        public FinancialsController(IConfiguration config, ILogger<FinancialsController> logger)
         {
             _baseConfig = config;
+            _logger = logger;
         }
 
         public IActionResult AddJournalEntry()
@@ -29,8 +32,9 @@ namespace AccountGoWeb.Controllers
 
             using (var client = new System.Net.Http.HttpClient())
             {
-                var baseUri = _baseConfig["ApiUrl"];
-                client.BaseAddress = new System.Uri(baseUri);
+                var baseUri = _baseConfig!["ApiUrl"];
+                _logger.LogInformation($"+++++++++++++++ baseUri={baseUri} +++++++++++++++");
+                client.BaseAddress = new System.Uri(baseUri!);
                 client.DefaultRequestHeaders.Accept.Clear();
                 var response = await client.GetAsync(baseUri + "financials/accounts");
                 if (response.IsSuccessStatusCode)
@@ -45,7 +49,7 @@ namespace AccountGoWeb.Controllers
 
         public async System.Threading.Tasks.Task<IActionResult> Account(int? id = null)
         {
-            Dto.Financial.Account accountModel = null;
+            Dto.Financial.Account? accountModel = null;
             if (id == null)
             {
                 accountModel = new Dto.Financial.Account();
@@ -65,8 +69,8 @@ namespace AccountGoWeb.Controllers
 
             using (var client = new System.Net.Http.HttpClient())
             {
-                var baseUri = _baseConfig["ApiUrl"];
-                client.BaseAddress = new System.Uri(baseUri);
+                var baseUri = _baseConfig!["ApiUrl"];
+                client.BaseAddress = new System.Uri(baseUri!);
                 client.DefaultRequestHeaders.Accept.Clear();
                 var response = await client.GetAsync(baseUri + "financials/journalentries");
                 if (response.IsSuccessStatusCode)
@@ -85,8 +89,8 @@ namespace AccountGoWeb.Controllers
 
             using (var client = new System.Net.Http.HttpClient())
             {
-                var baseUri = _baseConfig["ApiUrl"];
-                client.BaseAddress = new System.Uri(baseUri);
+                var baseUri = _baseConfig!["ApiUrl"];
+                client.BaseAddress = new System.Uri(baseUri!);
                 client.DefaultRequestHeaders.Accept.Clear();
                 var response = await client.GetAsync(baseUri + "financials/generalledger");
                 if (response.IsSuccessStatusCode)
@@ -105,8 +109,8 @@ namespace AccountGoWeb.Controllers
 
             using (var client = new System.Net.Http.HttpClient())
             {
-                var baseUri = _baseConfig["ApiUrl"];
-                client.BaseAddress = new System.Uri(baseUri);
+                var baseUri = _baseConfig!["ApiUrl"];
+                client.BaseAddress = new System.Uri(baseUri!);
                 client.DefaultRequestHeaders.Accept.Clear();
                 var response = await client.GetAsync(baseUri + "financials/trialbalance");
                 if (response.IsSuccessStatusCode)
@@ -126,8 +130,8 @@ namespace AccountGoWeb.Controllers
 
             using (var client = new System.Net.Http.HttpClient())
             {
-                var baseUri = _baseConfig["ApiUrl"];
-                client.BaseAddress = new System.Uri(baseUri);
+                var baseUri = _baseConfig!["ApiUrl"];
+                client.BaseAddress = new System.Uri(baseUri!);
                 client.DefaultRequestHeaders.Accept.Clear();
                 var response = await client.GetAsync(baseUri + "financials/balancesheet");
                 if (response.IsSuccessStatusCode)
@@ -161,14 +165,14 @@ namespace AccountGoWeb.Controllers
             //return View(Dto);
         }
 
-        public async System.Threading.Tasks.Task<IActionResult> IncomeStatement()
+        public async Task<IActionResult> IncomeStatement()
         {
             ViewBag.PageContentHeader = "Income Statement";
 
             using (var client = new System.Net.Http.HttpClient())
             {
-                var baseUri = _baseConfig["ApiUrl"];
-                client.BaseAddress = new System.Uri(baseUri);
+                var baseUri = _baseConfig!["ApiUrl"];
+                client.BaseAddress = new System.Uri(baseUri!);
                 client.DefaultRequestHeaders.Accept.Clear();
                 var response = await client.GetAsync(baseUri + "financials/incomestatement");
                 if (response.IsSuccessStatusCode)
