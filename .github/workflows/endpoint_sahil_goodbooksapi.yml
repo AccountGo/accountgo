@@ -50,7 +50,7 @@ jobs:
 
       - name: dotnet publish
         run: |
-          echo "++++ contents of dotnet publish ./src/Api.Api.proj"
+          echo "++++ contents of dotnet publish ./src/Api.proj"
           dotnet publish ./src/Api.Api.proj -c Release -o ${{env.DOTNET_ROOT}}/myapp
 
       - name: Upload artifact for deployment job
