@@ -5,15 +5,10 @@
     <PreserveCompilationContext>true</PreserveCompilationContext>
     <AssemblyName>AccountGoWeb</AssemblyName>
     <PackageId>AccountGoWeb</PackageId>
-    <TypeScriptToolsVersion>latest</TypeScriptToolsVersion>
-    <Version>0.0.1-alpha</Version>
+    <Version>1.0.0</Version>
     <Language>Latest</Language>
+    <InvariantGlobalization>true</InvariantGlobalization>
   </PropertyGroup>
-
-  <ItemGroup>
-    <Content Include="package.json.exclude" />
-    <Content Include="tsconfig.json.exclude" />
-  </ItemGroup>
 
   <ItemGroup>
     <None Update="wwwroot\**\*;Views\**\*;Areas\**\Views;">
