@@ -46,10 +46,12 @@ jobs:
           echo "++++ contents of ./src/Api/Data/Migrations/IdentityDb"
           ls ./src/Api/Data/Migrations/IdentityDb
           echo "++++ contents of ./src/Api/Data/Migrations/ApiDb"
-          ls ../src/Api/Data/Migrations/ApiDb
+          ls ./src/Api/Data/Migrations/ApiDb
 
       - name: dotnet publish
-        run: dotnet publish -c Release -o ${{env.DOTNET_ROOT}}/myapp
+        run: |
+          echo "++++ contents of dotnet publish ./src/Api.Api.proj"
+          dotnet publish ./src/Api.Api.proj -c Release -o ${{env.DOTNET_ROOT}}/myapp
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v3
