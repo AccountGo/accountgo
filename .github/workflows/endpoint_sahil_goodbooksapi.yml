@@ -42,9 +42,9 @@ jobs:
           echo "++++ current directory"
           pwd
           echo "++++ add ApplicationIdentityDbContext migration M1"
-          dotnet ef migrations add M1 --msbuildprojectextensionspath ./Api/obj --context ApplicationIdentityDbContext --output-dir ./Data/Migrations/IdentityDb
+          dotnet ef migrations add Mi --context ApplicationIdentityDbContext --output-dir ./Data/Migrations/IdentityDb
           echo "++++ add ApiDbContext migration M2"
-          dotnet ef migrations add M2 --msbuildprojectextensionspath ./.build/obj/Api/ --context ApiDbContext --output-dir ./Data/Migrations/ApiDb
+          dotnet ef migrations add Ma --context ApiDbContext --output-dir ./Data/Migrations/ApiDb
           echo "++++ contents of ./Data/Migrations/IdentityDb"
           ls ./Data/Migrations/IdentityDb
           echo "++++ contents of ./Data/Migrations/ApiDb"
