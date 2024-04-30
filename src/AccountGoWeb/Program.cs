@@ -7,9 +7,10 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 builder.Services.AddControllersWithViews();
 
-string urlhost = System.Environment.GetEnvironmentVariable("APIHOST") ?? "localhost";
-string urlport = System.Environment.GetEnvironmentVariable("APIPORT") ?? "8001";
-builder.Configuration["ApiUrl"] = $"http://{urlhost}:{urlport}/api/";
+// string urlhost = System.Environment.GetEnvironmentVariable("APIHOST") ?? "localhost";
+// string urlport = System.Environment.GetEnvironmentVariable("APIPORT") ?? "8001";
+string apiurl = System.Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
+builder.Configuration["ApiUrl"] = apiurl;
 System.Console.WriteLine($"[ASPNETCORE SERVER] API URL {builder.Configuration["ApiUrl"]}");
 
 builder.Services.AddHttpClient();
