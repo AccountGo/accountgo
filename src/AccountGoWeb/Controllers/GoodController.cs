@@ -6,7 +6,7 @@ namespace AccountGoWeb.Controllers
 {
     public class GoodController : Controller
     {
-        protected IConfiguration _configuration;
+        protected IConfiguration? _configuration;
 
         protected HttpResponseMessage Get(string uri)
         {
@@ -51,7 +51,7 @@ namespace AccountGoWeb.Controllers
                     responseJson = await response.Content.ReadAsStringAsync();
                 }
             }
-            return Newtonsoft.Json.JsonConvert.DeserializeObject<T>(responseJson);
+            return Newtonsoft.Json.JsonConvert.DeserializeObject<T>(responseJson)!;
         }
 
         protected async System.Threading.Tasks.Task<string> PostAsync(string uri, StringContent data)
@@ -71,7 +71,7 @@ namespace AccountGoWeb.Controllers
                     responseJson = await response.Content.ReadAsStringAsync();
                 }
             }
-            return Newtonsoft.Json.JsonConvert.DeserializeObject<string>(responseJson);
+            return Newtonsoft.Json.JsonConvert.DeserializeObject<string>(responseJson)!;
         }
     }
 }

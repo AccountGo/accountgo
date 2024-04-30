@@ -1,16 +1,5 @@
-﻿using AccountGoWeb.Models;
-using Dto.Sales;
+﻿using Dto.Sales;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Configuration;
-using System.Collections.Generic;
-using System.Net.Http;
-using Microsoft.Extensions.Logging;
-using System;
-using System.Net.Http;
-using System.Text;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Configuration;
 
 namespace AccountGoWeb.Controllers
 {
@@ -37,7 +26,7 @@ namespace AccountGoWeb.Controllers
             using (var client = new HttpClient())
             {
                 var baseUri = _configuration["ApiUrl"];
-                client.BaseAddress = new System.Uri(baseUri);
+                client.BaseAddress = new System.Uri(baseUri!);
                 client.DefaultRequestHeaders.Accept.Clear();
                 var response = await client.GetAsync(baseUri + "sales/quotations");
                 if (response.IsSuccessStatusCode)
@@ -104,7 +93,7 @@ namespace AccountGoWeb.Controllers
                 using (var client = new HttpClient())
                 {
                     var baseUri = _configuration["ApiUrl"];
-                    client.BaseAddress = new Uri(baseUri);
+                    client.BaseAddress = new Uri(baseUri!);
                     var response = await client.PostAsync("sales/savequotation", content);
 
                     if (response.IsSuccessStatusCode)
@@ -120,7 +109,7 @@ namespace AccountGoWeb.Controllers
         {
             ViewBag.PageContentHeader = "Sales";
 
-            SalesQuotation model = null;
+            SalesQuotation? model = null;
 
             if (id == 0)
             {

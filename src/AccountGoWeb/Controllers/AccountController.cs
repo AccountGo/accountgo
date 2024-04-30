@@ -21,7 +21,7 @@ namespace AccountGoWeb.Controllers
 
         [HttpGet]
         [AllowAnonymous]
-        public IActionResult SignIn(string returnUrl = null)
+        public IActionResult SignIn(string? returnUrl = null)
         {
             ViewData["ReturnUrl"] = returnUrl;
             return View(new LoginViewModel() { Email = "admin@accountgo.ph", Password = "P@ssword1" });
@@ -29,7 +29,7 @@ namespace AccountGoWeb.Controllers
 
         [HttpPost]
         [AllowAnonymous]
-        public async Task<IActionResult> SignIn(LoginViewModel model, string returnUrl = null)
+        public async Task<IActionResult> SignIn(LoginViewModel model, string? returnUrl = null)
         {
             ViewData["ReturnUrl"] = returnUrl;
 
@@ -70,7 +70,7 @@ namespace AccountGoWeb.Controllers
 
                     await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal);
 
-                    return RedirectToLocal(returnUrl);
+                    return RedirectToLocal(returnUrl!);
                 }
                 else
                 {
@@ -92,7 +92,7 @@ namespace AccountGoWeb.Controllers
 
         public IActionResult SignedOut()
         {
-            if (HttpContext.User.Identity.IsAuthenticated)
+            if (HttpContext.User.Identity!.IsAuthenticated)
             {
                 return RedirectToAction(nameof(HomeController.Index), "Home");
             }
@@ -106,7 +106,7 @@ namespace AccountGoWeb.Controllers
 
         [HttpGet]
         [AllowAnonymous]
-        public IActionResult Register(string returnUrl = null)
+        public IActionResult Register(string? returnUrl = null)
         {
             ViewData["ReturnUrl"] = returnUrl;
             return View();
@@ -114,7 +114,7 @@ namespace AccountGoWeb.Controllers
 
         [HttpPost]
         [AllowAnonymous]
-        public IActionResult Register(RegisterViewModel model, string returnUrl = null)
+        public IActionResult Register(RegisterViewModel model, string? returnUrl = null)
         {
             ViewData["ReturnUrl"] = returnUrl;
             try
@@ -127,9 +127,9 @@ namespace AccountGoWeb.Controllers
                     HttpResponseMessage responseAddNewUser = Post("account/addnewuser", content);
                     Newtonsoft.Json.Linq.JObject resultAddNewUser = Newtonsoft.Json.Linq.JObject.Parse(responseAddNewUser.Content.ReadAsStringAsync().Result);
 
-                    HttpResponseMessage responseInitialized = null;
-                    Newtonsoft.Json.Linq.JObject resultInitialized = null;
-                    if ((bool)resultAddNewUser["succeeded"])
+                    HttpResponseMessage? responseInitialized = null;
+                    Newtonsoft.Json.Linq.JObject? resultInitialized = null;
+                    if ((bool)resultAddNewUser["succeeded"]!)
                     {
                         responseInitialized = Get("administration/initializedcompany");
                         resultInitialized = Newtonsoft.Json.Linq.JObject.Parse((responseInitialized.Content.ReadAsStringAsync().Result));
@@ -137,7 +137,7 @@ namespace AccountGoWeb.Controllers
                     }
                     else
                     {
-                        ModelState.AddModelError(string.Empty, resultAddNewUser["errors"][0]["description"].ToString());
+                        ModelState.AddModelError(string.Empty, resultAddNewUser["errors"]![0]!["description"]!.ToString());
                         return View(model);
                     }
                 }

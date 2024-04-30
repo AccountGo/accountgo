@@ -29,7 +29,7 @@ namespace AccountGoWeb.Controllers
 
             string purchaseOrders = GetAsync<object>("purchasing/purchaseorders")
                 .Result
-                .ToString();
+                .ToString()!;
 
             return View(model: purchaseOrders);
         }
@@ -94,7 +94,7 @@ namespace AccountGoWeb.Controllers
         {
             ViewBag.PageContentHeader = "Purchase Invoice";
 
-            PurchaseInvoice purchaseInvoiceModel = null;
+            PurchaseInvoice? purchaseInvoiceModel = null;
 
             if (id == 0)
             {
@@ -119,7 +119,7 @@ namespace AccountGoWeb.Controllers
         {
             ViewBag.PageContentHeader = "Purchase Order";
 
-            PurchaseOrder purchaseOrderModel = null;
+            PurchaseOrder? purchaseOrderModel = null;
 
             if (id == 0)
             {
@@ -144,8 +144,8 @@ namespace AccountGoWeb.Controllers
             ViewBag.PageContentHeader = "Purchase Invoices";
             using (var client = new HttpClient())
             {
-                var baseUri = _baseConfig["ApiUrl"];
-                client.BaseAddress = new System.Uri(baseUri);
+                var baseUri = _baseConfig!["ApiUrl"];
+                client.BaseAddress = new System.Uri(baseUri!);
                 client.DefaultRequestHeaders.Accept.Clear();
                 var response = await client.GetAsync(baseUri + "purchasing/purchaseinvoices");
                 if (response.IsSuccessStatusCode)
@@ -226,8 +226,8 @@ namespace AccountGoWeb.Controllers
             ViewBag.PageContentHeader = "Vendors";
             using (var client = new HttpClient())
             {
-                var baseUri = _baseConfig["ApiUrl"];
-                client.BaseAddress = new System.Uri(baseUri);
+                var baseUri = _baseConfig!["ApiUrl"];
+                client.BaseAddress = new System.Uri(baseUri!);
                 client.DefaultRequestHeaders.Accept.Clear();
                 var response = await client.GetAsync(baseUri + "purchasing/vendors");
                 if (response.IsSuccessStatusCode)
@@ -240,7 +240,7 @@ namespace AccountGoWeb.Controllers
         }
         public IActionResult Vendor(int id = -1)
         {
-            Dto.Purchasing.Vendor vendorModel = null;
+            Dto.Purchasing.Vendor? vendorModel = null;
             if (id == -1)
             {
                 ViewBag.PageContentHeader = "New Vendor";
