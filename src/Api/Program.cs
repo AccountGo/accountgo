@@ -110,10 +110,16 @@ using (var scope = app.Services.CreateScope())
     var services = scope.ServiceProvider;
 
     var apiDbContext = services.GetRequiredService<ApiDbContext>();
-    apiDbContext.Database.Migrate();
+    if (!apiDbContext.Database.GetAppliedMigrations().Any())
+    {
+        apiDbContext.Database.Migrate();
+    }
 
     var identityDbContext = services.GetRequiredService<ApplicationIdentityDbContext>();
-    identityDbContext.Database.Migrate();
+    if (!identityDbContext.Database.GetAppliedMigrations().Any())
+    {
+        identityDbContext.Database.Migrate();
+    }
 }
 
 app.Run();
