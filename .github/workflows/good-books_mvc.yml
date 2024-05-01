@@ -61,6 +61,10 @@ jobs:
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_9ED1B649A03F45E7B34C3BE1217B6BDE }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_A41842A963384E4BAB26580EEFE65E92 }}
 
+      - name: Extract artifacts
+        run: |
+          tar -xzvf .net-app/my_artifact.tar.gz -C .net-app
+
       - name: Deploy to Azure Web App
         id: deploy-to-webapp
         uses: azure/webapps-deploy@v2
