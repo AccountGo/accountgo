@@ -63,7 +63,7 @@ jobs:
 
       - name: Extract artifacts
         run: |
-          tar -xzvf my_artifact.tar.gz -C .net-app
+          tar -xzvf my_artifact.tar.gz -C .
 
       - name: Deploy to Azure Web App
         id: deploy-to-webapp
@@ -71,4 +71,5 @@ jobs:
         with:
           app-name: 'good-books'
           slot-name: 'Production'
-          package: .net-app
+          package: .
+          
