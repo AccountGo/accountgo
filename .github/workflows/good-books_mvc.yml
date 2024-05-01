@@ -28,16 +28,16 @@ jobs:
       - name: dotnet publish
         run: dotnet publish ./src/AccountGoWeb/AccountGoWeb.csproj -c Release -o ${{env.DOTNET_ROOT}}/myapp
 
-      - name: Archive production artifacts
-        run: |
-          tar -czvf my_artifact.tar.gz ${{env.DOTNET_ROOT}}/myapp
+      # - name: Archive production artifacts
+      #   run: |
+      #     tar -czvf my_artifact.tar.gz ${{env.DOTNET_ROOT}}/myapp
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v3
         with:
           name: .net-app
-          path: my_artifact.tar.gz
-          # path: ${{env.DOTNET_ROOT}}/myapp
+          # path: my_artifact.tar.gz
+          path: ${{env.DOTNET_ROOT}}/myapp
 
   deploy:
     runs-on: ubuntu-latest
@@ -61,9 +61,9 @@ jobs:
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_9ED1B649A03F45E7B34C3BE1217B6BDE }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_A41842A963384E4BAB26580EEFE65E92 }}
 
-      - name: Extract artifacts
-        run: |
-          tar -xzvf my_artifact.tar.gz -C .
+      # - name: Extract artifacts
+      #   run: |
+      #     tar -xzvf my_artifact.tar.gz -C .
 
       - name: Deploy to Azure Web App
         id: deploy-to-webapp
