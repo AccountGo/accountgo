@@ -71,7 +71,7 @@ jobs:
           tar -xzvf my_artifact.tar.gz -C .
 
       - name: Print working directory
-          run: pwd
+        run: pwd
 
       - name: List directory contents
         run: ls -l /home/runner/.dotnet/
