@@ -1,0 +1,8 @@
+API:
+https://goodbooksapi.azurewebsites.net
+
+MVC:
+https://good-books.azurewebsites.net
+
+React:
+https://mango-glacier-0edfec41e.5.azurestaticapps.net
