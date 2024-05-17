@@ -76,5 +76,5 @@ jobs:
         with:
           app-name: 'good-books'
           slot-name: 'Production'
-          package: .
+          package: /home/runner/.dotnet/myapp
           
