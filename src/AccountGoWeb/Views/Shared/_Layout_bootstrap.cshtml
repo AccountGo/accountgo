@@ -5,7 +5,7 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, shrink-to-fit=no">
     <meta name="description" content="Good Books - Open Source Accounting System">
-    <title>AccountGo</title>
+    <title>Good Books</title>
     <link rel="icon" type="image/x-icon" href="~/images/favicon.ico">
     <!-- Icons-->
     @* <link href="~/css/coreui/icons/css/all.min.css" rel="stylesheet"> *@
@@ -337,7 +337,11 @@
     <footer class="app-footer">
         <div>
             <span>GoodBooks</span>
-            <span>&copy; 2024 All rights reserved.</span>
+            <span>&copy; @DateTime.Now.Year All rights reserved.</span>
+            &nbsp;|&nbsp;
+            @System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription
+            - Build
+            @File.GetLastWriteTime(System.Reflection.Assembly.GetExecutingAssembly().Location).ToLocalTime()
         </div>
         <div class="ml-auto">
             <span>Powered by</span>
