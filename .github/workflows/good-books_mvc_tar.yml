@@ -32,20 +32,26 @@ jobs:
         run: |
           echo "+++++++++++++++++++++++++ where am I? ++++++++++++++++++++++++"
           pwd
-          cwd=$(pwd)
+          echo "+++++++++++++++++++++++++ save current directory into a variable dir ++++"
+          dir=$(pwd)
+          echo "+++++++++ what is in variable dir ++++++++++++++"
+          echo $dir
           echo "++++++++++++++++++++++++ what's in current directory? ++++++++"
           ls -al
           echo "+++++ what's in the ${{env.DOTNET_ROOT}}/myapp directory? ++++"
           ls -al ${{env.DOTNET_ROOT}}/myapp
           echo "+++++ change directoiry to ${{env.DOTNET_ROOT}}/myapp ++++"
-          dir=$(pwd)
           cd ${{env.DOTNET_ROOT}}/myapp
           echo "+++++++++++++++++++++++++ where am I? ++++++++++++++++++++++++"
           pwd
-          echo "+++++++++ what is in $dir ++++++++++++++"
-          echo dir
-          echo "+++++ compress current directory ++++"
+          echo "+++++++++++++++++++++++++ compress current directory and save in $dir/my_artifact.tar.gz ++++"
           tar -czvf $dir/my_artifact.tar.gz .
+          echo "+++++++++++++++++++++++++ change dir to to $dir directory ++++"
+          cd $dir
+          echo "+++++++++++++++++++++++++ where am I? ++++++++++++++++++++++++"
+          pwd
+          echo "++++++++++++++++++++++++ what's in $dir directory? ++++++++"
+          ls -al
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v3
