@@ -22,6 +22,8 @@ jobs:
 
       - name: Replace API URL
         run: |
+          pwd
+          echo "++++ search & replace API URL from http://localhost:8001/api/ to https://goodbooksapi.azurewebsites.net/api/"
           sed -i 's|http://localhost:8001/api/|https://goodbooksapi.azurewebsites.net/api/|g' src/components/Shared/Config/index.tsx
 
       - name: Build And Deploy
