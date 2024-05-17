@@ -36,7 +36,12 @@ jobs:
           ls -al
           echo "+++++ what's in the ${{env.DOTNET_ROOT}}/myapp directory? ++++"
           ls -al ${{env.DOTNET_ROOT}}/myapp
-          tar -czvf my_artifact.tar.gz ${{env.DOTNET_ROOT}}/myapp
+          echo "+++++ change directoiry to ${{env.DOTNET_ROOT}}/myapp ++++"
+          cd ${{env.DOTNET_ROOT}}/myapp
+          echo "+++++++++++++++++++++++++ where am I? ++++++++++++++++++++++++"
+          pwd
+          echo "+++++ compress ${{env.DOTNET_ROOT}}/myapp directory ++++"
+          tar -czvf ../../my_artifact.tar.gz .
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v3
@@ -82,5 +87,5 @@ jobs:
         with:
           app-name: 'good-books'
           slot-name: 'Production'
-          package: /home/runner/.dotnet/myapp
+          package: .
           
