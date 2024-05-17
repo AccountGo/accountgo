@@ -30,22 +30,24 @@ jobs:
 
       - name: Archive production artifacts
         run: |
-          echo "++++ where am I? ++++"
+          echo "+++++++++++++++++++++++++ where am I? ++++++++++++++++++++++++"
           pwd
-          echo "++++ what's in the directory? ++++"
+          echo "++++++++++++++++++++++++ what's in current directory? ++++++++"
           ls -al
-          echo "++++ what's in the myapp directory? ++++"
+          echo "+++++ what's in the ${{env.DOTNET_ROOT}}/myapp directory? ++++"
           ls -al ${{env.DOTNET_ROOT}}/myapp
           tar -czvf my_artifact.tar.gz ${{env.DOTNET_ROOT}}/myapp
 
       - name: Upload artifact for deployment job
+        run: |
+          echo "++++++++++++++++++++++++ what's in current directory? ++++++++++++++++++++++++"
+          ls -al
+          echo ""++++++++++++++++++++++++ what's in tar file? "++++++++++++++++++++++++"
+          tar -tzf my_artifact.tar.gz
         uses: actions/upload-artifact@v3
         with:
           name: .net-app
-          path: |
-            my_artifact.tar.gz
-            echo "++++ what's in tar file? ++++"
-            tar -tzf my_artifact.tar.gz
+          path: my_artifact.tar.gz
           # path: ${{env.DOTNET_ROOT}}/myapp
 
   deploy:
