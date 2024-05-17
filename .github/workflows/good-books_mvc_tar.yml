@@ -39,16 +39,18 @@ jobs:
           tar -czvf my_artifact.tar.gz ${{env.DOTNET_ROOT}}/myapp
 
       - name: Upload artifact for deployment job
-        run: |
-          echo "++++++++++++++++++++++++ what's in current directory? ++++++++++++++++++++++++"
-          ls -al
-          echo ""++++++++++++++++++++++++ what's in tar file? "++++++++++++++++++++++++"
-          tar -tzf my_artifact.tar.gz
         uses: actions/upload-artifact@v3
         with:
           name: .net-app
           path: my_artifact.tar.gz
           # path: ${{env.DOTNET_ROOT}}/myapp
+
+      - name: Inspect the artifact
+        run: |
+          echo "++++++++++++++++++++++++ what's in current directory? ++++++++++++++++++++++++"
+          ls -al
+          echo ""++++++++++++++++++++++++ what's in tar file? "++++++++++++++++++++++++"
+          tar -tzf my_artifact.tar.gz
 
   deploy:
     runs-on: ubuntu-latest
