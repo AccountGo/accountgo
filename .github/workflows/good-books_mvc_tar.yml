@@ -45,12 +45,12 @@ jobs:
           path: my_artifact.tar.gz
           # path: ${{env.DOTNET_ROOT}}/myapp
 
-      - name: Inspect the artifact
-        run: |
-          echo "++++++++++++++++++++++++ what's in current directory? ++++++++++++++++++++++++"
-          ls -al
-          echo ""++++++++++++++++++++++++ what's in tar file? "++++++++++++++++++++++++"
-          tar -tzf my_artifact.tar.gz
+      # - name: Inspect the artifact
+      #   run: |
+      #     echo "++++++++++++++++++++++++ what's in current directory? ++++++++++++++++++++++++"
+      #     ls -al
+      #     echo ""++++++++++++++++++++++++ what's in tar file? "++++++++++++++++++++++++"
+      #     tar -tzf my_artifact.tar.gz
 
   deploy:
     runs-on: ubuntu-latest
