@@ -43,14 +43,6 @@ jobs:
         with:
           name: .net-app
           path: my_artifact.tar.gz
-          # path: ${{env.DOTNET_ROOT}}/myapp
-
-      # - name: Inspect the artifact
-      #   run: |
-      #     echo "++++++++++++++++++++++++ what's in current directory? ++++++++++++++++++++++++"
-      #     ls -al
-      #     echo ""++++++++++++++++++++++++ what's in tar file? "++++++++++++++++++++++++"
-      #     tar -tzf my_artifact.tar.gz
 
   deploy:
     runs-on: ubuntu-latest
@@ -78,11 +70,11 @@ jobs:
         run: |
           tar -xzvf my_artifact.tar.gz -C .
 
-      # - name: Deploy to Azure Web App
-      #   id: deploy-to-webapp
-      #   uses: azure/webapps-deploy@v2
-      #   with:
-      #     app-name: 'good-books'
-      #     slot-name: 'Production'
-      #     package: .
+      - name: Deploy to Azure Web App
+        id: deploy-to-webapp
+        uses: azure/webapps-deploy@v2
+        with:
+          app-name: 'good-books'
+          slot-name: 'Production'
+          package: .
           
