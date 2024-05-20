@@ -6,7 +6,7 @@ namespace AccountGoWeb.Models
 {
     public static class SelectListItemHelper
     {
-        public static IConfiguration _config;
+        public static IConfiguration? _config;
 
         public static IEnumerable<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem> Accounts()
         {
@@ -136,8 +136,8 @@ namespace AccountGoWeb.Models
             string responseJson = string.Empty;
             using (var client = new HttpClient())
             {
-                var baseUri = _config["ApiUrl"];
-                client.BaseAddress = new System.Uri(baseUri);
+                var baseUri = _config!["ApiUrl"];
+                client.BaseAddress = new System.Uri(baseUri!);
                 client.DefaultRequestHeaders.Accept.Clear();
                 var response = await client.GetAsync(baseUri + uri);
                 if (response.IsSuccessStatusCode)
@@ -145,7 +145,7 @@ namespace AccountGoWeb.Models
                     responseJson = await response.Content.ReadAsStringAsync();
                 }
             }
-            return Newtonsoft.Json.JsonConvert.DeserializeObject<T>(responseJson);
+            return Newtonsoft.Json.JsonConvert.DeserializeObject<T>(responseJson)!;
         }
         #endregion
     }

@@ -6,7 +6,7 @@ namespace AccountGoWeb.Controllers
     //[Microsoft.AspNetCore.Authorization.Authorize]
     public class QuotationsController : GoodController
     {
-        private readonly IConfiguration _configuration;
+        //private readonly IConfiguration _configuration;
         private readonly ILogger<QuotationsController> _logger;
         public QuotationsController(IConfiguration config, ILogger<QuotationsController> logger)
         {
@@ -25,7 +25,7 @@ namespace AccountGoWeb.Controllers
 
             using (var client = new HttpClient())
             {
-                var baseUri = _configuration["ApiUrl"];
+                var baseUri = _configuration!["ApiUrl"];
                 client.BaseAddress = new System.Uri(baseUri!);
                 client.DefaultRequestHeaders.Accept.Clear();
                 var response = await client.GetAsync(baseUri + "sales/quotations");
@@ -92,7 +92,7 @@ namespace AccountGoWeb.Controllers
                 _logger.LogInformation("Quotation ID is is : " + model.Id);
                 using (var client = new HttpClient())
                 {
-                    var baseUri = _configuration["ApiUrl"];
+                    var baseUri = _configuration!["ApiUrl"];
                     client.BaseAddress = new Uri(baseUri!);
                     var response = await client.PostAsync("sales/savequotation", content);
 

@@ -1,5 +1,11 @@
 @model Dto.Inventory.Item
 
+<style>
+    div.row {
+        color: #fff;
+    }
+</style>
+
  <form action="~/Inventory/SaveItem" method="post">
     <div class="col-sm-10">
         @Html.AntiForgeryToken()
