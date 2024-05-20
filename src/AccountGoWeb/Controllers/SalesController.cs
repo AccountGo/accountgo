@@ -12,7 +12,7 @@ namespace AccountGoWeb.Controllers
     //[Microsoft.AspNetCore.Authorization.Authorize]
     public class SalesController : GoodController
     {
-        private readonly IConfiguration _configuration;
+        // private readonly IConfiguration _configuration;
         private readonly ILogger<SalesController> _logger;
 
         public SalesController(IConfiguration config, ILogger<SalesController> logger)
@@ -32,7 +32,7 @@ namespace AccountGoWeb.Controllers
             ViewBag.PageContentHeader = "Sales Orders";
             using (var client = new HttpClient())
             {
-                var baseUri = _configuration["ApiUrl"];
+                var baseUri = _configuration!["ApiUrl"];
                 client.BaseAddress = new System.Uri(baseUri!);
                 client.DefaultRequestHeaders.Accept.Clear();
                 var response = await client.GetAsync(baseUri + "sales/salesorders");
@@ -163,7 +163,7 @@ namespace AccountGoWeb.Controllers
             ViewBag.PageContentHeader = "Sales Invoices";
             using (var client = new HttpClient())
             {
-                var baseUri = _configuration["ApiUrl"];
+                var baseUri = _configuration!["ApiUrl"];
                 client.BaseAddress = new System.Uri(baseUri!);
                 client.DefaultRequestHeaders.Accept.Clear();
                 var response = await client.GetAsync(baseUri + "sales/salesinvoices");
@@ -244,7 +244,7 @@ namespace AccountGoWeb.Controllers
             ViewBag.PageContentHeader = "Sales Receipts";
             using (var client = new HttpClient())
             {
-                var baseUri = _configuration["ApiUrl"];
+                var baseUri = _configuration!["ApiUrl"];
                 client.BaseAddress = new System.Uri(baseUri!);
                 client.DefaultRequestHeaders.Accept.Clear();
                 var response = await client.GetAsync(baseUri + "sales/salesreceipts");
@@ -312,7 +312,7 @@ namespace AccountGoWeb.Controllers
             ViewBag.PageContentHeader = "Customers";
             using (var client = new HttpClient())
             {
-                var baseUri = _configuration["ApiUrl"];
+                var baseUri = _configuration!["ApiUrl"];
                 client.BaseAddress = new System.Uri(baseUri!);
                 client.DefaultRequestHeaders.Accept.Clear();
                 var response = await client.GetAsync(baseUri + "sales/customers");
