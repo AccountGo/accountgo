@@ -28,7 +28,8 @@ namespace Api.Controllers
             var cashAndBanks = _financialService.GetCashAndBanks();
             var cashAndBanksDto = new List<Bank>();
 
-            foreach (var bank in cashAndBanks) {
+            foreach (var bank in cashAndBanks)
+            {
                 cashAndBanksDto.Add(new Bank()
                 {
                     Id = bank.Id,
@@ -84,7 +85,8 @@ namespace Api.Controllers
             var journalEntries = _financialService.GetJournalEntries();
             var journalEntriesDto = new List<JournalEntry>();
 
-            foreach (var je in journalEntries) {
+            foreach (var je in journalEntries)
+            {
                 var journalEntryDto = new JournalEntry()
                 {
                     Id = je.Id,
@@ -95,7 +97,8 @@ namespace Api.Controllers
                     Posted = je.Posted
                 };
 
-                foreach (var line in je.JournalEntryLines) {
+                foreach (var line in je.JournalEntryLines)
+                {
                     var lineDto = new JournalEntryLine()
                     {
                         Id = line.Id,
@@ -157,7 +160,7 @@ namespace Api.Controllers
 
         [HttpPost]
         [Route("PostJournalEntry")]
-        public IActionResult PostJournalEntry([FromBody]JournalEntry journalEntryDto)
+        public IActionResult PostJournalEntry([FromBody] JournalEntry journalEntryDto)
         {
             string[] errors = null;
 
@@ -188,7 +191,7 @@ namespace Api.Controllers
 
         [HttpPost]
         [Route("SaveJournalEntry")]
-        public IActionResult SaveJournalEntry([FromBody]JournalEntry journalEntryDto)
+        public IActionResult SaveJournalEntry([FromBody] JournalEntry journalEntryDto)
         {
             string[] errors = null;
 
@@ -292,7 +295,7 @@ namespace Api.Controllers
             var generalLedgerTree = BuildMasterGeneralLedger(Dto);
 
             return new ObjectResult(generalLedgerTree);
- 
+
         }
 
         [HttpGet]
@@ -376,7 +379,7 @@ namespace Api.Controllers
         {
             var ledgerTree = new List<Dto.Financial.MasterGeneralLedger>();
 
- 
+
             var parentLedger = allLedger.Select(a => a.TransactionNo).Distinct();
             var childLedgers = new List<Dto.Financial.MasterGeneralLedger>();
             parentLedger.ToList().ForEach(a =>
@@ -392,18 +395,18 @@ namespace Api.Controllers
                 secondChild.Date = null;
                 foreach (var ledger in childrenLedger)
                 {
-                        var thirdChild = new Dto.Financial.MasterGeneralLedger();
-                        thirdChild.Id = ledger.Id;
-                        thirdChild.TransactionNo = ledger.TransactionNo;
-                        thirdChild.AccountId = ledger.AccountId;
-                        thirdChild.AccountName = ledger.AccountName;
-                        thirdChild.AccountCode = ledger.AccountCode;
-                        thirdChild.CurrencyId = ledger.CurrencyId;
-                        thirdChild.Date = ledger.Date;
-                        thirdChild.Debit = ledger.Debit;
-                        thirdChild.Credit = ledger.Credit;
-                        thirdChildren.Add(thirdChild);
-                        secondChild.ChildMasterGeneralLedger = thirdChildren;                    
+                    var thirdChild = new Dto.Financial.MasterGeneralLedger();
+                    thirdChild.Id = ledger.Id;
+                    thirdChild.TransactionNo = ledger.TransactionNo;
+                    thirdChild.AccountId = ledger.AccountId;
+                    thirdChild.AccountName = ledger.AccountName;
+                    thirdChild.AccountCode = ledger.AccountCode;
+                    thirdChild.CurrencyId = ledger.CurrencyId;
+                    thirdChild.Date = ledger.Date;
+                    thirdChild.Debit = ledger.Debit;
+                    thirdChild.Credit = ledger.Credit;
+                    thirdChildren.Add(thirdChild);
+                    secondChild.ChildMasterGeneralLedger = thirdChildren;
                 }
 
                 childLedgers.Add(secondChild);
