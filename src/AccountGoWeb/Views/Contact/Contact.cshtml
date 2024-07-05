@@ -46,12 +46,12 @@
                         <input asp-for="Party.Phone" class="form-control" type="text" placeholder="Phone ..." />
                     </div>
                 </div>
-                <div class="row">
+                @* <div class="row">
                     <div class="col-sm-4">Fax</div>
                     <div class="col-sm-8">
                         <input asp-for="Party.Fax" class="form-control" type="text" placeholder="Fax ..." />
                     </div>
-                </div>
+                </div> *@
                 <div class="row">
                     <div class="col-sm-4">Website</div>
                     <div class="col-sm-8">
@@ -68,7 +68,7 @@
         </div>
     </div>
     <div class="col-sm-9">
-        <input id="btnSave" class="btn btn-sm btn-primary btn-flat pull-left disabledControl" type="submit" value="Save" />
+        <input id="btnSave" class="btn btn-sm btn-primary btn-flat pull-left" type="submit" value="Save" />
         <a href="~/sales/customers" class="btn btn-sm btn-default btn-flat pull-left">Close</a>
     </div>
  </form>
