@@ -1,0 +1,23 @@
+﻿@page "/students"
+@rendermode InteractiveServer
+<PageTitle>Students</PageTitle>
+<h1>Students</h1>
+<QuickGrid Items="@students" Pagination="@pagination">
+    <PropertyColumn Property="@(_ => _.Id)" Sortable="true" />
+    <TemplateColumn Title="Name" SortBy="@sortByName">
+        <div class="flex items-center">
+            <nobr>
+                <strong>@context.FirstName @context.LastName</strong>
+            </nobr>
+        </div>
+    </TemplateColumn>
+    <PropertyColumn Property="@(_ => _.School)" Sortable="true" />
+</QuickGrid>
+<Paginator State="@pagination" />
+
+@code {
+    IQueryable<Student> students = Student.GetStudents();
+    PaginationState pagination = new PaginationState { ItemsPerPage = 10 };
+    GridSort<Student> sortByName = GridSort<Student>
+    .ByAscending(_ => _.FirstName).ThenAscending(_ => _.LastName);
+}

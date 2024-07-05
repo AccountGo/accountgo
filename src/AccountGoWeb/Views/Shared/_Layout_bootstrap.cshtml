@@ -2,6 +2,9 @@
 <html lang="en">
 
 <head>
+    <base href="~/" />
+    <component type="typeof(Microsoft.AspNetCore.Components.Web.HeadOutlet)"
+               render-mode="ServerPrerendered" />
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, shrink-to-fit=no">
@@ -17,6 +20,11 @@
     <!-- Main styles for this application-->
     <link href="~/css/dark.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/pace-js@latest/pace-theme-default.min.css" rel="stylesheet">
+
+    <!-- suggested by GitHub copilot chat on July 5, 2024 -->
+    <!-- Add these in the <head> section -->
+    <link href="_content/QuickGrid/quickgrid.css" rel="stylesheet" />
+    <script src="_content/QuickGrid/quickgrid.js"></script>
 </head>
 
 <body class="app header-fixed sidebar-fixed aside-menu-fixed sidebar-lg-show">
@@ -78,7 +86,7 @@
         }
     </style>
     <header class="app-header navbar">
-        <a class="navbar-brand" href="#">
+        <a class="navbar-brand" href="/">
             <span class="text-light">GoodBooks</span>
         </a>
     </header>
@@ -361,7 +369,6 @@
     <script src="https://cdn.jsdelivr.net/npm/@@coreui/coreui@4.3.2/dist/js/coreui.bundle.min.js"></script>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/ag-grid/31.0.1/ag-grid-community.min.js"></script>
-    <script src="~/scripts/vendor.chunk.js"></script>
 
     <script>
         $('.sub-menu ul').hide();
@@ -370,7 +377,8 @@
             $(this).find(".right").toggleClass("fa-caret-up fa-caret-down");
         });
     </script>
-
+    @* <script src="_framework/blazor.web.js"></script> *@
+    <script src="~/_framework/blazor.server.js"></script>
     <!-- PLugins and scripts required by the views -->
     @RenderSection("Scripts", required: false)
 </body>

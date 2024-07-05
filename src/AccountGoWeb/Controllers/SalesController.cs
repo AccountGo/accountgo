@@ -1,11 +1,6 @@
 ﻿using AccountGoWeb.Models;
 using Dto.Sales;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Configuration;
-using System.Collections.Generic;
-using System.Net.Http;
-using Microsoft.Extensions.Logging;
-using System.Threading.Tasks;
 
 namespace AccountGoWeb.Controllers
 {

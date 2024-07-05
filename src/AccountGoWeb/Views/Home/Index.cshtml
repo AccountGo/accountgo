@@ -1,15 +1,16 @@
 ﻿<!-- select different layout for this page -->
-@{
+@* @{
     Layout = "~/Views/Shared/_Layout_bootstrap.cshtml";
-}
+} *@
 <div class="row">
     <div class="col-md-6">
-        @* @Html.Partial("~/Views/Dashboard/_MonthlySales.cshtml") *@
         <partial name="~/Views/Dashboard/_MonthlySales.cshtml" />
     </div>
     <div class="col-md-6"></div>
 </div>
 <div class="row">
-    <div class="col-md-6"></div>
+    <div class="col-md-6">
+        <component type="typeof(Students)" render-mode="ServerPrerendered" />
+    </div>
     <div class="col-md-6"></div>
 </div>
