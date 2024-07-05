@@ -1,14 +1,11 @@
 ﻿using Dto.Administration;
 using Dto.Security;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Configuration;
-using System;
-using System.Net.Http;
 
 namespace AccountGoWeb.Controllers
 {
-  //[Microsoft.AspNetCore.Authorization.Authorize]
-  public class AdministrationController : BaseController
+    //[Microsoft.AspNetCore.Authorization.Authorize]
+    public class AdministrationController : BaseController
   {
     public AdministrationController(IConfiguration config)
     {

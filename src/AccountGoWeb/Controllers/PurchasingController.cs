@@ -1,9 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Configuration;
-using System.Net.Http;
-using Microsoft.Extensions.Logging;
-using Dto.Purchasing;
-using System.Collections.Generic;
+﻿using Dto.Purchasing;
+using Microsoft.AspNetCore.Mvc;
 
 namespace AccountGoWeb.Controllers
 {

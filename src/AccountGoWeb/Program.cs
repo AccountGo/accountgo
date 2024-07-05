@@ -1,7 +1,5 @@
+using AccountGoWeb.Components;
 using Microsoft.AspNetCore.Authentication.Cookies;
-using Microsoft.AspNetCore.Builder;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -17,6 +15,11 @@ System.Console.WriteLine($"[ASPNETCORE SERVER] API URL {builder.Configuration["A
 builder.Services.AddHttpClient();
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(o => o.LoginPath = new PathString("/account/signin"));
+
+builder.Services
+.AddRazorComponents()
+.AddInteractiveServerComponents()
+.AddCircuitOptions(options => options.DetailedErrors = true); // for debugging razor components
 
 var app = builder.Build();
 
@@ -34,10 +37,14 @@ app.UseStaticFiles();
 app.UseRouting();
 
 app.UseAuthentication();
+app.UseAntiforgery();
 app.UseAuthorization();
 
 app.MapControllerRoute(
     name: "default",
     pattern: "{controller=Home}/{action=Index}/{id?}");
+
+app.MapRazorComponents<App>()
+.AddInteractiveServerRenderMode();
 
 app.Run();
