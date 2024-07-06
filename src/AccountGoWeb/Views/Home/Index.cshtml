@@ -1,9 +1,10 @@
-﻿<!-- select different layout for this page -->
-@* @{
-    Layout = "~/Views/Shared/_Layout_bootstrap.cshtml";
-} *@
+﻿<div class="row">
+    <div class="col-md-12">
+        <img src="~/images/gbd/logo2_trans.png" alt="Good Deed Books Logo" class="img-fluid mx-auto d-block" id="main-logo" style="width: 50%;" />
+    </div>
+</div>
 <div class="row">
-    <div class="col-md-6">
+    <div class="col-md-12">
         <partial name="~/Views/Dashboard/_MonthlySales.cshtml" />
     </div>
     <div class="col-md-6"></div>
@@ -11,7 +12,7 @@
 <div class="row">
     <div class="col-md-6">
         @* <component type="typeof(Students)" render-mode="ServerPrerendered" /> *@
-        <component type="typeof(Counter)" render-mode="ServerPrerendered" />
+        @* <component type="typeof(Counter)" render-mode="ServerPrerendered" /> *@
     </div>
     <div class="col-md-6"></div>
 </div>
