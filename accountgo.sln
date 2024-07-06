@@ -31,7 +31,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{EF0BD6F1-00D
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Modules", "Modules", "{EFF13E33-1D79-4221-87D7-4FCC8EA88943}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SampleModule", "src\Modules\SampleModule\SampleModule.csproj", "{ABD1EE97-DD84-4C6A-8F3F-28E7D3D898B4}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SampleModule", "src\Modules\SampleModule\SampleModule.csproj", "{ABD1EE97-DD84-4C6A-8F3F-28E7D3D898B4}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -71,10 +71,6 @@ Global
 		{B0AB6EA7-7D53-4457-9482-F0613F99E3BB}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{B0AB6EA7-7D53-4457-9482-F0613F99E3BB}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{B0AB6EA7-7D53-4457-9482-F0613F99E3BB}.Release|Any CPU.Build.0 = Release|Any CPU
-		{7F9BA938-9871-4D37-80A5-358C43796961}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{7F9BA938-9871-4D37-80A5-358C43796961}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{7F9BA938-9871-4D37-80A5-358C43796961}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{7F9BA938-9871-4D37-80A5-358C43796961}.Release|Any CPU.Build.0 = Release|Any CPU
 		{ABD1EE97-DD84-4C6A-8F3F-28E7D3D898B4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{ABD1EE97-DD84-4C6A-8F3F-28E7D3D898B4}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{ABD1EE97-DD84-4C6A-8F3F-28E7D3D898B4}.Release|Any CPU.ActiveCfg = Release|Any CPU
