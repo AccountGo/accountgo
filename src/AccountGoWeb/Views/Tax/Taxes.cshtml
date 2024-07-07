@@ -7,6 +7,7 @@
 </style>
 
 <div class="nav-tabs-custom">
+
     <ul class="nav nav-tabs">
         <li class="active">
             <a href="#tab_1" data-toggle="tab">Taxes</a>
@@ -21,7 +22,9 @@
             &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
         </li>
     </ul>
+
     <div class="tab-content">
+
         <div class="tab-pane active" id="tab_1">
             <div id="taxes" class="box-body table-responsive">
                 <table class="table table-hover">
@@ -45,6 +48,7 @@
                 </table>
             </div>
         </div>
+
         <div class="tab-pane" id="tab_2">
             <div id="taxGroups" class="box-body table-responsive">
                 <table class="table table-hover">
@@ -92,6 +96,7 @@
                 </div>
             </div>
         </div>
+
         <div class="tab-pane" id="tab_3">
             <div id="itemTaxGroups" class="box-body table-responsive">
                 <table class="table table-hover">
@@ -135,11 +140,14 @@
                 </div>
             </div>
         </div>
+
     </div>
 </div>
+
 @section scripts{
     <script type="text/javascript" src="~/plugins/knockout/build/output/knockout-latest.js"></script>
     <script type="text/javascript" src="~/plugins/knockout-mapping/dist/knockout.mapping.js"></script>
+
     <script>
         function viewModel() {
             var self = this;
