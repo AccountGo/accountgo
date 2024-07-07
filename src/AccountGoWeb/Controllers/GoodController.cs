@@ -11,8 +11,8 @@ namespace AccountGoWeb.Controllers
             string responseJson = string.Empty;
             using (var client = new HttpClient())
             {
-                var baseUri = "http://localhost:8001/api/";
-                client.BaseAddress = new System.Uri(baseUri);
+                string? baseUri = _configuration!["ApiUrl"];
+                client.BaseAddress = new System.Uri(baseUri!);
                 client.DefaultRequestHeaders.Accept.Clear();
                 var response = client.GetAsync(baseUri + uri);
                 return response.Result;
@@ -24,8 +24,8 @@ namespace AccountGoWeb.Controllers
             string responseJson = string.Empty;
             using (var client = new HttpClient())
             {
-                var baseUri = "http://localhost:8001/api/";
-                client.BaseAddress = new System.Uri(baseUri);
+                string? baseUri = _configuration!["ApiUrl"];
+                client.BaseAddress = new System.Uri(baseUri!);
                 client.DefaultRequestHeaders.Accept.Clear();
                 client.DefaultRequestHeaders.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
                 //client.DefaultRequestHeaders.Add("UserName", GetCurrentUserName());
@@ -40,8 +40,8 @@ namespace AccountGoWeb.Controllers
             string responseJson = string.Empty;
             using (var client = new HttpClient())
             {
-                var baseUri = "http://localhost:8001/api/";
-                client.BaseAddress = new System.Uri(baseUri);
+                string? baseUri = _configuration!["ApiUrl"];
+                client.BaseAddress = new System.Uri(baseUri!);
                 client.DefaultRequestHeaders.Accept.Clear();
                 var response = await client.GetAsync(baseUri + uri);
                 if (response.IsSuccessStatusCode)
@@ -57,9 +57,8 @@ namespace AccountGoWeb.Controllers
             string responseJson = string.Empty;
             using (var client = new HttpClient())
             {
-                // TODO: Move this to appsettings.json
-                var baseUri = "http://localhost:8001/api/";
-                client.BaseAddress = new System.Uri(baseUri);
+                string? baseUri = _configuration!["ApiUrl"];
+                client.BaseAddress = new System.Uri(baseUri!);
                 client.DefaultRequestHeaders.Accept.Clear();
                 //client.DefaultRequestHeaders.Add("UserName", GetCurrentUserName());
 
