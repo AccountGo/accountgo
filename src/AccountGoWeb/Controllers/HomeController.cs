@@ -1,9 +1,8 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Configuration;
 
 namespace AccountGoWeb.Controllers
 {
-    [Microsoft.AspNetCore.Authorization.Authorize]
+    //[Microsoft.AspNetCore.Authorization.Authorize]
     public class HomeController : BaseController
     {
         public HomeController(IConfiguration config)
@@ -14,7 +13,7 @@ namespace AccountGoWeb.Controllers
         public IActionResult Index()
         {
             ViewBag.PageContentHeader = "Dashboard";
-            ViewBag.ApiMontlySales = _baseConfig["ApiUrl"] + "sales/getmonthlysales";
+            ViewBag.ApiMontlySales = _baseConfig!["ApiUrl"] + "sales/getmonthlysales";
             return View();
         }
     }

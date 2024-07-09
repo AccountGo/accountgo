@@ -175,7 +175,7 @@
                            <!-- The user image in the navbar-->
                            <img src="~/adminLTE/img/user2-160x160.png" class="user-image" alt="User Image">
                            <!-- hidden-xs hides the username on small devices so only the image appears. -->
-                           <span class="hidden-xs">@User.Identity.Name</span>
+                           <span class="hidden-xs">@User.Identity!.Name</span>
                         </a>
                         <ul class="dropdown-menu">
                            <!-- The user image in the menu -->
@@ -501,8 +501,7 @@
       <!-- AdminLTE App -->
       <script src="~/adminLTE/js/adminlte.js"></script>
       <!--AG-GRID-->
-      <script src="~/plugins/ag-grid/dist/ag-grid.js?ignore=notused24"></script>
-      <script src="~/scripts/vendor.chunk.js"></script>
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/ag-grid/31.0.1/ag-grid-community.min.js"></script>
       <!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/bluebird/3.5.2/bluebird.min.js"></script> -->
       <!--TODO : this is temporary solution.-->
       <script>

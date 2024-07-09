@@ -20,9 +20,9 @@
       "launchBrowser": true,
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "DBSERVER": "localhost",
+        "DBSERVER": "localhost,1444",
         "DBUSERID": "sa",
-        "DBPASSWORD": "Str0ngPassword"
+        "DBPASSWORD": "SqlPassword!"
       },
       "applicationUrl": "http://localhost:8001/"
     }

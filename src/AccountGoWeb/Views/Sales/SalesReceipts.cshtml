@@ -9,6 +9,10 @@
         <i class="fa fa-tasks"></i>
         Allocate
     </a>
+    <a href="~/sales/SalesReceipt" id="linkViewReceipt" class="btn inactiveLink">
+        <i class="fa fa-edit"></i>
+        View
+    </a>
 </div>
 <div>
     <div id="receipts" class="ag-fresh" style="height: 400px;"></div>
@@ -40,7 +44,9 @@
         selectedRow = selectedRows[0];
 
         document.getElementById('linkAllocate').setAttribute('href', 'allocate/' + selectedRow.id);
-
+        document.getElementById('linkViewReceipt').setAttribute('href', 'SalesReceipt?id=' + selectedRow.id);
+        document.getElementById('linkViewReceipt').setAttribute('class', 'btn');
+        
         if(selectedRow.remainingAmountToAllocate > 0)
             document.getElementById('linkAllocate').setAttribute('class', 'btn');
         else

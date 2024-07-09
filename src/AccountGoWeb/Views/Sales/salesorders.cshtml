@@ -43,8 +43,9 @@
     function onSelectionChanged() {
         var selectedRows = gridOptions.api.getSelectedRows();
         selectedRow = selectedRows[0];
+        console.log(selectedRows);
 
-        document.getElementById('linkViewOrder').setAttribute('href', 'salesorder?orderId=' + selectedRow.id);
+        document.getElementById('linkViewOrder').setAttribute('href', 'SalesOrder?id=' + selectedRow.id);
         document.getElementById('linkViewOrder').setAttribute('class', 'btn');
 
         document.getElementById('linkNewInvoice').setAttribute('href', 'salesinvoice?orderId=' + selectedRow.id);

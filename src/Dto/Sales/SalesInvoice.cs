@@ -7,7 +7,7 @@ namespace Dto.Sales
     public class SalesInvoice : BaseDto
     {
         public string No { get; set; }
-        public int? CustomerId { get; set; }        
+        public int CustomerId { get; set; }        
         public DateTime InvoiceDate { get; set; }
         public int? PaymentTermId { get; set; }
         public int? FromSalesOrderId { get; set; }
@@ -27,6 +27,7 @@ namespace Dto.Sales
         public SalesInvoice()
         {
             SalesInvoiceLines = new List<SalesInvoiceLine>();
+            InvoiceDate = DateTime.Now;
         }
 
         private decimal GetTotalAmount()

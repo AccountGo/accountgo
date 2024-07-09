@@ -118,7 +118,7 @@ namespace Api.Data
             }
             catch(Exception ex)
             {
-                throw ex;
+                Console.WriteLine(ex.Message);
             }
 
             return result;

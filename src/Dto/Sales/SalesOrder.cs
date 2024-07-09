@@ -5,22 +5,22 @@ namespace Dto.Sales
 {
     public class SalesOrder : BaseDto
     {
-        public string No { get; set; }
-        public int? CustomerId { get; set; }
+        public string No { get; set; } = "1";
+        public int CustomerId { get; set; } = 1;
         public DateTime OrderDate { get; set; }
-        public int? PaymentTermId { get; set; }
-        public string ReferenceNo { get; set; }
+        public int? PaymentTermId { get; set; } = 1;
+        public string ReferenceNo { get; set; } = "1";
         public decimal? Amount { get { return GetTotalAmount(); } }
-        public string CustomerNo { get; set; }
-        public string CustomerName { get; set; }
-        public int StatusId { get; set; }
-
-        public int? QuotationId { get; set; }
+        public string CustomerNo { get; set; } = "1";
+        public string CustomerName { get; set; } = "1";
+        public int StatusId { get; set; } = 1;
+        public int? QuotationId { get; set; } = 1;
         public IList<SalesOrderLine> SalesOrderLines { get; set; }
 
         public SalesOrder()
         {
             SalesOrderLines = new List<SalesOrderLine>();
+            OrderDate = DateTime.Now; // TODO: Can be set by user
         }
 
         private decimal GetTotalAmount()

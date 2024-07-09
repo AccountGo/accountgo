@@ -1,5 +1,11 @@
 ﻿@model Dto.Purchasing.Vendor
 
+<style>
+    div.row, div.card-header {
+        color: #fff;
+    }
+</style>
+
 <div>
     <a href="#" id="linkEdit" class="btn" onclick="onClickEditButton();">
         <i class="fa fa-edit"></i>
@@ -73,13 +79,13 @@
                     <div class="row">
                         <div class="col-sm-4">First Name</div>
                         <div class="col-sm-8">
-                            <input asp-for="PrimaryContact.FirstName" class="form-control" type="text" placeholder="Phone ..." />
+                            <input asp-for="PrimaryContact.FirstName" class="form-control" type="text" placeholder="First Name ..." />
                         </div>
                     </div>
                     <div class="row">
                         <div class="col-sm-4">Last Name</div>
                         <div class="col-sm-8">
-                            <input asp-for="PrimaryContact.LastName" class="form-control" type="text" placeholder="Fax ..." />
+                            <input asp-for="PrimaryContact.LastName" class="form-control" type="text" placeholder="Last Name ..." />
                         </div>
                     </div>
                 </div>

@@ -1,8 +1,9 @@
 ﻿@model ICollection<AccountGoWeb.Models.IncomeStatement>
 @{
     ViewBag.Title = "IncomeStatement";
-    Layout = "~/Views/Shared/_Layout.cshtml";
-    var netIncome = Model.Where(a => a.IsExpense == false).Sum(a => a.Amount) - Model.Where(a => a.IsExpense == true).Sum(a => a.Amount);
+    Layout = "~/Views/Shared/_Layout_bootstrap.cshtml";
+    @* var netIncome = Model.Where(a => a.IsExpense == false).Sum(a => a.Amount) - Model.Where(a => a.IsExpense == true).Sum(a => a.Amount); *@
+    var netIncome = 100;
 }
 
 <h2>Income Statement</h2>

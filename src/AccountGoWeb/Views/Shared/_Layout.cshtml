@@ -1,7 +1,9 @@
-﻿@{ Layout = ""; }
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
+    <base href="~/" />
+    <component type="typeof(Microsoft.AspNetCore.Components.Web.HeadOutlet)"
+               render-mode="ServerPrerendered" />
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, shrink-to-fit=no">
@@ -9,125 +11,33 @@
     <title>AccountGo</title>
     <link rel="icon" type="image/x-icon" href="~/images/favicon.ico">
     <!-- Icons-->
-    <link href="~/lib/@@coreui/icons/css/coreui-icons.min.css" rel="stylesheet">
-    <link href="~/lib/font-awesome/css/font-awesome.min.css" rel="stylesheet">
-    <!-- <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css"> -->
-    <link href="~/lib/simple-line-icons/css/simple-line-icons.css" rel="stylesheet">
-    <!-- <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/simple-line-icons/2.4.1/css/simple-line-icons.css"> -->
+    <link href="~/css/coreui/icons/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/simple-line-icons/2.5.5/css/simple-line-icons.min.css" rel="stylesheet">
     <!-- Main styles for this application-->
     <link href="~/css/dark.css" rel="stylesheet">
-    <link href="~/css/vendors/pace-progress/pace.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/pace-js@latest/pace-theme-default.min.css" rel="stylesheet">
+
 </head>
 <body class="app header-fixed sidebar-fixed aside-menu-fixed sidebar-lg-show">
+
     <header class="app-header navbar">
-        <button class="navbar-toggler sidebar-toggler d-lg-none mr-auto" type="button" data-toggle="sidebar-show">
-            <span class="navbar-toggler-icon"></span>
-        </button>
-        <a class="navbar-brand" href="#">
-            <img class="navbar-brand-full" src="~/images/Dark-Logo.svg" width="90" height="30"  alt="AccountGo Logo">
-            <img class="navbar-brand-minimized" src="~/images/Dark-Logo.svg" width="30" height="30" alt="AccountGo Logo">
+        <a class="navbar-brand" href="/">
+            GoodBooks
         </a>
-        <button class="navbar-toggler sidebar-toggler d-md-down-none" type="button" data-toggle="sidebar-lg-show">
-            <span class="navbar-toggler-icon"></span>
-        </button>
-        <ul class="nav navbar-nav d-md-down-none">
-            <li class="nav-item px-3">
-                <a class="nav-link" href="#">Dashboard</a>
-            </li>
-            <li class="nav-item px-3">
-                <a class="nav-link" href="#">Users</a>
-            </li>
-            <li class="nav-item px-3">
-                <a class="nav-link" href="#">Settings</a>
-            </li>
-        </ul>
-        <ul class="nav navbar-nav ml-auto">
-            <li class="nav-item d-md-down-none">
-                <a class="nav-link" href="#">
-                    <i class="icon-bell"></i>
-                    <span class="badge badge-pill badge-danger">5</span>
-                </a>
-            </li>
-            <li class="nav-item d-md-down-none">
-                <a class="nav-link" href="#">
-                    <i class="icon-list"></i>
-                </a>
-            </li>
-            <li class="nav-item d-md-down-none">
-                <a class="nav-link" href="#">
-                    <i class="icon-location-pin"></i>
-                </a>
-            </li>
-            <li class="nav-item dropdown">
-                <a class="nav-link" data-toggle="dropdown" href="#" role="button" aria-haspopup="true" aria-expanded="false">
-                    <img class="img-avatar" src="~/images/avatars/user2-160x160.png" alt="admin@accountgo.com">
-                </a>
-                <div class="dropdown-menu dropdown-menu-right">
-                    <div class="dropdown-header text-center">
-                        <strong>Account</strong>
-                    </div>
-                    <a class="dropdown-item" href="#">
-                        <i class="fa fa-bell-o"></i> Updates
-                        <span class="badge badge-info">42</span>
-                    </a>
-                    <a class="dropdown-item" href="#">
-                        <i class="fa fa-envelope-o"></i> Messages
-                        <span class="badge badge-success">42</span>
-                    </a>
-                    <a class="dropdown-item" href="#">
-                        <i class="fa fa-tasks"></i> Tasks
-                        <span class="badge badge-danger">42</span>
-                    </a>
-                    <a class="dropdown-item" href="#">
-                        <i class="fa fa-comments"></i> Comments
-                        <span class="badge badge-warning">42</span>
-                    </a>
-                    <div class="dropdown-header text-center">
-                        <strong>Settings</strong>
-                    </div>
-                    <a class="dropdown-item" href="#">
-                        <i class="fa fa-user"></i> Profile
-                    </a>
-                    <a class="dropdown-item" href="#">
-                        <i class="fa fa-wrench"></i> Settings
-                    </a>
-                    <a class="dropdown-item" href="#">
-                        <i class="fa fa-usd"></i> Payments
-                        <span class="badge badge-secondary">42</span>
-                    </a>
-                    <a class="dropdown-item" href="#">
-                        <i class="fa fa-file"></i> Projects
-                        <span class="badge badge-primary">42</span>
-                    </a>
-                    <div class="divider"></div>
-                    <a class="dropdown-item" href="#">
-                        <i class="fa fa-shield"></i> Lock Account
-                    </a>
-                    <a class="dropdown-item" href="~/account/signout">
-                        <i class="fa fa-lock"></i> Logout
-                    </a>
-                </div>
-            </li>
-        </ul>
-        <button class="navbar-toggler aside-menu-toggler d-md-down-none" type="button" data-toggle="aside-menu-lg-show">
-            <span class="navbar-toggler-icon"></span>
-        </button>
-        <button class="navbar-toggler aside-menu-toggler d-lg-none" type="button" data-toggle="aside-menu-show">
-            <span class="navbar-toggler-icon"></span>
-        </button>
     </header>
     <div class="app-body">
         <div class="sidebar">
             <nav class="sidebar-nav">
                 <ul class="nav">
                     <li class="nav-item">
-                        <a class="nav-link" href="~/">
+                        <a class="nav-link" asp-area="" asp-controller="Dashboard" asp-action="MonthlySales">
                             <i class="nav-icon fa fa-dashboard"></i> Dashboard
                             <!-- <span class="badge badge-primary">NEW</span> -->
                         </a>
                     </li>
-                    <li class="nav-item nav-dropdown">
-                        <a class="nav-link nav-dropdown-toggle" href="#">
+                    <li class="nav-item nav-dropdown open">
+                        <a class="nav-link nav-dropdown-toggle">
                             <i class="nav-icon fa fa-industry"></i> Accounts Receivable
                         </a>
                         <ul class="nav-dropdown-items">
@@ -152,13 +62,18 @@
                                 </a>
                             </li>
                             <li class="nav-item">
+                                <a class="nav-link" asp-area="" asp-controller="Sales" asp-action="DonationInvoices">
+                                    Donation Invoices
+                                </a>
+                            </li>
+                            <li class="nav-item">
                                 <a class="nav-link" asp-area="" asp-controller="Sales" asp-action="Customers">
                                     Customers
                                 </a>
                             </li>
                         </ul>
                     </li>
-                    <li class="nav-item nav-dropdown">
+                    <li class="nav-item nav-dropdown open">
                         <a class="nav-link nav-dropdown-toggle" href="#">
                             <i class="nav-icon fa fa-link"></i> Accounts Payable
                         </a>
@@ -180,13 +95,13 @@
                             </li>
                         </ul>
                     </li>
-                    <li class="nav-item nav-dropdown">
+                    <li class="nav-item nav-dropdown open">
                         <a class="nav-link nav-dropdown-toggle" href="#">
                             <i class="nav-icon fa fa-wrench"></i> Inventory Control
                         </a>
                         <ul class="nav-dropdown-items">
                             <li class="nav-item">
-                                <a class="nav-link" asp-area="" asp-controller="Inventory" asp-action="Items">
+                                <a class="nav-link" asp-area="" asp-controller="Inventory" asp-action="Index">
                                     Items
                                 </a>
                             </li>
@@ -197,7 +112,7 @@
                             </li>
                         </ul>
                     </li>
-                    <li class="nav-item nav-dropdown">
+                    <li class="nav-item nav-dropdown open">
                         <a class="nav-link nav-dropdown-toggle" href="#">
                             <i class="nav-icon fa fa-bank"></i> Financials
                         </a>
@@ -219,7 +134,7 @@
                             </li>
                             <li class="nav-item">
                                 <a class="nav-link" asp-area="" asp-controller="Financials" asp-action="Accounts">
-                                    Accounts
+                                    Chart of Accounts
                                 </a>
                             </li>
                             <li class="nav-item">
@@ -229,7 +144,7 @@
                             </li>
                         </ul>
                     </li>
-                    <li class="nav-item nav-dropdown">
+                    <li class="nav-item nav-dropdown open">
                         <a class="nav-link nav-dropdown-toggle" href="#">
                             <i class="nav-icon fa fa-line-chart"></i> Reports
                         </a>
@@ -251,7 +166,7 @@
                             </li>
                         </ul>
                     </li>
-                    <li class="nav-item nav-dropdown">
+                    <li class="nav-item nav-dropdown open">
                         <a class="nav-link nav-dropdown-toggle" href="#">
                             <i class="nav-icon fa fa-group"></i> Organization Settings
                         </a>
@@ -268,7 +183,7 @@
                             </li>
                         </ul>
                     </li>
-                    <li class="nav-item nav-dropdown">
+                    <li class="nav-item nav-dropdown open">
                         <a class="nav-link nav-dropdown-toggle" href="#">
                             <i class="nav-icon fa fa-desktop"></i> System Administration
                         </a>
@@ -300,33 +215,34 @@
         </div>
         <main class="main">
             <!-- Breadcrumb-->
-            <!-- <ol class="breadcrumb"> -->
-                <!-- <li class="breadcrumb-item">Home</li>
-                <li class="breadcrumb-item">
-                    <a href="#">Admin</a>
-                </li>
-                <li class="breadcrumb-item active">Dashboard</li> -->
-                <!-- Breadcrumb Menu-->
-                <!-- <li class="breadcrumb-menu d-md-down-none">
-                    <div class="btn-group" role="group" aria-label="Button group">
-                        <a class="btn" href="#">
-                            <i class="icon-speech"></i>
-                        </a>
-                        <a class="btn" asp-area="" asp-controller="/" asp-action="Index" asp-route-view="">
-                            <i class="icon-graph"></i>  Dashboard
-                        </a>
-                        <a class="btn" href="#">
-                            <i class="icon-settings"></i>  Settings
-                        </a>
-                    </div>
-                </li> -->
-            <!-- </ol> -->
+            @* <ol class="breadcrumb">
+    <li class="breadcrumb-item">Home</li>
+    <li class="breadcrumb-item">
+        <a href="#">Admin</a>
+    </li>
+    <li class="breadcrumb-item active">Dashboard</li>
+    <!-- Breadcrumb Menu-->
+    <li class="breadcrumb-menu d-md-down-none">
+        <div class="btn-group" role="group" aria-label="Button group">
+            <a class="btn" href="#">
+                <i class="icon-speech"></i>
+            </a>
+            <a class="btn" asp-area="" asp-controller="/" asp-action="Index" asp-route-view="">
+                <i class="icon-graph"></i>  Dashboard
+            </a>
+            <a class="btn" href="#">
+                <i class="icon-settings"></i>  Settings
+            </a>
+        </div>
+    </li>
+</ol> *@
+
             <div class="container-fluid">
                 <div class="animated fadeIn">
                     <!-- PAGE CONTENT -->
-                    <!-- <h2>
+                    <h2>
             @Html.Raw(ViewBag.PageContentHeader)
-                    </h2> -->
+                    </h2>
                     @RenderBody()
                     <!-- /PAGE CONTENT -->
                 </div>
@@ -643,14 +559,18 @@
         </div>
     </footer>
     <!-- Bootstrap and necessary plugins-->
-    <script src="~/lib/jquery/dist/jquery.min.js"></script>
-    <script src="~/lib/popper.js/dist/umd/popper.min.js"></script>
-    <script src="~/lib/bootstrap/dist/js/bootstrap.min.js"></script>
-    <script src="~/lib/pace-progress/pace.min.js"></script>
-    <script src="~/lib/perfect-scrollbar/dist/perfect-scrollbar.min.js"></script>
-    <script src="~/lib/@@coreui/coreui/dist/js/coreui.min.js"></script>
-    <script src="~/lib/ag-grid/dist/ag-grid.js?ignore=notused24"></script>
+    <script src="https://code.jquery.com/jquery-3.2.1.slim.min.js" ></script>
+    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.12.9/dist/umd/popper.min.js" ></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.0.0/dist/js/bootstrap.min.js" ></script>
+    <script src="https://cdn.jsdelivr.net/npm/pace-js@latest/pace.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.perfect-scrollbar/1.5.5/perfect-scrollbar.js"></script>
+
+    <script src="https://cdn.jsdelivr.net/npm/@@coreui/coreui@4.3.2/dist/js/coreui.bundle.min.js" ></script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ag-grid/31.0.1/ag-grid-community.min.js"></script>
     <script src="~/scripts/vendor.chunk.js"></script>
+    @* <script src="_framework/blazor.web.js"></script> *@
+    <script src="~/_framework/blazor.server.js"></script>
 
     <!-- PLugins and scripts required by the views -->
     @RenderSection("Scripts", required: false)

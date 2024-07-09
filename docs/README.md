@@ -128,7 +128,7 @@ At this point, your database has no data on it. But there is already an initial 
 - Items
 - Banks
 
-To initialize a company, call the api endpoint directly http://localhost:8001/api/administration/initializedcompany from the browser or by using curl e.g. `curl http://localhost:8001/api/administration/initializedcompany`. If you encounter some issues, the easy way for now is recreate your database and repeat the `Publish Database` section.
+To initialize a company, call the api endpoint directly http://localhost:8001/api/administration/setup from the browser or by using curl e.g. `curl http://localhost:8001/api/administration/setup`. If you encounter some issues, the easy way for now is recreate your database and repeat the `Publish Database` section.
 
 ## Build and Run "Api" (Back-end)
 1. Navigate directory to `src/Api` project
@@ -181,7 +181,7 @@ To run everything (database, api, web) in docker container you can use docker-co
 1. Database instance running in docker container and you can connect to it
 1. You should have a running "Api" and can test it by getting the list of customers e.g. http://localhost:8001/api/sales customers
 1. You can browse the UI from http://localhost:8000 and able to login to the system using initial username/password: admin@accountgo.ph/P@ssword1
-1. Initialize data by calling a special api endpoint directly. http://localhost:8001/api/administration/initializedcompany
+1. Initialize data by calling a special api endpoint directly: http://localhost:8001/api/administration/setup
 
 # Technology Stack
 - ASP.NET Core 3.1

@@ -38,10 +38,11 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("Customers")] // api/Common/Customers
         public IActionResult Customers()
         {
             var customers = _salesService.GetCustomers();
+            
             ICollection<Customer> customersDto = new HashSet<Customer>();
 
             foreach (var customer in customers)
@@ -54,7 +55,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("PaymentTerms")] // api/Common/PaymentTerms
         public IActionResult PaymentTerms()
         {
             var paymentterms = _administrationService.GetPaymentTerms();
@@ -62,10 +63,10 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("Items")] // api/Common/Items
         public IActionResult Items()
         {
-            var items = _inventoryService.GetAllItems();
+            var items = _inventoryService.GetAllItems().OrderBy(i => i.Description);
             ICollection<Item> itemsDto = new HashSet<Item>();
 
             foreach (var item in items)
@@ -75,14 +76,14 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("Measurements")] // api/Common/Measurements
         public IActionResult Measurements()
         {
-            return new ObjectResult(_inventoryService.GetMeasurements());
+            return new ObjectResult(_inventoryService.GetMeasurements().OrderBy(m => m.Description));
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("Vendors")] // api/Common/Vendors
         public IActionResult Vendors()
         {
             var vendors = _purchasingService.GetVendors();
@@ -98,7 +99,7 @@ namespace Api.Controllers
         }
         
         [HttpGet]
-        [Route("[action]")]
+        [Route("ItemCategories")] // api/Common/ItemCategories
         public IActionResult ItemCategories()
         {
             var itemcategories = _inventoryService.GetItemCategories();
@@ -106,7 +107,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("CashBanks")] // api/Common/CashBanks
         public IActionResult CashBanks()
         {
             var banks = _financialService.GetCashAndBanks();
@@ -119,11 +120,12 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("PostingAccounts")] // api/Common/PostingAccounts
         public IActionResult PostingAccounts()
         {
             var accounts = _financialService.GetAccounts()
-                .Where(a => a.ChildAccounts.Count == 0);
+                .Where(a => a.ChildAccounts.Count == 0)
+                .OrderBy(a => a.AccountName);
 
             ICollection<Account> accountsDto = new HashSet<Account>();
 
@@ -134,7 +136,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("SalesQuotationStatus")] // api/Common/SalesQuotationStatus
         public IActionResult SalesQuotationStatus()
         {
 

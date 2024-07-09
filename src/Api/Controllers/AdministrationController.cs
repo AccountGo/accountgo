@@ -42,7 +42,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("Setup")]
         public IActionResult Setup()
         {
             Api.Data.Initializer initializer = new Data.Initializer(_adminService, _financialService, _salesService, _purchasingService, _inventoryService, _securityService);
@@ -54,7 +54,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("clear")]
         public IActionResult Clear()
         {
             Api.Data.Initializer initializer = new Data.Initializer(_adminService, _financialService, _salesService, _purchasingService, _inventoryService, _securityService);
@@ -66,14 +66,14 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("company")]
         public IActionResult Company(string companyCode)
         {
             return new ObjectResult(_adminService.GetDefaultCompany());
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("auditlogs")] // api/Administration/AuditLogs
         public IActionResult AuditLogs()
         {
             var auditLogs = _adminService.AuditLogs();
@@ -94,7 +94,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("users")] // api/Administration/Users
         public IActionResult Users()
         {
             var users = _securityService.GetAllUser();
@@ -130,7 +130,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("roles")] // api/Administration/Roles
         public IActionResult Roles()
         {
             var roles = _securityService.GetAllSecurityRole();
@@ -164,7 +164,8 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("groups")]
+        // TODO: generates exception
         public IActionResult Groups()
         {
             var groups = _securityService.GetAllSecurityGroup();
@@ -198,7 +199,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("GetUser")]
         public IActionResult GetUser(string username)
         {
             var user = _securityService.GetUser(username);
@@ -241,7 +242,7 @@ namespace Api.Controllers
         }
 
         [HttpPost]
-        [Route("[action]")]
+        [Route("SaveCompany")]
         public IActionResult SaveCompany([FromBody]Company companyDto)
         {
             string[] errors;

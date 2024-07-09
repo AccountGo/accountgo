@@ -13,14 +13,12 @@ namespace Dto.Sales
         public string ReferenceNo { get; set; }
         public decimal Amount { get { return GetTotalAmount(); } }
         public int StatusId { get; set; }
-
         public string SalesQuoteStatus { get; set; }
-
         public virtual List<SalesQuotationLine> SalesQuotationLines { get; set; }
-
         public SalesQuotation()
         {
             SalesQuotationLines = new List<SalesQuotationLine>();
+            QuotationDate = DateTime.Now;
         }
 
         private decimal GetTotalAmount()
@@ -50,5 +48,7 @@ namespace Dto.Sales
         public decimal? Quantity { get; set; }
         public decimal? Amount { get; set; }
         public decimal? Discount { get; set; }
+        public string ItemDescription { get; set; }
+        public string MeasurementDescription { get; set; }
     }
 }

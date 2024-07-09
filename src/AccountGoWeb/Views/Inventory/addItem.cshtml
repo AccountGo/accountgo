@@ -1,0 +1,118 @@
+@model Dto.Inventory.Item
+
+<style>
+    div.row {
+        color: #fff;
+    }
+</style>
+
+ <form action="~/Inventory/SaveItem" method="post">
+    <div class="col-sm-10">
+        @Html.AntiForgeryToken()
+        @Html.ValidationSummary(true)
+        <div class="card">
+            <div class="card-body">
+                @* Description *@
+                <div class="row">
+                    <div class="col-sm-3">Name</div>
+                    <div class="col-sm-8">
+                        <input class="form-control" asp-for="Description" type="text" required />
+                        <span asp-validation-for="Description" class="danger"></span>
+                    </div>
+                </div>
+                @* Cost *@
+                <div class="row">
+                    <div class="col-sm-3">Cost</div>
+                    <div class="col-sm-8">
+                        <input class="form-control" asp-for="Cost" type="number" />
+                        <span asp-validation-for="Cost" class="danger"></span>
+                    </div>
+                </div>
+                @* Item Category *@
+                <div class="row">
+                    <div class="col-sm-3">Item Category</div>
+                    <div class="col-sm-8">
+                        <select class="form-control" asp-for="ItemCategoryId" asp-items="ViewBag.ItemCategories"></select>
+                        <span asp-validation-for="ItemCategoryId" class="danger"></span>
+                    </div>
+                </div>
+                @* Smallest Measurement *@
+                <div class="row">
+                    <div class="col-sm-3">Smallest Measurement</div>
+                    <div class="col-sm-8">
+                        <select class="form-control" asp-for="SmallestMeasurementId" asp-items="ViewBag.Measurements"></select>
+                        <span asp-validation-for="SmallestMeasurementId" class="danger"></span>
+                    </div>
+                </div>
+                @* Purchase Measurement *@
+                <div class="row">
+                    <div class="col-sm-3">Purchase Measurement</div>
+                    <div class="col-sm-8">
+                        <select class="form-control" asp-for="PurchaseMeasurementId" asp-items="ViewBag.Measurements"></select>
+                        <span asp-validation-for="PurchaseMeasurementId" class="danger"></span>
+                    </div>
+                </div>
+                @* Item Tax Group *@
+                <div class="row">
+                    <div class="col-sm-3">Item Tax Group</div>
+                    <div class="col-sm-8">
+                        <select class="form-control" asp-for="ItemTaxGroupId" asp-items="ViewBag.ItemTaxGroups"></select>
+                        <span asp-validation-for="ItemTaxGroupId" class="danger"></span>
+                    </div>
+                </div>
+                @* Preferred Vendor *@
+                <div class="row">
+                    <div class="col-sm-3">Preferred Vendor</div>
+                    <div class="col-sm-8">
+                        <select class="form-control" asp-for="PreferredVendorId" asp-items="ViewBag.PreferredVendorId"></select>
+                        <span asp-validation-for="PreferredVendorId" class="danger"></span>
+                    </div>
+                </div>
+                @* Sales Account *@
+                <div class="row">
+                    <div class="col-sm-3">Sales Account</div>
+                    <div class="col-sm-8">
+                        <select class="form-control" asp-for="SalesAccountId" asp-items="ViewBag.Accounts"></select>
+                        <span asp-validation-for="SalesAccountId" class="danger"></span>
+                    </div>
+                </div>
+                @* Inventory Account *@
+                <div class="row">
+                    <div class="col-sm-3">Inventory Account</div>
+                    <div class="col-sm-8">
+                        <select class="form-control" asp-for="InventoryAccountId" asp-items="ViewBag.Accounts"></select>
+                        <span asp-validation-for="InventoryAccountId" class="danger"></span>
+                    </div>
+                </div>
+                @* Cost of Goods Account *@
+                <div class="row">
+                    <div class="col-sm-3">Cost of Goods Account</div>
+                    <div class="col-sm-8">
+                        <select class="form-control" asp-for="CostOfGoodsSoldAccountId" asp-items="ViewBag.Accounts"></select>
+                        <span asp-validation-for="CostOfGoodsSoldAccountId" class="danger"></span>
+                    </div>
+                </div>
+                @* Inventory Adjustment Account *@
+                <div class="row">
+                    <div class="col-sm-3">Inventory Adjustment Account</div>
+                    <div class="col-sm-8">
+                        <select class="form-control" asp-for="InventoryAdjustmentAccountId" asp-items="ViewBag.Accounts"></select>
+                        <span asp-validation-for="InventoryAdjustmentAccountId" class="danger"></span>
+                    </div>
+                </div>
+                @* Price *@
+                <div class="row">
+                    <div class="col-sm-3">Price</div>
+                    <div class="col-sm-8">
+                        <input class="form-control" asp-for="Price" type="number" />
+                        <span asp-validation-for="Price" class="danger"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-9">
+        <input id="btnSave" class="btn btn-sm btn-primary btn-flat pull-left" type="submit" value="Save" />
+        <a href="~/Inventory" class="btn btn-sm btn-default btn-flat pull-left">Close</a>
+    </div>
+ </form>

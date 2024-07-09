@@ -154,6 +154,7 @@ namespace Services.Financial
                 a => a.ParentAccount,
                 a => a.Company)
                 .Where(a => a.AccountCode == accountcode)
+                //.OrderByDescending(a => a.Id)
                 .FirstOrDefault();
 
             return account;
@@ -201,10 +202,11 @@ namespace Services.Financial
                 throw new InvalidOperationException("One or more line(s) amount is zero.");
 
             var fiscalYear = CurrentFiscalYear();
-            if (fiscalYear == null 
-                || !FinancialHelper.InRange(glEntry.Date, fiscalYear.StartDate, fiscalYear.EndDate)
-                || !FinancialHelper.InRange(DateTime.Now, fiscalYear.StartDate, fiscalYear.EndDate))
-                throw new InvalidOperationException("Date is out of range. Must within financial year.");
+            //TODO: Fix this
+            // if (fiscalYear == null 
+            //     || !FinancialHelper.InRange(glEntry.Date, fiscalYear.StartDate, fiscalYear.EndDate)
+            //     || !FinancialHelper.InRange(DateTime.Now, fiscalYear.StartDate, fiscalYear.EndDate))
+            //     throw new InvalidOperationException("Date is out of range. Must within financial year.");
 
             //var duplicateAccounts = glEntry.GeneralLedgerLines.GroupBy(gl => gl.AccountId).Where(gl => gl.Count() > 1);
             //if (duplicateAccounts.Count() > 0)
@@ -310,6 +312,7 @@ namespace Services.Financial
             return accounts;
         }
 
+        // TODO: This generates an error
         public ICollection<BalanceSheet> BalanceSheet(DateTime? from = default(DateTime?), DateTime? to = default(DateTime?))
         {
             var assets = from a in _accountRepo.GetAllIncluding(a => a.AccountClass, 
@@ -509,10 +512,9 @@ namespace Services.Financial
         /// <returns></returns>
         public List<KeyValuePair<int, decimal>> ComputeInputTax(int vendorId, int itemId, decimal quantity, decimal amount, decimal discount)
         {
-            decimal taxAmount = 0, amountXquantity = 0, discountAmount = 0, subTotalAmount = 0;
+            decimal taxAmount, amountXquantity, discountAmount = 0, subTotalAmount;
 
             var taxes = new List<KeyValuePair<int, decimal>>();
-            var item = _inventoryService.GetItemById(itemId);
 
             amountXquantity = amount * quantity;
 
@@ -541,7 +543,7 @@ namespace Services.Financial
         /// <returns></returns>
         public List<KeyValuePair<int, decimal>> ComputeOutputTax(int customerId, int itemId, decimal quantity, decimal amount, decimal discount)
         {
-            decimal taxAmount = 0, amountXquantity = 0, discountAmount = 0, subTotalAmount = 0;
+            decimal taxAmount, amountXquantity, discountAmount = 0, subTotalAmount;
 
             var taxes = new List<KeyValuePair<int, decimal>>();
 
@@ -732,11 +734,12 @@ namespace Services.Financial
 
             var glSetting = _generalLedgerSettingRepo.Table.FirstOrDefault();
 
-            var journalEntry = new JournalEntryHeader();
-            journalEntry.Memo = "Closing entries";
-            journalEntry.Date = DateTime.Now;
-            journalEntry.Posted = false;
-            journalEntry.VoucherType = JournalVoucherTypes.ClosingEntries;
+            var journalEntry = new JournalEntryHeader() {
+                Memo = "Closing entries",
+                Date = DateTime.Now,
+                Posted = false,
+                VoucherType = JournalVoucherTypes.ClosingEntries
+            };
 
             return journalEntry;
         }

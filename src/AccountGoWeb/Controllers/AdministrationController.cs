@@ -1,14 +1,11 @@
 ﻿using Dto.Administration;
 using Dto.Security;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Configuration;
-using System;
-using System.Net.Http;
 
 namespace AccountGoWeb.Controllers
 {
-  [Microsoft.AspNetCore.Authorization.Authorize]
-  public class AdministrationController : BaseController
+    //[Microsoft.AspNetCore.Authorization.Authorize]
+    public class AdministrationController : BaseController
   {
     public AdministrationController(IConfiguration config)
     {
@@ -125,13 +122,13 @@ namespace AccountGoWeb.Controllers
           HttpResponseMessage responseAddNewUser = Post("account/addnewuser", content);
           Newtonsoft.Json.Linq.JObject resultAddNewUser = Newtonsoft.Json.Linq.JObject.Parse(responseAddNewUser.Content.ReadAsStringAsync().Result);
 
-          if ((bool)resultAddNewUser["succeeded"])
+          if ((bool)resultAddNewUser["succeeded"]!)
           {
             return RedirectToAction(nameof(AdministrationController.Users), "Administration");
           }
           else
           {
-            ModelState.AddModelError(string.Empty, resultAddNewUser["errors"][0]["description"].ToString());
+            ModelState.AddModelError(string.Empty, resultAddNewUser["errors"]![0]!["description"]!.ToString());
             return View(model);
           }
         }

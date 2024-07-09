@@ -1,6 +1,12 @@
 ﻿@model AccountGoWeb.Models.Sales.AddReceipt
 
-<form action="~/sales/addreceipt" method="post">
+<style>
+    div.row {
+        color: #fff;
+    }
+</style>
+
+<form action="~/Sales/AddReceipt" method="post">
     <div class="col-sm-6">
         @Html.ValidationSummary(true)
         <div class="card">

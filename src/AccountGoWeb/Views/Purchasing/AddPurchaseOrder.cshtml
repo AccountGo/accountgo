@@ -1,2 +1,107 @@
-﻿<div id="divPurchaseOrder"></div>
-<script src="~/scripts/purchasing/purchaseorder.chunk.js" type="text/javascript"></script>
+﻿@model Dto.Purchasing.PurchaseOrder
+
+<style>
+    tr,td,div.row {
+        color: white;
+    }
+</style>
+
+<form action="~/Purchasing/AddPurchaseOrder" method="post">
+    <div class="col-sm-9">
+        @Html.ValidationSummary(true)
+        <div class="card">
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-sm-3">Vendor Name</div>
+                    <div class="col-sm-8">
+                        <select class="form-control" asp-for="VendorId" asp-items="@ViewBag.Vendors"></select>
+                        <span asp-validation-for="VendorId" class="text-danger"></span>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-sm-3">Completed</div>
+                    <div class="col-sm-8">
+                        <input type="checkbox" asp-for="Completed" />
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-sm-3">Date</div>
+                    <div class="col-sm-8">
+                        <input class="form-control pull-right" type="date" asp-for="OrderDate">
+                    </div>
+                </div>
+            </div>
+            <table class="table">
+                    <thead>
+                        <th>Item</th>
+                        <th>Quantity</th>
+                        <th>Amount</th>
+                        <th>Discount</th>
+                        <th>Measurement</th>
+                    </thead>
+                    <tbody>@for (int i = 0; i < Model.PurchaseOrderLines.Count; i++)
+                        {
+                            <tr>
+                                <td>
+                                    @Html.DropDownListFor(model => model.PurchaseOrderLines[i].ItemId,
+                                             (IEnumerable<SelectListItem>)ViewBag.Items, new
+                                             {
+                                                 @class = "form-control",
+                                                 id =
+                                             "optItem"
+                                             })
+                                    <span asp-validation-for="PurchaseOrderLines[i].ItemId" class="danger"></span>
+                                </td>
+                                <td>
+                                    @Html.EditorFor(model => model.PurchaseOrderLines[i].Quantity, new
+                                        {
+                                            htmlAttributes = new
+                                            {
+                                                @class = "form-control"
+                                            }
+                                        })
+                                </td>
+                                <td>
+                                    @Html.EditorFor(model => model.PurchaseOrderLines[i].Amount, new
+                                        {
+                                            htmlAttributes = new
+                                            {
+                                                @class = "form-control"
+                                            }
+                                        })
+                                </td>
+                                <td>
+                                    @Html.EditorFor(model => model.PurchaseOrderLines[i].Discount, new
+                                        {
+                                            htmlAttributes = new
+                                            {
+                                                @class = "form-control"
+                                            }
+                                        })
+                                </td>
+                                <td>
+                                    @Html.DropDownListFor(model => model.PurchaseOrderLines[i].MeasurementId,
+                                             (IEnumerable<SelectListItem>)ViewBag.Measurements,
+                                             new { @class = "form-control", id = $"optMeasurement_{i}" })
+                                    <span asp-validation-for="PurchaseOrderLines[i].MeasurementId" class="danger"></span>
+                                </td>
+                            </tr>
+                        }
+
+                        <tr>
+                            <td>
+                                <button type="submit" name="addRowBtn" value="true" class="btn btn-primary">Add
+                                    Row</button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+        </div>
+
+        <div class="col-md-9">
+            <input id="btnSave" class="btn btn-sm btn-primary btn-flat pull-left" type="submit" value="Save" />
+            <a href="~/Purchasing/PurchaseOrders" class="btn btn-sm btn-default btn-flat pull-left">Close</a>
+        </div>
+</form>
+@* <div id="divPurchaseOrder"></div> *@
+@* <script src="~/scripts/purchasing/purchaseorder.chunk.js" type="text/javascript"></script> *@

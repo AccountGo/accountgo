@@ -22,33 +22,8 @@ namespace Api.Controllers
             _purchasingService = purchasingService;
         }
 
-        //[HttpGet]
-        //[Route("[action]")]
-        //public IActionResult Contacts(int customerId)
-        //{
-        //    var customer = _salesService.GetCustomerById(customerId);
-
-        //    //var customerContact = customer.CustomerContact;
-
-        //    var customerContact = customer.CustomerContact;
-
-        //    //var contacts = _salesService.GetContacts();//.Where(a => customerContact.Select(x => x.ContactId).Contains(a.Id));
-       
-
-
-
-        //    //ICollection<ContactDto> contactsDto = new HashSet<ContactDto>();
-        //    var contactsDto = new List<Dto.Common.Contact>();
-
-        //    foreach (var contact in customerContact.Select(a => a.Contact).ToList())
-        //        contactsDto.Add(new Dto.Common.Contact() { Id = contact.Id, FirstName = contact.FirstName, LastName = contact.LastName, CustomerId = customerId });
-
-        //    return Ok(contactsDto.AsEnumerable());
-        //}
-
-
         [HttpGet]
-        [Route("[action]")]
+        [Route("Contacts")]
         public IActionResult Contacts(int partyId = 0, int partyType = 0)
         {
             var contactsDto = new List<Dto.Common.Contact>();
@@ -71,33 +46,9 @@ namespace Api.Controllers
             }
             return Ok(contactsDto.AsEnumerable());
         }
-        //[HttpGet]
-        //[Route("[action]")]
-        //public IActionResult Contact(int id, int customerId)
-        //{
-        //    var contact = _salesService.GetContacyById(id);
-
-        //    var contactDto = new Dto.Common.Contact();
-        //    var partyDto = new Dto.Common.Party();
-
-        //    partyDto.Email = contact.Party.Email;
-        //    partyDto.Fax = contact.Party.Fax;
-        //    partyDto.Phone = contact.Party.Phone;
-        //    partyDto.Website = contact.Party.Website;
-        //    partyDto.Id = contact.Party.Id;
-        //    contactDto.CustomerId = customerId;
-        //    contactDto.FirstName = contact.FirstName;
-        //    contactDto.LastName = contact.LastName;
-        //    contactDto.Id = contact.Id;
-        //    contactDto.Party = partyDto;
-
-        //    //contactDto.Party = contact.Party;
-        //    return new ObjectResult(contactDto);
-
-        //}
-
+ 
         [HttpGet]
-        [Route("[action]")]
+        [Route("Contact")]
         public IActionResult Contact(int id, int partyId, int partyType)
         {
             Core.Domain.Contact contact = _salesService.GetContacyById(id);
@@ -127,7 +78,7 @@ namespace Api.Controllers
 
 
         [HttpPost]
-        [Route("[action]")]
+        [Route("SaveContact")]
         public IActionResult SaveContact([FromBody]Dto.Common.Contact model)
         {
             string[] errors = null;
@@ -203,13 +154,7 @@ namespace Api.Controllers
                         _purchasingService.UpdateVendor(vendor);
 
                     }
-
-
                 }
-
-
-
-
                 return new ObjectResult(Ok());
             }
             catch (Exception ex)
@@ -217,9 +162,6 @@ namespace Api.Controllers
                 errors = new string[1] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
                 return new BadRequestObjectResult(errors);
             }
-
         }
-
-
     }
 }

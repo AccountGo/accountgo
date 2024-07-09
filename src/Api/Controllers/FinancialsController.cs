@@ -22,13 +22,14 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("CashBanks")] // api/Financials/CashBanks
         public IActionResult CashBanks()
         {
             var cashAndBanks = _financialService.GetCashAndBanks();
             var cashAndBanksDto = new List<Bank>();
 
-            foreach (var bank in cashAndBanks) {
+            foreach (var bank in cashAndBanks)
+            {
                 cashAndBanksDto.Add(new Bank()
                 {
                     Id = bank.Id,
@@ -42,7 +43,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("Accounts")] // api/Financials/Accounts
         public IActionResult Accounts()
         {
             var accounts = _financialService.GetAccounts().ToList();
@@ -52,7 +53,7 @@ namespace Api.Controllers
             return new ObjectResult(accountTree);
         }
 
-        [Route("[action]")]
+        [Route("Account")]
         public IActionResult Account(int id)
         {
             var account = _financialService.GetAccount(id);
@@ -78,13 +79,14 @@ namespace Api.Controllers
 
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("JournalEntries")] // api/Financials/JournalEntries
         public IActionResult JournalEntries()
         {
             var journalEntries = _financialService.GetJournalEntries();
             var journalEntriesDto = new List<JournalEntry>();
 
-            foreach (var je in journalEntries) {
+            foreach (var je in journalEntries)
+            {
                 var journalEntryDto = new JournalEntry()
                 {
                     Id = je.Id,
@@ -95,7 +97,8 @@ namespace Api.Controllers
                     Posted = je.Posted
                 };
 
-                foreach (var line in je.JournalEntryLines) {
+                foreach (var line in je.JournalEntryLines)
+                {
                     var lineDto = new JournalEntryLine()
                     {
                         Id = line.Id,
@@ -115,7 +118,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("JournalEntry")]
         public IActionResult JournalEntry(int id)
         {
             var je = _financialService.GetJournalEntry(id);
@@ -156,8 +159,8 @@ namespace Api.Controllers
         }
 
         [HttpPost]
-        [Route("[action]")]
-        public IActionResult PostJournalEntry([FromBody]JournalEntry journalEntryDto)
+        [Route("PostJournalEntry")]
+        public IActionResult PostJournalEntry([FromBody] JournalEntry journalEntryDto)
         {
             string[] errors = null;
 
@@ -187,8 +190,8 @@ namespace Api.Controllers
         }
 
         [HttpPost]
-        [Route("[action]")]
-        public IActionResult SaveJournalEntry([FromBody]JournalEntry journalEntryDto)
+        [Route("SaveJournalEntry")]
+        public IActionResult SaveJournalEntry([FromBody] JournalEntry journalEntryDto)
         {
             string[] errors = null;
 
@@ -280,7 +283,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("GeneralLedger")]
         public ActionResult GeneralLedger(DateTime? from = default(DateTime?),
             DateTime? to = default(DateTime?),
             string accountCode = null,
@@ -292,11 +295,11 @@ namespace Api.Controllers
             var generalLedgerTree = BuildMasterGeneralLedger(Dto);
 
             return new ObjectResult(generalLedgerTree);
- 
+
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("trialbalance")]
         public ActionResult TrialBalance()
         {
             var Dto = _financialService.TrialBalance();
@@ -304,7 +307,8 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("BalanceSheet")]
+        // TODO: this generates an error a.ContraAccounts' is invalid inside an 'Include' operation
         public ActionResult BalanceSheet()
         {
             var Dto = _financialService.BalanceSheet().ToList();
@@ -330,7 +334,8 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("IncomeStatement")]
+        // TODO: this generates an error a.ContraAccounts' is invalid inside an 'Include' operation
         public ActionResult IncomeStatement()
         {
             var Dto = _financialService.IncomeStatement();
@@ -339,7 +344,7 @@ namespace Api.Controllers
 
         #region Private Methods
         private IList<Dto.Financial.Account> BuildAccountGrouping(IList<Core.Domain.Financials.Account> allAccounts,
-                                          int? parentAccountId)
+        int? parentAccountId)
         {
             var accountTree = new List<Dto.Financial.Account>();
             var childAccounts = allAccounts.Where(o => o.ParentAccountId == parentAccountId).ToList();
@@ -374,7 +379,7 @@ namespace Api.Controllers
         {
             var ledgerTree = new List<Dto.Financial.MasterGeneralLedger>();
 
- 
+
             var parentLedger = allLedger.Select(a => a.TransactionNo).Distinct();
             var childLedgers = new List<Dto.Financial.MasterGeneralLedger>();
             parentLedger.ToList().ForEach(a =>
@@ -390,18 +395,18 @@ namespace Api.Controllers
                 secondChild.Date = null;
                 foreach (var ledger in childrenLedger)
                 {
-                        var thirdChild = new Dto.Financial.MasterGeneralLedger();
-                        thirdChild.Id = ledger.Id;
-                        thirdChild.TransactionNo = ledger.TransactionNo;
-                        thirdChild.AccountId = ledger.AccountId;
-                        thirdChild.AccountName = ledger.AccountName;
-                        thirdChild.AccountCode = ledger.AccountCode;
-                        thirdChild.CurrencyId = ledger.CurrencyId;
-                        thirdChild.Date = ledger.Date;
-                        thirdChild.Debit = ledger.Debit;
-                        thirdChild.Credit = ledger.Credit;
-                        thirdChildren.Add(thirdChild);
-                        secondChild.ChildMasterGeneralLedger = thirdChildren;                    
+                    var thirdChild = new Dto.Financial.MasterGeneralLedger();
+                    thirdChild.Id = ledger.Id;
+                    thirdChild.TransactionNo = ledger.TransactionNo;
+                    thirdChild.AccountId = ledger.AccountId;
+                    thirdChild.AccountName = ledger.AccountName;
+                    thirdChild.AccountCode = ledger.AccountCode;
+                    thirdChild.CurrencyId = ledger.CurrencyId;
+                    thirdChild.Date = ledger.Date;
+                    thirdChild.Debit = ledger.Debit;
+                    thirdChild.Credit = ledger.Credit;
+                    thirdChildren.Add(thirdChild);
+                    secondChild.ChildMasterGeneralLedger = thirdChildren;
                 }
 
                 childLedgers.Add(secondChild);
@@ -411,10 +416,6 @@ namespace Api.Controllers
 
             return childLedgers;
         }
-
-
-
-
         #endregion
     }
 }

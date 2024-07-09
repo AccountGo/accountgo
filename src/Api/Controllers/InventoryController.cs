@@ -4,6 +4,7 @@ using Services.Administration;
 using Services.Inventory;
 using System.Collections.Generic;
 using System.Linq;
+using Microsoft.Extensions.Logging;
 
 namespace Api.Controllers
 {
@@ -12,16 +13,19 @@ namespace Api.Controllers
     {
         private readonly IAdministrationService _adminService;
         private readonly IInventoryService _inventoryService;
+        private readonly ILogger<InventoryController> _logger;
 
         public InventoryController(IAdministrationService adminService,
-            IInventoryService inventoryService)
+            IInventoryService inventoryService,
+            ILogger<InventoryController> logger)
         {
             _adminService = adminService;
             _inventoryService = inventoryService;
+            _logger = logger;
         }
 
         [HttpPost]
-        [Route("[action]")]
+        [Route("SaveItem")]
         public IActionResult SaveItem([FromBody]Item itemDto)
         {
             bool isNew = itemDto.Id == 0;
@@ -35,6 +39,8 @@ namespace Api.Controllers
             {
                 item = _inventoryService.GetItemById(itemDto.Id);
             }
+
+            _logger.LogInformation("Item is New: " + isNew);
 
             item.No = itemDto.No;
             item.Code = itemDto.Code;
@@ -66,7 +72,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("items")] // api/Inventory/items
         public IActionResult Items()
         {
             var items = _inventoryService.GetAllItems();
@@ -75,11 +81,8 @@ namespace Api.Controllers
 
             foreach (var item in items)
             {
-                var measurments = _inventoryService.GetMeasurements();
-
                 itemsDto.Add(new Item()
                 {
-
                     Id = item.Id,
                     Code = item.Code,
                     Description = item.Description,
@@ -89,15 +92,13 @@ namespace Api.Controllers
                     Price = item.Price,
                     QuantityOnHand = item.ComputeQuantityOnHand()
                 });
-
-                
             }
 
             return new ObjectResult(itemsDto.AsEnumerable());
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("Item")]
         public IActionResult Item(int id)
         {
             var item = _inventoryService.GetItemById(id);
@@ -127,7 +128,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("[action]")]
+        [Route("ICJ")] // api/Inventory/ICJ
         public IActionResult ICJ()
         {
             var invControlJournals = _inventoryService.GetInventoryControlJournals();
@@ -144,6 +145,8 @@ namespace Api.Controllers
                     Date = icj.Date
                 });
             }
+
+            _logger.LogInformation("ICJ Count: " + icjDto.Count);
             return new ObjectResult(icjDto.AsEnumerable());
         }    
     }

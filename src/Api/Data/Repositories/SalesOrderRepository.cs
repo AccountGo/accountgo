@@ -1,13 +1,16 @@
 ﻿using Core.Data;
+using Core.Domain.Purchases;
 using Core.Domain.Sales;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using Microsoft.IdentityModel.Logging;
 using System.Linq;
 
 namespace Api.Data
 {
     public class SalesOrderRepository : EfRepository<SalesOrderHeader>, ISalesOrderRepository
     {
-        public SalesOrderRepository(ApiDbContext context) : base(context)
+        public SalesOrderRepository(ILogger<SalesOrderHeader> logger, ApiDbContext context) : base(logger,context)
         {
         }
 

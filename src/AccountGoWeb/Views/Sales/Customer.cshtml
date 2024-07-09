@@ -1,4 +1,10 @@
 ﻿@model Dto.Sales.Customer
+
+<style>
+    div.row, div.card-header {
+        color: #fff;
+    }   
+</style>
 <div>
     <a href="#" id="linkEdit" class="btn" onclick="onClickEditButton();">
         <i class="fa fa-edit"></i>
@@ -38,12 +44,12 @@
                             <input asp-for="Phone" class="form-control" type="text" placeholder="Phone ..." />
                         </div>
                     </div>
-                    <div class="row">
+                    @* <div class="row">
                         <div class="col-sm-2">Fax</div>
                         <div class="col-sm-10">
                             <input asp-for="Fax" class="form-control" type="text" placeholder="Fax ..." />
                         </div>
-                    </div>
+                    </div> *@
                     <div class="row">
                         <div class="col-sm-2">Website</div>
                         <div class="col-sm-10">
@@ -73,13 +79,13 @@
                     <div class="row">
                         <div class="col-sm-4">First Name</div>
                         <div class="col-sm-8">
-                            <input asp-for="PrimaryContact.FirstName" class="form-control" type="text" placeholder="Phone ..." />
+                            <input asp-for="PrimaryContact.FirstName" class="form-control" type="text" placeholder="First Name ..." />
                         </div>
                     </div>
                     <div class="row">
                         <div class="col-sm-4">Last Name</div>
                         <div class="col-sm-8">
-                            <input asp-for="PrimaryContact.LastName" class="form-control" type="text" placeholder="Fax ..." />
+                            <input asp-for="PrimaryContact.LastName" class="form-control" type="text" placeholder="Last Name ..." />
                         </div>
                     </div>
                 </div>
@@ -90,12 +96,12 @@
                             <input asp-for="PrimaryContact.Party.Phone" class="form-control" type="text" placeholder="Phone ..." />
                         </div>
                     </div>
-                    <div class="row">
+                    @* <div class="row">
                         <div class="col-sm-4">Fax</div>
                         <div class="col-sm-8">
                             <input asp-for="PrimaryContact.Party.Fax" class="form-control" type="text" placeholder="Fax ..." />
                         </div>
-                    </div>
+                    </div> *@
                     <div class="row">
                         <div class="col-sm-4">Website</div>
                         <div class="col-sm-8">

@@ -1,11 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
+﻿using Dto.Common;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Configuration;
-using System.Net.Http;
-using Dto.Common;
 // For more information on enabling MVC for empty projects, visit http://go.microsoft.com/fwlink/?LinkID=397860
 
 namespace AccountGoWeb.Controllers
@@ -35,8 +29,8 @@ namespace AccountGoWeb.Controllers
             //return View(model: contacts);
             using (var client = new HttpClient())
             {
-                var baseUri = _baseConfig["ApiUrl"];
-                client.BaseAddress = new System.Uri(baseUri);
+                var baseUri = _baseConfig!["ApiUrl"];
+                client.BaseAddress = new System.Uri(baseUri!);
                 client.DefaultRequestHeaders.Accept.Clear(); 
                 var response = await client.GetAsync(baseUri + "contact/contacts?partyId=" + partyId + "&partyType=" + partyType);
                 if (response.IsSuccessStatusCode)
@@ -57,7 +51,7 @@ namespace AccountGoWeb.Controllers
         /// <returns></returns>
         public IActionResult Contact(int id = 0, int partyId = 0, int partyType = 0)
         {
-            Contact contact = null;
+            Contact? contact = null;
 
             if (id == 0) // creating new contact
             {
