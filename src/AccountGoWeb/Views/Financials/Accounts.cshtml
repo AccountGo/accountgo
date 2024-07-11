@@ -1,91 +1,86 @@
-﻿@model string
+﻿@model ICollection<AccountGoWeb.Models.Financial.AccountViewModel>
 
 @{
     ViewBag.Title = "Chart of Accounts";
 }
-<div>
-</div>
-<div>
-    <div id="accounts" class="ag-blue" style="height:600px;"></div>
-</div>
-<script>
-    var columnDefs = [
-        {
-            headerName: "Name",
-            field: "indentedName", // Use a computed field for indented name
-        },
-        { headerName: "Group", cellRenderer: "agGroupCellRenderer", field: "accountClassId" },
-        { headerName: "Code", field: "accountCode", width: 100 },
-        { headerName: "Name", field: "accountName", width: 350 },
-        @* { headerName: "Description", field: "description", width: 250 },
-        {
-            headerName: "Cash", width: 100, cellRenderer: function (val) {
-                if (val.data.isCash)
-                    return '<input type="checkbox" checked disabled />';
-                return '<input type="checkbox" disabled />';
-            }
-        }, *@
-        { headerName: "Balance", field: "totalBalance", width: 100 },
-        { headerName: "Debit", field: "totalDebitBalance", width: 100 },
-        { headerName: "Credit", field: "totalCreditBalance", width: 100 }
-    ];
-
-    var gridOptions = {
-        autoGroupColumnDef: {
-            headerName: 'Name', // Display indented name in auto group column
-            field: 'indentedName'
-        },
-        columnDefs: columnDefs,
-        rowData: null,
-        getNodeChildDetails: function (data) {
-            if (data.childAccounts.length > 0) {
-                return {
-                    group: true,
-                    children: data.childAccounts,
-                    key: data.accountCode
-                };
-            } else {
-                return null;
-            }
-        },
-        icons: {
-            groupExpanded: '<i class="fa fa-minus-square-o"/>',
-            groupContracted: '<i class="fa fa-plus-square-o"/>'
-        },
-        // PROPERTIES
-        rowSelection: 'single',
-        enableFilter: true,
-        enableColResize: true,
-    };
-
-    function flattenChildAccounts(value, depth = 0) {
-        const result = [];
-        value.forEach(item => {
-            result.push(item);
-            if (item.childAccounts) {
-                // Recursively flatten childAccounts with increased depth
-                result.push(...flattenChildAccounts(item.childAccounts, depth + 1));
-            }
-        });
-        return result;
+<style>
+    .hiddenRow {
+        padding: 4px !important;
     }
+</style>
 
-    function autoSizeAll() {
-        var allColumnIds = [];
-        columnDefs.forEach(function (columnDef) {
-            allColumnIds.push(columnDef.field);
-        });
-        gridOptions.columnApi.autoSizeColumns(allColumnIds);
-    }
+<div>
+    <table class="table table-condensed table-striped">
 
-    // wait for the document to be loaded, otherwise
-    // ag-Grid will not find the div in the document.
-    document.addEventListener("DOMContentLoaded", function () {
-        var eGridDiv = document.querySelector('#accounts');
-        new agGrid.Grid(eGridDiv, gridOptions)
-        const value = flattenChildAccounts(@Html.Raw(Model));
-        console.log(value);
-        gridOptions.api.setRowData(value);
-        autoSizeAll();
-    });
-</script>
+        <thead>
+            <tr>
+                <th>Code</th>
+                <th>Name</th>
+                <th>Balance</th>
+                <th>Debit</th>
+                <th>Credit</th>
+            </tr>
+        </thead>
+
+        <tbody>
+            @for(int accountIdx = 0; accountIdx < Model.Count; ++accountIdx)
+            {
+                var account = Model.ToList()[accountIdx];
+                var accountTargetId = $"asset-{accountIdx}";
+
+                <tr data-bs-toggle="collapse" data-bs-target="#@accountTargetId" aria-expanded="false" aria-controls="@accountTargetId">
+                    <td>@account.AccountCode</td>
+                    <td>@account.AccountName</td>
+                    <td>@account.TotalBalance</td>
+                    <td>@account.TotalDebitBalance</td>
+                    <td>@account.TotalCreditBalance</td>
+                </tr>
+
+                <tr>
+                    <td colspan="12">
+                        <div class="collapse" id="@accountTargetId" aria-expanded="false" aria-controls="@accountTargetId">
+                    
+                            <table class="table table-striped">
+                                @for (int childAccountIdx = 0; childAccountIdx < account.ChildAccounts.Count; ++childAccountIdx)
+                                {
+                                    var childAccount = account.ChildAccounts.ToList()[childAccountIdx];
+                                    var childAccountTargetId = $"asset-{accountIdx}-{childAccountIdx}";
+
+                                    <tr data-bs-toggle="collapse" data-bs-target="#@childAccountTargetId" aria-expanded="false" aria-controls="@childAccountTargetId">
+                                        <td>@childAccount.AccountCode</td>
+                                        <td>@childAccount.AccountName</td>
+                                        <td>@childAccount.TotalBalance</td>
+                                        <td>@childAccount.TotalDebitBalance</td>
+                                        <td>@childAccount.TotalCreditBalance</td>
+                                    </tr>
+
+                                    <tr>
+                                        <td colspan="12">
+                                            <div class="collapse" id="@childAccountTargetId" aria-expanded="false" aria-controls="@childAccountTargetId">
+                                                
+                                                <table class="table table-striped">
+                                                    @foreach (var grandChildAccount in childAccount.ChildAccounts)
+                                                    {
+                                                        <tr data-bs-toggle="collapse" data-bs-target="#@childAccountTargetId" aria-expanded="false" aria-controls="@childAccountTargetId">
+                                                            <td>@grandChildAccount.AccountCode</td>
+                                                            <td>@grandChildAccount.AccountName</td>
+                                                            <td>@grandChildAccount.TotalBalance</td>
+                                                            <td>@grandChildAccount.TotalDebitBalance</td>
+                                                            <td>@grandChildAccount.TotalCreditBalance</td>
+                                                        </tr>
+                                                    }
+                                                </table>
+
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </table>
+
+                        </div>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
