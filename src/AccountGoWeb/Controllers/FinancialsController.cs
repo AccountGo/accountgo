@@ -39,7 +39,8 @@ namespace AccountGoWeb.Controllers
                 if (response.IsSuccessStatusCode)
                 {
                     var responseJson = await response.Content.ReadAsStringAsync();
-                    return View(model: responseJson);
+                    var accountModels = Newtonsoft.Json.JsonConvert.DeserializeObject<System.Collections.Generic.List<Models.Financial.AccountViewModel>>(responseJson);
+                    return View(accountModels);
                 }
             }
 
