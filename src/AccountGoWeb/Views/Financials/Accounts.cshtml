@@ -59,14 +59,38 @@
                                             <div class="collapse" id="@childAccountTargetId" aria-expanded="false" aria-controls="@childAccountTargetId">
                                                 
                                                 <table class="table table-striped">
-                                                    @foreach (var grandChildAccount in childAccount.ChildAccounts)
+                                                    @for (int grandChildAccountIdx = 0; grandChildAccountIdx < childAccount.ChildAccounts.Count; ++grandChildAccountIdx)
                                                     {
-                                                        <tr data-bs-toggle="collapse" data-bs-target="#@childAccountTargetId" aria-expanded="false" aria-controls="@childAccountTargetId">
+                                                        var grandChildAccount = childAccount.ChildAccounts.ToList()[grandChildAccountIdx];
+                                                        var grandChildAccountTargetId = $"asset-{accountIdx}-{childAccountIdx}-{grandChildAccountIdx}";
+
+                                                        <tr data-bs-toggle="collapse" data-bs-target="#@grandChildAccountTargetId" aria-expanded="false" aria-controls="@grandChildAccountTargetId">
                                                             <td>@grandChildAccount.AccountCode</td>
                                                             <td>@grandChildAccount.AccountName</td>
                                                             <td>@grandChildAccount.TotalBalance</td>
                                                             <td>@grandChildAccount.TotalDebitBalance</td>
                                                             <td>@grandChildAccount.TotalCreditBalance</td>
+                                                        </tr>
+
+                                                        <tr>
+                                                            <td colspan="12">
+                                                                <div class="collapse" id="@grandChildAccountTargetId" aria-expanded="false" aria-controls="@grandChildAccountTargetId">
+
+                                                                    <table class="table table-striped">
+                                                                        @foreach(var greatGrandChildAccount in grandChildAccount.ChildAccounts)
+                                                                        {
+                                                                            <tr>
+                                                                                <td>@greatGrandChildAccount.AccountCode</td>
+                                                                                <td>@greatGrandChildAccount.AccountName</td>
+                                                                                <td>@greatGrandChildAccount.TotalBalance</td>
+                                                                                <td>@greatGrandChildAccount.TotalDebitBalance</td>
+                                                                                <td>@greatGrandChildAccount.TotalCreditBalance</td>
+                                                                            </tr>
+                                                                        }
+                                                                    </table>
+
+                                                                </div>
+                                                            </td>
                                                         </tr>
                                                     }
                                                 </table>
