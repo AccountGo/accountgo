@@ -44,6 +44,7 @@ builder.Services
     //.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery) // Add this line
     .AddDbContext<ApplicationIdentityDbContext>(options => options.UseSqlServer(connectionString));
 
+builder.Services.AddAuthentication();
 builder.Services
     .AddIdentity<ApplicationUser, IdentityRole>()
     .AddEntityFrameworkStores<ApplicationIdentityDbContext>()
@@ -101,6 +102,8 @@ if (app.Environment.IsDevelopment())
 //app.UseHttpsRedirection();
 app.UseRouting();
 app.UseCors(AllowAllOrigins);
+
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
