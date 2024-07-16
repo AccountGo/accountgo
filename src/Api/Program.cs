@@ -1,6 +1,8 @@
 using System;
 using Api.Data;
 using Api.Data.Repositories;
+using Api.Extensions;
+using Api.Service;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -11,6 +13,15 @@ using Microsoft.Extensions.Hosting;
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
+
+// authentication
+builder.Services.AddScoped<IAuthenticationService, AuthenticationService>();
+builder.Services.AddAuthentication();
+builder.Services
+    .AddIdentity<ApplicationUser, IdentityRole>()
+    .AddEntityFrameworkStores<ApplicationIdentityDbContext>()
+    .AddDefaultTokenProviders();
+builder.Services.ConfigureJWT(builder.Configuration);
 
 builder.Services.AddControllers()
 .AddNewtonsoftJson(
@@ -44,12 +55,6 @@ builder.Services
     //.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery) // Add this line
     .AddDbContext<ApplicationIdentityDbContext>(options => options.UseSqlServer(connectionString));
 
-builder.Services.AddAuthentication();
-builder.Services
-    .AddIdentity<ApplicationUser, IdentityRole>()
-    .AddEntityFrameworkStores<ApplicationIdentityDbContext>()
-    .AddDefaultTokenProviders();
-
 // Add cors
 // builder.Services.AddCors(o => o.AddPolicy("AllowAll", builder =>
 // {
@@ -70,7 +75,6 @@ builder.Services.AddCors(options =>
                                 .AllowAnyHeader();
                       });
 });
-
 
 // generic repository
 builder.Services.AddScoped(typeof(Core.Data.IRepository<>), typeof(EfRepository<>));
