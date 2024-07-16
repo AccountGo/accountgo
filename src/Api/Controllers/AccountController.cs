@@ -54,7 +54,7 @@ namespace Api.Controllers
                 if (await _userManager.CheckPasswordAsync(applicationUser, password))
                 {
                     //await ResetLockout(user);
-                    return new ObjectResult(_userManager.FindByEmailAsync(applicationUser.Email));
+                    return new ObjectResult(await _userManager.FindByEmailAsync(applicationUser.Email));
                 }
             }
             catch(System.Exception ex)
