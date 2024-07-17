@@ -1,0 +1,9 @@
+Recreate starter Blazor app with database authentication
+- we will use JWT for client-side authentication
+
+Get chart of account to work
+
+CI/CD GiHul >> Azure
+
+Meet and decide on moving the current application into the Blazor template
+

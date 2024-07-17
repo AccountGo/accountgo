@@ -1,0 +1,94 @@
+﻿@page "/financials/chart-of-accounts"
+@using System.Text.Json
+@using System.Text.Json.Serialization
+@using LibraryGDB.Models.Financial
+@using Microsoft.JSInterop
+@using Microsoft.Net.Http.Headers
+@inject IHttpClientFactory ClientFactory
+@inject Microsoft.JSInterop.IJSRuntime JSRuntime
+
+<PageTitle>Chart of Accounts</PageTitle>
+
+<h3>Chart Of Accounts</h3>
+
+@if (getError || accounts is null)
+{
+    <p>Unable to get data. Please try again later.</p>
+}
+else
+{
+    <ul>
+        @foreach (var item in accounts)
+        {
+            <li>@item.AccountName</li>
+        }
+    </ul>
+}
+
+@code {
+     private IEnumerable<AccountViewModel>? accounts = [];
+    private bool getError;
+    private bool shouldRender;
+    private bool jsInteropCalled = false; // Flag to ensure JS interop is called only once
+    
+
+    protected override bool ShouldRender() => shouldRender;
+
+protected override async Task OnInitializedAsync()
+{
+    var request = new HttpRequestMessage(HttpMethod.Get, "http://localhost:8001/api/financials/accounts");
+    request.Headers.Add("Accept", "application/json");
+
+    var _client = ClientFactory.CreateClient();
+
+    _client.DefaultRequestHeaders.Accept.Clear();
+    _client.DefaultRequestHeaders.Clear();
+    _client.DefaultRequestHeaders.CacheControl = new System.Net.Http.Headers.CacheControlHeaderValue() { NoCache = true };
+    _client.DefaultRequestHeaders.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
+
+    var response = await _client.SendAsync(request).ConfigureAwait(false);
+
+    if (response.IsSuccessStatusCode)
+    {
+        var responseString = await response.Content.ReadAsStringAsync();
+
+        // Log the response string to verify the JSON structure
+        // Console.WriteLine($"Response JSON: {responseString}");
+
+        // Ensure JsonSerializerOptions are set correctly
+        var options = new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true, // Adjust based on your JSON
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        };
+
+        try
+        {
+            accounts = JsonSerializer.Deserialize<System.Collections.Generic.List<AccountViewModel>>(responseString, options);
+        }
+        catch (JsonException ex)
+        {
+            // Log the exception to diagnose deserialization issues
+            Console.WriteLine($"JSON Deserialization error: {ex.Message}");
+            getError = true;
+        }
+
+        await JSRuntime.InvokeVoidAsync("console.log", accounts);
+    }
+    else
+    {
+        getError = true;
+    }
+
+    shouldRender = true;
+}
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !jsInteropCalled)
+        {
+            await JSRuntime.InvokeVoidAsync("console.log", accounts);
+            jsInteropCalled = true; // Ensure this block runs only once
+        }
+    }
+}
