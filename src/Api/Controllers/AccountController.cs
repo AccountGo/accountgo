@@ -53,7 +53,9 @@ namespace Api.Controllers
                     return Unauthorized();
                 }
 
-                return Ok(new { Token = await _authenticationService.CreateToken() });
+                var tokenDto = await _authenticationService.CreateToken(populateExp: true);
+
+                return Ok(tokenDto);
             }
             catch(System.Exception ex)
             {
