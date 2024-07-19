@@ -6,5 +6,6 @@ namespace Api.Service
     {
         Task<bool> ValidateUser(dynamic loginViewModel);
         Task<Token> CreateToken(bool populateExp);
+        Task<Token> RefreshToken(Token tokenDto);
     }
 }

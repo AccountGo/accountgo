@@ -57,6 +57,19 @@ namespace Api.Service
             return new Token(accessToken, refreshToken);
         }
 
+        public async Task<Token> RefreshToken(Token tokenDto)
+        {
+            var principal = GetPrincipalFromExpriedToken(tokenDto.AccessToken);
+
+            var user = await _userManager.FindByEmailAsync(principal.Identity.Name);
+            if (user == null || user.RefreshToken != tokenDto.RefreshToken || user.RefreshTokenExpiryTime <= DateTime.Now)
+                throw new SecurityTokenException("Invalid Client request. The tokenDto has some invalid values.");
+
+            _user = user;
+
+            return await CreateToken(populateExp: false);
+        }
+
         private SigningCredentials GetSigningCredentials()
         {
             var key = Encoding.UTF8.GetBytes(Environment.GetEnvironmentVariable("SECRET"));
