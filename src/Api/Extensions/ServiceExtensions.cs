@@ -31,5 +31,26 @@ namespace Api.Extensions
                 };
             });
         }
+
+        public static void ConfigureSqlContext(this IServiceCollection services, IConfiguration configuration)
+        {
+            var connectionString = configuration.GetConnectionString("DefaultConnection") ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
+
+            // These environment variables can be overriden from launchSettings.json.
+            string dbServer = System.Environment.GetEnvironmentVariable("DBSERVER") ?? "localhost,1444";
+            string dbUserID = System.Environment.GetEnvironmentVariable("DBUSERID") ?? "sa";
+            string dbUserPassword = System.Environment.GetEnvironmentVariable("DBPASSWORD") ?? "SqlPassword!";
+            string dbName = System.Environment.GetEnvironmentVariable("DBNAME") ?? "accountgodb";
+
+            connectionString = String.Format(configuration.GetConnectionString("DefaultConnection")!, dbServer, dbUserID, dbUserPassword, dbName);
+
+            System.Console.WriteLine("DB Connection String: " + connectionString);
+            
+            services
+                //.AddEntityFrameworkSqlServer()
+                .AddDbContext<ApiDbContext>(options => options.UseSqlServer(connectionString))
+                //.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery) // Add this line
+                .AddDbContext<ApplicationIdentityDbContext>(options => options.UseSqlServer(connectionString));
+        }
     }
 }
