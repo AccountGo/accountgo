@@ -45,17 +45,8 @@ builder.Services.ConfigureSqlContext(builder.Configuration);
 //     .AllowAnyHeader();
 // }));
 
-var AllowAllOrigins = "AllowAll";
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy(name: AllowAllOrigins,
-                      policy =>
-                      {
-                          policy.AllowAnyOrigin()
-                                .AllowAnyMethod()
-                                .AllowAnyHeader();
-                      });
-});
+// cors
+builder.Services.ConfigureCors();
 
 // generic repository
 builder.Services.AddScoped(typeof(Core.Data.IRepository<>), typeof(EfRepository<>));
@@ -86,7 +77,7 @@ if (app.Environment.IsDevelopment())
 
 //app.UseHttpsRedirection();
 app.UseRouting();
-app.UseCors(AllowAllOrigins);
+app.UseCors("AllowAll");
 
 app.UseAuthentication();
 app.UseAuthorization();
