@@ -36,24 +36,8 @@ builder.Services.AddControllers()
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
-
-// These environment variables can be overriden from launchSettings.json.
-string dbServer = System.Environment.GetEnvironmentVariable("DBSERVER") ?? "localhost,1444";
-string dbUserID = System.Environment.GetEnvironmentVariable("DBUSERID") ?? "sa";
-string dbUserPassword = System.Environment.GetEnvironmentVariable("DBPASSWORD") ?? "SqlPassword!";
-string dbName = System.Environment.GetEnvironmentVariable("DBNAME") ?? "accountgodb";
-
-connectionString = String.Format(builder.Configuration.GetConnectionString("DefaultConnection")!, dbServer, dbUserID, dbUserPassword, dbName);
-
-System.Console.WriteLine("DB Connection String: " + connectionString);
-
-builder.Services
-    //.AddEntityFrameworkSqlServer()
-    .AddDbContext<ApiDbContext>(options => options.UseSqlServer(connectionString))
-    //.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery) // Add this line
-    .AddDbContext<ApplicationIdentityDbContext>(options => options.UseSqlServer(connectionString));
+// Add database context
+builder.Services.ConfigureSqlContext(builder.Configuration);
 
 // Add cors
 // builder.Services.AddCors(o => o.AddPolicy("AllowAll", builder =>
