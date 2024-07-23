@@ -1,6 +1,8 @@
 using System;
 using Api.Data;
 using Api.Data.Repositories;
+using Api.Extensions;
+using Api.Service;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -11,6 +13,12 @@ using Microsoft.Extensions.Hosting;
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
+
+// authentication
+builder.Services.AddScoped<IAuthenticationService, AuthenticationService>();
+builder.Services.AddAuthentication();
+builder.Services.ConfigureIdentity();
+builder.Services.ConfigureJWT(builder.Configuration);
 
 builder.Services.AddControllers()
 .AddNewtonsoftJson(
@@ -25,29 +33,8 @@ builder.Services.AddControllers()
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
-
-// These environment variables can be overriden from launchSettings.json.
-string dbServer = System.Environment.GetEnvironmentVariable("DBSERVER") ?? "localhost,1444";
-string dbUserID = System.Environment.GetEnvironmentVariable("DBUSERID") ?? "sa";
-string dbUserPassword = System.Environment.GetEnvironmentVariable("DBPASSWORD") ?? "SqlPassword!";
-string dbName = System.Environment.GetEnvironmentVariable("DBNAME") ?? "accountgodb";
-
-connectionString = String.Format(builder.Configuration.GetConnectionString("DefaultConnection")!, dbServer, dbUserID, dbUserPassword, dbName);
-
-System.Console.WriteLine("DB Connection String: " + connectionString);
-
-builder.Services
-    //.AddEntityFrameworkSqlServer()
-    .AddDbContext<ApiDbContext>(options => options.UseSqlServer(connectionString))
-    //.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery) // Add this line
-    .AddDbContext<ApplicationIdentityDbContext>(options => options.UseSqlServer(connectionString));
-
-builder.Services
-    .AddIdentity<ApplicationUser, IdentityRole>()
-    .AddEntityFrameworkStores<ApplicationIdentityDbContext>()
-    .AddDefaultTokenProviders();
+// Add database context
+builder.Services.ConfigureSqlContext(builder.Configuration);
 
 // Add cors
 // builder.Services.AddCors(o => o.AddPolicy("AllowAll", builder =>
@@ -58,18 +45,8 @@ builder.Services
 //     .AllowAnyHeader();
 // }));
 
-var AllowAllOrigins = "AllowAll";
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy(name: AllowAllOrigins,
-                      policy =>
-                      {
-                          policy.AllowAnyOrigin()
-                                .AllowAnyMethod()
-                                .AllowAnyHeader();
-                      });
-});
-
+// cors
+builder.Services.ConfigureCors();
 
 // generic repository
 builder.Services.AddScoped(typeof(Core.Data.IRepository<>), typeof(EfRepository<>));
@@ -100,7 +77,9 @@ if (app.Environment.IsDevelopment())
 
 //app.UseHttpsRedirection();
 app.UseRouting();
-app.UseCors(AllowAllOrigins);
+app.UseCors("AllowAll");
+
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
