@@ -1,4 +1,5 @@
 using Api.Data;
+using Api.Service;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Services.Administration;
@@ -11,16 +12,19 @@ namespace Api.Controllers
     {
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly IAdministrationService _administrationService;
+        private readonly IAuthenticationService _authenticationService;
 
         public AccountController(
             UserManager<ApplicationUser> userManager,
             SignInManager<ApplicationUser> signInManager,
             IAdministrationService administrationService,
-            ISecurityService securityService
+            ISecurityService securityService,
+            IAuthenticationService authenticationService
             )
         {
             _userManager = userManager;
             _administrationService = administrationService;
+            _authenticationService = authenticationService;
         }
 
         [HttpPost]
@@ -41,21 +45,17 @@ namespace Api.Controllers
             //{
             //    return await LockedOut(user);
             //}
-            string password = loginViewModel.Password;
-            string username = loginViewModel.Email;
             
             try
             {
-                var applicationUser = await _userManager.FindByEmailAsync(username);
-                if (applicationUser == null)
+                if(!await _authenticationService.ValidateUser(loginViewModel))
                 {
-                    System.Console.WriteLine($"Unable to load user with email '{username}'.");
+                    return Unauthorized();
                 }
-                if (await _userManager.CheckPasswordAsync(applicationUser, password))
-                {
-                    //await ResetLockout(user);
-                    return new ObjectResult(_userManager.FindByEmailAsync(applicationUser.Email));
-                }
+
+                var tokenDto = await _authenticationService.CreateToken(populateExp: true);
+
+                return Ok(tokenDto);
             }
             catch(System.Exception ex)
             {

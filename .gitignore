@@ -227,3 +227,4 @@ FakesAssemblies/
 
 .vscode
 exclude
+/src/Api/appsettings.Development.json
