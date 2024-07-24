@@ -72,7 +72,7 @@ namespace Api.Service
 
         private SigningCredentials GetSigningCredentials()
         {
-            var secretKey = System.Environment.GetEnvironmentVariable("SECRET_key");
+            var secretKey = _configuration["SECRET:key"];
 
             var key = Encoding.UTF8.GetBytes(secretKey);
             var secret = new SymmetricSecurityKey(key);
@@ -93,9 +93,9 @@ namespace Api.Service
 
         private JwtSecurityToken GenerateTokenOptions(SigningCredentials signingCredentials, List<Claim> claims)
         {
-            var validIssuer = System.Environment.GetEnvironmentVariable("JwtSettings_validIssuer") ?? "Good Deed Books API";
-            var validAudience = System.Environment.GetEnvironmentVariable("JwtSettings_validAudience") ?? "http://localhost:8001";
-            var expires = System.Environment.GetEnvironmentVariable("JwtSettings_expires") ?? "60";
+            var validIssuer = _configuration["JwtSettings:validIssuer"];
+            var validAudience = _configuration["JwtSettings:validAudience"];
+            var expires = _configuration["JwtSettings:expires"];
 
             var tokenOptions = new JwtSecurityToken
             (
@@ -121,9 +121,9 @@ namespace Api.Service
 
         private ClaimsPrincipal GetPrincipalFromExpriedToken(string token)
         {
-            var validIssuer = System.Environment.GetEnvironmentVariable("JwtSettings_validIssuer") ?? "Good Deed Books API";
-            var validAudience = System.Environment.GetEnvironmentVariable("JwtSettings_validAudience") ?? "http://localhost:8001";
-            var secretKey = System.Environment.GetEnvironmentVariable("SECRET_key");
+            var validIssuer = _configuration["JwtSettings:validIssuer"];
+            var validAudience = _configuration["JwtSettings:validAudience"];
+            var secretKey = _configuration["SECRET:key"];
 
             var tokenValidationParameters = new TokenValidationParameters
             {
