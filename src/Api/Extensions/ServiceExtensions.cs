@@ -23,6 +23,7 @@ namespace Api.Extensions
                                   });
             });
         }
+
         public static void ConfigureIdentity(this IServiceCollection services)
         {
             services.AddIdentity<ApplicationUser, IdentityRole>()
@@ -32,9 +33,10 @@ namespace Api.Extensions
 
         public static void ConfigureJWT(this IServiceCollection services, IConfiguration configuration)
         {
-            var jwtSettings = configuration.GetSection("JwtSettings");
+            var validIssuer = configuration["JwtSettings:validIssuer"];
+            var validAudience = configuration["JwtSettings:validAudience"];
             var secretKey = configuration["SECRET:key"];
-            
+
             services.AddAuthentication(opt =>
             {
                 opt.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -48,8 +50,8 @@ namespace Api.Extensions
                     ValidateLifetime = true,
                     ValidateIssuerSigningKey = true,
 
-                    ValidIssuer = jwtSettings["validIssuer"],
-                    ValidAudience = jwtSettings["validAudience"],
+                    ValidIssuer = validIssuer,
+                    ValidAudience = validAudience,
                     IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey))
                 };
             });
@@ -71,7 +73,8 @@ namespace Api.Extensions
             
             services
                 //.AddEntityFrameworkSqlServer()
-                .AddDbContext<ApiDbContext>(options => options.UseSqlServer(connectionString))
+                .AddDbContext<ApiDbContext>(options => options.UseSqlServer(connectionString
+                , options => options.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery)))
                 //.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery) // Add this line
                 .AddDbContext<ApplicationIdentityDbContext>(options => options.UseSqlServer(connectionString));
         }

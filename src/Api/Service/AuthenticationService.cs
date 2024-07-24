@@ -72,7 +72,9 @@ namespace Api.Service
 
         private SigningCredentials GetSigningCredentials()
         {
-            var key = Encoding.UTF8.GetBytes(_configuration["SECRET:key"]);
+            var secretKey = _configuration["SECRET:key"];
+
+            var key = Encoding.UTF8.GetBytes(secretKey);
             var secret = new SymmetricSecurityKey(key);
 
             return new SigningCredentials(secret, SecurityAlgorithms.HmacSha256);
@@ -91,14 +93,16 @@ namespace Api.Service
 
         private JwtSecurityToken GenerateTokenOptions(SigningCredentials signingCredentials, List<Claim> claims)
         {
-            var jwtSettings = _configuration.GetSection("JwtSettings");
+            var validIssuer = _configuration["JwtSettings:validIssuer"];
+            var validAudience = _configuration["JwtSettings:validAudience"];
+            var expires = _configuration["JwtSettings:expires"];
 
             var tokenOptions = new JwtSecurityToken
             (
-                issuer: jwtSettings["validIssuer"],
-                audience: jwtSettings["validAudience"],
+                issuer: validIssuer,
+                audience: validAudience,
                 claims: claims,
-                expires: DateTime.Now.AddMinutes(Convert.ToDouble(jwtSettings["expires"])),
+                expires: DateTime.Now.AddMinutes(Convert.ToDouble(expires)),
                 signingCredentials: signingCredentials
             );
 
@@ -117,17 +121,19 @@ namespace Api.Service
 
         private ClaimsPrincipal GetPrincipalFromExpriedToken(string token)
         {
-            var jwtSettings = _configuration.GetSection("JwtSettings");
+            var validIssuer = _configuration["JwtSettings:validIssuer"];
+            var validAudience = _configuration["JwtSettings:validAudience"];
+            var secretKey = _configuration["SECRET:key"];
 
             var tokenValidationParameters = new TokenValidationParameters
             {
                 ValidateAudience = true,
                 ValidateIssuer = true,
                 ValidateIssuerSigningKey = true,
-                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["SECRET:key"])),
+                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey)),
                 ValidateLifetime = true,
-                ValidIssuer = jwtSettings["validIssuer"],
-                ValidAudience = jwtSettings["validAudience"]
+                ValidIssuer = validIssuer,
+                ValidAudience = validAudience
             };
 
             var tokenHandler = new JwtSecurityTokenHandler();
