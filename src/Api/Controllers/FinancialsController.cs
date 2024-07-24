@@ -10,7 +10,7 @@ using System.Linq;
 namespace Api.Controllers
 {
     [Route("api/[controller]")]
-    [Authorize]
+    //[Authorize]
     public class FinancialsController : BaseController
     {
         private readonly IAdministrationService _adminService;

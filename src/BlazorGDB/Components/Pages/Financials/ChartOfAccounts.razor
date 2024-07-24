@@ -17,71 +17,177 @@
 }
 else
 {
-    <ul>
+@*     <ul>
         @foreach (var item in accounts)
         {
             <li>@item.AccountName</li>
         }
-    </ul>
+    </ul> *@
+    <style>
+        .hiddenRow {
+            padding: 4px !important;
+        }
+    </style>
+
+    <div>
+        <table class="table table-condensed table-striped">
+
+            <thead>
+                <tr>
+                    <th>Code</th>
+                    <th>Name</th>
+                    <th>Balance</th>
+                    <th>Debit</th>
+                    <th>Credit</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                @for (int accountIdx = 0; accountIdx < accounts.Count(); ++accountIdx)
+                {
+                    var account = accounts.ToList()[accountIdx];
+                    var accountTargetId = $"asset-{accountIdx}";
+
+                    <tr data-bs-toggle="collapse" data-bs-target="#@accountTargetId" aria-expanded="false" aria-controls="@accountTargetId">
+                        <td>@account.AccountCode</td>
+                        <td>@account.AccountName</td>
+                        <td>@account.TotalBalance</td>
+                        <td>@account.TotalDebitBalance</td>
+                        <td>@account.TotalCreditBalance</td>
+                    </tr>
+
+                    <tr>
+                        <td colspan="12">
+                            <div class="collapse" id="@accountTargetId" aria-expanded="false" aria-controls="@accountTargetId">
+
+                                <table class="table table-striped">
+                                    @for (int childAccountIdx = 0; childAccountIdx < account.ChildAccounts!.Count; ++childAccountIdx)
+                                    {
+                                        var childAccount = account.ChildAccounts.ToList()[childAccountIdx];
+                                        var childAccountTargetId = $"asset-{accountIdx}-{childAccountIdx}";
+
+                                        <tr data-bs-toggle="collapse" data-bs-target="#@childAccountTargetId" aria-expanded="false" aria-controls="@childAccountTargetId">
+                                            <td>@childAccount.AccountCode</td>
+                                            <td>@childAccount.AccountName</td>
+                                            <td>@childAccount.TotalBalance</td>
+                                            <td>@childAccount.TotalDebitBalance</td>
+                                            <td>@childAccount.TotalCreditBalance</td>
+                                        </tr>
+
+                                        <tr>
+                                            <td colspan="12">
+                                                <div class="collapse" id="@childAccountTargetId" aria-expanded="false" aria-controls="@childAccountTargetId">
+
+                                                    <table class="table table-striped">
+                                                        @for (int grandChildAccountIdx = 0; grandChildAccountIdx < childAccount.ChildAccounts!.Count; ++grandChildAccountIdx)
+                                                        {
+                                                            var grandChildAccount = childAccount.ChildAccounts.ToList()[grandChildAccountIdx];
+                                                            var grandChildAccountTargetId = $"asset-{accountIdx}-{childAccountIdx}-{grandChildAccountIdx}";
+
+                                                            <tr data-bs-toggle="collapse" data-bs-target="#@grandChildAccountTargetId" aria-expanded="false" aria-controls="@grandChildAccountTargetId">
+                                                                <td>@grandChildAccount.AccountCode</td>
+                                                                <td>@grandChildAccount.AccountName</td>
+                                                                <td>@grandChildAccount.TotalBalance</td>
+                                                                <td>@grandChildAccount.TotalDebitBalance</td>
+                                                                <td>@grandChildAccount.TotalCreditBalance</td>
+                                                            </tr>
+
+                                                            <tr>
+                                                                <td colspan="12">
+                                                                    <div class="collapse" id="@grandChildAccountTargetId" aria-expanded="false" aria-controls="@grandChildAccountTargetId">
+
+                                                                        <table class="table table-striped">
+                                                                            @foreach (var greatGrandChildAccount in grandChildAccount.ChildAccounts!)
+                                                                            {
+                                                                                <tr>
+                                                                                    <td>@greatGrandChildAccount.AccountCode</td>
+                                                                                    <td>@greatGrandChildAccount.AccountName</td>
+                                                                                    <td>@greatGrandChildAccount.TotalBalance</td>
+                                                                                    <td>@greatGrandChildAccount.TotalDebitBalance</td>
+                                                                                    <td>@greatGrandChildAccount.TotalCreditBalance</td>
+                                                                                </tr>
+                                                                            }
+                                                                        </table>
+
+                                                                    </div>
+                                                                </td>
+                                                            </tr>
+                                                        }
+                                                    </table>
+
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </table>
+
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
 }
 
 @code {
-     private IEnumerable<AccountViewModel>? accounts = [];
+    private IEnumerable<AccountViewModel>? accounts = [];
     private bool getError;
     private bool shouldRender;
     private bool jsInteropCalled = false; // Flag to ensure JS interop is called only once
-    
+
 
     protected override bool ShouldRender() => shouldRender;
 
-protected override async Task OnInitializedAsync()
-{
-    var request = new HttpRequestMessage(HttpMethod.Get, "http://localhost:8001/api/financials/accounts");
-    request.Headers.Add("Accept", "application/json");
-
-    var _client = ClientFactory.CreateClient();
-
-    _client.DefaultRequestHeaders.Accept.Clear();
-    _client.DefaultRequestHeaders.Clear();
-    _client.DefaultRequestHeaders.CacheControl = new System.Net.Http.Headers.CacheControlHeaderValue() { NoCache = true };
-    _client.DefaultRequestHeaders.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
-
-    var response = await _client.SendAsync(request).ConfigureAwait(false);
-
-    if (response.IsSuccessStatusCode)
+    protected override async Task OnInitializedAsync()
     {
-        var responseString = await response.Content.ReadAsStringAsync();
+        var request = new HttpRequestMessage(HttpMethod.Get, $"{BlazorGDB.Models.Constants.API_URL}financials/accounts");
+        request.Headers.Add("Accept", "application/json");
 
-        // Log the response string to verify the JSON structure
-        // Console.WriteLine($"Response JSON: {responseString}");
+        var _client = ClientFactory.CreateClient();
 
-        // Ensure JsonSerializerOptions are set correctly
-        var options = new JsonSerializerOptions
+        _client.DefaultRequestHeaders.Accept.Clear();
+        _client.DefaultRequestHeaders.Clear();
+        _client.DefaultRequestHeaders.CacheControl = new System.Net.Http.Headers.CacheControlHeaderValue() { NoCache = true };
+        _client.DefaultRequestHeaders.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
+
+        var response = await _client.SendAsync(request).ConfigureAwait(false);
+
+        if (response.IsSuccessStatusCode)
         {
-            PropertyNameCaseInsensitive = true, // Adjust based on your JSON
-            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-        };
+            var responseString = await response.Content.ReadAsStringAsync();
 
-        try
-        {
-            accounts = JsonSerializer.Deserialize<System.Collections.Generic.List<AccountViewModel>>(responseString, options);
+            // Log the response string to verify the JSON structure
+            // Console.WriteLine($"Response JSON: {responseString}");
+
+            // Ensure JsonSerializerOptions are set correctly
+            var options = new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true, // Adjust based on your JSON
+                    DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+                };
+
+            try
+            {
+                accounts = JsonSerializer.Deserialize<System.Collections.Generic.List<AccountViewModel>>(responseString, options);
+            }
+            catch (JsonException ex)
+            {
+                // Log the exception to diagnose deserialization issues
+                Console.WriteLine($"JSON Deserialization error: {ex.Message}");
+                getError = true;
+            }
+
+            await JSRuntime.InvokeVoidAsync("console.log", accounts);
         }
-        catch (JsonException ex)
+        else
         {
-            // Log the exception to diagnose deserialization issues
-            Console.WriteLine($"JSON Deserialization error: {ex.Message}");
             getError = true;
         }
 
-        await JSRuntime.InvokeVoidAsync("console.log", accounts);
+        shouldRender = true;
     }
-    else
-    {
-        getError = true;
-    }
-
-    shouldRender = true;
-}
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
