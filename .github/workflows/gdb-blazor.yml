@@ -34,6 +34,15 @@ jobs:
       - name: dotnet publish
         run: dotnet publish ./src/BlazorGDB/BlazorGDB.csproj -c Release -o ${{env.DOTNET_ROOT}}/myapp
 
+      - name: sanity check
+        run: |
+          echo "+++++++++++++++++++++++++ where am I? ++++++++++++++++++++++++"
+          pwd
+          echo "++++++++++++++++++++++++ what's in current directory? ++++++++"
+          ls -al
+          echo "+++++ what's in the ${{env.DOTNET_ROOT}}/myapp directory? ++++"
+          ls -al ${{env.DOTNET_ROOT}}/myapp
+          
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
         with:
