@@ -33,9 +33,9 @@ namespace Api.Extensions
 
         public static void ConfigureJWT(this IServiceCollection services, IConfiguration configuration)
         {
-            var validIssuer = System.Environment.GetEnvironmentVariable("JwtSettings_validIssuer") ?? "Good Deed Books API";
-            var validAudience = System.Environment.GetEnvironmentVariable("JwtSettings_validAudience") ?? "http://localhost:8001";
-            var secretKey = System.Environment.GetEnvironmentVariable("SECRET_key");
+            var validIssuer = configuration["JwtSettings:validIssuer"];
+            var validAudience = configuration["JwtSettings:validAudience"];
+            var secretKey = configuration["SECRET:key"];
 
             services.AddAuthentication(opt =>
             {
