@@ -1,0 +1,101 @@
+# Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
+# More GitHub Actions for Azure: https://github.com/Azure/actions
+
+name: Build and deploy Good Deed Books MVC project to Azure
+
+on:
+  push:
+    branches:
+      - endpoint_sahil
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET Core
+        uses: actions/setup-dotnet@v1
+        with:
+          dotnet-version: '8.x'
+          include-prerelease: true
+
+      - name: Build with dotnet
+        run: dotnet build --configuration Release
+
+      - name: dotnet publish
+        run: dotnet publish ./src/AccountGoWeb/AccountGoWeb.csproj -c Release -o ${{env.DOTNET_ROOT}}/myapp
+
+      - name: Archive production artifacts
+        run: |
+          echo "+++++++++++++++++++++++++ where am I? ++++++++++++++++++++++++"
+          pwd
+          echo "+++++++++++++++++++++++++ save current directory into a variable dir ++++"
+          dir=$(pwd)
+          echo "+++++++++ what is in variable dir ++++++++++++++"
+          echo $dir
+          echo "++++++++++++++++++++++++ what's in current directory? ++++++++"
+          ls -al
+          echo "+++++ what's in the ${{env.DOTNET_ROOT}}/myapp directory? ++++"
+          ls -al ${{env.DOTNET_ROOT}}/myapp
+          echo "+++++ change directoiry to ${{env.DOTNET_ROOT}}/myapp ++++"
+          cd ${{env.DOTNET_ROOT}}/myapp
+          echo "+++++++++++++++++++++++++ where am I? ++++++++++++++++++++++++"
+          pwd
+          echo "+++++++++++++++++++++++++ compress current directory and save in $dir/my_artifact.tar.gz ++++"
+          tar -czvf $dir/my_artifact.tar.gz .
+          echo "+++++++++++++++++++++++++ change dir to to $dir directory ++++"
+          cd $dir
+          echo "+++++++++++++++++++++++++ where am I? ++++++++++++++++++++++++"
+          pwd
+          echo "++++++++++++++++++++++++ what's in $dir directory? ++++++++"
+          ls -al
+
+      - name: Upload artifact for deployment job
+        uses: actions/upload-artifact@v3
+        with:
+          name: .net-app
+          path: my_artifact.tar.gz
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    environment:
+      name: 'Production'
+      url: ${{ steps.deploy-to-webapp.outputs.webapp-url }}
+    permissions:
+      id-token: write #This is required for requesting the JWT
+
+    steps:
+      - name: Download artifact from build job
+        uses: actions/download-artifact@v3
+        with:
+          name: .net-app
+      
+      - name: Login to Azure
+        uses: azure/login@v1
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_28108B2CCE81480BB0295B2554B37231 }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_9ED1B649A03F45E7B34C3BE1217B6BDE }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_A41842A963384E4BAB26580EEFE65E92 }}
+
+      - name: Extract artifacts
+        run: |
+          tar -xzvf my_artifact.tar.gz -C .
+
+      - name: Print working directory
+        run: pwd
+
+      - name: List directory contents
+        run: ls -l /home/runner/.dotnet/
+
+      - name: Deploy to Azure Web App
+        id: deploy-to-webapp
+        uses: azure/webapps-deploy@v2
+        with:
+          app-name: 'good-books'
+          slot-name: 'Production'
+          package: .
+          
