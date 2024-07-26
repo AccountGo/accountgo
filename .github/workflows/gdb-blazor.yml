@@ -16,25 +16,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Replace API URL in Models/Constants.cs
-        working-directory: ./src/BlazorGDB
-        run: |
-          echo "++++ search & replace API URL in Models/Constants.cs from http://localhost:8001 to https://goodbooksapi.azurewebsites.net"
-          sed -i 's|http://localhost:8001|https://goodbooksapi.azurewebsites.net|g' ./Models/Constants.cs
-          echo "++++ display contents of Models/Constants.cs after search & replace"
-          cat ./Models/Constants.cs
-
       - name: Set up .NET Core
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.x'
 
       - name: Build with dotnet
-        working-directory: ./src/BlazorGDB
+        working-directory: ./src/BlazorGDB/BlazorGDB
         run: dotnet build --configuration Release
 
       - name: dotnet publish
-        working-directory: ./src/BlazorGDB
+        working-directory: ./src/BlazorGDB/BlazorGDB
         run: dotnet publish BlazorGDB.csproj -c Release -o ${{env.DOTNET_ROOT}}/myapp
 
       - name: sanity check
