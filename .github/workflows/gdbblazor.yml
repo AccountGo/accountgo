@@ -62,6 +62,6 @@ jobs:
         uses: azure/webapps-deploy@v3
         with:
           app-name: 'gdbblazor'
-          slot-name: 'Production'g
+          slot-name: 'Production'
           package: .
           
