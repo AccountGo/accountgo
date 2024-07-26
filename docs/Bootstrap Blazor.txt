@@ -1,7 +1,7 @@
 https://github.com/vikramlearning/blazorbootstrap-starter-templates/tree/master
 
 
-dotnet add package Blazor.Bootstrap -v 2.1.0
+dotnet add package Blazor.Bootstrap -v 3.0.0-preview.2
 
 Program.cs
 

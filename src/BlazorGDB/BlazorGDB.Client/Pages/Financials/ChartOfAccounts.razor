@@ -1,11 +1,9 @@
 ﻿@page "/b/financials/chart-of-accounts"
-@using System.Text.Json
-@using System.Text.Json.Serialization
-@using BlazorGDB.Client.Models
-@using Microsoft.JSInterop
-@using Microsoft.Net.Http.Headers
 @inject Microsoft.JSInterop.IJSRuntime JSRuntime
 @inject HttpClient Http
+
+@* @rendermode InteractiveServer *@
+@rendermode InteractiveAuto
 
 <PageTitle>Chart of Accounts</PageTitle>
 
@@ -142,7 +140,7 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        accounts = await Http.GetFromJsonAsync<AccountViewModel[]>("financials/accounts");
+        accounts = await Http.GetFromJsonAsync<AccountViewModel[]>($"{Constants.API_URL}financials/accounts");
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
