@@ -1,0 +1,156 @@
+﻿@page "/financials/chart-of-accounts"
+@using System.Text.Json
+@using System.Text.Json.Serialization
+@using BlazorGDB.Client.Models
+@using Microsoft.JSInterop
+@using Microsoft.Net.Http.Headers
+@inject Microsoft.JSInterop.IJSRuntime JSRuntime
+@inject HttpClient Http
+
+<PageTitle>Chart of Accounts</PageTitle>
+
+<h3>Chart Of Accounts</h3>
+
+@if (getError || accounts is null)
+{
+    <p>Unable to get data. Please try again later.</p>
+}
+else
+{
+@*     <ul>
+        @foreach (var item in accounts)
+        {
+            <li>@item.AccountName</li>
+        }
+    </ul> *@
+    <style>
+        .hiddenRow {
+            padding: 4px !important;
+        }
+    </style>
+
+    <div>
+        <table class="table table-condensed table-striped">
+
+            <thead>
+                <tr>
+                    <th>Code</th>
+                    <th>Name</th>
+                    <th>Balance</th>
+                    <th>Debit</th>
+                    <th>Credit</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                @for (int accountIdx = 0; accountIdx < accounts.Count(); ++accountIdx)
+                {
+                    var account = accounts.ToList()[accountIdx];
+                    var accountTargetId = $"asset-{accountIdx}";
+
+                    <tr data-bs-toggle="collapse" data-bs-target="#@accountTargetId" aria-expanded="false" aria-controls="@accountTargetId">
+                        <td>@account.AccountCode</td>
+                        <td>@account.AccountName</td>
+                        <td>@account.TotalBalance</td>
+                        <td>@account.TotalDebitBalance</td>
+                        <td>@account.TotalCreditBalance</td>
+                    </tr>
+
+                    <tr>
+                        <td colspan="12">
+                            <div class="collapse" id="@accountTargetId" aria-expanded="false" aria-controls="@accountTargetId">
+
+                                <table class="table table-striped">
+                                    @for (int childAccountIdx = 0; childAccountIdx < account.ChildAccounts!.Count; ++childAccountIdx)
+                                    {
+                                        var childAccount = account.ChildAccounts.ToList()[childAccountIdx];
+                                        var childAccountTargetId = $"asset-{accountIdx}-{childAccountIdx}";
+
+                                        <tr data-bs-toggle="collapse" data-bs-target="#@childAccountTargetId" aria-expanded="false" aria-controls="@childAccountTargetId">
+                                            <td>@childAccount.AccountCode</td>
+                                            <td>@childAccount.AccountName</td>
+                                            <td>@childAccount.TotalBalance</td>
+                                            <td>@childAccount.TotalDebitBalance</td>
+                                            <td>@childAccount.TotalCreditBalance</td>
+                                        </tr>
+
+                                        <tr>
+                                            <td colspan="12">
+                                                <div class="collapse" id="@childAccountTargetId" aria-expanded="false" aria-controls="@childAccountTargetId">
+
+                                                    <table class="table table-striped">
+                                                        @for (int grandChildAccountIdx = 0; grandChildAccountIdx < childAccount.ChildAccounts!.Count; ++grandChildAccountIdx)
+                                                        {
+                                                            var grandChildAccount = childAccount.ChildAccounts.ToList()[grandChildAccountIdx];
+                                                            var grandChildAccountTargetId = $"asset-{accountIdx}-{childAccountIdx}-{grandChildAccountIdx}";
+
+                                                            <tr data-bs-toggle="collapse" data-bs-target="#@grandChildAccountTargetId" aria-expanded="false" aria-controls="@grandChildAccountTargetId">
+                                                                <td>@grandChildAccount.AccountCode</td>
+                                                                <td>@grandChildAccount.AccountName</td>
+                                                                <td>@grandChildAccount.TotalBalance</td>
+                                                                <td>@grandChildAccount.TotalDebitBalance</td>
+                                                                <td>@grandChildAccount.TotalCreditBalance</td>
+                                                            </tr>
+
+                                                            <tr>
+                                                                <td colspan="12">
+                                                                    <div class="collapse" id="@grandChildAccountTargetId" aria-expanded="false" aria-controls="@grandChildAccountTargetId">
+
+                                                                        <table class="table table-striped">
+                                                                            @foreach (var greatGrandChildAccount in grandChildAccount.ChildAccounts!)
+                                                                            {
+                                                                                <tr>
+                                                                                    <td>@greatGrandChildAccount.AccountCode</td>
+                                                                                    <td>@greatGrandChildAccount.AccountName</td>
+                                                                                    <td>@greatGrandChildAccount.TotalBalance</td>
+                                                                                    <td>@greatGrandChildAccount.TotalDebitBalance</td>
+                                                                                    <td>@greatGrandChildAccount.TotalCreditBalance</td>
+                                                                                </tr>
+                                                                            }
+                                                                        </table>
+
+                                                                    </div>
+                                                                </td>
+                                                            </tr>
+                                                        }
+                                                    </table>
+
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </table>
+
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+}
+
+@code {
+    private IEnumerable<AccountViewModel>? accounts = [];
+    private bool getError;
+    private bool shouldRender;
+    private bool jsInteropCalled = false; // Flag to ensure JS interop is called only once
+
+
+    protected override bool ShouldRender() => shouldRender;
+
+    protected override async Task OnInitializedAsync()
+    {
+        accounts = await Http.GetFromJsonAsync<AccountViewModel[]>("financials/accounts");
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !jsInteropCalled)
+        {
+            await JSRuntime.InvokeVoidAsync("console.log", accounts);
+            jsInteropCalled = true; // Ensure this block runs only once
+        }
+    }
+}
