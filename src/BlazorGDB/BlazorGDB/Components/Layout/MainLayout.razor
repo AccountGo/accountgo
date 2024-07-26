@@ -1,6 +1,6 @@
 ﻿@inherits LayoutComponentBase
 
-<div class="page">
+@* <div class="page">
     <div class="sidebar">
         <NavMenu />
     </div>
@@ -20,4 +20,95 @@
     An unhandled error has occurred.
     <a href="" class="reload">Reload</a>
     <a class="dismiss">🗙</a>
+</div> *@
+
+<div class="bb-page">
+
+    <Sidebar @ref="sidebar"
+             IconName="IconName.CheckAll"
+             Title="Good Deed Books"
+             DataProvider="SidebarDataProvider" />
+
+    <main>
+        <div class="bb-top-row px-4 d-flex justify-content-end">
+            <a href="https://docs.microsoft.com/aspnet/" target="_blank">About</a>
+        </div>
+
+        <article class="content px-4">
+            <div class="py-2">@Body</div>
+        </article>
+    </main>
+
 </div>
+
+@code {
+    Sidebar? sidebar;
+    IEnumerable<NavItem>? navItems;
+
+    private async Task<SidebarDataProviderResult> SidebarDataProvider(SidebarDataProviderRequest request)
+    {
+        if (navItems is null)
+            navItems = GetNavItems();
+
+        return await Task.FromResult(request.ApplyTo(navItems));
+    }
+
+    // https://icons.getbootstrap.com/
+
+    private IEnumerable<NavItem> GetNavItems()
+    {
+        navItems = new List<NavItem>
+        {
+            new NavItem { Id = "10", Href = "/", IconName = IconName.HouseDoorFill, Text = "Dashboard", Match=NavLinkMatch.All},
+
+            new NavItem { Id = "20", IconName = IconName.Activity, Text = "Accounts Receivable" },
+            new NavItem { Id = "21", Href = "/receivables/sales-quotations", CustomIconName = "bi bi-currency-dollar", Text = "Sales Quotations", ParentId="20"},
+            new NavItem { Id = "22", Href = "/receivables/sales-orders", IconName = IconName.Alarm, Text = "Sales Orders", ParentId="20"},
+            new NavItem { Id = "23", Href = "/receivables/sales-receipts", IconName = IconName.CheckAll, Text = "Sales Receipts", ParentId="20"},
+            new NavItem { Id = "24", Href = "/receivables/sales-invoices", IconName = IconName.CheckAll, Text = "Sales Invoices", ParentId="20"},
+            new NavItem { Id = "25", Href = "/receivables/donation-invoices", IconName = IconName.CheckAll, Text = "Donation Invoices", ParentId="20"},
+            new NavItem { Id = "26", Href = "/receivables/customers", IconName = IconName.CheckAll, Text = "Customers", ParentId="20"},
+
+            new NavItem { Id = "30", IconName = IconName.WindowPlus, Text = "Accounts Payable" },
+            new NavItem { Id = "31", Href = "/payables/purchase-orders", CustomIconName = "bi bi-pencil", Text = "Purchase Orders", ParentId="30"},
+            new NavItem { Id = "32", Href = "/payables/purchase-invoices", CustomIconName = "bi bi-laptop-fill", Text = "Purchase Invoices", ParentId="30"},
+            new NavItem { Id = "33", Href = "/payables/vendors", CustomIconName = "bi bi-globe2", Text = "Vendors", ParentId="30"},
+
+            new NavItem { Id = "40", IconName = IconName.WindowPlus, Text = "Inventory" },
+            new NavItem { Id = "41", Href = "/inventory/inventory-control-journal", CustomIconName = "bi bi-pencil", Text = "Inventory Control Journal", ParentId="40"},
+            new NavItem { Id = "42", Href = "/inventory/items", CustomIconName = "bi bi-laptop-fill", Text = "Items", ParentId="40"},
+
+            new NavItem { Id = "50", IconName = IconName.WindowPlus, Text = "Financials" },
+            new NavItem { Id = "51", Href = "/financials/journal-entries", CustomIconName = "bi bi-currency-dollar", Text = "Journal Entries", ParentId="50"},
+            new NavItem { Id = "52", Href = "/financials/general-ledgers", IconName = IconName.Alarm, Text = "General Ledgers", ParentId="50"},
+            new NavItem { Id = "53", Href = "/financials/taxes", IconName = IconName.CheckAll, Text = "Taxes", ParentId="50"},
+            new NavItem { Id = "54", Href = "/financials/chart-of-accounts", IconName = IconName.CheckAll, Text = "Chart of Accounts", ParentId="50"},
+            new NavItem { Id = "55", Href = "/financials/banks", IconName = IconName.CheckAll, Text = "Banks", ParentId="50"},
+
+            new NavItem { Id = "60", IconName = IconName.WindowPlus, Text = "Reports" },
+            new NavItem { Id = "61", Href = "/reports/balance-sheet", CustomIconName = "bi bi-pencil", Text = "Balance Sheet", ParentId="60"},
+            new NavItem { Id = "62", Href = "/reports/income-statement", CustomIconName = "bi bi-laptop-fill", Text = "Income Statement", ParentId="60"},
+            new NavItem { Id = "63", Href = "/reports/trial-balance", CustomIconName = "bi bi-globe2", Text = "Trial Balance", ParentId="60"},
+
+            new NavItem { Id = "70", IconName = IconName.WindowPlus, Text = "Organization" },
+            new NavItem { Id = "71", Href = "/organization/company", CustomIconName = "bi bi-pencil", Text = "Company", ParentId="70"},
+            new NavItem { Id = "72", Href = "/organization/settings", CustomIconName = "bi bi-laptop-fill", Text = "Settings", ParentId="70"},
+
+            new NavItem { Id = "80", IconName = IconName.WindowPlus, Text = "System Administration" },
+            new NavItem { Id = "81", Href = "/system-administration/security-users", IconName = IconName.People, Text = "Security Users", ParentId="80"},
+            new NavItem { Id = "82", Href = "/system-administration/security-roles", IconName = IconName.PersonRolodex, Text = "Security Roles", ParentId="80"},
+            new NavItem { Id = "83", Href = "/system-administration/security-groups", IconName = IconName.CheckAll, Text = "Security Groups", ParentId="80"},
+            new NavItem { Id = "84", Href = "/system-administration/audit-logs", IconName = IconName.CheckAll, Text = "Audit Logs", ParentId="80"},
+
+            new NavItem { Id = "90", Href = "/logout", IconName = IconName.FullscreenExit, Text = "Logout", Match=NavLinkMatch.All},
+
+            new NavItem { Id = "100", Href = "Account/Login", CustomIconName = "bi bi-person-badge-nav-menu", Text = "Login"},
+            
+            new NavItem { Id = "110", Href = "Account/Register", CustomIconName = "bi bi-person-nav-menu", Text = "Register"},
+
+        };
+
+        return navItems;
+    }
+}
+
