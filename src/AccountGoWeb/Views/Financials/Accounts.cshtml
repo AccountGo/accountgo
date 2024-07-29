@@ -1,9 +1,11 @@
 ﻿@model ICollection<AccountGoWeb.Models.Financial.AccountViewModel>
+@using AccountGoWeb.Components.Pages.Financial
 
 @{
     ViewBag.Title = "Chart of Accounts";
 }
-<style>
+
+@* <style>
     .hiddenRow {
         padding: 4px !important;
     }
@@ -107,4 +109,5 @@
             }
         </tbody>
     </table>
-</div>
+</div> *@
+<component type="typeof(ChartOfAccounts)" render-mode="ServerPrerendered" />
