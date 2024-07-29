@@ -25,7 +25,7 @@ namespace AccountGoWeb.Controllers
             return View();
         }
 
-        public async System.Threading.Tasks.Task<IActionResult> Accounts()
+        public async Task<IActionResult> Accounts()
         {
             ViewBag.PageContentHeader = "Chart of Accounts";
 
@@ -47,7 +47,7 @@ namespace AccountGoWeb.Controllers
             return View();
         }
 
-        public async System.Threading.Tasks.Task<IActionResult> Account(int? id = null)
+        public async Task<IActionResult> Account(int? id = null)
         {
             Dto.Financial.Account? accountModel = null;
             if (id == null)
