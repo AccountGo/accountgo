@@ -1,11 +1,11 @@
-﻿@page "/financials/chart-of-accounts"
+﻿@page "/b/financials/chart-of-accounts"
+@inject HttpClient _client
+@inject Microsoft.JSInterop.IJSRuntime JSRuntime
+@using System.Net.Http.Json
 @using System.Text.Json
 @using System.Text.Json.Serialization
-@using LibraryGDB.Models.Financial
-@using Microsoft.JSInterop
-@using Microsoft.Net.Http.Headers
-@inject IHttpClientFactory ClientFactory
-@inject Microsoft.JSInterop.IJSRuntime JSRuntime
+@using System.Net.Http
+
 
 <PageTitle>Chart of Accounts</PageTitle>
 
@@ -17,12 +17,12 @@
 }
 else
 {
-@*     <ul>
+    <ul>
         @foreach (var item in accounts)
         {
             <li>@item.AccountName</li>
         }
-    </ul> *@
+    </ul>
     <style>
         .hiddenRow {
             padding: 4px !important;
@@ -132,62 +132,81 @@ else
 }
 
 @code {
-    private IEnumerable<AccountViewModel>? accounts = [];
-    private bool getError;
-    private bool shouldRender;
+    private List<AccountViewModel>? accounts = [];
+    private bool getError = false;
+    private bool shouldRender = false;
     private bool jsInteropCalled = false; // Flag to ensure JS interop is called only once
-
+    private string apiurl = string.Empty;
+    private HttpResponseMessage responseMessage = new();
+    private string error = string.Empty;
 
     protected override bool ShouldRender() => shouldRender;
 
     protected override async Task OnInitializedAsync()
     {
-        string apiurl = System.Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
+        // apiurl = $"{Constants.API_URL}financials/accounts";
+        // Set the BaseAddress dynamically
+        _client.BaseAddress = new Uri(Constants.API_URL);
+        apiurl = "financials/accounts";
 
-        var request = new HttpRequestMessage(HttpMethod.Get, $"{apiurl}financials/accounts");
+        var request = new HttpRequestMessage(HttpMethod.Get, apiurl);
         request.Headers.Add("Accept", "application/json");
 
-        var _client = ClientFactory.CreateClient();
+        error += "HERE 1\n";
 
         _client.DefaultRequestHeaders.Accept.Clear();
         _client.DefaultRequestHeaders.Clear();
         _client.DefaultRequestHeaders.CacheControl = new System.Net.Http.Headers.CacheControlHeaderValue() { NoCache = true };
         _client.DefaultRequestHeaders.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
 
-        var response = await _client.SendAsync(request).ConfigureAwait(false);
-
-        if (response.IsSuccessStatusCode)
+        try
         {
-            var responseString = await response.Content.ReadAsStringAsync();
+            error += "HERE 2\n";
+            var responseMessage = await _client.SendAsync(request).ConfigureAwait(false);
+            error += "HERE 3\n";
+            if (responseMessage.IsSuccessStatusCode)
+            {
+                var responseString = await responseMessage.Content.ReadAsStringAsync();
 
-            // Log the response string to verify the JSON structure
-            // Console.WriteLine($"Response JSON: {responseString}");
+                // Ensure JsonSerializerOptions are set correctly
+                var options = new JsonSerializerOptions
+                    {
+                        PropertyNameCaseInsensitive = true, // Adjust based on your JSON
+                        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+                    };
+                error += "HERE 4\n";
 
-            // Ensure JsonSerializerOptions are set correctly
-            var options = new JsonSerializerOptions
+                try
                 {
-                    PropertyNameCaseInsensitive = true, // Adjust based on your JSON
-                    DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-                };
-
-            try
-            {
-                accounts = JsonSerializer.Deserialize<System.Collections.Generic.List<AccountViewModel>>(responseString, options);
+                    error += "HERE 5\n";
+                    accounts = JsonSerializer.Deserialize<List<AccountViewModel>>(responseString, options);
+                    error += "HERE 6\n";
+                }
+                catch (JsonException ex)
+                {
+                    // Log the exception to diagnose deserialization issues
+                    //await JSRuntime.InvokeVoidAsync("logToConsole", $"JSON Deserialization error: {ex.Message}");
+                    error += $"JSON Deserialization error: {ex.Message}\n";
+                    getError = true;
+                }
             }
-            catch (JsonException ex)
+            else
             {
-                // Log the exception to diagnose deserialization issues
-                Console.WriteLine($"JSON Deserialization error: {ex.Message}");
+                // Log the status code and reason phrase for debugging
+                //await JSRuntime.InvokeVoidAsync("logToConsole", $"HTTP Request failed. Status Code: {responseMessage.StatusCode}, Reason: {responseMessage.ReasonPhrase}");
+                error += $"HTTP Request failed. Status Code: {responseMessage.StatusCode}, Reason: {responseMessage.ReasonPhrase}\n";
                 getError = true;
             }
-
-            // await JSRuntime.InvokeVoidAsync("console.log", accounts);
         }
-        else
+        catch (Exception ex)
         {
+            error += "HERE 7\n";
+            // Log the exception to diagnose request issues
+            //await JSRuntime.InvokeVoidAsync("logToConsole", $"HTTP Request error: {ex.Message}");
+            error += $"HTTP Request error: {ex.Message}\n";
             getError = true;
         }
-
+        error += "HERE 8\n";
         shouldRender = true;
     }
 
@@ -195,7 +214,14 @@ else
     {
         if (firstRender && !jsInteropCalled)
         {
-            await JSRuntime.InvokeVoidAsync("console.log", accounts);
+            await JSRuntime.InvokeVoidAsync(
+                "console.log",
+                $"accounts: {accounts}\n",
+                $"url: {apiurl}\n",
+                $"getError: {getError}\n",
+                $"responseMessage: {responseMessage!.Content.ToString()}\n",
+                $"error: {error}\n"
+           );
             jsInteropCalled = true; // Ensure this block runs only once
         }
     }

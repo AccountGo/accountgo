@@ -11,5 +11,6 @@ builder.Services.AddAuthorizationCore();
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddSingleton<AuthenticationStateProvider, PersistentAuthenticationStateProvider>();
 builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(Constants.API_URL) });
+//builder.Services.AddScoped(sp => new HttpClient());
 
 await builder.Build().RunAsync();
