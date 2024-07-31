@@ -1,0 +1,118 @@
+﻿@model Dto.TaxSystem.TaxForCreation
+<style>
+    tr th{
+        color: #fff;
+    }
+
+    tr td, div.row{
+        color: #fff;
+    }
+
+    .btn-primary[data-bs-toggle="popover"] {
+        margin-top: 1px;
+        margin-bottom: 4px;
+    }
+</style>
+
+<form action="~/Tax/AddNewTax" method="post">
+    <div class="col-sm-10">
+
+        <div class="card">
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-sm-3">Sales Account</div>
+                    <div class="col-sm-8">
+                        <select class="form-control" asp-for="SalesAccountId">
+                            <option value="20300">
+                                Sales Tax
+                            </option>
+                        </select>
+                        <span asp-validation-for="SalesAccountId" class="danger"></span>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-sm-3">Purchase Account</div>
+                    <div class="col-sm-8">
+                        <select class="form-control" asp-for="PurchaseAccountId">
+                            <option value="50700">
+                                Purchase Tax
+                            </option>
+                        </select>
+                        <span asp-validation-for="PurchaseAccountId" class="danger"></span>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-sm-3">Tax Group</div>
+                    <div class="col-sm-8">
+                        <select class="form-control" asp-for="TaxGroupId" asp-items="@ViewBag.TaxGroups" id="optTaxGroups"></select>
+                        <span asp-validation-for="TaxGroupId" class="danger"></span>
+                        <button type="button" class="btn-primary float-end" data-bs-toggle="popover" data-bs-placement="bottom" data-bs-title="Tax Group" data-bs-content="Create Tax Group">
+                            Create New
+                        </button>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-sm-3">Item Tax Group</div>
+                    <div class="col-sm-8">
+                        <select class="form-control" asp-for="ItemTaxGroupId" asp-items="@ViewBag.ItemTaxGroups" id="optItemTaxGroups"></select>
+                        <span asp-validation-for="ItemTaxGroupId" class="danger"></span>
+                        <button type="button" class="btn-primary float-end" data-bs-toggle="popover" data-bs-placement="bottom" data-bs-title="Item Tax Group" data-bs-content="Create Item Tax Group">
+                            Create New
+                        </button>
+                    </div>
+                </div>
+             </div>
+         </div>
+         <div class="card">
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-sm-6">
+                        <div class="row">
+                            <div class="col-sm-3">Tax Name</div>
+                            <div class="col-sm-9">
+                                <input asp-for="TaxName" class="form-control" type="text" placeholder="Tax Name" />
+                                <span asp-validation-for="TaxName" class="danger"></span>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-sm-3">Rate</div>
+                            <div class="col-sm-9">
+                                <input asp-for="Rate" class="form-control" type="number" step="any" placeholder="Rate" />
+                                <span asp-validation-for="Rate" class="danger"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-sm-6">
+                        <div class="row">
+                            <div class="col-sm-3">Tax Code</div>
+                            <div class="col-sm-9">
+                                <input asp-for="TaxCode" class="form-control" type="text" placeholder="Tax Code" />
+                                <span asp-validation-for="TaxCode" class="danger"></span>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-sm-3">Active</div>
+                            <div class="col-sm-9">
+                                <input asp-for="IsActive" class="form-check" type="checkbox"/>
+                                <span asp-validation-for="IsActive" class="danger"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+         </div>
+    </div>
+    <div class="col-md-9">
+        <input id="btnSave" class="btn btn-sm btn-primary btn-flat pull-left" type="submit" value="Save" />
+        <a href="~/tax/taxes" class="btn btn-sm btn-default btn-flat pull-left">Close</a>
+    </div>
+</form>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        var popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'));
+        var popoverList = popoverTriggerList.map(function (popoverTriggerEl) {
+            return new bootstrap.Popover(popoverTriggerEl);
+        });
+    });
+</script>
