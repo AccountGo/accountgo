@@ -3,6 +3,8 @@ using Dto.TaxSystem;
 using Services.TaxSystem;
 using System.Collections.Generic;
 using System.Linq;
+using Services.Administration;
+using Services.Financial;
 
 namespace Api.Controllers
 {
@@ -10,10 +12,14 @@ namespace Api.Controllers
     public class TaxController : BaseController
     {
         private readonly ITaxService _taxService;
+        private readonly IAdministrationService _adminService;
+        private readonly IFinancialService _financialService;
 
-        public TaxController(ITaxService taxService)
+        public TaxController(ITaxService taxService, IAdministrationService adminService, IFinancialService financialService)
         {
             _taxService = taxService;
+            _adminService = adminService;
+            _financialService = financialService;
         }
 
         /// <summary>
@@ -182,5 +188,50 @@ namespace Api.Controllers
 
             return new ObjectResult(taxSystemDto);
         }
+
+        [HttpPost]
+        [Route("addnewtax")]
+        public IActionResult AddNewTax([FromBody] TaxForCreation taxForCreationDto)
+        {
+            try
+            {
+                var salesTaxAccount = _financialService.GetAccountByAccountCode(taxForCreationDto.SalesAccountId.ToString());
+                var purchaseTaxAccount = _financialService.GetAccountByAccountCode(taxForCreationDto.PurchaseAccountId.ToString());
+
+                // Tax
+                var tax = new Core.Domain.TaxSystem.Tax()
+                {
+                    TaxCode = taxForCreationDto.TaxCode,
+                    TaxName = taxForCreationDto.TaxName,
+                    Rate = taxForCreationDto.Rate,
+                    IsActive = taxForCreationDto.IsActive,
+
+                    SalesAccountId = salesTaxAccount.Id,
+                    PurchasingAccountId = purchaseTaxAccount.Id,
+                };
+
+                // TaxGroup
+                tax.TaxGroupTaxes.Add(new Core.Domain.TaxSystem.TaxGroupTax()
+                {
+                    TaxId = tax.Id,
+                    TaxGroupId = taxForCreationDto.TaxGroupId
+                });
+
+                // Item Tax Group
+                tax.ItemTaxGroupTaxes.Add(new Core.Domain.TaxSystem.ItemTaxGroupTax()
+                {
+                    TaxId = tax.Id,
+                    ItemTaxGroupId = taxForCreationDto.ItemTaxGroupId
+                });
+
+                _adminService.AddNewTax(tax);
+
+                return new ObjectResult(taxForCreationDto);
+            }
+            catch(Exception ex) {
+                return new ObjectResult(ex);
+            }
+        }
+
     }
 }
