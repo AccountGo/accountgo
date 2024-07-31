@@ -8,9 +8,9 @@
         color: #fff;
     }
 
-    .btn-primary[data-bs-toggle="popover"] {
+    button.float-end {
         margin-top: 1px;
-        margin-bottom: 4px;
+        margin-bottom: 3px;
     }
 </style>
 
@@ -46,7 +46,7 @@
                     <div class="col-sm-8">
                         <select class="form-control" asp-for="TaxGroupId" asp-items="@ViewBag.TaxGroups" id="optTaxGroups"></select>
                         <span asp-validation-for="TaxGroupId" class="danger"></span>
-                        <button type="button" class="btn-primary float-end" data-bs-toggle="popover" data-bs-placement="bottom" data-bs-title="Tax Group" data-bs-content="Create Tax Group">
+                        <button type="button" class="btn-primary float-end" data-bs-toggle="modal" data-bs-target="#taxGroup">
                             Create New
                         </button>
                     </div>
@@ -56,7 +56,7 @@
                     <div class="col-sm-8">
                         <select class="form-control" asp-for="ItemTaxGroupId" asp-items="@ViewBag.ItemTaxGroups" id="optItemTaxGroups"></select>
                         <span asp-validation-for="ItemTaxGroupId" class="danger"></span>
-                        <button type="button" class="btn-primary float-end" data-bs-toggle="popover" data-bs-placement="bottom" data-bs-title="Item Tax Group" data-bs-content="Create Item Tax Group">
+                        <button type="button" class="btn-primary float-end" data-bs-toggle="modal" data-bs-target="#itemTaxGroup">
                             Create New
                         </button>
                     </div>
