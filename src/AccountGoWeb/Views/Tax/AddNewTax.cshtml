@@ -108,6 +108,76 @@
     </div>
 </form>
 
+@* Tax Group Modal *@
+<div class="modal fade" id="taxGroup" tabindex="-1" aria-labelledby="taxGroupLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="taxGroupLabel">Add New Tax Group</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form>
+                    <div class="row mb-3">
+                        <div class="col-sm-4">Description</div>
+                        <div class="col-sm-6">
+                            <input type="text" class="form-control" id="recipient-name">
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-sm-4">TaxAppliedToShipping</div>
+                        <div class="col-sm-8">
+                            <input type="checkbox" class="form-check" id="recipient-name">
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-sm-4">Is Active</div>
+                        <div class="col-sm-8">
+                            <input type="checkbox" class="form-check" id="recipient-name">
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-primary btn-flat">Save</button>
+                <button type="button" class="btn btn-sm btn-default btn-flat" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@* Item Tax Group Modal *@
+<div class="modal fade" id="itemTaxGroup" tabindex="-1" aria-labelledby="itemTaxGroupLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="itemTaxGroupLabel">Add New Item Tax Group</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form>
+                    <div class="row mb-3">
+                        <div class="col-sm-4">Name</div>
+                        <div class="col-sm-6">
+                            <input type="text" class="form-control" id="recipient-name">
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-sm-4">IsFullyExempt</div>
+                        <div class="col-sm-8">
+                            <input type="checkbox" class="form-check" id="recipient-name">
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-primary btn-flat">Save</button>
+                <button type="button" class="btn btn-sm btn-default btn-flat" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
     document.addEventListener("DOMContentLoaded", function() {
         var popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'));
