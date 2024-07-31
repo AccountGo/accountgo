@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Dto.TaxSystem;
+using Microsoft.AspNetCore.Mvc;
 
 namespace AccountGoWeb.Controllers
 {
@@ -10,7 +11,8 @@ namespace AccountGoWeb.Controllers
             _baseConfig = config;
         }
 
-        public IActionResult Index() {
+        public IActionResult Index()
+        {
             return RedirectToAction("taxes");
         }
 
@@ -39,5 +41,33 @@ namespace AccountGoWeb.Controllers
 
             return View();
         }
+
+        public IActionResult AddNewTax()
+        {
+            ViewBag.PageContentHeader = "Add New Tax";
+
+            @ViewBag.TaxGroups = Models.SelectListItemHelper.TaxGroups();
+            @ViewBag.ItemTaxGroups = Models.SelectListItemHelper.ItemTaxGroups();
+
+            return View();
+        }
+
+        [HttpPost]
+        public IActionResult AddNewTax(TaxForCreation taxForCreationDto)
+        {
+            if (ModelState.IsValid)
+            {
+                var serialize = Newtonsoft.Json.JsonConvert.SerializeObject(taxForCreationDto);
+                var content = new StringContent(serialize);
+                content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+
+                var response = Post("Tax/addnewtax", content);
+                if (response.IsSuccessStatusCode)
+                    return RedirectToAction("Taxes");
+            }
+
+            return RedirectToAction("Taxes");
+        }
+
     }
 }
