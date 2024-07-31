@@ -27,7 +27,7 @@
 
         <div class="tab-pane" id="tab_1">
             <div>
-                <a href="~/Tax/AddNewTax" class="btn">
+                <a href="~/Tax/AddNewTax" class="btn btn-primary" style="margin-bottom: 2px;">
                     <i class="fa fa-plus"></i>
                     New Tax
                 </a>
@@ -39,6 +39,7 @@
                             <th>Code</th>
                             <th>Name</th>
                             <th>Rate (%)</th>
+                            <th>Action</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -48,6 +49,10 @@
                                 <td>@tax.TaxCode</td>
                                 <td>@tax.TaxName</td>
                                 <td>@tax.Rate</td>
+                                <td>
+                                    <button class="btn btn-sm btn-info btn-flat">Edit</button>
+                                    <button class="btn btn-sm btn-danger btn-flat" data-bs-toggle="modal" data-bs-target="#deleteTax">Delete</button>
+                                </td>
                             </tr>
                         }
                     </tbody>
@@ -147,6 +152,25 @@
             </div>
         </div>
 
+    </div>
+</div>
+
+@* Delete Modal*@
+<div class="modal" id="deleteTax" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Delete</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Do you want to delete it?</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-primary btn-flat">Yes</button>
+                <button type="button" class="btn btn-sm btn-default btn-flat" data-bs-dismiss="modal">No</button>
+            </div>
+        </div>
     </div>
 </div>
 
