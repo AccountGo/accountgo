@@ -76,9 +76,14 @@ namespace Services.Administration
             _taxRepo.Update(tax);
         }
 
-        public void DeleteTax(int id)
+        public void DeleteTax(int taxId)
         {
-            throw new System.NotImplementedException();
+            var tax = _taxRepo.GetById(taxId);
+
+            if(tax is null)
+                throw new Exception("Tax not found");
+
+            _taxRepo.Delete(tax);
         }
 
         public ICollection<ItemTaxGroup> GetItemTaxGroups(bool includeInActive)
