@@ -1,5 +1,6 @@
 ﻿using Dto.TaxSystem;
 using Microsoft.AspNetCore.Mvc;
+using System;
 
 namespace AccountGoWeb.Controllers
 {
@@ -63,6 +64,22 @@ namespace AccountGoWeb.Controllers
 
                 var response = Post("Tax/addnewtax", content);
                 if (response.IsSuccessStatusCode)
+                    return RedirectToAction("Taxes");
+            }
+
+            return RedirectToAction("Taxes");
+        }
+
+        public async Task<IActionResult> DeleteTax(int taxId)
+        {
+            using (var client = new HttpClient())
+            {
+                var baseUri = _baseConfig!["ApiUrl"];
+                client.BaseAddress = new System.Uri(baseUri!);
+                client.DefaultRequestHeaders.Accept.Clear();
+                var response = await client.DeleteAsync(baseUri + "Tax/deletetax?id=" + taxId);
+
+                if(response.IsSuccessStatusCode)
                     return RedirectToAction("Taxes");
             }
 
