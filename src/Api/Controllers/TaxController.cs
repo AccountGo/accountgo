@@ -233,5 +233,20 @@ namespace Api.Controllers
             }
         }
 
+        [HttpDelete("{id:int}")]
+        [Route("deletetax")]
+        public IActionResult DeleteTax(int taxId)
+        {
+            try
+            {
+                _adminService.DeleteTax(taxId);
+
+                return new ObjectResult(taxId);
+            }
+            catch (Exception ex)
+            {
+                return new ObjectResult(ex);
+            }
+        }
     }
 }
