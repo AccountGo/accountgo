@@ -51,7 +51,7 @@
                                 <td>@tax.Rate</td>
                                 <td>
                                     <button class="btn btn-sm btn-info btn-flat">Edit</button>
-                                    <button class="btn btn-sm btn-danger btn-flat" data-bs-toggle="modal" data-bs-target="#deleteTax">Delete</button>
+                                    <button id="@tax.Id" class="taxId btn btn-sm btn-danger btn-flat" data-bs-toggle="modal" data-bs-target="#deleteTax">Delete</button>
                                 </td>
                             </tr>
                         }
@@ -165,9 +165,10 @@
             </div>
             <div class="modal-body">
                 <p>Do you want to delete it?</p>
+                <input type="hidden" id="hdnselectedtaxId" />
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-sm btn-primary btn-flat">Yes</button>
+                <button type="button" class="btn btn-sm btn-primary btn-flat" onclick="deleteTax()">Yes</button>
                 <button type="button" class="btn btn-sm btn-default btn-flat" data-bs-dismiss="modal">No</button>
             </div>
         </div>
@@ -179,6 +180,16 @@
     <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/knockout.mapping/2.4.1/knockout.mapping.js"></script>
 
     <script>
+        $(".taxId").on("click", function () {
+            $("#hdnselectedtaxId").val($(this).attr('id'));
+        })
+
+        function deleteTax(){
+            var taxId = $("#hdnselectedtaxId").val();
+
+            location.href = '@Url.Action("DeleteTax", "Tax")?id=' + taxId;
+        }
+
         function viewModel() {
             var self = this;
 
