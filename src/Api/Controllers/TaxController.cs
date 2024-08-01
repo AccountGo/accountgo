@@ -235,13 +235,13 @@ namespace Api.Controllers
 
         [HttpDelete("{id:int}")]
         [Route("deletetax")]
-        public IActionResult DeleteTax(int taxId)
+        public IActionResult DeleteTax(int id)
         {
             try
             {
-                _adminService.DeleteTax(taxId);
+                _adminService.DeleteTax(id);
 
-                return new ObjectResult(taxId);
+                return new ObjectResult(id);
             }
             catch (Exception ex)
             {

@@ -70,14 +70,14 @@ namespace AccountGoWeb.Controllers
             return RedirectToAction("Taxes");
         }
 
-        public async Task<IActionResult> DeleteTax(int taxId)
+        public async Task<IActionResult> DeleteTax(int id)
         {
             using (var client = new HttpClient())
             {
                 var baseUri = _baseConfig!["ApiUrl"];
                 client.BaseAddress = new System.Uri(baseUri!);
                 client.DefaultRequestHeaders.Accept.Clear();
-                var response = await client.DeleteAsync(baseUri + "Tax/deletetax?id=" + taxId);
+                var response = await client.DeleteAsync(baseUri + "Tax/deletetax?id=" + id);
 
                 if(response.IsSuccessStatusCode)
                     return RedirectToAction("Taxes");
