@@ -50,7 +50,7 @@
                                 <td>@tax.TaxName</td>
                                 <td>@tax.Rate</td>
                                 <td>
-                                    <button class="btn btn-sm btn-info btn-flat">Edit</button>
+                                    <button class="taxId btn btn-sm btn-info btn-flat" onclick="updateTax(@tax.Id)">Edit</button>
                                     <button id="@tax.Id" class="taxId btn btn-sm btn-danger btn-flat" data-bs-toggle="modal" data-bs-target="#deleteTax">Delete</button>
                                 </td>
                             </tr>
@@ -183,6 +183,40 @@
         $(".taxId").on("click", function () {
             $("#hdnselectedtaxId").val($(this).attr('id'));
         })
+
+        function updateTax(taxId){
+            var self = this;
+            self.model = ko.mapping.fromJS(@Html.Raw(Model.ToJson()));
+
+            var serializedTax = null;
+            for (var i = 0; i < self.model.Taxes().length; i++) {
+                var tax = self.model.Taxes()[i];
+                if (taxId == self.model.Taxes()[i].Id()) {
+                    serializedTax  = ko.toJSON(tax);
+                    break;
+                }
+            }
+
+            var serializedTaxGroup = null; 
+            for (var i = 0; i < self.model.TaxGroups().length; i++) {
+                var taxGroup = self.model.TaxGroups()[i];
+                if (taxGroup.Taxes().some(function (tax) { return tax.TaxId() === taxId; })) {
+                    serializedTaxGroup = ko.toJSON(taxGroup);
+                    break;
+                }
+            }
+
+            var serializedItemTaxGroup = null;
+            for (var i = 0; i < self.model.ItemTaxGroups().length; i++) {
+                var itemTaxGroup = self.model.ItemTaxGroups()[i];
+                if (itemTaxGroup.Taxes().some(function (tax) { return tax.TaxId() === taxId; })) {
+                    serializedItemTaxGroup = ko.toJSON(itemTaxGroup);
+                    break;
+                }
+            }
+
+            location.href = '@Url.Action("EditTax", "Tax")?tax=' + serializedTax + '&taxGroup=' + serializedTaxGroup + '&itemTaxGroup=' + serializedItemTaxGroup;
+        }
 
         function deleteTax(){
             var taxId = $("#hdnselectedtaxId").val();
