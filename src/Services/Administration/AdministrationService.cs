@@ -12,6 +12,7 @@ using Core.Domain.Auditing;
 using Core.Domain.Financials;
 using Core.Domain.Security;
 using Core.Domain.TaxSystem;
+using Services.Financial;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -31,6 +32,7 @@ namespace Services.Administration
         private readonly IRepository<Account> _accountRepo;
         private readonly IRepository<AuditLog> _auditLogRepo;
         private readonly ISecurityRepository _securityRepository;
+        private readonly IFinancialService _financialService;
 
         public AdministrationService(IRepository<FinancialYear> fiscalYearRepo,
             IRepository<TaxGroup> taxGroupRepo,
@@ -42,6 +44,7 @@ namespace Services.Administration
             IRepository<Account> accountRepo,
             IRepository<AuditLog> auditLogRepo,
             ISecurityRepository securityRepository,
+            IFinancialService financialService,
             IRepository<Company> company = null
             )
             : base(null, generalLedgerSetting, paymentTermRepo, bankRepo)
@@ -57,6 +60,7 @@ namespace Services.Administration
             _accountRepo = accountRepo;
             _auditLogRepo = auditLogRepo;
             _securityRepository = securityRepository;
+            _financialService = financialService;
         }
 
         public ICollection<Tax> GetAllTaxes(bool includeInActive)
@@ -64,6 +68,40 @@ namespace Services.Administration
             var query = from f in _taxRepo.Table
                         select f;
             return query.ToList();
+        }
+
+        public void CreateTax(Dto.TaxSystem.TaxForCreation taxForCreationDto)
+        {
+            var salesTaxAccount = _financialService.GetAccountByAccountCode(taxForCreationDto.SalesAccountId.ToString());
+            var purchaseTaxAccount = _financialService.GetAccountByAccountCode(taxForCreationDto.PurchaseAccountId.ToString());
+
+            // Tax
+            var tax = new Core.Domain.TaxSystem.Tax()
+            {
+                TaxCode = taxForCreationDto.TaxCode,
+                TaxName = taxForCreationDto.TaxName,
+                Rate = taxForCreationDto.Rate,
+                IsActive = taxForCreationDto.IsActive,
+
+                SalesAccountId = salesTaxAccount.Id,
+                PurchasingAccountId = purchaseTaxAccount.Id,
+            };
+
+            // TaxGroup
+            tax.TaxGroupTaxes.Add(new Core.Domain.TaxSystem.TaxGroupTax()
+            {
+                TaxId = tax.Id,
+                TaxGroupId = taxForCreationDto.TaxGroupId
+            });
+
+            // Item Tax Group
+            tax.ItemTaxGroupTaxes.Add(new Core.Domain.TaxSystem.ItemTaxGroupTax()
+            {
+                TaxId = tax.Id,
+                ItemTaxGroupId = taxForCreationDto.ItemTaxGroupId
+            });
+
+            AddNewTax(tax);
         }
 
         public void AddNewTax(Tax tax)
