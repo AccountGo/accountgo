@@ -20,6 +20,7 @@ namespace Services.Administration
         ICollection<Tax> GetAllTaxes(bool includeInActive);
         ICollection<ItemTaxGroup> GetItemTaxGroups(bool includeInActive);
         ICollection<TaxGroup> GetTaxGroups(bool includeInActive);
+        void CreateTax(Dto.TaxSystem.TaxForCreation taxForCreationDto);
         void AddNewTax(Tax tax);
         void UpdateTax(Tax tax);
         void DeleteTax(int id);

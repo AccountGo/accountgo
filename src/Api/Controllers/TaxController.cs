@@ -189,14 +189,12 @@ namespace Api.Controllers
             return new ObjectResult(taxSystemDto);
         }
 
-        [HttpPost]
-        [Route("addnewtax")]
+        [HttpPost("addnewtax")]
         public IActionResult AddNewTax([FromBody] TaxForCreation taxForCreationDto)
         {
             try
             {
-                var salesTaxAccount = _financialService.GetAccountByAccountCode(taxForCreationDto.SalesAccountId.ToString());
-                var purchaseTaxAccount = _financialService.GetAccountByAccountCode(taxForCreationDto.PurchaseAccountId.ToString());
+                _adminService.CreateTax(taxForCreationDto);
 
                 // Tax
                 var tax = new Core.Domain.TaxSystem.Tax()
