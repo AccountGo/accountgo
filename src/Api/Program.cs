@@ -14,6 +14,9 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 
+// Mapping
+builder.Services.AddAutoMapper(typeof(Program));
+
 // authentication
 builder.Services.AddScoped<IAuthenticationService, AuthenticationService>();
 builder.Services.AddAuthentication();
