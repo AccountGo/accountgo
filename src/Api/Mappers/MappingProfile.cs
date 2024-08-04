@@ -19,6 +19,7 @@ namespace Api
                             TaxId = dest.Id,
                             TaxGroupId = src.TaxGroupId
                         });
+
                         return dest.TaxGroupTaxes;
                     }))
                 .ForMember(dest => dest.ItemTaxGroupTaxes, opt => opt.MapFrom(
@@ -29,6 +30,7 @@ namespace Api
                             TaxId = dest.Id,
                             ItemTaxGroupId = src.ItemTaxGroupId
                         });
+
                         return dest.ItemTaxGroupTaxes;
                     }));
         }

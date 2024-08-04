@@ -47,7 +47,7 @@ namespace Services.Administration
             IRepository<AuditLog> auditLogRepo,
             ISecurityRepository securityRepository,
             IFinancialService financialService,
-            IMapper mapepr,
+            IMapper mapper,
             IRepository<Company> company = null
             )
             : base(null, generalLedgerSetting, paymentTermRepo, bankRepo)
@@ -64,7 +64,7 @@ namespace Services.Administration
             _auditLogRepo = auditLogRepo;
             _securityRepository = securityRepository;
             _financialService = financialService;
-            _mapper = mapepr;
+            _mapper = mapper;
         }
 
         public ICollection<Tax> GetAllTaxes(bool includeInActive)
