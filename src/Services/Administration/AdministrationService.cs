@@ -6,6 +6,7 @@
 // </copyright>
 //-----------------------------------------------------------------------
 
+using AutoMapper;
 using Core.Data;
 using Core.Domain;
 using Core.Domain.Auditing;
@@ -33,6 +34,7 @@ namespace Services.Administration
         private readonly IRepository<AuditLog> _auditLogRepo;
         private readonly ISecurityRepository _securityRepository;
         private readonly IFinancialService _financialService;
+        private readonly IMapper _mapper;
 
         public AdministrationService(IRepository<FinancialYear> fiscalYearRepo,
             IRepository<TaxGroup> taxGroupRepo,
@@ -45,6 +47,7 @@ namespace Services.Administration
             IRepository<AuditLog> auditLogRepo,
             ISecurityRepository securityRepository,
             IFinancialService financialService,
+            IMapper mapepr,
             IRepository<Company> company = null
             )
             : base(null, generalLedgerSetting, paymentTermRepo, bankRepo)
@@ -61,6 +64,7 @@ namespace Services.Administration
             _auditLogRepo = auditLogRepo;
             _securityRepository = securityRepository;
             _financialService = financialService;
+            _mapper = mapepr;
         }
 
         public ICollection<Tax> GetAllTaxes(bool includeInActive)
@@ -75,33 +79,13 @@ namespace Services.Administration
             var salesTaxAccount = _financialService.GetAccountByAccountCode(taxForCreationDto.SalesAccountId.ToString());
             var purchaseTaxAccount = _financialService.GetAccountByAccountCode(taxForCreationDto.PurchaseAccountId.ToString());
 
-            // Tax
-            var tax = new Core.Domain.TaxSystem.Tax()
-            {
-                TaxCode = taxForCreationDto.TaxCode,
-                TaxName = taxForCreationDto.TaxName,
-                Rate = taxForCreationDto.Rate,
-                IsActive = taxForCreationDto.IsActive,
+            var taxEntity = _mapper.Map<Core.Domain.TaxSystem.Tax>(taxForCreationDto);
+            taxEntity.SalesAccountId = salesTaxAccount.Id;
+            taxEntity.PurchasingAccountId = purchaseTaxAccount.Id;
+            taxEntity.SalesAccount = salesTaxAccount;
+            taxEntity.PurchasingAccount = purchaseTaxAccount;
 
-                SalesAccountId = salesTaxAccount.Id,
-                PurchasingAccountId = purchaseTaxAccount.Id,
-            };
-
-            // TaxGroup
-            tax.TaxGroupTaxes.Add(new Core.Domain.TaxSystem.TaxGroupTax()
-            {
-                TaxId = tax.Id,
-                TaxGroupId = taxForCreationDto.TaxGroupId
-            });
-
-            // Item Tax Group
-            tax.ItemTaxGroupTaxes.Add(new Core.Domain.TaxSystem.ItemTaxGroupTax()
-            {
-                TaxId = tax.Id,
-                ItemTaxGroupId = taxForCreationDto.ItemTaxGroupId
-            });
-
-            AddNewTax(tax);
+            AddNewTax(taxEntity);
         }
 
         public void AddNewTax(Tax tax)
