@@ -194,9 +194,7 @@ namespace Api.Controllers
         [ServiceFilter(typeof(ValidationFilterAttribute))]
         public IActionResult AddNewTax([FromBody] TaxForCreation taxForCreationDto)
         {
-            try
-            {
-                _adminService.CreateTax(taxForCreationDto);
+            _adminService.CreateTax(taxForCreationDto);
 
             return new ObjectResult(taxForCreationDto);
         }
@@ -204,25 +202,42 @@ namespace Api.Controllers
         [HttpDelete("{id:int}")]
         [Route("deletetax")]
         public IActionResult DeleteTax(int id)
-                {
-            _adminService.DeleteTax(id);
-
-            return new ObjectResult(id);
-            }
-            catch(Exception ex) {
-                return new ObjectResult(ex);
-            }
-        }
-
-        [HttpDelete("{id:int}")]
-        [Route("deletetax")]
-        public IActionResult DeleteTax(int id)
         {
-            try
-            {
                 _adminService.DeleteTax(id);
 
                 return new ObjectResult(id);
+        }
+
+        [HttpPut]
+        [Route("edittax")]
+        public IActionResult EditTax([FromBody] TaxForUpdate taxForUpdateDto)
+        {
+            try
+            {
+                var tax = _taxService.GetTaxById(taxForUpdateDto.Tax.Id);
+
+                var salesTaxAccount = _financialService.GetAccountByAccountCode(taxForUpdateDto.SalesAccountId.ToString());
+                var purchaseTaxAccount = _financialService.GetAccountByAccountCode(taxForUpdateDto.PurchaseAccountId.ToString());
+
+                // Tax
+
+                tax.TaxCode = taxForUpdateDto.Tax.TaxCode;
+                tax.TaxName = taxForUpdateDto.Tax.TaxName;
+                tax.Rate = taxForUpdateDto.Tax.Rate;
+                tax.IsActive = taxForUpdateDto.Tax.IsActive;
+
+                tax.SalesAccountId = salesTaxAccount.Id;
+                tax.PurchasingAccountId = purchaseTaxAccount.Id;
+                
+                // TaxGroup
+                tax.TaxGroupTaxes.FirstOrDefault().TaxGroupId = taxForUpdateDto.TaxGroupId;
+
+                // Item Tax Group
+                tax.ItemTaxGroupTaxes.FirstOrDefault().ItemTaxGroupId = taxForUpdateDto.ItemTaxGroupId;
+
+                _adminService.UpdateTax(tax);
+
+                return new ObjectResult(taxForUpdateDto);
             }
             catch (Exception ex)
             {
