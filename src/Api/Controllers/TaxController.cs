@@ -190,19 +190,15 @@ namespace Api.Controllers
         }
 
         [HttpPost("addnewtax")]
+        [ServiceFilter(typeof(ValidationFilterAttribute))]
         public IActionResult AddNewTax([FromBody] TaxForCreation taxForCreationDto)
         {
             try
             {
                 _adminService.CreateTax(taxForCreationDto);
 
-                // Tax
-                var tax = new Core.Domain.TaxSystem.Tax()
-                {
-                    TaxCode = taxForCreationDto.TaxCode,
-                    TaxName = taxForCreationDto.TaxName,
-                    Rate = taxForCreationDto.Rate,
-                    IsActive = taxForCreationDto.IsActive,
+            return new ObjectResult(taxForCreationDto);
+        }
 
                     SalesAccountId = salesTaxAccount.Id,
                     PurchasingAccountId = purchaseTaxAccount.Id,
