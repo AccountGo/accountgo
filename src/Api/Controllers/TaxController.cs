@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Services.Administration;
 using Services.Financial;
+using Api.ActionFilters;
 
 namespace Api.Controllers
 {
@@ -200,27 +201,13 @@ namespace Api.Controllers
             return new ObjectResult(taxForCreationDto);
         }
 
-                    SalesAccountId = salesTaxAccount.Id,
-                    PurchasingAccountId = purchaseTaxAccount.Id,
-                };
-
-                // TaxGroup
-                tax.TaxGroupTaxes.Add(new Core.Domain.TaxSystem.TaxGroupTax()
+        [HttpDelete("{id:int}")]
+        [Route("deletetax")]
+        public IActionResult DeleteTax(int id)
                 {
-                    TaxId = tax.Id,
-                    TaxGroupId = taxForCreationDto.TaxGroupId
-                });
+            _adminService.DeleteTax(id);
 
-                // Item Tax Group
-                tax.ItemTaxGroupTaxes.Add(new Core.Domain.TaxSystem.ItemTaxGroupTax()
-                {
-                    TaxId = tax.Id,
-                    ItemTaxGroupId = taxForCreationDto.ItemTaxGroupId
-                });
-
-                _adminService.AddNewTax(tax);
-
-                return new ObjectResult(taxForCreationDto);
+            return new ObjectResult(id);
             }
             catch(Exception ex) {
                 return new ObjectResult(ex);
