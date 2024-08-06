@@ -45,12 +45,14 @@ namespace Services.TaxSystem
 
         public Tax GetTaxById(int taxId)
         {
-            var tax = _taxRepo.GetById(taxId);
+            var taxEntity = _taxRepo
+                .GetAllIncluding(s => s.SalesAccount, p => p.PurchasingAccount, tgt => tgt.TaxGroupTaxes, itgt => itgt.ItemTaxGroupTaxes)
+                .FirstOrDefault(tax => tax.Id == taxId);
 
-            if(tax is null)
+            if(taxEntity is null)
                 throw new NotImplementedException("Tax not found");
 
-            return tax;
+            return taxEntity;
         }
 
         public IEnumerable<Tax> GetTaxes(bool includeInActive = false)
