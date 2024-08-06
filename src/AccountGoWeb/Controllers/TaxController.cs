@@ -1,4 +1,5 @@
-﻿using Dto.TaxSystem;
+﻿using AccountGoWeb.Models.TaxSystem;
+using Dto.TaxSystem;
 using Microsoft.AspNetCore.Mvc;
 using System;
 
@@ -65,6 +66,57 @@ namespace AccountGoWeb.Controllers
                 var response = Post("Tax/addnewtax", content);
                 if (response.IsSuccessStatusCode)
                     return RedirectToAction("Taxes");
+            }
+
+            return RedirectToAction("Taxes");
+        }
+
+        public IActionResult EditTax(string tax, string taxGroup, string itemTaxGroup)
+        {
+            ViewBag.PageContentHeader = "Edit Tax";
+
+            var taxObj = Newtonsoft.Json.JsonConvert.DeserializeObject<Dto.TaxSystem.Tax>(tax);
+            var taxGroupObj = Newtonsoft.Json.JsonConvert.DeserializeObject<Dto.TaxSystem.TaxGroup>(taxGroup);
+            var itemTaxGroupObj = Newtonsoft.Json.JsonConvert.DeserializeObject<Dto.TaxSystem.ItemTaxGroup>(itemTaxGroup);
+
+            var editTaxViewModel = new Models.TaxSystem.EditTaxViewModel();
+            editTaxViewModel.Tax = taxObj;
+            editTaxViewModel.TaxGroup = taxGroupObj;
+            editTaxViewModel.ItemTaxGroup = itemTaxGroupObj;
+
+            @ViewBag.TaxGroups = Models.SelectListItemHelper.TaxGroups();
+            @ViewBag.ItemTaxGroups = Models.SelectListItemHelper.ItemTaxGroups();
+
+            return View(editTaxViewModel);
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> EditTax(EditTaxViewModel editTaxViewModel)
+        {
+            // Make Dto
+            var taxForUpdateDto = new Dto.TaxSystem.TaxForUpdate();
+            taxForUpdateDto.SalesAccountId = editTaxViewModel.SalesAccountId;
+            taxForUpdateDto.PurchaseAccountId = editTaxViewModel.PurchaseAccountId;
+            taxForUpdateDto.Tax = editTaxViewModel.Tax;
+            taxForUpdateDto.TaxGroupId = editTaxViewModel.TaxGroup.Id;
+            taxForUpdateDto.ItemTaxGroupId = editTaxViewModel.ItemTaxGroup.Id;
+
+            using (var client = new System.Net.Http.HttpClient())
+            {
+                var baseUri = _baseConfig!["ApiUrl"];
+                client.BaseAddress = new System.Uri(baseUri!);
+                client.DefaultRequestHeaders.Accept.Clear();
+
+                var serialize = Newtonsoft.Json.JsonConvert.SerializeObject(taxForUpdateDto);
+                var content = new StringContent(serialize);
+                content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+
+                var response = await client.PutAsync(baseUri + "Tax/edittax", content);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    return RedirectToAction("Taxes");   
+                }
             }
 
             return RedirectToAction("Taxes");
