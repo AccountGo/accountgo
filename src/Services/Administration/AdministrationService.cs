@@ -14,6 +14,7 @@ using Core.Domain.Financials;
 using Core.Domain.Security;
 using Core.Domain.TaxSystem;
 using Services.Financial;
+using Services.TaxSystem;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -34,6 +35,7 @@ namespace Services.Administration
         private readonly IRepository<AuditLog> _auditLogRepo;
         private readonly ISecurityRepository _securityRepository;
         private readonly IFinancialService _financialService;
+        private readonly ITaxService _taxService;
         private readonly IMapper _mapper;
 
         public AdministrationService(IRepository<FinancialYear> fiscalYearRepo,
@@ -47,6 +49,7 @@ namespace Services.Administration
             IRepository<AuditLog> auditLogRepo,
             ISecurityRepository securityRepository,
             IFinancialService financialService,
+            ITaxService taxService,
             IMapper mapper,
             IRepository<Company> company = null
             )
@@ -64,6 +67,7 @@ namespace Services.Administration
             _auditLogRepo = auditLogRepo;
             _securityRepository = securityRepository;
             _financialService = financialService;
+            _taxService = taxService;
             _mapper = mapper;
         }
 
@@ -84,6 +88,18 @@ namespace Services.Administration
             taxEntity.PurchasingAccountId = purchaseTaxAccount.Id;
             taxEntity.SalesAccount = salesTaxAccount;
             taxEntity.PurchasingAccount = purchaseTaxAccount;
+            taxEntity.TaxGroupTaxes.Add(new Core.Domain.TaxSystem.TaxGroupTax
+            {
+                TaxId = taxEntity.Id,
+                TaxGroupId = taxForCreationDto.TaxGroupId,
+                TaxGroup = _taxGroupRepo.GetById(taxForCreationDto.TaxGroupId),
+            });
+            taxEntity.ItemTaxGroupTaxes.Add(new Core.Domain.TaxSystem.ItemTaxGroupTax
+            {
+                TaxId = taxEntity.Id,
+                ItemTaxGroupId = taxForCreationDto.ItemTaxGroupId,
+                ItemTaxGroup = _itemTaxGroupRepo.GetById(taxForCreationDto.ItemTaxGroupId),
+            });
 
             AddNewTax(taxEntity);
         }
@@ -91,6 +107,38 @@ namespace Services.Administration
         public void AddNewTax(Tax tax)
         {
             _taxRepo.Insert(tax);
+        }
+
+        public void EditTax(Dto.TaxSystem.TaxForUpdate taxForUpdateDto)
+        {
+            var salesTaxAccount = _financialService.GetAccountByAccountCode(taxForUpdateDto.SalesAccountId.ToString());
+            var purchaseTaxAccount = _financialService.GetAccountByAccountCode(taxForUpdateDto.PurchaseAccountId.ToString());
+
+            var taxEntity = _taxService.GetTaxById(taxForUpdateDto.Tax.Id);
+
+            _mapper.Map(taxForUpdateDto, taxEntity);
+            taxEntity.SalesAccountId = salesTaxAccount.Id;
+            taxEntity.PurchasingAccountId = purchaseTaxAccount.Id;
+            taxEntity.SalesAccount = salesTaxAccount;
+            taxEntity.PurchasingAccount = purchaseTaxAccount;
+
+            taxEntity.TaxGroupTaxes.Clear();
+            taxEntity.TaxGroupTaxes.Add(new Core.Domain.TaxSystem.TaxGroupTax
+            {
+                TaxId = taxEntity.Id,
+                TaxGroupId = taxForUpdateDto.TaxGroupId,
+                TaxGroup = _taxGroupRepo.GetById(taxForUpdateDto.TaxGroupId),
+            });
+
+            taxEntity.ItemTaxGroupTaxes.Clear();
+            taxEntity.ItemTaxGroupTaxes.Add(new Core.Domain.TaxSystem.ItemTaxGroupTax
+            {
+                TaxId = taxEntity.Id,
+                ItemTaxGroupId = taxForUpdateDto.ItemTaxGroupId,
+                ItemTaxGroup = _itemTaxGroupRepo.GetById(taxForUpdateDto.ItemTaxGroupId),
+            });
+
+            UpdateTax(taxEntity);
         }
 
         public void UpdateTax(Tax tax)
