@@ -18,6 +18,7 @@ using Services.TaxSystem;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Cryptography;
 
 namespace Services.Administration
 {
@@ -80,6 +81,13 @@ namespace Services.Administration
 
         public void CreateTax(Dto.TaxSystem.TaxForCreation taxForCreationDto)
         {
+            var query = from f in _taxRepo.Table
+                        where f.TaxCode == taxForCreationDto.TaxCode || f.TaxName == taxForCreationDto.TaxName || f.Rate == taxForCreationDto.Rate
+                        select f;
+
+            if (query.Any())
+                throw new Exception("Tax already exists");
+
             var salesTaxAccount = _financialService.GetAccountByAccountCode(taxForCreationDto.SalesAccountId.ToString());
             var purchaseTaxAccount = _financialService.GetAccountByAccountCode(taxForCreationDto.PurchaseAccountId.ToString());
 
