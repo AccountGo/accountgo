@@ -11,28 +11,21 @@ namespace Api
                 .ForMember(dest => dest.PurchasingAccountId, opt => opt.Ignore())
                 .ForMember(dest => dest.SalesAccount, opt => opt.Ignore())
                 .ForMember(dest => dest.PurchasingAccount, opt => opt.Ignore())
-                .ForMember(dest => dest.TaxGroupTaxes, opt => opt.MapFrom(
-                    (src, dest) =>
-                    {
-                        dest.TaxGroupTaxes.Add(new Core.Domain.TaxSystem.TaxGroupTax
-                        {
-                            TaxId = dest.Id,
-                            TaxGroupId = src.TaxGroupId
-                        });
+                .ForMember(dest => dest.TaxGroupTaxes, opt => opt.Ignore())
+                .ForMember(dest => dest.ItemTaxGroupTaxes, opt => opt.Ignore());
 
-                        return dest.TaxGroupTaxes;
-                    }))
-                .ForMember(dest => dest.ItemTaxGroupTaxes, opt => opt.MapFrom(
-                    (src, dest) =>
-                    {
-                        dest.ItemTaxGroupTaxes.Add(new Core.Domain.TaxSystem.ItemTaxGroupTax
-                        {
-                            TaxId = dest.Id,
-                            ItemTaxGroupId = src.ItemTaxGroupId
-                        });
+            CreateMap<Dto.TaxSystem.TaxForUpdate, Core.Domain.TaxSystem.Tax>()
+                .ForMember(dest => dest.SalesAccountId, opt => opt.Ignore())
+                .ForMember(dest => dest.PurchasingAccountId, opt => opt.Ignore())
+                .ForMember(dest => dest.SalesAccount, opt => opt.Ignore())
+                .ForMember(dest => dest.PurchasingAccount, opt => opt.Ignore())
+                .ForMember(dest => dest.TaxName, opt => opt.MapFrom(src => src.Tax.TaxName))
+                .ForMember(dest => dest.TaxCode, opt => opt.MapFrom(src => src.Tax.TaxCode))
+                .ForMember(dest => dest.Rate, opt => opt.MapFrom(src => src.Tax.Rate))
+                .ForMember(dest => dest.IsActive, opt => opt.MapFrom(src => src.Tax.IsActive))
+                .ForMember(dest => dest.TaxGroupTaxes, opt => opt.Ignore())
+                .ForMember(dest => dest.ItemTaxGroupTaxes, opt => opt.Ignore());
 
-                        return dest.ItemTaxGroupTaxes;
-                    }));
         }
     }
 }
