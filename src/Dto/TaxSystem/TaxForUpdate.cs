@@ -9,9 +9,8 @@ namespace Dto.TaxSystem
 
         public Tax? Tax { get; set; }
 
-        [Required]
+
         public int TaxGroupId { get; set; }
-        [Required]
         public int ItemTaxGroupId { get; set; }
     }
 }
