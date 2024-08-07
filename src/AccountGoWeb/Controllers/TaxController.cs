@@ -57,16 +57,13 @@ namespace AccountGoWeb.Controllers
         [HttpPost]
         public IActionResult AddNewTax(TaxForCreation taxForCreationDto)
         {
-            if (ModelState.IsValid)
-            {
-                var serialize = Newtonsoft.Json.JsonConvert.SerializeObject(taxForCreationDto);
-                var content = new StringContent(serialize);
-                content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+            var serialize = Newtonsoft.Json.JsonConvert.SerializeObject(taxForCreationDto);
+            var content = new StringContent(serialize);
+            content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
 
-                var response = Post("Tax/addnewtax", content);
-                if (response.IsSuccessStatusCode)
-                    return RedirectToAction("Taxes");
-            }
+            var response = Post("Tax/addnewtax", content);
+            if (response.IsSuccessStatusCode)
+                return RedirectToAction("Taxes");
 
             return RedirectToAction("Taxes");
         }
@@ -74,7 +71,8 @@ namespace AccountGoWeb.Controllers
         public IActionResult EditTax(string tax, string taxGroup, string itemTaxGroup)
         {
             ViewBag.PageContentHeader = "Edit Tax";
-
+          
+            // Mapping Dto to View Model
             var taxObj = Newtonsoft.Json.JsonConvert.DeserializeObject<Dto.TaxSystem.Tax>(tax);
             var taxGroupObj = Newtonsoft.Json.JsonConvert.DeserializeObject<Dto.TaxSystem.TaxGroup>(taxGroup);
             var itemTaxGroupObj = Newtonsoft.Json.JsonConvert.DeserializeObject<Dto.TaxSystem.ItemTaxGroup>(itemTaxGroup);
@@ -93,13 +91,13 @@ namespace AccountGoWeb.Controllers
         [HttpPost]
         public async Task<IActionResult> EditTax(EditTaxViewModel editTaxViewModel)
         {
-            // Make Dto
+            // Mapping View Model to Dto
             var taxForUpdateDto = new Dto.TaxSystem.TaxForUpdate();
             taxForUpdateDto.SalesAccountId = editTaxViewModel.SalesAccountId;
             taxForUpdateDto.PurchaseAccountId = editTaxViewModel.PurchaseAccountId;
             taxForUpdateDto.Tax = editTaxViewModel.Tax;
-            taxForUpdateDto.TaxGroupId = editTaxViewModel.TaxGroup.Id;
-            taxForUpdateDto.ItemTaxGroupId = editTaxViewModel.ItemTaxGroup.Id;
+            taxForUpdateDto.TaxGroup = editTaxViewModel.TaxGroup;
+            taxForUpdateDto.ItemTaxGroup = editTaxViewModel.ItemTaxGroup;
 
             using (var client = new System.Net.Http.HttpClient())
             {

@@ -44,20 +44,20 @@
                 <div class="row">
                     <div class="col-sm-3">Tax Group</div>
                     <div class="col-sm-8">
-                        <select class="form-control" asp-for="TaxGroupId" asp-items="@ViewBag.TaxGroups" id="optTaxGroups"></select>
-                        <span asp-validation-for="TaxGroupId" class="danger"></span>
+                        <select class="form-control" asp-for="TaxGroup.Id" asp-items="@ViewBag.TaxGroups" id="optTaxGroups"></select>
+                        <span asp-validation-for="TaxGroup.Id" class="danger"></span>
                         <button type="button" class="btn-primary float-end" data-bs-toggle="modal" data-bs-target="#taxGroup">
-                            Create New
+                            Create New Tax Group
                         </button>
                     </div>
                 </div>
                 <div class="row">
                     <div class="col-sm-3">Item Tax Group</div>
                     <div class="col-sm-8">
-                        <select class="form-control" asp-for="ItemTaxGroupId" asp-items="@ViewBag.ItemTaxGroups" id="optItemTaxGroups"></select>
-                        <span asp-validation-for="ItemTaxGroupId" class="danger"></span>
+                        <select class="form-control" asp-for="ItemTaxGroup.Id" asp-items="@ViewBag.ItemTaxGroups" id="optItemTaxGroups"></select>
+                        <span asp-validation-for="ItemTaxGroup.Id" class="danger"></span>
                         <button type="button" class="btn-primary float-end" data-bs-toggle="modal" data-bs-target="#itemTaxGroup">
-                            Create New
+                            Create New Item Tax Group
                         </button>
                     </div>
                 </div>
@@ -106,74 +106,104 @@
         <input id="btnSave" class="btn btn-sm btn-primary btn-flat pull-left" type="submit" value="Save" />
         <a href="~/tax/taxes" class="btn btn-sm btn-default btn-flat pull-left">Close</a>
     </div>
-</form>
 
-@* Tax Group Modal *@
-<div class="modal fade" id="taxGroup" tabindex="-1" aria-labelledby="taxGroupLabel" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="taxGroupLabel">Add New Tax Group</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <form>
+    @* Tax Group Modal *@
+    <div class="modal fade" id="taxGroup" tabindex="-1" aria-labelledby="taxGroupLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="taxGroupLabel">Add New Tax Group</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
                     <div class="row mb-3">
                         <div class="col-sm-4">Description</div>
                         <div class="col-sm-6">
-                            <input type="text" class="form-control" id="recipient-name">
+                            <input class="form-control" id="taxGroupDescription" asp-for="TaxGroup.Description" type="text" class="form-control">
+                            <span asp-validation-for="TaxGroup.Description" class="danger"></span>
                         </div>
                     </div>
                     <div class="row mb-3">
                         <div class="col-sm-4">TaxAppliedToShipping</div>
                         <div class="col-sm-8">
-                            <input type="checkbox" class="form-check" id="recipient-name">
+                            <input class="form-check" asp-for="TaxGroup.TaxAppliedToShipping" type="checkbox">
+                            <span asp-validation-for="TaxGroup.TaxAppliedToShipping" class="danger"></span>
                         </div>
                     </div>
                     <div class="row mb-3">
                         <div class="col-sm-4">Is Active</div>
                         <div class="col-sm-8">
-                            <input type="checkbox" class="form-check" id="recipient-name">
+                            <input asp-for="TaxGroup.IsActive" type="checkbox" class="form-check">
+                            <span asp-validation-for="TaxGroup.IsActive" class="danger"></span>
                         </div>
                     </div>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-sm btn-primary btn-flat">Save</button>
-                <button type="button" class="btn btn-sm btn-default btn-flat" data-bs-dismiss="modal">Close</button>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-sm btn-primary btn-flat" id="taxGroupButton" type="button" data-bs-dismiss="modal">Save</button>
+                    <button class="btn btn-sm btn-default btn-flat" type="button" data-bs-dismiss="modal">Close</button>
+                </div>
             </div>
         </div>
     </div>
-</div>
 
-@* Item Tax Group Modal *@
-<div class="modal fade" id="itemTaxGroup" tabindex="-1" aria-labelledby="itemTaxGroupLabel" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="itemTaxGroupLabel">Add New Item Tax Group</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <form>
+    @* Item Tax Group Modal *@
+    <div class="modal fade" id="itemTaxGroup" tabindex="-1" aria-labelledby="itemTaxGroupLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="itemTaxGroupLabel">Add New Item Tax Group</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
                     <div class="row mb-3">
                         <div class="col-sm-4">Name</div>
                         <div class="col-sm-6">
-                            <input type="text" class="form-control" id="recipient-name">
+                            <input id="itemTaxGroupName" asp-for="ItemTaxGroup.Name" type="text" class="form-control">
                         </div>
                     </div>
                     <div class="row mb-3">
                         <div class="col-sm-4">IsFullyExempt</div>
                         <div class="col-sm-8">
-                            <input type="checkbox" class="form-check" id="recipient-name">
+                            <input asp-for="ItemTaxGroup.IsFullyExempt" type="checkbox" class="form-check">
                         </div>
                     </div>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-sm btn-primary btn-flat">Save</button>
-                <button type="button" class="btn btn-sm btn-default btn-flat" data-bs-dismiss="modal">Close</button>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-sm btn-primary btn-flat" id="itemTaxGroupButton" type="button" data-bs-dismiss="modal""">Save</button>
+                    <button class="btn btn-sm btn-default btn-flat" type="button" data-bs-dismiss="modal">Close</button>
+                </div>
             </div>
         </div>
     </div>
-</div>
+
+</form>
+
+@section scripts {
+    <script>
+        document.getElementById('taxGroupButton').addEventListener('click', function () {
+            var taxGroup = {
+                Description: document.getElementById('taxGroupDescription').value,
+            };
+
+            var select = document.getElementById('optTaxGroups');
+
+            var option = document.createElement('option');
+            option.text = taxGroup.Description; option.selected = true;
+
+            select.add(option);
+        });
+
+        document.getElementById('itemTaxGroupButton').addEventListener('click', function () {
+            var itemTaxGroup = {
+                Name: document.getElementById('itemTaxGroupName').value,
+            };
+
+            var select = document.getElementById('optItemTaxGroups');
+
+            var option = document.createElement('option');
+            option.text = itemTaxGroup.Name; option.selected = true;
+
+            select.add(option);
+        })
+    </script>
+}
