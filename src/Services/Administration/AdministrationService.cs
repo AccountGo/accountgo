@@ -96,17 +96,21 @@ namespace Services.Administration
             taxEntity.PurchasingAccountId = purchaseTaxAccount.Id;
             taxEntity.SalesAccount = salesTaxAccount;
             taxEntity.PurchasingAccount = purchaseTaxAccount;
+
+            var taxGroupEntity = AddNewTaxGroup(taxForCreationDto.TaxGroup);
             taxEntity.TaxGroupTaxes.Add(new Core.Domain.TaxSystem.TaxGroupTax
             {
                 TaxId = taxEntity.Id,
-                TaxGroupId = taxForCreationDto.TaxGroupId,
-                TaxGroup = _taxGroupRepo.GetById(taxForCreationDto.TaxGroupId),
+                TaxGroupId = taxGroupEntity.Id,
+                TaxGroup = taxGroupEntity,
             });
+
+            var itemTaxGroupEntity = AddNewItemTaxGroup(taxForCreationDto.ItemTaxGroup);
             taxEntity.ItemTaxGroupTaxes.Add(new Core.Domain.TaxSystem.ItemTaxGroupTax
             {
                 TaxId = taxEntity.Id,
-                ItemTaxGroupId = taxForCreationDto.ItemTaxGroupId,
-                ItemTaxGroup = _itemTaxGroupRepo.GetById(taxForCreationDto.ItemTaxGroupId),
+                ItemTaxGroupId = itemTaxGroupEntity.Id,
+                ItemTaxGroup = itemTaxGroupEntity,
             });
 
             AddNewTax(taxEntity);
@@ -115,6 +119,30 @@ namespace Services.Administration
         public void AddNewTax(Tax tax)
         {
             _taxRepo.Insert(tax);
+        }
+
+        public TaxGroup AddNewTaxGroup(Dto.TaxSystem.TaxGroup taxGroupDto)
+        {
+            var taxGroupEntity = _taxGroupRepo.GetById(taxGroupDto.Id);
+            if (taxGroupEntity is null)
+            {
+                taxGroupEntity = _mapper.Map<Core.Domain.TaxSystem.TaxGroup>(taxGroupDto);
+                _taxGroupRepo.Insert(taxGroupEntity);
+            }
+
+            return taxGroupEntity;
+        }
+
+        public ItemTaxGroup AddNewItemTaxGroup(Dto.TaxSystem.ItemTaxGroup itemTaxGroupDto)
+        {
+            var itemTaxGroupEntity = _itemTaxGroupRepo.GetById(itemTaxGroupDto.Id);
+            if (itemTaxGroupEntity is null)
+            {
+                itemTaxGroupEntity = _mapper.Map<Core.Domain.TaxSystem.ItemTaxGroup>(itemTaxGroupDto);
+                _itemTaxGroupRepo.Insert(itemTaxGroupEntity);
+            }
+
+            return itemTaxGroupEntity;
         }
 
         public void EditTax(Dto.TaxSystem.TaxForUpdate taxForUpdateDto)
@@ -131,19 +159,23 @@ namespace Services.Administration
             taxEntity.PurchasingAccount = purchaseTaxAccount;
 
             taxEntity.TaxGroupTaxes.Clear();
+
+            var taxGroupEntity = AddNewTaxGroup(taxForUpdateDto.TaxGroup);
             taxEntity.TaxGroupTaxes.Add(new Core.Domain.TaxSystem.TaxGroupTax
             {
                 TaxId = taxEntity.Id,
-                TaxGroupId = taxForUpdateDto.TaxGroupId,
-                TaxGroup = _taxGroupRepo.GetById(taxForUpdateDto.TaxGroupId),
+                TaxGroupId = taxGroupEntity.Id,
+                TaxGroup = taxGroupEntity,
             });
 
             taxEntity.ItemTaxGroupTaxes.Clear();
+            
+            var itemTaxGroupEntity = AddNewItemTaxGroup(taxForUpdateDto.ItemTaxGroup);
             taxEntity.ItemTaxGroupTaxes.Add(new Core.Domain.TaxSystem.ItemTaxGroupTax
             {
                 TaxId = taxEntity.Id,
-                ItemTaxGroupId = taxForUpdateDto.ItemTaxGroupId,
-                ItemTaxGroup = _itemTaxGroupRepo.GetById(taxForUpdateDto.ItemTaxGroupId),
+                ItemTaxGroupId = itemTaxGroupEntity.Id,
+                ItemTaxGroup = itemTaxGroupEntity
             });
 
             UpdateTax(taxEntity);
