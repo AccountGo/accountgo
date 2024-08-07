@@ -22,6 +22,8 @@ namespace Services.Administration
         ICollection<TaxGroup> GetTaxGroups(bool includeInActive);
         void CreateTax(Dto.TaxSystem.TaxForCreation taxForCreationDto);
         void AddNewTax(Tax tax);
+        TaxGroup AddNewTaxGroup(Dto.TaxSystem.TaxGroup taxGroupDto);
+        ItemTaxGroup AddNewItemTaxGroup(Dto.TaxSystem.ItemTaxGroup itemTaxGroupDto)
         void EditTax(Dto.TaxSystem.TaxForUpdate taxForUpdateDto);
         void UpdateTax(Tax tax);
         void DeleteTax(int id);

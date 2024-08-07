@@ -20,7 +20,7 @@ namespace Dto.TaxSystem
 
         public bool IsActive { get; set; }
 
-        public int TaxGroupId { get; set; }
-        public int ItemTaxGroupId { get; set; }
+        public TaxGroup TaxGroup { get; set; }
+        public ItemTaxGroup ItemTaxGroup { get; set; }
     }
 }

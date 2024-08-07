@@ -26,6 +26,11 @@ namespace Api
                 .ForMember(dest => dest.TaxGroupTaxes, opt => opt.Ignore())
                 .ForMember(dest => dest.ItemTaxGroupTaxes, opt => opt.Ignore());
 
+            CreateMap<Dto.TaxSystem.TaxGroup, Core.Domain.TaxSystem.TaxGroup>()
+                .ForMember(dest => dest.TaxGroupTax, opt => opt.MapFrom(src => src.Taxes));
+
+            CreateMap<Dto.TaxSystem.ItemTaxGroup, Core.Domain.TaxSystem.ItemTaxGroup>()
+                .ForMember(dest => dest.ItemTaxGroupTax, opt => opt.MapFrom(src => src.Taxes));
         }
     }
 }
