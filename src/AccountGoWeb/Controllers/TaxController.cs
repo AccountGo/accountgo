@@ -1,4 +1,5 @@
 ﻿using AccountGoWeb.Models.TaxSystem;
+using AutoMapper;
 using Dto.TaxSystem;
 using Microsoft.AspNetCore.Mvc;
 using System;
@@ -8,9 +9,12 @@ namespace AccountGoWeb.Controllers
     //[Microsoft.AspNetCore.Authorization.Authorize]
     public class TaxController : BaseController
     {
-        public TaxController(Microsoft.Extensions.Configuration.IConfiguration config)
+        private readonly IMapper _mapper;
+
+        public TaxController(Microsoft.Extensions.Configuration.IConfiguration config, IMapper mapper)
         {
             _baseConfig = config;
+            _mapper = mapper;
         }
 
         public IActionResult Index()
@@ -31,12 +35,10 @@ namespace AccountGoWeb.Controllers
                 if (response.IsSuccessStatusCode)
                 {
                     var responseJson = await response.Content.ReadAsStringAsync();
-                    var taxSystemDto = Newtonsoft.Json.JsonConvert.DeserializeObject<Dto.TaxSystem.TaxSystemDto>(responseJson);
-                    var taxSystemViewModel = new Models.TaxSystem.TaxSystemViewModel();
-                    taxSystemViewModel.Taxes = taxSystemDto!.Taxes;
-                    taxSystemViewModel.ItemTaxGroups = taxSystemDto.ItemTaxGroups;
-                    taxSystemViewModel.TaxGroups = taxSystemDto.TaxGroups;
 
+                    var taxSystemDto = Newtonsoft.Json.JsonConvert.DeserializeObject<Dto.TaxSystem.TaxSystemDto>(responseJson);
+                    var taxSystemViewModel = _mapper.Map<Models.TaxSystem.TaxSystemViewModel>(taxSystemDto);
+                  
                     return View(taxSystemViewModel);
                 }
             }
@@ -78,9 +80,9 @@ namespace AccountGoWeb.Controllers
             var itemTaxGroupObj = Newtonsoft.Json.JsonConvert.DeserializeObject<Dto.TaxSystem.ItemTaxGroup>(itemTaxGroup);
 
             var editTaxViewModel = new Models.TaxSystem.EditTaxViewModel();
-            editTaxViewModel.Tax = taxObj;
-            editTaxViewModel.TaxGroup = taxGroupObj;
-            editTaxViewModel.ItemTaxGroup = itemTaxGroupObj;
+            editTaxViewModel.Tax = _mapper.Map<Models.TaxSystem.Tax>(taxObj);
+            editTaxViewModel.TaxGroup = _mapper.Map<Models.TaxSystem.TaxGroup>(taxGroupObj);
+            editTaxViewModel.ItemTaxGroup = _mapper.Map<Models.TaxSystem.ItemTaxGroup>(itemTaxGroupObj);
 
             @ViewBag.TaxGroups = Models.SelectListItemHelper.TaxGroups();
             @ViewBag.ItemTaxGroups = Models.SelectListItemHelper.ItemTaxGroups();
@@ -91,33 +93,35 @@ namespace AccountGoWeb.Controllers
         [HttpPost]
         public async Task<IActionResult> EditTax(EditTaxViewModel editTaxViewModel)
         {
-            // Mapping View Model to Dto
-            var taxForUpdateDto = new Dto.TaxSystem.TaxForUpdate();
-            taxForUpdateDto.SalesAccountId = editTaxViewModel.SalesAccountId;
-            taxForUpdateDto.PurchaseAccountId = editTaxViewModel.PurchaseAccountId;
-            taxForUpdateDto.Tax = editTaxViewModel.Tax;
-            taxForUpdateDto.TaxGroup = editTaxViewModel.TaxGroup;
-            taxForUpdateDto.ItemTaxGroup = editTaxViewModel.ItemTaxGroup;
-
-            using (var client = new System.Net.Http.HttpClient())
+            if (ModelState.IsValid)
             {
-                var baseUri = _baseConfig!["ApiUrl"];
-                client.BaseAddress = new System.Uri(baseUri!);
-                client.DefaultRequestHeaders.Accept.Clear();
+                var taxForUpdateDto = _mapper.Map<Dto.TaxSystem.TaxForUpdate>(editTaxViewModel); 
 
-                var serialize = Newtonsoft.Json.JsonConvert.SerializeObject(taxForUpdateDto);
-                var content = new StringContent(serialize);
-                content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
-
-                var response = await client.PutAsync(baseUri + "Tax/edittax", content);
-
-                if (response.IsSuccessStatusCode)
+                using (var client = new System.Net.Http.HttpClient())
                 {
-                    return RedirectToAction("Taxes");   
+                    var baseUri = _baseConfig!["ApiUrl"];
+                    client.BaseAddress = new System.Uri(baseUri!);
+                    client.DefaultRequestHeaders.Accept.Clear();
+
+                    var serialize = Newtonsoft.Json.JsonConvert.SerializeObject(taxForUpdateDto);
+                    var content = new StringContent(serialize);
+                    content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+
+                    var response = await client.PutAsync(baseUri + "Tax/edittax", content);
+
+                    if (response.IsSuccessStatusCode)
+                    {
+                        return RedirectToAction("Taxes");
+                    }
                 }
+
+                return RedirectToAction("Taxes");
             }
 
-            return RedirectToAction("Taxes");
+            @ViewBag.TaxGroups = Models.SelectListItemHelper.TaxGroups();
+            @ViewBag.ItemTaxGroups = Models.SelectListItemHelper.ItemTaxGroups();
+
+            return View(editTaxViewModel);
         }
 
         public async Task<IActionResult> DeleteTax(int id)
