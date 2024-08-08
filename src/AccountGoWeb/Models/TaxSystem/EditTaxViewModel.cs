@@ -1,4 +1,4 @@
-﻿using Dto.TaxSystem;
+﻿using System.ComponentModel.DataAnnotations;
 
 namespace AccountGoWeb.Models.TaxSystem
 {
@@ -6,8 +6,8 @@ namespace AccountGoWeb.Models.TaxSystem
     {
         public int SalesAccountId { get; set; }
         public int PurchaseAccountId { get; set; }
-        public Tax? Tax { get; set; }
-        public TaxGroup? TaxGroup { get; set; }
-        public ItemTaxGroup? ItemTaxGroup { get; set; }
+        public Tax Tax { get; set; }
+        public TaxGroup TaxGroup { get; set; }
+        public ItemTaxGroup ItemTaxGroup { get; set; }
     }
 }
