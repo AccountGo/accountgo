@@ -1,9 +1,14 @@
 using AccountGoWeb.Components;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using AutoMapper;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
+
+// Mapping
+builder.Services.AddAutoMapper(typeof(Program));
+
 builder.Services.AddControllersWithViews();
 
 // string urlhost = System.Environment.GetEnvironmentVariable("APIHOST") ?? "localhost";
@@ -17,9 +22,9 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
     .AddCookie(o => o.LoginPath = new PathString("/account/signin"));
 
 builder.Services
-.AddRazorComponents()
-.AddInteractiveServerComponents()
-.AddCircuitOptions(options => options.DetailedErrors = true); // for debugging razor components
+    .AddRazorComponents()
+    .AddInteractiveServerComponents()
+    .AddCircuitOptions(options => options.DetailedErrors = true); // for debugging razor components
 
 var app = builder.Build();
 
@@ -45,6 +50,6 @@ app.MapControllerRoute(
     pattern: "{controller=Home}/{action=Index}/{id?}");
 
 app.MapRazorComponents<App>()
-.AddInteractiveServerRenderMode();
+    .AddInteractiveServerRenderMode();
 
 app.Run();
