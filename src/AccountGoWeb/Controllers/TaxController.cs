@@ -59,15 +59,21 @@ namespace AccountGoWeb.Controllers
         [HttpPost]
         public IActionResult AddNewTax(TaxForCreation taxForCreationDto)
         {
-            var serialize = Newtonsoft.Json.JsonConvert.SerializeObject(taxForCreationDto);
-            var content = new StringContent(serialize);
-            content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+            if (ModelState.IsValid)
+            {
+                var serialize = Newtonsoft.Json.JsonConvert.SerializeObject(taxForCreationDto);
+                var content = new StringContent(serialize);
+                content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
 
-            var response = Post("Tax/addnewtax", content);
-            if (response.IsSuccessStatusCode)
-                return RedirectToAction("Taxes");
+                var response = Post("Tax/addnewtax", content);
+                if (response.IsSuccessStatusCode)
+                    return RedirectToAction("Taxes");
+            }
 
-            return RedirectToAction("Taxes");
+            @ViewBag.TaxGroups = Models.SelectListItemHelper.TaxGroups();
+            @ViewBag.ItemTaxGroups = Models.SelectListItemHelper.ItemTaxGroups();
+
+            return View();
         }
 
         public IActionResult EditTax(string tax, string taxGroup, string itemTaxGroup)
