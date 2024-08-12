@@ -196,6 +196,26 @@ namespace Services.Administration
             _taxRepo.Delete(tax);
         }
 
+        public void DeleteTaxGroup(int taxGroupId)
+        {
+            var taxGroup = _taxGroupRepo.GetById(taxGroupId);
+
+            if (taxGroup is null)
+                throw new Exception("TaxGroup not found");
+
+            _taxGroupRepo.Delete(taxGroup);
+        }
+
+        public void DeleteItemTaxGroup(int itemTaxGroupId)
+        {
+            var itemTaxGroup = _itemTaxGroupRepo.GetById(itemTaxGroupId);
+
+            if (itemTaxGroup is null)
+                throw new Exception("ItemTaxGroup not found");
+
+            _itemTaxGroupRepo.Delete(itemTaxGroup);
+        }
+
         public ICollection<ItemTaxGroup> GetItemTaxGroups(bool includeInActive)
         {
             var query = from f in _itemTaxGroupRepo.Table

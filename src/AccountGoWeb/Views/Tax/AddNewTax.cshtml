@@ -35,9 +35,10 @@
                     <div class="col-sm-8">
                         <select class="form-control" asp-for="PurchaseAccountId">
                             <option value="50700">
-                                Purchase Tax
+                                Purchase Tax 
                             </option>
                         </select>
+
                         <span asp-validation-for="PurchaseAccountId" class="text-danger"></span>
                     </div>
                 </div>
@@ -188,7 +189,7 @@
             var select = document.getElementById('optTaxGroups');
 
             var option = document.createElement('option');
-            option.text = taxGroup.Description; option.selected = true;
+            option.value = 0; option.text = taxGroup.Description; option.selected = true;
 
             select.add(option);
         });
@@ -201,7 +202,7 @@
             var select = document.getElementById('optItemTaxGroups');
 
             var option = document.createElement('option');
-            option.text = itemTaxGroup.Name; option.selected = true;
+            option.value = 0; option.text = itemTaxGroup.Name; option.selected = true;
 
             select.add(option);
         })
