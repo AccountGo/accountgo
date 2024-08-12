@@ -164,7 +164,7 @@ namespace Api.Controllers
         [Route("PostJournalEntry")]
         public IActionResult PostJournalEntry([FromBody] JournalEntry journalEntryDto)
         {
-            string[] errors = null;
+            string[]? errors = null;
 
             try
             {
@@ -195,7 +195,7 @@ namespace Api.Controllers
         [Route("SaveJournalEntry")]
         public IActionResult SaveJournalEntry([FromBody] JournalEntry journalEntryDto)
         {
-            string[] errors = null;
+            string[]? errors = null;
 
             try
             {
@@ -214,7 +214,7 @@ namespace Api.Controllers
                     throw new Exception("One or more journal entry lines has duplicate account.");
 
                 bool isNew = journalEntryDto.Id == 0;
-                Core.Domain.Financials.JournalEntryHeader journalEntry = null;
+                Core.Domain.Financials.JournalEntryHeader? journalEntry = null;
 
                 if (isNew)
                 {
@@ -288,7 +288,7 @@ namespace Api.Controllers
         [Route("GeneralLedger")]
         public ActionResult GeneralLedger(DateTime? from = default(DateTime?),
             DateTime? to = default(DateTime?),
-            string accountCode = null,
+            string? accountCode = null,
             int? transactionNo = null)
         {
             var Dto = _financialService.MasterGeneralLedger(from, to, accountCode, transactionNo);

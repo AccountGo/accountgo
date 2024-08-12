@@ -42,8 +42,8 @@ namespace AccountGoWeb.Controllers
 
                     var claims = new List<Claim>();
                     claims.Add(new Claim(ClaimTypes.IsPersistent, model.RememberMe.ToString()));
-                    claims.Add(new Claim(ClaimTypes.NameIdentifier, user.Email));
-                    claims.Add(new Claim(ClaimTypes.Email, user.Email));
+                    claims.Add(new Claim(ClaimTypes.NameIdentifier, user.Email!));
+                    claims.Add(new Claim(ClaimTypes.Email, user.Email!));
 
                     string firstName = user.FirstName != null ? user.FirstName : "";
                     string lastName = user.LastName != null ? user.LastName : "";
@@ -53,7 +53,7 @@ namespace AccountGoWeb.Controllers
                     claims.Add(new Claim(ClaimTypes.Name, firstName + " " + lastName));
 
                     foreach(var role in user.Roles)
-                        claims.Add(new Claim(ClaimTypes.Role, role.Name));
+                        claims.Add(new Claim(ClaimTypes.Role, role.Name!));
 
                     claims.Add(new Claim(ClaimTypes.UserData, Newtonsoft.Json.JsonConvert.SerializeObject(user)));
 

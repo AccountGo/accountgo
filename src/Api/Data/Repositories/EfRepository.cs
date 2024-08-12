@@ -12,14 +12,14 @@ namespace Api.Data
     {
         private readonly ApiDbContext _context;
         private readonly ILogger<T> _logger;
-        private DbSet<T> _entities;
+        private DbSet<T>? _entities = null;
 
         public EfRepository(ILogger<T> logger, ApiDbContext context)
         {
             _logger = logger;
             _context = context;
         }
-
+         
         #region Properties
 
         /// <summary>
@@ -71,7 +71,7 @@ namespace Api.Data
         /// <returns>Entity</returns>
         public virtual T GetById(object id)
         {
-            return this.Entities.FirstOrDefault(x => x.Id == (int)id);
+            return this.Entities.FirstOrDefault(x => x.Id == (int)id)!;
         }
 
         /// <summary>

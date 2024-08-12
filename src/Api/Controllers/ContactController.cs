@@ -81,10 +81,10 @@ namespace Api.Controllers
         [Route("SaveContact")]
         public IActionResult SaveContact([FromBody]Dto.Common.Contact model)
         {
-            string[] errors = null;
+            string[]? errors = null;
             try
             {
-                Core.Domain.Contact contact = null;
+                Core.Domain.Contact? contact = null;
 
 
                 if (model.Id == 0)

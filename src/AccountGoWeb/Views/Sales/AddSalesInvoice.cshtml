@@ -47,21 +47,21 @@
                         <th>Discount</th>
                         <th>Measurement</th>
                     </thead>
-                    <tbody>@for (int i = 0; i < Model.SalesInvoiceLines.Count; i++)
+                    <tbody>@for (int i = 0; i < Model.SalesInvoiceLines!.Count; i++)
                         {
                             <tr>
                                 <td>
-                                    @Html.DropDownListFor(model => model.SalesInvoiceLines[i].ItemId,
+                                    @Html.DropDownListFor(model => model.SalesInvoiceLines![i].ItemId,
                                              (IEnumerable<SelectListItem>)ViewBag.Items, new
                                              {
                                                  @class = "form-control",
                                                  id =
                                              "optItem"
                                              })
-                                    <span asp-validation-for="SalesInvoiceLines[i].ItemId" class="danger"></span>
+                                    <span asp-validation-for="SalesInvoiceLines![i].ItemId!" class="danger"></span>
                                 </td>
                                 <td>
-                                    @Html.EditorFor(model => model.SalesInvoiceLines[i].Quantity, new
+                                    @Html.EditorFor(model => model.SalesInvoiceLines![i].Quantity, new
                                         {
                                             htmlAttributes = new
                                             {
@@ -70,7 +70,7 @@
                                         })
                                 </td>
                                 <td>
-                                    @Html.EditorFor(model => model.SalesInvoiceLines[i].Amount, new
+                                    @Html.EditorFor(model => model.SalesInvoiceLines![i].Amount, new
                                         {
                                             htmlAttributes = new
                                             {
@@ -79,7 +79,7 @@
                                         })
                                 </td>
                                 <td>
-                                    @Html.EditorFor(model => model.SalesInvoiceLines[i].Discount, new
+                                    @Html.EditorFor(model => model.SalesInvoiceLines![i].Discount, new
                                         {
                                             htmlAttributes = new
                                             {
@@ -88,10 +88,10 @@
                                         })
                                 </td>
                                 <td>
-                                    @Html.DropDownListFor(model => model.SalesInvoiceLines[i].MeasurementId,
+                                    @Html.DropDownListFor(model => model.SalesInvoiceLines![i].MeasurementId,
                                              (IEnumerable<SelectListItem>)ViewBag.Measurements,
                                              new { @class = "form-control", id = $"optMeasurement_{i}" })
-                                    <span asp-validation-for="SalesInvoiceLines[i].MeasurementId" class="danger"></span>
+                                    <span asp-validation-for="SalesInvoiceLines![i].MeasurementId!" class="danger"></span>
                                 </td>
                             </tr>
                         }

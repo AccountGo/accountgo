@@ -1,10 +1,7 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using Dto.Inventory;
+﻿using Dto.Inventory;
+using Microsoft.AspNetCore.Mvc;
 using Services.Administration;
 using Services.Inventory;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.Extensions.Logging;
 
 namespace Api.Controllers
 {
@@ -29,7 +26,7 @@ namespace Api.Controllers
         public IActionResult SaveItem([FromBody]Item itemDto)
         {
             bool isNew = itemDto.Id == 0;
-            Core.Domain.Items.Item item = null;
+            Core.Domain.Items.Item? item = null;
 
             if (isNew)
             {

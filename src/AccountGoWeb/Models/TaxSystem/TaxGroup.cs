@@ -6,7 +6,7 @@ namespace AccountGoWeb.Models.TaxSystem
     {
         [Required(ErrorMessage = "The Tax Group Name field is Required.")]
         [StringLength(50)]
-        public string Description { get; set; }
+        public string? Description { get; set; }
         public bool TaxAppliedToShipping { get; set; }
         public bool IsActive { get; set; }
 
