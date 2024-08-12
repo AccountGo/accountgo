@@ -27,6 +27,8 @@ namespace Services.Administration
         void EditTax(Dto.TaxSystem.TaxForUpdate taxForUpdateDto);
         void UpdateTax(Tax tax);
         void DeleteTax(int id);
+        void DeleteTaxGroup(int id);
+        void DeleteItemTaxGroup(int id);
         void InitializeCompany();
         Company GetDefaultCompany();
         ICollection<PaymentTerm> GetPaymentTerms();

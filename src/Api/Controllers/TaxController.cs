@@ -216,5 +216,23 @@ namespace Api.Controllers
 
             return new ObjectResult(taxForUpdateDto);
         }
+
+        [HttpDelete("{id:int}")]
+        [Route("deletetaxgroup")]
+        public IActionResult DeleteTaxGroup(int id)
+        {
+            _adminService.DeleteTaxGroup(id);
+
+            return new ObjectResult(id);
+        }
+
+        [HttpDelete("{id:int}")]
+        [Route("deleteitemtaxgroup")]
+        public IActionResult DeleteItemTaxGroup(int id)
+        {
+            _adminService.DeleteItemTaxGroup(id);
+
+            return new ObjectResult(id);
+        }
     }
 }

@@ -68,18 +68,22 @@
                             <th>Description</th>
                             <th>Tax Applied To Shipping</th>
                             <th>Active</th>
+                            <th>Action</th>
                         </tr>
                     </thead>
                     <tbody data-bind="foreach: model.TaxGroups">
                         <tr data-bind="click: $root.selectTaxGroup">
                             <td>
-                                <input data-bind="value:Description" type="text"  readonly="readonly"/>
+                                <input data-bind="value:Description" readonly="readonly" type="text"/>
                             </td>
                             <td>
                                 <input data-bind="checked:TaxAppliedToShipping" type="checkbox" />
                             </td>
                             <td>
                                 <input data-bind="checked:IsActive" type="checkbox" />
+                            </td>
+                            <td>
+                                <button class="btn btn-sm btn-danger btn-flat" data-bind="click: $root.clickTaxGroup" data-bs-toggle="modal" data-bs-target="#deleteTaxGroup">Delete</button>
                             </td>
                         </tr>
                     </tbody>
@@ -115,6 +119,7 @@
                         <tr>
                             <th>Name</th>
                             <th>Fully Exempt</th>
+                            <th>Action</th>
                         </tr>
                     </thead>
                     <tbody data-bind="foreach: model.ItemTaxGroups">
@@ -124,6 +129,9 @@
                             </td>
                             <td>
                                 <input data-bind="checked:IsFullyExempt" type="checkbox" />
+                            </td>
+                            <td>
+                                <button class="btn btn-sm btn-danger btn-flat" data-bind="click: $root.clickItemTaxGroup" data-bs-toggle="modal" data-bs-target="#deleteItemTaxGroup">Delete</button>
                             </td>
                         </tr>
                     </tbody>
@@ -161,15 +169,57 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">Delete</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                <button aria-label="Close" class="btn-close" data-bs-dismiss="modal" type="button"></button>
             </div>
             <div class="modal-body">
                 <p>Do you want to delete it?</p>
                 <input type="hidden" id="hdnselectedtaxId" />
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-sm btn-primary btn-flat" onclick="deleteTax()">Yes</button>
-                <button type="button" class="btn btn-sm btn-default btn-flat" data-bs-dismiss="modal">No</button>
+                <button class="btn btn-sm btn-primary btn-flat" onclick="deleteTax()" type="button">Yes</button>
+                <button class="btn btn-sm btn-default btn-flat" data-bs-dismiss="modal" type="button">No</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal" id="deleteTaxGroup" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Delete Tax Group</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>
+                    Do you want to delete it?
+                </p>
+                <input type="hidden" id="hdnselectedtaxgroupId" />
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-sm btn-primary btn-flat" data-bind="click: $root.deleteTaxGroup" type="button">Yes</button>
+                <button class="btn btn-sm btn-default btn-flat" data-bs-dismiss="modal" type="button">No</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal" id="deleteItemTaxGroup" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Delete Item Tax Group</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>
+                    Do you want to delete it?
+                </p>
+                <input type="hidden" id="hdnselectedItemTaxGroupId" />
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-sm btn-primary btn-flat" data-bind="click: $root.deleteItemTaxGroup" type="button">Yes</button>
+                <button class="btn btn-sm btn-default btn-flat" data-bs-dismiss="modal" type="button">No</button>
             </div>
         </div>
     </div>
@@ -180,10 +230,6 @@
     <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/knockout.mapping/2.4.1/knockout.mapping.js"></script>
 
     <script>
-        $(".taxId").on("click", function () {
-            $("#hdnselectedtaxId").val($(this).attr('id'));
-        })
-
         function updateTax(taxId){
             var self = this;
             self.model = ko.mapping.fromJS(@Html.Raw(Model.ToJson()));
@@ -218,6 +264,9 @@
             location.href = '@Url.Action("EditTax", "Tax")?tax=' + serializedTax + '&taxGroup=' + serializedTaxGroup + '&itemTaxGroup=' + serializedItemTaxGroup;
         }
 
+        $(".taxId").on("click", function () {
+            $("#hdnselectedtaxId").val($(this).attr('id'));
+        })
         function deleteTax(){
             var taxId = $("#hdnselectedtaxId").val();
 
@@ -247,6 +296,26 @@
                     }
                 }
                 return null;
+            }
+
+            self.clickTaxGroup = function(item){
+                $("#hdnselectedtaxgroupId").val(item.Id());
+            }
+
+            self.deleteTaxGroup = function() {
+                var taxGroupId = $("#hdnselectedtaxgroupId").val();
+
+                location.href = '@Url.Action("DeleteTaxGroup", "Tax")?id=' + taxGroupId;
+            }
+
+            self.clickItemTaxGroup = function(item){
+                $("#hdnselectedItemTaxGroupId").val(item.Id());
+            }
+
+            self.deleteItemTaxGroup = function(){
+                var itemTaxGroupId = $("#hdnselectedItemTaxGroupId").val();
+
+                location.href = '@Url.Action("DeleteItemTaxGroup", "Tax")?id=' + itemTaxGroupId;
             }
         }
 

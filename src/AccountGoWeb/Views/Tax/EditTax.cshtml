@@ -45,7 +45,7 @@
                 <div class="row">
                     <div class="col-sm-3">Tax Group</div>
                     <div class="col-sm-8">
-                        <select class="form-control" asp-for="TaxGroup.Id" asp-items="@ViewBag.TaxGroups" id="optTaxGroups"></select>
+                        <select asp-for="TaxGroup.Id" asp-items="@ViewBag.TaxGroups" class="form-control" id="optTaxGroups" onchange="onSelectedTaxGroup(this)"></select>
                         <span asp-validation-for="TaxGroup.Id" class="text-danger"></span>
                         <button type="button" class="btn-primary float-end" data-bs-toggle="modal" data-bs-target="#taxGroup">
                             Create New Tax Group
@@ -55,7 +55,7 @@
                 <div class="row">
                     <div class="col-sm-3">Item Tax Group</div>
                     <div class="col-sm-8">
-                        <select class="form-control" asp-for="ItemTaxGroup.Id" asp-items="@ViewBag.ItemTaxGroups" id="optItemTaxGroups"></select>
+                        <select class="form-control" asp-for="ItemTaxGroup.Id" asp-items="@ViewBag.ItemTaxGroups" id="optItemTaxGroups" onchange="onSelectedItemTaxGroup(this)"></select>
                         <span asp-validation-for="ItemTaxGroup.Id" class="text-danger"></span>
                         <button type="button" class="btn-primary float-end" data-bs-toggle="modal" data-bs-target="#itemTaxGroup">
                             Create New Item Tax Group
@@ -120,22 +120,22 @@
                     <div class="row mb-3">
                         <div class="col-sm-4">Description</div>
                         <div class="col-sm-6">
-                            <input class="form-control" id="taxGroupDescription" asp-for="TaxGroup.Description" type="text" class="form-control">
-                            <span asp-validation-for="TaxGroup.Description" class="danger"></span>
+                            <input asp-for="TaxGroup.Description" class="form-control" id="taxGroupDescription" type="text">
+                            <span asp-validation-for="TaxGroup.Description" class="text-danger"></span>
                         </div>
                     </div>
                     <div class="row mb-3">
                         <div class="col-sm-4">TaxAppliedToShipping</div>
                         <div class="col-sm-8">
                             <input class="form-check" asp-for="TaxGroup.TaxAppliedToShipping" type="checkbox">
-                            <span asp-validation-for="TaxGroup.TaxAppliedToShipping" class="danger"></span>
+                            <span asp-validation-for="TaxGroup.TaxAppliedToShipping" class="text-danger"></span>
                         </div>
                     </div>
                     <div class="row mb-3">
                         <div class="col-sm-4">Is Active</div>
                         <div class="col-sm-8">
                             <input asp-for="TaxGroup.IsActive" type="checkbox" class="form-check">
-                            <span asp-validation-for="TaxGroup.IsActive" class="danger"></span>
+                            <span asp-validation-for="TaxGroup.IsActive" class="text-danger"></span>
                         </div>
                     </div>
                 </div>
@@ -159,7 +159,7 @@
                         <div class="row mb-3">
                             <div class="col-sm-4">Name</div>
                             <div class="col-sm-6">
-                                <input id="itemTaxGroupName" asp-for="ItemTaxGroup.Name" type="text" class="form-control">
+                            <input asp-for="ItemTaxGroup.Name" id="itemTaxGroupName" type="text" class="form-control">
                             </div>
                         </div>
                         <div class="row mb-3">
@@ -189,7 +189,7 @@
             var select = document.getElementById('optTaxGroups');
 
             var option = document.createElement('option');
-            option.text = taxGroup.Description; option.selected = true;
+            option.value = 0; option.text = taxGroup.Description; option.selected = true;
           
             select.add(option);
         });
@@ -202,9 +202,19 @@
             var select = document.getElementById('optItemTaxGroups');
 
             var option = document.createElement('option');
-            option.text = itemTaxGroup.Name; option.selected = true;
+            option.value = 0; option.text = itemTaxGroup.Name; option.selected = true;
 
             select.add(option);
         })
+
+        function onSelectedTaxGroup(value){
+            var textValue = value.options[value.selectedIndex].text;
+            document.getElementById('taxGroupDescription').value = textValue;
+        }
+
+        function onSelectedItemTaxGroup(value) {
+            var textValue = value.options[value.selectedIndex].text;
+            document.getElementById('itemTaxGroupName').value = textValue;
+        }
     </script>
 }

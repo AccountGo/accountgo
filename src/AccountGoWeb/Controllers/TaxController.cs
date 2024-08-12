@@ -146,5 +146,37 @@ namespace AccountGoWeb.Controllers
             return RedirectToAction("Taxes");
         }
 
+        public async Task<IActionResult> DeleteTaxGroup(int id)
+        {
+            using (var client = new HttpClient())
+            {
+                var baseUri = _baseConfig!["ApiUrl"];
+                client.BaseAddress = new System.Uri(baseUri!);
+                client.DefaultRequestHeaders.Accept.Clear();
+                var response = await client.DeleteAsync(baseUri + "Tax/deletetaxgroup?id=" + id);
+
+                if (response.IsSuccessStatusCode)
+                    return RedirectToAction("Taxes");
+            }
+
+            return RedirectToAction("Taxes");
+        }
+
+        public async Task<IActionResult> DeleteItemTaxGroup(int id)
+        {
+            using (var client = new HttpClient())
+            {
+                var baseUri = _baseConfig!["ApiUrl"];
+                client.BaseAddress = new System.Uri(baseUri!);
+                client.DefaultRequestHeaders.Accept.Clear();
+                var response = await client.DeleteAsync(baseUri + "Tax/deleteitemtaxgroup?id=" + id);
+
+                if (response.IsSuccessStatusCode)
+                    return RedirectToAction("Taxes");
+            }
+
+            return RedirectToAction("Taxes");
+        }
+
     }
 }
