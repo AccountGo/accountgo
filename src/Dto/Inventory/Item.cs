@@ -4,13 +4,13 @@ namespace Dto.Inventory
 {
     public class Item : BaseDto
     {
-        public string No { get; set; }
+        public string? No { get; set; }
         [Required]
-        public string Code { get; set; }
+        public string? Code { get; set; }
         [Required]
-        public string Description { get; set; }
-        public string PurchaseDescription { get; set; }
-        public string SellDescription { get; set; }
+        public string? Description { get; set; }
+        public string? PurchaseDescription { get; set; }
+        public string? SellDescription { get; set; }
         public decimal? Cost { get; set; }
         public decimal? Price { get; set; }
         public decimal? QuantityOnHand { get; set; }
