@@ -6,13 +6,13 @@ namespace Dto.Sales
 {
     public class Customer : BaseDto
     {
-        public string No { get; set; }
+        public string? No { get; set; }
         [Required]
-        public string Name { get; set; }
-        public string Email { get; set; }
-        public string Website { get; set; }
-        public string Phone { get; set; }
-        public string Fax { get; set; }
+        public string? Name { get; set; }
+        public string? Email { get; set; }
+        public string? Website { get; set; }
+        public string? Phone { get; set; }
+        public string? Fax { get; set; }
 
         public int? AccountsReceivableId { get; set; }
         public int? SalesAccountId { get; set; }
@@ -21,10 +21,10 @@ namespace Dto.Sales
         public int? TaxGroupId { get; set; }
         public int? PaymentTermId { get; set; }
         public decimal Balance { get; set; }        
-        public string Contact { get; set; }
-        public string TaxGroup { get; set; }
-        public Contact PrimaryContact { get; set; }
-        public IEnumerable<SalesInvoice> Invoices { get; set; }
+        public string? Contact { get; set; }
+        public string? TaxGroup { get; set; }
+        public Contact? PrimaryContact { get; set; }
+        public IEnumerable<SalesInvoice>? Invoices { get; set; }
 
         public Customer() {
             PrimaryContact = new Contact();

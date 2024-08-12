@@ -9,7 +9,7 @@ namespace Dto.TaxSystem
 
         [Required(ErrorMessage = "The Tax Name is a required field.")]
         [MaxLength(50, ErrorMessage = "Tax Name must be less than 20 characters.")]
-        public string TaxName { get; set; }
+        public string? TaxName { get; set; }
 
         [Required(ErrorMessage = "The Tax Code is a required field.")]
         [MaxLength(16, ErrorMessage = "Tax Code must be less than 20 characters.")]
@@ -20,7 +20,7 @@ namespace Dto.TaxSystem
 
         public bool IsActive { get; set; }
 
-        public TaxGroup TaxGroup { get; set; }
-        public ItemTaxGroup ItemTaxGroup { get; set; }
+        public TaxGroup? TaxGroup { get; set; }
+        public ItemTaxGroup? ItemTaxGroup { get; set; }
     }
 }

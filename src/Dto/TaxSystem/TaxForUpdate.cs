@@ -10,7 +10,7 @@ namespace Dto.TaxSystem
         public Tax? Tax { get; set; }
 
 
-        public TaxGroup TaxGroup { get; set; }
-        public ItemTaxGroup ItemTaxGroup { get; set; }
+        public TaxGroup? TaxGroup { get; set; }
+        public ItemTaxGroup? ItemTaxGroup { get; set; }
     }
 }
