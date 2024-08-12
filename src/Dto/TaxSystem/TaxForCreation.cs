@@ -13,7 +13,7 @@ namespace Dto.TaxSystem
 
         [Required(ErrorMessage = "The Tax Code is a required field.")]
         [MaxLength(16, ErrorMessage = "Tax Code must be less than 20 characters.")]
-        public string TaxCode { get; set; }
+        public string? TaxCode { get; set; }
 
         [Range(0, 100, ErrorMessage = "Rate must be between 0 and 100.")]
         public decimal Rate { get; set; }

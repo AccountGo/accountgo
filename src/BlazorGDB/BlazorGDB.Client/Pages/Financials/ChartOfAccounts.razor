@@ -131,8 +131,8 @@ else
 
 @code {
     private IEnumerable<AccountViewModel>? accounts = [];
-    private bool getError;
-    private bool shouldRender;
+    private bool getError = false;
+    private bool shouldRender = false;
     private bool jsInteropCalled = false; // Flag to ensure JS interop is called only once
 
 

@@ -1,16 +1,11 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Core.Domain;
+using Dto.Sales;
+using Microsoft.AspNetCore.Mvc;
 using Services.Administration;
 using Services.Financial;
-using Services.Sales;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using Core.Domain;
-using Core.Domain.Sales;
 using Services.Inventory;
-using Dto.Sales;
+using Services.Sales;
 using Services.TaxSystem;
-using Microsoft.Extensions.Logging;
 
 namespace Api.Controllers
 {
@@ -44,7 +39,7 @@ namespace Api.Controllers
         public IActionResult SaveCustomer([FromBody]Dto.Sales.Customer customerDto)
         {
             bool isNew = customerDto.Id == 0;
-            Core.Domain.Sales.Customer customer = null;
+            Core.Domain.Sales.Customer? customer = null;
 
             if (isNew)
             {
@@ -75,7 +70,7 @@ namespace Api.Controllers
             customer.Party.Email = customerDto.Email;
             customer.Party.Fax = customerDto.Fax;
             customer.Party.Website = customerDto.Website;
-            customer.PrimaryContact.FirstName = customerDto.PrimaryContact.FirstName;
+            customer.PrimaryContact.FirstName = customerDto.PrimaryContact!.FirstName;
             customer.PrimaryContact.LastName = customerDto.PrimaryContact.LastName;
             customer.PrimaryContact.Party.Name = customerDto.PrimaryContact.Party.Name;
             customer.PrimaryContact.Party.Phone = customerDto.PrimaryContact.Party.Phone;
@@ -125,7 +120,7 @@ namespace Api.Controllers
 
                 if (customer.PrimaryContact != null)
                 {
-                    customerDto.PrimaryContact.FirstName = customer.PrimaryContact.FirstName;
+                    customerDto.PrimaryContact!.FirstName = customer.PrimaryContact.FirstName;
                     customerDto.PrimaryContact.LastName = customer.PrimaryContact.LastName;
                     customerDto.PrimaryContact.Party.Email = customer.PrimaryContact.Party.Email;
                     customerDto.PrimaryContact.Party.Phone = customer.PrimaryContact.Party.Phone;
@@ -194,7 +189,7 @@ namespace Api.Controllers
                     {
                         Id = salesOrder.Id,
                         PaymentTermId = salesOrder.PaymentTermId,
-                        CustomerId = salesOrder.CustomerId.Value,
+                        CustomerId = salesOrder.CustomerId!.Value,
                         CustomerNo = salesOrder.Customer.No,
                         CustomerName = salesOrder.Customer.Party.Name,
                         OrderDate = salesOrder.Date,
@@ -239,13 +234,13 @@ namespace Api.Controllers
                 var salesOrderDto = new Dto.Sales.SalesOrder()
                 {
                     Id = salesOrder.Id,
-                    CustomerId = salesOrder.CustomerId.Value,
+                    CustomerId = salesOrder.CustomerId!.Value,
                     CustomerNo = salesOrder.Customer.No,
                     CustomerName = _salesService.GetCustomerById(salesOrder.CustomerId.Value).Party.Name,
                     OrderDate = salesOrder.Date,
                     PaymentTermId = salesOrder.PaymentTermId,
                     ReferenceNo = salesOrder.ReferenceNo,
-                    StatusId = (int)salesOrder.Status,
+                    StatusId = (int) salesOrder.Status!,
                     SalesOrderLines = new List<Dto.Sales.SalesOrderLine>()
                 };
 
@@ -380,7 +375,7 @@ namespace Api.Controllers
                     QuotationDate = quote.Date,
                     ReferenceNo = quote.ReferenceNo,
                     SalesQuoteStatus = quote.Status.ToString(),
-                    StatusId = (int)quote.Status
+                    StatusId = (int) quote.Status!
                 };
 
                 foreach (var line in quote.SalesQuoteLines)
@@ -416,7 +411,7 @@ namespace Api.Controllers
                 QuotationDate = quote.Date,
                 PaymentTermId = quote.PaymentTermId,
                 ReferenceNo = quote.ReferenceNo,
-                StatusId = (int)quote.Status
+                StatusId = (int) quote.Status!
             };
 
             foreach (var line in quote.SalesQuoteLines)
@@ -471,7 +466,7 @@ namespace Api.Controllers
                         Amount = line.Amount,
                         Discount = line.Discount
                     };
-                    salesInvoiceDto.SalesInvoiceLines.Add(lineDto);
+                    salesInvoiceDto.SalesInvoiceLines!.Add(lineDto);
                 }
 
                 salesInvoicesDto.Add(salesInvoiceDto);
@@ -556,7 +551,7 @@ namespace Api.Controllers
                         lineDto.ItemId = line.ItemId;
                         lineDto.MeasurementId = line.MeasurementId;
 
-                        invoiceDto.SalesInvoiceLines.Add(lineDto);
+                        invoiceDto.SalesInvoiceLines!.Add(lineDto);
                     }
 
                     invoicesDto.Add(invoiceDto);
@@ -574,7 +569,7 @@ namespace Api.Controllers
         [Route("SaveSalesOrder")]
         public IActionResult SaveSalesOrder([FromBody]Dto.Sales.SalesOrder salesOrderDto)
         {
-            string[] errors = null;
+            string[]? errors = null;
             try
             {
                 if (!ModelState.IsValid)
@@ -588,7 +583,7 @@ namespace Api.Controllers
                 }
 
                 bool isNew = salesOrderDto.Id == 0;
-                Core.Domain.Sales.SalesOrderHeader salesOrder = null;
+                Core.Domain.Sales.SalesOrderHeader? salesOrder = null;
 
                 if (isNew)
                 {
@@ -620,7 +615,7 @@ namespace Api.Controllers
                         var existingLine = salesOrder.SalesOrderLines.Where(id => id.Id == line.Id).FirstOrDefault();
                         if (salesOrder.SalesOrderLines.Where(id => id.Id == line.Id).FirstOrDefault() != null)
                         {
-                            existingLine.Amount = line.Amount.GetValueOrDefault();
+                            existingLine!.Amount = line.Amount.GetValueOrDefault();
                             existingLine.Discount = line.Discount.GetValueOrDefault();
                             existingLine.Quantity = line.Quantity.GetValueOrDefault();
                             existingLine.ItemId = line.ItemId.GetValueOrDefault();
@@ -689,7 +684,7 @@ namespace Api.Controllers
         [Route("PostSalesInvoice")]
         public IActionResult PostSalesInvoice([FromBody]Dto.Sales.SalesInvoice salesInvoiceDto)
         {
-            string[] errors = null;
+            string[]? errors = null;
 
             _logger.LogInformation("PostSalesInvoice");
 
@@ -720,7 +715,7 @@ namespace Api.Controllers
         [Route("SaveSalesInvoice")]
         public IActionResult SaveSalesInvoice([FromBody]Dto.Sales.SalesInvoice salesInvoiceDto)
         {
-            string[] errors = null;
+            string[]? errors = null;
 
             try
             {
@@ -735,8 +730,8 @@ namespace Api.Controllers
                 }
 
                 bool isNew = salesInvoiceDto.Id == 0;
-                Core.Domain.Sales.SalesInvoiceHeader salesInvoice = null;
-                Core.Domain.Sales.SalesOrderHeader salesOrder = null;
+                Core.Domain.Sales.SalesInvoiceHeader? salesInvoice = null;
+                Core.Domain.Sales.SalesOrderHeader? salesOrder = null;
 
                 // Creating a new invoice
                 if (isNew)
@@ -763,7 +758,7 @@ namespace Api.Controllers
                     salesInvoice.PaymentTermId = salesInvoiceDto.PaymentTermId;
                     salesInvoice.ReferenceNo = salesInvoiceDto.ReferenceNo;
 
-                    foreach (var line in salesInvoiceDto.SalesInvoiceLines)
+                    foreach (var line in salesInvoiceDto.SalesInvoiceLines!)
                     {
                         var salesInvoiceLine = new Core.Domain.Sales.SalesInvoiceLine();
 
@@ -809,12 +804,12 @@ namespace Api.Controllers
                     salesInvoice.ReferenceNo = salesInvoiceDto.ReferenceNo;
                     salesInvoice.CustomerId = salesInvoiceDto.CustomerId;
 
-                    foreach (var line in salesInvoiceDto.SalesInvoiceLines)
+                    foreach (var line in salesInvoiceDto.SalesInvoiceLines!)
                     {
                         var existingLine = salesInvoice.SalesInvoiceLines.Where(id => id.Id == line.Id).FirstOrDefault();
                         if (salesInvoice.SalesInvoiceLines.Where(id => id.Id == line.Id).FirstOrDefault() != null)
                         {
-                            existingLine.Amount = line.Amount.GetValueOrDefault();
+                            existingLine!.Amount = line.Amount.GetValueOrDefault();
                             existingLine.Discount = line.Discount.GetValueOrDefault();
                             existingLine.Quantity = line.Quantity.GetValueOrDefault();
                             existingLine.ItemId = line.ItemId.GetValueOrDefault();
@@ -848,7 +843,7 @@ namespace Api.Controllers
                             if (salesOrder == null)
                             {
                                 // use the last value of existingLine
-                                salesOrder = _salesService.GetSalesOrderLineById(existingLine.SalesOrderLine.SalesOrderHeaderId).SalesOrderHeader;
+                                salesOrder = _salesService.GetSalesOrderLineById(existingLine!.SalesOrderLine.SalesOrderHeaderId).SalesOrderHeader;
                                 salesOrder.SalesOrderLines.Add(salesOrderLine);
                             }
 
@@ -886,7 +881,7 @@ namespace Api.Controllers
         [Route("SaveQuotation")]
         public IActionResult SaveQuotation([FromBody]Dto.Sales.SalesQuotation quotationDto)
         {
-            string[] errors = null;
+            string[]? errors = null;
             _logger.LogInformation("SaveQuotation");
 
             try
@@ -902,7 +897,7 @@ namespace Api.Controllers
                 }
 
                 bool isNew = quotationDto.Id == 0;
-                Core.Domain.Sales.SalesQuoteHeader salesQuote = null;
+                Core.Domain.Sales.SalesQuoteHeader? salesQuote = null;
 
                 if (isNew)
                 {
@@ -928,7 +923,7 @@ namespace Api.Controllers
                         var existingLine = salesQuote.SalesQuoteLines.Where(id => id.Id == line.Id).FirstOrDefault();
                         if (salesQuote.SalesQuoteLines.Where(id => id.Id == line.Id).FirstOrDefault() != null)
                         {
-                            existingLine.Amount = line.Amount == null ? 0 : line.Amount.Value;
+                            existingLine!.Amount = line.Amount == null ? 0 : line.Amount.Value;
                             existingLine.Discount = line.Discount == null ? 0 : line.Discount.Value;
                             existingLine.Quantity = line.Quantity == null ? 0 : line.Quantity.Value;
                             existingLine.ItemId = line.ItemId.GetValueOrDefault();
@@ -991,7 +986,7 @@ namespace Api.Controllers
         [Route("SaveReceipt")]
         public IActionResult SaveReceipt([FromBody]dynamic receiptDto)
         {
-            string[] errors = null;
+            string[]? errors = null;
 
             try
             {
@@ -1010,7 +1005,7 @@ namespace Api.Controllers
                 var salesReceipt = new Core.Domain.Sales.SalesReceiptHeader();
                 salesReceipt.Date = receiptDto.ReceiptDate;
                 salesReceipt.CustomerId = receiptDto.CustomerId;
-                salesReceipt.AccountToDebitId = bank.AccountId;
+                salesReceipt.AccountToDebitId = bank!.AccountId;
                 salesReceipt.Amount = receiptDto.Amount;
 
                 var customer = _salesService.GetCustomerById((int)receiptDto.CustomerId);
@@ -1040,7 +1035,7 @@ namespace Api.Controllers
         [Route("SaveAllocation")]
         public IActionResult SaveAllocation([FromBody]dynamic allocationDto)
         {
-            string[] errors = null;
+            string[]? errors = null;
 
             try
             {
