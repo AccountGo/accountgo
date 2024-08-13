@@ -12,6 +12,7 @@ using Core.Domain.TaxSystem;
 using Core.Domain.Financials;
 using Core.Domain.Security;
 using Core.Domain.Auditing;
+using Core.Domain.Error;
 
 namespace Services.Administration
 {
@@ -20,7 +21,7 @@ namespace Services.Administration
         ICollection<Tax> GetAllTaxes(bool includeInActive);
         ICollection<ItemTaxGroup> GetItemTaxGroups(bool includeInActive);
         ICollection<TaxGroup> GetTaxGroups(bool includeInActive);
-        void CreateTax(Dto.TaxSystem.TaxForCreation taxForCreationDto);
+        Result<Dto.TaxSystem.Tax> CreateTax(Dto.TaxSystem.TaxForCreation taxForCreationDto);
         void AddNewTax(Tax tax);
         TaxGroup AddNewTaxGroup(Dto.TaxSystem.TaxGroup taxGroupDto);
         ItemTaxGroup AddNewItemTaxGroup(Dto.TaxSystem.ItemTaxGroup itemTaxGroupDto);
