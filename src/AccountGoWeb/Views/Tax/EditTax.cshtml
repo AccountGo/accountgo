@@ -120,22 +120,26 @@
                     <div class="row mb-3">
                         <div class="col-sm-4">Description</div>
                         <div class="col-sm-6">
-                            <input asp-for="TaxGroup.Description" class="form-control" id="taxGroupDescription" type="text">
-                            <span asp-validation-for="TaxGroup.Description" class="text-danger"></span>
+                            <input asp-for="TaxGroup!.Description" class="form-control" id="taxGroupDescription" type="text">
+                            <span asp-validation-for="TaxGroup!.Description" class="text-danger"></span>
                         </div>
                     </div>
                     <div class="row mb-3">
-                        <div class="col-sm-4">TaxAppliedToShipping</div>
+                        @* <div class="col-sm-4">TaxAppliedToShipping</div> *@
+                        <div class="col-sm-4">
+                            <label asp-for="TaxGroup!.TaxAppliedToShipping" class="control-label"></label>
+                        </div>
+
                         <div class="col-sm-8">
-                            <input class="form-check" asp-for="TaxGroup.TaxAppliedToShipping" type="checkbox">
-                            <span asp-validation-for="TaxGroup.TaxAppliedToShipping" class="text-danger"></span>
+                            <input class="form-check" asp-for="TaxGroup!.TaxAppliedToShipping" type="checkbox">
+                            <span asp-validation-for="TaxGroup!.TaxAppliedToShipping" class="text-danger"></span>
                         </div>
                     </div>
                     <div class="row mb-3">
                         <div class="col-sm-4">Is Active</div>
                         <div class="col-sm-8">
-                            <input asp-for="TaxGroup.IsActive" type="checkbox" class="form-check">
-                            <span asp-validation-for="TaxGroup.IsActive" class="text-danger"></span>
+                            <input asp-for="TaxGroup!.IsActive" type="checkbox" class="form-check">
+                            <span asp-validation-for="TaxGroup!.IsActive" class="text-danger"></span>
                         </div>
                     </div>
                 </div>
@@ -159,13 +163,16 @@
                         <div class="row mb-3">
                             <div class="col-sm-4">Name</div>
                             <div class="col-sm-6">
-                            <input asp-for="ItemTaxGroup.Name" id="itemTaxGroupName" type="text" class="form-control">
+                            <input asp-for="ItemTaxGroup!.Name" id="itemTaxGroupName" type="text" class="form-control">
                             </div>
                         </div>
                         <div class="row mb-3">
-                            <div class="col-sm-4">IsFullyExempt</div>
+                            @* <div class="col-sm-4">IsFullyExempt</div> *@
+                            <div class="col-sm-4">
+                                <label asp-for="ItemTaxGroup!.IsFullyExempt" class="control-label"></label>
+                            </div>
                             <div class="col-sm-8">
-                                <input asp-for="ItemTaxGroup.IsFullyExempt" type="checkbox" class="form-check">
+                                <input asp-for="ItemTaxGroup!.IsFullyExempt" type="checkbox" class="form-check">
                             </div>
                         </div>
                 </div>
