@@ -194,9 +194,16 @@ namespace Api.Controllers
         [ServiceFilter(typeof(ValidationFilterAttribute))]
         public IActionResult AddNewTax([FromBody] TaxForCreation taxForCreationDto)
         {
-            _adminService.CreateTax(taxForCreationDto);
+            var result = _adminService.CreateTax(taxForCreationDto);
 
-            return new ObjectResult(taxForCreationDto);
+            if (result.IsFailure)
+            {
+                return BadRequest(result.Error.Message);
+            }
+
+            var taxToReturn = result.Value;
+
+            return Ok(taxToReturn);
         }
 
         [HttpDelete("{id:int}")]

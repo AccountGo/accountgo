@@ -10,6 +10,7 @@ using AutoMapper;
 using Core.Data;
 using Core.Domain;
 using Core.Domain.Auditing;
+using Core.Domain.Error;
 using Core.Domain.Financials;
 using Core.Domain.Security;
 using Core.Domain.TaxSystem;
@@ -18,6 +19,7 @@ using Services.TaxSystem;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 
 namespace Services.Administration
@@ -79,14 +81,17 @@ namespace Services.Administration
             return query.ToList();
         }
 
-        public void CreateTax(Dto.TaxSystem.TaxForCreation taxForCreationDto)
+        public Result<Dto.TaxSystem.Tax> CreateTax(Dto.TaxSystem.TaxForCreation taxForCreationDto)
         {
             var query = from f in _taxRepo.Table
                         where f.TaxName == taxForCreationDto.TaxName || f.TaxCode == taxForCreationDto.TaxCode 
                         select f;
 
             if (query.Any())
-                throw new Exception("Tax already exists");
+            {
+                var message = $"Tax with name {taxForCreationDto.TaxName} or code {taxForCreationDto.TaxCode} already exists";
+                return Result<Dto.TaxSystem.Tax>.Failure(Error.ValidationError(message));
+            }
 
             var salesTaxAccount = _financialService.GetAccountByAccountCode(taxForCreationDto.SalesAccountId.ToString());
             var purchaseTaxAccount = _financialService.GetAccountByAccountCode(taxForCreationDto.PurchaseAccountId.ToString());
@@ -114,6 +119,9 @@ namespace Services.Administration
             });
 
             AddNewTax(taxEntity);
+            var taxToReturn = _mapper.Map<Dto.TaxSystem.Tax>(taxEntity);
+            
+            return Result<Dto.TaxSystem.Tax>.Success(taxToReturn);
         }
 
         public void AddNewTax(Tax tax)

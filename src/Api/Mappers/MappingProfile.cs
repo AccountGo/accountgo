@@ -6,6 +6,8 @@ namespace Api
     {
         public MappingProfile()
         {
+            CreateMap<Core.Domain.TaxSystem.Tax, Dto.TaxSystem.Tax>();
+
             CreateMap<Dto.TaxSystem.TaxForCreation, Core.Domain.TaxSystem.Tax>()
                 .ForMember(dest => dest.SalesAccountId, opt => opt.Ignore())
                 .ForMember(dest => dest.PurchasingAccountId, opt => opt.Ignore())
