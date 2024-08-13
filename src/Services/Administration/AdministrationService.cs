@@ -82,7 +82,7 @@ namespace Services.Administration
         public void CreateTax(Dto.TaxSystem.TaxForCreation taxForCreationDto)
         {
             var query = from f in _taxRepo.Table
-                        where f.TaxCode == taxForCreationDto.TaxCode || f.TaxName == taxForCreationDto.TaxName || f.Rate == taxForCreationDto.Rate
+                        where f.TaxName == taxForCreationDto.TaxName || f.TaxCode == taxForCreationDto.TaxCode 
                         select f;
 
             if (query.Any())
