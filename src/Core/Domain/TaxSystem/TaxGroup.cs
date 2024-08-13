@@ -7,6 +7,7 @@
 //-----------------------------------------------------------------------
 
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Core.Domain.TaxSystem
@@ -19,6 +20,8 @@ namespace Core.Domain.TaxSystem
             TaxGroupTax = new HashSet<TaxGroupTax>();
         }
         public string Description { get; set; }
+
+        [Display(Name = "Fully Exempt")]
         public bool TaxAppliedToShipping { get; set; }
         public bool IsActive { get; set; }
         public virtual ICollection<TaxGroupTax> TaxGroupTax { get; set; }
