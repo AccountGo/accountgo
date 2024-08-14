@@ -194,34 +194,49 @@ namespace Services.Administration
             _taxRepo.Update(tax);
         }
 
-        public void DeleteTax(int taxId)
+        public Result<Dto.TaxSystem.Tax> DeleteTax(int taxId)
         {
             var tax = _taxRepo.GetById(taxId);
 
             if(tax is null)
-                throw new Exception("Tax not found");
+            {
+                var message = $"Tax with id {taxId} not found";
+                return Result<Dto.TaxSystem.Tax>.Failure(Error.RecordNotFound(message));
+            }
 
             _taxRepo.Delete(tax);
+
+            return Result<Dto.TaxSystem.Tax>.Success(null);
         }
 
-        public void DeleteTaxGroup(int taxGroupId)
+        public Result<Dto.TaxSystem.TaxGroup> DeleteTaxGroup(int taxGroupId)
         {
             var taxGroup = _taxGroupRepo.GetById(taxGroupId);
 
             if (taxGroup is null)
-                throw new Exception("TaxGroup not found");
-
+            {
+                var message = $"TaxGroup with id {taxGroupId} not found";
+                return Result<Dto.TaxSystem.TaxGroup>.Failure(Error.RecordNotFound(message));
+            }
+                
             _taxGroupRepo.Delete(taxGroup);
+
+            return Result<Dto.TaxSystem.TaxGroup>.Success(null);
         }
 
-        public void DeleteItemTaxGroup(int itemTaxGroupId)
+        public Result<Dto.TaxSystem.ItemTaxGroup> DeleteItemTaxGroup(int itemTaxGroupId)
         {
             var itemTaxGroup = _itemTaxGroupRepo.GetById(itemTaxGroupId);
 
             if (itemTaxGroup is null)
-                throw new Exception("ItemTaxGroup not found");
-
+            {
+                var message = $"ItemTaxGroup with id {itemTaxGroupId} not found";
+                return Result<Dto.TaxSystem.ItemTaxGroup>.Failure(Error.RecordNotFound(message));
+            }
+                
             _itemTaxGroupRepo.Delete(itemTaxGroup);
+
+            return Result<Dto.TaxSystem.ItemTaxGroup>.Success(null);
         }
 
         public ICollection<ItemTaxGroup> GetItemTaxGroups(bool includeInActive)

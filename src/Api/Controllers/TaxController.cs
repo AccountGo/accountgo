@@ -210,9 +210,14 @@ namespace Api.Controllers
         [Route("deletetax")]
         public IActionResult DeleteTax(int id)
         {
-            _adminService.DeleteTax(id);
+            var result = _adminService.DeleteTax(id);
 
-            return new ObjectResult(id);
+            if (result.IsFailure)
+            {
+                return BadRequest(result.Error.Message);
+            }
+
+            return NoContent();
         }
 
         [HttpPut("edittax")]
@@ -228,18 +233,28 @@ namespace Api.Controllers
         [Route("deletetaxgroup")]
         public IActionResult DeleteTaxGroup(int id)
         {
-            _adminService.DeleteTaxGroup(id);
+            var result = _adminService.DeleteTaxGroup(id);
 
-            return new ObjectResult(id);
+            if(result.IsFailure)
+            {
+                return BadRequest(result.Error.Message);
+            }
+
+            return NoContent();
         }
 
         [HttpDelete("{id:int}")]
         [Route("deleteitemtaxgroup")]
         public IActionResult DeleteItemTaxGroup(int id)
         {
-            _adminService.DeleteItemTaxGroup(id);
+            var result = _adminService.DeleteItemTaxGroup(id);
 
-            return new ObjectResult(id);
+            if(result.IsFailure)
+            {
+                return BadRequest(result.Error.Message);
+            }
+
+            return NoContent();
         }
     }
 }
