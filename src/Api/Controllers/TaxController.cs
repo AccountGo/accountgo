@@ -224,9 +224,16 @@ namespace Api.Controllers
         [ServiceFilter(typeof(ValidationFilterAttribute))]
         public IActionResult EditTax([FromBody] TaxForUpdate taxForUpdateDto)
         {
-            _adminService.EditTax(taxForUpdateDto);
+            var result = _adminService.EditTax(taxForUpdateDto);
 
-            return new ObjectResult(taxForUpdateDto);
+            if (result.IsFailure)
+            {
+                return BadRequest(result.Error.Message);
+            }
+
+            var taxToReturn = result.Value;
+
+            return Ok(taxToReturn);
         }
 
         [HttpDelete("{id:int}")]

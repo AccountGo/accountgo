@@ -153,12 +153,17 @@ namespace Services.Administration
             return itemTaxGroupEntity;
         }
 
-        public void EditTax(Dto.TaxSystem.TaxForUpdate taxForUpdateDto)
+        public Result<Dto.TaxSystem.Tax> EditTax(Dto.TaxSystem.TaxForUpdate taxForUpdateDto)
         {
+            var taxEntity = _taxService.GetTaxById(taxForUpdateDto.Tax.Id);
+            if(taxEntity is null)
+            {
+                var message = $"Tax with id {taxForUpdateDto.Tax.Id} is not found.";
+                return Result<Dto.TaxSystem.Tax>.Failure(Error.RecordNotFound(message));
+            }
+
             var salesTaxAccount = _financialService.GetAccountByAccountCode(taxForUpdateDto.SalesAccountId.ToString());
             var purchaseTaxAccount = _financialService.GetAccountByAccountCode(taxForUpdateDto.PurchaseAccountId.ToString());
-
-            var taxEntity = _taxService.GetTaxById(taxForUpdateDto.Tax.Id);
 
             _mapper.Map(taxForUpdateDto, taxEntity);
             taxEntity.SalesAccountId = salesTaxAccount.Id;
@@ -187,6 +192,9 @@ namespace Services.Administration
             });
 
             UpdateTax(taxEntity);
+            var taxToRetun = _mapper.Map<Dto.TaxSystem.Tax>(taxEntity);
+
+            return Result<Dto.TaxSystem.Tax>.Success(taxToRetun);    
         }
 
         public void UpdateTax(Tax tax)

@@ -25,7 +25,7 @@ namespace Services.Administration
         void AddNewTax(Tax tax);
         TaxGroup AddNewTaxGroup(Dto.TaxSystem.TaxGroup taxGroupDto);
         ItemTaxGroup AddNewItemTaxGroup(Dto.TaxSystem.ItemTaxGroup itemTaxGroupDto);
-        void EditTax(Dto.TaxSystem.TaxForUpdate taxForUpdateDto);
+        Result<Dto.TaxSystem.Tax> EditTax(Dto.TaxSystem.TaxForUpdate taxForUpdateDto);
         void UpdateTax(Tax tax);
         Result<Dto.TaxSystem.Tax> DeleteTax(int id);
         Result<Dto.TaxSystem.TaxGroup> DeleteTaxGroup(int id);
