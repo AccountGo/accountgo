@@ -27,9 +27,9 @@ namespace Services.Administration
         ItemTaxGroup AddNewItemTaxGroup(Dto.TaxSystem.ItemTaxGroup itemTaxGroupDto);
         void EditTax(Dto.TaxSystem.TaxForUpdate taxForUpdateDto);
         void UpdateTax(Tax tax);
-        void DeleteTax(int id);
-        void DeleteTaxGroup(int id);
-        void DeleteItemTaxGroup(int id);
+        Result<Dto.TaxSystem.Tax> DeleteTax(int id);
+        Result<Dto.TaxSystem.TaxGroup> DeleteTaxGroup(int id);
+        Result<Dto.TaxSystem.ItemTaxGroup> DeleteItemTaxGroup(int id);
         void InitializeCompany();
         Company GetDefaultCompany();
         ICollection<PaymentTerm> GetPaymentTerms();
