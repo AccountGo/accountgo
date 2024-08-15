@@ -142,7 +142,9 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        var request = new HttpRequestMessage(HttpMethod.Get, $"{Constants.API_URL}financials/accounts");
+        string apiurl = System.Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
+
+        var request = new HttpRequestMessage(HttpMethod.Get, $"{apiurl}financials/accounts");
         request.Headers.Add("Accept", "application/json");
 
         var _client = ClientFactory.CreateClient();

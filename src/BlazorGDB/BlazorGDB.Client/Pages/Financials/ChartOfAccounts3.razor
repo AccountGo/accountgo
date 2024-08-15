@@ -1,9 +1,8 @@
-﻿@page "/x/financials/chart-of-accounts"
+﻿@page "/a/financials/chart-of-accounts"
 @using System.Text.Json
 @inject Microsoft.JSInterop.IJSRuntime JSRuntime
-@inject HttpClient Http
+@inject HttpClient _httpClient
 
-@* @rendermode InteractiveServer *@
 @rendermode InteractiveAuto
 
 <PageTitle>Chart of Accounts</PageTitle>
@@ -143,27 +142,26 @@ else
 
     protected override async Task OnInitializedAsync()
     {
+        error += "HERE 1\n";
+        using var httpResponse = await _httpClient.GetAsync($"{Constants.API_URL}financials/accounts");
+        error += "HERE 2\n";
+        if (!httpResponse.IsSuccessStatusCode)
+        {
+            error += "HERE 3\n";
+            // set error message for display, log to console and return
+            var errorMessage = httpResponse.ReasonPhrase;
+            Console.WriteLine($"There was an error! {errorMessage}");
+            return;
+        }
+
         var options = new JsonSerializerOptions
             {
                 PropertyNameCaseInsensitive = true
             };
-        try
-        {
-            error += $"BASE URL: {Http.BaseAddress}\n";
-            url = $"{Constants.API_URL}financials/accounts";
-            //accounts = await Http.GetFromJsonAsync<AccountViewModel[]>(url);
-            error += "1\n";
-            data = await Http.GetFromJsonAsync<JsonElement>(url);
-            error += "2\n";
-            // get total property from JSON response data
-            error += "3\n";
-            error += data.GetProperty("accountName").GetInt32();
-        }
-        catch (Exception ex)
-        {
-            getError = true;
-            Console.WriteLine(ex.Message);
-        }
+        error += "HERE 4\n";
+        // convert http response data to UsersResponse object
+        accounts = await httpResponse.Content.ReadFromJsonAsync<AccountViewModel[]>(options);
+        error += "HERE 5\n";
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -171,7 +169,7 @@ else
         if (firstRender && !jsInteropCalled)
         {
             await JSRuntime.InvokeVoidAsync(
-                "console.log", 
+                "console.log",
                 $"accounts: {accounts}\n",
                 $"url: {url}\n",
                 $"getError: {getError}\n",

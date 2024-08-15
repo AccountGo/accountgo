@@ -1,10 +1,11 @@
-﻿@page "/x/financials/chart-of-accounts"
-@using System.Text.Json
+﻿@page "/b/financials/chart-of-accounts"
+@inject HttpClient _client
 @inject Microsoft.JSInterop.IJSRuntime JSRuntime
-@inject HttpClient Http
+@using System.Net.Http.Json
+@using System.Text.Json
+@using System.Text.Json.Serialization
+@using System.Net.Http
 
-@* @rendermode InteractiveServer *@
-@rendermode InteractiveAuto
 
 <PageTitle>Chart of Accounts</PageTitle>
 
@@ -131,39 +132,82 @@ else
 }
 
 @code {
-    private AccountViewModel[]? accounts = [];
-    private bool getError;
-    private bool shouldRender;
+    private List<AccountViewModel>? accounts = [];
+    private bool getError = false;
+    private bool shouldRender = false;
     private bool jsInteropCalled = false; // Flag to ensure JS interop is called only once
-    private string url = string.Empty;
-    JsonElement data;
-    string error = string.Empty;
+    private string apiurl = string.Empty;
+    private HttpResponseMessage responseMessage = new();
+    private string error = string.Empty;
 
     protected override bool ShouldRender() => shouldRender;
 
     protected override async Task OnInitializedAsync()
     {
-        var options = new JsonSerializerOptions
-            {
-                PropertyNameCaseInsensitive = true
-            };
+        // apiurl = $"{Constants.API_URL}financials/accounts";
+        // Set the BaseAddress dynamically
+        _client.BaseAddress = new Uri(Constants.API_URL);
+        apiurl = "financials/accounts";
+
+        var request = new HttpRequestMessage(HttpMethod.Get, apiurl);
+        request.Headers.Add("Accept", "application/json");
+
+        error += "HERE 1\n";
+
+        _client.DefaultRequestHeaders.Accept.Clear();
+        _client.DefaultRequestHeaders.Clear();
+        _client.DefaultRequestHeaders.CacheControl = new System.Net.Http.Headers.CacheControlHeaderValue() { NoCache = true };
+        _client.DefaultRequestHeaders.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
+
         try
         {
-            error += $"BASE URL: {Http.BaseAddress}\n";
-            url = $"{Constants.API_URL}financials/accounts";
-            //accounts = await Http.GetFromJsonAsync<AccountViewModel[]>(url);
-            error += "1\n";
-            data = await Http.GetFromJsonAsync<JsonElement>(url);
-            error += "2\n";
-            // get total property from JSON response data
-            error += "3\n";
-            error += data.GetProperty("accountName").GetInt32();
+            error += "HERE 2\n";
+            var responseMessage = await _client.SendAsync(request).ConfigureAwait(false);
+            error += "HERE 3\n";
+            if (responseMessage.IsSuccessStatusCode)
+            {
+                var responseString = await responseMessage.Content.ReadAsStringAsync();
+
+                // Ensure JsonSerializerOptions are set correctly
+                var options = new JsonSerializerOptions
+                    {
+                        PropertyNameCaseInsensitive = true, // Adjust based on your JSON
+                        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+                    };
+                error += "HERE 4\n";
+
+                try
+                {
+                    error += "HERE 5\n";
+                    accounts = JsonSerializer.Deserialize<List<AccountViewModel>>(responseString, options);
+                    error += "HERE 6\n";
+                }
+                catch (JsonException ex)
+                {
+                    // Log the exception to diagnose deserialization issues
+                    //await JSRuntime.InvokeVoidAsync("logToConsole", $"JSON Deserialization error: {ex.Message}");
+                    error += $"JSON Deserialization error: {ex.Message}\n";
+                    getError = true;
+                }
+            }
+            else
+            {
+                // Log the status code and reason phrase for debugging
+                //await JSRuntime.InvokeVoidAsync("logToConsole", $"HTTP Request failed. Status Code: {responseMessage.StatusCode}, Reason: {responseMessage.ReasonPhrase}");
+                error += $"HTTP Request failed. Status Code: {responseMessage.StatusCode}, Reason: {responseMessage.ReasonPhrase}\n";
+                getError = true;
+            }
         }
         catch (Exception ex)
         {
+            error += "HERE 7\n";
+            // Log the exception to diagnose request issues
+            //await JSRuntime.InvokeVoidAsync("logToConsole", $"HTTP Request error: {ex.Message}");
+            error += $"HTTP Request error: {ex.Message}\n";
             getError = true;
-            Console.WriteLine(ex.Message);
         }
+        error += "HERE 8\n";
+        shouldRender = true;
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -171,13 +215,13 @@ else
         if (firstRender && !jsInteropCalled)
         {
             await JSRuntime.InvokeVoidAsync(
-                "console.log", 
+                "console.log",
                 $"accounts: {accounts}\n",
-                $"url: {url}\n",
+                $"url: {apiurl}\n",
                 $"getError: {getError}\n",
+                $"responseMessage: {responseMessage!.Content.ToString()}\n",
                 $"error: {error}\n"
            );
-            //await JSRuntime.InvokeVoidAsync("getError", getError);
             jsInteropCalled = true; // Ensure this block runs only once
         }
     }
