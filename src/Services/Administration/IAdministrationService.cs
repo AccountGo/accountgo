@@ -13,6 +13,7 @@ using Core.Domain.Financials;
 using Core.Domain.Security;
 using Core.Domain.Auditing;
 using Core.Domain.Error;
+using System.Threading.Tasks;
 
 namespace Services.Administration
 {
@@ -21,15 +22,16 @@ namespace Services.Administration
         ICollection<Tax> GetAllTaxes(bool includeInActive);
         ICollection<ItemTaxGroup> GetItemTaxGroups(bool includeInActive);
         ICollection<TaxGroup> GetTaxGroups(bool includeInActive);
-        Result<Dto.TaxSystem.Tax> CreateTax(Dto.TaxSystem.TaxForCreation taxForCreationDto);
+        Task<Result<Dto.TaxSystem.Tax>> CreateTaxAsync(Dto.TaxSystem.TaxForCreation taxForCreationDto);
         void AddNewTax(Tax tax);
+        Task AddNewTaxAsync(Tax tax);
         TaxGroup AddNewTaxGroup(Dto.TaxSystem.TaxGroup taxGroupDto);
         ItemTaxGroup AddNewItemTaxGroup(Dto.TaxSystem.ItemTaxGroup itemTaxGroupDto);
-        Result<Dto.TaxSystem.Tax> EditTax(Dto.TaxSystem.TaxForUpdate taxForUpdateDto);
-        void UpdateTax(Tax tax);
-        Result<Dto.TaxSystem.Tax> DeleteTax(int id);
-        Result<Dto.TaxSystem.TaxGroup> DeleteTaxGroup(int id);
-        Result<Dto.TaxSystem.ItemTaxGroup> DeleteItemTaxGroup(int id);
+        Task<Result<Dto.TaxSystem.Tax>> EditTaxAsync(Dto.TaxSystem.TaxForUpdate taxForUpdateDto);
+        Task UpdateTaxAsync(Tax tax);
+        Task<Result<Dto.TaxSystem.Tax>> DeleteTaxAsync(int id);
+        Task<Result<Dto.TaxSystem.TaxGroup>> DeleteTaxGroupAsync(int id);
+        Task<Result<Dto.TaxSystem.ItemTaxGroup>> DeleteItemTaxGroupAsync(int id);
         void InitializeCompany();
         Company GetDefaultCompany();
         ICollection<PaymentTerm> GetPaymentTerms();

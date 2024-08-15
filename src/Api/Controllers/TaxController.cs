@@ -192,9 +192,25 @@ namespace Api.Controllers
 
         [HttpPost("addnewtax")]
         [ServiceFilter(typeof(ValidationFilterAttribute))]
-        public IActionResult AddNewTax([FromBody] TaxForCreation taxForCreationDto)
+        public async Task<IActionResult> AddNewTax([FromBody] TaxForCreation taxForCreationDto)
         {
-            var result = _adminService.CreateTax(taxForCreationDto);
+            var result = await _adminService.CreateTaxAsync(taxForCreationDto);
+
+            if (result.IsFailure)
+            {
+                return BadRequest(result.Error.Message);
+            }
+
+            var taxToReturn = result.Value;
+
+            return Ok(taxToReturn);
+        }
+
+        [HttpPut("edittax")]
+        [ServiceFilter(typeof(ValidationFilterAttribute))]
+        public async Task<IActionResult> EditTax([FromBody] TaxForUpdate taxForUpdateDto)
+        {
+            var result = await _adminService.EditTaxAsync(taxForUpdateDto);
 
             if (result.IsFailure)
             {
@@ -208,9 +224,9 @@ namespace Api.Controllers
 
         [HttpDelete("{id:int}")]
         [Route("deletetax")]
-        public IActionResult DeleteTax(int id)
+        public async Task<IActionResult> DeleteTax(int id)
         {
-            var result = _adminService.DeleteTax(id);
+            var result = await _adminService.DeleteTaxAsync(id);
 
             if (result.IsFailure)
             {
@@ -220,27 +236,11 @@ namespace Api.Controllers
             return NoContent();
         }
 
-        [HttpPut("edittax")]
-        [ServiceFilter(typeof(ValidationFilterAttribute))]
-        public IActionResult EditTax([FromBody] TaxForUpdate taxForUpdateDto)
-        {
-            var result = _adminService.EditTax(taxForUpdateDto);
-
-            if (result.IsFailure)
-            {
-                return BadRequest(result.Error.Message);
-            }
-
-            var taxToReturn = result.Value;
-
-            return Ok(taxToReturn);
-        }
-
         [HttpDelete("{id:int}")]
         [Route("deletetaxgroup")]
-        public IActionResult DeleteTaxGroup(int id)
+        public async Task<IActionResult> DeleteTaxGroup(int id)
         {
-            var result = _adminService.DeleteTaxGroup(id);
+            var result = await _adminService.DeleteTaxGroupAsync(id);
 
             if(result.IsFailure)
             {
@@ -252,9 +252,9 @@ namespace Api.Controllers
 
         [HttpDelete("{id:int}")]
         [Route("deleteitemtaxgroup")]
-        public IActionResult DeleteItemTaxGroup(int id)
+        public async Task<IActionResult> DeleteItemTaxGroup(int id)
         {
-            var result = _adminService.DeleteItemTaxGroup(id);
+            var result = await _adminService.DeleteItemTaxGroupAsync(id);
 
             if(result.IsFailure)
             {
