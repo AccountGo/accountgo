@@ -1,0 +1,228 @@
+﻿@page "/b/financials/chart-of-accounts"
+@inject HttpClient _client
+@inject Microsoft.JSInterop.IJSRuntime JSRuntime
+@using System.Net.Http.Json
+@using System.Text.Json
+@using System.Text.Json.Serialization
+@using System.Net.Http
+
+
+<PageTitle>Chart of Accounts</PageTitle>
+
+<h3>Chart Of Accounts</h3>
+
+@if (getError || accounts is null)
+{
+    <p>Unable to get data. Please try again later.</p>
+}
+else
+{
+    <ul>
+        @foreach (var item in accounts)
+        {
+            <li>@item.AccountName</li>
+        }
+    </ul>
+    <style>
+        .hiddenRow {
+            padding: 4px !important;
+        }
+    </style>
+
+    <div>
+        <table class="table table-condensed table-striped">
+
+            <thead>
+                <tr>
+                    <th>Code</th>
+                    <th>Name</th>
+                    <th>Balance</th>
+                    <th>Debit</th>
+                    <th>Credit</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                @for (int accountIdx = 0; accountIdx < accounts.Count(); ++accountIdx)
+                {
+                    var account = accounts.ToList()[accountIdx];
+                    var accountTargetId = $"asset-{accountIdx}";
+
+                    <tr data-bs-toggle="collapse" data-bs-target="#@accountTargetId" aria-expanded="false" aria-controls="@accountTargetId">
+                        <td>@account.AccountCode</td>
+                        <td>@account.AccountName</td>
+                        <td>@account.TotalBalance</td>
+                        <td>@account.TotalDebitBalance</td>
+                        <td>@account.TotalCreditBalance</td>
+                    </tr>
+
+                    <tr>
+                        <td colspan="12">
+                            <div class="collapse" id="@accountTargetId" aria-expanded="false" aria-controls="@accountTargetId">
+
+                                <table class="table table-striped">
+                                    @for (int childAccountIdx = 0; childAccountIdx < account.ChildAccounts!.Count; ++childAccountIdx)
+                                    {
+                                        var childAccount = account.ChildAccounts.ToList()[childAccountIdx];
+                                        var childAccountTargetId = $"asset-{accountIdx}-{childAccountIdx}";
+
+                                        <tr data-bs-toggle="collapse" data-bs-target="#@childAccountTargetId" aria-expanded="false" aria-controls="@childAccountTargetId">
+                                            <td>@childAccount.AccountCode</td>
+                                            <td>@childAccount.AccountName</td>
+                                            <td>@childAccount.TotalBalance</td>
+                                            <td>@childAccount.TotalDebitBalance</td>
+                                            <td>@childAccount.TotalCreditBalance</td>
+                                        </tr>
+
+                                        <tr>
+                                            <td colspan="12">
+                                                <div class="collapse" id="@childAccountTargetId" aria-expanded="false" aria-controls="@childAccountTargetId">
+
+                                                    <table class="table table-striped">
+                                                        @for (int grandChildAccountIdx = 0; grandChildAccountIdx < childAccount.ChildAccounts!.Count; ++grandChildAccountIdx)
+                                                        {
+                                                            var grandChildAccount = childAccount.ChildAccounts.ToList()[grandChildAccountIdx];
+                                                            var grandChildAccountTargetId = $"asset-{accountIdx}-{childAccountIdx}-{grandChildAccountIdx}";
+
+                                                            <tr data-bs-toggle="collapse" data-bs-target="#@grandChildAccountTargetId" aria-expanded="false" aria-controls="@grandChildAccountTargetId">
+                                                                <td>@grandChildAccount.AccountCode</td>
+                                                                <td>@grandChildAccount.AccountName</td>
+                                                                <td>@grandChildAccount.TotalBalance</td>
+                                                                <td>@grandChildAccount.TotalDebitBalance</td>
+                                                                <td>@grandChildAccount.TotalCreditBalance</td>
+                                                            </tr>
+
+                                                            <tr>
+                                                                <td colspan="12">
+                                                                    <div class="collapse" id="@grandChildAccountTargetId" aria-expanded="false" aria-controls="@grandChildAccountTargetId">
+
+                                                                        <table class="table table-striped">
+                                                                            @foreach (var greatGrandChildAccount in grandChildAccount.ChildAccounts!)
+                                                                            {
+                                                                                <tr>
+                                                                                    <td>@greatGrandChildAccount.AccountCode</td>
+                                                                                    <td>@greatGrandChildAccount.AccountName</td>
+                                                                                    <td>@greatGrandChildAccount.TotalBalance</td>
+                                                                                    <td>@greatGrandChildAccount.TotalDebitBalance</td>
+                                                                                    <td>@greatGrandChildAccount.TotalCreditBalance</td>
+                                                                                </tr>
+                                                                            }
+                                                                        </table>
+
+                                                                    </div>
+                                                                </td>
+                                                            </tr>
+                                                        }
+                                                    </table>
+
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </table>
+
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+}
+
+@code {
+    private List<AccountViewModel>? accounts = [];
+    private bool getError = false;
+    private bool shouldRender = false;
+    private bool jsInteropCalled = false; // Flag to ensure JS interop is called only once
+    private string apiurl = string.Empty;
+    private HttpResponseMessage responseMessage = new();
+    private string error = string.Empty;
+
+    protected override bool ShouldRender() => shouldRender;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // apiurl = $"{Constants.API_URL}financials/accounts";
+        // Set the BaseAddress dynamically
+        _client.BaseAddress = new Uri(Constants.API_URL);
+        apiurl = "financials/accounts";
+
+        var request = new HttpRequestMessage(HttpMethod.Get, apiurl);
+        request.Headers.Add("Accept", "application/json");
+
+        error += "HERE 1\n";
+
+        _client.DefaultRequestHeaders.Accept.Clear();
+        _client.DefaultRequestHeaders.Clear();
+        _client.DefaultRequestHeaders.CacheControl = new System.Net.Http.Headers.CacheControlHeaderValue() { NoCache = true };
+        _client.DefaultRequestHeaders.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
+
+        try
+        {
+            error += "HERE 2\n";
+            var responseMessage = await _client.SendAsync(request).ConfigureAwait(false);
+            error += "HERE 3\n";
+            if (responseMessage.IsSuccessStatusCode)
+            {
+                var responseString = await responseMessage.Content.ReadAsStringAsync();
+
+                // Ensure JsonSerializerOptions are set correctly
+                var options = new JsonSerializerOptions
+                    {
+                        PropertyNameCaseInsensitive = true, // Adjust based on your JSON
+                        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+                    };
+                error += "HERE 4\n";
+
+                try
+                {
+                    error += "HERE 5\n";
+                    accounts = JsonSerializer.Deserialize<List<AccountViewModel>>(responseString, options);
+                    error += "HERE 6\n";
+                }
+                catch (JsonException ex)
+                {
+                    // Log the exception to diagnose deserialization issues
+                    //await JSRuntime.InvokeVoidAsync("logToConsole", $"JSON Deserialization error: {ex.Message}");
+                    error += $"JSON Deserialization error: {ex.Message}\n";
+                    getError = true;
+                }
+            }
+            else
+            {
+                // Log the status code and reason phrase for debugging
+                //await JSRuntime.InvokeVoidAsync("logToConsole", $"HTTP Request failed. Status Code: {responseMessage.StatusCode}, Reason: {responseMessage.ReasonPhrase}");
+                error += $"HTTP Request failed. Status Code: {responseMessage.StatusCode}, Reason: {responseMessage.ReasonPhrase}\n";
+                getError = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            error += "HERE 7\n";
+            // Log the exception to diagnose request issues
+            //await JSRuntime.InvokeVoidAsync("logToConsole", $"HTTP Request error: {ex.Message}");
+            error += $"HTTP Request error: {ex.Message}\n";
+            getError = true;
+        }
+        error += "HERE 8\n";
+        shouldRender = true;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !jsInteropCalled)
+        {
+            await JSRuntime.InvokeVoidAsync(
+                "console.log",
+                $"accounts: {accounts}\n",
+                $"url: {apiurl}\n",
+                $"getError: {getError}\n",
+                $"responseMessage: {responseMessage!.Content.ToString()}\n",
+                $"error: {error}\n"
+           );
+            jsInteropCalled = true; // Ensure this block runs only once
+        }
+    }
+}
