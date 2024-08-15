@@ -1,4 +1,5 @@
-﻿@page "/b/financials/chart-of-accounts"
+﻿@page "/x/financials/chart-of-accounts"
+@using System.Text.Json
 @inject Microsoft.JSInterop.IJSRuntime JSRuntime
 @inject HttpClient Http
 
@@ -130,24 +131,54 @@ else
 }
 
 @code {
-    private IEnumerable<AccountViewModel>? accounts = [];
-    private bool getError = false;
-    private bool shouldRender = false;
+    private AccountViewModel[]? accounts = [];
+    private bool getError;
+    private bool shouldRender;
     private bool jsInteropCalled = false; // Flag to ensure JS interop is called only once
-
+    private string url = string.Empty;
+    JsonElement data;
+    string error = string.Empty;
 
     protected override bool ShouldRender() => shouldRender;
 
     protected override async Task OnInitializedAsync()
     {
-        accounts = await Http.GetFromJsonAsync<AccountViewModel[]>($"{Constants.API_URL}financials/accounts");
+        var options = new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true
+            };
+        try
+        {
+            error += $"BASE URL: {Http.BaseAddress}\n";
+            url = $"{Constants.API_URL}financials/accounts";
+            //accounts = await Http.GetFromJsonAsync<AccountViewModel[]>(url);
+
+            error += "1\n";
+            data = await Http.GetFromJsonAsync<JsonElement>(url);
+            error += "2\n";
+            // get total property from JSON response data
+            error += "3\n";
+            error += data.GetProperty("accountName").GetInt32();
+        }
+        catch (Exception ex)
+        {
+            getError = true;
+            Console.WriteLine(ex.Message);
+        }
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender && !jsInteropCalled)
         {
-            await JSRuntime.InvokeVoidAsync("console.log", accounts);
+            await JSRuntime.InvokeVoidAsync(
+                "console.log",
+                $"accounts: {accounts}\n",
+                $"url: {url}\n",
+                $"getError: {getError}\n",
+                $"error: {error}\n"
+           );
+            //await JSRuntime.InvokeVoidAsync("getError", getError);
             jsInteropCalled = true; // Ensure this block runs only once
         }
     }
