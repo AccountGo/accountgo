@@ -1,4 +1,5 @@
 using System;
+using Api.ActionFilters;
 using Api.Data;
 using Api.Data.Repositories;
 using Api.Extensions;
@@ -13,6 +14,12 @@ using Microsoft.Extensions.Hosting;
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
+
+// Validation
+builder.Services.AddScoped<ValidationFilterAttribute>();
+
+// Mapping
+builder.Services.AddAutoMapper(typeof(Program));
 
 // authentication
 builder.Services.AddScoped<IAuthenticationService, AuthenticationService>();

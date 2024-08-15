@@ -12,14 +12,14 @@ namespace Api.Data
     {
         private readonly ApiDbContext _context;
         private readonly ILogger<T> _logger;
-        private DbSet<T> _entities;
+        private DbSet<T>? _entities = null;
 
         public EfRepository(ILogger<T> logger, ApiDbContext context)
         {
             _logger = logger;
             _context = context;
         }
-
+         
         #region Properties
 
         /// <summary>
@@ -71,7 +71,7 @@ namespace Api.Data
         /// <returns>Entity</returns>
         public virtual T GetById(object id)
         {
-            return this.Entities.FirstOrDefault(x => x.Id == (int)id);
+            return this.Entities.FirstOrDefault(x => x.Id == (int)id)!;
         }
 
         /// <summary>
@@ -141,6 +141,28 @@ namespace Api.Data
         }
 
         /// <summary>
+        /// Insert entity asynchronously
+        /// </summary>
+        /// <param name="entities">Entity</param>
+        public async virtual Task InsertAsync(T entity)
+        {
+            try
+            {
+                if (entity == null)
+                    throw new ArgumentNullException("entity");
+
+                this.Entities.Add(entity);
+
+                await this._context.SaveChangesAsync();
+
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex.Message);
+            }
+        }
+
+        /// <summary>
         /// Update entity
         /// </summary>
         /// <param name="entity">Entity</param>
@@ -166,6 +188,25 @@ namespace Api.Data
             //    throw fail;
             //}
             catch (Exception ex) {
+                _logger.LogError(ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Update entity asynchronously
+        /// </summary>
+        /// <param name="entity">Entity</param>
+        public async virtual Task UpdateAsync(T entity)
+        {
+            try
+            {
+                if (entity == null)
+                    throw new ArgumentNullException("entity");
+
+                await _context.SaveChangesAsync();
+            }
+            catch (Exception ex)
+            {
                 _logger.LogError(ex.Message);
             }
         }
@@ -198,6 +239,27 @@ namespace Api.Data
             //    throw fail;
             //}
             catch (Exception ex) {
+                _logger.LogError(ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Delete entity asynchronously
+        /// </summary>
+        /// <param name="entity">Entity</param>
+        public async virtual Task DeleteAsync(T entity)
+        {
+            try
+            {
+                if (entity == null)
+                    throw new ArgumentNullException("entity");
+
+                this.Entities.Remove(entity);
+
+                await this._context.SaveChangesAsync();
+            }
+            catch (Exception ex)
+            {
                 _logger.LogError(ex.Message);
             }
         }

@@ -10,7 +10,7 @@ namespace Api.Controllers
             Microsoft.Extensions.Primitives.StringValues val = new Microsoft.Extensions.Primitives.StringValues();
 
             if (HttpContext.Request.Headers.TryGetValue("UserName", out val))
-                username = val[0].ToString();
+                username = val[0]!.ToString();
 
             return username;
         }

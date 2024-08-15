@@ -1,17 +1,14 @@
 ﻿using Core.Domain.Auditing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
-using System;
-using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using System.Linq;
 
 namespace Api.Data
 {
     public class AuditLogHelper
     {
-        static AuditableEntity _auditableEntity = null;
+        static AuditableEntity? _auditableEntity = null;
 
         public static IDictionary<DateTime, EntityEntry> addedEntities = new Dictionary<DateTime, EntityEntry>();
 
@@ -22,11 +19,11 @@ namespace Api.Data
             // Get the Table() attribute, if one exists
             Type entryType = dbEntry.Entity.GetType();
 
-            TableAttribute tableAttr = entryType.GetCustomAttributes(typeof(TableAttribute), false).SingleOrDefault() as TableAttribute;
+            TableAttribute? tableAttr = entryType.GetCustomAttributes(typeof(TableAttribute), false).SingleOrDefault() as TableAttribute;
 
             if(tableAttr == null)
             {
-                tableAttr = entryType.BaseType.GetCustomAttributes(typeof(TableAttribute), false).SingleOrDefault() as TableAttribute;
+                tableAttr = entryType.BaseType!.GetCustomAttributes(typeof(TableAttribute), false).SingleOrDefault() as TableAttribute;
             }
 
             // Get table name (if it has a Table attribute, use that, otherwise get the pluralized name)
@@ -35,7 +32,7 @@ namespace Api.Data
             if (tableName.IndexOf("_") > 0)
                 tableName = tableName.Substring(0, tableName.IndexOf("_"));
 
-            bool isSchemaExt = tableAttr.Schema == "ext";
+            bool isSchemaExt = tableAttr!.Schema == "ext";
 
             if (!isSchemaExt)
             {
@@ -80,7 +77,7 @@ namespace Api.Data
                             changeTime,
                             AuditEventTypes.Deleted,
                             tableName,
-                            dbEntry.Property(keyName).CurrentValue.ToString(),
+                            dbEntry.Property(keyName).CurrentValue!.ToString(),
                             null,
                             null,
                             dbEntryObject);
@@ -97,7 +94,7 @@ namespace Api.Data
                         if (isSchemaExt || IsAttributeAuditable(tableName, propertyName))
                         {
                             var property = dbEntry.Property(propertyName);
-                            var keyValue = dbEntry.Property(keyName).CurrentValue.ToString();
+                            var keyValue = dbEntry.Property(keyName).CurrentValue!.ToString();
 
                             if (!Equals(property.CurrentValue, property.OriginalValue))
                             {
@@ -125,7 +122,7 @@ namespace Api.Data
         }
 
         #region Private Methods
-        private static AuditLog CreateAuditLog(string username, DateTime changeTime, AuditEventTypes type, string tableName, string recordId, string fieldname, string originalvalue, string newvalue)
+        private static AuditLog CreateAuditLog(string username, DateTime changeTime, AuditEventTypes type, string tableName, string? recordId, string? fieldname, string? originalvalue, string? newvalue)
         {
             var auditLog = new AuditLog()
             {
@@ -156,7 +153,7 @@ namespace Api.Data
         {
             bool auditable = true;
 
-            if (null == _auditableEntity.AuditableAttributes
+            if (null == _auditableEntity!.AuditableAttributes
                 .FirstOrDefault(attr => attr.AttributeName == columnname && attr.AuditableEntity.EntityName == tablename))
                 auditable = false;
 
@@ -182,7 +179,7 @@ namespace Api.Data
         private static void FillAuditableEntityAndAttributes(EntityEntry dbEntry)
         {
             Type entryType = dbEntry.Entity.GetType();
-            TableAttribute tableAttr = entryType.GetCustomAttributes(typeof(TableAttribute), false).SingleOrDefault() as TableAttribute;
+            TableAttribute? tableAttr = entryType.GetCustomAttributes(typeof(TableAttribute), false).SingleOrDefault() as TableAttribute;
             string tableName = tableAttr != null ? tableAttr.Name : dbEntry.Entity.GetType().Name;
 
             _auditableEntity = ((ApiDbContext)dbEntry.Context).AuditableEntities

@@ -4,13 +4,13 @@ namespace Dto.Inventory
 {
     public class Item : BaseDto
     {
-        public string No { get; set; }
+        public string? No { get; set; }
         [Required]
-        public string Code { get; set; }
+        public string? Code { get; set; }
         [Required]
-        public string Description { get; set; }
-        public string PurchaseDescription { get; set; }
-        public string SellDescription { get; set; }
+        public string? Description { get; set; }
+        public string? PurchaseDescription { get; set; }
+        public string? SellDescription { get; set; }
         public decimal? Cost { get; set; }
         public decimal? Price { get; set; }
         public decimal? QuantityOnHand { get; set; }
@@ -25,7 +25,7 @@ namespace Dto.Inventory
         public int? InventoryAccountId { get; set; }
         public int? CostOfGoodsSoldAccountId { get; set; }
         public int? InventoryAdjustmentAccountId { get; set; }
-        public string ItemTaxGroupName { get; set; }
-        public string Measurement { get; set; }
+        public string? ItemTaxGroupName { get; set; }
+        public string? Measurement { get; set; }
     }
 }

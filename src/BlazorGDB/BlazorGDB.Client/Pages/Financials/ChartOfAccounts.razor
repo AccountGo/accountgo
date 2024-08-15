@@ -152,7 +152,6 @@ else
             error += $"BASE URL: {Http.BaseAddress}\n";
             url = $"{Constants.API_URL}financials/accounts";
             //accounts = await Http.GetFromJsonAsync<AccountViewModel[]>(url);
-            
             error += "1\n";
             data = await Http.GetFromJsonAsync<JsonElement>(url);
             error += "2\n";

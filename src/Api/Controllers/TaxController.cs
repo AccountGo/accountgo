@@ -3,6 +3,9 @@ using Dto.TaxSystem;
 using Services.TaxSystem;
 using System.Collections.Generic;
 using System.Linq;
+using Services.Administration;
+using Services.Financial;
+using Api.ActionFilters;
 
 namespace Api.Controllers
 {
@@ -10,10 +13,14 @@ namespace Api.Controllers
     public class TaxController : BaseController
     {
         private readonly ITaxService _taxService;
+        private readonly IAdministrationService _adminService;
+        private readonly IFinancialService _financialService;
 
-        public TaxController(ITaxService taxService)
+        public TaxController(ITaxService taxService, IAdministrationService adminService, IFinancialService financialService)
         {
             _taxService = taxService;
+            _adminService = adminService;
+            _financialService = financialService;
         }
 
         /// <summary>
@@ -181,6 +188,80 @@ namespace Api.Controllers
             taxSystemDto.ItemTaxGroups = itemTaxGroupsDto;
 
             return new ObjectResult(taxSystemDto);
+        }
+
+        [HttpPost("addnewtax")]
+        [ServiceFilter(typeof(ValidationFilterAttribute))]
+        public async Task<IActionResult> AddNewTax([FromBody] TaxForCreation taxForCreationDto)
+        {
+            var result = await _adminService.CreateTaxAsync(taxForCreationDto);
+
+            if (result.IsFailure)
+            {
+                return BadRequest(result.Error.Message);
+            }
+
+            var taxToReturn = result.Value;
+
+            return Ok(taxToReturn);
+        }
+
+        [HttpPut("edittax")]
+        [ServiceFilter(typeof(ValidationFilterAttribute))]
+        public async Task<IActionResult> EditTax([FromBody] TaxForUpdate taxForUpdateDto)
+        {
+            var result = await _adminService.EditTaxAsync(taxForUpdateDto);
+
+            if (result.IsFailure)
+            {
+                return BadRequest(result.Error.Message);
+            }
+
+            var taxToReturn = result.Value;
+
+            return Ok(taxToReturn);
+        }
+
+        [HttpDelete("{id:int}")]
+        [Route("deletetax")]
+        public async Task<IActionResult> DeleteTax(int id)
+        {
+            var result = await _adminService.DeleteTaxAsync(id);
+
+            if (result.IsFailure)
+            {
+                return BadRequest(result.Error.Message);
+            }
+
+            return NoContent();
+        }
+
+        [HttpDelete("{id:int}")]
+        [Route("deletetaxgroup")]
+        public async Task<IActionResult> DeleteTaxGroup(int id)
+        {
+            var result = await _adminService.DeleteTaxGroupAsync(id);
+
+            if(result.IsFailure)
+            {
+                return BadRequest(result.Error.Message);
+            }
+
+            return NoContent();
+        }
+
+        [HttpDelete("{id:int}")]
+        [Route("deleteitemtaxgroup")]
+        public async Task<IActionResult> DeleteItemTaxGroup(int id)
+        {
+            var result = await _adminService.DeleteItemTaxGroupAsync(id);
+
+            if(result.IsFailure)
+            {
+                return BadRequest(result.Error.Message);
+            }
+
+            return NoContent();
         }
     }
 }

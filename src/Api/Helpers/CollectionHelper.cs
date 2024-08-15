@@ -33,9 +33,9 @@ namespace Api.Helpers
             return table;
         }
 
-        public static IList<T> ConvertTo<T>(IList<DataRow> rows)
+        public static IList<T>? ConvertTo<T>(IList<DataRow> rows)
         {
-            IList<T> list = null;
+            IList<T>? list = null;
 
             if (rows != null)
             {
@@ -43,15 +43,15 @@ namespace Api.Helpers
 
                 foreach (DataRow row in rows)
                 {
-                    T item = CreateItem<T>(row);
-                    list.Add(item);
+                    T? item = CreateItem<T>(row);
+                    list.Add(item!);
                 }
             }
 
             return list;
         }
 
-        public static IList<T> ConvertTo<T>(DataTable table)
+        public static IList<T>? ConvertTo<T>(DataTable table)
         {
             if (table == null)
             {
@@ -68,16 +68,16 @@ namespace Api.Helpers
             return ConvertTo<T>(rows);
         }
 
-        public static T CreateItem<T>(DataRow row)
+        public static T? CreateItem<T>(DataRow row)
         {
-            T obj = default(T);
+            T? obj = default(T);
             if (row != null)
             {
                 obj = Activator.CreateInstance<T>();
 
                 foreach (DataColumn column in row.Table.Columns)
                 {
-                    PropertyInfo prop = obj.GetType().GetProperty(column.ColumnName);
+                    PropertyInfo prop = obj!.GetType().GetProperty(column.ColumnName)!;
                     try
                     {
                         object value = row[column.ColumnName];

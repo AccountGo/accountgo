@@ -12,6 +12,8 @@ using Core.Domain.TaxSystem;
 using Core.Domain.Financials;
 using Core.Domain.Security;
 using Core.Domain.Auditing;
+using Core.Domain.Error;
+using System.Threading.Tasks;
 
 namespace Services.Administration
 {
@@ -20,9 +22,16 @@ namespace Services.Administration
         ICollection<Tax> GetAllTaxes(bool includeInActive);
         ICollection<ItemTaxGroup> GetItemTaxGroups(bool includeInActive);
         ICollection<TaxGroup> GetTaxGroups(bool includeInActive);
+        Task<Result<Dto.TaxSystem.Tax>> CreateTaxAsync(Dto.TaxSystem.TaxForCreation taxForCreationDto);
         void AddNewTax(Tax tax);
-        void UpdateTax(Tax tax);
-        void DeleteTax(int id);
+        Task AddNewTaxAsync(Tax tax);
+        TaxGroup AddNewTaxGroup(Dto.TaxSystem.TaxGroup taxGroupDto);
+        ItemTaxGroup AddNewItemTaxGroup(Dto.TaxSystem.ItemTaxGroup itemTaxGroupDto);
+        Task<Result<Dto.TaxSystem.Tax>> EditTaxAsync(Dto.TaxSystem.TaxForUpdate taxForUpdateDto);
+        Task UpdateTaxAsync(Tax tax);
+        Task<Result<Dto.TaxSystem.Tax>> DeleteTaxAsync(int id);
+        Task<Result<Dto.TaxSystem.TaxGroup>> DeleteTaxGroupAsync(int id);
+        Task<Result<Dto.TaxSystem.ItemTaxGroup>> DeleteItemTaxGroupAsync(int id);
         void InitializeCompany();
         Company GetDefaultCompany();
         ICollection<PaymentTerm> GetPaymentTerms();

@@ -203,7 +203,7 @@ namespace AccountGoWeb.Controllers
         {
             if (!string.IsNullOrEmpty(addRowBtn))
             {
-                Dto.SalesInvoiceLines.Add(new SalesInvoiceLine
+                Dto.SalesInvoiceLines!.Add(new SalesInvoiceLine
                 {
                     Amount = 0,
                     Quantity = 1,

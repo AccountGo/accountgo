@@ -35,7 +35,7 @@ namespace Api.Data.Repositories
             throw new NotImplementedException();
         }
 
-        public User GetUser(string username)
+        public User? GetUser(string username)
         {
             return _context.Users
                 .Include(u => u.Roles)

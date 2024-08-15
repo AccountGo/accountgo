@@ -33,7 +33,7 @@ namespace Dto.Sales
             decimal total = 0;
             foreach (var line in SalesOrderLines)
             {
-                decimal quantityXamount = (line.Amount.Value * line.Quantity.Value);
+                decimal quantityXamount = (line.Amount!.Value * line.Quantity!.Value);
                 decimal discount = 0;
                 if (line.Discount.HasValue)
                     discount = (line.Discount.Value / 100) > 0 ? (quantityXamount * (line.Discount.Value / 100)) : 0;
@@ -50,9 +50,9 @@ namespace Dto.Sales
         public decimal? Quantity { get; set; }
         public decimal? Discount { get; set; }
         public decimal? Amount { get; set; }
-        public string MeasurementDescription { get; set; }
-        public string ItemNo { get; set; }
-        public string ItemDescription { get; set; }
+        public string? MeasurementDescription { get; set; }
+        public string? ItemNo { get; set; }
+        public string? ItemDescription { get; set; }
         public decimal? RemainingQtyToInvoice { get; set; }
     }
 }

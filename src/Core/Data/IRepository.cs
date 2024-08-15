@@ -11,6 +11,8 @@ namespace Core.Data
     using Domain;
     using System;
     using System.Linq;
+    using System.Threading.Tasks;
+
     /// <summary>
     /// Repository
     /// </summary>
@@ -18,8 +20,11 @@ namespace Core.Data
     {
         T GetById(object id);
         void Insert(T entity);
+        Task InsertAsync(T entity);
         void Update(T entity);
+        Task UpdateAsync(T enitity);
         void Delete(T entity);
+        Task DeleteAsync(T entity);
         IQueryable<T> Table { get; }
 
         IQueryable<T> GetAllIncluding(params System.Linq.Expressions.Expression<Func<T, object>>[] includeProperties);

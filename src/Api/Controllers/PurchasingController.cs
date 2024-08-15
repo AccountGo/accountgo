@@ -1,10 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Services.Administration;
-using Services.Purchasing;
-using System;
-using System.Linq;
-using System.Collections.Generic;
 using Services.Financial;
+using Services.Purchasing;
 
 namespace Api.Controllers
 {
@@ -37,7 +34,7 @@ namespace Api.Controllers
                 {
                     Id = purchaseOrder.Id,
                     No = purchaseOrder.No,
-                    VendorId = purchaseOrder.VendorId.Value,
+                    VendorId = purchaseOrder.VendorId!.Value,
                     VendorName = purchaseOrder.Vendor.Party.Name,
                     OrderDate = purchaseOrder.Date,
                     ReferenceNo = purchaseOrder.ReferenceNo,
@@ -74,7 +71,7 @@ namespace Api.Controllers
             purchaseOrderDto = new Dto.Purchasing.PurchaseOrder()
             {
                 Id = purchaseOrder.Id,               
-                VendorId = purchaseOrder.VendorId.Value,
+                VendorId = purchaseOrder.VendorId!.Value,
                 VendorName = purchaseOrder.Vendor.Party.Name,
                 OrderDate = purchaseOrder.Date,
                 PaymentTermId = purchaseOrder.PaymentTermId,
@@ -105,7 +102,7 @@ namespace Api.Controllers
         [Route("savepurchaseorder")]
         public IActionResult SavePurchaseOrder([FromBody]Dto.Purchasing.PurchaseOrder purchaseOrderDto)
         {
-            string[] errors = null;
+            string[]? errors = null;
 
             if (!ModelState.IsValid)
             {
@@ -120,7 +117,7 @@ namespace Api.Controllers
             try
             {
                 bool isNew = purchaseOrderDto.Id == 0;
-                Core.Domain.Purchases.PurchaseOrderHeader purchaseOrder = null;
+                Core.Domain.Purchases.PurchaseOrderHeader? purchaseOrder = null;
 
                 if (isNew)
                 {
@@ -142,7 +139,7 @@ namespace Api.Controllers
                         var existingLine = purchaseOrder.PurchaseOrderLines.Where(id => id.Id == line.Id).FirstOrDefault();
                         if (purchaseOrder.PurchaseOrderLines.Where(id => id.Id == line.Id).FirstOrDefault() != null)
                         {
-                            existingLine.Amount = line.Amount.GetValueOrDefault();
+                            existingLine!.Amount = line.Amount.GetValueOrDefault();
                             existingLine.Discount = line.Discount.GetValueOrDefault();
                             existingLine.Quantity = line.Quantity.GetValueOrDefault();
                             existingLine.ItemId = line.ItemId.GetValueOrDefault();
@@ -219,7 +216,7 @@ namespace Api.Controllers
                 {
                     Id = purchaseInvoice.Id,
                     No = purchaseInvoice.No,
-                    VendorId = purchaseInvoice.VendorId.Value,
+                    VendorId = purchaseInvoice.VendorId!.Value,
                     VendorName = purchaseInvoice.Vendor.Party.Name,
                     InvoiceDate = purchaseInvoice.Date,
                     AmountPaid = purchaseInvoice.AmountPaid(),
@@ -256,7 +253,7 @@ namespace Api.Controllers
             var purchaseInvoiceDto = new Dto.Purchasing.PurchaseInvoice()
             {
                 Id = purchaseInvoice.Id,
-                VendorId = purchaseInvoice.VendorId.Value,
+                VendorId = purchaseInvoice.VendorId!.Value,
                 VendorName = purchaseInvoice.Vendor.Party.Name,
                 InvoiceDate = purchaseInvoice.Date,
                 AmountPaid = purchaseInvoice.AmountPaid(),
@@ -290,7 +287,7 @@ namespace Api.Controllers
         [Route("PostPurchaseInvoice")]
         public IActionResult PostPurchaseInvoice([FromBody]Dto.Purchasing.PurchaseInvoice purchaseInvoiceDto)
         {
-            string[] errors = null;
+            string[]? errors = null;
 
             try
             {
@@ -319,7 +316,7 @@ namespace Api.Controllers
         [Route("SavePurchaseInvoice")]
         public IActionResult SavePurchaseInvoice([FromBody]Dto.Purchasing.PurchaseInvoice purchaseInvoiceDto)
         {
-            string[] errors = null;
+            string[]? errors = null;
 
             try
             {
@@ -334,8 +331,8 @@ namespace Api.Controllers
                 }
 
                 bool isNew = purchaseInvoiceDto.Id == 0;
-                Core.Domain.Purchases.PurchaseInvoiceHeader purchaseInvoice = null;
-                Core.Domain.Purchases.PurchaseOrderHeader purchaseOrder = null;
+                Core.Domain.Purchases.PurchaseInvoiceHeader? purchaseInvoice = null;
+                Core.Domain.Purchases.PurchaseOrderHeader? purchaseOrder = null;
 
                 // Creating a new invoice
                 if (isNew)
@@ -413,7 +410,7 @@ namespace Api.Controllers
                         var existingLine = purchaseInvoice.PurchaseInvoiceLines.Where(id => id.Id == line.Id).FirstOrDefault();
                         if (purchaseInvoice.PurchaseInvoiceLines.Where(id => id.Id == line.Id).FirstOrDefault() != null)
                         {
-                            existingLine.Amount = line.Amount.GetValueOrDefault();
+                            existingLine!.Amount = line.Amount.GetValueOrDefault();
                             existingLine.Discount = line.Discount.GetValueOrDefault();
                             existingLine.Quantity = line.Quantity.GetValueOrDefault();
                             existingLine.ItemId = line.ItemId.GetValueOrDefault();
@@ -446,7 +443,7 @@ namespace Api.Controllers
                             if (purchaseOrder == null)
                             {
                                 // use the last value of existingLine
-                                purchaseOrder = _purchasingService.GetPurchaseOrderById(existingLine.PurchaseOrderLine.PurchaseOrderHeaderId);
+                                purchaseOrder = _purchasingService.GetPurchaseOrderById(existingLine!.PurchaseOrderLine.PurchaseOrderHeaderId);
                                 purchaseOrder.PurchaseOrderLines.Add(purchaseOrderLine);
                             }
 
@@ -606,7 +603,7 @@ namespace Api.Controllers
         [Route("SavePayment")]
         public IActionResult SavePayment([FromBody]dynamic paymentDto)
         {
-            string[] errors = null;
+            string[]? errors = null;
 
             try
             {
@@ -623,11 +620,11 @@ namespace Api.Controllers
                 var bank = _financialService.GetCashAndBanks().Where(id => id.Id == (int)paymentDto.AccountId).FirstOrDefault();
 
                 _purchasingService.SavePayment(
-                    (int)paymentDto.InvoiceId, 
-                    (int)paymentDto.VendorId, 
-                    ((int?)bank.AccountId).GetValueOrDefault(), 
-                    (decimal)paymentDto.AmountToPay, 
-                    (DateTime)paymentDto.Date);
+                    (int) paymentDto.InvoiceId, 
+                    (int) paymentDto.VendorId, 
+                    ((int?) bank!.AccountId).GetValueOrDefault(), 
+                    (decimal) paymentDto.AmountToPay, 
+                    (DateTime) paymentDto.Date);
 
                 return new ObjectResult(Ok());
             }
