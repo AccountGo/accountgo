@@ -6,6 +6,7 @@ namespace Services.TaxSystem
 {
     public interface ITaxService
     {
+        Core.Domain.TaxSystem.Tax GetTaxById(int taxId);
         IEnumerable<Core.Domain.TaxSystem.Tax> GetTaxes(bool includeInActive = false);
         IEnumerable<Core.Domain.TaxSystem.TaxGroup> GetTaxGroups();
         IEnumerable<Core.Domain.TaxSystem.ItemTaxGroup> GetItemTaxGroups();

@@ -6,8 +6,8 @@ namespace Dto.Financial
     {
         public DateTime JournalDate { get; set; }
         public int? VoucherType { get; set; }
-        public string ReferenceNo { get; set; }
-        public string Memo { get; set; }
+        public string? ReferenceNo { get; set; }
+        public string? Memo { get; set; }
         public bool? Posted { get; set; }
         public bool? ReadyForPosting { get; set; }
         public decimal? debitAmount { get { return GetDebitAmount(); } }
@@ -47,6 +47,6 @@ namespace Dto.Financial
         public int? AccountId { get; set; }
         public int DrCr { get; set; }
         public decimal? Amount { get; set; }
-        public string Memo { get; set; }
+        public string? Memo { get; set; }
     }
 }

@@ -40,12 +40,12 @@ namespace Api.Service
         public async Task<Token> CreateToken(bool populateExp)
         {
             var signingCredentials = GetSigningCredentials();
-            var claims = await GetClaims();
+            var claims = GetClaims();
             var tokenOptions = GenerateTokenOptions(signingCredentials, claims);
 
             var refreshToken = GenerateRefreshToken();
 
-            _user.RefreshToken = refreshToken;
+            _user!.RefreshToken = refreshToken;
 
             if(populateExp)
                 _user.RefreshTokenExpiryTime = DateTime.Now.AddDays(7);
@@ -61,7 +61,7 @@ namespace Api.Service
         {
             var principal = GetPrincipalFromExpriedToken(tokenDto.AccessToken);
 
-            var user = await _userManager.FindByEmailAsync(principal.Identity.Name);
+            var user = await _userManager.FindByEmailAsync(principal.Identity!.Name!);
             if (user == null || user.RefreshToken != tokenDto.RefreshToken || user.RefreshTokenExpiryTime <= DateTime.Now)
                 throw new SecurityTokenException("Invalid Client request. The tokenDto has some invalid values.");
 
@@ -74,18 +74,18 @@ namespace Api.Service
         {
             var secretKey = _configuration["SECRET:key"];
 
-            var key = Encoding.UTF8.GetBytes(secretKey);
+            var key = Encoding.UTF8.GetBytes(secretKey!);
             var secret = new SymmetricSecurityKey(key);
 
             return new SigningCredentials(secret, SecurityAlgorithms.HmacSha256);
         }
 
-        private async Task<List<Claim>> GetClaims()
+        private List<Claim> GetClaims()
         {
             var claims = new List<Claim>
             {
-                new Claim(ClaimTypes.Name, _user.UserName),
-                new Claim(ClaimTypes.Email, _user.Email)
+                new Claim(ClaimTypes.Name, _user!.UserName!),
+                new Claim(ClaimTypes.Email, _user!.Email!)
             };
 
             return claims;
@@ -130,7 +130,7 @@ namespace Api.Service
                 ValidateAudience = true,
                 ValidateIssuer = true,
                 ValidateIssuerSigningKey = true,
-                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey)),
+                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey!)),
                 ValidateLifetime = true,
                 ValidIssuer = validIssuer,
                 ValidAudience = validAudience

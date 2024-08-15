@@ -43,6 +43,18 @@ namespace Services.TaxSystem
             _taxGroupTaxRepo = taxGroupTaxRepo;
         }
 
+        public Tax GetTaxById(int taxId)
+        {
+            var taxEntity = _taxRepo
+                .GetAllIncluding(s => s.SalesAccount, p => p.PurchasingAccount, tgt => tgt.TaxGroupTaxes, itgt => itgt.ItemTaxGroupTaxes)
+                .FirstOrDefault(tax => tax.Id == taxId);
+
+            if(taxEntity is null)
+                throw new NotImplementedException("Tax not found");
+
+            return taxEntity;
+        }
+
         public IEnumerable<Tax> GetTaxes(bool includeInActive = false)
         {
             var taxes = _taxRepo
