@@ -21,6 +21,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
+using System.Threading.Tasks;
 
 namespace Services.Administration
 {
@@ -81,7 +82,7 @@ namespace Services.Administration
             return query.ToList();
         }
 
-        public Result<Dto.TaxSystem.Tax> CreateTax(Dto.TaxSystem.TaxForCreation taxForCreationDto)
+        public async Task<Result<Dto.TaxSystem.Tax>> CreateTaxAsync(Dto.TaxSystem.TaxForCreation taxForCreationDto)
         {
             var query = from f in _taxRepo.Table
                         where f.TaxName == taxForCreationDto.TaxName || f.TaxCode == taxForCreationDto.TaxCode 
@@ -118,7 +119,7 @@ namespace Services.Administration
                 ItemTaxGroup = itemTaxGroupEntity,
             });
 
-            AddNewTax(taxEntity);
+            await AddNewTaxAsync(taxEntity);
             var taxToReturn = _mapper.Map<Dto.TaxSystem.Tax>(taxEntity);
             
             return Result<Dto.TaxSystem.Tax>.Success(taxToReturn);
@@ -127,6 +128,11 @@ namespace Services.Administration
         public void AddNewTax(Tax tax)
         {
             _taxRepo.Insert(tax);
+        }
+
+        public async Task AddNewTaxAsync(Tax tax)
+        {
+            await _taxRepo.InsertAsync(tax);
         }
 
         public TaxGroup AddNewTaxGroup(Dto.TaxSystem.TaxGroup taxGroupDto)
@@ -153,7 +159,7 @@ namespace Services.Administration
             return itemTaxGroupEntity;
         }
 
-        public Result<Dto.TaxSystem.Tax> EditTax(Dto.TaxSystem.TaxForUpdate taxForUpdateDto)
+        public async Task<Result<Dto.TaxSystem.Tax>> EditTaxAsync(Dto.TaxSystem.TaxForUpdate taxForUpdateDto)
         {
             var taxEntity = _taxService.GetTaxById(taxForUpdateDto.Tax.Id);
             if(taxEntity is null)
@@ -191,18 +197,18 @@ namespace Services.Administration
                 ItemTaxGroup = itemTaxGroupEntity
             });
 
-            UpdateTax(taxEntity);
+            await UpdateTaxAsync(taxEntity);
             var taxToRetun = _mapper.Map<Dto.TaxSystem.Tax>(taxEntity);
 
             return Result<Dto.TaxSystem.Tax>.Success(taxToRetun);    
         }
 
-        public void UpdateTax(Tax tax)
+        public async Task UpdateTaxAsync(Tax tax)
         {
-            _taxRepo.Update(tax);
+            await _taxRepo.UpdateAsync(tax);
         }
 
-        public Result<Dto.TaxSystem.Tax> DeleteTax(int taxId)
+        public async Task<Result<Dto.TaxSystem.Tax>> DeleteTaxAsync(int taxId)
         {
             var tax = _taxRepo.GetById(taxId);
 
@@ -212,12 +218,12 @@ namespace Services.Administration
                 return Result<Dto.TaxSystem.Tax>.Failure(Error.RecordNotFound(message));
             }
 
-            _taxRepo.Delete(tax);
+            await _taxRepo.DeleteAsync(tax);
 
             return Result<Dto.TaxSystem.Tax>.Success(null);
         }
 
-        public Result<Dto.TaxSystem.TaxGroup> DeleteTaxGroup(int taxGroupId)
+        public async Task<Result<Dto.TaxSystem.TaxGroup>> DeleteTaxGroupAsync(int taxGroupId)
         {
             var taxGroup = _taxGroupRepo.GetById(taxGroupId);
 
@@ -227,12 +233,12 @@ namespace Services.Administration
                 return Result<Dto.TaxSystem.TaxGroup>.Failure(Error.RecordNotFound(message));
             }
                 
-            _taxGroupRepo.Delete(taxGroup);
+            await _taxGroupRepo.DeleteAsync(taxGroup);
 
             return Result<Dto.TaxSystem.TaxGroup>.Success(null);
         }
 
-        public Result<Dto.TaxSystem.ItemTaxGroup> DeleteItemTaxGroup(int itemTaxGroupId)
+        public async Task<Result<Dto.TaxSystem.ItemTaxGroup>> DeleteItemTaxGroupAsync(int itemTaxGroupId)
         {
             var itemTaxGroup = _itemTaxGroupRepo.GetById(itemTaxGroupId);
 
@@ -242,7 +248,7 @@ namespace Services.Administration
                 return Result<Dto.TaxSystem.ItemTaxGroup>.Failure(Error.RecordNotFound(message));
             }
                 
-            _itemTaxGroupRepo.Delete(itemTaxGroup);
+            await _itemTaxGroupRepo.DeleteAsync(itemTaxGroup);
 
             return Result<Dto.TaxSystem.ItemTaxGroup>.Success(null);
         }
