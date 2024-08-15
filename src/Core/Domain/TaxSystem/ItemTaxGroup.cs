@@ -7,6 +7,7 @@
 //-----------------------------------------------------------------------
 
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Core.Domain.TaxSystem
@@ -20,6 +21,8 @@ namespace Core.Domain.TaxSystem
         }
 
         public string Name { get; set; }
+
+        [Display(Name = "Fully Exempt")]
         public bool IsFullyExempt { get; set; }
 
         public virtual ICollection<ItemTaxGroupTax> ItemTaxGroupTax { get; set; }
