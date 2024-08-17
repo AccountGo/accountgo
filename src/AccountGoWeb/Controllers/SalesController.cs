@@ -199,7 +199,7 @@ namespace AccountGoWeb.Controllers
         }
 
         [HttpPost]
-        public async System.Threading.Tasks.Task<IActionResult> AddSalesInvoice(SalesInvoice Dto, string addRowBtn)
+        public async System.Threading.Tasks.Task<IActionResult> AddSalesInvoice(SalesInvoice Dto, string? addRowBtn)
         {
             if (!string.IsNullOrEmpty(addRowBtn))
             {
