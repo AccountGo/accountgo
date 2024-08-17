@@ -18,7 +18,7 @@
                     <div class="col-sm-8">
                         <select class="form-control" asp-for="CustomerId" asp-items="@ViewBag.Customers"
                             id="optCustomer"></select>
-                        <span asp-validation-for="CustomerId" class="danger"></span>
+                        <span asp-validation-for="CustomerId" class="text-danger"></span>
                     </div>
                 </div>
                 @* Payment Term *@
@@ -27,7 +27,7 @@
                     <div class="col-sm-8">
                         <select class="form-control" asp-for="PaymentTermId" asp-items="@ViewBag.PaymentTerms"
                             id="optPayment"></select>
-                        <span asp-validation-for="PaymentTermId" class="danger"></span>
+                        <span asp-validation-for="PaymentTermId" class="text-danger"></span>
                     </div>
                 </div>
                 @* Posted *@
@@ -35,7 +35,7 @@
                     <div class="col-sm-3">Posted</div>
                     <div class="col-sm-8">
                         <input class="form-control" asp-for="Posted" type="checkbox" />
-                        <span asp-validation-for="Posted" class="danger"></span>
+                        <span asp-validation-for="Posted" class="text-danger"></span>
                     </div>
                 </div>
 
@@ -55,10 +55,9 @@
                                              (IEnumerable<SelectListItem>)ViewBag.Items, new
                                              {
                                                  @class = "form-control",
-                                                 id =
-                                             "optItem"
+                                                 id = "optItem"
                                              })
-                                    <span asp-validation-for="SalesInvoiceLines![i].ItemId!" class="danger"></span>
+                                    <span asp-validation-for="SalesInvoiceLines![i].ItemId!" class="text-danger"></span>
                                 </td>
                                 <td>
                                     @Html.EditorFor(model => model.SalesInvoiceLines![i].Quantity, new
@@ -91,7 +90,7 @@
                                     @Html.DropDownListFor(model => model.SalesInvoiceLines![i].MeasurementId,
                                              (IEnumerable<SelectListItem>)ViewBag.Measurements,
                                              new { @class = "form-control", id = $"optMeasurement_{i}" })
-                                    <span asp-validation-for="SalesInvoiceLines![i].MeasurementId!" class="danger"></span>
+                                    <span asp-validation-for="SalesInvoiceLines![i].MeasurementId!" class="text-danger"></span>
                                 </td>
                             </tr>
                         }
