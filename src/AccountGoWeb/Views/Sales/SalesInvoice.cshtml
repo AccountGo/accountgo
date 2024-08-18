@@ -8,6 +8,11 @@
     tr td {
         color: #fff;
     }
+
+    div.row {
+        color: #fff;
+        margin-bottom: 3px;
+    }
 </style>
 
 <div>
@@ -33,8 +38,8 @@
                         <div class="col-sm-5" id="customer-name">Customer Name</div>
                         <div class="col-sm-7">
                             <select class="form-control" asp-for="CustomerId" asp-items="@ViewBag.Customers"
-                                id="optCustomer"></select>
-                            <span asp-validation-for="CustomerId" class="danger"></span>
+                                    id="optCustomer"></select>
+                            <span asp-validation-for="CustomerId" class="text-danger"></span>
                             @Html.HiddenFor(m => m.CustomerId)
                         </div>
                     </div>
@@ -69,24 +74,24 @@
                             <td>
                                 <select class="form-control" asp-for="@Model.SalesInvoiceLines[i].ItemId" asp-items="@ViewBag.Items"
                                     id="optCustomer" required></select>
-                                <span asp-validation-for="@Model.SalesInvoiceLines[i].ItemId" class="danger"></span>
+                                <span asp-validation-for="@Model.SalesInvoiceLines[i].ItemId" class="text-danger"></span>
                             </td>
                             <td>
                                 <input class="form-control" asp-for="@Model.SalesInvoiceLines[i].Quantity" type="text" placeholder="0.0 ..." required/>
-                                <span asp-validation-for="@Model.SalesInvoiceLines[i].Quantity" class="danger"></span>
+                                <span asp-validation-for="@Model.SalesInvoiceLines[i].Quantity" class="text-danger"></span>
                             </td>
                             <td>
                                 <input class="form-control" asp-for="@Model.SalesInvoiceLines[i].Amount" type="text" placeholder="0.0 ..." required/>
-                                <span asp-validation-for="@Model.SalesInvoiceLines[i].Amount" class="danger"></span>
+                                <span asp-validation-for="@Model.SalesInvoiceLines[i].Amount" class="text-danger"></span>
                             </td>
                             <td>
                                 <input class="form-control" asp-for="@Model.SalesInvoiceLines[i].Discount" type="text" placeholder="0.0 ..." required/>
-                                <span asp-validation-for="@Model.SalesInvoiceLines[i].Discount" class="danger"></span>
+                                <span asp-validation-for="@Model.SalesInvoiceLines[i].Discount" class="text-danger"></span>
                             </td>
                             <td>
                                 <select class="form-control" asp-for="@Model.SalesInvoiceLines[i].MeasurementId" asp-items="@ViewBag.Measurements"
                                     id="optCustomer" required></select>
-                                <span asp-validation-for="@Model.SalesInvoiceLines[i].MeasurementId" class="danger"></span>
+                                <span asp-validation-for="@Model.SalesInvoiceLines[i].MeasurementId" class="text-danger"></span>
                             </td>
                         </tr>
                     }
@@ -95,7 +100,7 @@
         </div>
     </div>
     <div class="col-sm-9">
-        <input id="btnSave" class="btn btn-sm btn-primary btn-flat pull-left disabledControl" type="submit" value="Save" />
+        <input id="btnSave" class="btn btn-sm btn-primary btn-flat pull-left" type="submit" value="Save" />
         <a href="~/sales/salesinvoices" class="btn btn-sm btn-default btn-flat pull-left">Close</a>
     </div>
 </form>
@@ -104,13 +109,13 @@
     <script src="~/js/custom.js" type="text/javascript"></script>
     <script>
 
-        if (@Model.Id > 0) {
-            setFormDisabled("divSalesInvoiceCard");
-        }
-        else {
-            document.getElementById("linkEdit").className = document.getElementById("linkEdit").className + " btn inactiveLink";
-            document.getElementById("btnSave").className = "btn btn-sm btn-primary btn-flat pull-left";
-        }
+        // if (@Model.Id > 0) {
+        //     setFormDisabled("divSalesInvoiceCard");
+        // }
+        // else {
+        //     document.getElementById("linkEdit").className = document.getElementById("linkEdit").className + " btn inactiveLink";
+        //     document.getElementById("btnSave").className = "btn btn-sm btn-primary btn-flat pull-left";
+        // }
 
         function onClickEditButton() {
             document.getElementById("linkEdit").className = document.getElementById("linkEdit").className + " disabledControl";
