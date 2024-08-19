@@ -2,9 +2,10 @@
 
 <style>
     .ag-row-selected {
-        background-color: orange;
+        background-color: darkorange;
         color: white;
         border-color: aqua;
+        opacity: 0.9;
     }
 </style>
 
@@ -24,8 +25,8 @@
 <script>
     var columnDefs = [
         {headerName: "No", field: "no", width: 50},
-        {headerName: "Customer Name", field: "customerName", width: 350},
-        {headerName: "Invoiced Date", field: "invoiceDate", width: 100},
+        {headerName: "Customer Name", field: "customerName", width: 200},
+        {headerName: "Invoiced Date", field: "invoiceDate", width: 250},
         {headerName: "Amount", field: "amount", width: 100},
         {headerName: "Ref no", field: "referenceNo", width: 100},
         {headerName: "Posted", width: 100, cellRenderer: function(val) {
