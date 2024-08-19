@@ -72,6 +72,7 @@
                     {
                         <tr>
                             <td>
+                                <input asp-for="@Model.SalesInvoiceLines[i].Id" type="hidden"/>
                                 <select class="form-control" asp-for="@Model.SalesInvoiceLines[i].ItemId" asp-items="@ViewBag.Items"
                                     id="optCustomer" required></select>
                                 <span asp-validation-for="@Model.SalesInvoiceLines[i].ItemId" class="text-danger"></span>

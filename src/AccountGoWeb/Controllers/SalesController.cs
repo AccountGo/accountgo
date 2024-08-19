@@ -353,6 +353,11 @@ namespace AccountGoWeb.Controllers
                 string ReadAsStringAsync = await content.ReadAsStringAsync();
                 _logger.LogInformation("SaveSalesInvoice: " + ReadAsStringAsync);
                 var response = Post("Sales/SaveSalesInvoice", content);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    return RedirectToAction("SalesInvoices");
+                }
             }
             ViewBag.Customers = SelectListItemHelper.Customers();
             ViewBag.PaymentTerms = SelectListItemHelper.PaymentTerms();
