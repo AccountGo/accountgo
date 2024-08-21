@@ -7,6 +7,7 @@
 //-----------------------------------------------------------------------
 
 using Core.Domain;
+using Core.Domain.Error;
 using Core.Domain.Sales;
 using System.Collections.Generic;
 
@@ -48,6 +49,7 @@ namespace Services.Sales
         IEnumerable<SalesInvoiceHeader> GetCustomerInvoices(int customerId);
         SalesQuoteHeader GetSalesQuotationById(int id);
         void SaveSalesInvoice(SalesInvoiceHeader salesInvoice, SalesOrderHeader salesOrder);
+        Result<Dto.Sales.SalesInvoice> CreateSalesInvoice(Dto.Sales.SalesInvoice salesInvoiceDto);
         void PostSalesInvoice(int invoiceId);
         Contact GetContacyById(int id);
         CustomerContact GetCustomerContact(int id);
