@@ -1,4 +1,5 @@
-﻿using Core.Domain;
+﻿using Api.ActionFilters;
+using Core.Domain;
 using Dto.Sales;
 using Microsoft.AspNetCore.Mvc;
 using Services.Administration;
@@ -875,6 +876,20 @@ namespace Api.Controllers
                 errors = new string[1] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
                 return new BadRequestObjectResult(errors);
             }
+        }
+
+        [HttpPost("CreateSalesInvoice")]
+        [ServiceFilter(typeof(ValidationFilterAttribute))]
+        public IActionResult CreateSalesInvoice([FromBody] Dto.Sales.SalesInvoice salesInvoiceDto)
+        {
+            var result = _salesService.CreateSalesInvoice(salesInvoiceDto);
+
+            if (result.IsFailure)
+                return BadRequest(result.Error.Message);
+
+            var salesInvoiceToReturn = result.Value;
+
+            return Ok(salesInvoiceToReturn);
         }
 
         [HttpPost]
