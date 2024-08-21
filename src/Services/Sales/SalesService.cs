@@ -18,6 +18,8 @@ using System;
 using System.Collections.Generic;
 using Core.Domain.TaxSystem;
 using Microsoft.Extensions.Logging;
+using AutoMapper;
+using Core.Domain.Error;
 
 namespace Services.Sales
 {
@@ -26,6 +28,7 @@ namespace Services.Sales
         private readonly IFinancialService _financialService;
         private readonly IInventoryService _inventoryService;
 
+        private readonly IMapper _mapper;
         private readonly ILogger<SalesService> _logger;
 
         private readonly IRepository<SalesOrderHeader> _salesOrderRepo;
@@ -47,7 +50,7 @@ namespace Services.Sales
         private readonly IRepository<TaxGroup> _taxGroupRepo;
         private readonly IRepository<SalesQuoteHeader> _salesQuoteRepo;
         private readonly ISalesOrderRepository _salesOrderRepository;
-
+    
         public SalesService(IFinancialService financialService,
             IInventoryService inventoryService,
             IRepository<SalesOrderHeader> salesOrderRepo,
@@ -69,7 +72,8 @@ namespace Services.Sales
             ISalesOrderRepository salesOrderRepository,
             IRepository<CustomerContact> customerContactRepo,
             IRepository<VendorContact> vendorContactRepo,
-            ILogger<SalesService> logger)
+            ILogger<SalesService> logger,
+            IMapper mapper)
             : base(sequenceNumberRepo, generalLedgerSetting, paymentTermRepo, bankRepo)
         {
             _financialService = financialService;
@@ -94,6 +98,7 @@ namespace Services.Sales
             _customerContactRepo = customerContactRepo;
             _vendorContactRepo = vendorContactRepo;
             _logger = logger;
+            _mapper = mapper;
         }
 
         public void AddSalesOrder(SalesOrderHeader salesOrder, bool toSave)
@@ -722,6 +727,45 @@ namespace Services.Sales
             }
 
             return quotation;
+        }
+
+        public Result<Dto.Sales.SalesInvoice> CreateSalesInvoice(Dto.Sales.SalesInvoice salesInvoiceDto)
+        {
+            Core.Domain.Sales.SalesOrderHeader? salesOrder = null;
+            Core.Domain.Sales.SalesInvoiceHeader? salesInvoice = null;
+           
+            if (!salesInvoiceDto.FromSalesOrderId.HasValue)
+            {
+                salesOrder = _mapper.Map<Core.Domain.Sales.SalesOrderHeader>(salesInvoiceDto);
+            }
+            else
+            {
+                // your invoice is created from existing (open) sales order.
+                salesOrder = GetSalesOrderById(salesInvoiceDto.FromSalesOrderId.GetValueOrDefault());
+
+                if(salesOrder is null)
+                {
+                    var message = $"Sales order {salesInvoiceDto.FromSalesOrderId} in SalesInvoice not found.";
+                    return Result<Dto.Sales.SalesInvoice>.Failure(Error.RecordNotFound(message));
+                }
+            }
+
+            salesInvoice = _mapper.Map<Core.Domain.Sales.SalesInvoiceHeader>(salesInvoiceDto);
+
+            foreach(var invoiceLine in salesInvoice.SalesInvoiceLines)
+            {
+                if(invoiceLine.SalesOrderLineId == 0)
+                {
+                    salesOrder.SalesOrderLines.Add(invoiceLine.SalesOrderLine);
+                    invoiceLine.SalesOrderLineId = invoiceLine.SalesOrderLine.Id;
+                }
+            }
+
+            _logger.LogInformation("SaveSalesInvoice API " + salesInvoice.CustomerId);
+
+            SaveSalesInvoice(salesInvoice, salesOrder);
+
+            return Result<Dto.Sales.SalesInvoice>.Success(salesInvoiceDto);
         }
 
         public void SaveSalesInvoice(SalesInvoiceHeader salesInvoice, SalesOrderHeader salesOrder)
