@@ -225,7 +225,7 @@ namespace AccountGoWeb.Controllers
                 var content = new StringContent(serialize);
                 content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
                 _logger.LogInformation("AddSalesInvoice: " + await content.ReadAsStringAsync());
-                var response = Post("Sales/SaveSalesInvoice", content);
+                var response = Post("Sales/CreateSalesInvoice", content);
                 _logger.LogInformation("AddSalesInvoice response: " + response.ToString());
                 if (response.IsSuccessStatusCode)
                     return RedirectToAction("salesinvoices");
