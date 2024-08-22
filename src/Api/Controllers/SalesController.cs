@@ -892,6 +892,20 @@ namespace Api.Controllers
             return Ok(salesInvoiceToReturn);
         }
 
+        [HttpPost("UpdateSalesInvoice")]
+        [ServiceFilter(typeof(ValidationFilterAttribute))]
+        public IActionResult UpdateSalesInvoice([FromBody] Dto.Sales.SalesInvoice salesInvoiceDto)
+        {
+            var result = _salesService.UpdateSalesInvoice(salesInvoiceDto);
+
+            if (result.IsFailure)
+                return BadRequest(result.Error.Message);
+
+            var salesInvoiceToReturn = result.Value;
+
+            return Ok(salesInvoiceToReturn);
+        }
+
         [HttpPost]
         [Route("SaveQuotation")]
         public IActionResult SaveQuotation([FromBody]Dto.Sales.SalesQuotation quotationDto)
