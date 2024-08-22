@@ -1,5 +1,4 @@
 ﻿using AutoMapper;
-using Dto.Sales;
 
 namespace Api
 {
@@ -73,22 +72,32 @@ namespace Api
 
             foreach (var lineDto in source.SalesInvoiceLines!)
             {
-                var salesInvoiceLine = context.Mapper.Map<Core.Domain.Sales.SalesInvoiceLine>(lineDto);
-              
-                // line.Id here is referring to SalesOrderLineId. It is pre-populated when you create a new sales invoice from sales order.
-                if (lineDto.Id != 0)
+                var existingInvoiceLine = destination.SalesInvoiceLines.Where(id => lineDto.Id != 0 && id.Id == lineDto.Id).FirstOrDefault();
+                if (existingInvoiceLine is not null)
                 {
-                    salesInvoiceLine.SalesOrderLineId = lineDto.Id;
+                    context.Mapper.Map(lineDto, existingInvoiceLine);
+
+                    destMember.Add(existingInvoiceLine);
                 }
                 else
                 {
-                    var salesOrderLine = context.Mapper.Map<Core.Domain.Sales.SalesOrderLine>(lineDto);
+                    var salesInvoiceLine = context.Mapper.Map<Core.Domain.Sales.SalesInvoiceLine>(lineDto);
 
-                    salesInvoiceLine.SalesOrderLineId = 0; // set to 0 to indicate this line item is newly added to invoice which is not originally in sales order.
-                    salesInvoiceLine.SalesOrderLine = salesOrderLine;
+                    // line.Id here is referring to SalesOrderLineId. It is pre-populated when you create a new sales invoice from sales order.
+                    if (lineDto.Id != 0)
+                    {
+                        salesInvoiceLine.SalesOrderLineId = lineDto.Id;
+                    }
+                    else
+                    {
+                        var salesOrderLine = context.Mapper.Map<Core.Domain.Sales.SalesOrderLine>(lineDto);
+
+                        salesInvoiceLine.SalesOrderLineId = 0; // set to 0 to indicate this line item is newly added to invoice which is not originally in sales order.
+                        salesInvoiceLine.SalesOrderLine = salesOrderLine;
+                    }
+
+                    destMember.Add(salesInvoiceLine);
                 }
-
-                destMember.Add(salesInvoiceLine);
             }
 
             return destMember;
