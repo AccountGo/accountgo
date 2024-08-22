@@ -50,6 +50,7 @@ namespace Services.Sales
         SalesQuoteHeader GetSalesQuotationById(int id);
         void SaveSalesInvoice(SalesInvoiceHeader salesInvoice, SalesOrderHeader salesOrder);
         Result<Dto.Sales.SalesInvoice> CreateSalesInvoice(Dto.Sales.SalesInvoice salesInvoiceDto);
+        Result<Dto.Sales.SalesInvoice> UpdateSalesInvoice(Dto.Sales.SalesInvoice salesInvoiceDto);
         void PostSalesInvoice(int invoiceId);
         Contact GetContacyById(int id);
         CustomerContact GetCustomerContact(int id);

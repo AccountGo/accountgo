@@ -768,6 +768,58 @@ namespace Services.Sales
             return Result<Dto.Sales.SalesInvoice>.Success(salesInvoiceDto);
         }
 
+        public Result<Dto.Sales.SalesInvoice> UpdateSalesInvoice(Dto.Sales.SalesInvoice salesInvoiceDto)
+        {
+            Core.Domain.Sales.SalesInvoiceHeader? salesInvoice = null;
+            Core.Domain.Sales.SalesOrderHeader? salesOrder = null;
+
+            salesInvoice = GetSalesInvoiceById(salesInvoiceDto.Id);
+            
+            if(salesInvoice is null)
+            {
+                var message = $"Sales invoice {salesInvoiceDto.Id} not found.";
+                return Result<Dto.Sales.SalesInvoice>.Failure(Error.RecordNotFound(message));
+            }
+
+            if (salesInvoice.GeneralLedgerHeaderId.HasValue)
+                throw new Exception("Invoice is already posted. Update is not allowed.");
+
+            _mapper.Map<Dto.Sales.SalesInvoice, Core.Domain.Sales.SalesInvoiceHeader>(salesInvoiceDto, salesInvoice);
+
+            int existingOrderLineId = salesInvoice.SalesInvoiceLines.FirstOrDefault().SalesOrderLineId ??= 0;
+            foreach (var invoiceLine in salesInvoice.SalesInvoiceLines!)
+            {
+                salesOrder = GetSalesOrderLineById(invoiceLine!.SalesOrderLineId ??= 0).SalesOrderHeader;
+
+                if (invoiceLine.Id == 0)
+                {
+                    // use the last value of existingLine
+                    salesOrder = GetSalesOrderLineById(existingOrderLineId).SalesOrderHeader;
+                    salesOrder.SalesOrderLines.Add(invoiceLine.SalesOrderLine);
+                }
+                else
+                {
+                    // TODO: Udpate Existing SalesOrderLine with SalesInvoiceLine.
+                    invoiceLine.SalesOrderLine = GetSalesOrderLineById(invoiceLine.SalesOrderLineId.GetValueOrDefault());
+                }
+            }
+
+            var deleted = (from line in salesInvoice.SalesInvoiceLines
+                           where !salesInvoiceDto.SalesInvoiceLines.Any(x => x.Id == line.Id)
+                           select line).ToList();
+
+            foreach (var line in deleted)
+            {
+                salesInvoice.SalesInvoiceLines.Remove(line);
+            }
+
+            _logger.LogInformation("SaveSalesInvoice API " + salesInvoice.CustomerId);
+
+            SaveSalesInvoice(salesInvoice, salesOrder);
+
+            return Result<Dto.Sales.SalesInvoice>.Success(null);
+        }
+
         public void SaveSalesInvoice(SalesInvoiceHeader salesInvoice, SalesOrderHeader salesOrder)
         {
             // This method should be in a single transaction. when one fails, roll back all changes.
