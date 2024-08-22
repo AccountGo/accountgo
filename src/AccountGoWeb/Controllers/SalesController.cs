@@ -176,6 +176,31 @@ namespace AccountGoWeb.Controllers
             return View();
         }
 
+        [HttpPost]
+        public async System.Threading.Tasks.Task<IActionResult> SalesInvoice(SalesInvoice salesInvoiceModel)
+        {
+            if (ModelState.IsValid)
+            {
+                var serialize = Newtonsoft.Json.JsonConvert.SerializeObject(salesInvoiceModel);
+                var content = new StringContent(serialize);
+                content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+                string ReadAsStringAsync = await content.ReadAsStringAsync();
+                _logger.LogInformation("SaveSalesInvoice: " + ReadAsStringAsync);
+                var response = Post("Sales/UpdateSalesInvoice", content);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    return RedirectToAction("SalesInvoices");
+                }
+            }
+            ViewBag.Customers = SelectListItemHelper.Customers();
+            ViewBag.PaymentTerms = SelectListItemHelper.PaymentTerms();
+            ViewBag.Items = SelectListItemHelper.Items();
+            ViewBag.Measurements = SelectListItemHelper.Measurements();
+
+            return View("SalesInvoice", salesInvoiceModel);
+        }
+
         [HttpGet]
         public IActionResult AddSalesInvoice()
         {
