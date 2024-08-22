@@ -284,6 +284,7 @@ namespace Api.Controllers
                     Id = salesInvoice.Id,
                     CustomerId = salesInvoice.CustomerId,
                     CustomerName = salesInvoice.Customer.Party.Name,
+                    No = salesInvoice.No,
                     InvoiceDate = salesInvoice.Date,
                     SalesInvoiceLines = new List<Dto.Sales.SalesInvoiceLine>(),
                     PaymentTermId = salesInvoice.PaymentTermId,
