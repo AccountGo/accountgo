@@ -15,14 +15,7 @@
     }
 </style>
 
-<div>
-    <a href="#" id="linkEdit" class="btn" onclick="onClickEditButton();">
-        <i class="fa fa-edit"></i>
-        Edit
-    </a>
-</div>
-
-<form action="~/Sales/SaveSalesInvoice" method="post">
+<form action="~/Sales/SalesInvoice" method="post">
     <div id="divSalesInvoiceCard" class="col-md-11">
         @Html.HiddenFor(m => m.Id)
         <div class="card">
@@ -30,6 +23,8 @@
                 <div class="col-sm-10">
                     @* ID *@
                     <div class="row">
+                        <input asp-for="No" type="hidden" value="@Model.No" />
+                        <input asp-for="PaymentTermId" type="hidden" value="@Model.PaymentTermId" />
                         <div class="col-sm-5">ID</div>
                         <div class="col-sm-7">@Model.Id</div>
                     </div>
