@@ -10,54 +10,95 @@
 </style>
 
 <div>
-    <a href="~/sales/addsalesinvoice" class="btn">
+    <a href="~/sales/addsalesinvoice" class="btn btn-outline-light">
         <i class="fa fa-plus"></i>
         New Invoice
     </a>
-    <a href="~/sales/salesinvoice" id="linkViewInvoice" class="btn inactiveLink">
+    <a href="~/sales/salesinvoice" id="linkEditInvoice" class="btn inactiveLink">
         <i class="fa fa-edit"></i>
         Edit
+    </a>
+        <a href="~/sales/deletesalesinvoice" id="linkDeleteInvoice" class="btn inactiveLink">
+        <i class="fa fa-trash"></i>
+        Delete
     </a>
 </div>
 <div>
     <div id="salesinvoices" class="ag-fresh" style="height: 400px;"></div>
 </div>
-<script>
-    var columnDefs = [
-        {headerName: "No", field: "no", width: 50},
-        {headerName: "Customer Name", field: "customerName", width: 200},
-        {headerName: "Invoiced Date", field: "invoiceDate", width: 250},
-        {headerName: "Amount", field: "amount", width: 100},
-        {headerName: "Ref no", field: "referenceNo", width: 100},
-        {headerName: "Posted", width: 100, cellRenderer: function(val) {
-            if(val.data.posted)
-                return '<input type="checkbox" checked disabled />';
-            return '<input type="checkbox" disabled />';
-        }},
-    ];
 
-    var gridOptions = {
-        columnDefs: columnDefs,
-        rowData: @Html.Raw(Model),
-        enableSorting: true,
-        // PROPERTIES - simple boolean / string / number properties
-        rowSelection: 'single',
-        onSelectionChanged: onSelectionChanged,
-    };
+@* Delete Modal*@
+<div class="modal" id="deleteSalesInvoice" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Delete</h5>
+                <button aria-label="Close" class="btn-close" data-bs-dismiss="modal" type="button"></button>
+            </div>
+            <div class="modal-body">
+                <p>Do you want to delete it?</p>
+                <input type="hidden" id="hdnselectedsalesInvoiceId" />
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-sm btn-primary btn-flat" onclick="deleteSalesInvoice()" type="button">Yes</button>
+                <button class="btn btn-sm btn-default btn-flat" data-bs-dismiss="modal" type="button">No</button>
+            </div>
+        </div>
+    </div>
+</div>
 
-    function onSelectionChanged() {
-        var selectedRows = gridOptions.api.getSelectedRows();
-        selectedRow = selectedRows[0];
-        console.log(selectedRow);
+@section scripts{
+    <script>
+        var columnDefs = [
+            { headerName: "No", field: "no", width: 50 },
+            { headerName: "Customer Name", field: "customerName", width: 200 },
+            { headerName: "Invoiced Date", field: "invoiceDate", width: 250 },
+            { headerName: "Amount", field: "amount", width: 100 },
+            { headerName: "Ref no", field: "referenceNo", width: 100 },
+            {
+                headerName: "Posted", width: 100, cellRenderer: function (val) {
+                    if (val.data.posted)
+                        return '<input type="checkbox" checked disabled />';
+                    return '<input type="checkbox" disabled />';
+                }
+            },
+        ];
 
-        document.getElementById('linkViewInvoice').setAttribute('href', 'Sales/SalesInvoice?id=' + selectedRow.id);
-        document.getElementById('linkViewInvoice').setAttribute('class', 'btn');
-    }
+        var gridOptions = {
+            columnDefs: columnDefs,
+            rowData: @Html.Raw(Model),
+            enableSorting: true,
+            // PROPERTIES - simple boolean / string / number properties
+            rowSelection: 'single',
+            onSelectionChanged: onSelectionChanged,
+        };
 
-    // wait for the document to be loaded, otherwise
-    // ag-Grid will not find the div in the document.
-    document.addEventListener("DOMContentLoaded", function() {
-        var eGridDiv = document.querySelector('#salesinvoices');
-        new agGrid.Grid(eGridDiv, gridOptions);
-    });
-</script>
+        function onSelectionChanged() {
+            var selectedRows = gridOptions.api.getSelectedRows();
+            selectedRow = selectedRows[0];
+            console.log(selectedRow);
+
+            document.getElementById('linkEditInvoice').setAttribute('href', 'Sales/SalesInvoice?id=' + selectedRow.id);
+            document.getElementById('linkEditInvoice').setAttribute('class', 'btn btn-outline-light');
+
+            document.getElementById('linkDeleteInvoice').setAttribute('class', 'btn btn-outline-light');
+            document.getElementById('linkDeleteInvoice').setAttribute('data-bs-toggle', 'modal');
+            document.getElementById('linkDeleteInvoice').setAttribute('data-bs-target', '#deleteSalesInvoice');
+            $("#hdnselectedsalesInvoiceId").val(selectedRow.id);
+        }
+
+        // wait for the document to be loaded, otherwise
+        // ag-Grid will not find the div in the document.
+        document.addEventListener("DOMContentLoaded", function () {
+            var eGridDiv = document.querySelector('#salesinvoices');
+            new agGrid.Grid(eGridDiv, gridOptions);
+        });
+
+
+        function deleteSalesInvoice() {
+            var salesInvoiceId = $("#hdnselectedsalesInvoiceId").val();
+            
+            location.href = '@Url.Action("DeleteSalesInvoice", "Sales")?id=' + salesInvoiceId;
+        }
+    </script>
+}

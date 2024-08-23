@@ -500,5 +500,21 @@ namespace AccountGoWeb.Controllers
             return View(salesInvoiceModel);
         }
 
+        public async Task<IActionResult> DeleteSalesInvoice(int id)
+        {
+            using (var client = new HttpClient())
+            {
+                var baseUri = _configuration!["ApiUrl"];
+                client.BaseAddress = new System.Uri(baseUri!);
+                client.DefaultRequestHeaders.Accept.Clear();
+                var response = await client.DeleteAsync(baseUri + "Sales/DeleteSalesInvoice?id=" + id);
+
+                if (response.IsSuccessStatusCode)
+                    return RedirectToAction("SalesInvoices");
+            }
+
+            return RedirectToAction("SalesInvoices");
+        }
+
     }
 }
