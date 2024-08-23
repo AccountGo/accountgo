@@ -907,6 +907,17 @@ namespace Api.Controllers
             return Ok(salesInvoiceToReturn);
         }
 
+        [HttpDelete("DeleteSalesInvoice")]
+        public async Task<IActionResult> DeleteSalesInvoice(int id)
+        {
+            var result = await _salesService.DeleteSalesInvoiceAsync(id);
+
+            if (result.IsFailure)
+                return BadRequest(result.Error.Message);
+
+            return NoContent();
+        }
+
         [HttpPost]
         [Route("SaveQuotation")]
         public IActionResult SaveQuotation([FromBody]Dto.Sales.SalesQuotation quotationDto)
