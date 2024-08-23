@@ -10,6 +10,7 @@ using Core.Domain;
 using Core.Domain.Error;
 using Core.Domain.Sales;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 
 namespace Services.Sales
 {
@@ -51,6 +52,7 @@ namespace Services.Sales
         void SaveSalesInvoice(SalesInvoiceHeader salesInvoice, SalesOrderHeader salesOrder);
         Result<Dto.Sales.SalesInvoice> CreateSalesInvoice(Dto.Sales.SalesInvoice salesInvoiceDto);
         Result<Dto.Sales.SalesInvoice> UpdateSalesInvoice(Dto.Sales.SalesInvoice salesInvoiceDto);
+        Task<Result<Dto.Sales.SalesInvoice>> DeleteSalesInvoiceAsync(int id);
         void PostSalesInvoice(int invoiceId);
         Contact GetContacyById(int id);
         CustomerContact GetCustomerContact(int id);

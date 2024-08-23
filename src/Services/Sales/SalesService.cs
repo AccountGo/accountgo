@@ -20,6 +20,7 @@ using Core.Domain.TaxSystem;
 using Microsoft.Extensions.Logging;
 using AutoMapper;
 using Core.Domain.Error;
+using System.Threading.Tasks;
 
 namespace Services.Sales
 {
@@ -816,6 +817,21 @@ namespace Services.Sales
             _logger.LogInformation("SaveSalesInvoice API " + salesInvoice.CustomerId);
 
             SaveSalesInvoice(salesInvoice, salesOrder);
+
+            return Result<Dto.Sales.SalesInvoice>.Success(null);
+        }
+
+        public async Task<Result<Dto.Sales.SalesInvoice>> DeleteSalesInvoiceAsync(int id)
+        {
+            var salesInvoice = GetSalesInvoiceById(id);
+
+            if (salesInvoice is null)
+            {
+                var message = $"Sales invoice {id} not found.";
+                return Result<Dto.Sales.SalesInvoice>.Failure(Error.RecordNotFound(message));
+            }
+
+            await _salesInvoiceRepo.DeleteAsync(salesInvoice);
 
             return Result<Dto.Sales.SalesInvoice>.Success(null);
         }
