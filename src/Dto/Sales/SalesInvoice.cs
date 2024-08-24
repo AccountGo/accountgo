@@ -40,6 +40,11 @@ namespace Dto.Sales
             decimal total = 0;
             foreach (var line in SalesInvoiceLines!)
             {
+                if(line.Amount is null  || line.Quantity is null)
+                {
+                    continue;
+                }
+
                 decimal quantityXamount = (line.Amount!.Value * line.Quantity!.Value);
                 decimal discount = 0;
                 if (line.Discount.HasValue)
