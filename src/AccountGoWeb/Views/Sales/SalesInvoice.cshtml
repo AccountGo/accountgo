@@ -69,24 +69,24 @@
                             <td>
                                 <input asp-for="@Model.SalesInvoiceLines[i].Id" type="hidden"/>
                                 <select class="form-control" asp-for="@Model.SalesInvoiceLines[i].ItemId" asp-items="@ViewBag.Items"
-                                    id="optCustomer" required></select>
+                                    id="optCustomer"></select>
                                 <span asp-validation-for="@Model.SalesInvoiceLines[i].ItemId" class="text-danger"></span>
                             </td>
                             <td>
-                                <input class="form-control" asp-for="@Model.SalesInvoiceLines[i].Quantity" type="text" placeholder="0.0 ..." required/>
+                                <input class="form-control" asp-for="@Model.SalesInvoiceLines[i].Quantity" type="text" placeholder="0.0 ..."/>
                                 <span asp-validation-for="@Model.SalesInvoiceLines[i].Quantity" class="text-danger"></span>
                             </td>
                             <td>
-                                <input class="form-control" asp-for="@Model.SalesInvoiceLines[i].Amount" type="text" placeholder="0.0 ..." required/>
+                                <input class="form-control" asp-for="@Model.SalesInvoiceLines[i].Amount" type="text" placeholder="0.0 ..."/>
                                 <span asp-validation-for="@Model.SalesInvoiceLines[i].Amount" class="text-danger"></span>
                             </td>
                             <td>
-                                <input class="form-control" asp-for="@Model.SalesInvoiceLines[i].Discount" type="text" placeholder="0.0 ..." required/>
+                                <input class="form-control" asp-for="@Model.SalesInvoiceLines[i].Discount" type="text" placeholder="0.0 ..."/>
                                 <span asp-validation-for="@Model.SalesInvoiceLines[i].Discount" class="text-danger"></span>
                             </td>
                             <td>
                                 <select class="form-control" asp-for="@Model.SalesInvoiceLines[i].MeasurementId" asp-items="@ViewBag.Measurements"
-                                    id="optCustomer" required></select>
+                                    id="optCustomer"></select>
                                 <span asp-validation-for="@Model.SalesInvoiceLines[i].MeasurementId" class="text-danger"></span>
                             </td>
                         </tr>
