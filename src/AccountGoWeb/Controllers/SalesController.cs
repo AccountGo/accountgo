@@ -256,7 +256,12 @@ namespace AccountGoWeb.Controllers
                     return RedirectToAction("salesinvoices");
             }
 
-            return View();
+            ViewBag.Customers = Models.SelectListItemHelper.Customers();
+            ViewBag.Items = Models.SelectListItemHelper.Items();
+            ViewBag.PaymentTerms = Models.SelectListItemHelper.PaymentTerms();
+            ViewBag.Measurements = Models.SelectListItemHelper.Measurements();
+
+            return View(Dto);
         }
 
         public async System.Threading.Tasks.Task<IActionResult> SalesReceipts()
