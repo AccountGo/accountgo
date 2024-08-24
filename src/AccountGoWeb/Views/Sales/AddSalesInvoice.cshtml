@@ -51,46 +51,26 @@
                         {
                             <tr>
                                 <td>
-                                    @Html.DropDownListFor(model => model.SalesInvoiceLines![i].ItemId,
-                                             (IEnumerable<SelectListItem>)ViewBag.Items, new
-                                             {
-                                                 @class = "form-control",
-                                                 id = "optItem"
-                                             })
-                                    <span asp-validation-for="SalesInvoiceLines![i].ItemId!" class="text-danger"></span>
+                                    <select class="form-control" asp-for="@Model.SalesInvoiceLines[i].ItemId" asp-items="@ViewBag.Items"
+                                            id="optCustomer"></select>
+                                    <span asp-validation-for="@Model.SalesInvoiceLines[i].ItemId" class="text-danger"></span>
                                 </td>
                                 <td>
-                                    @Html.EditorFor(model => model.SalesInvoiceLines![i].Quantity, new
-                                        {
-                                            htmlAttributes = new
-                                            {
-                                                @class = "form-control"
-                                            }
-                                        })
+                                    <input class="form-control" asp-for="@Model.SalesInvoiceLines[i].Quantity" type="text" placeholder="0.0 ..." />
+                                    <span asp-validation-for="@Model.SalesInvoiceLines[i].Quantity" class="text-danger"></span>
                                 </td>
                                 <td>
-                                    @Html.EditorFor(model => model.SalesInvoiceLines![i].Amount, new
-                                        {
-                                            htmlAttributes = new
-                                            {
-                                                @class = "form-control"
-                                            }
-                                        })
+                                    <input class="form-control" asp-for="@Model.SalesInvoiceLines[i].Amount" type="text" placeholder="0.0 ..." />
+                                    <span asp-validation-for="@Model.SalesInvoiceLines[i].Amount" class="text-danger"></span>
                                 </td>
                                 <td>
-                                    @Html.EditorFor(model => model.SalesInvoiceLines![i].Discount, new
-                                        {
-                                            htmlAttributes = new
-                                            {
-                                                @class = "form-control"
-                                            }
-                                        })
+                                    <input class="form-control" asp-for="@Model.SalesInvoiceLines[i].Discount" type="text" placeholder="0.0 ..." />
+                                    <span asp-validation-for="@Model.SalesInvoiceLines[i].Discount" class="text-danger"></span>
                                 </td>
                                 <td>
-                                    @Html.DropDownListFor(model => model.SalesInvoiceLines![i].MeasurementId,
-                                             (IEnumerable<SelectListItem>)ViewBag.Measurements,
-                                             new { @class = "form-control", id = $"optMeasurement_{i}" })
-                                    <span asp-validation-for="SalesInvoiceLines![i].MeasurementId!" class="text-danger"></span>
+                                    <select class="form-control" asp-for="@Model.SalesInvoiceLines[i].MeasurementId" asp-items="@ViewBag.Measurements"
+                                            id="optCustomer"></select>
+                                    <span asp-validation-for="@Model.SalesInvoiceLines[i].MeasurementId" class="text-danger"></span>
                                 </td>
                             </tr>
                         }
