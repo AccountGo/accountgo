@@ -1,5 +1,5 @@
 ﻿@model Dto.Sales.SalesInvoice
-
+@using System.Globalization
 <style>
     tr th {
         color: #fff;
@@ -48,7 +48,7 @@
                     @* Total Amount *@
                     <div class="row">
                         <div class="col-sm-5">Total Amount</div>
-                        <div class="col-sm-7">@ViewBag.TotalAmount</div>
+                        <div class="col-sm-7">@String.Format("{0:F2}", ViewBag.TotalAmount)</div>
                     </div>
                 </div>
             </div>
