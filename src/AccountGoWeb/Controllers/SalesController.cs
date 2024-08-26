@@ -176,6 +176,33 @@ namespace AccountGoWeb.Controllers
             return View();
         }
 
+        [HttpPost]
+        public async System.Threading.Tasks.Task<IActionResult> SalesInvoice(SalesInvoice salesInvoiceModel)
+        {
+            if (ModelState.IsValid)
+            {
+                var serialize = Newtonsoft.Json.JsonConvert.SerializeObject(salesInvoiceModel);
+                var content = new StringContent(serialize);
+                content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+                string ReadAsStringAsync = await content.ReadAsStringAsync();
+                _logger.LogInformation("SaveSalesInvoice: " + ReadAsStringAsync);
+                var response = Post("Sales/UpdateSalesInvoice", content);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    return RedirectToAction("SalesInvoices");
+                }
+            }
+
+            ViewBag.Customers = SelectListItemHelper.Customers();
+            ViewBag.PaymentTerms = SelectListItemHelper.PaymentTerms();
+            ViewBag.Items = SelectListItemHelper.Items();
+            ViewBag.Measurements = SelectListItemHelper.Measurements();
+            ViewBag.TotalAmount = salesInvoiceModel.Amount;
+
+            return View(salesInvoiceModel);
+        }
+
         [HttpGet]
         public IActionResult AddSalesInvoice()
         {
@@ -199,7 +226,7 @@ namespace AccountGoWeb.Controllers
         }
 
         [HttpPost]
-        public async System.Threading.Tasks.Task<IActionResult> AddSalesInvoice(SalesInvoice Dto, string addRowBtn)
+        public async System.Threading.Tasks.Task<IActionResult> AddSalesInvoice(SalesInvoice Dto, string? addRowBtn)
         {
             if (!string.IsNullOrEmpty(addRowBtn))
             {
@@ -225,13 +252,18 @@ namespace AccountGoWeb.Controllers
                 var content = new StringContent(serialize);
                 content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
                 _logger.LogInformation("AddSalesInvoice: " + await content.ReadAsStringAsync());
-                var response = Post("Sales/SaveSalesInvoice", content);
+                var response = Post("Sales/CreateSalesInvoice", content);
                 _logger.LogInformation("AddSalesInvoice response: " + response.ToString());
                 if (response.IsSuccessStatusCode)
                     return RedirectToAction("salesinvoices");
             }
 
-            return View();
+            ViewBag.Customers = Models.SelectListItemHelper.Customers();
+            ViewBag.Items = Models.SelectListItemHelper.Items();
+            ViewBag.PaymentTerms = Models.SelectListItemHelper.PaymentTerms();
+            ViewBag.Measurements = Models.SelectListItemHelper.Measurements();
+
+            return View(Dto);
         }
 
         public async System.Threading.Tasks.Task<IActionResult> SalesReceipts()
@@ -353,6 +385,11 @@ namespace AccountGoWeb.Controllers
                 string ReadAsStringAsync = await content.ReadAsStringAsync();
                 _logger.LogInformation("SaveSalesInvoice: " + ReadAsStringAsync);
                 var response = Post("Sales/SaveSalesInvoice", content);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    return RedirectToAction("SalesInvoices");
+                }
             }
             ViewBag.Customers = SelectListItemHelper.Customers();
             ViewBag.PaymentTerms = SelectListItemHelper.PaymentTerms();
@@ -468,6 +505,22 @@ namespace AccountGoWeb.Controllers
             salesInvoiceModel.CustomerName = invoice.CustomerName;
             salesInvoiceModel.SalesInvoiceLines = invoice.SalesInvoiceLines;
             return View(salesInvoiceModel);
+        }
+
+        public async Task<IActionResult> DeleteSalesInvoice(int id)
+        {
+            using (var client = new HttpClient())
+            {
+                var baseUri = _configuration!["ApiUrl"];
+                client.BaseAddress = new System.Uri(baseUri!);
+                client.DefaultRequestHeaders.Accept.Clear();
+                var response = await client.DeleteAsync(baseUri + "Sales/DeleteSalesInvoice?id=" + id);
+
+                if (response.IsSuccessStatusCode)
+                    return RedirectToAction("SalesInvoices");
+            }
+
+            return RedirectToAction("SalesInvoices");
         }
 
     }

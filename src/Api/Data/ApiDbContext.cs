@@ -298,11 +298,12 @@ namespace Api.Data
 
         public override int SaveChanges()
         {
-            SaveAuditLog();
+            // TODO : Implementation Required
+            //SaveAuditLog();
 
             var ret = base.SaveChanges();
 
-            UpdateAuditLogRecordId();
+            //UpdateAuditLogRecordId();
 
             return ret;
         }

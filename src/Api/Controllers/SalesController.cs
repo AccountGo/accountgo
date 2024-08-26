@@ -1,4 +1,5 @@
-﻿using Core.Domain;
+﻿using Api.ActionFilters;
+using Core.Domain;
 using Dto.Sales;
 using Microsoft.AspNetCore.Mvc;
 using Services.Administration;
@@ -283,6 +284,7 @@ namespace Api.Controllers
                     Id = salesInvoice.Id,
                     CustomerId = salesInvoice.CustomerId,
                     CustomerName = salesInvoice.Customer.Party.Name,
+                    No = salesInvoice.No,
                     InvoiceDate = salesInvoice.Date,
                     SalesInvoiceLines = new List<Dto.Sales.SalesInvoiceLine>(),
                     PaymentTermId = salesInvoice.PaymentTermId,
@@ -875,6 +877,45 @@ namespace Api.Controllers
                 errors = new string[1] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
                 return new BadRequestObjectResult(errors);
             }
+        }
+
+        [HttpPost("CreateSalesInvoice")]
+        [ServiceFilter(typeof(ValidationFilterAttribute))]
+        public IActionResult CreateSalesInvoice([FromBody] Dto.Sales.SalesInvoice salesInvoiceDto)
+        {
+            var result = _salesService.CreateSalesInvoice(salesInvoiceDto);
+
+            if (result.IsFailure)
+                return BadRequest(result.Error.Message);
+
+            var salesInvoiceToReturn = result.Value;
+
+            return Ok(salesInvoiceToReturn);
+        }
+
+        [HttpPost("UpdateSalesInvoice")]
+        [ServiceFilter(typeof(ValidationFilterAttribute))]
+        public IActionResult UpdateSalesInvoice([FromBody] Dto.Sales.SalesInvoice salesInvoiceDto)
+        {
+            var result = _salesService.UpdateSalesInvoice(salesInvoiceDto);
+
+            if (result.IsFailure)
+                return BadRequest(result.Error.Message);
+
+            var salesInvoiceToReturn = result.Value;
+
+            return Ok(salesInvoiceToReturn);
+        }
+
+        [HttpDelete("DeleteSalesInvoice")]
+        public async Task<IActionResult> DeleteSalesInvoice(int id)
+        {
+            var result = await _salesService.DeleteSalesInvoiceAsync(id);
+
+            if (result.IsFailure)
+                return BadRequest(result.Error.Message);
+
+            return NoContent();
         }
 
         [HttpPost]

@@ -18,6 +18,9 @@ using System;
 using System.Collections.Generic;
 using Core.Domain.TaxSystem;
 using Microsoft.Extensions.Logging;
+using AutoMapper;
+using Core.Domain.Error;
+using System.Threading.Tasks;
 
 namespace Services.Sales
 {
@@ -26,6 +29,7 @@ namespace Services.Sales
         private readonly IFinancialService _financialService;
         private readonly IInventoryService _inventoryService;
 
+        private readonly IMapper _mapper;
         private readonly ILogger<SalesService> _logger;
 
         private readonly IRepository<SalesOrderHeader> _salesOrderRepo;
@@ -47,7 +51,7 @@ namespace Services.Sales
         private readonly IRepository<TaxGroup> _taxGroupRepo;
         private readonly IRepository<SalesQuoteHeader> _salesQuoteRepo;
         private readonly ISalesOrderRepository _salesOrderRepository;
-
+    
         public SalesService(IFinancialService financialService,
             IInventoryService inventoryService,
             IRepository<SalesOrderHeader> salesOrderRepo,
@@ -69,7 +73,8 @@ namespace Services.Sales
             ISalesOrderRepository salesOrderRepository,
             IRepository<CustomerContact> customerContactRepo,
             IRepository<VendorContact> vendorContactRepo,
-            ILogger<SalesService> logger)
+            ILogger<SalesService> logger,
+            IMapper mapper)
             : base(sequenceNumberRepo, generalLedgerSetting, paymentTermRepo, bankRepo)
         {
             _financialService = financialService;
@@ -94,6 +99,7 @@ namespace Services.Sales
             _customerContactRepo = customerContactRepo;
             _vendorContactRepo = vendorContactRepo;
             _logger = logger;
+            _mapper = mapper;
         }
 
         public void AddSalesOrder(SalesOrderHeader salesOrder, bool toSave)
@@ -722,6 +728,112 @@ namespace Services.Sales
             }
 
             return quotation;
+        }
+
+        public Result<Dto.Sales.SalesInvoice> CreateSalesInvoice(Dto.Sales.SalesInvoice salesInvoiceDto)
+        {
+            Core.Domain.Sales.SalesOrderHeader? salesOrder = null;
+            Core.Domain.Sales.SalesInvoiceHeader? salesInvoice = null;
+           
+            if (!salesInvoiceDto.FromSalesOrderId.HasValue)
+            {
+                salesOrder = _mapper.Map<Core.Domain.Sales.SalesOrderHeader>(salesInvoiceDto);
+            }
+            else
+            {
+                // your invoice is created from existing (open) sales order.
+                salesOrder = GetSalesOrderById(salesInvoiceDto.FromSalesOrderId.GetValueOrDefault());
+
+                if(salesOrder is null)
+                {
+                    var message = $"Sales order {salesInvoiceDto.FromSalesOrderId} in SalesInvoice not found.";
+                    return Result<Dto.Sales.SalesInvoice>.Failure(Error.RecordNotFound(message));
+                }
+            }
+
+            salesInvoice = _mapper.Map<Core.Domain.Sales.SalesInvoiceHeader>(salesInvoiceDto);
+
+            foreach(var invoiceLine in salesInvoice.SalesInvoiceLines)
+            {
+                if(invoiceLine.SalesOrderLineId == 0)
+                {
+                    salesOrder.SalesOrderLines.Add(invoiceLine.SalesOrderLine);
+                    invoiceLine.SalesOrderLineId = invoiceLine.SalesOrderLine.Id;
+                }
+            }
+
+            _logger.LogInformation("SaveSalesInvoice API " + salesInvoice.CustomerId);
+
+            SaveSalesInvoice(salesInvoice, salesOrder);
+
+            return Result<Dto.Sales.SalesInvoice>.Success(salesInvoiceDto);
+        }
+
+        public Result<Dto.Sales.SalesInvoice> UpdateSalesInvoice(Dto.Sales.SalesInvoice salesInvoiceDto)
+        {
+            Core.Domain.Sales.SalesInvoiceHeader? salesInvoice = null;
+            Core.Domain.Sales.SalesOrderHeader? salesOrder = null;
+
+            salesInvoice = GetSalesInvoiceById(salesInvoiceDto.Id);
+            
+            if(salesInvoice is null)
+            {
+                var message = $"Sales invoice {salesInvoiceDto.Id} not found.";
+                return Result<Dto.Sales.SalesInvoice>.Failure(Error.RecordNotFound(message));
+            }
+
+            if (salesInvoice.GeneralLedgerHeaderId.HasValue)
+                throw new Exception("Invoice is already posted. Update is not allowed.");
+
+            _mapper.Map<Dto.Sales.SalesInvoice, Core.Domain.Sales.SalesInvoiceHeader>(salesInvoiceDto, salesInvoice);
+
+            int existingOrderLineId = salesInvoice.SalesInvoiceLines.FirstOrDefault().SalesOrderLineId ??= 0;
+            foreach (var invoiceLine in salesInvoice.SalesInvoiceLines!)
+            {
+                salesOrder = GetSalesOrderLineById(invoiceLine!.SalesOrderLineId ??= 0).SalesOrderHeader;
+
+                if (invoiceLine.Id == 0)
+                {
+                    // use the last value of existingLine
+                    salesOrder = GetSalesOrderLineById(existingOrderLineId).SalesOrderHeader;
+                    salesOrder.SalesOrderLines.Add(invoiceLine.SalesOrderLine);
+                }
+                else
+                {
+                    // TODO: Udpate Existing SalesOrderLine with SalesInvoiceLine.
+                    invoiceLine.SalesOrderLine = GetSalesOrderLineById(invoiceLine.SalesOrderLineId.GetValueOrDefault());
+                }
+            }
+
+            var deleted = (from line in salesInvoice.SalesInvoiceLines
+                           where !salesInvoiceDto.SalesInvoiceLines.Any(x => x.Id == line.Id)
+                           select line).ToList();
+
+            foreach (var line in deleted)
+            {
+                salesInvoice.SalesInvoiceLines.Remove(line);
+            }
+
+            _logger.LogInformation("SaveSalesInvoice API " + salesInvoice.CustomerId);
+
+            SaveSalesInvoice(salesInvoice, salesOrder);
+
+            return Result<Dto.Sales.SalesInvoice>.Success(null);
+        }
+
+        public async Task<Result<Dto.Sales.SalesInvoice>> DeleteSalesInvoiceAsync(int id)
+        {
+            var salesInvoice = GetSalesInvoiceById(id);
+
+            if (salesInvoice is null)
+            {
+                var message = $"Sales invoice {id} not found.";
+                return Result<Dto.Sales.SalesInvoice>.Failure(Error.RecordNotFound(message));
+            }
+
+            await _salesInvoiceRepo.DeleteAsync(salesInvoice);
+
+            return Result<Dto.Sales.SalesInvoice>.Success(null);
         }
 
         public void SaveSalesInvoice(SalesInvoiceHeader salesInvoice, SalesOrderHeader salesOrder)
