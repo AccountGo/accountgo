@@ -193,12 +193,14 @@ namespace AccountGoWeb.Controllers
                     return RedirectToAction("SalesInvoices");
                 }
             }
+
             ViewBag.Customers = SelectListItemHelper.Customers();
             ViewBag.PaymentTerms = SelectListItemHelper.PaymentTerms();
             ViewBag.Items = SelectListItemHelper.Items();
             ViewBag.Measurements = SelectListItemHelper.Measurements();
+            ViewBag.TotalAmount = salesInvoiceModel.Amount;
 
-            return View("SalesInvoice", salesInvoiceModel);
+            return View(salesInvoiceModel);
         }
 
         [HttpGet]
