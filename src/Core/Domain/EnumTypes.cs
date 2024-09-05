@@ -175,4 +175,15 @@ namespace Core.Domain
         [Display(Name = "Closed - Order Created")]
         ClosedOrderCreated = 5
     }
+
+    public enum SalesProposalStatus
+    {
+        Draft = 0,
+        Open = 1,
+        Overdue = 2,
+        Closed = 3,
+        Void = 4,
+        [Display(Name = "Closed - Order Created")]
+        ClosedOrderCreated = 5
+    }
 }
