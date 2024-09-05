@@ -2,7 +2,7 @@
 // <copyright file="SalesProposalLine.cs" company="GoodDeedBooks">
 // Copyright (c) GoodDeedBooks. All rights reserved.
 // <author>Yeongdong Choi</author>
-// <date>4/09/2024 5:31:40 AM</date>
+// <date>4/09/2024 5:31:40 PM</date>
 // </copyright>
 //-----------------------------------------------------------------------
 
