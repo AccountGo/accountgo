@@ -14,19 +14,20 @@ namespace Core.Domain.Sales
     [Table("SalesProposalLine")]
     public class SalesProposalLine : BaseEntity
     {
+        // Properties
         public int SalesProposalHeaderId { get; set; }
+        public decimal Quantity { get; set; }
+        public decimal Amount { get; set; }
+        public decimal Discount { get; set; }
+
+
+        // Foreign keys
         public int ItemId { get; set; }
         public int MeasurementId { get; set; }
 
 
-        public decimal Quantity { get; set; }
-        public decimal Amount { get; set; }
-        public decimal Discount { get; set; }
-       
-
+        // Navigation properties
         public SalesProposalHeader SalesProposalHeader { get; set; }
-
-
         public virtual Item Item { get; set; }
         public virtual Measurement Measurement { get; set; }
     }

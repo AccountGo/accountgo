@@ -15,17 +15,19 @@ namespace Core.Domain.Sales
     [Table("SalesProposalHeader")]
     public class SalesProposalHeader : BaseEntity
     {
-        public int CustomerId { get; set; }
-        public int? PaymentTermId { get; set; }
-
-
+        // Properties
         public string No { get; set; }
         public string Description { get; set; }
         public DateTime DeliveryDate { get; set; }
         public SalesProposalStatus? Status { get; set; }
         public string ReferenceNo { get; set; }
 
+        // Foreign keys
+        public int CustomerId { get; set; }
+        public int? PaymentTermId { get; set; }
 
+
+        // Navigation properties
         public virtual Customer Customer { get; set; }
         public virtual ICollection<SalesProposalLine> SalesProposalLines { get; set; }
 
