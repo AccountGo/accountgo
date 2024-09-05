@@ -20,10 +20,9 @@ namespace Core.Domain.Sales
 
 
         public decimal Quantity { get; set; }
-        public decimal AmountExcludingTaxes { get; set; }
-        public decimal PricePerUnit { get; set; }
+        public decimal Amount { get; set; }
         public decimal Discount { get; set; }
-
+       
 
         public SalesProposalHeader SalesProposalHeader { get; set; }
 
