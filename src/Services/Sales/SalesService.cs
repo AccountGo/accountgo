@@ -21,6 +21,7 @@ using Microsoft.Extensions.Logging;
 using AutoMapper;
 using Core.Domain.Error;
 using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
 
 namespace Services.Sales
 {
@@ -51,6 +52,7 @@ namespace Services.Sales
         private readonly IRepository<TaxGroup> _taxGroupRepo;
         private readonly IRepository<SalesQuoteHeader> _salesQuoteRepo;
         private readonly ISalesOrderRepository _salesOrderRepository;
+        private readonly IRepository<SalesProposalHeader> _salesProposalRepo;
     
         public SalesService(IFinancialService financialService,
             IInventoryService inventoryService,
@@ -71,6 +73,7 @@ namespace Services.Sales
             IRepository<TaxGroup> taxGroupRepo,
             IRepository<SalesQuoteHeader> salesQuoteRepo,
             ISalesOrderRepository salesOrderRepository,
+            IRepository<SalesProposalHeader> salesProposalRepo,
             IRepository<CustomerContact> customerContactRepo,
             IRepository<VendorContact> vendorContactRepo,
             ILogger<SalesService> logger,
@@ -96,6 +99,7 @@ namespace Services.Sales
             _salesQuoteRepo = salesQuoteRepo;
             _salesOrderRepository = salesOrderRepository;
             _salesOrderLineRepo = salesOrderLineRepo;
+            _salesProposalRepo = salesProposalRepo;
             _customerContactRepo = customerContactRepo;
             _vendorContactRepo = vendorContactRepo;
             _logger = logger;
@@ -709,6 +713,19 @@ namespace Services.Sales
                 .Where(i => i.CustomerId == customerId);
 
             return invoices;
+
+        }
+            
+        public async Task<Result<IEnumerable<Dto.Sales.SalesProposal>>> GetSalesProposalsAsync()
+        {
+            var salesProposals = await _salesProposalRepo.GetAllIncludingAsNoTracking(proposal => proposal.Customer,
+                proposal => proposal.Customer.Party,
+                proposal => proposal.SalesProposalLines)
+                .ToListAsync();
+            
+            var salesProposalsDto = _mapper.Map<IEnumerable<Dto.Sales.SalesProposal>>(salesProposals);
+
+            return Result<IEnumerable<Dto.Sales.SalesProposal>>.Success(salesProposalsDto);
         }
 
         public SalesQuoteHeader GetSalesQuotationById(int id)

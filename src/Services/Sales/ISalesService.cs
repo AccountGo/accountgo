@@ -37,6 +37,7 @@ namespace Services.Sales
         void SaveCustomerAllocation(CustomerAllocation allocation);
         IEnumerable<SalesDeliveryHeader> GetSalesDeliveries();
         IEnumerable<SalesOrderHeader> GetSalesOrders();
+        Task<Result<IEnumerable<Dto.Sales.SalesProposal>>> GetSalesProposalsAsync();
         SalesOrderHeader GetSalesOrderById(int id);
         SalesOrderLine GetSalesOrderLineById(int id);
         SalesDeliveryHeader GetSalesDeliveryById(int id);
