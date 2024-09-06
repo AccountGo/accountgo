@@ -7,18 +7,26 @@ namespace Dto.Sales
     public class SalesProposal : BaseDto
     {
         public string? No { get; set; }
+        public decimal Amount { get { return GetTotalAmount(); } }
+        public string? Description { get; set; }
+        public DateTime DeliveryDate { get; set; }
+        public IList<SalesProposalLine>? SalesProposalLines { get; set; }
+
+
+        public int StatusId { get; set; }
+        public string? SalesProposalStatus { get; set; }
+
         public int? PaymentTermId { get; set; }
+
         public int CustomerId { get; set; }
         public string? CustomerName { get; set; }
         public string? CustomerEmail { get; set; }
+
         public string? CompanyName { get; set; }
         public string? CompanyEmail { get; set; }
-        public decimal Amount { get { return GetTotalAmount(); } }
 
-        public string? Description { get; set; }
-        public DateTime DeliveryDate { get; set; }
         public string? ReferenceNo { get; set; }
-        public IList<SalesProposalLine>? SalesProposalLines { get; set; }
+
 
         private decimal GetTotalAmount()
         {
