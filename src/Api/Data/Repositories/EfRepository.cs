@@ -308,6 +308,17 @@ namespace Api.Data
             return queryable;
         }
 
+        public IQueryable<T> GetAllIncludingAsNoTracking(params System.Linq.Expressions.Expression<Func<T, object>>[] includeProperties)
+        {
+            IQueryable<T> queryable = TableNoTracking;
+            foreach (System.Linq.Expressions.Expression<Func<T, object>> includeProperty in includeProperties)
+            {
+                queryable = queryable.Include<T, object>(includeProperty);
+            }
+
+            return queryable;
+        }
+
         #endregion
     }
 }
