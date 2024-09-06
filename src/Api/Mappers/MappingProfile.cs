@@ -60,6 +60,13 @@ namespace Api
                 .ForMember(dest => dest.ItemId, opt => opt.MapFrom(src => src.ItemId.GetValueOrDefault()))
                 .ForMember(dest => dest.MeasurementId, opt => opt.MapFrom(src => src.MeasurementId.GetValueOrDefault()));
 
+            CreateMap<Core.Domain.Sales.SalesProposalHeader, Dto.Sales.SalesProposal>()
+                .ForMember(dest => dest.CustomerName, opt => opt.MapFrom(src => src.Customer.Party.Name))
+                .ForMember(dest => dest.SalesProposalStatus, opt => opt.MapFrom(src => src.Status))
+                .ForMember(dest => dest.SalesProposalLines, opt => opt.MapFrom(src => src.SalesProposalLines));
+
+            CreateMap<Core.Domain.Sales.SalesInvoiceLine, Dto.Sales.SalesInvoiceLine>();
+
             #endregion
         }
     }
