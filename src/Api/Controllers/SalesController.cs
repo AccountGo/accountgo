@@ -357,6 +357,19 @@ namespace Api.Controllers
             }
         }
 
+        [HttpGet("GetSalesProposals")]
+        public async Task<IActionResult> GetSalesProposals()
+        {
+            var result = await _salesService.GetSalesProposalsAsync();
+
+            if (result.IsFailure)
+                return BadRequest(result.Error.Message);
+
+            var salesProposals = result.Value;
+
+            return Ok(salesProposals);
+        }
+
         [HttpGet]
         [Route("Quotations")] // api/Sales/Quotations
         public IActionResult Quotations()
