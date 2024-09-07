@@ -7,7 +7,7 @@ namespace Dto.Sales
     public class SalesProposal : BaseDto
     {
         public string? No { get; set; }
-        public decimal Amount { get { return GetTotalAmount(); } }
+        public decimal TotalAmount { get { return GetTotalAmount(); } }
         public string? Description { get; set; }
         public DateTime DeliveryDate { get; set; }
         public IList<SalesProposalLine>? SalesProposalLines { get; set; }
