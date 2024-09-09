@@ -27,6 +27,9 @@ builder.Services.AddAuthentication();
 builder.Services.ConfigureIdentity();
 builder.Services.ConfigureJWT(builder.Configuration);
 
+// swagger
+builder.Services.ConfigureSwagger();
+
 builder.Services.AddControllers()
 .AddNewtonsoftJson(
     options =>
@@ -38,7 +41,6 @@ builder.Services.AddControllers()
 
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
 
 // Add database context
 builder.Services.ConfigureSqlContext(builder.Configuration);
@@ -76,11 +78,6 @@ builder.Services.AddScoped(typeof(Services.TaxSystem.ITaxService), typeof(Servic
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
 
 //app.UseHttpsRedirection();
 app.UseRouting();
@@ -88,6 +85,15 @@ app.UseCors("AllowAll");
 
 app.UseAuthentication();
 app.UseAuthorization();
+
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI(s =>
+    {
+        s.SwaggerEndpoint("/swagger/v1/swagger.json", "Good Deed Books API v1");
+    });
+}
 
 app.MapControllers();
 
