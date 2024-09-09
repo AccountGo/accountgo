@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
 using System.Text;
 
 namespace Api.Extensions
@@ -76,6 +77,29 @@ namespace Api.Extensions
                 , options => options.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery)))
                 //.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery) // Add this line
                 .AddDbContext<ApplicationIdentityDbContext>(options => options.UseSqlServer(connectionString));
+        }
+
+        public static void ConfigureSwagger(this IServiceCollection services)
+        {
+            services.AddSwaggerGen( s =>
+            {
+                s.SwaggerDoc("v1", new OpenApiInfo
+                {
+                    Title = "Good Deed Books API",
+                    Version = "v1",
+                    Contact = new OpenApiContact
+                    {
+                        Name = "Good Deed Books",
+                        Email = "yeongdong.choi7@gmail.com",
+                        Url = new Uri("https://good-books.azurewebsites.net/"),
+                    },
+                    License = new OpenApiLicense
+                    {
+                        Name = "MIT License",
+                        Url = new Uri("https://opensource.org/licenses/MIT"),
+                    }
+                });
+            });
         }
     }
 }
