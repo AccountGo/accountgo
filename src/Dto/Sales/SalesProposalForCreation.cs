@@ -3,12 +3,12 @@ using System;
 
 namespace Dto.Sales
 {
-    public class SalesProposalForCreation
+    public class SalesProposalForCreation : BaseDto
     {
         public string No { get; set; }
         public string Description { get; set; }
         public DateTime DeliveryDate { get; set; }
-        public IList<SalesProposalLine> SalesProposalLines { get; set; }
+        public IList<SalesProposalLineForCreation> SalesProposalLines { get; set; }
 
 
         public int? StatusId { get; set; }
@@ -26,8 +26,9 @@ namespace Dto.Sales
         public string? ReferenceNo { get; set; }
     }
 
-    public class SalesProposalLineForCreation
+    public class SalesProposalLineForCreation : BaseDto
     {
+        public int SalesProposalHeaderId { get; set; }
         public decimal Quantity { get; set; }
         public decimal Amount { get; set; }
         public decimal Discount { get; set; }

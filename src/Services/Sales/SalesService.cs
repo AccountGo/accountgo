@@ -272,6 +272,23 @@ namespace Services.Sales
             }
         }
 
+        public async Task<Result<Dto.Sales.SalesProposal>> AddSalesProposalAsync(Dto.Sales.SalesProposalForCreation salesProposalForCreationDto)
+        {
+            if(salesProposalForCreationDto is null)
+            {
+                var message = "Sales proposal for creation is null";
+                return Result<Dto.Sales.SalesProposal>.Failure(Error.NullError(message));
+            }
+
+            var salesProposal = _mapper.Map<Core.Domain.Sales.SalesProposalHeader>(salesProposalForCreationDto);
+
+            await _salesProposalRepo.InsertAsync(salesProposal);
+
+            var salesProposalDto = _mapper.Map<Dto.Sales.SalesProposal>(salesProposal);
+
+            return Result<Dto.Sales.SalesProposal>.Success(salesProposalDto);
+        }
+
         public void AddSalesReceipt(SalesReceiptHeader salesReceipt)
         {
             var customer = _customerRepo.GetById(salesReceipt.CustomerId);

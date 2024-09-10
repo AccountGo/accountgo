@@ -22,6 +22,7 @@ namespace Services.Sales
         void AddSalesReceipt(SalesReceiptHeader salesReceipt);
         void AddSalesReceiptNoInvoice(SalesReceiptHeader salesReceipt);
         void AddSalesDelivery(SalesDeliveryHeader salesDelivery, bool toSave);
+        Task<Result<Dto.Sales.SalesProposal>> AddSalesProposalAsync(Dto.Sales.SalesProposalForCreation salesProposalForCreationDto);
         IEnumerable<SalesInvoiceHeader> GetSalesInvoices();
         SalesInvoiceHeader GetSalesInvoiceById(int id);
         SalesInvoiceHeader GetSalesInvoiceByNo(string no);

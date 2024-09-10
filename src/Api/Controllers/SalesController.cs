@@ -357,6 +357,17 @@ namespace Api.Controllers
             }
         }
 
+        [HttpPost("AddSalesProposal")]
+        public async Task<IActionResult> AddSalesProposal([FromBody] Dto.Sales.SalesProposalForCreation salesProposalForCreationDto)
+        {
+            var result = await _salesService.AddSalesProposalAsync(salesProposalForCreationDto);
+
+            if (result.IsFailure)
+                return BadRequest(result.Error.Message);
+
+            return Created();
+        }
+
         [HttpGet("GetSalesProposals")]
         public async Task<IActionResult> GetSalesProposals()
         {
