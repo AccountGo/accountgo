@@ -19,6 +19,7 @@ namespace Core.Data
     public partial interface IRepository<T> where T : BaseEntity
     {
         T GetById(object id);
+        Task<T> GetByIdAsync(object id);
         void Insert(T entity);
         Task InsertAsync(T entity);
         void Update(T entity);

@@ -29,7 +29,9 @@ namespace Core.Domain.Sales
 
         // Navigation properties
         public virtual Customer Customer { get; set; }
+        public virtual PaymentTerm PaymentTerm { get; set; }
         public virtual ICollection<SalesProposalLine> SalesProposalLines { get; set; }
+
 
 
         public SalesProposalHeader()

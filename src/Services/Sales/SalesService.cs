@@ -289,6 +289,53 @@ namespace Services.Sales
             return Result<Dto.Sales.SalesProposal>.Success(salesProposalDto);
         }
 
+        private async Task<SalesProposalHeader> GetSalesProposalAsync(int id)
+        {
+            var salesProposal = await _salesProposalRepo.GetAllIncludingAsNoTracking(proposal => proposal.Customer,
+                proposal => proposal.Customer.Party,
+                proposal => proposal.SalesProposalLines)
+                .Where(proposal => proposal.Id == id)
+                .FirstOrDefaultAsync();
+
+            if (salesProposal is not null)
+            {
+                foreach (var line in salesProposal.SalesProposalLines)
+                {
+                    line.Item = _itemRepo.GetById(line.ItemId);
+                    line.Measurement = _measurementRepo.GetById(line.MeasurementId);
+                }
+            }
+
+            return salesProposal;
+        }
+
+        public async Task<Result<IEnumerable<Dto.Sales.SalesProposal>>> GetSalesProposalsAsync()
+        {
+            var salesProposals = await _salesProposalRepo.GetAllIncludingAsNoTracking(proposal => proposal.Customer,
+                proposal => proposal.Customer.Party,
+                proposal => proposal.SalesProposalLines)
+                .ToListAsync();
+
+            var salesProposalsDto = _mapper.Map<IEnumerable<Dto.Sales.SalesProposal>>(salesProposals);
+
+            return Result<IEnumerable<Dto.Sales.SalesProposal>>.Success(salesProposalsDto);
+        }
+
+        public async Task<Result<Dto.Sales.SalesProposal>> DeleteSalesProposalAsync(int id)
+        {
+            var salesProposal = await GetSalesProposalAsync(id);
+
+            if (salesProposal is null)
+            {
+                var message = "Sales proposal not found.";
+                return Result<Dto.Sales.SalesProposal>.Failure(Error.RecordNotFound(message));
+            }
+
+            await _salesProposalRepo.DeleteAsync(salesProposal);
+
+            return Result<Dto.Sales.SalesProposal>.Success(null);
+        }
+
         public void AddSalesReceipt(SalesReceiptHeader salesReceipt)
         {
             var customer = _customerRepo.GetById(salesReceipt.CustomerId);
@@ -731,18 +778,6 @@ namespace Services.Sales
 
             return invoices;
 
-        }
-            
-        public async Task<Result<IEnumerable<Dto.Sales.SalesProposal>>> GetSalesProposalsAsync()
-        {
-            var salesProposals = await _salesProposalRepo.GetAllIncludingAsNoTracking(proposal => proposal.Customer,
-                proposal => proposal.Customer.Party,
-                proposal => proposal.SalesProposalLines)
-                .ToListAsync();
-            
-            var salesProposalsDto = _mapper.Map<IEnumerable<Dto.Sales.SalesProposal>>(salesProposals);
-
-            return Result<IEnumerable<Dto.Sales.SalesProposal>>.Success(salesProposalsDto);
         }
 
         public SalesQuoteHeader GetSalesQuotationById(int id)

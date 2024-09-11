@@ -75,6 +75,18 @@ namespace Api.Data
         }
 
         /// <summary>
+        /// Get entity by identifier asynchronously
+        /// </summary>
+        /// <param name="id">Identifier</param>
+        /// <returns>Entity</returns>
+        public async virtual Task<T> GetByIdAsync(object id)
+        {
+            var entity = await this.TableNoTracking.FirstOrDefaultAsync(x => x.Id == (int)id);
+
+            return entity;
+        }
+
+        /// <summary>
         /// Insert entity
         /// </summary>
         /// <param name="entity">Entity</param>

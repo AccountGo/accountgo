@@ -381,6 +381,17 @@ namespace Api.Controllers
             return Ok(salesProposals);
         }
 
+        [HttpDelete("DeleteSalesProposal")]
+        public async Task<IActionResult> DeleteSalesProposal(int id)
+        {
+            var result = await _salesService.DeleteSalesProposalAsync(id);
+
+            if (result.IsFailure)
+                return BadRequest(result.Error.Message);
+
+            return NoContent();
+        }
+
         [HttpGet]
         [Route("Quotations")] // api/Sales/Quotations
         public IActionResult Quotations()

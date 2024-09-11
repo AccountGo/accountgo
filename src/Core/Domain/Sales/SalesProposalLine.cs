@@ -27,8 +27,9 @@ namespace Core.Domain.Sales
 
 
         // Navigation properties
-        public SalesProposalHeader SalesProposalHeader { get; set; }
         public virtual Item Item { get; set; }
         public virtual Measurement Measurement { get; set; }
+        public SalesProposalHeader SalesProposalHeader { get; set; }
+
     }
 }

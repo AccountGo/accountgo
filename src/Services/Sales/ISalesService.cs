@@ -23,6 +23,9 @@ namespace Services.Sales
         void AddSalesReceiptNoInvoice(SalesReceiptHeader salesReceipt);
         void AddSalesDelivery(SalesDeliveryHeader salesDelivery, bool toSave);
         Task<Result<Dto.Sales.SalesProposal>> AddSalesProposalAsync(Dto.Sales.SalesProposalForCreation salesProposalForCreationDto);
+        Task<Result<IEnumerable<Dto.Sales.SalesProposal>>> GetSalesProposalsAsync();
+        Task<Result<Dto.Sales.SalesProposal>> DeleteSalesProposalAsync(int id);
+        Task<Result<Dto.Sales.SalesInvoice>> DeleteSalesInvoiceAsync(int id);
         IEnumerable<SalesInvoiceHeader> GetSalesInvoices();
         SalesInvoiceHeader GetSalesInvoiceById(int id);
         SalesInvoiceHeader GetSalesInvoiceByNo(string no);
@@ -38,7 +41,6 @@ namespace Services.Sales
         void SaveCustomerAllocation(CustomerAllocation allocation);
         IEnumerable<SalesDeliveryHeader> GetSalesDeliveries();
         IEnumerable<SalesOrderHeader> GetSalesOrders();
-        Task<Result<IEnumerable<Dto.Sales.SalesProposal>>> GetSalesProposalsAsync();
         SalesOrderHeader GetSalesOrderById(int id);
         SalesOrderLine GetSalesOrderLineById(int id);
         SalesDeliveryHeader GetSalesDeliveryById(int id);
@@ -54,7 +56,6 @@ namespace Services.Sales
         void SaveSalesInvoice(SalesInvoiceHeader salesInvoice, SalesOrderHeader salesOrder);
         Result<Dto.Sales.SalesInvoice> CreateSalesInvoice(Dto.Sales.SalesInvoice salesInvoiceDto);
         Result<Dto.Sales.SalesInvoice> UpdateSalesInvoice(Dto.Sales.SalesInvoice salesInvoiceDto);
-        Task<Result<Dto.Sales.SalesInvoice>> DeleteSalesInvoiceAsync(int id);
         void PostSalesInvoice(int invoiceId);
         Contact GetContacyById(int id);
         CustomerContact GetCustomerContact(int id);
