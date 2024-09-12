@@ -321,6 +321,11 @@ namespace Services.Sales
             return Result<IEnumerable<Dto.Sales.SalesProposal>>.Success(salesProposalsDto);
         }
 
+        public async Task<Result<Dto.Sales.SalesProposal>> UpdateSalesProposalAsync(Dto.Sales.SalesProposalForUpdate salesProposalForUpdateDto)
+        {
+            throw new NotImplementedException();
+        }
+
         public async Task<Result<Dto.Sales.SalesProposal>> DeleteSalesProposalAsync(int id)
         {
             var salesProposal = await GetSalesProposalAsync(id);

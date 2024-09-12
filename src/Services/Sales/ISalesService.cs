@@ -24,6 +24,7 @@ namespace Services.Sales
         void AddSalesDelivery(SalesDeliveryHeader salesDelivery, bool toSave);
         Task<Result<Dto.Sales.SalesProposal>> AddSalesProposalAsync(Dto.Sales.SalesProposalForCreation salesProposalForCreationDto);
         Task<Result<IEnumerable<Dto.Sales.SalesProposal>>> GetSalesProposalsAsync();
+        Task<Result<Dto.Sales.SalesProposal>> UpdateSalesProposalAsync(Dto.Sales.SalesProposalForUpdate salesProposalForUpdateDto);
         Task<Result<Dto.Sales.SalesProposal>> DeleteSalesProposalAsync(int id);
         Task<Result<Dto.Sales.SalesInvoice>> DeleteSalesInvoiceAsync(int id);
         IEnumerable<SalesInvoiceHeader> GetSalesInvoices();
