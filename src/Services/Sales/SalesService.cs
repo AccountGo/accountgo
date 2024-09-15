@@ -323,7 +323,21 @@ namespace Services.Sales
 
         public async Task<Result<Dto.Sales.SalesProposal>> UpdateSalesProposalAsync(Dto.Sales.SalesProposalForUpdate salesProposalForUpdateDto)
         {
-            throw new NotImplementedException();
+            if(salesProposalForUpdateDto is null)
+                return Result<Dto.Sales.SalesProposal>.Failure(Error.NullError("Sales proposal for update is null"));
+            
+            var salesProposal = await GetSalesProposalAsync(salesProposalForUpdateDto.Id);
+
+            if (salesProposal is null)
+                return Result<Dto.Sales.SalesProposal>.Failure(Error.RecordNotFound("Sales proposal not found."));
+            
+            _mapper.Map<Dto.Sales.SalesProposalForUpdate, Core.Domain.Sales.SalesProposalHeader>(salesProposalForUpdateDto, salesProposal);
+
+            await _salesProposalRepo.UpdateAsync(salesProposal);
+
+            var salesProposalDto = _mapper.Map<Dto.Sales.SalesProposal>(salesProposal);
+
+            return Result<Dto.Sales.SalesProposal>.Success(salesProposalDto);
         }
 
         public async Task<Result<Dto.Sales.SalesProposal>> DeleteSalesProposalAsync(int id)
