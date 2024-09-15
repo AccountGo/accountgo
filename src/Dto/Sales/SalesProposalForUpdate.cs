@@ -11,8 +11,7 @@ namespace Dto.Sales
         public IList<SalesProposalLineForUpdate> SalesProposalLines { get; set; }
 
 
-        public int? StatusId { get; set; }
-        public string? SalesProposalStatus { get; set; }
+        public int? SalesProposalStatus { get; set; }
 
         public int PaymentTermId { get; set; }
 
