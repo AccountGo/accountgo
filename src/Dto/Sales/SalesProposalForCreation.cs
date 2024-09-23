@@ -10,8 +10,7 @@ namespace Dto.Sales
         public DateTime DeliveryDate { get; set; }
         public IList<SalesProposalLineForCreation> SalesProposalLines { get; set; }
 
-
-        public int? SalesProposalStatus { get; set; }
+        public int StatusId { get; set; }
 
         public int PaymentTermId { get; set; }
 
