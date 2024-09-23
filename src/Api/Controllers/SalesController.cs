@@ -371,7 +371,7 @@ namespace Api.Controllers
         [HttpGet("GetSalesProposals")]
         public async Task<IActionResult> GetSalesProposals()
         {
-            var result = await _salesService.GetSalesProposalsAsync();
+            var result = await _salesService.GetSalesProposalsAsync(trackChanges : false);
 
             if (result.IsFailure)
                 return BadRequest(result.Error.Message);
@@ -381,10 +381,23 @@ namespace Api.Controllers
             return Ok(salesProposals);
         }
 
+        [HttpPut("UpdateSalesProposal")]
+        public async Task<IActionResult> UpdateSalesProposal([FromBody] Dto.Sales.SalesProposalForUpdate salesProposalForUpdateDto)
+        {
+            var result = await _salesService.UpdateSalesProposalAsync(salesProposalForUpdateDto, trackChanges : true);
+
+            if(result.IsFailure)
+                return BadRequest(result.Error.Message);
+
+            var salesProposalToReturn = result.Value;
+
+            return Ok(salesProposalToReturn);
+        }
+
         [HttpDelete("DeleteSalesProposal")]
         public async Task<IActionResult> DeleteSalesProposal(int id)
         {
-            var result = await _salesService.DeleteSalesProposalAsync(id);
+            var result = await _salesService.DeleteSalesProposalAsync(id, trackChanges : false);
 
             if (result.IsFailure)
                 return BadRequest(result.Error.Message);
