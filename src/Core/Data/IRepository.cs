@@ -31,5 +31,6 @@ namespace Core.Data
         IQueryable<T> GetAllIncluding(params System.Linq.Expressions.Expression<Func<T, object>>[] includeProperties);
 
         IQueryable<T> GetAllIncludingAsNoTracking(params System.Linq.Expressions.Expression<Func<T, object>>[] includingProperties);
+        IQueryable<T> FindAllIncluding(bool trackChanges, params System.Linq.Expressions.Expression<Func<T, object>>[] includingProperties);
     }
 }

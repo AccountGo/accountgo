@@ -289,9 +289,9 @@ namespace Services.Sales
             return Result<Dto.Sales.SalesProposal>.Success(salesProposalDto);
         }
 
-        private async Task<SalesProposalHeader> GetSalesProposalAsync(int id)
+        private async Task<SalesProposalHeader> GetSalesProposalAsync(int id, bool trackChanges)
         {
-            var salesProposal = await _salesProposalRepo.GetAllIncludingAsNoTracking(proposal => proposal.Customer,
+            var salesProposal = await _salesProposalRepo.FindAllIncluding(trackChanges, proposal => proposal.Customer,
                 proposal => proposal.Customer.Party,
                 proposal => proposal.SalesProposalLines)
                 .Where(proposal => proposal.Id == id)
@@ -309,9 +309,9 @@ namespace Services.Sales
             return salesProposal;
         }
 
-        public async Task<Result<IEnumerable<Dto.Sales.SalesProposal>>> GetSalesProposalsAsync()
+        public async Task<Result<IEnumerable<Dto.Sales.SalesProposal>>> GetSalesProposalsAsync(bool trackChanges)
         {
-            var salesProposals = await _salesProposalRepo.GetAllIncludingAsNoTracking(proposal => proposal.Customer,
+            var salesProposals = await _salesProposalRepo.FindAllIncluding(trackChanges, proposal => proposal.Customer,
                 proposal => proposal.Customer.Party,
                 proposal => proposal.SalesProposalLines)
                 .ToListAsync();
@@ -321,12 +321,12 @@ namespace Services.Sales
             return Result<IEnumerable<Dto.Sales.SalesProposal>>.Success(salesProposalsDto);
         }
 
-        public async Task<Result<Dto.Sales.SalesProposal>> UpdateSalesProposalAsync(Dto.Sales.SalesProposalForUpdate salesProposalForUpdateDto)
+        public async Task<Result<Dto.Sales.SalesProposal>> UpdateSalesProposalAsync(Dto.Sales.SalesProposalForUpdate salesProposalForUpdateDto, bool trackChanges)
         {
             if(salesProposalForUpdateDto is null)
                 return Result<Dto.Sales.SalesProposal>.Failure(Error.NullError("Sales proposal for update is null"));
             
-            var salesProposal = await GetSalesProposalAsync(salesProposalForUpdateDto.Id);
+            var salesProposal = await GetSalesProposalAsync(salesProposalForUpdateDto.Id, trackChanges);
 
             if (salesProposal is null)
                 return Result<Dto.Sales.SalesProposal>.Failure(Error.RecordNotFound("Sales proposal not found."));
@@ -340,9 +340,9 @@ namespace Services.Sales
             return Result<Dto.Sales.SalesProposal>.Success(salesProposalDto);
         }
 
-        public async Task<Result<Dto.Sales.SalesProposal>> DeleteSalesProposalAsync(int id)
+        public async Task<Result<Dto.Sales.SalesProposal>> DeleteSalesProposalAsync(int id, bool trackChanges)
         {
-            var salesProposal = await GetSalesProposalAsync(id);
+            var salesProposal = await GetSalesProposalAsync(id, trackChanges);
 
             if (salesProposal is null)
             {
