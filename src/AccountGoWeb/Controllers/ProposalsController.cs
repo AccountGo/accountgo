@@ -20,14 +20,15 @@ namespace AccountGoWeb.Controllers
 
         public async System.Threading.Tasks.Task<IActionResult> Proposals()
         {
-            ViewBag.PageContentHeader = "Proposals";
+            ViewBag.PageContentHeader = "Sales Proposals";
 
             using (var client = new HttpClient())
             {
                 var baseUri = _configuration!["ApiUrl"];
                 client.BaseAddress = new System.Uri(baseUri!);
                 client.DefaultRequestHeaders.Accept.Clear();
-                var response = await client.GetAsync(baseUri + "sales/quotations");
+
+                var response = await client.GetAsync(baseUri + "sales/GetSalesProposals");
                 if (response.IsSuccessStatusCode)
                 {
                     var responseJson = await response.Content.ReadAsStringAsync();
