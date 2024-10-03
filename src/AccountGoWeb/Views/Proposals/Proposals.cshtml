@@ -32,6 +32,25 @@
     <div id="proposals" class="ag-fresh" style="height: 400px;"></div>
 </div>
 
+@* Delete Modal*@
+<div class="modal" id="deleteSalesProposal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Delete</h5>
+                <button aria-label="Close" class="btn-close" data-bs-dismiss="modal" type="button"></button>
+            </div>
+            <div class="modal-body">
+                <p>Do you want to delete it?</p>
+                <input type="hidden" id="hdnselectedsalesProposalId" />
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-sm btn-primary btn-flat" onclick="deleteSalesProposal()" type="button">Yes</button>
+                <button class="btn btn-sm btn-default btn-flat" data-bs-dismiss="modal" type="button">No</button>
+            </div>
+        </div>
+    </div>
+</div>
 <script>
     var columnDefs = [
     {headerName: "No", field: "no", width: 50},
@@ -58,10 +77,12 @@
         document.getElementById('linkEditProposal').setAttribute('class', 'btn btn-outline-light');
 
         document.getElementById('linkDeleteProposal').setAttribute('class', 'btn btn-outline-light');
+        document.getElementById('linkDeleteProposal').setAttribute('data-bs-toggle', 'modal');
+        document.getElementById('linkDeleteProposal').setAttribute('data-bs-target', '#deleteSalesProposal');
 
         document.getElementById('linkNewOrder').setAttribute('class', 'btn btn-outline-light');
         console.log(selectedRows);
-        document.getElementById('linkNewOrder').innerHTML += ("(Next Step - No" + selectedRows[0].no + " Proposal)");
+        $("#hdnselectedsalesProposalId").val(selectedRow.id);
 
         // if(selectedRow.status == 3)
         // {
@@ -79,4 +100,10 @@
         var eGridDiv = document.querySelector('#proposals');
         new agGrid.Grid(eGridDiv, gridOptions);
     });
+
+    function deleteSalesProposal(){
+        var salesProposalId = $("#hdnselectedsalesProposalId").val();
+
+        location.href = '@Url.Action("DeleteSalesProposal", "Proposals")?id=' + salesProposalId;
+    }
 </script>

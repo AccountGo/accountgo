@@ -39,5 +39,25 @@ namespace AccountGoWeb.Controllers
             return View();
         }
 
+        public async System.Threading.Tasks.Task<IActionResult> DeleteSalesProposal(int id)
+        {
+            using (var client = new HttpClient())
+            {
+                var baseUri = _configuration!["ApiUrl"];
+                client.BaseAddress = new System.Uri(baseUri!);
+                client.DefaultRequestHeaders.Accept.Clear();
+                var response = await client.DeleteAsync(baseUri + "Sales/DeleteSalesProposal?id=" + id);
+
+                if(response.IsSuccessStatusCode)
+                    return RedirectToAction("Proposals");
+                else
+                {
+                    // TODO : Alerts and Error Handling
+                    throw new NotImplementedException();
+                }
+            }
+
+            return RedirectToAction("Proposals");
+        }
     }
 }
