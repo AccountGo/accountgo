@@ -7,6 +7,10 @@
         border-color: aqua;
         opacity: 0.9;
     }
+
+    div {
+        margin-bottom : 0.2em;
+    }
 </style>
 
 <div>
@@ -22,8 +26,11 @@
         <i class="fa fa-trash"></i>
         Delete
     </a>
+</div>
+
+<div>
     <a href="" id="linkNewOrder" class="btn inactiveLink">
-        <i class="fa fa-plus"></i>
+        <i class='fa fa-arrow-right'></i>
         New Order
     </a>
 </div>
@@ -51,13 +58,33 @@
         </div>
     </div>
 </div>
+
 <script>
     var columnDefs = [
-    {headerName: "No", field: "no", width: 50},
-    { headerName: "Customer Name", field: "customerName", width: 130 },
-    {headerName: "Description", field: "description", width: 170},
-    { headerName: "Delivery Date", field: "deliveryDate", width: 170 },
-    {headerName: "Amount" , field: "totalAmount", width : 130}
+        { headerName: "No", field: "no", width: 50},
+        { headerName: "Customer Name", field: "customerName", width: 130 },
+        { headerName: "Description", field: "description", width: 180},
+        { headerName: "Delivery Date", field: "deliveryDate", width: 180 },
+        { headerName: "Amount" , field: "totalAmount", width : 130},
+        { 
+            headerName: "Status", 
+            field: "statusId", 
+            width: 130,
+            cellRenderer: function(params) {
+                if (params.value === 0) {
+                    return '<i class="fa fa-circle" style="color: green;"></i> Draft';
+                } else if (params.value === 1) {
+                    return '<i class="fa fa-circle" style="color: deepskyblue;"></i> Open';
+                } else if (params.value === 2) {
+                    return '<i class="fa fa-circle" style="color: coral;"></i> Overdue';
+                } else if (params.value === 3) {
+                    return '<i class="fa fa-circle" style="color: red;"></i> Closed';
+                }
+                else {
+                    return '';
+                }
+            }
+        }
     ];
 
     var gridOptions = {
@@ -81,9 +108,8 @@
         document.getElementById('linkDeleteProposal').setAttribute('data-bs-target', '#deleteSalesProposal');
 
         document.getElementById('linkNewOrder').setAttribute('class', 'btn btn-outline-light');
-        console.log(selectedRows);
+        document.getElementById('linkNewOrder').innerHTML += ("( No" + selectedRows[0].no + " Proposal)");
         $("#hdnselectedsalesProposalId").val(selectedRow.id);
-
         // if(selectedRow.status == 3)
         // {
         //     document.getElementById('linkNewOrder').setAttribute('class', 'btn inactiveLink');
