@@ -1,0 +1,157 @@
+﻿@model Dto.Sales.SalesProposalForCreation
+
+<style>
+    tr td, div.row {
+        color: white;
+    }
+
+</style>
+
+<form action="~/Proposals/AddSalesProposal" method="post">
+    <div class="col-sm-8">
+        @Html.AntiForgeryToken()
+        @Html.ValidationSummary(true)
+        <div class="card">
+            <div class="card-body">
+                @* Customer *@
+                <div class="row">
+                    <div class="col-sm-4">Customer</div>
+                    <div class="col-sm-8">
+                        <select class="form-control" asp-for="CustomerId" asp-items="@ViewBag.Customers"
+                                id="optCustomer" onchange="customerOnChange();"></select>
+                        <span asp-validation-for="CustomerId" class="danger"></span>
+                    </div>
+                </div>
+                @* Payment Term *@
+                <div class="row">
+                    <div class="col-sm-4">Payment Term</div>
+                    <div class="col-sm-8">
+                        <select class="form-control" asp-for="PaymentTermId" asp-items="@ViewBag.PaymentTerms"
+                                id="optPayment"></select>
+                        <span asp-validation-for="PaymentTermId" class="text-danger"></span>
+                    </div>
+                </div>
+                @* Proposal Date *@
+                <div class="row">
+                    <div class="col-sm-4">Start Date ~ Expiry Date</div>
+                    <div class="col-sm-4">
+                        <input class="form-control pull-right" id="startDate" type="date">
+                    </div>
+                    <div class="col-sm-4">
+                        <input class="form-control pull-right" id="endDate" type="date">
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-sm-4">Delivery Date</div>
+                    <div class="col-sm-4">
+                        <input class="form-control pull-right" type="date">
+                    </div>
+                </div>
+            </div>
+
+            <table class="table" id="table">
+                <thead>
+                <th>Item</th>
+                <th>Quantity</th>
+                <th>Amount</th>
+                <th>Discount</th>
+                <th>Measurement</th>
+
+                </thead>
+                <tbody>
+                    @for (int i = 0; i < Model.SalesProposalLines!.Count; i++)
+                    {
+                        <tr>
+                            <td>
+                                <select class="form-control" asp-for="@Model.SalesProposalLines[i].ItemId" asp-items="@ViewBag.Items"
+                                        id="optCustomer"></select>
+                                <span asp-validation-for="@Model.SalesProposalLines[i].ItemId" class="text-danger"></span>
+                            </td>
+                            <td>
+                                <input class="form-control" asp-for="@Model.SalesProposalLines[i].Quantity" type="text" placeholder="0.0 ..." />
+                                <span asp-validation-for="@Model.SalesProposalLines[i].Quantity" class="text-danger"></span>
+                            </td>
+                            <td>
+                                <input class="form-control" asp-for="@Model.SalesProposalLines[i].Amount" type="text" placeholder="0.0 ..." />
+                                <span asp-validation-for="@Model.SalesProposalLines[i].Amount" class="text-danger"></span>
+                            </td>
+                            <td>
+                                <input class="form-control" asp-for="@Model.SalesProposalLines[i].Discount" type="text" placeholder="0.0 ..." />
+                                <span asp-validation-for="@Model.SalesProposalLines[i].Discount" class="text-danger"></span>
+                            </td>
+                            <td>
+                                <select class="form-control" asp-for="@Model.SalesProposalLines[i].MeasurementId" asp-items="@ViewBag.Measurements"
+                                        id="optCustomer"></select>
+                                <span asp-validation-for="@Model.SalesProposalLines[i].MeasurementId" class="text-danger"></span>
+                            </td>
+                        </tr>
+                    }
+
+                    <tr>
+                        <td class="rounded-1" style="border-color : #252525">
+                            <button class="btn btn-primary" name="addRowBtn" type="submit" value="true">Add Row</button>
+                        </td>
+                    </tr>
+                </tbody>
+
+            </table>
+        </div>
+    </div>
+    <div class="col-md-9">
+        <input id="btnSave" class="btn btn-sm btn-primary btn-flat pull-left" type="submit" value="Save" />
+        <a href="~/Proposals/proposals" class="btn btn-sm btn-default btn-flat pull-left">Close</a>
+    </div>
+</form>
+
+@section scripts {
+    <script type="text/javascript">
+        var customers = @Html.Raw(ViewBag.CustomersDetail)
+
+        function customerOnChange() {
+            var customerId = document.getElementById("optCustomer").value;
+            var element = document.getElementById("optAccountToCreditId");
+
+            for (var i = 0; i < customers.length; i++) {
+                if (customerId === customers[i].Id.toString()) {
+                    var customer = customers[i];
+                    for (var i = 0; i < element.options.length; i++) {
+                        if (element.options[i].value === customer.PrepaymentAccountId.toString()) {
+                            element.selectedIndex = i;
+                            document.getElementById("optAccountToCreditId").value = customer.PrepaymentAccountId;
+                            break;
+                        }
+                    }
+                }
+                else
+                    element.selectedIndex = element.options.length - element.options.length;
+            }
+        }
+
+        // ValidateDate related to Proposal Date.
+        document.getElementById("startDate").addEventListener("change", function () {
+            var result = validateDate();
+            if(result === false){
+                document.getElementById("startDate").value = "";
+            }
+        });
+
+        document.getElementById("endDate").addEventListener("change", function () {
+            var result = validateDate();
+            if (result === false) {
+                document.getElementById("endDate").value = "";
+            }
+        });
+
+        function validateDate() {
+            var startDate = new Date(document.getElementById("startDate").value);
+            var endDate = new Date(document.getElementById("endDate").value);
+
+            if (startDate > endDate) {
+                alert("Start Date must be less than End Date.");
+                return false;
+            }
+
+            return true;
+        }
+    </script>
+}
