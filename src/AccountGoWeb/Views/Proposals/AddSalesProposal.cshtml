@@ -37,13 +37,13 @@
                         <input class="form-control pull-right" id="startDate" type="date">
                     </div>
                     <div class="col-sm-4">
-                        <input class="form-control pull-right" id="endDate" type="date">
+                        <input class="form-control pull-right" id="expiryDate" type="date">
                     </div>
                 </div>
                 <div class="row">
                     <div class="col-sm-4">Delivery Date</div>
                     <div class="col-sm-4">
-                        <input class="form-control pull-right" type="date">
+                        <input class="form-control pull-right" id="deliveryDate" type="date">
                     </div>
                 </div>
             </div>
@@ -129,26 +129,50 @@
 
         // ValidateDate related to Proposal Date.
         document.getElementById("startDate").addEventListener("change", function () {
-            var result = validateDate();
+            var result = validateDate("Start");
             if(result === false){
                 document.getElementById("startDate").value = "";
             }
         });
 
-        document.getElementById("endDate").addEventListener("change", function () {
-            var result = validateDate();
+        document.getElementById("expiryDate").addEventListener("change", function () {
+            var result = validateDate("Expiry");
             if (result === false) {
-                document.getElementById("endDate").value = "";
+                document.getElementById("expiryDate").value = "";
             }
         });
 
-        function validateDate() {
-            var startDate = new Date(document.getElementById("startDate").value);
-            var endDate = new Date(document.getElementById("endDate").value);
+        document.getElementById("deliveryDate").addEventListener("change", function () {
+            var result = validateDate("Delivery");
+            if (result === false) {
+                document.getElementById("deliveryDate").value = "";
+            }
+        });
 
-            if (startDate > endDate) {
-                alert("Start Date must be less than End Date.");
-                return false;
+        function validateDate(dateType) {
+            var startDate = new Date(document.getElementById("startDate").value);
+            var expriyDate = new Date(document.getElementById("expiryDate").value);
+            var deliveryDate = new Date(document.getElementById("deliveryDate").value);
+
+            switch(dateType){
+                case "Start":
+                    if (expriyDate < startDate || deliveryDate < startDate) {
+                        alert("Start Date must be less than Expiry Date and Delivery Date.");
+                        return false;
+                    }
+                    break;
+                case "Expiry":
+                    if (startDate > expriyDate) {
+                        alert("Expiry Date must be greater than Start Date.");
+                        return false;
+                    }
+                    break;
+                case "Delivery":
+                    if (startDate > deliveryDate) {
+                        alert("Delivery Date must be greater than Start Date");
+                        return false;
+                    }
+                    break;
             }
 
             return true;
