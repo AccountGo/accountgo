@@ -30,6 +30,14 @@
                         <span asp-validation-for="PaymentTermId" class="text-danger"></span>
                     </div>
                 </div>
+                @* Description *@
+                <div class="row">
+                    <div class="col-sm-4">Description</div>
+                    <div class="col-sm-8">
+                        <textarea class="form-control" asp-for="Description" rows="2"></textarea>
+                        <span asp-validation-for="Description" class="text-danger"></span>
+                    </div>
+                </div>
                 @* Proposal Date *@
                 <div class="row">
                     <div class="col-sm-4">Start Date ~ Expiry Date</div>
