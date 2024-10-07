@@ -1,3 +1,4 @@
+﻿using Dto.Sales;
 ﻿using Microsoft.AspNetCore.Mvc;
 
 namespace AccountGoWeb.Controllers
@@ -36,6 +37,76 @@ namespace AccountGoWeb.Controllers
             }
 
             return View();
+        }
+
+        [HttpGet]
+        public async System.Threading.Tasks.Task<IActionResult> AddSalesProposal()
+        {
+            ViewBag.PageContentHeader = "Add Sales Proposal";
+
+            SalesProposalForCreation salesProposalModel = new SalesProposalForCreation();
+            salesProposalModel.SalesProposalLines = new List<SalesProposalLineForCreation>
+            {
+                new SalesProposalLineForCreation
+                {
+                    Amount = 0,
+                    Discount = 0,
+                    ItemId = 1,
+                    Quantity = 1,
+                }
+            };
+            // TODO: Replace with system generated numbering.
+            salesProposalModel.No = new System.Random().Next(1, 99999).ToString();
+
+            @ViewBag.Customers = Models.SelectListItemHelper.Customers();
+            @ViewBag.Items = Models.SelectListItemHelper.Items();
+            @ViewBag.Measurements = Models.SelectListItemHelper.Measurements();
+            @ViewBag.PaymentTerms = Models.SelectListItemHelper.PaymentTerms();
+
+            return View(salesProposalModel);
+        }
+
+        [HttpPost]
+        public async System.Threading.Tasks.Task<IActionResult> AddSalesProposal(SalesProposalForCreation salesProposalForCreationDto, string? addRowBtn)
+        {
+            if (!string.IsNullOrEmpty(addRowBtn))
+            {
+                salesProposalForCreationDto.SalesProposalLines!.Add(new SalesProposalLineForCreation
+                {
+                    Amount = 0,
+                    Quantity = 1,
+                    Discount = 0,
+                    ItemId = 1,
+                    MeasurementId = 1,
+                });
+
+                ViewBag.Customers = Models.SelectListItemHelper.Customers();
+                ViewBag.Items = Models.SelectListItemHelper.Items();
+                ViewBag.Measurements = Models.SelectListItemHelper.Measurements();
+                ViewBag.PaymentTerms = Models.SelectListItemHelper.PaymentTerms();
+         
+                return View(salesProposalForCreationDto);
+            }
+            else if (ModelState.IsValid)
+            {
+                var serialize = Newtonsoft.Json.JsonConvert.SerializeObject(salesProposalForCreationDto);
+                var content = new StringContent(serialize);
+                content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+
+                _logger.LogInformation("AddSalesProposal: " + await content.ReadAsStringAsync());
+                var response = Post("Sales/AddSalesProposal", content);
+                _logger.LogInformation("AddSalesProposal response: " + response.ToString());
+
+                if (response.IsSuccessStatusCode)
+                    return RedirectToAction("Proposals");
+            }
+
+            ViewBag.Customers = Models.SelectListItemHelper.Customers();
+            ViewBag.Items = Models.SelectListItemHelper.Items();
+            ViewBag.PaymentTerms = Models.SelectListItemHelper.PaymentTerms();
+            ViewBag.Measurements = Models.SelectListItemHelper.Measurements();
+
+            return View(salesProposalForCreationDto);
         }
 
         public async System.Threading.Tasks.Task<IActionResult> DeleteSalesProposal(int id)
