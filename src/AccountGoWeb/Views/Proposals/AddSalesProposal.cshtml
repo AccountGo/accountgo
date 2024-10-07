@@ -106,8 +106,9 @@
         </div>
     </div>
     <div class="col-md-9">
-        <input id="btnSave" class="btn btn-sm btn-secondary btn-flat pull-left" type="submit" value="Save Draft" />
-        <input id="btnSave" class="btn btn-sm btn-primary btn-flat pull-left" type="submit" value="Submit" />
+        <input asp-for="StatusId" id="statusId" type="hidden" />
+        <button class="btn btn-sm btn-secondary btn-flat pull-left" id="btnDraft" type="submit">Save Draft</button>
+        <button class="btn btn-sm btn-primary btn-flat pull-left" id="btnSubmit" type="submit">Submit</button>
         <a href="~/Proposals/proposals" class="btn btn-sm btn-default btn-flat pull-left">Close</a>
     </div>
 </form>
@@ -186,5 +187,17 @@
 
             return true;
         }
+
+        // Set StatusId
+        document.getElementById("btnDraft").addEventListener("click", function () {
+            console.log("Draft button clicked.");
+            document.getElementById("statusId").value = 0;            
+        });
+
+        document.getElementById("btnSubmit").addEventListener("click", function () {
+            console.log("Submit button clicked.");
+            document.getElementById("statusId").value = 1;
+        });
+
     </script>
 }
