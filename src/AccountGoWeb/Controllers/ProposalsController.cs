@@ -4,7 +4,6 @@ namespace AccountGoWeb.Controllers
 {
     public class ProposalsController : GoodController
     {
-        private readonly IConfiguration _configuration;
         private readonly ILogger<ProposalsController> _logger;
 
         public ProposalsController(IConfiguration config, ILogger<ProposalsController> logger)
