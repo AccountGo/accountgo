@@ -1,5 +1,5 @@
 ﻿using Dto.Sales;
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 
 namespace AccountGoWeb.Controllers
 {
