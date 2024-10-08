@@ -281,6 +281,10 @@ namespace Services.Sales
             }
 
             var salesProposal = _mapper.Map<Core.Domain.Sales.SalesProposalHeader>(salesProposalForCreationDto);
+            if (string.IsNullOrEmpty(salesProposal.No))
+            {
+                salesProposal.No = GetNextNumber(SequenceNumberTypes.SalesProposal).ToString();
+            }
 
             await _salesProposalRepo.InsertAsync(salesProposal);
 
@@ -772,7 +776,8 @@ namespace Services.Sales
 
         public void AddSalesQuote(SalesQuoteHeader salesQuoteHeader)
         {
-            salesQuoteHeader.No = GetNextNumber(SequenceNumberTypes.SalesQuote).ToString();
+            // ToDo : Remove SalesQuote once Sales Proposal development is complete.
+            // salesQuoteHeader.No = GetNextNumber(SequenceNumberTypes.SalesQuote).ToString();
             _salesQuoteRepo.Insert(salesQuoteHeader);
         }
 

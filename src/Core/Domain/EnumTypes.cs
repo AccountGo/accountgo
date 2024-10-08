@@ -93,7 +93,7 @@ namespace Core.Domain
 
     public enum SequenceNumberTypes
     {
-        SalesQuote = 1,
+        SalesProposal = 1,
         SalesOrder,
         SalesDelivery,
         SalesInvoice,
