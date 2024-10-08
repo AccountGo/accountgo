@@ -68,7 +68,7 @@
         { headerName: "Amount" , field: "totalAmount", width : 130},
         { 
             headerName: "Status", 
-            field: "statusId", 
+            field: "statusId",
             width: 130,
             cellRenderer: function(params) {
                 if (params.value === 0) {
@@ -108,7 +108,7 @@
         document.getElementById('linkDeleteProposal').setAttribute('data-bs-target', '#deleteSalesProposal');
 
         document.getElementById('linkNewOrder').setAttribute('class', 'btn btn-outline-light');
-        document.getElementById('linkNewOrder').innerHTML += ("( No" + selectedRows[0].no + " Proposal)");
+        document.getElementById('linkNewOrder').innerHTML = ("New Order ( No" + selectedRows[0].no + " Proposal)");
         $("#hdnselectedsalesProposalId").val(selectedRow.id);
         // if(selectedRow.status == 3)
         // {
