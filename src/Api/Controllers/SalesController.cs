@@ -368,6 +368,19 @@ namespace Api.Controllers
             return Created();
         }
 
+        [HttpGet("GetSalesProposalById")]
+        public async Task<IActionResult> GetSalesProposalById(int id)
+        {
+            var result = await _salesService.GetSalesProposalByIdAsync(id, trackChanges: false);
+
+            if (result.IsFailure)
+                return BadRequest(result.Error.Message);
+
+            var salesProposal = result.Value;
+
+            return Ok(salesProposal);
+        }
+
         [HttpGet("GetSalesProposals")]
         public async Task<IActionResult> GetSalesProposals()
         {

@@ -293,6 +293,21 @@ namespace Services.Sales
             return Result<Dto.Sales.SalesProposal>.Success(salesProposalDto);
         }
 
+        public async Task<Result<Dto.Sales.SalesProposal>> GetSalesProposalByIdAsync(int id, bool trackChanges)
+        {
+            var salesProposal = await GetSalesProposalAsync(id, trackChanges);
+
+            if (salesProposal is null)
+            {
+                var message = "Sales proposal not found.";
+                return Result<Dto.Sales.SalesProposal>.Failure(Error.RecordNotFound(message));
+            }
+
+            var salesProposalDto = _mapper.Map<Dto.Sales.SalesProposal>(salesProposal);
+
+            return Result<Dto.Sales.SalesProposal>.Success(salesProposalDto);
+        }
+
         private async Task<SalesProposalHeader> GetSalesProposalAsync(int id, bool trackChanges)
         {
             var salesProposal = await _salesProposalRepo.FindAllIncluding(trackChanges, proposal => proposal.Customer,

@@ -23,6 +23,7 @@ namespace Services.Sales
         void AddSalesReceiptNoInvoice(SalesReceiptHeader salesReceipt);
         void AddSalesDelivery(SalesDeliveryHeader salesDelivery, bool toSave);
         Task<Result<Dto.Sales.SalesProposal>> AddSalesProposalAsync(Dto.Sales.SalesProposalForCreation salesProposalForCreationDto);
+        Task<Result<Dto.Sales.SalesProposal>> GetSalesProposalByIdAsync(int id, bool trackChanges);
         Task<Result<IEnumerable<Dto.Sales.SalesProposal>>> GetSalesProposalsAsync(bool trackChanges);
         Task<Result<Dto.Sales.SalesProposal>> UpdateSalesProposalAsync(Dto.Sales.SalesProposalForUpdate salesProposalForUpdateDto, bool trackChanges);
         Task<Result<Dto.Sales.SalesProposal>> DeleteSalesProposalAsync(int id, bool trackChanges);
