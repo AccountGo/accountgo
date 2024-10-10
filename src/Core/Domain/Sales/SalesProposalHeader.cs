@@ -18,6 +18,8 @@ namespace Core.Domain.Sales
         // Properties
         public string No { get; set; }
         public string Description { get; set; }
+        public DateTime StartDate { get; set; }
+        public DateTime ExpiryDate { get; set; }
         public DateTime DeliveryDate { get; set; }
         public SalesProposalStatus? Status { get; set; }
         public string ReferenceNo { get; set; }
