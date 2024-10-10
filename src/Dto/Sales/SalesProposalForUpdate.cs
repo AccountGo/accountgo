@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using System;
+using System.ComponentModel.DataAnnotations;
 
 namespace Dto.Sales
 {
@@ -7,6 +8,11 @@ namespace Dto.Sales
     {
         public string No { get; set; }
         public string Description { get; set; }
+        [Required(ErrorMessage = "The Start Date is required")]
+        public DateTime StartDate { get; set; }
+        [Required(ErrorMessage = "The Expiry Date is required")]
+        public DateTime ExpiryDate { get; set; }
+        [Required(ErrorMessage = "The Delivery Date is required")]
         public DateTime DeliveryDate { get; set; }
         public IList<SalesProposalLineForUpdate> SalesProposalLines { get; set; }
 

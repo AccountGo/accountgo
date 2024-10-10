@@ -9,6 +9,8 @@ namespace Dto.Sales
         public string? No { get; set; }
         public decimal TotalAmount { get { return GetTotalAmount(); } }
         public string? Description { get; set; }
+        public DateTime StartDate { get; set; }
+        public DateTime ExpiryDate { get; set; }
         public DateTime DeliveryDate { get; set; }
         public IList<SalesProposalLine>? SalesProposalLines { get; set; }
 

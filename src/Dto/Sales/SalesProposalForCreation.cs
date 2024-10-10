@@ -1,12 +1,20 @@
 ﻿using System.Collections.Generic;
 using System;
+using System.ComponentModel.DataAnnotations;
 
 namespace Dto.Sales
 {
     public class SalesProposalForCreation : BaseDto
     {
-        public string No { get; set; }
+        public string? No { get; set; }
+        [Required(ErrorMessage = "The Description is required")]
+        [StringLength(200, ErrorMessage = "The Description must be less than 200 characters")]
         public string Description { get; set; }
+        [Required(ErrorMessage = "The Start Date is required")]
+        public DateTime StartDate { get; set; }
+        [Required(ErrorMessage = "The Expiry Date is required")]
+        public DateTime ExpiryDate { get; set; }
+        [Required(ErrorMessage = "The Delivery Date is required")]
         public DateTime DeliveryDate { get; set; }
         public IList<SalesProposalLineForCreation> SalesProposalLines { get; set; }
 
@@ -22,6 +30,13 @@ namespace Dto.Sales
         public string? CompanyEmail { get; set; }
 
         public string? ReferenceNo { get; set; }
+
+        public SalesProposalForCreation()
+        {
+            StartDate = DateTime.Now;
+            ExpiryDate = DateTime.Now;
+            DeliveryDate = DateTime.Now;
+        }
     }
 
     public class SalesProposalLineForCreation : BaseDto
