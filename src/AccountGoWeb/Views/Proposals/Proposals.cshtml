@@ -71,13 +71,13 @@
             width: 130,
             cellRenderer: function(params) {
                 if (params.value === 0) {
-                    return '<i class="fa fa-circle" style="color: green;"></i> Draft';
+                    return '<i class="fa fa-circle" data-toggle="tooltip" style="color: green;" title="The proposal is still being prepared."><span style="color : white;"> Draft</span></i>';
                 } else if (params.value === 1) {
-                    return '<i class="fa fa-circle" style="color: deepskyblue;"></i> Open';
+                    return '<i class="fa fa-circle" data-toggle="tooltip" style="color: deepskyblue;" title="The proposal is submitted."><span style="color : white;"> Open</span></i>';
                 } else if (params.value === 2) {
-                    return '<i class="fa fa-circle" style="color: coral;"></i> Overdue';
+                    return '<i class="fa fa-circle" data-toggle="tooltip" style="color: coral;" title="The client has not responded by the expected deadline."><span style="color: white; "> Overdue</span></i>';
                 } else if (params.value === 3) {
-                    return '<i class="fa fa-circle" style="color: red;"></i> Closed';
+                    return '<i class="fa fa-circle" data-toggle="tooltip" style="color: red;" title="The proposal is finalized."><span style="color: white;"> Closed</span></i>';
                 }
                 else {
                     return '';
