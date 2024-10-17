@@ -26,9 +26,6 @@
         <i class="fa fa-trash"></i>
         Delete
     </a>
-</div>
-
-<div>
     <a href="" id="linkNewOrder" class="btn inactiveLink">
         <i class='fa fa-arrow-right'></i>
         New Order
@@ -101,9 +98,17 @@
     function onSelectionChanged() {
         var selectedRows = gridOptions.api.getSelectedRows();
         selectedRow = selectedRows[0];
-
-        document.getElementById('linkEditProposal').setAttribute('href', 'proposal?id=' + selectedRow.id);
-        document.getElementById('linkEditProposal').setAttribute('class', 'btn btn-outline-light');
+   
+        if(selectedRow.statusId === 0){
+            document.getElementById('linkEditProposal').innerHTML = "<i class='fa fa-edit'></i> Edit";
+            document.getElementById('linkEditProposal').setAttribute('href', 'Proposals/EditSalesProposal?id=' + selectedRow.id);
+            document.getElementById('linkEditProposal').setAttribute('class', 'btn btn-outline-light');
+        }else{
+            // TODO : Goto defaultView of Proposal
+            document.getElementById('linkEditProposal').innerHTML = "<i class='fa fa-eye'></i> View";
+            document.getElementById('linkEditProposal').setAttribute('href', 'Proposals/ViewSalesProposal?id=' + selectedRow.id);
+            document.getElementById('linkEditProposal').setAttribute('class', 'btn btn-outline-light');
+        }
 
         document.getElementById('linkDeleteProposal').setAttribute('class', 'btn btn-outline-light');
         document.getElementById('linkDeleteProposal').setAttribute('data-bs-toggle', 'modal');

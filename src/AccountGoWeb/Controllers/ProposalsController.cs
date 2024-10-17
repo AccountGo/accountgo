@@ -109,6 +109,26 @@ namespace AccountGoWeb.Controllers
             return View(salesProposalForCreationDto);
         }
 
+        public async System.Threading.Tasks.Task<IActionResult> ViewSalesProposal(int id)
+        {
+            ViewBag.PageContentHeader = "View Sales Proposal";
+            SalesProposal? salesProposalModel = null;
+
+            salesProposalModel = GetAsync<SalesProposal>("Sales/GetSalesProposalById?id=" + id).Result;
+
+            if (salesProposalModel is null)
+            {
+                // TODO : Alerts and Error Handling
+                throw new NotImplementedException();
+            }
+
+            @ViewBag.Customers = Models.SelectListItemHelper.Customers();
+            @ViewBag.PaymentTerms = Models.SelectListItemHelper.PaymentTerms();
+            @ViewBag.Items = Models.SelectListItemHelper.Items();
+            @ViewBag.Measurements = Models.SelectListItemHelper.Measurements();
+
+            return View(salesProposalModel);
+        }
         public async System.Threading.Tasks.Task<IActionResult> DeleteSalesProposal(int id)
         {
             using (var client = new HttpClient())

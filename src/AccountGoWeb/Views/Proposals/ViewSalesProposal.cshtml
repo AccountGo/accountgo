@@ -1,0 +1,106 @@
+﻿@model Dto.Sales.SalesProposal
+
+<style>
+    tr td, div.row {
+        color: white;
+    }
+</style>
+
+<form>
+    <div class="col-sm-8">
+        @Html.AntiForgeryToken()
+        @Html.ValidationSummary(true)
+        <div class="card">
+            <div class="card-body">
+                @* Customer *@
+                <div class="row">
+                    <div class="col-sm-4">Customer</div>
+                    <div class="col-sm-8">
+                        <select class="form-control" asp-for="CustomerId" asp-items="@ViewBag.Customers" disabled
+                                id="optCustomer"></select>
+                        <span asp-validation-for="CustomerId" class="danger"></span>
+                    </div>
+                </div>
+                @* Payment Term *@
+                <div class="row">
+                    <div class="col-sm-4">Payment Term</div>
+                    <div class="col-sm-8">
+                        <select class="form-control" asp-for="PaymentTermId" asp-items="@ViewBag.PaymentTerms" disabled
+                                id="optPayment"></select>
+                        <span asp-validation-for="PaymentTermId" class="text-danger"></span>
+                    </div>
+                </div>
+                @* Proposal Date *@
+                <div class="row">
+                    <div class="col-sm-4">Start Date ~ Expiry Date</div>
+                    <div class="col-sm-4">
+                        <input asp-for="StartDate" class="form-control pull-right" id="startDate" readonly type="date">
+                    </div>
+                    <div class="col-sm-4">
+                        <input asp-for="ExpiryDate" class="form-control pull-right" id="expiryDate" readonly type="date">
+                    </div>
+                </div>
+                @* Delivery Date *@
+                <div class="row">
+                    <div class="col-sm-4">Delivery Date</div>
+                    <div class="col-sm-4">
+                        <input asp-for="DeliveryDate" class="form-control pull-right" id="deliveryDate" readonly type="date">
+                    </div>
+                </div>
+                @* Description *@
+                <div class="row">
+                    <div class="col-sm-4">Description</div>
+                    <div class="col-sm-8">
+                        <textarea class="form-control" asp-for="Description" readonly rows="2"></textarea>
+                        <span asp-validation-for="Description" class="text-danger"></span>
+                    </div>
+                </div>
+            </div>
+
+            <table class="table" id="table">
+                <thead>
+                <th>Item</th>
+                <th>Quantity</th>
+                <th>Amount</th>
+                <th>Discount</th>
+                <th>Measurement</th>
+
+                </thead>
+                <tbody>
+                    @for (int i = 0; i < Model.SalesProposalLines!.Count; i++)
+                    {
+                        <tr>
+                            <td>
+                                <select class="form-control" asp-for="@Model.SalesProposalLines[i].ItemId" asp-items="@ViewBag.Items" disabled
+                                        id="optCustomer"></select>
+                                <span asp-validation-for="@Model.SalesProposalLines[i].ItemId" class="text-danger"></span>
+                            </td>
+                            <td>
+                                <input class="form-control" asp-for="@Model.SalesProposalLines[i].Quantity" type="text" placeholder="0.0 ..." readonly />
+                                <span asp-validation-for="@Model.SalesProposalLines[i].Quantity" class="text-danger"></span>
+                            </td>
+                            <td>
+                                <input class="form-control" asp-for="@Model.SalesProposalLines[i].Amount" type="text" placeholder="0.0 ..." readonly />
+                                <span asp-validation-for="@Model.SalesProposalLines[i].Amount" class="text-danger"></span>
+                            </td>
+                            <td>
+                                <input class="form-control" asp-for="@Model.SalesProposalLines[i].Discount" type="text" placeholder="0.0 ..." readonly />
+                                <span asp-validation-for="@Model.SalesProposalLines[i].Discount" class="text-danger"></span>
+                            </td>
+                            <td>
+                                <select class="form-control" asp-for="@Model.SalesProposalLines[i].MeasurementId" asp-items="@ViewBag.Measurements" disabled
+                                        id="optCustomer"></select>
+                                <span asp-validation-for="@Model.SalesProposalLines[i].MeasurementId" class="text-danger"></span>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+
+            </table>
+        </div>
+    </div>
+
+    <div class="col-md-9">
+        <a href="~/Proposals/proposals" class="btn btn-sm btn-default btn-flat pull-left">Close</a>
+    </div>
+</form>
