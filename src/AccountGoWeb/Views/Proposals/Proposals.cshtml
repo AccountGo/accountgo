@@ -103,29 +103,23 @@
             document.getElementById('linkEditProposal').innerHTML = "<i class='fa fa-edit'></i> Edit";
             document.getElementById('linkEditProposal').setAttribute('href', 'Proposals/EditSalesProposal?id=' + selectedRow.id);
             document.getElementById('linkEditProposal').setAttribute('class', 'btn btn-outline-light');
+
+            document.getElementById('linkNewOrder').setAttribute('class', 'btn inactiveLink');
+            document.getElementById('linkNewOrder').innerHTML = "<i class='fa fa-arrow-right'></i> New Order ( No" + selectedRows[0].no + " Proposal)";
         }else{
-            // TODO : Goto defaultView of Proposal
             document.getElementById('linkEditProposal').innerHTML = "<i class='fa fa-eye'></i> View";
             document.getElementById('linkEditProposal').setAttribute('href', 'Proposals/ViewSalesProposal?id=' + selectedRow.id);
             document.getElementById('linkEditProposal').setAttribute('class', 'btn btn-outline-light');
+
+            document.getElementById('linkNewOrder').setAttribute('class', 'btn btn-outline-light');
+            document.getElementById('linkNewOrder').innerHTML = "<i class='fa fa-arrow-right'></i> New Order ( No" + selectedRows[0].no + " Proposal)";
         }
 
         document.getElementById('linkDeleteProposal').setAttribute('class', 'btn btn-outline-light');
         document.getElementById('linkDeleteProposal').setAttribute('data-bs-toggle', 'modal');
         document.getElementById('linkDeleteProposal').setAttribute('data-bs-target', '#deleteSalesProposal');
 
-        document.getElementById('linkNewOrder').setAttribute('class', 'btn btn-outline-light');
-
-        document.getElementById('linkNewOrder').innerHTML = "<i class='fa fa-arrow-right'></i> New Order ( No" + selectedRows[0].no + " Proposal)";
         $("#hdnselectedsalesProposalId").val(selectedRow.id);
-        // if(selectedRow.status == 3)
-        // {
-        //     document.getElementById('linkNewOrder').setAttribute('class', 'btn inactiveLink');
-        // }
-        // else if (selectedRow.status == 1){
-        //     document.getElementById('linkNewOrder').setAttribute('href', '/sales/salesorder?quotationId=' + selectedRow.id);
-        //     document.getElementById('linkNewOrder').setAttribute('class', 'btn');
-        // }
     }
 
     // wait for the document to be loaded, otherwise
