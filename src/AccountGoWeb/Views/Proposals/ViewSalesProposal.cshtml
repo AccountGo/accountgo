@@ -6,7 +6,7 @@
     }
 </style>
 
-<form>
+<form action="~/Proposals/ViewSalesProposal" method="post">
     <div class="col-sm-8">
         @Html.AntiForgeryToken()
         @Html.ValidationSummary(true)
@@ -16,7 +16,7 @@
                 <div class="row">
                     <div class="col-sm-4">Customer</div>
                     <div class="col-sm-8">
-                        <select class="form-control" asp-for="CustomerId" asp-items="@ViewBag.Customers" disabled
+                        <select asp-for="CustomerId" asp-items="@ViewBag.Customers" class="form-control"
                                 id="optCustomer"></select>
                         <span asp-validation-for="CustomerId" class="danger"></span>
                     </div>
@@ -25,7 +25,7 @@
                 <div class="row">
                     <div class="col-sm-4">Payment Term</div>
                     <div class="col-sm-8">
-                        <select class="form-control" asp-for="PaymentTermId" asp-items="@ViewBag.PaymentTerms" disabled
+                        <select asp-for="PaymentTermId" asp-items="@ViewBag.PaymentTerms" class="form-control"
                                 id="optPayment"></select>
                         <span asp-validation-for="PaymentTermId" class="text-danger"></span>
                     </div>
@@ -55,6 +55,11 @@
                         <span asp-validation-for="Description" class="text-danger"></span>
                     </div>
                 </div>
+                @* Hidden Property *@
+                <input asp-for="No" type="hidden" />
+                <input asp-for="Id" type="hidden" />
+                <input asp-for="CustomerId" type="hidden" />
+                <input asp-for="StatusId" id="statusId" type="hidden" />
             </div>
 
             <table class="table" id="table">
@@ -71,7 +76,7 @@
                     {
                         <tr>
                             <td>
-                                <select class="form-control" asp-for="@Model.SalesProposalLines[i].ItemId" asp-items="@ViewBag.Items" disabled
+                                <select class="form-control" asp-for="@Model.SalesProposalLines[i].ItemId" asp-items="@ViewBag.Items"
                                         id="optCustomer"></select>
                                 <span asp-validation-for="@Model.SalesProposalLines[i].ItemId" class="text-danger"></span>
                             </td>
@@ -88,7 +93,7 @@
                                 <span asp-validation-for="@Model.SalesProposalLines[i].Discount" class="text-danger"></span>
                             </td>
                             <td>
-                                <select class="form-control" asp-for="@Model.SalesProposalLines[i].MeasurementId" asp-items="@ViewBag.Measurements" disabled
+                                <select class="form-control" asp-for="@Model.SalesProposalLines[i].MeasurementId" asp-items="@ViewBag.Measurements"
                                         id="optCustomer"></select>
                                 <span asp-validation-for="@Model.SalesProposalLines[i].MeasurementId" class="text-danger"></span>
                             </td>
@@ -101,6 +106,22 @@
     </div>
 
     <div class="col-md-9">
+        <button class="btn btn-sm btn-secondary btn-flat pull-left" id="btnAccept">Accept</button>
+        <button class="btn btn-sm btn-primary btn-flat pull-left" id="btnReject">Reject</button>
         <a href="~/Proposals/proposals" class="btn btn-sm btn-default btn-flat pull-left">Close</a>
     </div>
 </form>
+
+@section scripts{
+    <script>
+        document.getElementById("btnAccept").addEventListener("click", function () {
+            console.log("Accept button clicked.");
+            document.getElementById("statusId").value = 3;
+        });
+
+        document.getElementById("btnReject").addEventListener("click", function () {
+            console.log("Reject button clicked.");
+            document.getElementById("statusId").value = 4;
+        });
+    </script>
+}
