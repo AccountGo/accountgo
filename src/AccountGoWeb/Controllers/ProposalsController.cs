@@ -129,6 +129,35 @@ namespace AccountGoWeb.Controllers
 
             return View(salesProposalModel);
         }
+
+        [HttpPost]
+        public async System.Threading.Tasks.Task<IActionResult> ViewSalesProposal(SalesProposalForUpdate salesProposalForUpdate)
+        {
+            if (ModelState.IsValid)
+            {
+                var serialize = Newtonsoft.Json.JsonConvert.SerializeObject(salesProposalForUpdate);
+                var content = new StringContent(serialize);
+                content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+                var response = Post("Sales/UpdateSalesProposal", content);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    return RedirectToAction("Proposals");
+                }
+                else
+                {
+                    // TODO : Alerts and Error Handling
+                    throw new NotImplementedException();
+                }
+            }
+
+            ViewBag.Customers = Models.SelectListItemHelper.Customers();
+            ViewBag.PaymentTerms = Models.SelectListItemHelper.PaymentTerms();
+            ViewBag.Items = Models.SelectListItemHelper.Items();
+            ViewBag.Measurements = Models.SelectListItemHelper.Measurements();
+
+            return View(salesProposalForUpdate.Id);
+        }
         public async System.Threading.Tasks.Task<IActionResult> DeleteSalesProposal(int id)
         {
             using (var client = new HttpClient())
