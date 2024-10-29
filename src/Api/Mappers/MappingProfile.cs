@@ -75,7 +75,7 @@ namespace Api
             CreateMap<Dto.Sales.SalesProposalLineForCreation, Core.Domain.Sales.SalesProposalLine>();
 
             CreateMap<Dto.Sales.SalesProposalForUpdate, Core.Domain.Sales.SalesProposalHeader>()
-                .ForMember(dest => dest.Status, opt => opt.MapFrom(src => src.StatusId))
+                .ForMember(dest => dest.Status, opt => opt.MapFrom(src => (Core.Domain.SalesProposalStatus)src.StatusId))
                 .ForMember(dest => dest.SalesProposalLines, opt => opt.MapFrom(src => src.SalesProposalLines));
 
             CreateMap<Dto.Sales.SalesProposalLineForUpdate, Core.Domain.Sales.SalesProposalLine>();
