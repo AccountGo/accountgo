@@ -53,6 +53,13 @@ namespace AccountGoWeb
 
             #endregion
 
+
+            #region Sales
+
+            CreateMap<Dto.Sales.SalesProposal, Dto.Sales.SalesProposalForUpdate>();
+            CreateMap<Dto.Sales.SalesProposalLine, Dto.Sales.SalesProposalLineForUpdate>();
+
+            #endregion
         }
     }
 }
