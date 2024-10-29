@@ -394,7 +394,7 @@ namespace Api.Controllers
             return Ok(salesProposals);
         }
 
-        [HttpPut("UpdateSalesProposal")]
+        [HttpPost("UpdateSalesProposal")]
         public async Task<IActionResult> UpdateSalesProposal([FromBody] Dto.Sales.SalesProposalForUpdate salesProposalForUpdateDto)
         {
             var result = await _salesService.UpdateSalesProposalAsync(salesProposalForUpdateDto, trackChanges : true);
