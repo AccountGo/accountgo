@@ -1,4 +1,5 @@
-﻿using Dto.Sales;
+﻿using AutoMapper;
+using Dto.Sales;
 using Microsoft.AspNetCore.Mvc;
 
 namespace AccountGoWeb.Controllers
@@ -6,11 +7,13 @@ namespace AccountGoWeb.Controllers
     public class ProposalsController : GoodController
     {
         private readonly ILogger<ProposalsController> _logger;
+        private readonly IMapper _mapper;
 
-        public ProposalsController(IConfiguration config, ILogger<ProposalsController> logger)
+        public ProposalsController(IConfiguration config, ILogger<ProposalsController> logger, IMapper mapper)
         {
             _configuration = config;
             _logger = logger;
+            _mapper = mapper;
         }
 
         public IActionResult Index()
@@ -109,6 +112,59 @@ namespace AccountGoWeb.Controllers
             return View(salesProposalForCreationDto);
         }
 
+        [HttpGet]
+        public async System.Threading.Tasks.Task<IActionResult> EditSalesProposal(int id)
+        {
+            ViewBag.PageContentHeader = "Edit Sales Proposal";
+            SalesProposal? salesProposalModel = null;
+
+            salesProposalModel = GetAsync<SalesProposal>("Sales/GetSalesProposalById?id=" + id).Result;
+
+            if(salesProposalModel is null)
+            {
+                // TODO : Alerts and Error Handling
+                throw new NotImplementedException();
+            }
+
+            @ViewBag.Customers = Models.SelectListItemHelper.Customers();
+            @ViewBag.PaymentTerms = Models.SelectListItemHelper.PaymentTerms();
+            @ViewBag.Items = Models.SelectListItemHelper.Items();
+            @ViewBag.Measurements = Models.SelectListItemHelper.Measurements();
+
+            SalesProposalForUpdate salesProposalForUpdateModel = _mapper.Map<SalesProposalForUpdate>(salesProposalModel);
+
+            return View(salesProposalForUpdateModel);
+        }
+
+        [HttpPost]
+        public async System.Threading.Tasks.Task<IActionResult> EditSalesProposal(SalesProposalForUpdate salesProposalForUpdate)
+        {
+            if (ModelState.IsValid)
+            {
+                var serialize = Newtonsoft.Json.JsonConvert.SerializeObject(salesProposalForUpdate);
+                var content = new StringContent(serialize);
+                content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+                var response = Post("Sales/UpdateSalesProposal", content);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    return RedirectToAction("Proposals");
+                }
+                else
+                {
+                    // TODO : Alerts and Error Handling
+                    throw new NotImplementedException();
+                }
+            }
+
+            ViewBag.Customers = Models.SelectListItemHelper.Customers();
+            ViewBag.PaymentTerms = Models.SelectListItemHelper.PaymentTerms();
+            ViewBag.Items = Models.SelectListItemHelper.Items();
+            ViewBag.Measurements = Models.SelectListItemHelper.Measurements();
+            
+            return View(salesProposalForUpdate);
+        }
+
         public async System.Threading.Tasks.Task<IActionResult> ViewSalesProposal(int id)
         {
             ViewBag.PageContentHeader = "View Sales Proposal";
@@ -158,6 +214,7 @@ namespace AccountGoWeb.Controllers
 
             return View(salesProposalForUpdate.Id);
         }
+
         public async System.Threading.Tasks.Task<IActionResult> DeleteSalesProposal(int id)
         {
             using (var client = new HttpClient())
