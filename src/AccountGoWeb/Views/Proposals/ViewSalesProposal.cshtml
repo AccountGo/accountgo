@@ -106,8 +106,11 @@
     </div>
 
     <div class="col-md-9">
-        <button class="btn btn-sm btn-secondary btn-flat pull-left" id="btnAccept">Accept</button>
-        <button class="btn btn-sm btn-primary btn-flat pull-left" id="btnReject">Reject</button>
+        @if (Model.StatusId != 2 && Model.StatusId != 3 && Model.StatusId != 4)
+        {
+            <button class="btn btn-sm btn-secondary btn-flat pull-left" id="btnAccept">Accept</button>
+            <button class="btn btn-sm btn-primary btn-flat pull-left" id="btnReject">Reject</button>
+        }
         <a href="~/Proposals/proposals" class="btn btn-sm btn-default btn-flat pull-left">Close</a>
     </div>
 </form>
