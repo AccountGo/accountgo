@@ -16,18 +16,14 @@
                 <div class="row">
                     <div class="col-sm-4">Customer</div>
                     <div class="col-sm-8">
-                        <select asp-for="CustomerId" asp-items="@ViewBag.Customers" class="form-control"
-                                id="optCustomer"></select>
-                        <span asp-validation-for="CustomerId" class="danger"></span>
+                        <input class="form-control" id="optCustomer" readonly value="@ViewBag.Customer" />
                     </div>
                 </div>
                 @* Payment Term *@
                 <div class="row">
                     <div class="col-sm-4">Payment Term</div>
                     <div class="col-sm-8">
-                        <select asp-for="PaymentTermId" asp-items="@ViewBag.PaymentTerms" class="form-control"
-                                id="optPayment"></select>
-                        <span asp-validation-for="PaymentTermId" class="text-danger"></span>
+                        <input class="form-control" id="optPayment" readonly value="@ViewBag.PaymentTerm"></input>
                     </div>
                 </div>
                 @* Proposal Date *@
@@ -52,7 +48,6 @@
                     <div class="col-sm-4">Description</div>
                     <div class="col-sm-8">
                         <textarea class="form-control" asp-for="Description" readonly rows="2"></textarea>
-                        <span asp-validation-for="Description" class="text-danger"></span>
                     </div>
                 </div>
                 @* Hidden Property *@
@@ -76,26 +71,19 @@
                     {
                         <tr>
                             <td>
-                                <select class="form-control" asp-for="@Model.SalesProposalLines[i].ItemId" asp-items="@ViewBag.Items"
-                                        id="optCustomer"></select>
-                                <span asp-validation-for="@Model.SalesProposalLines[i].ItemId" class="text-danger"></span>
+                                <input class="form-control" id="optCustomer" readonly value="@ViewBag.Item"></input>
                             </td>
                             <td>
                                 <input class="form-control" asp-for="@Model.SalesProposalLines[i].Quantity" type="text" placeholder="0.0 ..." readonly />
-                                <span asp-validation-for="@Model.SalesProposalLines[i].Quantity" class="text-danger"></span>
                             </td>
                             <td>
                                 <input class="form-control" asp-for="@Model.SalesProposalLines[i].Amount" type="text" placeholder="0.0 ..." readonly />
-                                <span asp-validation-for="@Model.SalesProposalLines[i].Amount" class="text-danger"></span>
                             </td>
                             <td>
                                 <input class="form-control" asp-for="@Model.SalesProposalLines[i].Discount" type="text" placeholder="0.0 ..." readonly />
-                                <span asp-validation-for="@Model.SalesProposalLines[i].Discount" class="text-danger"></span>
                             </td>
                             <td>
-                                <select class="form-control" asp-for="@Model.SalesProposalLines[i].MeasurementId" asp-items="@ViewBag.Measurements"
-                                        id="optCustomer"></select>
-                                <span asp-validation-for="@Model.SalesProposalLines[i].MeasurementId" class="text-danger"></span>
+                                <input class="form-control" id="optCustomer" readonly value="@ViewBag.Measurement"></input>
                             </td>
                         </tr>
                     }

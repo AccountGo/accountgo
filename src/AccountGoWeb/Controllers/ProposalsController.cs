@@ -178,10 +178,15 @@ namespace AccountGoWeb.Controllers
                 throw new NotImplementedException();
             }
 
-            @ViewBag.Customers = Models.SelectListItemHelper.Customers();
-            @ViewBag.PaymentTerms = Models.SelectListItemHelper.PaymentTerms();
-            @ViewBag.Items = Models.SelectListItemHelper.Items();
-            @ViewBag.Measurements = Models.SelectListItemHelper.Measurements();
+            var customers = Models.SelectListItemHelper.Customers();
+            var paymentTerms = Models.SelectListItemHelper.PaymentTerms();
+            var items = Models.SelectListItemHelper.Items();
+            var measurements = Models.SelectListItemHelper.Measurements();
+
+            @ViewBag.Customer = customers.FirstOrDefault(c => c.Value == salesProposalModel.CustomerId.ToString()).Text;
+            @ViewBag.PaymentTerm = paymentTerms.FirstOrDefault(c => c.Value == salesProposalModel.PaymentTermId.ToString()).Text;
+            @ViewBag.Item = items.FirstOrDefault(c => c.Value == salesProposalModel.SalesProposalLines.FirstOrDefault().ItemId.ToString()).Text;
+            @ViewBag.Measurement = measurements.FirstOrDefault(c => c.Value == salesProposalModel.SalesProposalLines.FirstOrDefault().MeasurementId.ToString()).Text;
 
             return View(salesProposalModel);
         }
