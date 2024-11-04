@@ -94,7 +94,13 @@
                 return formattedDate;
             }
         },
-        { headerName: "Amount" , field: "totalAmount", width : 130},
+        { headerName: "Amount" , 
+            field: "totalAmount", 
+            width : 130,
+            cellRenderer: function (params) {
+                return 'CAD ' + params.value;
+            }
+        },
         { 
             headerName: "Status", 
             field: "statusId",
