@@ -137,9 +137,27 @@ namespace AccountGoWeb.Controllers
         }
 
         [HttpPost]
-        public async System.Threading.Tasks.Task<IActionResult> EditSalesProposal(SalesProposalForUpdate salesProposalForUpdate)
+        public async System.Threading.Tasks.Task<IActionResult> EditSalesProposal(SalesProposalForUpdate salesProposalForUpdate, string? addRowBtn)
         {
-            if (ModelState.IsValid)
+            if (!string.IsNullOrEmpty(addRowBtn))
+            {
+                salesProposalForUpdate.SalesProposalLines!.Add(new SalesProposalLineForUpdate
+                {
+                    Amount = 0,
+                    Quantity = 1,
+                    Discount = 0,
+                    ItemId = 1,
+                    MeasurementId = 1,
+                });
+
+                ViewBag.Customers = Models.SelectListItemHelper.Customers();
+                ViewBag.Items = Models.SelectListItemHelper.Items();
+                ViewBag.Measurements = Models.SelectListItemHelper.Measurements();
+                ViewBag.PaymentTerms = Models.SelectListItemHelper.PaymentTerms();
+
+                return View(salesProposalForUpdate);
+            }
+            else if (ModelState.IsValid)
             {
                 var serialize = Newtonsoft.Json.JsonConvert.SerializeObject(salesProposalForUpdate);
                 var content = new StringContent(serialize);
