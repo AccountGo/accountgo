@@ -26,7 +26,7 @@
         <i class="fa fa-trash"></i>
         Delete
     </a>
-    <a href="" id="linkNewOrder" class="btn inactiveLink">
+    <a href="" id="linkNewOrder" class="btn inactiveLink" style="position: relative; float: right;">
         <i class='fa fa-arrow-right'></i>
         New Order
     </a>
@@ -59,11 +59,11 @@
 <script>
     var columnDefs = [
         { headerName: "No", field: "no", width: 50},
-        { headerName: "Customer Name", field: "customerName", width: 130 },
-        { headerName: "Description", field: "description", width: 180},
+        { headerName: "Customer Name", field: "customerName", width: 150 },
+        { headerName: "Description", field: "description", width: 200},
         { headerName: "Start Date", 
             field: "startDate", 
-            width: 180,
+            width: 200,
             cellRenderer: function (params) {
                 var date = new Date(params.value);
                 var formattedDate = date.getFullYear() + '-' +
@@ -74,7 +74,7 @@
         },
         { headerName: "Expiry Date", 
             field: "expiryDate", 
-            width: 180,
+            width: 200,
             cellRenderer: function (params) {
                 var date = new Date(params.value);
                 var formattedDate = date.getFullYear() + '-' +
@@ -85,7 +85,7 @@
         },
         { headerName: "Delivery Date", 
             field: "deliveryDate", 
-            width: 180,
+            width: 200,
             cellRenderer: function (params) {
                 var date = new Date(params.value);
                 var formattedDate = date.getFullYear() + '-' +
@@ -98,7 +98,7 @@
         { 
             headerName: "Status", 
             field: "statusId",
-            width: 130,
+            width: 150,
             cellRenderer: function(params) {
                 if (params.value === 0) {
                     return '<i class="fa fa-circle" data-toggle="tooltip" style="color: green;" title="The proposal is still being prepared."><span style="color : white;"> Draft</span></i>';
