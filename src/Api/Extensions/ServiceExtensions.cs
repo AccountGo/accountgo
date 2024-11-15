@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using System.Text;
+using Hangfire;
 
 namespace Api.Extensions
 {
@@ -100,6 +101,25 @@ namespace Api.Extensions
                     }
                 });
             });
+        }
+
+        public static void ConfigureHangFire(this IServiceCollection services, IConfiguration configuration)
+        {
+            var connectionString = configuration.GetConnectionString("HangfireConnection") ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
+
+            // These environment variables can be overriden from launchSettings.json.
+            string dbServer = System.Environment.GetEnvironmentVariable("DBSERVER") ?? "localhost,1444";
+            string dbUserID = System.Environment.GetEnvironmentVariable("DBUSERID") ?? "sa";
+            string dbUserPassword = System.Environment.GetEnvironmentVariable("DBPASSWORD") ?? "SqlPassword!";
+            string dbName = System.Environment.GetEnvironmentVariable("DBNAME") ?? "accountgodb";
+
+            connectionString = String.Format(configuration.GetConnectionString("HangfireConnection")!, dbServer, dbUserID, dbUserPassword, dbName);
+
+            System.Console.WriteLine("HangFireDB Connection String: " + connectionString);
+
+            services.AddHangfire(config =>
+                config.UseSqlServerStorage(connectionString));
+            services.AddHangfireServer();
         }
     }
 }
