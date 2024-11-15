@@ -10,6 +10,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Hangfire;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -74,6 +75,10 @@ builder.Services.AddScoped(typeof(Services.Administration.IAdministrationService
 builder.Services.AddScoped(typeof(Services.Security.ISecurityService), typeof(Services.Security.SecurityService));
 builder.Services.AddScoped(typeof(Services.TaxSystem.ITaxService), typeof(Services.TaxSystem.TaxService));
 
+// background jobs
+builder.Services.ConfigureHangFire(builder.Configuration);
+builder.Services.AddSingleton<Services.BackgroundJobs.ExpiryCheckJobService>();
+
 
 var app = builder.Build();
 
@@ -85,6 +90,11 @@ app.UseCors("AllowAll");
 
 app.UseAuthentication();
 app.UseAuthorization();
+
+app.UseHangfireDashboard();
+var jobService = app.Services.GetRequiredService<Services.BackgroundJobs.ExpiryCheckJobService>();
+jobService.AddExpiryCheckJob();
+
 
 if (app.Environment.IsDevelopment())
 {
