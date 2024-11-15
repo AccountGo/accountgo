@@ -335,28 +335,9 @@ namespace Services.Sales
                 proposal => proposal.SalesProposalLines)
                 .ToListAsync();
 
-            salesProposals = await UpdateSalesProposalStatusIfExpired(salesProposals);
-
             var salesProposalsDto = _mapper.Map<IEnumerable<Dto.Sales.SalesProposal>>(salesProposals);
 
             return Result<IEnumerable<Dto.Sales.SalesProposal>>.Success(salesProposalsDto);
-        }
-
-        private async Task<List<SalesProposalHeader>> UpdateSalesProposalStatusIfExpired(List<SalesProposalHeader> salesProposals)
-        {
-            foreach (var salesProposal in salesProposals)
-            {
-                bool canOverdue = salesProposal.Status == SalesProposalStatus.Draft || salesProposal.Status == SalesProposalStatus.Open;
-
-                if (canOverdue && salesProposal.ExpiryDate < DateTime.Now)
-                {
-                    salesProposal.Status = SalesProposalStatus.Overdue;
-                }
-
-                await _salesProposalRepo.UpdateAsync(salesProposal);
-            }
-
-            return salesProposals;
         }
 
         public async Task<Result<Dto.Sales.SalesProposal>> UpdateSalesProposalAsync(Dto.Sales.SalesProposalForUpdate salesProposalForUpdateDto, bool trackChanges)
