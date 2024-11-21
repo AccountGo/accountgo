@@ -11,6 +11,7 @@ namespace Api.Controllers
 {
     [Route("api/[controller]")]
     //[Authorize]
+    //
     public class FinancialsController : BaseController
     {
         private readonly IAdministrationService _adminService;
