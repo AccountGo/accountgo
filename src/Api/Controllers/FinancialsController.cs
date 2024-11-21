@@ -335,21 +335,28 @@ namespace Api.Controllers
             return new ObjectResult(Dto);
         }
 
-      [HttpGet]
+     [HttpGet]
     [Route("IncomeStatement")]
-    public ActionResult IncomeStatement()
+    public IActionResult IncomeStatement()
     {
-        var dto = _financialService.IncomeStatement();
-
-        // Ensure the DTO is not null
-        if (dto == null)
+        try
         {
-            // Return an empty list or handle appropriately
-            dto = new List<IncomeStatement>();
-        }
+            var incomeStatementData = _financialService.IncomeStatement();
 
-        return new ObjectResult(dto);
+            // Ensure the data is not null
+            if (incomeStatementData == null)
+            {
+                incomeStatementData = new List<IncomeStatement>();
+            }
+
+            return Ok(incomeStatementData);
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { message = "Error fetching income statement", details = ex.Message });
+        }
     }
+
 
 
 
