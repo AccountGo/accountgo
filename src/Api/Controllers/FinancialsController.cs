@@ -335,14 +335,23 @@ namespace Api.Controllers
             return new ObjectResult(Dto);
         }
 
-        [HttpGet]
-        [Route("IncomeStatement")]
-        // TODO: this generates an error a.ContraAccounts' is invalid inside an 'Include' operation
-        public ActionResult IncomeStatement()
+      [HttpGet]
+    [Route("IncomeStatement")]
+    public ActionResult IncomeStatement()
+    {
+        var dto = _financialService.IncomeStatement();
+
+        // Ensure the DTO is not null
+        if (dto == null)
         {
-            var Dto = _financialService.IncomeStatement();
-            return new ObjectResult(Dto);
+            // Return an empty list or handle appropriately
+            dto = new List<IncomeStatement>();
         }
+
+        return new ObjectResult(dto);
+    }
+
+
 
         #region Private Methods
         private IList<Dto.Financial.Account> BuildAccountGrouping(IList<Core.Domain.Financials.Account> allAccounts,
