@@ -1,67 +1,70 @@
 ﻿@model ICollection<AccountGoWeb.Models.IncomeStatement>
+
 @{
-    ViewBag.Title = "IncomeStatement";
+    ViewBag.Title = "Income Statement";
     Layout = "~/Views/Shared/_Layout_bootstrap.cshtml";
 
-    // Handle null or empty model
-    if (Model == null || !Model.Any())
-    {
-        <p>No data available to display.</p>
-        return; // Stop further processing
-    }
-
-    // Calculate net income
-    var netIncome = Model.Where(a => a.IsExpense == false).Sum(a => a.Amount) - 
-                    Model.Where(a => a.IsExpense == true).Sum(a => a.Amount);
+    var netIncome = Model?.Where(a => !a.IsExpense).Sum(a => a.Amount) ?? 0 - 
+                    Model?.Where(a => a.IsExpense).Sum(a => a.Amount) ?? 0;
 }
 
 <h2>Income Statement</h2>
 
-<div style="text-align: center">
-    <h3>Income Statement</h3>
-</div>
-<div>
-    <table class="table">
-        <tr style="font-weight: bold;">
-            <td>Account Code</td>
-            <td>Account Name</td>
-            <td style="text-align: right">Amount</td>
-        </tr>
-        @foreach (var asset in Model.Where(a => a.IsExpense == false))
-        {
+@if (ViewBag.Error != null)
+{
+    <div class="alert alert-danger">@ViewBag.Error</div>
+}
+else if (Model == null || !Model.Any())
+{
+    <p>No data available to display.</p>
+}
+else
+{
+    <div>
+        <h3>Revenues</h3>
+        <table class="table">
             <tr>
-                <td>@Html.ActionLink((string)string.Format("{0}", asset.AccountCode), "account", new { id = asset.AccountId })</td>
-                <td>@asset.AccountName</td>
-                <td style="text-align: right">@asset.Amount</td>
+                <th>Account Code</th>
+                <th>Account Name</th>
+                <th style="text-align: right;">Amount</th>
             </tr>
-        }
-        <tr style="font-weight: bold;">
-            <td colspan="2">Total Revenues</td>
-            <td style="text-align: right">@Model.Where(a => a.IsExpense == false).Sum(a => a.Amount)</td>
-        </tr>
-    </table>
-</div>
-<div>
-    <table class="table">
-        <tr style="font-weight: bold;">
-            <td>Account Code</td>
-            <td>Account Name</td>
-            <td style="text-align: right">Amount</td>
-        </tr>
-        @foreach (var asset in Model.Where(a => a.IsExpense == true))
-        {
+            @foreach (var item in Model.Where(a => !a.IsExpense))
+            {
+                <tr>
+                    <td>@Html.ActionLink(item.AccountCode, "Account", new { id = item.AccountId })</td>
+                    <td>@item.AccountName</td>
+                    <td style="text-align: right;">@item.Amount</td>
+                </tr>
+            }
             <tr>
-                <td>@Html.ActionLink((string)string.Format("{0}", asset.AccountCode), "account", new { id = asset.AccountId })</td>
-                <td>@asset.AccountName</td>
-                <td style="text-align: right">@asset.Amount</td>
+                <td colspan="2" style="text-align: right; font-weight: bold;">Total Revenues</td>
+                <td style="text-align: right;">@Model.Where(a => !a.IsExpense).Sum(a => a.Amount)</td>
             </tr>
-        }
-        <tr style="font-weight: bold;">
-            <td colspan="2">Total Expenses</td>
-            <td style="text-align: right">@Model.Where(a => a.IsExpense == true).Sum(a => a.Amount)</td>
-        </tr>
-    </table>
-</div>
-<div style="text-align: right; font-weight: bold; font-size: large">
-    Net Income: @netIncome
-</div>
+        </table>
+    </div>
+    <div>
+        <h3>Expenses</h3>
+        <table class="table">
+            <tr>
+                <th>Account Code</th>
+                <th>Account Name</th>
+                <th style="text-align: right;">Amount</th>
+            </tr>
+            @foreach (var item in Model.Where(a => a.IsExpense))
+            {
+                <tr>
+                    <td>@Html.ActionLink(item.AccountCode, "Account", new { id = item.AccountId })</td>
+                    <td>@item.AccountName</td>
+                    <td style="text-align: right;">@item.Amount</td>
+                </tr>
+            }
+            <tr>
+                <td colspan="2" style="text-align: right; font-weight: bold;">Total Expenses</td>
+                <td style="text-align: right;">@Model.Where(a => a.IsExpense).Sum(a => a.Amount)</td>
+            </tr>
+        </table>
+    </div>
+    <div style="text-align: right; font-weight: bold; font-size: large;">
+        Net Income: @netIncome
+    </div>
+}
