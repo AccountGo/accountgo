@@ -30,7 +30,7 @@ jobs:
         run: dotnet publish ./src/BlazorGDB/BlazorGDB/BlazorGDB.csproj --configuration Release --output ${{ github.workspace }}/myapp
 
       - name: Upload artifact for deployment job
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: .net-app
           path: ${{ github.workspace }}/myapp
@@ -46,7 +46,7 @@ jobs:
 
     steps:
       - name: Download artifact from build job
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: .net-app
       
