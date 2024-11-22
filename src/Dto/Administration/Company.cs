@@ -16,6 +16,10 @@ namespace Dto.Administration
     [Display(Name = "Short Name")]
     public string? ShortName { get; set; }
 
+    [Required]
+    [Display(Name = "CRA")]
+    public string? CRA { get; set; }
+
     [Display(Name = "Logo")]
     public byte[]? Logo { get; set; }
   }
