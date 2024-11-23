@@ -1,7 +1,7 @@
 # Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
 # More GitHub Actions for Azure: https://github.com/Azure/actions
 
-name: Build and deploy ASP.Net Core app to Azure Web App - gdbapi
+name: Build and deploy Good Deed Books API to Azure Web App - gdbapi
 
 on:
   push:
@@ -29,8 +29,6 @@ jobs:
 
       - name: Build with dotnet
         run: |
-          echo "++++ dotnet restore"
-          dotnet restore
           echo "++++ dotnet build"
           dotnet build --configuration Release
 
@@ -50,7 +48,7 @@ jobs:
       - name: dotnet publish
         run: |
           echo "++++ contents of dotnet publish ./src/Api/Api.csproj"
-          dotnet publish ./src/Api/Api.csproj -c Release -o ${{env.DOTNET_ROOT}}/myapp
+          dotnet publish ./src/Api/Api.csproj -f net8.0 -c Release -o ${{env.DOTNET_ROOT}}/myapp
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
