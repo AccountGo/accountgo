@@ -48,7 +48,7 @@ jobs:
       - name: dotnet publish
         run: |
           echo "++++ contents of dotnet publish ./src/Api/Api.csproj"
-          dotnet publish ./src/Api/Api.csproj -f net8.0 -c Release -o ${{env.DOTNET_ROOT}}/myapp
+          dotnet publish ./src/Api/Api.csproj -f net8.0 -c Release -o "${{runner.temp}}/myapp"
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
