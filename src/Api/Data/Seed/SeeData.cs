@@ -25,6 +25,7 @@ namespace Api.Data.Seed
                     Name = "Financial Solutions Inc.",
                     CompanyCode = "100",
                     ShortName = "FSI",
+                    CRA = "012345678"
                 }
             };
             return companiees;
