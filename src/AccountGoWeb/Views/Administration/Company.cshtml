@@ -12,6 +12,7 @@
   }
 </style>
 <p>
+  @*  *@
   <div class="col-sm-9">
     <button type="button" id="btnEdit" class="btn btn-sm btn-warning btn-flat">
       <span class="fa fa-edit"></span> Edit
@@ -52,6 +53,13 @@
             <div class="col-sm-8">
               <input asp-for="ShortName" class="form-control" type="text" required placeholder="Short Name ..." />
               <span asp-validation-for="ShortName" class="danger"></span>
+            </div>
+          </div>
+           <div class="row">
+            <label class="control-label col-sm-4" asp-for="CRA" ></label>
+            <div class="col-sm-8">
+              <input asp-for="CRA" class="form-control" type="text" required placeholder="Short Name ..." />
+              <span asp-validation-for="CRA" class="danger"></span>
             </div>
           </div>
         </div>

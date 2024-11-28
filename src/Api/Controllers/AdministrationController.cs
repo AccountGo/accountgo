@@ -264,6 +264,7 @@ namespace Api.Controllers
                 company.CompanyCode = companyDto.CompanyCode;
                 company.Name = companyDto.Name;
                 company.ShortName = companyDto.ShortName;
+                company.CRA = companyDto.CRA;
 
                 _adminService.SaveCompany(company);
 
