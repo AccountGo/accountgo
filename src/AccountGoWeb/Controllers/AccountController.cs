@@ -34,35 +34,36 @@ namespace AccountGoWeb.Controllers
                 var content = new StringContent(serialize);
                 content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
                 HttpResponseMessage responseSignIn = Post("account/signin", content);
-                Newtonsoft.Json.Linq.JObject resultSignIn = Newtonsoft.Json.Linq.JObject.Parse(responseSignIn.Content.ReadAsStringAsync().Result);
+                var responseContent = await responseSignIn.Content.ReadAsStringAsync();
+                var resultSignIn = Newtonsoft.Json.Linq.JObject.Parse(responseContent);
+                var accessToken = resultSignIn["accessToken"]?.ToString();
+                var refreshToken = resultSignIn["refreshToken"]?.ToString();
 
-                if (resultSignIn["result"] != null)
+                if (!string.IsNullOrEmpty(accessToken) && !string.IsNullOrEmpty(refreshToken))
                 {
                     var user = await GetAsync<Dto.Security.User>("administration/getuser?username=" + model.Email);
+                    var claims = new List<Claim>
+                    {
+                        new Claim(ClaimTypes.IsPersistent, model.RememberMe.ToString()),
+                        new Claim(ClaimTypes.NameIdentifier, user.Email!),
+                        new Claim(ClaimTypes.Email, user.Email!)
+                    };
 
-                    var claims = new List<Claim>();
-                    claims.Add(new Claim(ClaimTypes.IsPersistent, model.RememberMe.ToString()));
-                    claims.Add(new Claim(ClaimTypes.NameIdentifier, user.Email!));
-                    claims.Add(new Claim(ClaimTypes.Email, user.Email!));
-
-                    string firstName = user.FirstName != null ? user.FirstName : "";
-                    string lastName = user.LastName != null ? user.LastName : "";
-
+                    string firstName = user.FirstName ?? "";
+                    string lastName = user.LastName ?? "";
                     claims.Add(new Claim(ClaimTypes.GivenName, firstName));
                     claims.Add(new Claim(ClaimTypes.Surname, lastName));
-                    claims.Add(new Claim(ClaimTypes.Name, firstName + " " + lastName));
+                    claims.Add(new Claim(ClaimTypes.Name, $"{firstName} {lastName}"));
 
-                    foreach(var role in user.Roles)
-                        claims.Add(new Claim(ClaimTypes.Role, role.Name!));
+                    foreach (var role in user.Roles)
+                    { claims.Add(new Claim(ClaimTypes.Role, role.Name!)); }
 
                     claims.Add(new Claim(ClaimTypes.UserData, Newtonsoft.Json.JsonConvert.SerializeObject(user)));
 
                     var identity = new ClaimsIdentity(claims, "AuthCookie");
-
                     ClaimsPrincipal principal = new ClaimsPrincipal(new[] { identity });
 
                     HttpContext.User = principal;
-
                     await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal);
 
                     return RedirectToLocal(returnUrl!);
@@ -73,8 +74,6 @@ namespace AccountGoWeb.Controllers
                     return View(model);
                 }
             }
-
-            // If we got this far, something failed, redisplay form
             return View(model);
         }
 
@@ -137,7 +136,7 @@ namespace AccountGoWeb.Controllers
                     }
                 }
             }
-            catch(Exception ex)
+            catch (Exception ex)
             {
                 ModelState.AddModelError(string.Empty, "Please check if your database is ready/published." + ": " + ex.Message);
                 return View(model);
