@@ -83,6 +83,8 @@ SET IDENTITY_INSERT [dbo].[User] OFF
 GO
 
 /*******************************************************************
---- Add Admin user to SecurityUserRole table an assign SystemAdministrators role ---
+--- Add Admin user to SecurityUserRole table and assign SystemAdministrators role ---
 ********************************************************************/
-INSERT INTO [SecurityUserRole] ([UserId], [SecurityRoleId]) VALUES (1, 1);
+INSERT INTO [SecurityUserRole] ([UserId], [SecurityRoleId])
+VALUES		(1, 1)
+GO
