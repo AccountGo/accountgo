@@ -1,6 +1,7 @@
 using AccountGoWeb.Components;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using AutoMapper;
+using Microsoft.AspNetCore.Session;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -10,6 +11,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddAutoMapper(typeof(Program));
 
 builder.Services.AddControllersWithViews();
+builder.Services.AddHttpContextAccessor();
 
 // string urlhost = System.Environment.GetEnvironmentVariable("APIHOST") ?? "localhost";
 // string urlport = System.Environment.GetEnvironmentVariable("APIPORT") ?? "8001";
@@ -26,6 +28,14 @@ builder.Services
     .AddInteractiveServerComponents()
     .AddCircuitOptions(options => options.DetailedErrors = true); // for debugging razor components
 
+builder.Services.AddDistributedMemoryCache(); // For storing session data in memory
+builder.Services.AddSession(options =>
+{
+    options.IdleTimeout = TimeSpan.FromMinutes(30); // Session timeout (adjust as needed)
+    options.Cookie.HttpOnly = true; // Ensures the cookie cannot be accessed via client-side scripts
+    options.Cookie.IsEssential = true; // Makes the session cookie essential
+});
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -41,6 +51,7 @@ app.UseStaticFiles();
 
 app.UseRouting();
 
+app.UseSession();
 app.UseAuthentication();
 app.UseAntiforgery();
 app.UseAuthorization();

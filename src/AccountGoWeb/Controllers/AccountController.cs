@@ -41,6 +41,11 @@ namespace AccountGoWeb.Controllers
 
                 if (!string.IsNullOrEmpty(accessToken) && !string.IsNullOrEmpty(refreshToken))
                 {
+                    // Save the token to session
+                    HttpContext.Session.SetString("AccessToken", accessToken);
+                    HttpContext.Session.SetString("RefreshToken", refreshToken);
+
+                    // Get user details and set claims
                     var user = await GetAsync<Dto.Security.User>("administration/getuser?username=" + model.Email);
                     var claims = new List<Claim>
                     {
@@ -56,7 +61,9 @@ namespace AccountGoWeb.Controllers
                     claims.Add(new Claim(ClaimTypes.Name, $"{firstName} {lastName}"));
 
                     foreach (var role in user.Roles)
-                    { claims.Add(new Claim(ClaimTypes.Role, role.Name!)); }
+                    {
+                        claims.Add(new Claim(ClaimTypes.Role, role.Name!));
+                    }
 
                     claims.Add(new Claim(ClaimTypes.UserData, Newtonsoft.Json.JsonConvert.SerializeObject(user)));
 
@@ -74,6 +81,7 @@ namespace AccountGoWeb.Controllers
                     return View(model);
                 }
             }
+
             return View(model);
         }
 
