@@ -1,28 +1,48 @@
 ﻿@model IEnumerable<Dto.Administration.AuditLog>
 @using AccountGoWeb.Models;
 <div>
-    <div id="auditlogs" class="ag-blue" style="height: 400px;"></div>
+  <div id="auditlogs" class="ag-blue" style="height: 400px;"></div>
 </div>
 <script>
-    var columnDefs = [
-    {headerName: "Username", field: "UserName", width: 100},
-    {headerName: "Date", field: "AuditEventDateUTC", width: 100},
-    {headerName: "Type", field: "AuditEventType", width: 75},
-    {headerName: "Table Name", field: "TableName", width: 150},
-    {headerName: "Record Id", field: "RecordId", width: 75},
-    {headerName: "Field Name", field: "FieldName", width: 150},
-    {headerName: "Original Value", field: "OriginalValue", width: 150},
-    {headerName: "New Value", field: "NewValue", width: 150}
-    ];
+  var columnDefs = [
+    { headerName: "Username", field: "UserName", width: 100 },
+    { headerName: "Date", field: "Date", width: 100 },
+    { headerName: "Time", field: "Time", width: 100 },
+    { headerName: "Type", field: "AuditEventType", width: 75 },
+    { headerName: "Table Name", field: "TableName", width: 150 },
+    { headerName: "Record Id", field: "RecordId", width: 75 },
+    { headerName: "Field Name", field: "FieldName", width: 150 },
+    { headerName: "Original Value", field: "OriginalValue", width: 200 },
+    { headerName: "New Value", field: "NewValue", width: 200 }
+  ];
 
-    var gridOptions = {
-        columnDefs: columnDefs,
-        rowData: @Html.Raw(Model.ToJson()),
-        // PROPERTIES
-        rowSelection: 'single',
-        enableFilter: true,
-        enableColResize: true,
-    };
+  var rowData = @Html.Raw(Model.ToJson());
+
+  rowData.forEach(function (row) {
+    var localDateTimeString = row.AuditEventDateUTC;
+
+    var formattedDateTimeString = localDateTimeString.replace(' ', 'T') + 'Z';
+    var date = new Date(formattedDateTimeString);
+
+    var localDate = date.toLocaleDateString('en-US', {
+      year: 'numeric', month: '2-digit', day: '2-digit'
+    });
+
+    var localTime = date.toLocaleTimeString('en-US', {
+      hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true
+    });
+
+    row.Date = localDate;
+    row.Time = localTime;
+  });
+
+  var gridOptions = {
+    columnDefs: columnDefs,
+    rowData: rowData,
+    rowSelection: 'single',
+    enableFilter: true,
+    enableColResize: true,
+  };
 
     // wait for the document to be loaded, otherwise
     // ag-Grid will not find the div in the document.

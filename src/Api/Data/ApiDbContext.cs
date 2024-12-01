@@ -14,9 +14,11 @@ namespace Api.Data
 {
     public class ApiDbContext : DbContext
     {
-        public ApiDbContext(DbContextOptions<ApiDbContext> options)
+        private readonly IHttpContextAccessor _httpContextAccessor;
+        public ApiDbContext(DbContextOptions<ApiDbContext> options, IHttpContextAccessor httpContextAccessor)
             : base(options)
         {
+         _httpContextAccessor = httpContextAccessor;
         }
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
@@ -299,11 +301,11 @@ namespace Api.Data
         public override int SaveChanges()
         {
             // TODO : Implementation Required
-            //SaveAuditLog();
+            SaveAuditLog();
 
             var ret = base.SaveChanges();
 
-            //UpdateAuditLogRecordId();
+            UpdateAuditLogRecordId();
 
             return ret;
         }
@@ -320,6 +322,7 @@ namespace Api.Data
             {
                 try
                 {
+                    // TODO: Need to implement the logic to get the username
                     username = ((BaseEntity)dbEntityEntry.Entity).ModifiedBy;
                     var auditLogs = AuditLogHelper.GetChangesForAuditLog(dbEntityEntry, username);
                     foreach (var auditlog in auditLogs)

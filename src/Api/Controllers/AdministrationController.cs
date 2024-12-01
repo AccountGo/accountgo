@@ -1,6 +1,8 @@
+using Api.Data;
 using Dto.Administration;
 using Dto.Security;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Services.Administration;
 using Services.Financial;
 using Services.Inventory;
@@ -243,11 +245,12 @@ namespace Api.Controllers
 
         [HttpPost]
         [Route("SaveCompany")]
-        public IActionResult SaveCompany([FromBody]Company companyDto)
+        public IActionResult SaveCompany([FromBody] Company companyDto, [FromServices] ApiDbContext context)
         {
             string[] errors;
             try
             {
+                // Validate the model
                 if (!ModelState.IsValid)
                 {
                     errors = new string[ModelState.ErrorCount];
@@ -257,10 +260,36 @@ namespace Api.Controllers
                     return new BadRequestObjectResult(errors);
                 }
 
+                // Ensure 'Company' entry exists in AuditableEntity
+                var auditableEntity = context.AuditableEntities.FirstOrDefault(e => e.EntityName == "Company");
+                if (auditableEntity == null)
+                {
+                    auditableEntity = new Core.Domain.Auditing.AuditableEntity
+                    {
+                        EntityName = "Company",
+                        EnableAudit = true
+                    };
+                    context.AuditableEntities.Add(auditableEntity);
+                    context.SaveChanges();
+                    Console.WriteLine("Added AuditableEntity entry for 'Company'.");
+                }
+
+                // Retrieve or create the Company entity
                 Core.Domain.Company company = companyDto.Id == 0
                     ? new Core.Domain.Company()
                     : _adminService.GetDefaultCompany();
 
+                // Track changes before updating
+                var originalCompany = new Core.Domain.Company
+                {
+                    Id = company.Id,
+                    CompanyCode = company.CompanyCode,
+                    Name = company.Name,
+                    ShortName = company.ShortName,
+                    CRA = company.CRA
+                };
+
+                // Update the Company entity with the new values
                 company.CompanyCode = companyDto.CompanyCode;
                 company.Name = companyDto.Name;
                 company.ShortName = companyDto.ShortName;
@@ -268,11 +297,21 @@ namespace Api.Controllers
 
                 _adminService.SaveCompany(company);
 
+                // Ensure entity is tracked
+                context.Entry(company).State = EntityState.Modified;
+                var auditLogs = AuditLogHelper.GetChangesForAuditLog(context.Entry(company), "username");
+                foreach (var log in auditLogs)
+                {
+                    context.AuditLogs.Add(log);
+                }
+                context.SaveChanges();
+
                 return new ObjectResult(Ok());
             }
             catch (Exception ex)
             {
                 errors = new[] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
+                Console.WriteLine($"Error: {string.Join(", ", errors)}");
                 return new BadRequestObjectResult(errors);
             }
         }
