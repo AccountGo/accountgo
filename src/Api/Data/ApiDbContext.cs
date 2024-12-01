@@ -14,6 +14,8 @@ namespace Api.Data
 {
     public class ApiDbContext : DbContext
     {
+        public string CurrentUsername { get; set; } = "Unknown";
+        
         private readonly IHttpContextAccessor _httpContextAccessor;
         public ApiDbContext(DbContextOptions<ApiDbContext> options, IHttpContextAccessor httpContextAccessor)
             : base(options)
@@ -313,8 +315,6 @@ namespace Api.Data
         #region Audit Logs
         private void SaveAuditLog()
         {
-            string username = string.Empty;
-
             var dbEntityEntries = ChangeTracker.Entries().ToList()
                 .Where(p => p.State == EntityState.Modified || p.State == EntityState.Added || p.State == EntityState.Deleted);
 
@@ -322,15 +322,19 @@ namespace Api.Data
             {
                 try
                 {
-                    // TODO: Need to implement the logic to get the username
-                    username = ((BaseEntity)dbEntityEntry.Entity).ModifiedBy;
-                    var auditLogs = AuditLogHelper.GetChangesForAuditLog(dbEntityEntry, username);
+                    string resolvedUsername = string.IsNullOrWhiteSpace(CurrentUsername) ? "Unknown" : CurrentUsername;
+                    var auditLogs = AuditLogHelper.GetChangesForAuditLog(dbEntityEntry, resolvedUsername);
                     foreach (var auditlog in auditLogs)
+                    {
                         if (auditlog != null)
+                        {
                             AuditLogs.Add(auditlog);
+                        }
+                    }
                 }
-                catch
+                catch (Exception ex)
                 {
+                    Console.WriteLine($"Error in SaveAuditLog for entity {dbEntityEntry.Entity.GetType().Name}: {ex.Message}");
                     continue;
                 }
             }

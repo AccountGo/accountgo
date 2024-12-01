@@ -250,15 +250,15 @@ namespace Api.Controllers
             string[] errors;
             try
             {
-                // Validate the model
                 if (!ModelState.IsValid)
                 {
-                    errors = new string[ModelState.ErrorCount];
-                    foreach (var val in ModelState.Values)
-                        for (var i = 0; i < ModelState.ErrorCount; i++)
-                            errors[i] = val.Errors[i].ErrorMessage;
-                    return new BadRequestObjectResult(errors);
+                    errors = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage).ToArray();
+                    return BadRequest(errors);
                 }
+
+                // TODO: Implement proper username retrieval
+                string username = User?.Identity?.Name ?? "Bobo";
+                context.CurrentUsername = username;
 
                 // Ensure 'Company' entry exists in AuditableEntity
                 var auditableEntity = context.AuditableEntities.FirstOrDefault(e => e.EntityName == "Company");
@@ -279,17 +279,6 @@ namespace Api.Controllers
                     ? new Core.Domain.Company()
                     : _adminService.GetDefaultCompany();
 
-                // Track changes before updating
-                var originalCompany = new Core.Domain.Company
-                {
-                    Id = company.Id,
-                    CompanyCode = company.CompanyCode,
-                    Name = company.Name,
-                    ShortName = company.ShortName,
-                    CRA = company.CRA
-                };
-
-                // Update the Company entity with the new values
                 company.CompanyCode = companyDto.CompanyCode;
                 company.Name = companyDto.Name;
                 company.ShortName = companyDto.ShortName;
@@ -297,22 +286,22 @@ namespace Api.Controllers
 
                 _adminService.SaveCompany(company);
 
-                // Ensure entity is tracked
                 context.Entry(company).State = EntityState.Modified;
-                var auditLogs = AuditLogHelper.GetChangesForAuditLog(context.Entry(company), "username");
+                var auditLogs = AuditLogHelper.GetChangesForAuditLog(context.Entry(company), username);
+
                 foreach (var log in auditLogs)
                 {
                     context.AuditLogs.Add(log);
                 }
                 context.SaveChanges();
 
-                return new ObjectResult(Ok());
+                return Ok();
             }
             catch (Exception ex)
             {
-                errors = new[] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
+                errors = new[] { ex.InnerException?.Message ?? ex.Message };
                 Console.WriteLine($"Error: {string.Join(", ", errors)}");
-                return new BadRequestObjectResult(errors);
+                return BadRequest(errors);
             }
         }
     }
