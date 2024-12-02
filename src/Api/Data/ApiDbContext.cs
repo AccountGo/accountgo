@@ -15,6 +15,7 @@ namespace Api.Data
     public class ApiDbContext : DbContext
     {
         public string CurrentUsername { get; set; } = "Unknown";
+        public string IpAddress { get; set; } = "UnknownIP";
         
         private readonly IHttpContextAccessor _httpContextAccessor;
         public ApiDbContext(DbContextOptions<ApiDbContext> options, IHttpContextAccessor httpContextAccessor)
@@ -323,7 +324,8 @@ namespace Api.Data
                 try
                 {
                     string resolvedUsername = string.IsNullOrWhiteSpace(CurrentUsername) ? "Unknown" : CurrentUsername;
-                    var auditLogs = AuditLogHelper.GetChangesForAuditLog(dbEntityEntry, resolvedUsername);
+                    string resolvedIpAddress = string.IsNullOrWhiteSpace(IpAddress) ? "UnknownIP" : IpAddress;
+                    var auditLogs = AuditLogHelper.GetChangesForAuditLog(dbEntityEntry, resolvedUsername, resolvedIpAddress);
                     foreach (var auditlog in auditLogs)
                     {
                         if (auditlog != null)

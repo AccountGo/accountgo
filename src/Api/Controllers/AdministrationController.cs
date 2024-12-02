@@ -89,7 +89,8 @@ namespace Api.Controllers
                 RecordId = log.RecordId,
                 FieldName = log.FieldName,
                 OriginalValue = log.OriginalValue,
-                NewValue = log.NewValue
+                NewValue = log.NewValue,
+                IPAddress = log.IPAddress
             }).ToList();
 
             return new ObjectResult(auditLogsDto);
@@ -256,23 +257,15 @@ namespace Api.Controllers
                     return BadRequest(errors);
                 }
 
+                var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "UnknownIP";
+
                 // TODO: Implement proper username retrieval
-                string username = User?.Identity?.Name ?? "Bobo";
+                string username = User?.Identity?.Name ?? "UnknownUser";
                 context.CurrentUsername = username;
+                context.IpAddress = ipAddress;
 
                 // Ensure 'Company' entry exists in AuditableEntity
                 var auditableEntity = context.AuditableEntities.FirstOrDefault(e => e.EntityName == "Company");
-                if (auditableEntity == null)
-                {
-                    auditableEntity = new Core.Domain.Auditing.AuditableEntity
-                    {
-                        EntityName = "Company",
-                        EnableAudit = true
-                    };
-                    context.AuditableEntities.Add(auditableEntity);
-                    context.SaveChanges();
-                    Console.WriteLine("Added AuditableEntity entry for 'Company'.");
-                }
 
                 // Retrieve or create the Company entity
                 Core.Domain.Company company = companyDto.Id == 0
@@ -287,7 +280,7 @@ namespace Api.Controllers
                 _adminService.SaveCompany(company);
 
                 context.Entry(company).State = EntityState.Modified;
-                var auditLogs = AuditLogHelper.GetChangesForAuditLog(context.Entry(company), username);
+                var auditLogs = AuditLogHelper.GetChangesForAuditLog(context.Entry(company), username, ipAddress);
 
                 foreach (var log in auditLogs)
                 {
