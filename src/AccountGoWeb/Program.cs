@@ -2,7 +2,16 @@ using AccountGoWeb.Components;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using AutoMapper;
 
+
+
 var builder = WebApplication.CreateBuilder(args);
+
+builder.AddServiceDefaults();
+
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.ListenLocalhost(8000);
+});
 
 // Add services to the container.
 
