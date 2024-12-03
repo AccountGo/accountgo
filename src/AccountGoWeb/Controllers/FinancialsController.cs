@@ -168,26 +168,37 @@ namespace AccountGoWeb.Controllers
 
     public async Task<IActionResult> IncomeStatement()
     {
-      ViewBag.PageContentHeader = "Income Statement";
+        ViewBag.PageContentHeader = "Income Statement";
 
-      using (var client = new System.Net.Http.HttpClient())
-      {
-        var baseUri = _baseConfig!["ApiUrl"];
-        client.BaseAddress = new System.Uri(baseUri!);
-        client.DefaultRequestHeaders.Accept.Clear();
-        var response = await client.GetAsync(baseUri + "financials/incomestatement");
-        if (response.IsSuccessStatusCode)
+        using (var client = new System.Net.Http.HttpClient())
         {
-          var responseJson = await response.Content.ReadAsStringAsync();
-          var incomeStatementModel = Newtonsoft.Json.JsonConvert.DeserializeObject<System.Collections.Generic.List<Models.IncomeStatement>>(responseJson);
-          return View(incomeStatementModel);
-        }
-      }
+            var baseUri = _baseConfig!["ApiUrl"];
+            client.BaseAddress = new System.Uri(baseUri!);
+            client.DefaultRequestHeaders.Accept.Clear();
 
-      return View();
-      //var Dto = _financialService.IncomeStatement();
-      //return View(Dto);
+            try
+            {
+                var response = await client.GetAsync(baseUri + "financials/incomestatement");
+                if (response.IsSuccessStatusCode)
+                {
+                    var responseJson = await response.Content.ReadAsStringAsync();
+                    var incomeStatementModel = Newtonsoft.Json.JsonConvert.DeserializeObject<System.Collections.Generic.List<Models.IncomeStatement>>(responseJson);
+                    return View(incomeStatementModel);
+                }
+                else
+                {
+                    ViewBag.Error = "Failed to fetch income statement data.";
+                }
+            }
+            catch (Exception ex)
+            {
+                ViewBag.Error = $"Error: {ex.Message}";
+            }
+        }
+
+        return View(new List<Models.IncomeStatement>());
     }
+
 
     public IActionResult Banks()
     {
