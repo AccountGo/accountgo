@@ -181,6 +181,7 @@ namespace Api.Data
                     Name = "Financial Solutions Inc.",
                     CompanyCode = "100",
                     ShortName = "FSI",
+                    CRA = "012345678"
                 };
 
                 _adminService.SaveCompany(defaultCompany);

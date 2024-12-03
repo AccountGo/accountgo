@@ -2,6 +2,7 @@ using System;
 using Api.ActionFilters;
 using Api.Data;
 using Api.Data.Repositories;
+using Api.Data.Seed;
 using Api.Extensions;
 using Api.Service;
 using Microsoft.AspNetCore.Builder;
@@ -72,6 +73,8 @@ builder.Services.AddScoped(typeof(Services.Administration.IAdministrationService
 builder.Services.AddScoped(typeof(Services.Security.ISecurityService), typeof(Services.Security.SecurityService));
 builder.Services.AddScoped(typeof(Services.TaxSystem.ITaxService), typeof(Services.TaxSystem.TaxService));
 
+//seed the database
+builder.Services.AddScoped<DatabaseSeeder>();
 
 var app = builder.Build();
 
@@ -106,6 +109,9 @@ using (var scope = app.Services.CreateScope())
     {
         identityDbContext.Database.Migrate();
     }
+
+    var seeder = services.GetRequiredService<DatabaseSeeder>();
+    seeder.Seed();
 }
 
 app.Run();
