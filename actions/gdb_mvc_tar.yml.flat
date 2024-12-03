@@ -17,7 +17,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Set up .NET Core
-        uses: actions/setup-dotnet@v1
+        uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.x'
           include-prerelease: true
@@ -54,7 +54,7 @@ jobs:
           ls -al
 
       - name: Upload artifact for deployment job
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: .net-app
           path: my_artifact.tar.gz
@@ -70,12 +70,12 @@ jobs:
 
     steps:
       - name: Download artifact from build job
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: .net-app
       
       - name: Login to Azure
-        uses: azure/login@v1
+        uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_28108B2CCE81480BB0295B2554B37231 }}
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_9ED1B649A03F45E7B34C3BE1217B6BDE }}
@@ -93,7 +93,7 @@ jobs:
 
       - name: Deploy to Azure Web App
         id: deploy-to-webapp
-        uses: azure/webapps-deploy@v2
+        uses: azure/webapps-deploy@v3
         with:
           app-name: 'good-books'
           slot-name: 'Production'
