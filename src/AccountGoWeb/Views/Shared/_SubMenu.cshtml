@@ -1,0 +1,21 @@
+@model AccountGoWeb.Models.SubMenu.SubMenuModel
+
+<li class='sub-menu'>
+    <a href="javascript:;" onclick="document.location.hash='#message';">
+        <div class="d-flex justify-content-start">
+            <i class="nav-icon fa fa-@Model.Icon"></i>
+            @Model.MenuTitle
+            <div class='fa fa-caret-down ml-auto'></div>
+        </div>
+    </a>
+    <ul>
+        @foreach (var item in Model.MenuItems)
+        {
+            <li>
+                <a class="nav-link" asp-area="" asp-controller="@item.Controller" asp-action="@item.Action">
+                    @item.Text
+                </a>
+            </li>
+        }
+    </ul>
+</li>
