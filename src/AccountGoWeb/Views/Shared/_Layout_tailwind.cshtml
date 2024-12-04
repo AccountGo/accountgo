@@ -1,13 +1,15 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <partial name="_Head" />
 </head>
 
-<body class="bg-lightPrimary text-darkPrimary dark:bg-darkPrimary dark:bg-lightPrimary">
-    <div class="flex h-screen">
-        <partial name="_LeftNavigationTest" model="@Model"/>
-        <div class="flex-1 p-5 bg-lightPrimary dark:bg-darkPrimary">
+<body class="bg-lightPrimary text-darkPrimary dark:text-lightSecondary dark:bg-darkPrimary h-screen">
+    <div class="flex">
+        <!-- left side navigation -->
+        <partial name="_LeftNavigationTest" />
+        <div class="flex-1 p-5 bg-lightPrimary">
             <div class>
                 <!-- PAGE CONTENT -->
                 <h2>
@@ -17,11 +19,12 @@
                 <!-- /PAGE CONTENT -->
             </div>
         </div>
-        </aside> 
+        </aside>
     </div>
     <partial name="_Footer" />
     <script src="~/_framework/blazor.server.js"></script>
     <!-- PLugins and scripts required by the views -->
     @RenderSection("Scripts", required: false)
 </body>
+
 </html>

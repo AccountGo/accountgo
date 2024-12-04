@@ -1,43 +1,44 @@
 ﻿@model ICollection<AccountGoWeb.Models.BalanceSheet>
 @{
   ViewBag.Title = "BalanceSheet";
-  Layout = "~/Views/Shared/_Layout_bootstrap.cshtml";
+  Layout = "~/Views/Shared/_Layout_tailwind.cshtml";
 }
 
 @if (Model != null)
 {
   <div style="text-align: center">
-  <h3>Balance Sheet</h3>
-</div>
+    <h3>Balance Sheet</h3>
+  </div>
   <div>
-  <table class="table">
-    <tr style="font-weight: bold;">
-      <td>Account Code</td>
-      <td>Account Name</td>
-      <td style="text-align: right">Amount</td>
-    </tr>
-        @foreach (var asset in Model.Where(a => a.AccountClassId == 1))
-        {
-            <tr>
-                <td>@Html.ActionLink((string)string.Format("{0}", asset.AccountCode), "account", new { id = asset.AccountId })</td>
-                <td>@asset.AccountName</td>
-                <td style="text-align: right">@asset.Amount</td>
-            </tr>
-        }
-    <tr style="font-weight: bold;">
-      <td colspan="2">Total Assets</td>
-      <td style="text-align: right">@Model.Where(a => a.AccountClassId == 1).Sum(a => a.Amount)</td>
-    </tr>
-  </table>
-</div>
+    <table class="table">
+      <tr style="font-weight: bold;">
+        <td>Account Code</td>
+        <td>Account Name</td>
+        <td style="text-align: right">Amount</td>
+      </tr>
+      @foreach (var asset in Model.Where(a => a.AccountClassId == 1))
+      {
+        <tr>
+          <td>@Html.ActionLink((string)string.Format("{0}", asset.AccountCode), "account", new { id = asset.AccountId })
+          </td>
+          <td>@asset.AccountName</td>
+          <td style="text-align: right">@asset.Amount</td>
+        </tr>
+      }
+      <tr style="font-weight: bold;">
+        <td colspan="2">Total Assets</td>
+        <td style="text-align: right">@Model.Where(a => a.AccountClassId == 1).Sum(a => a.Amount)</td>
+      </tr>
+    </table>
+  </div>
   <div style="clear: both">
-  <table class="table">
-    <tr style="font-weight: bold;">
-      <td>Account Code</td>
-      <td>Account Namce</td>
-      <td style="text-align: right">Amount</td>
-    </tr>
-    @foreach (var liability in Model.Where(a => a.AccountClassId == 2))
+    <table class="table">
+      <tr style="font-weight: bold;">
+        <td>Account Code</td>
+        <td>Account Namce</td>
+        <td style="text-align: right">Amount</td>
+      </tr>
+      @foreach (var liability in Model.Where(a => a.AccountClassId == 2))
       {
         <tr>
           <td>@Html.ActionLink((string)string.Format("{0}", liability.AccountCode), "account", new
@@ -56,13 +57,13 @@
     </table>
   </div>
   <div style="clear: both">
-  <table class="table">
-    <tr style="font-weight: bold;">
-      <td>Account Code</td>
-      <td>Account Namce</td>
-      <td style="text-align: right">Amount</td>
-    </tr>
-    @foreach (var equity in Model.Where(a => a.AccountClassId == 3))
+    <table class="table">
+      <tr style="font-weight: bold;">
+        <td>Account Code</td>
+        <td>Account Namce</td>
+        <td style="text-align: right">Amount</td>
+      </tr>
+      @foreach (var equity in Model.Where(a => a.AccountClassId == 3))
       {
         <tr>
           <td>@Html.ActionLink((string)string.Format("{0}", equity.AccountCode), "account", new { id = equity.AccountId })
