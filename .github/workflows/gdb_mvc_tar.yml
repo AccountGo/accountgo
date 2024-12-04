@@ -46,7 +46,7 @@ jobs:
           cd ${{runner.temp}}/myapp
           echo "+++++++++++++++++++++++++ where am I? ++++++++++++++++++++++++"
           pwd
-          echo "+++++++++++++++++++++++++ compress current directory and save in $dir/my_artifact.tar.gz ++++"
+          echo "+++++++++++++++++++++++++ compress current dir + save in $dir/my_artifact.tar.gz ++++"
           tar -czvf $dir/my_artifact.tar.gz .
           echo "+++++++++++++++++++++++++ change back to $dir directory ++++"
           cd $dir
