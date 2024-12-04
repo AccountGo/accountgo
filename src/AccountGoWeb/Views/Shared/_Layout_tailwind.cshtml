@@ -1,16 +1,15 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <partial name="_Head" />
 </head>
 
-<body class="app header-fixed sidebar-fixed aside-menu-fixed sidebar-lg-show">
-    <div class="app-body min-h-screen bg-blue-500">
-        <partial name="_LeftNavigation" />
+<body class="bg-lightPrimary text-darkPrimary">
+    <div class="flex h-screen">
         <!-- left side navigation -->
-        <div class="container-fluid">
-            <div class="animated fadeIn">
+        <partial name="_LeftNavigationTest" />
+        <div class="flex-1 p-5 bg-lightPrimary">
+            <div class>
                 <!-- PAGE CONTENT -->
                 <h2>
                     @Html.Raw(ViewBag.PageContentHeader)
