@@ -40,13 +40,15 @@ jobs:
           ls -al
           echo "+++++ what's in the ${{runner.temp}}/myapp directory? ++++"
           ls -al ${{runner.temp}}/myapp
-          echo "+++++ change directoiry to ${{runner.temp}}/myapp ++++"
+          echo "+++++ how maby files in the ${{runner.temp}}/myapp directory? ++++"
+          ls ${{runner.temp}}/myapp | wc -l
+          echo "+++++ change directory to ${{runner.temp}}/myapp ++++"
           cd ${{runner.temp}}/myapp
           echo "+++++++++++++++++++++++++ where am I? ++++++++++++++++++++++++"
           pwd
           echo "+++++++++++++++++++++++++ compress current directory and save in $dir/my_artifact.tar.gz ++++"
           tar -czvf $dir/my_artifact.tar.gz .
-          echo "+++++++++++++++++++++++++ change dir to to $dir directory ++++"
+          echo "+++++++++++++++++++++++++ change back to $dir directory ++++"
           cd $dir
           echo "+++++++++++++++++++++++++ where am I? ++++++++++++++++++++++++"
           pwd

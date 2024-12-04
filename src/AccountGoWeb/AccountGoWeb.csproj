@@ -21,7 +21,7 @@
 	<ItemGroup>
 		<ProjectReference Include="../Dto/Dto.csproj" />
 		<ProjectReference Include="../Infrastructure/Infrastructure.csproj" />
-		<ProjectReference Include="..\LibraryGDB\LibraryGDB.csproj" />
+		<ProjectReference Include="../LibraryGDB/LibraryGDB.csproj" />
 	</ItemGroup>
 
 	<ItemGroup>
