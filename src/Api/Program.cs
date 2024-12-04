@@ -14,11 +14,6 @@ using Microsoft.Extensions.Hosting;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-builder.WebHost.ConfigureKestrel(options =>
-{
-    options.ListenLocalhost(8001); 
-});
 
 builder.AddServiceDefaults();
 

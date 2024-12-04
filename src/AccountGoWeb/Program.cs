@@ -8,11 +8,6 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
 
-builder.WebHost.ConfigureKestrel(options =>
-{
-    options.ListenLocalhost(8000);
-});
-
 // Add services to the container.
 
 // Mapping
@@ -20,9 +15,9 @@ builder.Services.AddAutoMapper(typeof(Program));
 
 builder.Services.AddControllersWithViews();
 
-// string urlhost = System.Environment.GetEnvironmentVariable("APIHOST") ?? "localhost";
-// string urlport = System.Environment.GetEnvironmentVariable("APIPORT") ?? "8001";
+
 string apiurl = System.Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
+
 builder.Configuration["ApiUrl"] = apiurl;
 System.Console.WriteLine($"[ASPNETCORE SERVER] API URL {builder.Configuration["ApiUrl"]}");
 
