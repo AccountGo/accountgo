@@ -1,20 +1,18 @@
 @using AccountGoWeb.Models.SubMenu
 @model NavigationModel
 
-
 @if (Model?.SubMenus != null && Model.SubMenus.Any())
 {
-    <div class="w-64 bg-lightSecondary text-darkPrimary dark:bg-darkSecondary dark:text-lightPrimary p-5">
+    <div class="fixed top-0 left-0 h-full w-64 bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-100 shadow-lg">
         @await Html.PartialAsync("_Logo")
 
-        <nav>
-            <ul>
+        <nav class="mt-5">
+            <ul class="space-y-2">
                 <li>
-                    <a class="nav-link" asp-area="" asp-controller="Dashboard" asp-action="MonthlySales">
-                        <div class="d-flex justify-content-start">
-                            <i class="nav-icon fa fa-dashboard"></i>
-                            <span>Dashboard</span>
-                        </div>
+                    <a href="@Url.Action("MonthlySales", "Dashboard")"
+                        class="flex items-center px-4 py-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors">
+                        <i class="fa fa-dashboard mr-3"></i>
+                        <span>Dashboard</span>
                     </a>
                 </li>
 
@@ -23,14 +21,18 @@
                     @await Html.PartialAsync("_SubMenu", subMenu)
                 }
 
-                <ul>
-                    using Microsoft.AspNetCore.Razor.Language.Intermediate;
-                    <li><a href='#message'>Logout</a></li>
-                </ul>
+                <li>
+                    <a href="#message"
+                        class="flex items-center px-4 py-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors">
+                        <i class="fa fa-sign-out mr-3"></i>
+                        <span>Logout</span>
+                    </a>
+                </li>
+            </ul>
         </nav>
     </div>
 }
 else
 {
-    <p>No submenus available.</p>
+    <p class="text-gray-500 dark:text-gray-400">No submenus available.</p>
 }
