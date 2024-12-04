@@ -8,11 +8,12 @@
     <partial name="_Head" />
 </head>
 
-<body class="bg-lightPrimary text-darkPrimary dark:text-lightSecondary dark:bg-darkPrimary">
-    <div class="flex h-screen">
-        <partial name="_LeftNavigation" model="Model"/>
-        <div class="flex-1 p-5 bg-lightPrimary dark:bg-darkPrimary">
-            <div class>
+<body class="bg-lightPrimary text-darkPrimary dark:text-lightSecondary dark:bg-darkPrimary h-screen">
+    <div class="flex">
+        <!-- left side navigation -->
+        <partial name="_LeftNavigationTest" />
+        <div class="flex-1 p-5 bg-lightPrimary w-full">
+            <div class="w-full">
                 <!-- PAGE CONTENT -->
                 <h2>
                     @Html.Raw(ViewBag.PageContentHeader)
@@ -20,10 +21,10 @@
                 @RenderBody()
                 <!-- /PAGE CONTENT -->
             </div>
+            <partial name="_Footer" />
         </div>
         </aside>
     </div>
-    <partial name="_Footer" />
     <script src="~/_framework/blazor.server.js"></script>
     <!-- PLugins and scripts required by the views -->
     @RenderSection("Scripts", required: false)
