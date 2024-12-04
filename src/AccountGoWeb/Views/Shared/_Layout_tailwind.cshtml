@@ -1,6 +1,3 @@
-@using AccountGoWeb.Models.SubMenu
-@model NavigationModel
-
 <!DOCTYPE html>
 <html lang="en">
 
@@ -12,7 +9,7 @@
     <div class="flex h-screen">
         <partial name="_LeftNavigation" />
         <div class="flex-1 p-5 bg-lightPrimary dark:bg-darkPrimary">
-            <div class>
+            <div class=" text-lightSecondary dark:text-darkSecondary">
                 <!-- PAGE CONTENT -->
                 <h2>
                     @Html.Raw(ViewBag.PageContentHeader)
