@@ -269,45 +269,59 @@ namespace AccountGoWeb.Controllers
         public async System.Threading.Tasks.Task<IActionResult> SalesReceipts()
         {
             ViewBag.PageContentHeader = "Sales Receipts";
-            using (var client = new HttpClient())
+            try
             {
-                var baseUri = _configuration!["ApiUrl"];
-                client.BaseAddress = new System.Uri(baseUri!);
-                client.DefaultRequestHeaders.Accept.Clear();
-                var response = await client.GetAsync(baseUri + "sales/salesreceipts");
-                if (response.IsSuccessStatusCode)
+                using (var client = new HttpClient())
                 {
-                    var responseJson = await response.Content.ReadAsStringAsync();
-                    return View(model: responseJson);
+                    var baseUri = _configuration!["ApiUrl"];
+                    client.BaseAddress = new Uri(baseUri!);
+                    client.DefaultRequestHeaders.Accept.Clear();
+
+                    var response = await client.GetAsync("sales/salesreceipts");
+                    if (response.IsSuccessStatusCode)
+                    {
+                        var responseJson = await response.Content.ReadAsStringAsync();
+                        return View(model: responseJson);
+                    }
+                    else
+                    {
+                        _logger.LogError("Failed to fetch sales receipts. API returned status code: {StatusCode}", response.StatusCode);
+                        ViewBag.ErrorMessage = "Failed to load sales receipts. Please try again later.";
+                    }
                 }
             }
-            return View();
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "An error occurred while fetching sales receipts.");
+                ViewBag.ErrorMessage = "An unexpected error occurred while loading sales receipts.";
+            }
+
+            // Return the view with an error message if the API call fails
+            return View(model: "[]");
         }
 
         [HttpGet]
         public IActionResult AddReceipt()
         {
-
-            var model = new Models.Sales.AddReceipt();
-
-            if (ModelState.IsValid)
+            try
             {
-                var serialize = Newtonsoft.Json.JsonConvert.SerializeObject(model);
-                var content = new StringContent(serialize);
-                content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
-                var response = Post("Sales/SaveReceipt", content);
-                if (response.IsSuccessStatusCode)
-                    return RedirectToAction("salesreceipts");
+                ViewBag.PageContentHeader = "New Receipt";
+                ViewBag.Customers = Models.SelectListItemHelper.Customers();
+                ViewBag.DebitAccounts = Models.SelectListItemHelper.CashBanks();
+                ViewBag.CreditAccounts = Models.SelectListItemHelper.Accounts();
+                ViewBag.CustomersDetail = Newtonsoft.Json.JsonConvert.SerializeObject(
+                    GetAsync<IEnumerable<Customer>>("sales/customers").Result
+                );
+
+                var model = new Models.Sales.AddReceipt();
+                return View(model);
             }
-
-            ViewBag.PageContentHeader = "New Receipt";
-
-            ViewBag.Customers = Models.SelectListItemHelper.Customers();
-            ViewBag.DebitAccounts = Models.SelectListItemHelper.CashBanks();
-            ViewBag.CreditAccounts = Models.SelectListItemHelper.Accounts();
-            ViewBag.CustomersDetail = Newtonsoft.Json.JsonConvert.SerializeObject(GetAsync<IEnumerable<Customer>>("sales/customers").Result);
-
-            return View(model);
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "An error occurred while preparing the Add Receipt page.");
+                ViewBag.ErrorMessage = "Failed to load the page for adding a receipt. Please try again later.";
+                return View(new Models.Sales.AddReceipt());
+            }
         }
 
         [HttpPost]
@@ -315,24 +329,41 @@ namespace AccountGoWeb.Controllers
         {
             if (ModelState.IsValid)
             {
-                var serialize = Newtonsoft.Json.JsonConvert.SerializeObject(model);
-                var content = new StringContent(serialize);
-                content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
-                var response = Post("sales/savereceipt", content);
-                if (response.IsSuccessStatusCode)
-                    return RedirectToAction("salesreceipts");
+                try
+                {
+                    var serialize = Newtonsoft.Json.JsonConvert.SerializeObject(model);
+                    var content = new StringContent(serialize);
+                    content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+
+                    var response = Post("sales/savereceipt", content);
+                    if (response.IsSuccessStatusCode)
+                    {
+                        return RedirectToAction("SalesReceipts");
+                    }
+                    else
+                    {
+                        _logger.LogError("Failed to save receipt. API returned status code: {StatusCode}", response.StatusCode);
+                        ViewBag.ErrorMessage = "Failed to save the receipt. Please try again.";
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "An error occurred while saving the receipt.");
+                    ViewBag.ErrorMessage = "An unexpected error occurred. Please try again.";
+                }
             }
 
+            // Reload dropdowns and return the view if validation or API call fails
             ViewBag.PageContentHeader = "New Receipt";
-
             ViewBag.Customers = Models.SelectListItemHelper.Customers();
             ViewBag.DebitAccounts = Models.SelectListItemHelper.CashBanks();
             ViewBag.CreditAccounts = Models.SelectListItemHelper.Accounts();
-            ViewBag.CustomersDetail = Newtonsoft.Json.JsonConvert.SerializeObject(GetAsync<IEnumerable<Customer>>("sales/customers").Result);
+            ViewBag.CustomersDetail = Newtonsoft.Json.JsonConvert.SerializeObject(
+                GetAsync<IEnumerable<Customer>>("sales/customers").Result
+            );
 
             return View(model);
         }
-
 
         public async System.Threading.Tasks.Task<IActionResult> Customers()
         {
@@ -433,39 +464,63 @@ namespace AccountGoWeb.Controllers
             return View();
         }
 
+        // [HttpGet]
         public IActionResult Allocate(int id)
         {
-            ViewBag.PageContentHeader = "Receipt Allocation";
+            Console.WriteLine($"Allocate called with ID: {id}");
 
-            var model = new Models.Sales.Allocate();
-
-            var receipt = GetAsync<Dto.Sales.SalesReceipt>("sales/salesreceipt?id=" + id).Result;
-
-            ViewBag.CustomerName = receipt.CustomerName;
-            ViewBag.ReceiptNo = receipt.ReceiptNo;
-
-            model.CustomerId = receipt.CustomerId;
-            model.ReceiptId = receipt.Id;
-            model.Date = receipt.ReceiptDate;
-            model.Amount = receipt.Amount;
-            model.RemainingAmountToAllocate = receipt.RemainingAmountToAllocate;
-
-            var invoices = GetAsync<IEnumerable<Dto.Sales.SalesInvoice>>("sales/customerinvoices?id=" + receipt.CustomerId).Result;
-
-            foreach (var invoice in invoices)
+            try
             {
-                if (invoice.Posted && invoice.TotalAllocatedAmount < invoice.Amount)
-                {
-                    model.AllocationLines.Add(new Models.Sales.AllocationLine()
-                    {
-                        InvoiceId = invoice.Id,
-                        Amount = invoice.Amount,
-                        AllocatedAmount = invoice.TotalAllocatedAmount
-                    });
-                }
-            }
+                ViewBag.PageContentHeader = "Receipt Allocation";
 
-            return View(model);
+                var model = new Models.Sales.Allocate();
+
+                // Fetch receipt details
+                var receipt = GetAsync<Dto.Sales.SalesReceipt>("sales/salesreceipt?id=" + id).Result;
+                if (receipt == null)
+                {
+                    Console.WriteLine($"Receipt not found for ID: {id}");
+                    _logger.LogError("Failed to fetch receipt with id: {id}", id);
+                    return NotFound($"Receipt with id {id} not found.");
+                }
+
+                ViewBag.CustomerName = receipt.CustomerName;
+                ViewBag.ReceiptNo = receipt.ReceiptNo;
+
+                model.CustomerId = receipt.CustomerId;
+                model.ReceiptId = receipt.Id;
+                model.Date = receipt.ReceiptDate;
+                model.Amount = receipt.Amount;
+                model.RemainingAmountToAllocate = receipt.RemainingAmountToAllocate;
+
+                // Fetch customer invoices
+                var invoices = GetAsync<IEnumerable<Dto.Sales.SalesInvoice>>("sales/customerinvoices?id=" + receipt.CustomerId).Result;
+                if (invoices == null)
+                {
+                    _logger.LogError("Failed to fetch invoices for customer with id: {CustomerId}", receipt.CustomerId);
+                    return NotFound($"Invoices for customer with id {receipt.CustomerId} not found.");
+                }
+
+                foreach (var invoice in invoices)
+                {
+                    if (invoice.Posted && invoice.TotalAllocatedAmount < invoice.Amount)
+                    {
+                        model.AllocationLines.Add(new Models.Sales.AllocationLine()
+                        {
+                            InvoiceId = invoice.Id,
+                            Amount = invoice.Amount,
+                            AllocatedAmount = invoice.TotalAllocatedAmount
+                        });
+                    }
+                }
+
+                return View(model);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "An error occurred while processing the Allocate action for id: {id}", id);
+                return StatusCode(500, "An error occurred while processing your request.");
+            }
         }
 
         [HttpPost]

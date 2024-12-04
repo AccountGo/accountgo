@@ -1,14 +1,22 @@
 ﻿@model string
 
+<style>
+    .highlighted-row {
+        background-color: #d9edf7;
+        color: #31708f;
+    }
+</style>
+
 <div>
     <a href="~/sales/addreceipt" class="btn">
         <i class="fa fa-plus"></i>
         New Receipt
     </a>
-    <a href="~/sales/allocate/" id="linkAllocate" class="btn inactiveLink">
+    <a href="#" id="linkAllocate" class="btn inactiveLink">
         <i class="fa fa-tasks"></i>
         Allocate
     </a>
+
     <a href="~/sales/SalesReceipt" id="linkViewReceipt" class="btn inactiveLink">
         <i class="fa fa-edit"></i>
         View
@@ -22,41 +30,69 @@
     var selectedRow = {};
 
     var columnDefs = [
-        {headerName: "Receipt", field: "id", width: 50},
-        {headerName: "No", field: "receiptNo", width: 50},
-        {headerName: "Customer Name", field: "customerName", width: 350},
-        {headerName: "Receipt Date", field: "receiptDate", width: 100},
-        {headerName: "Amount", field: "amount", width: 100},
-        {headerName: "Left to Allocate", field: "remainingAmountToAllocate", width: 100}
+        { headerName: "Receipt", field: "id", width: 50 },
+        { headerName: "No", field: "receiptNo", width: 50 },
+        { headerName: "Customer Name", field: "customerName", width: 350 },
+        { headerName: "Receipt Date", field: "receiptDate", width: 100 },
+        { headerName: "Amount", field: "amount", width: 100 },
+        { headerName: "Left to Allocate", field: "remainingAmountToAllocate", width: 100 }
     ];
 
     var gridOptions = {
         columnDefs: columnDefs,
         rowData: @Html.Raw(Model),
         enableSorting: true,
-        // PROPERTIES - simple boolean / string / number properties
         rowSelection: 'single',
         onSelectionChanged: onSelectionChanged,
+        rowClassRules: {
+            'highlighted-row': params => params.node.isSelected() // Add 'highlighted-row' to selected rows
+        },
     };
 
     function onSelectionChanged() {
-        var selectedRows = gridOptions.api.getSelectedRows();
-        selectedRow = selectedRows[0];
+        console.log("Selection changed");
 
-        document.getElementById('linkAllocate').setAttribute('href', 'allocate/' + selectedRow.id);
-        document.getElementById('linkViewReceipt').setAttribute('href', 'SalesReceipt?id=' + selectedRow.id);
+        // Get all selected rows
+        var selectedRows = gridOptions.api.getSelectedRows();
+        console.log("Selected rows:", selectedRows);
+
+        if (!selectedRows.length) {
+            console.log("No row selected");
+            return; // Exit if no row is selected
+        }
+
+        // Get the selected row
+        selectedRow = selectedRows[0];
+        console.log("Selected row data:", selectedRow);
+
+        // Update the Allocate and View Receipt links
+        document.getElementById('linkAllocate').setAttribute('href', '/sales/allocate/' + selectedRow.id);
+        console.log("Updated Allocate link to:", 'allocate/' + selectedRow.id);
+
+        document.getElementById('linkViewReceipt').setAttribute('href', '/sales/SalesReceipt?id=' + selectedRow.id);
+        console.log("Updated View Receipt link to:", 'SalesReceipt?id=' + selectedRow.id);
+
         document.getElementById('linkViewReceipt').setAttribute('class', 'btn');
-        
-        if(selectedRow.remainingAmountToAllocate > 0)
+
+        if (selectedRow.remainingAmountToAllocate > 0) {
             document.getElementById('linkAllocate').setAttribute('class', 'btn');
-        else
+            console.log("Set Allocate button to active");
+        } else {
             document.getElementById('linkAllocate').setAttribute('class', 'btn inactiveLink');
+            console.log("Set Allocate button to inactive");
+        }
+
+        // Highlight the selected row
+        gridOptions.api.forEachNode(node => {
+            console.log("Processing row node with ID:", node.data.id);
+            node.setSelected(node.data.id === selectedRow.id); // Mark row as selected
+        });
     }
 
-    // wait for the document to be loaded, otherwise
-    // ag-Grid will not find the div in the document.
-    document.addEventListener("DOMContentLoaded", function() {
+    document.addEventListener("DOMContentLoaded", function () {
+        console.log("Document loaded");
         var eGridDiv = document.querySelector('#receipts');
         new agGrid.Grid(eGridDiv, gridOptions);
+        console.log("ag-Grid initialized");
     });
 </script>
