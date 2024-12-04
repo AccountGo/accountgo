@@ -5,12 +5,12 @@
     <partial name="_Head" />
 </head>
 
-<body class="bg-lightPrimary text-darkPrimary dark:text-lightSecondary dark:bg-darkPrimary h-screen">
-    <div class="flex">
+<body class="bg-lightPrimary text-darkPrimary dark:text-lightSecondary dark:bg-darkPrimary">
+    <div class="flex h-screen">
         <!-- left side navigation -->
         <partial name="_LeftNavigationTest" />
         <div class="flex-1 p-5 bg-lightPrimary">
-            <div class>
+            <div class="overflow-y-scroll">
                 <!-- PAGE CONTENT -->
                 <h2>
                     @Html.Raw(ViewBag.PageContentHeader)
