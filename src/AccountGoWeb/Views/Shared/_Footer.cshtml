@@ -1,14 +1,14 @@
-<footer class="app-footer">
-        <div>
-            <span>Good Deed Books</span>
-            <span>&copy; @DateTime.Now.Year All rights reserved.</span>
-            &nbsp;|&nbsp;
-            @System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription
-            - Build
-            @File.GetLastWriteTime(System.Reflection.Assembly.GetExecutingAssembly().Location).ToLocalTime()
-        </div>
-        <div class="ml-auto">
-            <span>Powered by</span>
-            <a href="http://accountgo.net">Good Deed Books</a>
-        </div>
-    </footer>
+<footer class="app-footer absolute bottom-0 right-0 w-full text-lightSecondary">
+    <div>
+        <span>Good Deed Books</span>
+        <span>&copy; @DateTime.Now.Year All rights reserved.</span>
+        &nbsp;|&nbsp;
+        @System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription
+        - Build
+        @File.GetLastWriteTime(System.Reflection.Assembly.GetExecutingAssembly().Location).ToLocalTime()
+    </div>
+    <div class="ml-auto">
+        <span>Powered by</span>
+        <a href="http://accountgo.net">Good Deed Books</a>
+    </div>
+</footer>

@@ -5,11 +5,11 @@
     <partial name="_Head" />
 </head>
 
-<body class="bg-lightPrimary text-darkPrimary  dark:bg-lightPrimary">
+<body class="bg-darkSecondary dark:bg-darkPrimary dark:text-lightSecondary">
     <div class="flex h-screen">
         <partial name="_LeftNavigation" />
-        <div class="flex-1 p-5 bg-lightPrimary dark:bg-darkPrimary">
-            <div class=" text-lightSecondary dark:text-darkSecondary">
+        <div class="flex-1 p-5h-screen relative text-lightSecondary">
+            <div class="text-lightSecondary">
                 <!-- PAGE CONTENT -->
                 <h2>
                     @Html.Raw(ViewBag.PageContentHeader)
@@ -36,6 +36,38 @@
         $(".sub-menu a").click(function () {
             $(this).parent(".sub-menu").children("ul").slideToggle("100");
             $(this).find(".right").toggleClass("fa-caret-up fa-caret-down");
+        });
+        document.addEventListener('DOMContentLoaded', function () {
+            const themeToggleBtn = document.getElementById('theme-toggle');
+            const lightIcon = document.getElementById('light-icon');
+            const darkIcon = document.getElementById('dark-icon');
+            const html = document.documentElement;
+
+            if (localStorage.getItem('theme') === 'dark' ||
+                (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                html.classList.add('dark');
+                lightIcon.classList.remove('hidden');
+                darkIcon.classList.add('hidden');
+            } else {
+                html.classList.remove('dark');
+                lightIcon.classList.add('hidden');
+                darkIcon.classList.remove('hidden');
+            }
+
+            themeToggleBtn.addEventListener('click', function () {
+                if (html.classList.contains('dark')) {
+                    html.classList.remove('dark');
+                    localStorage.setItem('theme', 'light');
+                    lightIcon.classList.add('hidden');
+                    darkIcon.classList.remove('hidden');
+                } else {
+                    html.classList.add('dark');
+                    localStorage.setItem('theme', 'dark');
+                    lightIcon.classList.remove('hidden');
+                    darkIcon.classList.add('hidden');
+                }
+                console.log(html.classList);
+            });
         });
     </script>
     <!-- PLugins and scripts required by the views -->

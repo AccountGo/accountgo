@@ -6,6 +6,7 @@ module.exports = {
     "./Components/**/*.{cshtml,razor}",
     "./wwwroot/**/*.{html,js}",
   ],
+  darkMode: "selector",
   theme: {
     extend: {
       colors: {
