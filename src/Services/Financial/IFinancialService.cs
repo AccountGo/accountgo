@@ -51,6 +51,5 @@ namespace Services.Financial
         void SaveFinancialYear(FinancialYear financialYear);
         void SavePaymentTerm(PaymentTerm paymentTerm);
         void SaveBank(Bank bank);
-        Task GetAccountByIdAsync(int id);
     }
 }
