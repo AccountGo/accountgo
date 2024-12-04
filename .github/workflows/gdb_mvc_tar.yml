@@ -25,7 +25,8 @@ jobs:
         run: dotnet build --configuration Release
 
       - name: dotnet publish
-        run: dotnet publish ./src/AccountGoWeb/AccountGoWeb.csproj -c Release -o ${{env.DOTNET_ROOT}}/myapp
+        # run: dotnet publish ./src/AccountGoWeb/AccountGoWeb.csproj -c Release -o ${{env.DOTNET_ROOT}}/myapp
+        run: dotnet publish ./src/AccountGoWeb/AccountGoWeb.csproj -c Release -o ${{runner.temp}}/myapp
 
       - name: Archive production artifacts
         run: |
@@ -37,10 +38,10 @@ jobs:
           echo $dir
           echo "++++++++++++++++++++++++ what's in current directory? ++++++++"
           ls -al
-          echo "+++++ what's in the ${{env.DOTNET_ROOT}}/myapp directory? ++++"
-          ls -al ${{env.DOTNET_ROOT}}/myapp
-          echo "+++++ change directoiry to ${{env.DOTNET_ROOT}}/myapp ++++"
-          cd ${{env.DOTNET_ROOT}}/myapp
+          echo "+++++ what's in the ${{runner.temp}}/myapp directory? ++++"
+          ls -al ${{runner.temp}}/myapp
+          echo "+++++ change directoiry to ${{runner.temp}}/myapp ++++"
+          cd ${{runner.temp}}/myapp
           echo "+++++++++++++++++++++++++ where am I? ++++++++++++++++++++++++"
           pwd
           echo "+++++++++++++++++++++++++ compress current directory and save in $dir/my_artifact.tar.gz ++++"
