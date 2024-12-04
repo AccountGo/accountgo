@@ -6,7 +6,14 @@ module.exports = {
 		"./wwwroot/**/*.html",
 	],
 	theme: {
-		extend: {},
+		extend: {
+			colors: {
+				primary: { DEFAULT: "#0B2545" },
+				secondary: { DEFAULT: "#134074" },
+				info: { DEFAULT: "#8DA9C4" },
+				text: { DEFAULT: "eef4ed" },
+		},
 	},
 	plugins: [],
-};
+}
+}
