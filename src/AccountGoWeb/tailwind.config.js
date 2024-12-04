@@ -8,10 +8,10 @@ module.exports = {
 	theme: {
 		extend: {
 			colors: {
-				primary: { DEFAULT: "#0B2545" },
-				secondary: { DEFAULT: "#134074" },
-				info: { DEFAULT: "#8DA9C4" },
-				text: { DEFAULT: "eef4ed" },
+				darkPrimary: { DEFAULT: "#0B2545" },
+				darkSecondary: { DEFAULT: "#134074" },
+				lightPrimary: { DEFAULT: "#8DA9C4" },
+				lightSecondary: { DEFAULT: "#eef4ed" },
 		},
 	},
 	plugins: [],
