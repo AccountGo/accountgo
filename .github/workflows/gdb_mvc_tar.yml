@@ -97,7 +97,8 @@ jobs:
         id: deploy-to-webapp
         uses: azure/webapps-deploy@v3
         with:
-          app-name: 'good-books'
+          #app-name: 'good-books'
+          app-name: 'gdbmvc'
           slot-name: 'Production'
           package: .
           
