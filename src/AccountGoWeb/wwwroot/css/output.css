@@ -704,6 +704,11 @@ video {
   background-color: rgb(238 244 237 / var(--tw-bg-opacity, 1));
 }
 
+.bg-darkSecondary {
+  --tw-bg-opacity: 1;
+  background-color: rgb(19 64 116 / var(--tw-bg-opacity, 1));
+}
+
 .p-4 {
   padding: 1rem;
 }
@@ -731,6 +736,11 @@ video {
   line-height: 2rem;
 }
 
+.text-xl {
+  font-size: 1.25rem;
+  line-height: 1.75rem;
+}
+
 .font-bold {
   font-weight: 700;
 }
@@ -751,4 +761,26 @@ video {
   transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter, -webkit-backdrop-filter;
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
   transition-duration: 150ms;
+}
+
+@media (prefers-color-scheme: dark) {
+  .dark\:bg-darkSecondary {
+    --tw-bg-opacity: 1;
+    background-color: rgb(19 64 116 / var(--tw-bg-opacity, 1));
+  }
+
+  .dark\:bg-darkPrimary {
+    --tw-bg-opacity: 1;
+    background-color: rgb(11 37 69 / var(--tw-bg-opacity, 1));
+  }
+
+  .dark\:bg-lightPrimary {
+    --tw-bg-opacity: 1;
+    background-color: rgb(141 169 196 / var(--tw-bg-opacity, 1));
+  }
+
+  .dark\:text-lightPrimary {
+    --tw-text-opacity: 1;
+    color: rgb(141 169 196 / var(--tw-text-opacity, 1));
+  }
 }

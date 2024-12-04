@@ -4,11 +4,10 @@
     <partial name="_Head" />
 </head>
 
-<body class="bg-lightPrimary text-darkPrimary">
+<body class="bg-lightPrimary text-darkPrimary dark:bg-darkPrimary dark:bg-lightPrimary">
     <div class="flex h-screen">
-        <!-- left side navigation -->
-        <partial name="_LeftNavigationTest" />
-        <div class="flex-1 p-5 bg-lightPrimary">
+        <partial name="_LeftNavigationTest" model="@Model"/>
+        <div class="flex-1 p-5 bg-lightPrimary dark:bg-darkPrimary">
             <div class>
                 <!-- PAGE CONTENT -->
                 <h2>
