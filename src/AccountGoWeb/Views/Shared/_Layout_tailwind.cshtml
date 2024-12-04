@@ -5,13 +5,13 @@
     <partial name="_Head" />
 </head>
 
-<body class="bg-lightSecondary text-darkPrimary dark:bg-darkPrimary dark:text-lightSecondary">
+<body class="bg-lightSecondary text-darkPrimary dark:bg-darkPrimary dark:text-lightSecondary overflow-y-hidden">
     <div class="flex h-screen">
         <partial name="_LeftNavigation" />
-        <div class="flex-1 p-5h-screen relative">
-            <div>
+        <div class="flex-1 p-5 h-screen relative">
+            <div class="overflow-y-auto max-h-[calc(100vh-100px)] hidden-scrollbar">
                 <!-- PAGE CONTENT -->
-                <h2>
+                <h2 class="text-2xl font-bold text-center">
                     @Html.Raw(ViewBag.PageContentHeader)
                 </h2>
                 @RenderBody()

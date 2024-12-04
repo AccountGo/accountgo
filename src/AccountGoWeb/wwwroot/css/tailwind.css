@@ -2,54 +2,14 @@
 @tailwind components;
 @tailwind utilities;
 
-@layer components {
-  .table-base {
-    width: 100%;
-    table-layout: fixed;
-    border-collapse: collapse;
-    background-color: var(--color-lightSecondary);
-    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
-    display: table;
-    min-width: 100%;
+/* Hide scrollbar for all elements */
+.hidden-scrollbar {
+    overflow-y: scroll; /* Enables vertical scrolling */
+    -ms-overflow-style: none; /* Hides scrollbar in IE and Edge */
+    scrollbar-width: none; /* Hides scrollbar in Firefox */
   }
-
-  .table-cell-base {
-    padding: 1rem;
-    border: 1px solid #ccc;
-    display: table-cell;
-    text-align: center;
-    vertical-align: middle;
+  
+  /* Hides scrollbar in Chrome, Safari, and Edge */
+  .hidden-scrollbar::-webkit-scrollbar {
+    display: none;
   }
-
-  .table-header {
-    background-color: var(--color-darkPrimary);
-    color: white;
-    font-size: 0.875rem;
-    text-transform: uppercase;
-    font-weight: 600;
-  }
-
-  .table-row {
-    font-size: 0.875rem;
-    text-transform: uppercase;
-    font-weight: 600;
-  }
-
-  .table-cell-w1 {
-    width: 25%;
-    padding: 1rem;
-    border: 1px solid #ccc;
-    display: table-cell;
-    text-align: center;
-    vertical-align: middle;
-  }
-
-  .table-cell-w2 {
-    width: 50%;
-    padding: 1rem;
-    border: 1px solid #ccc;
-    display: table-cell;
-    text-align: center;
-    vertical-align: middle;
-  }
-}

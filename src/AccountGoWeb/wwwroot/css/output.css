@@ -683,12 +683,8 @@ video {
   height: 100vh;
 }
 
-.h-4 {
-  height: 1rem;
-}
-
-.min-h-screen {
-  min-height: 100vh;
+.max-h-\[calc\(100vh-100px\)\] {
+  max-height: calc(100vh - 100px);
 }
 
 .w-1\/4 {
@@ -785,6 +781,14 @@ video {
   overflow-x: auto;
 }
 
+.overflow-y-auto {
+  overflow-y: auto;
+}
+
+.overflow-y-hidden {
+  overflow-y: hidden;
+}
+
 .rounded-lg {
   border-radius: 0.5rem;
 }
@@ -803,10 +807,6 @@ video {
 
 .border-2 {
   border-width: 2px;
-}
-
-.border-4 {
-  border-width: 4px;
 }
 
 .border-b {
@@ -1099,15 +1099,21 @@ video {
   transition-duration: 150ms;
 }
 
-.focus-within\:ring-2:focus-within {
-  --tw-ring-offset-shadow: var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);
-  --tw-ring-shadow: var(--tw-ring-inset) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color);
-  box-shadow: var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow, 0 0 #0000);
+/* Hide scrollbar for all elements */
+
+.hidden-scrollbar {
+  overflow-y: scroll;
+  /* Enables vertical scrolling */
+  -ms-overflow-style: none;
+  /* Hides scrollbar in IE and Edge */
+  scrollbar-width: none;
+  /* Hides scrollbar in Firefox */
 }
 
-.focus-within\:ring-blue-500:focus-within {
-  --tw-ring-opacity: 1;
-  --tw-ring-color: rgb(59 130 246 / var(--tw-ring-opacity, 1));
+/* Hides scrollbar in Chrome, Safari, and Edge */
+
+.hidden-scrollbar::-webkit-scrollbar {
+  display: none;
 }
 
 .hover\:bg-gray-100:hover {
@@ -1145,22 +1151,6 @@ video {
   outline-offset: 2px;
 }
 
-.focus\:ring-2:focus {
-  --tw-ring-offset-shadow: var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);
-  --tw-ring-shadow: var(--tw-ring-inset) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color);
-  box-shadow: var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow, 0 0 #0000);
-}
-
-.focus\:ring-gray-200:focus {
-  --tw-ring-opacity: 1;
-  --tw-ring-color: rgb(229 231 235 / var(--tw-ring-opacity, 1));
-}
-
-.focus\:ring-blue-500:focus {
-  --tw-ring-opacity: 1;
-  --tw-ring-color: rgb(59 130 246 / var(--tw-ring-opacity, 1));
-}
-
 .dark\:bg-darkPrimary:where(.dark, .dark *) {
   --tw-bg-opacity: 1;
   background-color: rgb(11 37 69 / var(--tw-bg-opacity, 1));
@@ -1169,6 +1159,11 @@ video {
 .dark\:bg-darkSecondary:where(.dark, .dark *) {
   --tw-bg-opacity: 1;
   background-color: rgb(19 64 116 / var(--tw-bg-opacity, 1));
+}
+
+.dark\:bg-gray-800:where(.dark, .dark *) {
+  --tw-bg-opacity: 1;
+  background-color: rgb(31 41 55 / var(--tw-bg-opacity, 1));
 }
 
 .dark\:bg-gray-800:where(.dark, .dark *) {
