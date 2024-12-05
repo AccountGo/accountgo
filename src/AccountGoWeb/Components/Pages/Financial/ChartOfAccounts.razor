@@ -134,32 +134,30 @@ else
     </div>
 
 }
-@if (isAddModalVisible)
+@if (isAddModalVisible || isEditModalVisible)
 {
     <div class="modal show d-block" tabindex="-1">
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Add New Account</h5>
-                    <button type="button" class="btn-close" @onclick="CloseAddModal"></button>
+                    <h5 class="modal-title">@((isEditModalVisible ? "Edit Account" : "Add New Account"))</h5>
+                    <button type="button" class="btn-close" @onclick="CloseModal"></button>
                 </div>
                 <div class="modal-body">
                     <div class="mb-3">
                         <label for="accountCode" class="form-label">Account Code</label>
-                        <input type="text" id="accountCode" class="form-control" @bind="newAccount.AccountCode" />
+                        <input type="text" id="accountCode" class="form-control" 
+                               @bind="selectedAccount.AccountCode" disabled="@isEditModalVisible" />
                     </div>
                     <div class="mb-3">
                         <label for="accountName" class="form-label">Account Name</label>
-                        <input type="text" id="accountName" class="form-control" @bind="newAccount.AccountName" />
-                    </div>
-                    <div class="mb-3">
-                        <label for="totalBalance" class="form-label">Total Balance</label>
-                        <input type="number" id="totalBalance" class="form-control" @bind="newAccount.TotalBalance" />
+                        <input type="text" id="accountName" class="form-control" 
+                               @bind="selectedAccount.AccountName" />
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" @onclick="CloseAddModal">Cancel</button>
-                    <button type="button" class="btn btn-primary" @onclick="AddAccount">Add</button>
+                    <button type="button" class="btn btn-secondary" @onclick="CloseModal">Cancel</button>
+                    <button type="button" class="btn btn-primary" @onclick="SaveAccount">Save</button>
                 </div>
             </div>
         </div>
@@ -187,7 +185,7 @@ else
     </div>
 }
 
-@if (isEditModalVisible && selectedAccount != null)
+@* @if (isEditModalVisible && selectedAccount != null)
 {
     <div class="modal show d-block" tabindex="-1">
         <div class="modal-dialog">
@@ -217,10 +215,10 @@ else
             </div>
         </div>
     </div>
-}
+} *@
 
 @code {
-  private IEnumerable<Models.Financial.AccountViewModel>? accounts = [];
+    private IEnumerable<Models.Financial.AccountViewModel>? accounts = [];
     private bool getError;
     private bool isEditModalVisible;
     private bool isAddModalVisible;
@@ -228,11 +226,12 @@ else
     private Models.Financial.AccountViewModel? selectedAccount;
     private Models.Financial.AccountViewModel newAccount = new();
 
+    // On initialization, load all accounts
     protected override async Task OnInitializedAsync()
     {
         await LoadAccounts();
     }
-
+    // Load accounts from API
     private async Task LoadAccounts()
     {
         try
@@ -261,13 +260,28 @@ else
         }
     }
 
-       private void OpenAddModal()
+    private void OpenAddModal()
     {
         newAccount = new Models.Financial.AccountViewModel();
         isAddModalVisible = true;
     }
 
-    private void CloseAddModal() => isAddModalVisible = false;
+    private void OpenEditModal(Models.Financial.AccountViewModel account)
+    {
+        selectedAccount = new Models.Financial.AccountViewModel
+        {
+            AccountCode = account.AccountCode,
+            AccountName = account.AccountName
+        };
+        isEditModalVisible = true;
+    }
+
+    private void CloseModal()
+    {
+        isAddModalVisible = false;
+        isEditModalVisible = false;
+        selectedAccount = null;
+    }
 
     private async Task AddAccount()
     {
@@ -275,21 +289,14 @@ else
         {
             string apiUrl = Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
             var client = ClientFactory.CreateClient();
-            Console.WriteLine($"Adding Account: {JsonSerializer.Serialize(newAccount)}");
 
             var content = new StringContent(JsonSerializer.Serialize(newAccount), System.Text.Encoding.UTF8, "application/json");
             var response = await client.PostAsync($"{apiUrl}financials/accounts", content);
 
             if (response.IsSuccessStatusCode)
             {
-                Console.WriteLine("Account added successfully.");
                 await LoadAccounts();
-                CloseAddModal();
-            }
-            else
-            {
-                var errorResponse = await response.Content.ReadAsStringAsync();
-                Console.WriteLine($"Failed to add account. Status: {response.StatusCode}, Response: {errorResponse}");
+                CloseModal();
             }
         }
         catch (Exception ex)
@@ -297,38 +304,29 @@ else
             Console.WriteLine($"Error in AddAccount: {ex.Message}");
         }
     }
-    private void OpenEditModal(Models.Financial.AccountViewModel account)
-    {
-        selectedAccount = new Models.Financial.AccountViewModel
-        {
-            AccountCode = account.AccountCode,
-            AccountName = account.AccountName,
-            TotalBalance = account.TotalBalance
-        };
-        isEditModalVisible = true;
-    }
-
-    private void CloseEditModal() => isEditModalVisible = false;
 
     private async Task SaveAccount()
     {
         if (selectedAccount == null)
             return;
 
-        string apiUrl = Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
-        var client = ClientFactory.CreateClient();
-
-        var content = new StringContent(JsonSerializer.Serialize(selectedAccount), System.Text.Encoding.UTF8, "application/json");
-        var response = await client.PutAsync($"{apiUrl}financials/accounts/{selectedAccount.AccountCode}", content);
-
-        if (response.IsSuccessStatusCode)
+        try
         {
-            await LoadAccounts();
-            CloseEditModal();
+            string apiUrl = Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
+            var client = ClientFactory.CreateClient();
+
+            var content = new StringContent(JsonSerializer.Serialize(selectedAccount), System.Text.Encoding.UTF8, "application/json");
+            var response = await client.PutAsync($"{apiUrl}financials/accounts/{selectedAccount.AccountCode}", content);
+
+            if (response.IsSuccessStatusCode)
+            {
+                await LoadAccounts();
+                CloseModal();
+            }
         }
-        else
+        catch (Exception ex)
         {
-            Console.WriteLine("Failed to save account.");
+            Console.WriteLine($"Error in SaveAccount: {ex.Message}");
         }
     }
 
@@ -338,26 +336,32 @@ else
         isDeleteModalVisible = true;
     }
 
-    private void CloseDeleteModal() => isDeleteModalVisible = false;
+    private void CloseDeleteModal()
+    {
+        isDeleteModalVisible = false;
+    }
 
     private async Task ConfirmDeleteAccount()
     {
         if (selectedAccount == null)
             return;
 
-        string apiUrl = Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
-        var client = ClientFactory.CreateClient();
-
-        var response = await client.DeleteAsync($"{apiUrl}financials/accounts/{selectedAccount.AccountCode}");
-
-        if (response.IsSuccessStatusCode)
+        try
         {
-            await LoadAccounts();
-            CloseDeleteModal();
+            string apiUrl = Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
+            var client = ClientFactory.CreateClient();
+
+            var response = await client.DeleteAsync($"{apiUrl}financials/accounts/{selectedAccount.AccountCode}");
+
+            if (response.IsSuccessStatusCode)
+            {
+                await LoadAccounts();
+                CloseDeleteModal();
+            }
         }
-        else
+        catch (Exception ex)
         {
-            Console.WriteLine("Failed to delete account.");
+            Console.WriteLine($"Error in ConfirmDeleteAccount: {ex.Message}");
         }
     }
 }
