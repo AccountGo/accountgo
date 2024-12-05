@@ -405,27 +405,24 @@ namespace Api.Controllers
         }
 
         [HttpPut]
-        [Route("UpdateAccount/{id}")]
-        public async Task<IActionResult> UpdateAccount(int id, [FromBody] Account updatedAccountDto)
+        [Route("UpdateAccount/{accountCode}")]
+        public async Task<IActionResult> UpdateAccount(string accountCode, [FromBody] Account updatedAccountDto)
         {
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
-            var updatedAccount = new Core.Domain.Financials.Account
-            {
-                AccountCode = updatedAccountDto.AccountCode,
-                AccountName = updatedAccountDto.AccountName,
-                Description = updatedAccountDto.Description,
-                IsCash = updatedAccountDto.IsCash,
-                IsContraAccount = updatedAccountDto.IsContraAccount,
-            };
-
-            var result = await _accountService.UpdateAccountAsync(id, updatedAccount);
-
-            if (result == null)
+            var existingAccount = await _accountService.GetAccountByCodeAsync(accountCode);
+            if (existingAccount == null)
                 return NotFound();
 
-            return Ok(result);
+            existingAccount.AccountName = updatedAccountDto.AccountName;
+            existingAccount.Description = updatedAccountDto.Description;
+            existingAccount.IsCash = updatedAccountDto.IsCash;
+            existingAccount.IsContraAccount = updatedAccountDto.IsContraAccount;
+
+            await _accountService.UpdateAccountAsync(existingAccount);
+
+            return Ok(existingAccount);
         }
 
         [HttpDelete]
