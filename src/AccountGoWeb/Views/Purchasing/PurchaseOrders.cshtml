@@ -1,21 +1,23 @@
 ﻿@model string
 
-<div>
-    <a href="~/purchasing/addpurchaseorder" class="btn">
-        <i class="fa fa-plus"></i>
-        New Order
-    </a>
-    <a href="~/purchasing/purchaseorder" id="linkViewOrder" class="btn inactiveLink">
-        <i class="fa fa-edit"></i>
-        View
-    </a>
-    <a href="~/purchasing/addpurchaseinvoice" id="linkCreateInvoice" class="btn inactiveLink">
-        <i class="fa fa-plus"></i>
-        Create Invoice
-    </a>
-</div>
-<div>
-    <div id="purchaseorders" class="ag-fresh" style="height: 400px;"></div>
+<div class="w-full grid grid-cols-1 gap-4">
+    <div class="flex gap-2 mb-4">
+        <a href="~/purchasing/addpurchaseorder" class="px-4 py-2 bg-darkSecondary text-white rounded hover:bg-opacity-90">
+            <i class="fa fa-plus"></i>
+            New Order
+        </a>
+        <a href="~/purchasing/purchaseorder" id="linkViewOrder" class="px-4 py-2 bg-gray-400 text-white rounded disabled">
+            <i class="fa fa-edit"></i>
+            View
+        </a>
+        <a href="~/purchasing/addpurchaseinvoice" id="linkCreateInvoice" class="px-4 py-2 bg-gray-400 text-white rounded disabled">
+            <i class="fa fa-plus"></i>
+            Create Invoice
+        </a>
+    </div>
+    <div class="bg-white dark:bg-gray-800">
+        <div id="purchaseorders" class="ag-fresh overflow-hidden rounded-lg shadow-md border-2 border-gray-200" style="height: 400px;"></div>
+    </div>
 </div>
 <script>
     var columnDefs = [

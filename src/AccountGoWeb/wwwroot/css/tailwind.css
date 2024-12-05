@@ -23,6 +23,13 @@
     cursor: not-allowed;
 }
 
+.ag-header-container{
+  border: 1px solid #ccc;
+  background-color: #134074;
+  color: #fff;
+}
+
+
 .dark .hover\:text-lightPrimary:hover {
   color: var(--lightPrimary);
 }
