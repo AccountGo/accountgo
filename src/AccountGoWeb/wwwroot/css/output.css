@@ -985,7 +985,7 @@ video {
 }
 
 .text-sm {
-  font-size: 0.875rem;
+  font-size: 0.5rem;
   line-height: 1.25rem;
 }
 
@@ -998,6 +998,11 @@ video {
 .text-xl {
   font-size: 1.25rem;
   line-height: 1.75rem;
+}
+
+.text-xs {
+  font-size: 0.6rem;
+  line-height: 1rem;
 }
 
 .font-bold {
