@@ -1,85 +1,61 @@
 ﻿@model Dto.Administration.GeneralLedgerSetting
-<style>
-  label.control-label {
-    padding-top: 10px;
-  }
 
-  select.form-control {
-    margin-bottom: 2px;
-  }
+<div class=" w-3/4 mx-auto lg:py-16">
+  <button type="button" id="btnEdit" class="bg-yellow-500 hover:bg-yellow-600 text-white font-medium rounded-lg text-sm px-4 py-2.5 flex items-center space-x-2">
+    <span class="fa fa-edit"></span> Edit
+  </button>
 
-  .btn {
-    margin-right: 2px;
-  }
-</style>
-<p>
-  <div class="col-sm-9">
-    <button type="button" id="btnEdit" class="btn btn-sm btn-warning btn-flat">
-      <span class="fa fa-edit"></span> Edit
+  <h3 class="my-4 text-xl font-bold text-white dark:test-white">General Ledger Setup</h3>
+
+  <form method="post" action="~/administration/savesettings">
+    @Html.HiddenFor(model => model.Id)
+    
+    <button type="button" class="btn btn-box-tool" data-widget="collapse" data-toggle="tooltip" title="Collapse">
+      <i class="fa fa-minus"></i>
     </button>
-  </div>
-</p>
-<form method="post" action="~/administration/savesettings">
-  @Html.HiddenFor(model => model.Id)
-  <div id="divGLSetup" class="col-sm-12">
-      <div class="box">
-          <div class="box-header with-border">
-              <h3 class="box-title">General Ledger Setup</h3>
-              <div class="box-tools pull-right">
-                  <button type="button" class="btn btn-box-tool" data-widget="collapse" data-toggle="tooltip" title="Collapse">
-                      <i class="fa fa-minus"></i>
-                  </button>
-              </div>
-          </div>
-          <div class="box-body">
-              <div class="col-sm-6">
-                  <div class="row">
-                      <label class="col-sm-5" asp-for="PayableAccountId"></label>
-                      <div class="col-sm-7">
-                          <select class="form-control" asp-for="PayableAccountId" asp-items="@ViewBag.Accounts"></select>
-                      </div>
-                  </div>
-                  <div class="row">
-                    <label class="col-sm-5" asp-for="PurchaseDiscountAccountId"></label>
-                      <div class="col-sm-7">
-                          <select class="form-control" asp-for="PurchaseDiscountAccountId" asp-items="@ViewBag.Accounts"></select>
-                      </div>
-                  </div>
-                  <div class="row">
-                    <label class="col-sm-5" asp-for="GoodsReceiptNoteClearingAccountId"></label>
-                      <div class="col-sm-7">
-                          <select class="form-control" asp-for="GoodsReceiptNoteClearingAccountId" asp-items="@ViewBag.Accounts"></select>
-                      </div>
-                  </div>
-              </div>
-              <div class="col-sm-6">
-                  <div class="row">
-                    <label class="col-sm-5" asp-for="SalesDiscountAccountId"></label>
-                    <div class="col-sm-7">
-                        <select class="form-control" asp-for="SalesDiscountAccountId" asp-items="@ViewBag.Accounts"></select>
-                    </div>
-                  </div>
-                  <div class="row">
-                    <label class="col-sm-5" asp-for="ShippingChargeAccountId"></label>
-                    <div class="col-sm-7">
-                        <select class="form-control" asp-for="ShippingChargeAccountId" asp-items="@ViewBag.Accounts"></select>
-                    </div>
-                  </div>
-              </div>
-          </div>
+
+    <div class="grid gap-4 mb-4 sm:grid-cols-2 sm:gap-6 sm:mb-5" id="divGLSetup">
+
+      <div class="sm:col-span-2">
+        <label class="block mb-2 text-sm font-medium text-gray-900 dark:text-white" asp-for="PayableAccountId"></label>
+        <select class=" bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500" asp-for="PayableAccountId" asp-items="@ViewBag.Accounts"></select>
       </div>
-  </div>
-  <div class="col-sm-12">
-    <button type="submit" id="btnSave" class="btn btn-sm btn-flat pull-left disabledControl">
-      <span class="fa fa-save"></span> Save
-    </button>
 
-    <a href="~/" class="btn btn-sm btn-default btn-flat pull-left">
-      <i class="fa fa-times"></i>
-      Cancel
-    </a>
-  </div>
-</form>
+      <div class="sm:col-span-1">
+        <label class="block mb-2 text-sm font-medium text-gray-900 dark:text-white" asp-for="PurchaseDiscountAccountId"></label>
+        <select class=" bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500" asp-for="PurchaseDiscountAccountId" asp-items="@ViewBag.Accounts"></select>
+      </div>
+
+      <div class="sm:col-span-1">
+        <label class="block mb-2 text-sm font-medium text-gray-900 dark:text-white" asp-for="GoodsReceiptNoteClearingAccountId"></label>
+        <select class=" bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500" asp-for="GoodsReceiptNoteClearingAccountId" asp-items="@ViewBag.Accounts"></select>
+      </div>
+
+      <div class="sm:col-span-1">
+        <label class="block mb-2 text-sm font-medium text-gray-900 dark:text-white" asp-for="SalesDiscountAccountId"></label>
+        <select class=" bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500" asp-for="SalesDiscountAccountId" asp-items="@ViewBag.Accounts"></select>
+      </div>
+
+      <div class="sm:col-span-1">
+        <label class="block mb-2 text-sm font-medium text-gray-900 dark:text-white" asp-for="ShippingChargeAccountId"></label>
+        <select class=" bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500" asp-for="ShippingChargeAccountId" asp-items="@ViewBag.Accounts"></select>
+      </div>
+    </div>
+
+    <!-- Action Buttons  -->
+    <div class="flex items-center space-x-4">
+      <button type="submit" id="btnSave" class="text-white bg-slate-600 hover:bg-slate-200 focus:ring-4 focus:outline-none font medium rounded-lg text-sm px-5 py-2.5 text-center">
+        <span class="fa fa-save"></span> Save
+      </button>
+
+      <a href="~/" class="text-white bg-slate-600 hover:bg-slate-200 focus:ring-4 focus:outline-none font medium rounded-lg text-sm px-5 py-2.5 text-center opacity-75">
+        <i class="fa fa-times"></i>
+          Cancel
+      </a>
+    </div>
+  </form>
+</div>
+
 @section scripts{
 <script src="~/js/custom.js" type="text/javascript"></script>
 <script>
