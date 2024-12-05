@@ -3,14 +3,6 @@
     @await Html.PartialAsync("~/Views/Shared/Components/DarkLightMode.cshtml")
     <nav class="flex flex-col justify-center">
     <div class="p-5">
-        <li>
-            <a class="nav-link" asp-area="" asp-controller="Quotations" asp-action="Quotations">
-                <div class="d-flex justify-content-start hover:text-darkPrimary hover:bg-lightPrimary dark:hover:bg-darkPrimary dark:hover:text-white ">
-                <i class="nav-icon fa fa-sack-dollar"></i>
-                Sales Quotations
-            </a>
-            </div>
-        </li>
 
         <li class='sub-menu'>
             <a href="javascript:;" onclick="document.location.hash='#settings';">
@@ -21,6 +13,14 @@
                 </div>
             </a>
             <ul>
+            <li>
+            <a class="nav-link" asp-area="" asp-controller="Quotations" asp-action="Quotations">
+                <div class="d-flex justify-content-start hover:text-darkPrimary hover:bg-lightPrimary dark:hover:bg-darkPrimary dark:hover:text-white ">
+                Sales Quotations
+            </a>
+            </div>
+        </li>
+
                 <li class="hover:bg-lightPrimary hover:text-darkPrimary dark:hover:bg-darkPrimary dark:hover:text-white">
                     <a class="nav-link" asp-area="" asp-controller="Sales" asp-action="SalesReceipts">
                         Sales Receipts
@@ -31,7 +31,7 @@
                         Sales Invoices
                     </a>
                 </li>
-               <li class="hover:bg-lightPrimary hover:text-darkPrimary dark:hover:bg-darkPrimar dark:hover:text-white">
+               <li class="hover:bg-lightPrimary hover:text-darkPrimary dark:hover:bg-darkPrimary dark:hover:text-white">
                     <a class="nav-link" asp-area="" asp-controller="Sales" asp-action="DonationInvoices">
                         Donation Invoices
                     </a>
