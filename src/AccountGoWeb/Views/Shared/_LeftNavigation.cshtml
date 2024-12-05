@@ -1,42 +1,40 @@
-<div class='bg-darkPrimary text-white w-64 h-full overflow-auto dark:bg-darkSecondary dark:text-lightSecondary'>
-
+<div class='bg-darkPrimary text-white  w-64 h-full overflow-auto dark:bg-darkSecondary dark:text-lightSecondary'>
     @await Html.PartialAsync("~/Views/Shared/Components/Logo.cshtml")
     @await Html.PartialAsync("~/Views/Shared/Components/DarkLightMode.cshtml")
     <nav class="flex flex-col justify-center">
     <div class="p-5">
-        <li class="flex item-center text-lightPrimary hover:bg-lightPrimary ">
+        <li class="flex item-center hover:bg-lightPrimary dark:hover:bg-darkPrimary">
             <a class="nav-link" asp-area="" asp-controller="Quotations" asp-action="Quotations">
                 Sales Quotations
             </a>
         </li>
 
         @* Account Receivable *@
-        <li class='sub-menu'>
+        <li class='sub-menu px-2'>
             <a href="javascript:;" onclick="document.location.hash='#settings';">
-                <div class="d-flex justify-content-start">
+                <div class="d-flex justify-content-start hover:bg-lightPrimary dark:hover:bg-darkPrimary">
                     <i class="nav-icon fa fa-industry"></i>
                     Accounts Receivable
                     <div class='fa fa-caret-down ml-auto'></div>
                 </div>
             </a>
-        
             <ul>
-                <li>
+                <li class="hover:bg-lightPrimary dark:hover:bg-darkPrimary">
                     <a class="nav-link" asp-area="" asp-controller="Sales" asp-action="SalesReceipts">
                         Sales Receipts
                     </a>
                 </li>
-                <li>
+                <li class="hover:bg-lightPrimary dark:hover:bg-darkPrimary">
                     <a class="nav-link" asp-area="" asp-controller="Sales" asp-action="SalesInvoices">
                         Sales Invoices
                     </a>
                 </li>
-                <li>
+               <li class="hover:bg-lightPrimary dark:hover:bg-darkPrimary">
                     <a class="nav-link" asp-area="" asp-controller="Sales" asp-action="DonationInvoices">
                         Donation Invoices
                     </a>
                 </li>
-                <li>
+               <li class="hover:bg-lightPrimary dark:hover:bg-darkPrimary">
                     <a class="nav-link" asp-area="" asp-controller="Sales" asp-action="Customers">
                         Customers
                     </a>
@@ -47,24 +45,24 @@
     </li>
     <li class='sub-menu'>
         <a href="javascript:;" onclick="document.location.hash='#message';">
-            <div class="d-flex justify-content-start">
+            <div class="d-flex justify-content-start hover:bg-lightPrimary dark:hover:bg-darkPrimary">
                 <i class="nav-icon fa fa-link"></i>
                 Accounts Payable
                 <div class='fa fa-caret-down ml-auto'></div>
             </div>
         </a>
         <ul>
-            <li>
+             <li class="hover:bg-lightPrimary dark:hover:bg-darkPrimary">
                 <a class="nav-link" asp-area="" asp-controller="Purchasing" asp-action="PurchaseOrders">
                     Purchase Orders
                 </a>
             </li>
-            <li>
+             <li class="hover:bg-lightPrimary dark:hover:bg-darkPrimary">
                 <a class="nav-link" asp-area="" asp-controller="Purchasing" asp-action="PurchaseInvoices">
                     Purchase Invoices
                 </a>
             </li>
-            <li>
+             <li class="hover:bg-lightPrimary dark:hover:bg-darkPrimary">
                 <a class="nav-link" asp-area="" asp-controller="Purchasing" asp-action="Vendors">
                     Vendors
                 </a>
@@ -73,19 +71,19 @@
     </li>
     <li class='sub-menu'>
         <a href="javascript:;" onclick="document.location.hash='#message';">
-            <div class="d-flex justify-content-start">
+            <div class="d-flex justify-content-start hover:bg-lightPrimary dark:hover:bg-darkPrimary">
                 <i class="nav-icon fa fa-wrench"></i>
                 Inventory Control
                 <div class='fa fa-caret-down ml-auto'></div>
             </div>
         </a>
         <ul>
-            <li>
+             <li class="hover:bg-lightPrimary dark:hover:bg-darkPrimary">
                 <a class="nav-link" asp-area="" asp-controller="Inventory" asp-action="Index">
                     Items
                 </a>
             </li>
-            <li>
+             <li class="hover:bg-lightPrimary dark:hover:bg-darkPrimary">
                 <a class="nav-link" asp-area="" asp-controller="Inventory" asp-action="ICJ">
                     Inventory Control Journal
                 </a>
@@ -94,34 +92,34 @@
     </li>
     <li class='sub-menu'>
         <a href="javascript:;" onclick="document.location.hash='#message';">
-            <div class="d-flex justify-content-start">
+            <div class="d-flex justify-content-start hover:bg-lightPrimary dark:hover:bg-darkPrimary">
                 <i class="nav-icon fa fa-bank"></i>
                 Financials
                 <div class='fa fa-caret-down ml-auto'></div>
             </div>
         </a>
         <ul>
-            <li>
+             <li class="hover:bg-lightPrimary dark:hover:bg-darkPrimary">
                 <a class="nav-link" asp-area="" asp-controller="Financials" asp-action="JournalEntries">
                     Journal Entries
                 </a>
             </li>
-            <li>
+             <li class="hover:bg-lightPrimary dark:hover:bg-darkPrimary">
                 <a class="nav-link" asp-area="" asp-controller="Financials" asp-action="GeneralLedger">
                     General Ledgers
                 </a>
             </li>
-            <li>
+             <li class="hover:bg-lightPrimary dark:hover:bg-darkPrimary">
                 <a class="nav-link" asp-area="" asp-controller="Tax" asp-action="Taxes">
                     Taxes
                 </a>
             </li>
-            <li>
+            <li class="hover:bg-lightPrimary dark:hover:bg-darkPrimary">
                 <a class="nav-link" asp-area="" asp-controller="Financials" asp-action="Accounts">
                     Chart of Accounts
                 </a>
             </li>
-            <li>
+             <li class="hover:bg-lightPrimary dark:hover:bg-darkPrimary">
                 <a class="nav-link" asp-area="" asp-controller="Financials" asp-action="Banks">
                     Banks
                 </a>
@@ -130,24 +128,24 @@
     </li>
     <li class='sub-menu'>
         <a href="javascript:;" onclick="document.location.hash='#message';">
-            <div class="d-flex justify-content-start">
+            <div class="d-flex justify-content-start hover:bg-lightPrimary dark:hover:bg-darkPrimary">
                 <i class="nav-icon fa fa-line-chart"></i>
                 Reports
                 <div class='fa fa-caret-down ml-auto'></div>
             </div>
         </a>
         <ul>
-            <li>
+             <li class="hover:bg-lightPrimary dark:hover:bg-darkPrimary">
                 <a class="nav-link" asp-area="" asp-controller="Financials" asp-action="BalanceSheet">
                     Balance Sheet
                 </a>
             </li>
-            <li>
+             <li class="hover:bg-lightPrimary dark:hover:bg-darkPrimary">
                 <a class="nav-link" asp-area="" asp-controller="Financials" asp-action="IncomeStatement">
                     Income Statement
                 </a>
             </li>
-            <li>
+             <li class="hover:bg-lightPrimary dark:hover:bg-darkPrimary">
                 <a class="nav-link" asp-area="" asp-controller="Financials" asp-action="TrialBalance">
                     Trial Balance
                 </a>
@@ -156,19 +154,19 @@
     </li>
     <li class='sub-menu'>
         <a href="javascript:;" onclick="document.location.hash='#message';">
-            <div class="d-flex justify-content-start">
+            <div class="d-flex justify-content-start hover:bg-lightPrimary dark:hover:bg-darkPrimary">
                 <i class="nav-icon fa fa-group"></i>
                 Organization Settings
                 <div class='fa fa-caret-down ml-auto'></div>
             </div>
         </a>
         <ul>
-            <li>
+             <li class="hover:bg-lightPrimary dark:hover:bg-darkPrimary">
                 <a class="nav-link" asp-area="" asp-controller="Administration" asp-action="Company">
                     Company
                 </a>
             </li>
-            <li>
+             <li class="hover:bg-lightPrimary dark:hover:bg-darkPrimary">
                 <a class="nav-link" asp-area="" asp-controller="Administration" asp-action="Settings">
                     Settings
                 </a>
@@ -177,7 +175,7 @@
     </li>
     <li class='sub-menu'>
         <a href="javascript:;" onclick="document.location.hash='#message';">
-            <div class="d-flex justify-content-start">
+            <div class="d-flex justify-content-start hover:bg-lightPrimary dark:hover:bg-darkPrimary">
                 <i class="nav-icon fa fa-desktop"></i>
                 System Administration
                 <div class='fa fa-caret-down ml-auto'></div>
@@ -186,22 +184,22 @@
         <ul>
             @* @if (User.IsInRole("SystemAdministrators"))
                         { *@
-            <li>
+             <li class="hover:bg-lightPrimary dark:hover:bg-darkPrimary">
                 <a class="nav-link" href="~/administration/users">
                     Security Users
                 </a>
             </li>
-            <li>
+             <li class="hover:bg-lightPrimary dark:hover:bg-darkPrimary">
                 <a class="nav-link" href="~/administration/roles">
                     Security Roles
                 </a>
             </li>
-            <li>
+             <li class="hover:bg-lightPrimary dark:hover:bg-darkPrimary">
                 <a class="nav-link" href="~/administration/groups">
                     Security Groups
                 </a>
             </li>
-            <li>
+             <li class="hover:bg-lightPrimary dark:hover:bg-darkPrimary">
                 <a class="nav-link" href="~/administration/auditlogs">
                     Audit Logs
                 </a>
@@ -211,7 +209,8 @@
     </li>
 
 
-    <li><a href='#message'>Logout</a></li>
+     <li class="hover:bg-lightPrimary dark:hover:bg-darkPrimary">
+        <a href='#message'>Logout</a></li>
     </ul>
     </div>
     </nav>
