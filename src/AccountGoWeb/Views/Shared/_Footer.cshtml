@@ -1,8 +1,6 @@
-<footer class="app-footer absolute bottom-0 text-lightSecondary">
+<footer class="app-footer absolute bottom-0 text-lightSecondary text-xs p-5">
     <div>
-        <span>Good Deed Books</span>
-        <span>&copy; @DateTime.Now.Year All rights reserved.</span>
-        &nbsp;|&nbsp;
+        <p>Good Deed Books &copy; @DateTime.Now.Year All rights reserved.</p>
         @System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription
         - Build
         @File.GetLastWriteTime(System.Reflection.Assembly.GetExecutingAssembly().Location).ToLocalTime()

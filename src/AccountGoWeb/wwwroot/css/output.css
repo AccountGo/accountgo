@@ -939,6 +939,11 @@ video {
   line-height: 1.25rem;
 }
 
+.text-xs {
+  font-size: 0.6rem;
+  line-height: 1rem;
+}
+
 .font-bold {
   font-weight: 700;
 }
@@ -1106,11 +1111,6 @@ video {
 .dark\:hover\:bg-gray-700:hover:where(.dark, .dark *) {
   --tw-bg-opacity: 1;
   background-color: rgb(55 65 81 / var(--tw-bg-opacity, 1));
-}
-
-.dark\:hover\:text-lightPrimary:hover:where(.dark, .dark *) {
-  --tw-text-opacity: 1;
-  color: rgb(141 169 196 / var(--tw-text-opacity, 1));
 }
 
 .dark\:hover\:text-white:hover:where(.dark, .dark *) {
