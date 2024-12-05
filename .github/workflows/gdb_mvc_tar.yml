@@ -28,7 +28,7 @@ jobs:
         # run: dotnet publish ./src/AccountGoWeb/AccountGoWeb.csproj -c Release -o ${{env.DOTNET_ROOT}}/myapp
         run: dotnet publish ./src/AccountGoWeb/AccountGoWeb.csproj -c Release -o ${{runner.temp}}/myapp
 
-      - name: Where am I before archiving production artifacts
+      - name: archiving production artifacts
         run: |
           echo "+++++++++++++++++++++++++ where am I? ++++++++++++++++++++++++"
           pwd
@@ -38,9 +38,6 @@ jobs:
           echo $dir
           echo "++++++++++++++++++++++++ what's in current directory? ++++++++"
           ls -al
-
-      - name: Check production artifacts before archiving
-        run: |
           echo "+++++ what's in the ${{runner.temp}}/myapp directory? ++++"
           ls -al ${{runner.temp}}/myapp
           echo "+++++ how many files in the ${{runner.temp}}/myapp directory? ++++"
@@ -51,9 +48,6 @@ jobs:
           pwd
           echo "+++++ how many files in current directory? ++++"
           ls | wc -l
-
-      - name: Compress production artifacts
-        run: |
           echo "+++++++++++++++++++++++++ compress current dir + save in $dir/my_artifact.tar.gz ++++"
           tar -czvf $dir/my_artifact.tar.gz .
           echo "+++++++++++++++++++++++++ change back to $dir directory ++++"
