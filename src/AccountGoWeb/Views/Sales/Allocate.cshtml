@@ -1,12 +1,14 @@
 ﻿@model AccountGoWeb.Models.Sales.Allocate
 
-<form action="~/sales/allocate" method="post">
+<form action="~/sales/allocate/@Model.ReceiptId" method="post">
+    @Html.AntiForgeryToken()
     <div class="col-md-9">
         <div class="box">
             <div class="box-header with-border">
                 <h3 class="box-title">General</h3>
                 <div class="box-tools pull-right">
-                    <button type="button" class="btn btn-box-tool" data-widget="collapse" data-toggle="tooltip" title="Collapse">
+                    <button type="button" class="btn btn-box-tool" data-widget="collapse" data-toggle="tooltip"
+                        title="Collapse">
                         <i class="fa fa-minus"></i>
                     </button>
                 </div>
@@ -55,7 +57,8 @@
             <div class="box-header with-border">
                 <h3 class="box-title">Invoice</h3>
                 <div class="box-tools pull-right">
-                    <button type="button" class="btn btn-box-tool" data-widget="collapse" data-toggle="tooltip" title="Collapse">
+                    <button type="button" class="btn btn-box-tool" data-widget="collapse" data-toggle="tooltip"
+                        title="Collapse">
                         <i class="fa fa-minus"></i>
                     </button>
                 </div>
@@ -86,7 +89,8 @@
                                         @Model.AllocationLines[i].AllocatedAmount
                                     </td>
                                     <td>
-                                        <input asp-for="@Model.AllocationLines[i].AmountToAllocate" class="form-control" type="text" />
+                                        <input asp-for="@Model.AllocationLines[i].AmountToAllocate" class="form-control"
+                                            type="text" />
                                     </td>
                                 </tr>
                             }
@@ -101,3 +105,28 @@
         <a href="~/sales/salesreceipts" class="btn btn-sm btn-default btn-flat pull-left">Close</a>
     </div>
 </form>
+
+<script>
+    // Log Receipt General Information
+    console.log("Receipt Details:");
+    console.log("Receipt No:", "@ViewBag.ReceiptNo");
+    console.log("Customer Id:", "@Model.CustomerId");
+    console.log("Customer Name:", "@ViewBag.CustomerName");
+    console.log("Receipt Date:", "@Model.Date");
+    console.log("Amount:", @Model.Amount);
+    console.log("Remaining Amount to Allocate:", @Model.RemainingAmountToAllocate);
+
+    // Log Allocation Lines
+    console.log("Allocation Lines:");
+    const allocationLines = @Html.Raw(Newtonsoft.Json.JsonConvert.SerializeObject(Model.AllocationLines));
+    console.log(allocationLines);
+
+    // Display allocation line details for each entry
+    allocationLines.forEach((line, index) => {
+        console.log(`Allocation Line ${index + 1}:`);
+        console.log("Invoice No:", line.InvoiceId);
+        console.log("Amount:", line.Amount);
+        console.log("Allocated Amount:", line.AllocatedAmount);
+        console.log("To Allocate:", line.AmountToAllocate);
+    });
+</script>
