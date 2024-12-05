@@ -1,5 +1,6 @@
 using Api.Data;
 using Api.Service;
+using Microsoft.EntityFrameworkCore;
 
 public class AccountService : IAccountService
 {
@@ -17,13 +18,12 @@ public class AccountService : IAccountService
         return newAccount;
     }
 
-    public async Task<Core.Domain.Financials.Account?> UpdateAccountAsync(int id, Core.Domain.Financials.Account updatedAccount)
+    public async Task<Core.Domain.Financials.Account?> UpdateAccountAsync(string accountCode, Core.Domain.Financials.Account updatedAccount)
     {
-        var account = await _context.Accounts.FindAsync(id);
+        var account = await _context.Accounts.FirstOrDefaultAsync(a => a.AccountCode == accountCode);
         if (account == null)
             return null;
 
-        account.AccountCode = updatedAccount.AccountCode;
         account.AccountName = updatedAccount.AccountName;
         account.Description = updatedAccount.Description;
         account.IsCash = updatedAccount.IsCash;
@@ -35,9 +35,9 @@ public class AccountService : IAccountService
         return account;
     }
 
-    public async Task<Core.Domain.Financials.Account?> DeleteAccountAsync(int id)
+    public async Task<Core.Domain.Financials.Account?> DeleteAccountAsync(string accountCode)
     {
-        var account = await _context.Accounts.FindAsync(id);
+        var account = await _context.Accounts.FirstOrDefaultAsync(a => a.AccountCode == accountCode);
         if (account == null)
             return null;
 
@@ -47,8 +47,8 @@ public class AccountService : IAccountService
         return account;
     }
 
-    public async Task<Core.Domain.Financials.Account?> GetAccountByIdAsync(int id)
+    public async Task<Core.Domain.Financials.Account?> GetAccountByCodeAsync(string accountCode)
     {
-        return await _context.Accounts.FindAsync(id);
+        return await _context.Accounts.FirstOrDefaultAsync(a => a.AccountCode == accountCode);
     }
 }
