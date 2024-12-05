@@ -28,7 +28,7 @@ jobs:
         # run: dotnet publish ./src/AccountGoWeb/AccountGoWeb.csproj -c Release -o ${{env.DOTNET_ROOT}}/myapp
         run: dotnet publish ./src/AccountGoWeb/AccountGoWeb.csproj -c Release -o ${{runner.temp}}/myapp
 
-      - name: Archive production artifacts
+      - name: Where am I before archiving production artifacts
         run: |
           echo "+++++++++++++++++++++++++ where am I? ++++++++++++++++++++++++"
           pwd
@@ -38,14 +38,22 @@ jobs:
           echo $dir
           echo "++++++++++++++++++++++++ what's in current directory? ++++++++"
           ls -al
+
+      - name: Check production artifacts before archiving
+        run: |
           echo "+++++ what's in the ${{runner.temp}}/myapp directory? ++++"
           ls -al ${{runner.temp}}/myapp
-          echo "+++++ how maby files in the ${{runner.temp}}/myapp directory? ++++"
+          echo "+++++ how many files in the ${{runner.temp}}/myapp directory? ++++"
           ls ${{runner.temp}}/myapp | wc -l
           echo "+++++ change directory to ${{runner.temp}}/myapp ++++"
           cd ${{runner.temp}}/myapp
           echo "+++++++++++++++++++++++++ where am I? ++++++++++++++++++++++++"
           pwd
+          echo "+++++ how many files in current directory? ++++"
+          ls | wc -l
+
+      - name: Compress production artifacts
+        run: |
           echo "+++++++++++++++++++++++++ compress current dir + save in $dir/my_artifact.tar.gz ++++"
           tar -czvf $dir/my_artifact.tar.gz .
           echo "+++++++++++++++++++++++++ change back to $dir directory ++++"
@@ -86,14 +94,23 @@ jobs:
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_FD62C59DE5DC42C2A07DB8191A522348 }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_7076EF307FDA4C11BC99A0A7A0943794 }}
 
+      - name: Where am I now 1?
+        run: pwd
+
+      - name: What is in the current directory before extracting files?
+        run: ls -l
+
       - name: Extract artifacts
         run: |
           tar -xzvf my_artifact.tar.gz -C .
 
-      - name: Print working directory
+      - name: Where am I now 2?
         run: pwd
 
-      - name: List directory contents
+      - name: What is in the current directory After extracting files?
+        run: ls -l
+
+      - name: List /home/runner/.dotnet/ directory contents
         run: ls -l /home/runner/.dotnet/
 
       - name: Deploy to Azure Web App
