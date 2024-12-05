@@ -1,4 +1,5 @@
 ﻿using Dto.Inventory;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Services.Administration;
 using Services.Inventory;
@@ -6,6 +7,7 @@ using Services.Inventory;
 namespace Api.Controllers
 {
     [Route("api/[controller]")]
+    [Authorize]
     public class InventoryController : BaseController
     {
         private readonly IAdministrationService _adminService;

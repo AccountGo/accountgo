@@ -34,43 +34,75 @@ namespace AccountGoWeb.Controllers
                 var content = new StringContent(serialize);
                 content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
                 HttpResponseMessage responseSignIn = Post("account/signin", content);
-                Newtonsoft.Json.Linq.JObject resultSignIn = Newtonsoft.Json.Linq.JObject.Parse(responseSignIn.Content.ReadAsStringAsync().Result);
+                // Newtonsoft.Json.Linq.JObject resultSignIn = Newtonsoft.Json.Linq.JObject.Parse(responseSignIn.Content.ReadAsStringAsync().Result);
 
-                if (resultSignIn["result"] != null)
+                // if (resultSignIn["result"] != null)
+                if (responseSignIn.IsSuccessStatusCode)
                 {
-                    var user = await GetAsync<Dto.Security.User>("administration/getuser?username=" + model.Email);
+                    var responseBody = await responseSignIn.Content.ReadAsStringAsync();
 
-                    var claims = new List<Claim>();
-                    claims.Add(new Claim(ClaimTypes.IsPersistent, model.RememberMe.ToString()));
-                    claims.Add(new Claim(ClaimTypes.NameIdentifier, user.Email!));
-                    claims.Add(new Claim(ClaimTypes.Email, user.Email!));
+                    var tokenResponse = Newtonsoft.Json.JsonConvert.DeserializeObject<LoginResponseModel>(responseBody);
 
-                    string firstName = user.FirstName != null ? user.FirstName : "";
-                    string lastName = user.LastName != null ? user.LastName : "";
+                    if (tokenResponse != null)
+                    {
+                        // Save tokens or use them as needed
+                        Console.WriteLine($"AccessToken: {tokenResponse.AccessToken}");
+                        Console.WriteLine($"RefreshToken: {tokenResponse.RefreshToken}");
 
-                    claims.Add(new Claim(ClaimTypes.GivenName, firstName));
-                    claims.Add(new Claim(ClaimTypes.Surname, lastName));
-                    claims.Add(new Claim(ClaimTypes.Name, firstName + " " + lastName));
+                        // Example: Set claims and authenticate user
+                        var claims = new List<Claim>
+                        {
+                            new Claim(ClaimTypes.NameIdentifier, model.Email!),
+                            new Claim(ClaimTypes.Email, model.Email!),
+                            new Claim("AccessToken", tokenResponse.AccessToken),
+                            new Claim("RefreshToken", tokenResponse.RefreshToken)
+                        };
 
-                    foreach(var role in user.Roles)
-                        claims.Add(new Claim(ClaimTypes.Role, role.Name!));
+                        var identity = new ClaimsIdentity(claims, "AuthCookie");
+                        var principal = new ClaimsPrincipal(new[] { identity });
 
-                    claims.Add(new Claim(ClaimTypes.UserData, Newtonsoft.Json.JsonConvert.SerializeObject(user)));
+                        HttpContext.User = principal;
 
-                    var identity = new ClaimsIdentity(claims, "AuthCookie");
+                        await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal);
 
-                    ClaimsPrincipal principal = new ClaimsPrincipal(new[] { identity });
+                        return RedirectToLocal(returnUrl!);
+                    }
+                      
+                    // var user = await GetAsync<Dto.Security.User>("administration/getuser?username=" + model.Email);
 
-                    HttpContext.User = principal;
+                    // var claims = new List<Claim>();
+                    // claims.Add(new Claim(ClaimTypes.IsPersistent, model.RememberMe.ToString()));
+                    // claims.Add(new Claim(ClaimTypes.NameIdentifier, user.Email!));
+                    // claims.Add(new Claim(ClaimTypes.Email, user.Email!));
 
-                    await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal);
+                    // string firstName = user.FirstName != null ? user.FirstName : "";
+                    // string lastName = user.LastName != null ? user.LastName : "";
 
-                    return RedirectToLocal(returnUrl!);
+                    // claims.Add(new Claim(ClaimTypes.GivenName, firstName));
+                    // claims.Add(new Claim(ClaimTypes.Surname, lastName));
+                    // claims.Add(new Claim(ClaimTypes.Name, firstName + " " + lastName));
+
+                    // foreach(var role in user.Roles)
+                    //     claims.Add(new Claim(ClaimTypes.Role, role.Name!));
+
+                    // claims.Add(new Claim(ClaimTypes.UserData, Newtonsoft.Json.JsonConvert.SerializeObject(user)));
+
+                    // var identity = new ClaimsIdentity(claims, "AuthCookie");
+
+                    // ClaimsPrincipal principal = new ClaimsPrincipal(new[] { identity });
+
+                    // HttpContext.User = principal;
+
+                    // await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal);
+
+                    // return RedirectToLocal(returnUrl!);
                 }
                 else
                 {
-                    ModelState.AddModelError(string.Empty, "Invalid login attempt.");
-                    return View(model);
+                    // ModelState.AddModelError(string.Empty, "Invalid login attempt.");
+                    // return View(model);
+                    var errorBody = await responseSignIn.Content.ReadAsStringAsync();
+                    ModelState.AddModelError(string.Empty, $"Login failed: {errorBody}");
                 }
             }
 
@@ -119,22 +151,94 @@ namespace AccountGoWeb.Controllers
                     var serialize = Newtonsoft.Json.JsonConvert.SerializeObject(model);
                     var content = new StringContent(serialize);
                     content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+                    
                     HttpResponseMessage responseAddNewUser = Post("account/addnewuser", content);
-                    Newtonsoft.Json.Linq.JObject resultAddNewUser = Newtonsoft.Json.Linq.JObject.Parse(responseAddNewUser.Content.ReadAsStringAsync().Result);
+                    string responseContent = responseAddNewUser.Content.ReadAsStringAsync().Result;
 
-                    HttpResponseMessage? responseInitialized = null;
-                    Newtonsoft.Json.Linq.JObject? resultInitialized = null;
-                    if ((bool)resultAddNewUser["succeeded"]!)
+                    // Try to parse as JObject (success or failure case)
+                    Newtonsoft.Json.Linq.JObject? resultObject = null;
+                    Newtonsoft.Json.Linq.JArray? resultArray = null;
+
+                    try
                     {
-                        responseInitialized = Get("administration/initializedcompany");
-                        resultInitialized = Newtonsoft.Json.Linq.JObject.Parse((responseInitialized.Content.ReadAsStringAsync().Result));
-                        return RedirectToAction(nameof(AccountController.SignIn), "Account");
+                        resultObject = Newtonsoft.Json.Linq.JObject.Parse(responseContent);
+                    }
+                    catch (Newtonsoft.Json.JsonReaderException)
+                    {
+                        // If parsing as JObject fails, try parsing as JArray
+                        resultArray = Newtonsoft.Json.Linq.JArray.Parse(responseContent);
+                    }
+
+                    // Handle based on the parsed result
+                    if (resultObject != null)
+                    {
+                        // Handle response as a JObject
+                        if ((bool)resultObject["succeeded"]!)
+                        {
+                            HttpResponseMessage responseInitialized = Get("administration/initializedcompany");
+                            var resultInitialized = Newtonsoft.Json.Linq.JObject.Parse(responseInitialized.Content.ReadAsStringAsync().Result);
+                            return RedirectToAction(nameof(AccountController.SignIn), "Account");
+                        }
+                        else
+                        {
+                            var errorDescription = resultObject["errors"]![0]!["description"]!.ToString();
+                            ModelState.AddModelError(string.Empty, errorDescription);
+                            return View(model);
+                        }
+                    }
+                    else if (resultArray != null)
+                    {
+                        // Handle response as a JArray (exception case)
+                        string errorMessage = string.Join("; ", resultArray.Select(error => error.ToString()));
+                        ModelState.AddModelError(string.Empty, errorMessage);
+                        return View(model);
                     }
                     else
                     {
-                        ModelState.AddModelError(string.Empty, resultAddNewUser["errors"]![0]!["description"]!.ToString());
+                        ModelState.AddModelError(string.Empty, "Unexpected response format.");
                         return View(model);
                     }
+
+                    // Newtonsoft.Json.Linq.JObject resultAddNewUser = Newtonsoft.Json.Linq.JObject.Parse(responseAddNewUser.Content.ReadAsStringAsync().Result);
+                    // var resultAddNewUser = Newtonsoft.Json.Linq.JArray.Parse(responseAddNewUser.Content.ReadAsStringAsync().Result);
+
+                    // HttpResponseMessage? responseInitialized = null;
+                    // Newtonsoft.Json.Linq.JObject? resultInitialized = null;
+                    // if ((bool)resultAddNewUser["succeeded"]!)
+                    // {
+                    //     responseInitialized = Get("administration/initializedcompany");
+                    //     resultInitialized = Newtonsoft.Json.Linq.JObject.Parse((responseInitialized.Content.ReadAsStringAsync().Result));
+                    //     return RedirectToAction(nameof(AccountController.SignIn), "Account");
+                    // }
+                    // else
+                    // {
+                    //     ModelState.AddModelError(string.Empty, resultAddNewUser["errors"]![0]!["description"]!.ToString());
+                    //     return View(model);
+                    // }
+
+                    // if (resultAddNewUser.Count > 0) // Ensure the array is not empty
+                    // {
+                    //     var firstResult = resultAddNewUser[0]; // Access the first object in the array
+
+                    //     if ((bool)firstResult["succeeded"]!)
+                    //     {
+                    //         HttpResponseMessage responseInitialized = Get("administration/initializedcompany");
+                    //         var resultInitialized = Newtonsoft.Json.Linq.JObject.Parse(responseInitialized.Content.ReadAsStringAsync().Result);
+
+                    //         return RedirectToAction(nameof(AccountController.SignIn), "Account");
+                    //     }
+                    //     else
+                    //     {
+                    //         var errorDescription = firstResult["errors"]![0]!["description"]!.ToString();
+                    //         ModelState.AddModelError(string.Empty, errorDescription);
+                    //         return View(model);
+                    //     }
+                    // }
+                    // else
+                    // {
+                    //     ModelState.AddModelError(string.Empty, "API returned an empty response.");
+                    //     return View(model);
+                    // }
                 }
             }
             catch(Exception ex)

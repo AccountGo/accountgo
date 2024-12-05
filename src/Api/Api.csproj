@@ -4,6 +4,7 @@
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <IntermediateOutputPath>obj/</IntermediateOutputPath>
   </PropertyGroup>
 
   <ItemGroup>
@@ -24,11 +25,11 @@
       </PackageReference>
       <PackageReference Include="Microsoft.Extensions.Logging" Version="8.0.0" />
       <PackageReference Include="Swashbuckle.AspNetCore" Version="6.4.0" />
-    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="8.0.0" />
-    <PackageReference Include="Microsoft.AspNetCore.Mvc.NewtonsoftJson" Version="8.0.0" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.0" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.0" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.0" />
+      <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="8.0.0" />
+      <PackageReference Include="Microsoft.AspNetCore.Mvc.NewtonsoftJson" Version="8.0.0" />
+      <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.0" />
+      <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.0" />
+      <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.0" />
   </ItemGroup>
 
   <ItemGroup>

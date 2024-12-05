@@ -16,7 +16,7 @@
     <!-- Tell the browser to be responsive to screen width -->
     <meta content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" name="viewport">
     <!-- Icons-->
-    <link href="~/css/coreui/icons/css/all.min.css" rel="stylesheet">
+    @* <link href="~/css/coreui/icons/css/all.min.css" rel="stylesheet"> *@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/simple-line-icons/2.5.5/css/simple-line-icons.min.css" rel="stylesheet">
     <!-- Main styles for this application-->
@@ -32,7 +32,8 @@
                         <div class="card-body">
                             <h1>AccountGo</h1>
                             <p class="text-muted">Sign In to your account</p>
-                            <form action="/account/signin?returnurl=@ViewData["ReturnUrl"]" method="post">
+                            @* <form action="/account/signin?returnurl=@ViewData["ReturnUrl"]" method="post"> *@
+                            <form action="/account/signin" method="post">
                                 <div class="input-group mb-3">
                                     <div class="input-group-prepend">
                                         <span class="input-group-text">

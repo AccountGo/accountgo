@@ -1,6 +1,7 @@
 ﻿using Api.Data;
 using Dto.Security;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
@@ -67,7 +68,7 @@ namespace Api.Service
 
             _user = user;
 
-            return await CreateToken(populateExp: false);
+            return await CreateToken(populateExp: true);
         }
 
         private SigningCredentials GetSigningCredentials()
@@ -95,14 +96,15 @@ namespace Api.Service
         {
             var validIssuer = _configuration["JwtSettings:validIssuer"];
             var validAudience = _configuration["JwtSettings:validAudience"];
-            var expires = _configuration["JwtSettings:expires"];
+            // var expires = _configuration["JwtSettings:expires"];
 
             var tokenOptions = new JwtSecurityToken
             (
                 issuer: validIssuer,
                 audience: validAudience,
                 claims: claims,
-                expires: DateTime.Now.AddMinutes(Convert.ToDouble(expires)),
+                // expires: DateTime.Now.AddMinutes(Convert.ToDouble(expires)),
+                expires: System.DateTime.Now.AddMinutes(1), // Set to 1 minute
                 signingCredentials: signingCredentials
             );
 
@@ -131,7 +133,7 @@ namespace Api.Service
                 ValidateIssuer = true,
                 ValidateIssuerSigningKey = true,
                 IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey!)),
-                ValidateLifetime = true,
+                ValidateLifetime = false,
                 ValidIssuer = validIssuer,
                 ValidAudience = validAudience
             };

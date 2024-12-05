@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace AccountGoWeb.Controllers
 {
-    //[Microsoft.AspNetCore.Authorization.Authorize]
+    [Microsoft.AspNetCore.Authorization.Authorize]
     public class AdministrationController : BaseController
   {
     public AdministrationController(IConfiguration config)

@@ -33,7 +33,7 @@ namespace Api.Controllers
         {
             if (loginViewModel == null)
             {
-                throw new System.ArgumentNullException(nameof(loginViewModel));
+                return BadRequest(new { error = "Invalid login data." });
             }
             //var error = await _signInManager.PreSignInCheck(user);
             //if (error != null)
@@ -50,7 +50,7 @@ namespace Api.Controllers
             {
                 if(!await _authenticationService.ValidateUser(loginViewModel))
                 {
-                    return Unauthorized();
+                    return Unauthorized(new { error = "Invalid email or password." });
                 }
 
                 var tokenDto = await _authenticationService.CreateToken(populateExp: true);
@@ -58,8 +58,9 @@ namespace Api.Controllers
                 return Ok(tokenDto);
             }
             catch(System.Exception ex)
-            {
-                System.Console.WriteLine(ex.StackTrace);
+            {                
+                System.Console.WriteLine($"Error during SignIn: {ex.Message}");
+                return StatusCode(500, new { error = "An internal server error occurred." });
             }
 
 

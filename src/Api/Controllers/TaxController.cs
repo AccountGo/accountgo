@@ -222,7 +222,7 @@ namespace Api.Controllers
             return Ok(taxToReturn);
         }
 
-        [HttpDelete("{id:int}")]
+        [HttpDelete("tax/{id:int}")]
         [Route("deletetax")]
         public async Task<IActionResult> DeleteTax(int id)
         {
@@ -236,7 +236,7 @@ namespace Api.Controllers
             return NoContent();
         }
 
-        [HttpDelete("{id:int}")]
+        [HttpDelete("taxgroup/{id:int}")]
         [Route("deletetaxgroup")]
         public async Task<IActionResult> DeleteTaxGroup(int id)
         {
@@ -250,7 +250,7 @@ namespace Api.Controllers
             return NoContent();
         }
 
-        [HttpDelete("{id:int}")]
+        [HttpDelete("itemtaxgroup/{id:int}")]
         [Route("deleteitemtaxgroup")]
         public async Task<IActionResult> DeleteItemTaxGroup(int id)
         {
