@@ -1,12 +1,14 @@
 ﻿@model Dto.Sales.SalesInvoice
 
 <style>
-    tr, td, div.row {
+    tr,
+    td,
+    div.row {
         color: white;
     }
 </style>
 
-<form action="~/Sales/AddSalesInvoice" method="post">
+<form action="~/Sales/AddSalesInvoice" method="post" id="salesInvoiceForm">
     <div class="col-sm-10">
         @Html.AntiForgeryToken()
         @Html.ValidationSummary(true)
@@ -34,7 +36,8 @@
                 <div class="row">
                     <div class="col-sm-3">Posted</div>
                     <div class="col-sm-8">
-                        <input class="form-check" asp-for="Posted" type="checkbox"/>
+                        <input type="hidden" asp-for="Posted" value="false" />
+                        <input class="form-check" asp-for="Posted" type="checkbox" value="true" id="chkPosted" />
                         <span asp-validation-for="Posted" class="text-danger"></span>
                     </div>
                 </div>
@@ -47,40 +50,45 @@
                         <th>Discount</th>
                         <th>Measurement</th>
                     </thead>
-                    <tbody>@for (int i = 0; i < Model.SalesInvoiceLines!.Count; i++)
+                    <tbody id="invoiceLines">
+                        @for (int i = 0; i < Model.SalesInvoiceLines!.Count; i++)
                         {
                             <tr>
                                 <td>
-                                    <select class="form-control" asp-for="@Model.SalesInvoiceLines[i].ItemId" asp-items="@ViewBag.Items"
-                                            id="optCustomer"></select>
-                                    <span asp-validation-for="@Model.SalesInvoiceLines[i].ItemId" class="text-danger"></span>
+                                    <select class="form-control item-select" asp-for="@Model.SalesInvoiceLines[i].ItemId"
+                                        asp-items="@ViewBag.Items" data-index="@i"></select>
+                                    <span asp-validation-for="@Model.SalesInvoiceLines[i].ItemId"
+                                        class="text-danger"></span>
                                 </td>
                                 <td>
-                                    <input class="form-control" asp-for="@Model.SalesInvoiceLines[i].Quantity" type="text" placeholder="0.0 ..." />
-                                    <span asp-validation-for="@Model.SalesInvoiceLines[i].Quantity" class="text-danger"></span>
+                                    <input class="form-control quantity-input"
+                                        asp-for="@Model.SalesInvoiceLines[i].Quantity" type="text" placeholder="0.0 ..."
+                                        data-index="@i" />
+                                    <span asp-validation-for="@Model.SalesInvoiceLines[i].Quantity"
+                                        class="text-danger"></span>
                                 </td>
                                 <td>
-                                    <input class="form-control" asp-for="@Model.SalesInvoiceLines[i].Amount" type="text" placeholder="0.0 ..." />
-                                    <span asp-validation-for="@Model.SalesInvoiceLines[i].Amount" class="text-danger"></span>
+                                    <input class="form-control amount-input" asp-for="@Model.SalesInvoiceLines[i].Amount"
+                                        type="text" placeholder="0.0 ..." data-index="@i" />
+                                    <span asp-validation-for="@Model.SalesInvoiceLines[i].Amount"
+                                        class="text-danger"></span>
                                 </td>
                                 <td>
-                                    <input class="form-control" asp-for="@Model.SalesInvoiceLines[i].Discount" type="text" placeholder="0.0 ..." />
-                                    <span asp-validation-for="@Model.SalesInvoiceLines[i].Discount" class="text-danger"></span>
+                                    <input class="form-control discount-input"
+                                        asp-for="@Model.SalesInvoiceLines[i].Discount" type="text" placeholder="0.0 ..."
+                                        data-index="@i" />
+                                    <span asp-validation-for="@Model.SalesInvoiceLines[i].Discount"
+                                        class="text-danger"></span>
                                 </td>
                                 <td>
-                                    <select class="form-control" asp-for="@Model.SalesInvoiceLines[i].MeasurementId" asp-items="@ViewBag.Measurements"
-                                            id="optCustomer"></select>
-                                    <span asp-validation-for="@Model.SalesInvoiceLines[i].MeasurementId" class="text-danger"></span>
+                                    <select class="form-control measurement-select"
+                                        asp-for="@Model.SalesInvoiceLines[i].MeasurementId"
+                                        asp-items="@ViewBag.Measurements" data-index="@i"></select>
+                                    <span asp-validation-for="@Model.SalesInvoiceLines[i].MeasurementId"
+                                        class="text-danger"></span>
                                 </td>
                             </tr>
                         }
-
-                        <tr>
-                            <td>
-                                <button type="submit" name="addRowBtn" value="true" class="btn btn-primary">Add
-                                    Row</button>
-                            </td>
-                        </tr>
                     </tbody>
                 </table>
             </div>
@@ -91,3 +99,56 @@
         <a href="~/sales/salesinvoices" class="btn btn-sm btn-default btn-flat pull-left">Close</a>
     </div>
 </form>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        console.log('Page loaded. Adding event listeners.');
+
+        // Log Customer selection
+        document.getElementById('optCustomer').addEventListener('change', function () {
+            console.log('Customer selected:', this.value);
+        });
+
+        // Log Payment Term selection
+        document.getElementById('optPayment').addEventListener('change', function () {
+            console.log('Payment term selected:', this.value);
+        });
+
+        // Log Posted checkbox
+        document.getElementById('chkPosted').addEventListener('change', function () {
+            console.log('Posted checkbox state:', this.checked);
+        });
+
+        // Log table row changes
+        const invoiceTable = document.getElementById('invoiceLines');
+        invoiceTable.addEventListener('input', function (e) {
+            const target = e.target;
+            const index = target.getAttribute('data-index');
+
+            if (target.classList.contains('quantity-input')) {
+                console.log(`Row ${index} Quantity changed to:`, target.value);
+            } else if (target.classList.contains('amount-input')) {
+                console.log(`Row ${index} Amount changed to:`, target.value);
+            } else if (target.classList.contains('discount-input')) {
+                console.log(`Row ${index} Discount changed to:`, target.value);
+            }
+        });
+
+        // Log row selection changes
+        invoiceTable.addEventListener('change', function (e) {
+            const target = e.target;
+            const index = target.getAttribute('data-index');
+
+            if (target.classList.contains('item-select')) {
+                console.log(`Row ${index} Item selected:`, target.value);
+            } else if (target.classList.contains('measurement-select')) {
+                console.log(`Row ${index} Measurement selected:`, target.value);
+            }
+        });
+
+        // Log form submission
+        document.getElementById('salesInvoiceForm').addEventListener('submit', function (e) {
+            console.log('Form submitted.');
+        });
+    });
+</script>
