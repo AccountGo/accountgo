@@ -1,15 +1,16 @@
-<nav class='bg-darkPrimary text-white w-64 h-full overflow-auto dark:bg-darkSecondary dark:text-lightSecondary'>
+<div class='bg-darkPrimary text-white w-64 h-full overflow-auto dark:bg-darkSecondary dark:text-lightSecondary'>
+
     @await Html.PartialAsync("~/Views/Shared/Components/Logo.cshtml")
     @await Html.PartialAsync("~/Views/Shared/Components/DarkLightMode.cshtml")
-
-
-    <ul>
-        <li>
+    <nav class="flex flex-col justify-center">
+    <div class="p-5">
+        <li class="flex item-center text-lightPrimary hover:bg-lightPrimary ">
             <a class="nav-link" asp-area="" asp-controller="Quotations" asp-action="Quotations">
                 Sales Quotations
             </a>
         </li>
 
+        @* Account Receivable *@
         <li class='sub-menu'>
             <a href="javascript:;" onclick="document.location.hash='#settings';">
                 <div class="d-flex justify-content-start">
@@ -18,6 +19,7 @@
                     <div class='fa fa-caret-down ml-auto'></div>
                 </div>
             </a>
+        
             <ul>
                 <li>
                     <a class="nav-link" asp-area="" asp-controller="Sales" asp-action="SalesReceipts">
@@ -211,44 +213,6 @@
 
     <li><a href='#message'>Logout</a></li>
     </ul>
-</nav>
-
-<style>
-    /* 子菜单展开/收起的过渡效果 */
-    .parent:hover .child {
-        display: block;
-        opacity: 1;
-        visibility: visible;
-    }
-
-    .child {
-        opacity: 0;
-        visibility: hidden;
-        transition: all 0.3s ease-in-out;
-    }
-
-    /* 箭头旋转效果 */
-    .submenu-btn.active .fa-caret-down {
-        transform: rotate(180deg);
-    }
-</style>
-
-<script>
-    document.addEventListener('DOMContentLoaded', function () {
-        const submenuBtns = document.querySelectorAll('.submenu-btn');
-
-        submenuBtns.forEach(btn => {
-            btn.addEventListener('click', function () {
-                this.classList.toggle('active');
-                const submenu = this.nextElementSibling;
-                submenu.classList.toggle('hidden');
-                submenuBtns.forEach(otherBtn => {
-                    if (otherBtn !== this) {
-                        otherBtn.classList.remove('active');
-                        otherBtn.nextElementSibling.classList.add('hidden');
-                    }
-                });
-            });
-        });
-    });
-</script>
+    </div>
+    </nav>
+</div>
