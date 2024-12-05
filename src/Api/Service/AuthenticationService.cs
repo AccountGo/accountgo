@@ -67,7 +67,7 @@ namespace Api.Service
 
             _user = user;
 
-            return await CreateToken(populateExp: false);
+            return await CreateToken(populateExp: true);
         }
 
         private SigningCredentials GetSigningCredentials()
@@ -131,7 +131,7 @@ namespace Api.Service
                 ValidateIssuer = true,
                 ValidateIssuerSigningKey = true,
                 IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey!)),
-                ValidateLifetime = true,
+                ValidateLifetime = false,
                 ValidIssuer = validIssuer,
                 ValidAudience = validAudience
             };
