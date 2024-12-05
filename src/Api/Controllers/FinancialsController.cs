@@ -15,12 +15,14 @@ namespace Api.Controllers
     {
         private readonly IAdministrationService _adminService;
         private readonly IFinancialService _financialService;
+        private readonly IAccountService _accountService;
 
         public FinancialsController(IAdministrationService adminService,
-            IFinancialService financialService)
+            IFinancialService financialService, IAccountService accountService)
         {
             _adminService = adminService;
             _financialService = financialService;
+            _accountService = accountService;
         }
 
         [HttpGet]
@@ -357,10 +359,83 @@ namespace Api.Controllers
             }
         }
 
+        #region CRUD for Accounts
 
+        [HttpGet]
+        [Route("GetAccount/{accountCode}")]
+        public async Task<IActionResult> GetAccountByCode(string accountCode)
+        {
+            var account = await _accountService.GetAccountByCodeAsync(accountCode);
+            if (account == null)
+                return NotFound();
 
+            return Ok(new Account
+            {
+                AccountCode = account.AccountCode,
+                AccountName = account.AccountName,
+                Balance = account.Balance,
+                DebitBalance = account.DebitBalance,
+                CreditBalance = account.CreditBalance
+            });
+        }
 
-        #region Private Methods
+        [HttpPost]
+        [Route("AddAccount")]
+        public async Task<IActionResult> AddAccount([FromBody] Account newAccountDto)
+        {
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+
+            var newAccount = new Core.Domain.Financials.Account
+            {
+                AccountCode = newAccountDto.AccountCode,
+                AccountName = newAccountDto.AccountName,
+                // Balance = 0, // Initialize read-only fields
+                // DebitBalance = 0,
+                // CreditBalance = 0
+            };
+
+            var createdAccount = await _accountService.AddAccountAsync(newAccount);
+
+            return CreatedAtAction(nameof(GetAccountByCode), new { accountCode = createdAccount.AccountCode }, createdAccount);
+        }
+
+        [HttpPut]
+        [Route("UpdateAccount/{accountCode}")]
+        public async Task<IActionResult> UpdateAccount(string accountCode, [FromBody] Account updatedAccountDto)
+        {
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+
+            var updatedAccount = await _accountService.UpdateAccountAsync(accountCode, new Core.Domain.Financials.Account
+            {
+                AccountCode = updatedAccountDto.AccountCode,
+                AccountName = updatedAccountDto.AccountName,
+                // Balance = updatedAccountDto.Balance,
+                // DebitBalance = updatedAccountDto.DebitBalance,
+                // CreditBalance = updatedAccountDto.CreditBalance
+            });
+            if (updatedAccount == null)
+                return NotFound();
+
+            return Ok(updatedAccount);
+        }
+
+        [HttpDelete]
+        [Route("DeleteAccount/{accountCode}")]
+        public async Task<IActionResult> DeleteAccount(string accountCode)
+        {
+            var result = await _accountService.DeleteAccountAsync(accountCode);
+
+            if (result == null)
+                return NotFound();
+
+            return Ok(result);
+        }
+
+        #endregion
+
+        #region 
         private IList<Dto.Financial.Account> BuildAccountGrouping(IList<Core.Domain.Financials.Account> allAccounts,
         int? parentAccountId)
         {
