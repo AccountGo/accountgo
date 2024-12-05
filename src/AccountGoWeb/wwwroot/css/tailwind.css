@@ -1,0 +1,43 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+li {
+    list-style-type: none;
+}
+
+/* Hide scrollbar for all elements */
+.hidden-scrollbar {
+    overflow-y: scroll; /* Enables vertical scrolling */
+    -ms-overflow-style: none; /* Hides scrollbar in IE and Edge */
+    scrollbar-width: none; /* Hides scrollbar in Firefox */
+  }
+  
+  /* Hides scrollbar in Chrome, Safari, and Edge */
+  .hidden-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  li {
+    list-style: none;
+}
+  .disabled {
+    pointer-events: none;
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.ag-header-container{
+  border: 1px solid #ccc;
+  background-color: #134074;
+  color: #fff;
+}
+
+
+.dark .hover\:text-lightPrimary:hover {
+  color: var(--lightPrimary);
+}
+
+.dark .hover\:bg-darkPrimary:hover {
+  background-color: var(--darkPrimary);
+}

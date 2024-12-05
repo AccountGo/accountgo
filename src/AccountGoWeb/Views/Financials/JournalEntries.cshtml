@@ -1,27 +1,29 @@
 ﻿@model string
 
-<div>
-    <a href="~/financials/addjournalentry" class="btn">
-        <i class="fa fa-plus"></i>
-        New
-    </a>
-    <a href="~/financials/journalentry" id="linkViewJournalEntry" class="btn inactiveLink">
-        <i class="fa fa-edit"></i>
-        View
-    </a>
-</div>
-<div>
-    <div id="journalentries" class="ag-fresh" style="height: 400px;"></div>
+<div class="w-full grid grid-cols-1 gap-4">
+    <div class="flex gap-2 mb-4">
+        <a href="~/financials/addjournalentry" class="px-4 py-2 bg-darkSecondary text-white rounded hover:bg-opacity-90">
+            <i class="fa fa-plus"></i>
+            New
+        </a>
+        <a href="~/financials/journalentry" id="linkViewJournalEntry" class="px-4 py-2 bg-gray-400 text-white rounded disabled">
+            <i class="fa fa-edit"></i>
+            View
+        </a>
+    </div>
+    <div class="bg-white dark:bg-gray-800">
+        <div id="journalentries" class="ag-fresh overflow-hidden rounded-lg shadow-md border-2 border-gray-200" style="height: 400px;"></div>
+    </div>
 </div>
 <script>
     var columnDefs = [
-    {headerName: "Journal", field: "id", width: 50},
-    {headerName: "Voucher Type", field: "voucherType", width: 50},
-    {headerName: "Debit", field: "debitAmount", width: 50},
-    {headerName: "Credit", field: "creditAmount", width: 50},
-    {headerName: "Date", field: "journalDate", width: 100},
-    {headerName: "Reference No", field: "referenceNo", width: 50},
-    {headerName: "Posted", width: 100, cellRenderer: function(val) {
+    {headerName: "Journal", field: "id"},
+    {headerName: "Voucher Type", field: "voucherType"},
+    {headerName: "Debit", field: "debitAmount"},
+    {headerName: "Credit", field: "creditAmount"},
+    {headerName: "Date", field: "journalDate"},
+    {headerName: "Reference No", field: "referenceNo"},
+    {headerName: "Posted", cellRenderer: function(val) {
         if(val.data.posted)
             return '<input type="checkbox" checked disabled />';
         return '<input type="checkbox" disabled />';

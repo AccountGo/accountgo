@@ -1,28 +1,33 @@
 ﻿@model string
 
-<div>
-    <a href="~/sales/customer" class="btn">
-        <i class="fa fa-plus"></i>
-        New Customer
-    </a>
-    <a href="~/sales/customer" id="linkViewCustomer" class="btn inactiveLink">
-        <i class="fa fa-edit"></i>
-        View
-    </a>
-</div>
-<div>
-    <div id="customers" class="ag-fresh" style="height: 400px;"></div>
+<div class="w-full grid grid-cols-1 gap-4">
+    <div class="flex gap-2 mb-4">
+        <a href="~/sales/customer" class="px-4 py-2 bg-darkSecondary text-white rounded hover:bg-opacity-90">
+            <i class="fa fa-plus"></i>
+            New Customer
+        </a>
+        <a href="~/sales/customer" id="linkViewCustomer" class="px-4 py-2 bg-gray-400 text-white rounded disabled">
+            <i class="fa fa-edit"></i>
+            View
+        </a>
+    </div>
+    <div class="bg-white dark:bg-gray-800">
+        <div id="customers" class="ag-fresh overflow-hidden rounded-lg shadow-md border-2 border-gray-200"
+            style="height: 400px;"></div>
+    </div>
 </div>
 <script>
     var columnDefs = [
-        {headerName: "No", field: "no", width: 50, cellRenderer: function(params) {
-            return '<a href="customer/' + params.value + '">' + params.value + '</a>';
-        }},
-        {headerName: "Name", field: "name", width: 350},
-        {headerName: "Phone", field: "phone", width: 100},
-        {headerName: "Contact", field: "contact", width: 100},
-        {headerName: "TaxGroup", field: "taxGroup", width: 100},
-        {headerName: "Balance", field: "balance", width: 100}
+        {
+            headerName: "No", field: "no", width: 50, cellRenderer: function (params) {
+                return '<a href="customer/' + params.value + '">' + params.value + '</a>';
+            }
+        },
+        { headerName: "Name", field: "name", width: 350 },
+        { headerName: "Phone", field: "phone", width: 100 },
+        { headerName: "Contact", field: "contact", width: 100 },
+        { headerName: "TaxGroup", field: "taxGroup", width: 100 },
+        { headerName: "Balance", field: "balance", width: 100 }
     ];
 
     var gridOptions = {
@@ -38,12 +43,12 @@
         selectedRow = selectedRows[0];
 
         document.getElementById('linkViewCustomer').setAttribute('href', 'customer/' + selectedRow.id);
-        document.getElementById('linkViewCustomer').setAttribute('class', 'btn');
+        document.getElementById('linkViewCustomer').setAttribute('class', 'px-4 py-2 bg-darkSecondary text-white rounded hover:bg-opacity-90');
     }
 
     // wait for the document to be loaded, otherwise
     // ag-Grid will not find the div in the document.
-    document.addEventListener("DOMContentLoaded", function() {
+    document.addEventListener("DOMContentLoaded", function () {
         var eGridDiv = document.querySelector('#customers');
         new agGrid.Grid(eGridDiv, gridOptions);
     });

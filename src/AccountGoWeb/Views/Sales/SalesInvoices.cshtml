@@ -1,60 +1,36 @@
 ﻿@model string
 
-<style>
-    .ag-row-selected {
-        background-color: darkorange;
-        color: white;
-        border-color: aqua;
-        opacity: 0.9;
-    }
-</style>
-
-<div>
-    <a href="~/sales/addsalesinvoice" class="btn btn-outline-light">
-        <i class="fa fa-plus"></i>
-        New Invoice
-    </a>
-    <a href="~/sales/salesinvoice" id="linkEditInvoice" class="btn inactiveLink">
-        <i class="fa fa-edit"></i>
-        Edit
-    </a>
-        <a href="~/sales/deletesalesinvoice" id="linkDeleteInvoice" class="btn inactiveLink">
-        <i class="fa fa-trash"></i>
-        Delete
-    </a>
-</div>
-<div>
-    <div id="salesinvoices" class="ag-fresh" style="height: 400px;"></div>
-</div>
-
-@* Delete Modal*@
-<div class="modal" id="deleteSalesInvoice" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Delete</h5>
-                <button aria-label="Close" class="btn-close" data-bs-dismiss="modal" type="button"></button>
-            </div>
-            <div class="modal-body">
-                <p>Do you want to delete it?</p>
-                <input type="hidden" id="hdnselectedsalesInvoiceId" />
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-sm btn-primary btn-flat" onclick="deleteSalesInvoice()" type="button">Yes</button>
-                <button class="btn btn-sm btn-default btn-flat" data-bs-dismiss="modal" type="button">No</button>
-            </div>
-        </div>
+<div class="w-full grid grid-cols-1 gap-4">
+    <div class="flex gap-2 mb-4">
+        <a href="~/sales/addsalesinvoice" class="px-4 py-2 bg-darkSecondary text-white rounded hover:bg-opacity-90">
+            <i class="fa fa-plus"></i>
+            New Invoice
+        </a>
+        <a href="~/sales/salesinvoice" id="linkEditInvoice" class="px-4 py-2 bg-gray-400 text-white rounded disabled">
+            <i class="fa fa-edit"></i>
+            Edit
+        </a>
+        <a href="~/sales/deletesalesinvoice" id="linkDeleteInvoice"
+            class="px-4 py-2 bg-gray-400 text-white rounded disabled">
+            <i class="fa fa-trash"></i>
+            Delete
+        </a>
+    </div>
+    <input type="hidden" id="hdnselectedsalesInvoiceId" />
+    <div class="bg-white dark:bg-gray-800">
+        <div id="salesinvoices" class="ag-fresh overflow-hidden rounded-lg shadow-md border-2 border-gray-200"
+            style="height: 400px;"></div>
     </div>
 </div>
 
-@section scripts{
+@section scripts {
     <script>
         var columnDefs = [
             { headerName: "No", field: "no", width: 50 },
             { headerName: "Customer Name", field: "customerName", width: 200 },
             { headerName: "Invoiced Date", field: "invoiceDate", width: 250 },
             { headerName: "Amount", field: "amount", width: 100 },
-            { headerName: "Ref no", field: "referenceNo", width: 100 },
+            { headerName: "Ref no", field: "referenceNo", width: 200 },
             {
                 headerName: "Posted", width: 100, cellRenderer: function (val) {
                     if (val.data.posted)
@@ -75,16 +51,12 @@
 
         function onSelectionChanged() {
             var selectedRows = gridOptions.api.getSelectedRows();
-            selectedRow = selectedRows[0];
-            console.log(selectedRow);
+            var selectedRow = selectedRows[0];
+            var hdnInput = document.getElementById('hdnselectedsalesInvoiceId');
 
-            document.getElementById('linkEditInvoice').setAttribute('href', 'Sales/SalesInvoice?id=' + selectedRow.id);
-            document.getElementById('linkEditInvoice').setAttribute('class', 'btn btn-outline-light');
-
-            document.getElementById('linkDeleteInvoice').setAttribute('class', 'btn btn-outline-light');
-            document.getElementById('linkDeleteInvoice').setAttribute('data-bs-toggle', 'modal');
-            document.getElementById('linkDeleteInvoice').setAttribute('data-bs-target', '#deleteSalesInvoice');
-            $("#hdnselectedsalesInvoiceId").val(selectedRow.id);
+            if (selectedRow && hdnInput) {
+                hdnInput.value = selectedRow.id;
+            }
         }
 
         // wait for the document to be loaded, otherwise
@@ -96,9 +68,10 @@
 
 
         function deleteSalesInvoice() {
-            var salesInvoiceId = $("#hdnselectedsalesInvoiceId").val();
-            
-            location.href = '@Url.Action("DeleteSalesInvoice", "Sales")?id=' + salesInvoiceId;
+            var salesInvoiceId = document.getElementById('hdnselectedsalesInvoiceId').value;
+            if (salesInvoiceId) {
+                location.href = '@Url.Action("DeleteSalesInvoice", "Sales")?id=' + salesInvoiceId;
+            }
         }
     </script>
 }

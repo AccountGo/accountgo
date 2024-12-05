@@ -20,59 +20,51 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/simple-line-icons/2.5.5/css/simple-line-icons.min.css" rel="stylesheet">
     <!-- Main styles for this application-->
-    <link href="~/css/dark.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/pace-js@latest/pace-theme-default.min.css" rel="stylesheet">
+    @* <link href="~/css/dark.css" rel="stylesheet"> *@
+    <link href="/css/output.css" rel="stylesheet">
+    @* <link href="https://cdn.jsdelivr.net/npm/pace-js@latest/pace-theme-default.min.css" rel="stylesheet"> *@
 </head>
-<body class="app flex-row align-items-center">
-    <div class="container">
-        <div class="row justify-content-center">
-            <div class="col-md-4">
-                <div class="card-group">
-                    <div class="card p-4">
-                        <div class="card-body">
-                            <h1>AccountGo</h1>
-                            <p class="text-muted">Sign In to your account</p>
-                            <form action="/account/signin?returnurl=@ViewData["ReturnUrl"]" method="post">
-                                <div class="input-group mb-3">
-                                    <div class="input-group-prepend">
-                                        <span class="input-group-text">
-                                            <i class="icon-user"></i>
-                                        </span>
-                                    </div>
-                                    <input asp-for="Email" class="form-control" placeholder="admin@accoungo.ph">
-                                    <span class="glyphicon glyphicon-envelope form-control-feedback"></span>
-                                    <span asp-validation-for="Email" class="text-danger"></span>
-                                </div>
-                                <div class="input-group mb-4">
-                                    <div class="input-group-prepend">
-                                        <span class="input-group-text">
-                                            <i class="icon-lock"></i>
-                                        </span>
-                                    </div>
-                                    <input asp-for="Password" class="form-control" placeholder="P@ssword1">(P@ssword1)
-                                    <span class="glyphicon glyphicon-lock form-control-feedback"></span>
-                                    <span asp-validation-for="Password" class="text-danger"></span>
-                                </div>
-                                <div class="row">
-                                    <div class="col-6">
-                                        <button type="submit" class="btn btn-primary px-4">Login</button>
-                                    </div>
-                                    <!-- <div class="col-6 text-right">
-                                        <button type="button" class="btn btn-link px-0">Forgot password?</button>
-                                    </div> -->
-                                    <div class="col-xs-6">
-                                        <label>
-                                            <input asp-for="RememberMe"> @Html.DisplayNameFor(m => m.RememberMe)
-                                        </label>
-                                    </div>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
+
+<body class="flex items-center justify-center min-h-screen bg-darkPrimary">
+    <div class="w-full max-w-md bg-darkSecondary shadow-lg rounded-lg p-6 text-white border border-s-white">
+        <h1 class="text-2xl font-bold text-center mb-4">AccountGo</h1>
+        <p class="text-sm text-center mb-6">Sign In to your account</p>
+        <form action="/account/signin?returnurl=@ViewData["ReturnUrl"]" method="post" class="space-y-6">
+            <!-- Email -->
+            <div class="relative">
+                <label asp-for="Email" class="block font-medium mb-2">Email</label>
+                <div class="flex items-center border rounded-lg px-3 py-2 focus-within:ring-2 focus-within:ring-blue-500">
+                    <i class="icon-user text-gray-400"></i>
+                    <input asp-for="Email" class="flex-1 ml-2 outline-none placeholder-gray-400 bg-darkSecondary bg-opacity-50 border-0" placeholder="admin@accountgo.ph" />
                 </div>
+                <span asp-validation-for="Email" class="text-red-500 text-sm mt-1 block"></span>
             </div>
-        </div>
+
+            <!-- Password -->
+            <div class="relative">
+                <label asp-for="Password" class="block font-medium mb-2">Password</label>
+                <div class="flex items-center border rounded-lg px-3 py-2 focus-within:ring-2 focus-within:ring-blue-500">
+                    <i class="icon-lock text-gray-400"></i>
+                    <input asp-for="Password" type="password" class="flex-1 ml-2 outline-none placeholder-gray-400 bg-darkSecondary bg-opacity-50 border-0" placeholder="P@ssword1" />
+                </div>
+                <span asp-validation-for="Password" class="text-red-500 text-sm mt-1 block"></span>
+            </div>
+
+            <!-- Remember Me -->
+            <div class="flex items-center space-x-2">
+                <input asp-for="RememberMe" type="checkbox" class="w-4 h-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" />
+                <label class="text-sm">@Html.DisplayNameFor(m => m.RememberMe)</label>
+            </div>
+
+            <!-- Login Button -->
+            <div>
+                <button type="submit" class="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 focus:ring-2 focus:ring-blue-500">
+                    Login
+                </button>
+            </div>
+        </form>
     </div>
+
     <!-- Bootstrap and necessary plugins-->
     <script src="https://code.jquery.com/jquery-3.2.1.slim.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/popper.js@1.12.9/dist/umd/popper.min.js"></script>
@@ -81,4 +73,5 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.perfect-scrollbar/1.5.5/perfect-scrollbar.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@@coreui/coreui@4.3.2/dist/js/coreui.bundle.min.js"></script>
 </body>
+    
 </html>

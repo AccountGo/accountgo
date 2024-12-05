@@ -6,160 +6,123 @@
     tr td { color: #fff;  }
 </style>
 
-<div class="nav-tabs-custom">
+<div class="w-full grid grid-cols-1 gap-4">
+    <div class="nav-tabs-custom">
+        <ul class="nav nav-tabs">
+            <li class="active">
+                <a href="#tab_1" data-bs-toggle="tab">Taxes</a>
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+            </li>
+            <li>
+                <a href="#tab_2" data-bs-toggle="tab">Tax Groups</a>
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+            </li>
+            <li>
+                <a href="#tab_3" data-bs-toggle="tab">Item Tax Groups</a>
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+            </li>
+        </ul>
 
-    <ul class="nav nav-tabs">
-        <li class="active">
-            <a href="#tab_1" data-bs-toggle="tab">Taxes</a>
-            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-        </li>
-        <li>
-            <a href="#tab_2" data-bs-toggle="tab">Tax Groups</a>
-            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-        </li>
-        <li>
-            <a href="#tab_3" data-bs-toggle="tab">Item Tax Groups</a>
-            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-        </li>
-    </ul>
-
-    <div class="tab-content">
-
-        <div class="tab-pane" id="tab_1">
-            <div>
-                <a href="~/Tax/AddNewTax" class="btn btn-primary" style="margin-bottom: 2px;">
-                    <i class="fa fa-plus"></i>
-                    New Tax
-                </a>
+        <div class="tab-content">
+            <div class="tab-pane" id="tab_1">
+                <div class="flex gap-2 mb-4">
+                    <a href="~/Tax/AddNewTax" class="px-4 py-2 bg-darkSecondary text-white rounded hover:bg-opacity-90">
+                        <i class="fa fa-plus"></i>
+                        New Tax
+                    </a>
+                </div>
+                <div id="taxes" class="bg-white dark:bg-gray-800">
+                    <div class="overflow-hidden rounded-lg shadow-md border-2 border-gray-200">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Code</th>
+                                    <th>Name</th>
+                                    <th>Rate (%)</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var tax in Model.Taxes!)
+                                {
+                                    <tr>
+                                        <td>@tax.TaxCode</td>
+                                        <td>@tax.TaxName</td>
+                                        <td>@tax.Rate</td>
+                                        <td>
+                                            <button class="taxId px-4 py-2 bg-blue-500 text-white rounded hover:bg-opacity-90" onclick="updateTax(@tax.Id)">Edit</button>
+                                            <button id="@tax.Id" class="taxId px-4 py-2 bg-red-500 text-white rounded hover:bg-opacity-90" data-bs-toggle="modal" data-bs-target="#deleteTax">Delete</button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
-            <div id="taxes" class="box-body table-responsive">
-                <table class="table table-hover">
-                    <thead>
-                        <tr>
-                            <th>Code</th>
-                            <th>Name</th>
-                            <th>Rate (%)</th>
-                            <th>Action</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var tax in Model.Taxes!)
-                        {
-                            <tr>
-                                <td>@tax.TaxCode</td>
-                                <td>@tax.TaxName</td>
-                                <td>@tax.Rate</td>
-                                <td>
-                                    <button class="taxId btn btn-sm btn-info btn-flat" onclick="updateTax(@tax.Id)">Edit</button>
-                                    <button id="@tax.Id" class="taxId btn btn-sm btn-danger btn-flat" data-bs-toggle="modal" data-bs-target="#deleteTax">Delete</button>
-                                </td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
-        </div>
 
-        <div class="tab-pane" id="tab_2">
-            <div id="taxGroups" class="box-body table-responsive">
-                <table class="table table-hover">
-                    <thead>
-                        <tr>
-                            <th>Description</th>
-                            <th>Tax Applied To Shipping</th>
-                            <th>Active</th>
-                            <th>Action</th>
-                        </tr>
-                    </thead>
-                    <tbody data-bind="foreach: model.TaxGroups">
-                        <tr data-bind="click: $root.selectTaxGroup">
-                            <td>
-                                <input data-bind="value:Description" readonly="readonly" type="text"/>
-                            </td>
-                            <td>
-                                <input data-bind="checked:TaxAppliedToShipping" type="checkbox" />
-                            </td>
-                            <td>
-                                <input data-bind="checked:IsActive" type="checkbox" />
-                            </td>
-                            <td>
-                                <button class="btn btn-sm btn-danger btn-flat" data-bind="click: $root.clickTaxGroup" data-bs-toggle="modal" data-bs-target="#deleteTaxGroup">Delete</button>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
+            <div class="tab-pane" id="tab_2">
+                <div id="taxGroups" class="bg-white dark:bg-gray-800">
+                    <div class="overflow-hidden rounded-lg shadow-md border-2 border-gray-200">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Description</th>
+                                    <th>Tax Applied To Shipping</th>
+                                    <th>Active</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody data-bind="foreach: model.TaxGroups">
+                                <tr data-bind="click: $root.selectTaxGroup">
+                                    <td>
+                                        <input data-bind="value:Description" readonly="readonly" type="text"/>
+                                    </td>
+                                    <td>
+                                        <input data-bind="checked:TaxAppliedToShipping" type="checkbox" />
+                                    </td>
+                                    <td>
+                                        <input data-bind="checked:IsActive" type="checkbox" />
+                                    </td>
+                                    <td>
+                                        <button class="btn btn-sm btn-danger btn-flat" data-bind="click: $root.clickTaxGroup" data-bs-toggle="modal" data-bs-target="#deleteTaxGroup">Delete</button>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
-            <div data-bind="if:model.selectedTaxGroup">
-                Tax(es) included: <span data-bind="text: model.selectedTaxGroup().Taxes().length"></span>
-                <div id="taxGroupsIncludedTaxes" class="box-body table-responsive">
-                    <table class="table table-hover">
-                        <thead>
-                            <tr>
-                                <th>Code</th>
-                                <th>Name</th>
-                                <th>Rate (%)</th>
-                            </tr>
-                        </thead>
-                        <tbody data-bind="foreach: model.selectedTaxGroup().Taxes()">
-                            <tr>
-                                <td><span data-bind="text: $root.taxDetail(TaxId()).TaxCode"></span></td>
-                                <td><span data-bind="text: $root.taxDetail(TaxId()).TaxName"></span></td>
-                                <td><span data-bind="text: $root.taxDetail(TaxId()).Rate"></span></td>
-                            </tr>
-                        </tbody>
-                    </table>
+
+            <div class="tab-pane" id="tab_3">
+                <div id="itemTaxGroups" class="bg-white dark:bg-gray-800">
+                    <div class="overflow-hidden rounded-lg shadow-md border-2 border-gray-200">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Fully Exempt</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody data-bind="foreach: model.ItemTaxGroups">
+                                <tr data-bind="click: $root.selectItemTaxGroup">
+                                    <td>
+                                        <input data-bind="value:Name" type="text" readonly="readonly" />
+                                    </td>
+                                    <td>
+                                        <input data-bind="checked:IsFullyExempt" type="checkbox" />
+                                    </td>
+                                    <td>
+                                        <button class="btn btn-sm btn-danger btn-flat" data-bind="click: $root.clickItemTaxGroup" data-bs-toggle="modal" data-bs-target="#deleteItemTaxGroup">Delete</button>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
-
-        <div class="tab-pane" id="tab_3">
-            <div id="itemTaxGroups" class="box-body table-responsive">
-                <table class="table table-hover">
-                    <thead>
-                        <tr>
-                            <th>Name</th>
-                            <th>Fully Exempt</th>
-                            <th>Action</th>
-                        </tr>
-                    </thead>
-                    <tbody data-bind="foreach: model.ItemTaxGroups">
-                        <tr data-bind="click: $root.selectItemTaxGroup">
-                            <td>
-                                <input data-bind="value:Name" type="text" readonly="readonly" />
-                            </td>
-                            <td>
-                                <input data-bind="checked:IsFullyExempt" type="checkbox" />
-                            </td>
-                            <td>
-                                <button class="btn btn-sm btn-danger btn-flat" data-bind="click: $root.clickItemTaxGroup" data-bs-toggle="modal" data-bs-target="#deleteItemTaxGroup">Delete</button>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-            <div data-bind="if:model.selectedItemTaxGroup">
-                Tax(es) included: <span data-bind="text: model.selectedItemTaxGroup().Taxes().length"></span>
-                <div id="itemTaxGroupsIncludedTaxes" class="box-body table-responsive">
-                    <table class="table table-hover">
-                        <thead>
-                            <tr>
-                                <th>Code</th>
-                                <th>Name</th>
-                                <th>Rate (%)</th>
-                            </tr>
-                        </thead>
-                        <tbody data-bind="foreach: model.selectedItemTaxGroup().Taxes()">
-                            <tr>
-                                <td><span data-bind="text: $root.taxDetail(TaxId()).TaxCode"></span></td>
-                                <td><span data-bind="text: $root.taxDetail(TaxId()).TaxName"></span></td>
-                                <td><span data-bind="text: $root.taxDetail(TaxId()).Rate"></span></td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-
     </div>
 </div>
 

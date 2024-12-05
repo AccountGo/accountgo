@@ -62,34 +62,35 @@
                     <th>Measurement</th>
                     </thead>
                     <tbody>
-                    @for (int i = 0; i < Model.SalesQuotationLines.Count; i++) {
-                        <tr>
-                            <td>
-                                <select class="form-control" asp-for="@Model.SalesQuotationLines[i].ItemId" asp-items="@ViewBag.Items"
-                                        id="optCustomer" required>
-                                </select>
-                                <span asp-validation-for="@Model.SalesQuotationLines[i].ItemId" class="danger"></span>
-                            </td>
-                            <td>
-                                <input class="form-control" asp-for="@Model.SalesQuotationLines[i].Quantity" type="text" placeholder="0.0 ..." required/>
-                                <span asp-validation-for="@Model.SalesQuotationLines[i].Quantity" class="danger"></span>
-                            </td>
-                            <td>
-                                <input class="form-control" asp-for="@Model.SalesQuotationLines[i].Amount" type="text" placeholder="0.0 ..." required/>
-                                <span asp-validation-for="@Model.SalesQuotationLines[i].Amount" class="danger"></span>
-                            </td>
-                            <td>
-                                <input class="form-control" asp-for="@Model.SalesQuotationLines[i].Discount" type="text" placeholder="0.0 ..." required/>
-                                <span asp-validation-for="@Model.SalesQuotationLines[i].Discount" class="danger"></span>
-                            </td>
-                            <td>
-                                <select class="form-control" asp-for="@Model.SalesQuotationLines[i].MeasurementId" asp-items="@ViewBag.Measurements"
-                                        id="optCustomer" required>
-                                </select>
-                                <span asp-validation-for="@Model.SalesQuotationLines[i].MeasurementId" class="danger"></span>
-                            </td>
-                        </tr>
-                    }
+                        @for (int i = 0; i < Model.SalesQuotationLines.Count; i++)
+                        {
+                            <tr>
+                                <td>
+                                    <select class="form-control" asp-for="@Model.SalesQuotationLines[i].ItemId" asp-items="@ViewBag.Items"
+                                            id="optCustomer" required>
+                                    </select>
+                                    <span asp-validation-for="@Model.SalesQuotationLines[i].ItemId" class="danger"></span>
+                                </td>
+                                <td>
+                                    <input class="form-control" asp-for="@Model.SalesQuotationLines[i].Quantity" type="text" placeholder="0.0 ..." required/>
+                                    <span asp-validation-for="@Model.SalesQuotationLines[i].Quantity" class="danger"></span>
+                                </td>
+                                <td>
+                                    <input class="form-control" asp-for="@Model.SalesQuotationLines[i].Amount" type="text" placeholder="0.0 ..." required/>
+                                    <span asp-validation-for="@Model.SalesQuotationLines[i].Amount" class="danger"></span>
+                                </td>
+                                <td>
+                                    <input class="form-control" asp-for="@Model.SalesQuotationLines[i].Discount" type="text" placeholder="0.0 ..." required/>
+                                    <span asp-validation-for="@Model.SalesQuotationLines[i].Discount" class="danger"></span>
+                                </td>
+                                <td>
+                                    <select class="form-control" asp-for="@Model.SalesQuotationLines[i].MeasurementId" asp-items="@ViewBag.Measurements"
+                                            id="optCustomer" required>
+                                    </select>
+                                    <span asp-validation-for="@Model.SalesQuotationLines[i].MeasurementId" class="danger"></span>
+                                </td>
+                            </tr>
+                        }
                     </tbody>
                 </table>
             </div>
@@ -101,22 +102,22 @@
     </div>
 </form>
 
-@section scripts{
-    <script src="~/js/custom.js" type="text/javascript"></script>
-    <script>
+@section scripts {
+        <script src="~/js/custom.js" type="text/javascript"></script>
+        <script>
 
-        if (@Model.Id > 0) {
-            setFormDisabled("divSalesQuotationCard");
-        }
-        else {
-            document.getElementById("linkEdit").className = document.getElementById("linkEdit").className + " btn inactiveLink";
-            document.getElementById("btnSave").className = "btn btn-sm btn-primary btn-flat pull-left";
-        }
+            if (@Model.Id > 0) {
+                setFormDisabled("divSalesQuotationCard");
+            }
+            else {
+                document.getElementById("linkEdit").className = document.getElementById("linkEdit").className + " btn inactiveLink";
+                document.getElementById("btnSave").className = "btn btn-sm btn-primary btn-flat pull-left";
+            }
 
-        function onClickEditButton() {
-            document.getElementById("linkEdit").className = document.getElementById("linkEdit").className + " disabledControl";
-            document.getElementById("btnSave").className = "btn btn-sm btn-primary btn-flat pull-left";
-            setFormEnabled("divSalesQuotationCard");
-        }
-    </script>
+            function onClickEditButton() {
+                document.getElementById("linkEdit").className = document.getElementById("linkEdit").className + " disabledControl";
+                document.getElementById("btnSave").className = "btn btn-sm btn-primary btn-flat pull-left";
+                setFormEnabled("divSalesQuotationCard");
+            }
+        </script>
 }

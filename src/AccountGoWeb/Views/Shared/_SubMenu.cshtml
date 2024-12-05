@@ -1,0 +1,25 @@
+@using AccountGoWeb.Models.SubMenu
+@model SubMenuModel
+
+<li>
+    <div class="group">
+        <a href="#" class="flex items-center px-4 py-3 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg">
+            <i class="fa fa-@Model.Icon mr-3"></i>
+            <span>@Model.MenuTitle</span>
+        </a>
+        @if (Model.MenuItems?.Any() == true)
+        {
+            <ul class="ml-5 mt-2">
+                @foreach (var item in Model.MenuItems)
+                {
+                    <li>
+                        <a href="@Url.Action(item.Action, item.Controller)"
+                           class="block px-3 py-2 hover:bg-gray-300 dark:hover:bg-gray-600">
+                            @item.Text
+                        </a>
+                    </li>
+                }
+            </ul>
+        }
+    </div>
+</li>

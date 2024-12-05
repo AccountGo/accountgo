@@ -103,20 +103,20 @@ dotnet-ef       3.1.6        dotnet-ef
 
 If publishing database for the first time or there are changes made to the models, use EntityFrameworkCore CLI database migration to create an update migration to keep the `accountgodb` database updated.
 
-In root folder `accountgo` run the following command using a terminal, command prompt, or package manager console:
+Create the migration scripts by going into the root folder and running the following commands using a terminal, command prompt, or package manager console:
 
-1. `dotnet ef migrations add {Name} --project ./src/Api/ --startup-project ./src/Api/Api.csproj --msbuildprojectextensionspath .build/obj/Api/ --context ApplicationIdentityDbContext --output-dir Data/Migrations/IdentityDb`
-1. `dotnet ef migrations add {Name} --project ./src/Api/ --startup-project ./src/Api/Api.csproj --msbuildprojectextensionspath .build/obj/Api/ --context ApiDbContext --output-dir Data/Migrations/ApiDb`
+1. `dotnet ef migrations add M1_Identity --project ./src/Api/ --startup-project ./src/Api/Api.csproj --msbuildprojectextensionspath .build/obj/Api/ --context ApplicationIdentityDbContext --output-dir Data/Migrations/IdentityDb`
+2. `dotnet ef migrations add M1_Api --project ./src/Api/ --startup-project ./src/Api/Api.csproj --msbuildprojectextensionspath .build/obj/Api/ --context ApiDbContext --output-dir Data/Migrations/ApiDb`
 
-Note: `{Name}` must be provided. For example the name can be "InitialMigration". The above command will create migration scripts. Obviously, if you are doing this for the first time, the migration scripts contains all tables. Make you can connect to your database since the EF will connect to that and check for existing database and tables.
+Note: Connection to the database is required as EF will check for its existence and tables. If this is the first run, the migration scripts will contain all tables.
 
-Then to actually publish, In root folder `accountgo` run the following command using a terminal, command prompt, or package manager console:
+Publish by going to the root folder and running the following commands:
 
 1. `dotnet ef database update --project ./src/Api/ --msbuildprojectextensionspath .build/obj/Api/ --context ApplicationIdentityDbContext`
 2. `dotnet ef database update --project ./src/Api/ --msbuildprojectextensionspath .build/obj/Api/ --context ApiDbContext`
 
 ### Initialize Data
-At this point, your database has no data on it. But there is already an initial username and password (admin@accountgo.ph/P@ssword1) and you can logon to the UI. Now lets, create some initial data that would populate the following models.
+The database will be empty. We will now initialize data to populate the following models:
 - Company
 - Chart of accounts/account classes
 - Financial year
@@ -129,6 +129,10 @@ At this point, your database has no data on it. But there is already an initial 
 - Banks
 
 To initialize a company, call the api endpoint directly http://localhost:8001/api/administration/setup from the browser or by using curl e.g. `curl http://localhost:8001/api/administration/setup`. If you encounter some issues, the easy way for now is recreate your database and repeat the `Publish Database` section.
+
+Initialize the admin user by running `db\scripts\initial_data\3_InitialData-0001-Security.sql` in the database. The admin user has the following credentials:
+`admin@accountgo.ph`
+`P@ssword1`
 
 ## Build and Run "Api" (Back-end)
 1. Navigate directory to `src/Api` project

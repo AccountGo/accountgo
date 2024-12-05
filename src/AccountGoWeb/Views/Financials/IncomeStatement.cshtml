@@ -1,58 +1,74 @@
 ﻿@model ICollection<AccountGoWeb.Models.IncomeStatement>
+
 @{
-    ViewBag.Title = "IncomeStatement";
-    Layout = "~/Views/Shared/_Layout_bootstrap.cshtml";
-    @* var netIncome = Model.Where(a => a.IsExpense == false).Sum(a => a.Amount) - Model.Where(a => a.IsExpense == true).Sum(a => a.Amount); *@
-    var netIncome = 100;
+
+    var netIncome = Model?.Where(a => !a.IsExpense).Sum(a => a.Amount) ?? 0 -
+    Model?.Where(a => a.IsExpense).Sum(a => a.Amount) ?? 0;
 }
 
-<h2>Income Statement</h2>
+@if (ViewBag.Error != null)
+{
+            <div class="alert alert-danger">@ViewBag.Error</div>
+}
+else if (Model == null || !Model.Any())
+{
+            <p>No data available to display.</p>
+}
+else
+{
+            <div class="w-full grid grid-cols-1 gap-42">
+                <div class="dark:bg-gray-800 shadow-md rounded-lg">
+                    <div class="overflow-w-auto w-full mb-6 text-darkPrimary rounded-lg overflow-hidden">
+                        <table class="w-full table-auto border-collapse bg-white shadow-md text-darkPrimary">
+                            <thead class="dark:bg-lightPrimary bg-darkSecondary text-white text-sm uppercase font-semibold">
+                                <tr>
+                                    <th class="p-4 border w-1/4 text-center">Account Code</th>
+                                    <th class="p-4 border w-2/4 text-center">Account Name</th>
+                                    <th class="p-4 border w-1/4 text-center">Amount</th>
+                                </tr>
+                            </thead>
+                    @foreach (var item in Model.Where(a => !a.IsExpense))
+                    {
+                                        <tr class="text-sm uppercase font-semibold hover:bg-slate-100">
+                                            <td class="p-4 border w-1/4">@Html.ActionLink(item.AccountCode, "Account", new { id = item.AccountId }, new { @class = "hover:text-blue-600" })</td>
+                                            <td class="p-4 border w-2/4">@item.AccountName</td>
+                                            <td class="p-4 border w-1/4">@item.Amount</td>
+                                        </tr>
+                    }
+                            <tr class="font-bold">
+                                <td colspan="2" class="p-4 border">Total Revenues</td>
+                                <td class="p-4 border text-right">@Model.Where(a => !a.IsExpense).Sum(a => a.Amount)</td>
+                            </tr>
+                        </table>
+                    </div>
 
-<div style="text-align: center">
-    <h3>Income Statement</h3>
-</div>
-<div>
-    <table class="table">
-        <tr style="font-weight: bold;">
-            <td>Account Code</td>
-            <td>Account Name</td>
-            <td style="text-align: right">Amount</td>
-        </tr>
-        @foreach (var asset in Model.Where(a => a.IsExpense == false))
-        {
-            <tr>
-                <td>@Html.ActionLink((string)string.Format("{0}", asset.AccountCode), "account", new { id = asset.AccountId })</td>
-                <td>@asset.AccountName</td>
-                <td style="text-align: right">@asset.Amount</td>
-            </tr>
-        }
-        <tr style="font-weight: bold;">
-            <td colspan="2">Total Revenues</td>
-            <td style="text-align: right">@Model.Where(a => a.IsExpense == false).Sum(a => a.Amount)</td>
-        </tr>
-    </table>
-</div>
-<div>
-    <table class="table">
-        <tr style="font-weight: bold;">
-            <td>Account Code</td>
-            <td>Account Name</td>
-            <td style="text-align: right">Amount</td>
-        </tr>
-        @foreach (var asset in Model.Where(a => a.IsExpense == true))
-        {
-            <tr>
-                <td>@Html.ActionLink((string)string.Format("{0}", asset.AccountCode), "account", new { id = asset.AccountId })</td>
-                <td>@asset.AccountName</td>
-                <td style="text-align: right">@asset.Amount</td>
-            </tr>
-        }
-        <tr style="font-weight: bold;">
-            <td colspan="2">Total Expenses</td>
-            <td style="text-align: right">@Model.Where(a => a.IsExpense == true).Sum(a => a.Amount)</td>
-        </tr>
-    </table>
-</div>
-<div style="text-align: right; font-weight: bold; font-size: large">
-    Net Income: @netIncome
-</div>
+                    <div class="overflow-w-auto w-full mb-6 text-darkPrimary rounded-lg overflow-hidden">
+                        <table class="w-full table-auto border-collapse bg-white shadow-md text-darkPrimary">
+                            <thead class="dark:bg-lightPrimary bg-darkSecondary text-white text-sm uppercase font-semibold">
+                                <tr>
+                                    <th class="p-4 border w-1/4 text-center">Account Code</th>
+                                    <th class="p-4 border w-2/4 text-center">Account Name</th>
+                                    <th class="p-4 border w-1/4 text-center">Amount</th>
+                                </tr>
+                            </thead>
+                    @foreach (var item in Model.Where(a => a.IsExpense))
+                    {
+                                        <tr class="text-sm uppercase font-semibold hover:bg-slate-100">
+                                            <td class="p-4 border w-1/4">@Html.ActionLink(item.AccountCode, "Account", new { id = item.AccountId }, new { @class = "hover:text-blue-600" })</td>
+                                            <td class="p-4 border w-2/4">@item.AccountName</td>
+                                            <td class="p-4 border w-1/4">@item.Amount</td>
+                                        </tr>
+                    }
+                            <tr class="font-bold">
+                                <td colspan="2" class="p-4 border">Total Expenses</td>
+                                <td class="p-4 border text-right">@Model.Where(a => a.IsExpense).Sum(a => a.Amount)</td>
+                            </tr>
+                        </table>
+                    </div>
+
+                    <div class="p-4 text-right font-bold text-lg">
+                        Net Income: @netIncome
+                    </div>
+                </div>
+            </div>
+}

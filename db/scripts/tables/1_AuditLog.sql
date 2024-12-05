@@ -8,7 +8,8 @@ CREATE TABLE [dbo].[AuditLog] (
    [RecordId] [nvarchar](100) NOT NULL,
    [FieldName] [nvarchar](100) NOT NULL,
    [OriginalValue] [nvarchar](max) NULL,
-   [NewValue] [nvarchar](max) NULL
+   [NewValue] [nvarchar](max) NULL,
+   [IPAddress] [nvarchar](50) NULL
 
    ,CONSTRAINT [PK_AuditLog] PRIMARY KEY CLUSTERED ([Id])
 )

@@ -1,13 +1,12 @@
 ﻿@model string
 
 <style>
-    /* Highlight the selected row with a light blue background */
-    .ag-row-selected {
-        background-color: #d0e7ff !important;
-        color: #333 !important;
+    tr th {
+        color: #fff;
     }
-    .ag-row:hover {
-        background-color: #98939e;
+
+    tr td {
+        color: #fff;
     }
 </style>
 
@@ -16,10 +15,11 @@
         <i class="fa fa-plus"></i>
         New Receipt
     </a>
-    <a href="~/sales/allocate/" id="linkAllocate" class="btn inactiveLink">
+    <a href="#" id="linkAllocate" class="btn inactiveLink">
         <i class="fa fa-tasks"></i>
         Allocate
     </a>
+
     <a href="~/sales/SalesReceipt" id="linkViewReceipt" class="btn inactiveLink">
         <i class="fa fa-edit"></i>
         View
@@ -27,47 +27,80 @@
 </div>
 <div>
     <div id="receipts" class="ag-fresh" style="height: 400px;"></div>
+<div class="w-full grid grid-cols-1 gap-4">
+    <div class="flex gap-2 mb-4">
+        <a href="~/sales/addreceipt" class="px-4 py-2 bg-darkSecondary text-white rounded hover:bg-opacity-90">
+            <i class="fa fa-plus"></i>
+            New Receipt
+        </a>
+        <a href="~/sales/allocate/" id="linkAllocate" class="px-4 py-2 bg-gray-400 text-white rounded disabled">
+            <i class="fa fa-tasks"></i>
+            Allocate
+        </a>
+        <a href="~/sales/SalesReceipt" id="linkViewReceipt" class="px-4 py-2 bg-gray-400 text-white rounded disabled">
+            <i class="fa fa-edit"></i>
+            View
+        </a>
+    </div>
+    <div class="bg-white dark:bg-gray-800">
+        <div id="receipts" class="ag-fresh overflow-hidden rounded-lg shadow-md border-2 border-gray-200"
+            style="height: 400px;"></div>
+    </div>
 </div>
 
 <script>
     var selectedRow = {};
 
     var columnDefs = [
-        {headerName: "Receipt", field: "id", width: 50},
-        {headerName: "No", field: "receiptNo", width: 50},
-        {headerName: "Customer Name", field: "customerName", width: 350},
-        {headerName: "Receipt Date", field: "receiptDate", width: 100},
-        {headerName: "Amount", field: "amount", width: 100},
-        {headerName: "Left to Allocate", field: "remainingAmountToAllocate", width: 100}
+        { headerName: "Receipt", field: "id" },
+        { headerName: "No", field: "receiptNo" },
+        { headerName: "Customer Name", field: "customerName" },
+        { headerName: "Receipt Date", field: "receiptDate" },
+        { headerName: "Amount", field: "amount" },
+        { headerName: "Left to Allocate", field: "remainingAmountToAllocate" }
     ];
 
     var gridOptions = {
         columnDefs: columnDefs,
         rowData: @Html.Raw(Model),
         enableSorting: true,
-        // PROPERTIES - simple boolean / string / number properties
         rowSelection: 'single',
         onSelectionChanged: onSelectionChanged,
+        suppressColumnVirtualisation: true,
+        suppressRowVirtualisation: true,
+        domLayout: 'autoHeight'
     };
 
     function onSelectionChanged() {
+        console.log("Selection changed");
+
+        // Get all selected rows
         var selectedRows = gridOptions.api.getSelectedRows();
+        console.log("Selected rows:", selectedRows);
+
+        if (!selectedRows.length) {
+            console.log("No row selected");
+            return; // Exit if no row is selected
+        }
+
+        // Get the selected row
         selectedRow = selectedRows[0];
 
         document.getElementById('linkAllocate').setAttribute('href', 'allocate/' + selectedRow.id);
         document.getElementById('linkViewReceipt').setAttribute('href', 'SalesReceipt?id=' + selectedRow.id);
-        document.getElementById('linkViewReceipt').setAttribute('class', 'btn');
-        
-        if(selectedRow.remainingAmountToAllocate > 0)
-            document.getElementById('linkAllocate').setAttribute('class', 'btn');
+        document.getElementById('linkViewReceipt').setAttribute('class', 'px-4 py-2 bg-darkSecondary text-white rounded hover:bg-opacity-90');
+
+        if (selectedRow.remainingAmountToAllocate > 0)
+            document.getElementById('linkAllocate').setAttribute('class', 'px-4 py-2 bg-darkSecondary text-white rounded hover:bg-opacity-90');
         else
-            document.getElementById('linkAllocate').setAttribute('class', 'btn inactiveLink');
+            document.getElementById('linkAllocate').setAttribute('class', 'px-4 py-2 bg-gray-400 text-white rounded cursor-not-allowed');
     }
 
     // wait for the document to be loaded, otherwise
     // ag-Grid will not find the div in the document.
-    document.addEventListener("DOMContentLoaded", function() {
+    document.addEventListener("DOMContentLoaded", function () {
         var eGridDiv = document.querySelector('#receipts');
         new agGrid.Grid(eGridDiv, gridOptions);
+        console.log("ag-Grid initialized");
     });
 </script>

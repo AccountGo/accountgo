@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <partial name="_Head" />
+</head>
+<body class="bg-lightSecondary text-darkPrimary dark:bg-darkPrimary dark:text-lightSecondary overflow-y-hidden">
+    <div class="flex h-screen">
+        <partial name="_LeftNavigation" />
+        <div class="flex-1 p-5 h-screen relative">
+            <div class="overflow-y-auto max-h-[calc(100vh-100px)] hidden-scrollbar text-base">
+                <!-- PAGE CONTENT -->
+                <h2 class="text-2xl font-bold text-center py-4 mb-4">
+                    @Html.Raw(ViewBag.PageContentHeader)
+                </h2>
+                @RenderBody()
+                <!-- /PAGE CONTENT -->
+            </div>
+        </div>
+        </aside>
+    </div>
+    <script src="~/_framework/blazor.server.js"></script>
+    <script src="https://code.jquery.com/jquery-3.4.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.12.9/dist/umd/popper.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/pace-js@latest/pace.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.perfect-scrollbar/1.5.5/perfect-scrollbar.js"></script>
+
+    <script src="https://cdn.jsdelivr.net/npm/@@coreui/coreui@4.3.2/dist/js/coreui.bundle.min.js"></script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ag-grid/31.0.1/ag-grid-community.min.js"></script>
+    <script>
+        $('.sub-menu ul').hide();
+        $(".sub-menu a").click(function () {
+            $(this).parent(".sub-menu").children("ul").slideToggle("100");
+            $(this).find(".right").toggleClass("fa-caret-up fa-caret-down");
+        });
+        document.addEventListener('DOMContentLoaded', function () {
+            const themeToggleBtn = document.getElementById('theme-toggle');
+            const lightIcon = document.getElementById('light-icon');
+            const darkIcon = document.getElementById('dark-icon');
+            const html = document.documentElement;
+
+            if (localStorage.getItem('theme') === 'dark' ||
+                (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                html.classList.add('dark');
+                lightIcon.classList.remove('hidden');
+                darkIcon.classList.add('hidden');
+            } else {
+                html.classList.remove('dark');
+                lightIcon.classList.add('hidden');
+                darkIcon.classList.remove('hidden');
+            }
+
+            themeToggleBtn.addEventListener('click', function () {
+                if (html.classList.contains('dark')) {
+                    html.classList.remove('dark');
+                    localStorage.setItem('theme', 'light');
+                    lightIcon.classList.add('hidden');
+                    darkIcon.classList.remove('hidden');
+                } else {
+                    html.classList.add('dark');
+                    localStorage.setItem('theme', 'dark');
+                    lightIcon.classList.remove('hidden');
+                    darkIcon.classList.add('hidden');
+                }
+                console.log(html.classList);
+            });
+        });
+    </script>
+    <!-- PLugins and scripts required by the views -->
+    @RenderSection("Scripts", required: false)
+</body>
+
+</html>

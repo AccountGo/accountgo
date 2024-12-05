@@ -1,37 +1,42 @@
 ﻿@model ICollection<AccountGoWeb.Models.TrialBalance>
 @{
     ViewBag.Title = "TrialBalance";
-    Layout = "~/Views/Shared/_Layout_bootstrap.cshtml";
 }
-<div style="text-align: center">
-    <h3>
-        <label>Trial Balance as at</label>
-        <br />
-        @DateTime.Now.ToShortDateString()
-    </h3>
-</div>
-<div>
-    <table class="table">
-        <tr style="font-weight: bold;">
-            <td>Account Code</td>
-            <td>Account Name</td>
-            <td style="text-align: right;">Debit</td>
-            <td style="text-align: right;">Credit</td>
-        </tr>
-        @foreach (var account in Model)
-        {
-            <tr>
-                <td>@Html.ActionLink((string)string.Format("{0}", account.AccountCode), "account", new { id = account.AccountId })</td>
-                <td>@account.AccountName</td>
-                <td style="text-align: right;">@account.Debit</td>
-                <td style="text-align: right;">@account.Credit</td>
-            </tr>
-        }
-        <tr style="font-weight: bold; text-align: right;">
-            <td></td>
-            <td>Total</td>
-            <td>@Model.Sum(m => m.Debit)</td>
-            <td>@Model.Sum(m => m.Credit)</td>
-        </tr>
-    </table>
+<div class="w-full grid grid-cols-1 gap-42">
+    <div class="dark:bg-gray-800 shadow-md">
+        <div class="text-center mb-6">
+            <h3>
+                <label>Trial Balance as at</label>
+                <br />
+                @DateTime.Now.ToShortDateString()
+            </h3>
+        </div>
+
+        <div class="overflow-w-auto w-full mb-6 text-darkPrimary rounded-lg overflow-hidden">
+            <table class="w-full table-auto border-collapse bg-white shadow-md text-darkPrimary">
+                <thead class="dark:bg-lightPrimary bg-darkSecondary text-white text-sm uppercase font-semibold">
+                    <tr>
+                        <th class="p-4 border w-1/4 text-center">Account Code</th>
+                        <th class="p-4 border w-2/4 text-center">Account Name</th>
+                        <th class="p-4 border w-1/4 text-center">Debit</th>
+                        <th class="p-4 border w-1/4 text-center">Credit</th>
+                    </tr>
+                </thead>
+                @foreach (var account in Model)
+                {
+                            <tr class="text-sm uppercase font-semibold hover:bg-slate-100">
+                                <td class="p-4 border w-1/4">@Html.ActionLink((string)string.Format("{0}", account.AccountCode), "account", new { id = account.AccountId }, new { @class = "hover:text-blue-600" })</td>
+                                <td class="p-4 border w-2/4">@account.AccountName</td>
+                                <td class="p-4 border w-1/4 text-right">@account.Debit</td>
+                                <td class="p-4 border w-1/4 text-right">@account.Credit</td>
+                            </tr>
+                }
+                <tr class="font-bold">
+                    <td colspan="2" class="p-4 border">Total</td>
+                    <td class="p-4 border text-right">@Model.Sum(m => m.Debit)</td>
+                    <td class="p-4 border text-right">@Model.Sum(m => m.Credit)</td>
+                </tr>
+            </table>
+        </div>
+    </div>
 </div>

@@ -14,9 +14,14 @@ namespace Api.Data
 {
     public class ApiDbContext : DbContext
     {
-        public ApiDbContext(DbContextOptions<ApiDbContext> options)
+        public string CurrentUsername { get; set; } = "Unknown";
+        public string IpAddress { get; set; } = "UnknownIP";
+        
+        private readonly IHttpContextAccessor _httpContextAccessor;
+        public ApiDbContext(DbContextOptions<ApiDbContext> options, IHttpContextAccessor httpContextAccessor)
             : base(options)
         {
+         _httpContextAccessor = httpContextAccessor;
         }
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
@@ -299,11 +304,11 @@ namespace Api.Data
         public override int SaveChanges()
         {
             // TODO : Implementation Required
-            //SaveAuditLog();
+            SaveAuditLog();
 
             var ret = base.SaveChanges();
 
-            //UpdateAuditLogRecordId();
+            UpdateAuditLogRecordId();
 
             return ret;
         }
@@ -311,8 +316,6 @@ namespace Api.Data
         #region Audit Logs
         private void SaveAuditLog()
         {
-            string username = string.Empty;
-
             var dbEntityEntries = ChangeTracker.Entries().ToList()
                 .Where(p => p.State == EntityState.Modified || p.State == EntityState.Added || p.State == EntityState.Deleted);
 
@@ -320,14 +323,20 @@ namespace Api.Data
             {
                 try
                 {
-                    username = ((BaseEntity)dbEntityEntry.Entity).ModifiedBy;
-                    var auditLogs = AuditLogHelper.GetChangesForAuditLog(dbEntityEntry, username);
+                    string resolvedUsername = string.IsNullOrWhiteSpace(CurrentUsername) ? "Unknown" : CurrentUsername;
+                    string resolvedIpAddress = string.IsNullOrWhiteSpace(IpAddress) ? "UnknownIP" : IpAddress;
+                    var auditLogs = AuditLogHelper.GetChangesForAuditLog(dbEntityEntry, resolvedUsername, resolvedIpAddress);
                     foreach (var auditlog in auditLogs)
+                    {
                         if (auditlog != null)
+                        {
                             AuditLogs.Add(auditlog);
+                        }
+                    }
                 }
-                catch
+                catch (Exception ex)
                 {
+                    Console.WriteLine($"Error in SaveAuditLog for entity {dbEntityEntry.Entity.GetType().Name}: {ex.Message}");
                     continue;
                 }
             }

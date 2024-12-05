@@ -175,19 +175,30 @@ namespace AccountGoWeb.Controllers
         var baseUri = _baseConfig!["ApiUrl"];
         client.BaseAddress = new System.Uri(baseUri!);
         client.DefaultRequestHeaders.Accept.Clear();
-        var response = await client.GetAsync(baseUri + "financials/incomestatement");
-        if (response.IsSuccessStatusCode)
+
+        try
         {
-          var responseJson = await response.Content.ReadAsStringAsync();
-          var incomeStatementModel = Newtonsoft.Json.JsonConvert.DeserializeObject<System.Collections.Generic.List<Models.IncomeStatement>>(responseJson);
-          return View(incomeStatementModel);
+          var response = await client.GetAsync(baseUri + "financials/incomestatement");
+          if (response.IsSuccessStatusCode)
+          {
+            var responseJson = await response.Content.ReadAsStringAsync();
+            var incomeStatementModel = Newtonsoft.Json.JsonConvert.DeserializeObject<System.Collections.Generic.List<Models.IncomeStatement>>(responseJson);
+            return View(incomeStatementModel);
+          }
+          else
+          {
+            ViewBag.Error = "Failed to fetch income statement data.";
+          }
+        }
+        catch (Exception ex)
+        {
+          ViewBag.Error = $"Error: {ex.Message}";
         }
       }
 
-      return View();
-      //var Dto = _financialService.IncomeStatement();
-      //return View(Dto);
+      return View(new List<Models.IncomeStatement>());
     }
+
 
     public IActionResult Banks()
     {
@@ -197,5 +208,8 @@ namespace AccountGoWeb.Controllers
 
       return View(banks);
     }
+
+
+
   }
 }

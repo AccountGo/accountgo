@@ -14,7 +14,8 @@ using Microsoft.Extensions.Hosting;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
+
+builder.AddServiceDefaults();
 
 // Validation
 builder.Services.AddScoped<ValidationFilterAttribute>();
@@ -27,6 +28,8 @@ builder.Services.AddScoped<IAuthenticationService, AuthenticationService>();
 builder.Services.AddAuthentication();
 builder.Services.ConfigureIdentity();
 builder.Services.ConfigureJWT(builder.Configuration);
+builder.Services.AddScoped<IFinancialService, FinancialService>();
+builder.Services.AddScoped<IAccountService, AccountService>();
 
 builder.Services.AddControllers()
 .AddNewtonsoftJson(
