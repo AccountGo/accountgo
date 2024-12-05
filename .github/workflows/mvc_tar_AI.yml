@@ -79,6 +79,10 @@ jobs:
         run: |
           tar -xzvf my_artifact.tar.gz -C .
 
+      - name: Set startup command
+        run: |
+          az webapp config set --resource-group goodbooks-RG --name gdbmvc --startup-file "dotnet /home/site/wwwroot/GoodBooks.dll"
+
       - name: Deploy to Azure Web App
         id: deploy-to-webapp
         uses: azure/webapps-deploy@v2
