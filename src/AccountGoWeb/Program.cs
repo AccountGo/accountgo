@@ -3,7 +3,11 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using AutoMapper;
 using Microsoft.AspNetCore.Session;
 
+
+
 var builder = WebApplication.CreateBuilder(args);
+
+builder.AddServiceDefaults();
 
 // Add services to the container.
 
@@ -13,9 +17,9 @@ builder.Services.AddAutoMapper(typeof(Program));
 builder.Services.AddControllersWithViews();
 builder.Services.AddHttpContextAccessor();
 
-// string urlhost = System.Environment.GetEnvironmentVariable("APIHOST") ?? "localhost";
-// string urlport = System.Environment.GetEnvironmentVariable("APIPORT") ?? "8001";
+
 string apiurl = System.Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
+
 builder.Configuration["ApiUrl"] = apiurl;
 System.Console.WriteLine($"[ASPNETCORE SERVER] API URL {builder.Configuration["ApiUrl"]}");
 
