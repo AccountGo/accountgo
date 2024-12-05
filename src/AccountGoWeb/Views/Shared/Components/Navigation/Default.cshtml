@@ -1,0 +1,28 @@
+@using AccountGoWeb.Models.SubMenu
+@model NavigationModel
+
+<div class="w-64 bg-lightSecondary text-darkPrimary dark:bg-darkSecondary dark:text-lightPrimary p-5">
+    @await Html.PartialAsync("_Logo")
+    <nav>
+        <ul>
+            @foreach (var subMenu in Model.SubMenus)
+            {
+                <li>
+                    <a href="#">
+                        <i class="@subMenu.Icon"></i> @subMenu.MenuTitle
+                    </a>
+                    <ul>
+                        @foreach (var menuItem in subMenu.MenuItems)
+                        {
+                            <li>
+                                <a asp-controller="@menuItem.Controller" asp-action="@menuItem.Action">
+                                    @menuItem.Text
+                                </a>
+                            </li>
+                        }
+                    </ul>
+                </li>
+            }
+        </ul>
+    </nav>
+</div>

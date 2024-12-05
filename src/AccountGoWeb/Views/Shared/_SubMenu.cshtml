@@ -1,21 +1,25 @@
-@model AccountGoWeb.Models.SubMenu.SubMenuModel
+@using AccountGoWeb.Models.SubMenu
+@model SubMenuModel
 
-<li class='sub-menu'>
-    <a href="javascript:;" onclick="document.location.hash='#message';">
-        <div class="d-flex justify-content-start">
-            <i class="nav-icon fa fa-@Model.Icon"></i>
-            @Model.MenuTitle
-            <div class='fa fa-caret-down ml-auto'></div>
-        </div>
-    </a>
-    <ul>
-        @foreach (var item in Model.MenuItems)
+<li>
+    <div class="group">
+        <a href="#" class="flex items-center px-4 py-3 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg">
+            <i class="fa fa-@Model.Icon mr-3"></i>
+            <span>@Model.MenuTitle</span>
+        </a>
+        @if (Model.MenuItems?.Any() == true)
         {
-            <li>
-                <a class="nav-link" asp-area="" asp-controller="@item.Controller" asp-action="@item.Action">
-                    @item.Text
-                </a>
-            </li>
+            <ul class="ml-5 mt-2">
+                @foreach (var item in Model.MenuItems)
+                {
+                    <li>
+                        <a href="@Url.Action(item.Action, item.Controller)"
+                           class="block px-3 py-2 hover:bg-gray-300 dark:hover:bg-gray-600">
+                            @item.Text
+                        </a>
+                    </li>
+                }
+            </ul>
         }
-    </ul>
+    </div>
 </li>

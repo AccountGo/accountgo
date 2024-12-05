@@ -1,5 +1,13 @@
 @using AccountGoWeb.Models.SubMenu
 @model NavigationModel
+@try
+{
+    @await Component.InvokeAsync("Navigation")
+}
+catch
+{
+    <p class="text-gray-500">Navigation is temporarily unavailable.</p>
+}
 
 @if (Model?.SubMenus != null && Model.SubMenus.Any())
 {
@@ -10,7 +18,7 @@
             <ul class="space-y-2">
                 <li>
                     <a href="@Url.Action("MonthlySales", "Dashboard")"
-                        class="flex items-center px-4 py-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors">
+                       class="flex items-center px-4 py-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors">
                         <i class="fa fa-dashboard mr-3"></i>
                         <span>Dashboard</span>
                     </a>
@@ -22,8 +30,8 @@
                 }
 
                 <li>
-                    <a href="#message"
-                        class="flex items-center px-4 py-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors">
+                    <a href="#logout"
+                       class="flex items-center px-4 py-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors">
                         <i class="fa fa-sign-out mr-3"></i>
                         <span>Logout</span>
                     </a>
