@@ -17,7 +17,7 @@
 }
 else
 {
-@*     <ul>
+    @*     <ul>
         @foreach (var item in accounts)
         {
             <li>@item.AccountName</li>
@@ -28,10 +28,10 @@ else
             padding: 4px !important;
         }
     </style>
-
     <div>
-        <table class="table table-condensed table-striped">
+ <button class="btn btn-success mb-3" @onclick="OpenAddModal">Add Account</button>
 
+        <table class="table table-condensed table-striped">
             <thead>
                 <tr>
                     <th>Code</th>
@@ -39,11 +39,11 @@ else
                     <th>Balance</th>
                     <th>Debit</th>
                     <th>Credit</th>
+                    <th>Actions</th>
                 </tr>
             </thead>
-
             <tbody>
-                @for (int accountIdx = 0; accountIdx < accounts.Count(); ++accountIdx)
+    @for (int accountIdx = 0; accountIdx < accounts.Count(); ++accountIdx)
                 {
                     var account = accounts.ToList()[accountIdx];
                     var accountTargetId = $"asset-{accountIdx}";
@@ -54,7 +54,11 @@ else
                         <td>@account.TotalBalance</td>
                         <td>@account.TotalDebitBalance</td>
                         <td>@account.TotalCreditBalance</td>
-                    </tr>
+<td>
+    <button class="btn btn-primary" @onclick="() => OpenEditModal(account)">Edit</button>
+    <button class="btn btn-danger" @onclick="() => OpenDeleteModal(account)">Delete</button>
+</td>
+  </tr>
 
                     <tr>
                         <td colspan="12">
@@ -130,73 +134,231 @@ else
     </div>
 
 }
+@if (isAddModalVisible)
+{
+    <div class="modal show d-block" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Add New Account</h5>
+                    <button type="button" class="btn-close" @onclick="CloseAddModal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="accountCode" class="form-label">Account Code</label>
+                        <input type="text" id="accountCode" class="form-control" @bind="newAccount.AccountCode" />
+                    </div>
+                    <div class="mb-3">
+                        <label for="accountName" class="form-label">Account Name</label>
+                        <input type="text" id="accountName" class="form-control" @bind="newAccount.AccountName" />
+                    </div>
+                    <div class="mb-3">
+                        <label for="totalBalance" class="form-label">Total Balance</label>
+                        <input type="number" id="totalBalance" class="form-control" @bind="newAccount.TotalBalance" />
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseAddModal">Cancel</button>
+                    <button type="button" class="btn btn-primary" @onclick="AddAccount">Add</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (isDeleteModalVisible)
+{
+    <div class="modal show d-block" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Confirm Deletion</h5>
+                    <button type="button" class="btn-close" @onclick="CloseDeleteModal"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Are you sure you want to delete the account <b>@selectedAccount?.AccountName</b> with code <b>@selectedAccount?.AccountCode</b>?</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseDeleteModal">Cancel</button>
+                    <button type="button" class="btn btn-danger" @onclick="ConfirmDeleteAccount">Delete</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (isEditModalVisible && selectedAccount != null)
+{
+    <div class="modal show d-block" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Edit Account</h5>
+                    <button type="button" class="btn-close" @onclick="CloseEditModal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="accountCode" class="form-label">Account Code</label>
+                        <input type="text" id="accountCode" class="form-control" @bind="selectedAccount.AccountCode" disabled />
+                    </div>
+                    <div class="mb-3">
+                        <label for="accountName" class="form-label">Account Name</label>
+                        <input type="text" id="accountName" class="form-control" @bind="selectedAccount.AccountName" />
+                    </div>
+                    <div class="mb-3">
+                        <label for="totalBalance" class="form-label">Total Balance</label>
+                        <input type="number" id="totalBalance" class="form-control" @bind="selectedAccount.TotalBalance" />
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseEditModal">Cancel</button>
+                    <button type="button" class="btn btn-primary" @onclick="SaveAccount">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
 
 @code {
-    private IEnumerable<Models.Financial.AccountViewModel>? accounts = [];
+  private IEnumerable<Models.Financial.AccountViewModel>? accounts = [];
     private bool getError;
-    private bool shouldRender;
-    private bool jsInteropCalled = false; // Flag to ensure JS interop is called only once
-
-
-    protected override bool ShouldRender() => shouldRender;
+    private bool isEditModalVisible;
+    private bool isAddModalVisible;
+    private bool isDeleteModalVisible;
+    private Models.Financial.AccountViewModel? selectedAccount;
+    private Models.Financial.AccountViewModel newAccount = new();
 
     protected override async Task OnInitializedAsync()
     {
-        string apiurl = System.Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
+        await LoadAccounts();
+    }
 
-        var request = new HttpRequestMessage(HttpMethod.Get, $"{apiurl}financials/accounts");
-        request.Headers.Add("Accept", "application/json");
-
-        var _client = ClientFactory.CreateClient();
-
-        _client.DefaultRequestHeaders.Accept.Clear();
-        _client.DefaultRequestHeaders.Clear();
-        _client.DefaultRequestHeaders.CacheControl = new System.Net.Http.Headers.CacheControlHeaderValue() { NoCache = true };
-        _client.DefaultRequestHeaders.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
-
-        var response = await _client.SendAsync(request).ConfigureAwait(false);
-
-        if (response.IsSuccessStatusCode)
+    private async Task LoadAccounts()
+    {
+        try
         {
-            var responseString = await response.Content.ReadAsStringAsync();
+            string apiUrl = Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
+            var client = ClientFactory.CreateClient();
 
-            // Log the response string to verify the JSON structure
-            // Console.WriteLine($"Response JSON: {responseString}");
+            var response = await client.GetAsync($"{apiUrl}financials/accounts");
 
-            // Ensure JsonSerializerOptions are set correctly
-            var options = new JsonSerializerOptions
+            if (response.IsSuccessStatusCode)
+            {
+                var jsonString = await response.Content.ReadAsStringAsync();
+                accounts = JsonSerializer.Deserialize<List<Models.Financial.AccountViewModel>>(jsonString, new JsonSerializerOptions
                 {
-                    PropertyNameCaseInsensitive = true, // Adjust based on your JSON
-                    DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-                };
-
-            try
-            {
-                accounts = JsonSerializer.Deserialize<System.Collections.Generic.List<Models.Financial.AccountViewModel>>(responseString, options);
+                    PropertyNameCaseInsensitive = true
+                }) ?? new List<Models.Financial.AccountViewModel>();
             }
-            catch (JsonException ex)
+            else
             {
-                // Log the exception to diagnose deserialization issues
-                Console.WriteLine($"JSON Deserialization error: {ex.Message}");
                 getError = true;
             }
-
-            // await JSRuntime.InvokeVoidAsync("console.log", accounts);
         }
-        else
+        catch
         {
             getError = true;
         }
-
-        shouldRender = true;
     }
 
-    protected override async Task OnAfterRenderAsync(bool firstRender)
+       private void OpenAddModal()
     {
-        if (firstRender && !jsInteropCalled)
+        newAccount = new Models.Financial.AccountViewModel();
+        isAddModalVisible = true;
+    }
+
+    private void CloseAddModal() => isAddModalVisible = false;
+
+    private async Task AddAccount()
+    {
+        try
         {
-            await JSRuntime.InvokeVoidAsync("console.log", accounts);
-            jsInteropCalled = true; // Ensure this block runs only once
+            string apiUrl = Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
+            var client = ClientFactory.CreateClient();
+            Console.WriteLine($"Adding Account: {JsonSerializer.Serialize(newAccount)}");
+
+            var content = new StringContent(JsonSerializer.Serialize(newAccount), System.Text.Encoding.UTF8, "application/json");
+            var response = await client.PostAsync($"{apiUrl}financials/accounts", content);
+
+            if (response.IsSuccessStatusCode)
+            {
+                Console.WriteLine("Account added successfully.");
+                await LoadAccounts();
+                CloseAddModal();
+            }
+            else
+            {
+                var errorResponse = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"Failed to add account. Status: {response.StatusCode}, Response: {errorResponse}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error in AddAccount: {ex.Message}");
         }
     }
+    private void OpenEditModal(Models.Financial.AccountViewModel account)
+    {
+        selectedAccount = new Models.Financial.AccountViewModel
+        {
+            AccountCode = account.AccountCode,
+            AccountName = account.AccountName,
+            TotalBalance = account.TotalBalance
+        };
+        isEditModalVisible = true;
+    }
+
+    private void CloseEditModal() => isEditModalVisible = false;
+
+    private async Task SaveAccount()
+    {
+        if (selectedAccount == null)
+            return;
+
+        string apiUrl = Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
+        var client = ClientFactory.CreateClient();
+
+        var content = new StringContent(JsonSerializer.Serialize(selectedAccount), System.Text.Encoding.UTF8, "application/json");
+        var response = await client.PutAsync($"{apiUrl}financials/accounts/{selectedAccount.AccountCode}", content);
+
+        if (response.IsSuccessStatusCode)
+        {
+            await LoadAccounts();
+            CloseEditModal();
+        }
+        else
+        {
+            Console.WriteLine("Failed to save account.");
+        }
+    }
+
+    private void OpenDeleteModal(Models.Financial.AccountViewModel account)
+    {
+        selectedAccount = account;
+        isDeleteModalVisible = true;
+    }
+
+    private void CloseDeleteModal() => isDeleteModalVisible = false;
+
+    private async Task ConfirmDeleteAccount()
+    {
+        if (selectedAccount == null)
+            return;
+
+        string apiUrl = Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
+        var client = ClientFactory.CreateClient();
+
+        var response = await client.DeleteAsync($"{apiUrl}financials/accounts/{selectedAccount.AccountCode}");
+
+        if (response.IsSuccessStatusCode)
+        {
+            await LoadAccounts();
+            CloseDeleteModal();
+        }
+        else
+        {
+            Console.WriteLine("Failed to delete account.");
+        }
+    }
+}
 }
