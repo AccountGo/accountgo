@@ -15,12 +15,14 @@ namespace Api.Controllers
     {
         private readonly IAdministrationService _adminService;
         private readonly IFinancialService _financialService;
+        private readonly IAccountService _accountService;
 
         public FinancialsController(IAdministrationService adminService,
-            IFinancialService financialService)
+            IFinancialService financialService, IAccountService accountService)
         {
             _adminService = adminService;
             _financialService = financialService;
+            _accountService = accountService;
         }
 
         [HttpGet]
@@ -357,29 +359,24 @@ namespace Api.Controllers
             }
         }
 
-
         #region CRUD for Accounts
 
         [HttpGet]
-        [Route("GetAccount/{id}")]
-        public async Task<IActionResult> GetAccountById(int id)
+        [Route("GetAccount/{accountCode}")]
+        public async Task<IActionResult> GetAccountByCode(string accountCode)
         {
-            var account = await _accountService.GetAccountByIdAsync(id);
+            var account = await _accountService.GetAccountByCodeAsync(accountCode);
             if (account == null)
                 return NotFound();
 
-            var accountDto = new Account
+            return Ok(new Account
             {
-                Id = account.Id,
                 AccountCode = account.AccountCode,
                 AccountName = account.AccountName,
-                Description = account.Description,
-                IsCash = account.IsCash,
-                IsContraAccount = account.IsContraAccount,
-                Balance = account.Balance
-            };
-
-            return Ok(accountDto);
+                Balance = account.Balance,
+                DebitBalance = account.DebitBalance,
+                CreditBalance = account.CreditBalance
+            });
         }
 
         [HttpPost]
@@ -393,14 +390,14 @@ namespace Api.Controllers
             {
                 AccountCode = newAccountDto.AccountCode,
                 AccountName = newAccountDto.AccountName,
-                Description = newAccountDto.Description,
-                IsCash = newAccountDto.IsCash,
-                IsContraAccount = newAccountDto.IsContraAccount,
+                // Balance = 0, // Initialize read-only fields
+                // DebitBalance = 0,
+                // CreditBalance = 0
             };
 
             var createdAccount = await _accountService.AddAccountAsync(newAccount);
 
-            return CreatedAtAction(nameof(GetAccountById), new { id = createdAccount.Id }, createdAccount);
+            return CreatedAtAction(nameof(GetAccountByCode), new { accountCode = createdAccount.AccountCode }, createdAccount);
         }
 
         [HttpPut]
@@ -410,25 +407,25 @@ namespace Api.Controllers
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
-            var existingAccount = await _accountService.GetAccountByCodeAsync(accountCode);
-            if (existingAccount == null)
+            var updatedAccount = await _accountService.UpdateAccountAsync(accountCode, new Core.Domain.Financials.Account
+            {
+                AccountCode = updatedAccountDto.AccountCode,
+                AccountName = updatedAccountDto.AccountName,
+                // Balance = updatedAccountDto.Balance,
+                // DebitBalance = updatedAccountDto.DebitBalance,
+                // CreditBalance = updatedAccountDto.CreditBalance
+            });
+            if (updatedAccount == null)
                 return NotFound();
 
-            existingAccount.AccountName = updatedAccountDto.AccountName;
-            existingAccount.Description = updatedAccountDto.Description;
-            existingAccount.IsCash = updatedAccountDto.IsCash;
-            existingAccount.IsContraAccount = updatedAccountDto.IsContraAccount;
-
-            await _accountService.UpdateAccountAsync(existingAccount);
-
-            return Ok(existingAccount);
+            return Ok(updatedAccount);
         }
 
         [HttpDelete]
-        [Route("DeleteAccount/{id}")]
-        public async Task<IActionResult> DeleteAccount(int id)
+        [Route("DeleteAccount/{accountCode}")]
+        public async Task<IActionResult> DeleteAccount(string accountCode)
         {
-            var result = await _accountService.DeleteAccountAsync(id);
+            var result = await _accountService.DeleteAccountAsync(accountCode);
 
             if (result == null)
                 return NotFound();
