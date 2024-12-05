@@ -31,6 +31,11 @@ builder.Services.ConfigureJWT(builder.Configuration);
 // account service
 builder.Services.AddScoped<IAccountService, AccountService>();
 
+//register ApiDbContext
+builder.Services.AddDbContext<ApiDbContext>(options =>
+    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+
 builder.Services.AddControllers()
 .AddNewtonsoftJson(
     options =>
