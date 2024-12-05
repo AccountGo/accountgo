@@ -797,6 +797,10 @@ video {
   border-radius: 0.25rem;
 }
 
+.rounded {
+  border-radius: 0.25rem;
+}
+
 .rounded-full {
   border-radius: 9999px;
 }
@@ -856,6 +860,16 @@ video {
 .bg-lightSecondary {
   --tw-bg-opacity: 1;
   background-color: rgb(238 244 237 / var(--tw-bg-opacity, 1));
+}
+
+.bg-white {
+  --tw-bg-opacity: 1;
+  background-color: rgb(255 255 255 / var(--tw-bg-opacity, 1));
+}
+
+.bg-darkSecondary {
+  --tw-bg-opacity: 1;
+  background-color: rgb(19 64 116 / var(--tw-bg-opacity, 1));
 }
 
 .bg-white {
@@ -1136,9 +1150,14 @@ video {
   background-color: rgb(141 169 196 / var(--tw-bg-opacity, 1));
 }
 
-.hover\:bg-blue-700:hover {
+.hover\:bg-slate-400:hover {
   --tw-bg-opacity: 1;
-  background-color: rgb(29 78 216 / var(--tw-bg-opacity, 1));
+  background-color: rgb(148 163 184 / var(--tw-bg-opacity, 1));
+}
+
+.hover\:bg-slate-100:hover {
+  --tw-bg-opacity: 1;
+  background-color: rgb(241 245 249 / var(--tw-bg-opacity, 1));
 }
 
 .hover\:text-blue-600:hover {
@@ -1181,6 +1200,11 @@ video {
   background-color: rgb(148 163 184 / var(--tw-bg-opacity, 1));
 }
 
+.dark\:bg-lightPrimary:where(.dark, .dark *) {
+  --tw-bg-opacity: 1;
+  background-color: rgb(141 169 196 / var(--tw-bg-opacity, 1));
+}
+
 .dark\:text-gray-100:where(.dark, .dark *) {
   --tw-text-opacity: 1;
   color: rgb(243 244 246 / var(--tw-text-opacity, 1));
@@ -1196,7 +1220,36 @@ video {
   color: rgb(238 244 237 / var(--tw-text-opacity, 1));
 }
 
+.dark\:text-white:where(.dark, .dark *) {
+  --tw-text-opacity: 1;
+  color: rgb(255 255 255 / var(--tw-text-opacity, 1));
+}
+
 .dark\:hover\:bg-gray-700:hover:where(.dark, .dark *) {
   --tw-bg-opacity: 1;
   background-color: rgb(55 65 81 / var(--tw-bg-opacity, 1));
+}
+
+.dark\:hover\:bg-darkSecondary\/10:hover:where(.dark, .dark *) {
+  background-color: rgb(19 64 116 / 0.1);
+}
+
+.dark\:hover\:bg-slate-400:hover:where(.dark, .dark *) {
+  --tw-bg-opacity: 1;
+  background-color: rgb(148 163 184 / var(--tw-bg-opacity, 1));
+}
+
+.dark\:hover\:bg-darkPrimary:hover:where(.dark, .dark *) {
+  --tw-bg-opacity: 1;
+  background-color: rgb(11 37 69 / var(--tw-bg-opacity, 1));
+}
+
+.dark\:hover\:bg-darkSecondary:hover:where(.dark, .dark *) {
+  --tw-bg-opacity: 1;
+  background-color: rgb(19 64 116 / var(--tw-bg-opacity, 1));
+}
+
+.dark\:hover\:text-white:hover:where(.dark, .dark *) {
+  --tw-text-opacity: 1;
+  color: rgb(255 255 255 / var(--tw-text-opacity, 1));
 }
