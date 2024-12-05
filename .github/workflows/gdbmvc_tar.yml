@@ -4,7 +4,7 @@ name: Build and deploy Good Deed Books MVC project to Azure
 on:
   push:
     branches:
-      - endpoint_sahil
+      - main
   workflow_dispatch:
 jobs:
   build:

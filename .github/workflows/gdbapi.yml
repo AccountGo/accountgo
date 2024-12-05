@@ -6,7 +6,7 @@ name: Build and deploy Good Deed Books API to Azure Web App - gdbapi
 on:
   push:
     branches:
-      - endpoint_sahil
+      - main
   workflow_dispatch:
 
 jobs:
