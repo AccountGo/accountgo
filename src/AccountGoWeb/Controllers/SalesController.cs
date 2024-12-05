@@ -1,6 +1,7 @@
 ﻿using AccountGoWeb.Models;
 using Dto.Sales;
 using Microsoft.AspNetCore.Mvc;
+using Newtonsoft.Json;
 
 namespace AccountGoWeb.Controllers
 {
@@ -248,11 +249,14 @@ namespace AccountGoWeb.Controllers
             }
             else if (ModelState.IsValid)
             {
+                _logger.LogInformation("Posted value received: {Posted}", Dto.Posted);
                 var serialize = Newtonsoft.Json.JsonConvert.SerializeObject(Dto);
                 var content = new StringContent(serialize);
                 content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+
                 _logger.LogInformation("AddSalesInvoice: " + await content.ReadAsStringAsync());
                 var response = Post("Sales/CreateSalesInvoice", content);
+
                 _logger.LogInformation("AddSalesInvoice response: " + response.ToString());
                 if (response.IsSuccessStatusCode)
                     return RedirectToAction("salesinvoices");
@@ -494,6 +498,8 @@ namespace AccountGoWeb.Controllers
                 model.RemainingAmountToAllocate = receipt.RemainingAmountToAllocate;
 
                 // Fetch customer invoices
+                _logger.LogInformation("Calling API: sales/customerinvoices?id={id}", receipt.CustomerId);
+
                 var invoices = GetAsync<IEnumerable<Dto.Sales.SalesInvoice>>("sales/customerinvoices?id=" + receipt.CustomerId).Result;
                 if (invoices == null)
                 {
@@ -503,6 +509,7 @@ namespace AccountGoWeb.Controllers
 
                 foreach (var invoice in invoices)
                 {
+                    _logger.LogInformation("Invoice: {Invoice}", JsonConvert.SerializeObject(invoice));
                     if (invoice.Posted && invoice.TotalAllocatedAmount < invoice.Amount)
                     {
                         model.AllocationLines.Add(new Models.Sales.AllocationLine()
@@ -511,6 +518,11 @@ namespace AccountGoWeb.Controllers
                             Amount = invoice.Amount,
                             AllocatedAmount = invoice.TotalAllocatedAmount
                         });
+                    }
+                    else
+                    {
+                        _logger.LogInformation("Invoice excluded: Posted={Posted}, TotalAllocatedAmount={TotalAllocatedAmount}, Amount={Amount}",
+                            invoice.Posted, invoice.TotalAllocatedAmount, invoice.Amount);
                     }
                 }
 
