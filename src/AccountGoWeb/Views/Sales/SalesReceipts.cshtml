@@ -24,6 +24,26 @@
 </div>
 <div>
     <div id="receipts" class="ag-fresh" style="height: 400px;"></div>
+<div class="w-full grid grid-cols-1 gap-4">
+    <div class="flex gap-2 mb-4">
+        <a href="~/sales/addreceipt" class="px-4 py-2 bg-darkSecondary text-white rounded hover:bg-opacity-90">
+            <i class="fa fa-plus"></i>
+            New Receipt
+        </a>
+        <a href="~/sales/allocate/" id="linkAllocate" 
+            class="px-4 py-2 bg-gray-400 text-white rounded disabled">
+            <i class="fa fa-tasks"></i>
+            Allocate
+        </a>
+        <a href="~/sales/SalesReceipt" id="linkViewReceipt" 
+            class="px-4 py-2 bg-gray-400 text-white rounded disabled">
+            <i class="fa fa-edit"></i>
+            View
+        </a>
+    </div>
+    <div class="bg-white dark:bg-gray-800">
+        <div id="receipts" class="ag-fresh overflow-hidden rounded-lg shadow-md border-2 border-gray-200" style="height: 400px;"></div>
+    </div>
 </div>
 
 <script>
@@ -63,34 +83,20 @@
 
         // Get the selected row
         selectedRow = selectedRows[0];
-        console.log("Selected row data:", selectedRow);
 
-        // Update the Allocate and View Receipt links
-        document.getElementById('linkAllocate').setAttribute('href', '/sales/allocate/' + selectedRow.id);
-        console.log("Updated Allocate link to:", 'allocate/' + selectedRow.id);
+        document.getElementById('linkAllocate').setAttribute('href', 'allocate/' + selectedRow.id);
+        document.getElementById('linkViewReceipt').setAttribute('href', 'SalesReceipt?id=' + selectedRow.id);
+        document.getElementById('linkViewReceipt').setAttribute('class', 'px-4 py-2 bg-darkSecondary text-white rounded hover:bg-opacity-90');
 
-        document.getElementById('linkViewReceipt').setAttribute('href', '/sales/SalesReceipt?id=' + selectedRow.id);
-        console.log("Updated View Receipt link to:", 'SalesReceipt?id=' + selectedRow.id);
-
-        document.getElementById('linkViewReceipt').setAttribute('class', 'btn');
-
-        if (selectedRow.remainingAmountToAllocate > 0) {
-            document.getElementById('linkAllocate').setAttribute('class', 'btn');
-            console.log("Set Allocate button to active");
-        } else {
-            document.getElementById('linkAllocate').setAttribute('class', 'btn inactiveLink');
-            console.log("Set Allocate button to inactive");
-        }
-
-        // Highlight the selected row
-        gridOptions.api.forEachNode(node => {
-            console.log("Processing row node with ID:", node.data.id);
-            node.setSelected(node.data.id === selectedRow.id); // Mark row as selected
-        });
+        if(selectedRow.remainingAmountToAllocate > 0)
+            document.getElementById('linkAllocate').setAttribute('class', 'px-4 py-2 bg-darkSecondary text-white rounded hover:bg-opacity-90');
+        else
+            document.getElementById('linkAllocate').setAttribute('class', 'px-4 py-2 bg-gray-400 text-white rounded cursor-not-allowed');
     }
 
-    document.addEventListener("DOMContentLoaded", function () {
-        console.log("Document loaded");
+    // wait for the document to be loaded, otherwise
+    // ag-Grid will not find the div in the document.
+    document.addEventListener("DOMContentLoaded", function() {
         var eGridDiv = document.querySelector('#receipts');
         new agGrid.Grid(eGridDiv, gridOptions);
         console.log("ag-Grid initialized");
