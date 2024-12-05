@@ -1,82 +1,74 @@
 ﻿@model Dto.Administration.Company
-<style>
-  label.control-label {
-    padding-top: 10px;
-  }
 
-  input.form-control {
-    margin-bottom: 2px;
-  }
-  .btn{
-    margin-right:2px;
-  }
-</style>
-<p>
-  @*  *@
-  <div class="col-sm-9">
-    <button type="button" id="btnEdit" class="btn btn-sm btn-warning btn-flat">
-      <span class="fa fa-edit"></span> Edit
+<div class=" w-3/4 mx-auto lg:py-16">
+
+  <button type="button" id="btnEdit" class="bg-yellow-500 hover:bg-yellow-600 text-white font-medium rounded-lg text-sm px-4 py-2.5 flex items-center space-x-2">
+    <span class="fa fa-edit"></span> Edit
+  </button>
+
+  <h3 class="my-4 text-xl font-bold text-white dark:test-white">General</h3>
+
+  <form action="~/administration/company" method="post">
+    @Html.HiddenFor(model => model.Id)
+
+    <button type="button" class="btn btn-box-tool" data-widget="collapse" data-toggle="tooltip" title="Collapse">
+      <i class="fa fa-minus"></i>
     </button>
-  </div>
-</p>
-<form action="~/administration/company" method="post">
-  @Html.HiddenFor(model => model.Id)
-  <div id="divCompanyCard" class="col-sm-12">
-    <div class="box">
-      <div class="box-header with-border">
-        <h3 class="box-title">General</h3>
-        <div class="box-tools pull-right">
-          <button type="button" class="btn btn-box-tool" data-widget="collapse" data-toggle="tooltip" title="Collapse">
-            <i class="fa fa-minus"></i>
-          </button>
-        </div>
-      </div>
-      <div class="box-body">
-        <div class="col-sm-6">
-          <div class="row">
-            <label class="control-label col-sm-4"  asp-for="CompanyCode"></label>
-            <div class="col-sm-8">
-              <input asp-for="CompanyCode" class="form-control CompanyCode" type="text" required placeholder="Code ..." />
-              <span asp-validation-for="CompanyCode" class="danger"></span>
-            </div>
-          </div>
 
-          <div class="row">
-            <label class="control-label col-sm-4" asp-for="Name" ></label>
-            <div class="col-sm-8">
-              <input asp-for="Name" class="form-control" type="text" required placeholder="Name ..." />
-              <span asp-validation-for="Name" class="danger"></span>
-            </div>
+    <div class="grod gap-4 mb-4 sm:grid-cols-2 sm:gap-6 sm:mb-5" id="divCompanyCard">
+      
+      <!-- CompanyCode  -->
+      <div class="sm:col-span-2">
+        <label class="block mb-2 text-sm font-medium text-gray-900 dark:text-white"  asp-for="CompanyCode"></label>
+          <div class="col-sm-8">
+            <input asp-for="CompanyCode" class="CompanyCode bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500" type="text" required placeholder="Code ..." />
+            <span asp-validation-for="CompanyCode" class="text-red-500 text-sm mt-1 block"></span>
           </div>
-          <div class="row">
-            <label class="control-label col-sm-4" asp-for="ShortName" ></label>
-            <div class="col-sm-8">
-              <input asp-for="ShortName" class="form-control" type="text" required placeholder="Short Name ..." />
-              <span asp-validation-for="ShortName" class="danger"></span>
-            </div>
-          </div>
-           <div class="row">
-            <label class="control-label col-sm-4" asp-for="CRA" ></label>
-            <div class="col-sm-8">
-              <input asp-for="CRA" class="form-control" type="text" required placeholder="Short Name ..." />
-              <span asp-validation-for="CRA" class="danger"></span>
-            </div>
-          </div>
-        </div>
       </div>
+
+      <!-- Name  -->
+      <div class="w-full">
+        <label class="block mb-2 text-sm font-medium text-gray-900 dark:text-white" asp-for="Name" ></label>
+          <div class="col-sm-8">
+            <input asp-for="Name" class=" bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500" type="text" required placeholder="Name ..." />
+            <span asp-validation-for="Name" class="text-red-500 text-sm mt-1 block"></span>
+          </div>
+      </div>
+
+      <!-- ShortName  -->
+      <div class="w-full">
+        <label class="block mb-2 text-sm font-medium text-gray-900 dark:text-white" asp-for="ShortName" ></label>
+          <div class="col-sm-8">
+            <input asp-for="ShortName" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500" type="text" required placeholder="Short Name ..." />
+            <span asp-validation-for="ShortName" class="text-red-500 text-sm mt-1 block"></span>
+          </div>
+      </div>
+
+      <!-- CRA  -->
+      <div class="w-full">
+          <label class="block mb-2 text-sm font-medium text-gray-900 dark:text-white" asp-for="ShortName" ></label>
+            <div class="col-sm-8">
+              <input asp-for="CRA" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500" type="text" required placeholder="Short Name ..." />
+              <span asp-validation-for="CRA" class="text-red-500 text-sm mt-1 block"></span>
+            </div>
+      </div>
+
     </div>
-  </div>
-  <div class="col-sm-12">
-    <button type="submit" id="btnSave" class="btn btn-sm btn-flat pull-left disabledControl">
-      <span class="fa fa-save"></span> Save
-    </button>
 
-    <a href="~/" class="btn btn-sm btn-default btn-flat pull-left">
-      <i class="fa fa-times"></i>
-      Cancel
-    </a>
-  </div>
-</form>
+    <!-- Action Buttons  -->
+    <div class="flex items-center space-x-4">
+      <button type="submit" id="btnSave" class="text-white bg-slate-600 hover:bg-slate-200 focus:ring-4 focus:outline-none font medium rounded-lg text-sm px-5 py-2.5 text-center">
+        <span class="fa fa-save"></span> Save
+      </button>
+
+      <a href="~/" class="text-white bg-slate-600 hover:bg-slate-200 focus:ring-4 focus:outline-none font medium rounded-lg text-sm px-5 py-2.5 text-center opacity-75">
+        <i class="fa fa-times"></i>
+          Cancel
+      </a>
+    </div>
+  </form>
+</div>
+
 @section scripts{
   <script src="~/js/custom.js" type="text/javascript"></script>
   <script>
