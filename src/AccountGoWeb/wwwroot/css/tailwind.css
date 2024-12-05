@@ -2,6 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 
+li {
+    list-style-type: none;
+}
+
 /* Hide scrollbar for all elements */
 .hidden-scrollbar {
     overflow-y: scroll; /* Enables vertical scrolling */
