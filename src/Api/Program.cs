@@ -27,14 +27,7 @@ builder.Services.AddScoped<IAuthenticationService, AuthenticationService>();
 builder.Services.AddAuthentication();
 builder.Services.ConfigureIdentity();
 builder.Services.ConfigureJWT(builder.Configuration);
-
-// account service
-builder.Services.AddScoped<IAccountService, AccountService>();
-
-//register ApiDbContext
-builder.Services.AddDbContext<ApiDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
-
+builder.Services.AddScoped<IFinancialService, FinancialService>();
 
 builder.Services.AddControllers()
 .AddNewtonsoftJson(
@@ -53,13 +46,13 @@ builder.Services.AddSwaggerGen();
 builder.Services.ConfigureSqlContext(builder.Configuration);
 
 // Add cors
-builder.Services.AddCors(o => o.AddPolicy("AllowAll", builder =>
-{
-    builder
-    .AllowAnyOrigin()
-    .AllowAnyMethod()
-    .AllowAnyHeader();
-}));
+// builder.Services.AddCors(o => o.AddPolicy("AllowAll", builder =>
+// {
+//     builder
+//     .AllowAnyOrigin()
+//     .AllowAnyMethod()
+//     .AllowAnyHeader();
+// }));
 
 // cors
 builder.Services.ConfigureCors();
