@@ -358,9 +358,87 @@ namespace Api.Controllers
         }
 
 
+        #region CRUD for Accounts
 
+        [HttpGet]
+        [Route("GetAccount/{id}")]
+        public async Task<IActionResult> GetAccountById(int id)
+        {
+            var account = await _accountService.GetAccountByIdAsync(id);
+            if (account == null)
+                return NotFound();
 
-        #region Private Methods
+            var accountDto = new Account
+            {
+                Id = account.Id,
+                AccountCode = account.AccountCode,
+                AccountName = account.AccountName,
+                Description = account.Description,
+                IsCash = account.IsCash,
+                IsContraAccount = account.IsContraAccount,
+                Balance = account.Balance
+            };
+
+            return Ok(accountDto);
+        }
+
+        [HttpPost]
+        [Route("AddAccount")]
+        public async Task<IActionResult> AddAccount([FromBody] Account newAccountDto)
+        {
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+
+            var newAccount = new Core.Domain.Financials.Account
+            {
+                AccountCode = newAccountDto.AccountCode,
+                AccountName = newAccountDto.AccountName,
+                Description = newAccountDto.Description,
+                IsCash = newAccountDto.IsCash,
+                IsContraAccount = newAccountDto.IsContraAccount,
+            };
+
+            var createdAccount = await _accountService.AddAccountAsync(newAccount);
+
+            return CreatedAtAction(nameof(GetAccountById), new { id = createdAccount.Id }, createdAccount);
+        }
+
+        [HttpPut]
+        [Route("UpdateAccount/{accountCode}")]
+        public async Task<IActionResult> UpdateAccount(string accountCode, [FromBody] Account updatedAccountDto)
+        {
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+
+            var existingAccount = await _accountService.GetAccountByCodeAsync(accountCode);
+            if (existingAccount == null)
+                return NotFound();
+
+            existingAccount.AccountName = updatedAccountDto.AccountName;
+            existingAccount.Description = updatedAccountDto.Description;
+            existingAccount.IsCash = updatedAccountDto.IsCash;
+            existingAccount.IsContraAccount = updatedAccountDto.IsContraAccount;
+
+            await _accountService.UpdateAccountAsync(existingAccount);
+
+            return Ok(existingAccount);
+        }
+
+        [HttpDelete]
+        [Route("DeleteAccount/{id}")]
+        public async Task<IActionResult> DeleteAccount(int id)
+        {
+            var result = await _accountService.DeleteAccountAsync(id);
+
+            if (result == null)
+                return NotFound();
+
+            return Ok(result);
+        }
+
+        #endregion
+
+        #region 
         private IList<Dto.Financial.Account> BuildAccountGrouping(IList<Core.Domain.Financials.Account> allAccounts,
         int? parentAccountId)
         {
