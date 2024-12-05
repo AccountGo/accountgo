@@ -12,7 +12,7 @@ namespace Api.Data
 
         public static IDictionary<DateTime, EntityEntry> addedEntities = new Dictionary<DateTime, EntityEntry>();
 
-        public static List<AuditLog> GetChangesForAuditLog(EntityEntry dbEntry, string username)
+        public static List<AuditLog> GetChangesForAuditLog(EntityEntry dbEntry, string username, string ipAddress)
         {
             var result = new List<AuditLog>();
 
@@ -60,7 +60,8 @@ namespace Api.Data
                             null,
                             null,
                             null,
-                            dbEntryObject);
+                            dbEntryObject,
+                            ipAddress);
 
                         result.Add(auditLog);
 
@@ -80,7 +81,8 @@ namespace Api.Data
                             dbEntry.Property(keyName).CurrentValue!.ToString(),
                             null,
                             null,
-                            dbEntryObject);
+                            dbEntryObject,
+                            ipAddress);
 
                         result.Add(auditLog);
                     }
@@ -105,7 +107,8 @@ namespace Api.Data
                                     keyValue, 
                                     propertyName,
                                     property.OriginalValue == null ? null : property.OriginalValue.ToString(),
-                                    property.CurrentValue == null ? null : property.CurrentValue.ToString());
+                                    property.CurrentValue == null ? null : property.CurrentValue.ToString(),
+                                    ipAddress);
 
                                 result.Add(auditLog);
                             }
@@ -122,7 +125,7 @@ namespace Api.Data
         }
 
         #region Private Methods
-        private static AuditLog CreateAuditLog(string username, DateTime changeTime, AuditEventTypes type, string tableName, string? recordId, string? fieldname, string? originalvalue, string? newvalue)
+        private static AuditLog CreateAuditLog(string username, DateTime changeTime, AuditEventTypes type, string tableName, string? recordId, string? fieldname, string? originalvalue, string? newvalue, string? ipAddress)
         {
             var auditLog = new AuditLog()
             {
@@ -133,7 +136,8 @@ namespace Api.Data
                 RecordId = recordId,
                 FieldName = fieldname,
                 OriginalValue = originalvalue,
-                NewValue = newvalue
+                NewValue = newvalue,
+                IPAddress = ipAddress
             };
 
             return auditLog;

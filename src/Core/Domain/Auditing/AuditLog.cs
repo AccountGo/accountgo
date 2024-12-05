@@ -23,6 +23,7 @@ namespace Core.Domain.Auditing
         public string FieldName { get; set; }
         public string OriginalValue { get; set; }
         public string NewValue { get; set; }
+        public string IPAddress { get; set; }
         //public override int Id
         //{
         //    get { return AuditLogId; }

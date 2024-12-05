@@ -1,6 +1,8 @@
+using Api.Data;
 using Dto.Administration;
 using Dto.Security;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Services.Administration;
 using Services.Financial;
 using Services.Inventory;
@@ -87,7 +89,8 @@ namespace Api.Controllers
                 RecordId = log.RecordId,
                 FieldName = log.FieldName,
                 OriginalValue = log.OriginalValue,
-                NewValue = log.NewValue
+                NewValue = log.NewValue,
+                IPAddress = log.IPAddress
             }).ToList();
 
             return new ObjectResult(auditLogsDto);
@@ -243,20 +246,28 @@ namespace Api.Controllers
 
         [HttpPost]
         [Route("SaveCompany")]
-        public IActionResult SaveCompany([FromBody]Company companyDto)
+        public IActionResult SaveCompany([FromBody] Company companyDto, [FromServices] ApiDbContext context)
         {
             string[] errors;
             try
             {
                 if (!ModelState.IsValid)
                 {
-                    errors = new string[ModelState.ErrorCount];
-                    foreach (var val in ModelState.Values)
-                        for (var i = 0; i < ModelState.ErrorCount; i++)
-                            errors[i] = val.Errors[i].ErrorMessage;
-                    return new BadRequestObjectResult(errors);
+                    errors = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage).ToArray();
+                    return BadRequest(errors);
                 }
 
+                var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "UnknownIP";
+
+                // TODO: Implement proper username retrieval
+                string username = User?.Identity?.Name ?? "UnknownUser";
+                context.CurrentUsername = username;
+                context.IpAddress = ipAddress;
+
+                // Ensure 'Company' entry exists in AuditableEntity
+                var auditableEntity = context.AuditableEntities.FirstOrDefault(e => e.EntityName == "Company");
+
+                // Retrieve or create the Company entity
                 Core.Domain.Company company = companyDto.Id == 0
                     ? new Core.Domain.Company()
                     : _adminService.GetDefaultCompany();
@@ -268,12 +279,22 @@ namespace Api.Controllers
 
                 _adminService.SaveCompany(company);
 
-                return new ObjectResult(Ok());
+                context.Entry(company).State = EntityState.Modified;
+                var auditLogs = AuditLogHelper.GetChangesForAuditLog(context.Entry(company), username, ipAddress);
+
+                foreach (var log in auditLogs)
+                {
+                    context.AuditLogs.Add(log);
+                }
+                context.SaveChanges();
+
+                return Ok();
             }
             catch (Exception ex)
             {
-                errors = new[] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
-                return new BadRequestObjectResult(errors);
+                errors = new[] { ex.InnerException?.Message ?? ex.Message };
+                Console.WriteLine($"Error: {string.Join(", ", errors)}");
+                return BadRequest(errors);
             }
         }
     }
