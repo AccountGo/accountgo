@@ -22,3 +22,13 @@
     opacity: 0.6;
     cursor: not-allowed;
 }
+
+/* General hover styles for dark mode */
+.dark .hover\:text-lightPrimary:hover {
+  color: var(--lightPrimary); /* Replace with your light primary color variable or value */
+}
+
+/* Ensure dark mode elements respect hover text */
+.dark .hover\:bg-darkPrimary:hover {
+  background-color: var(--darkPrimary); /* Replace with your dark primary background variable or value */
+}
