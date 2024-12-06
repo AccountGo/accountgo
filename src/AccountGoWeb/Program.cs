@@ -26,6 +26,8 @@ builder.Services
     .AddInteractiveServerComponents()
     .AddCircuitOptions(options => options.DetailedErrors = true); // for debugging razor components
 
+builder.AddServiceDefaults();
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
