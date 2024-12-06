@@ -77,6 +77,8 @@ builder.Services.AddScoped(typeof(Services.TaxSystem.ITaxService), typeof(Servic
 //seed the database
 builder.Services.AddScoped<DatabaseSeeder>();
 
+builder.AddServiceDefaults();
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
