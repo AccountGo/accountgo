@@ -1,20 +1,14 @@
-using System;
 using Api.ActionFilters;
 using Api.Data;
 using Api.Data.Repositories;
 using Api.Data.Seed;
 using Api.Extensions;
 using Api.Service;
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
+builder.AddServiceDefaults();
 
 // Validation
 builder.Services.AddScoped<ValidationFilterAttribute>();
@@ -45,15 +39,6 @@ builder.Services.AddSwaggerGen();
 // Add database context
 builder.Services.ConfigureSqlContext(builder.Configuration);
 
-// Add cors
-// builder.Services.AddCors(o => o.AddPolicy("AllowAll", builder =>
-// {
-//     builder
-//     .AllowAnyOrigin()
-//     .AllowAnyMethod()
-//     .AllowAnyHeader();
-// }));
-
 // cors
 builder.Services.ConfigureCors();
 
@@ -76,8 +61,6 @@ builder.Services.AddScoped(typeof(Services.TaxSystem.ITaxService), typeof(Servic
 
 //seed the database
 builder.Services.AddScoped<DatabaseSeeder>();
-
-builder.AddServiceDefaults();
 
 var app = builder.Build();
 
