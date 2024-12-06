@@ -27,6 +27,10 @@ jobs:
           echo "++++ dotnet-ef version"
           dotnet ef --version
 
+      - name: Install dotnet aspire workload
+        run: |
+          dotnet workload install aspire
+
       - name: Build with dotnet
         run: |
           echo "++++ dotnet build"

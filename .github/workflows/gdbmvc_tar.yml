@@ -18,6 +18,10 @@ jobs:
           dotnet-version: '9.x'
           include-prerelease: true
 
+      - name: Install dotnet aspire workload
+        run: |
+          dotnet workload install aspire
+
       - name: Build with dotnet
         run: dotnet build --configuration Release
 
