@@ -79,13 +79,13 @@
                     <div class="row">
                         <div class="col-sm-4">First Name</div>
                         <div class="col-sm-8">
-                            <input asp-for="PrimaryContact.FirstName" class="form-control" type="text" placeholder="First Name ..." />
+                            <input asp-for="PrimaryContact!.FirstName" class="form-control" type="text" placeholder="First Name ..." />
                         </div>
                     </div>
                     <div class="row">
                         <div class="col-sm-4">Last Name</div>
                         <div class="col-sm-8">
-                            <input asp-for="PrimaryContact.LastName" class="form-control" type="text" placeholder="Last Name ..." />
+                            <input asp-for="PrimaryContact!.LastName" class="form-control" type="text" placeholder="Last Name ..." />
                         </div>
                     </div>
                 </div>
@@ -93,7 +93,7 @@
                     <div class="row">
                         <div class="col-sm-4">Phone</div>
                         <div class="col-sm-8">
-                            <input asp-for="PrimaryContact.Party.Phone" class="form-control" type="text" placeholder="Phone ..." />
+                            <input asp-for="PrimaryContact!.Party.Phone" class="form-control" type="text" placeholder="Phone ..." />
                         </div>
                     </div>
                     @* <div class="row">
@@ -105,13 +105,13 @@
                     <div class="row">
                         <div class="col-sm-4">Website</div>
                         <div class="col-sm-8">
-                            <input asp-for="PrimaryContact.Party.Website" class="form-control" type="text" placeholder="Website ..." />
+                            <input asp-for="PrimaryContact!.Party.Website" class="form-control" type="text" placeholder="Website ..." />
                         </div>
                     </div>
                     <div class="row">
                         <div class="col-sm-4">Email</div>
                         <div class="col-sm-8">
-                            <input asp-for="PrimaryContact.Party.Email" class="form-control" type="text" placeholder="Email ..." />
+                            <input asp-for="PrimaryContact!.Party.Email" class="form-control" type="text" placeholder="Email ..." />
                         </div>
                     </div>
                 </div>

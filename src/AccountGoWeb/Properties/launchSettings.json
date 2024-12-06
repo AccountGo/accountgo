@@ -13,9 +13,9 @@
       "launchBrowser": true,
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"
-      }
-    },
-    "AccountGoWeb": {
+    }
+  },
+  "AccountGoWeb": {
       "commandName": "Project",
       "launchBrowser": true,
       "environmentVariables": {

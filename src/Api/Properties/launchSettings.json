@@ -18,13 +18,13 @@
     "Api": {
       "commandName": "Project",
       "launchBrowser": true,
+      "applicationUrl": "http://localhost:8001/",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
         "DBSERVER": "localhost,1444",
         "DBUSERID": "sa",
         "DBPASSWORD": "SqlPassword!"
-      },
-      "applicationUrl": "http://localhost:8001/"
+      }
     }
   }
 }
