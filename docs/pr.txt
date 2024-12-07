@@ -12,6 +12,8 @@ dotnet ef database update --project ./src/Api/ --msbuildprojectextensionspath .b
 
 dotnet ef database update --project ./src/Api/ --msbuildprojectextensionspath .build/obj/Api/ --context ApiDbContext
 
-
 ==========
+
+Apply Entity Framework Core migrations in .NET Aspire
+    https://learn.microsoft.com/en-us/dotnet/aspire/database/ef-core-migrations
 

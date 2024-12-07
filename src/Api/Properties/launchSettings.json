@@ -23,7 +23,8 @@
         "ASPNETCORE_ENVIRONMENT": "Development",
         "DBSERVER": "localhost,1444",
         "DBUSERID": "sa",
-        "DBPASSWORD": "SqlPassword!"
+        "DBPASSWORD": "SqlPassword!",
+        "DBNAME": "gdb-db"
       }
     }
   }

@@ -10,10 +10,12 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Aspire.Hosting.AppHost" Version="8.2.2" />
+    <PackageReference Include="Aspire.Hosting.AppHost" Version="8.2.1" />
+    <PackageReference Include="Aspire.Hosting.SqlServer" Version="8.0.2" />
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="../MigrationService/MigrationService.csproj" />
     <ProjectReference Include="..\AccountGoWeb\AccountGoWeb.csproj" />
     <ProjectReference Include="..\Api\Api.csproj" />
   </ItemGroup>
