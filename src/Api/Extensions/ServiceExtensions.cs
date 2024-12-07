@@ -56,22 +56,36 @@ namespace Api.Extensions
             });
         }
 
+        static Dictionary<string, string> parseConnectionString(string connString)
+        {
+            var parts = connString.Split(';');
+            var dict = parts
+                .Select(p => p.Split('='))
+                .ToDictionary(p => p[0], p => p[1]);
+
+            return dict;
+        }
+
         public static void ConfigureSqlContext(this IServiceCollection services, IConfiguration configuration)
         {
-            var connectionString = configuration.GetConnectionString("DefaultConnection") ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
+            string dbServer, dbUserID, dbUserPassword, dbName = string.Empty;
 
-            // These environment variables can be overriden from launchSettings.json.
-            string dbServer = System.Environment.GetEnvironmentVariable("DBSERVER") ?? "localhost,1444";
-            string dbUserID = System.Environment.GetEnvironmentVariable("DBUSERID") ?? "sa";
-            string dbUserPassword = System.Environment.GetEnvironmentVariable("DBPASSWORD") ?? "SqlPassword!";
-            string dbName = System.Environment.GetEnvironmentVariable("DBNAME") ?? "accountgodb";
+            var connectionString = configuration.GetConnectionString("gdb-db") ?? null;
 
-            connectionString = String.Format(configuration.GetConnectionString("DefaultConnection")!, dbServer, dbUserID, dbUserPassword, dbName);
+            if (connectionString == null)
+            {
+                // These environment variables can be overriden from launchSettings.json.
+                dbServer = System.Environment.GetEnvironmentVariable("DBSERVER") ?? "localhost,1444";
+                dbUserID = System.Environment.GetEnvironmentVariable("DBUSERID") ?? "sa";
+                dbUserPassword = System.Environment.GetEnvironmentVariable("DBPASSWORD") ?? "SqlPassword!";
+                dbName = System.Environment.GetEnvironmentVariable("DBNAME") ?? "accountgodb";
 
-            System.Console.WriteLine("DB Connection String: " + connectionString);
-            
+                connectionString = string.Format(configuration.GetConnectionString("DefaultConnection")!, dbServer, dbUserID, dbUserPassword, dbName);
+            } 
+
+            Console.WriteLine("DB Connection String: " + connectionString);
+
             services
-                //.AddEntityFrameworkSqlServer()
                 .AddDbContext<ApiDbContext>(options => options.UseSqlServer(connectionString
                 , options => options.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery)))
                 //.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery) // Add this line
