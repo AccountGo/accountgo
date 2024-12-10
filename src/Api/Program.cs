@@ -5,6 +5,7 @@ using Api.Data.Repositories;
 using Api.Data.Seed;
 using Api.Extensions;
 using Api.Service;
+using Hangfire;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -77,6 +78,10 @@ builder.Services.AddScoped(typeof(Services.TaxSystem.ITaxService), typeof(Servic
 //seed the database
 builder.Services.AddScoped<DatabaseSeeder>();
 
+// background jobs
+builder.Services.ConfigureHangFire(builder.Configuration);
+builder.Services.AddSingleton<Services.BackgroundJobs.ExpiryCheckJobService>();
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -92,6 +97,10 @@ app.UseCors("AllowAll");
 
 app.UseAuthentication();
 app.UseAuthorization();
+
+app.UseHangfireDashboard();
+var jobService = app.Services.GetRequiredService<Services.BackgroundJobs.ExpiryCheckJobService>();
+jobService.AddExpiryCheckJob();
 
 app.MapControllers();
 
