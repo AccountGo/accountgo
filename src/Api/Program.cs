@@ -31,6 +31,9 @@ builder.Services.ConfigureJWT(builder.Configuration);
 // swagger
 builder.Services.ConfigureSwagger();
 
+// swagger
+builder.Services.ConfigureSwagger();
+
 builder.Services.AddControllers()
 .AddNewtonsoftJson(
     options =>
@@ -79,6 +82,10 @@ builder.Services.AddScoped(typeof(Services.TaxSystem.ITaxService), typeof(Servic
 builder.Services.ConfigureHangFire(builder.Configuration);
 builder.Services.AddSingleton<Services.BackgroundJobs.ExpiryCheckJobService>();
 
+
+// background jobs
+builder.Services.ConfigureHangFire(builder.Configuration);
+builder.Services.AddSingleton<Services.BackgroundJobs.ExpiryCheckJobService>();
 
 var app = builder.Build();
 
