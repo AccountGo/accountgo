@@ -2,6 +2,7 @@ using System;
 using Api.ActionFilters;
 using Api.Data;
 using Api.Data.Repositories;
+using Api.Data.Seed;
 using Api.Extensions;
 using Api.Service;
 using Microsoft.AspNetCore.Builder;
@@ -10,7 +11,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Hangfire;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -27,24 +27,20 @@ builder.Services.AddScoped<IAuthenticationService, AuthenticationService>();
 builder.Services.AddAuthentication();
 builder.Services.ConfigureIdentity();
 builder.Services.ConfigureJWT(builder.Configuration);
-
-// swagger
-builder.Services.ConfigureSwagger();
-
-// swagger
-builder.Services.ConfigureSwagger();
+builder.Services.AddScoped<IFinancialService, FinancialService>();
 
 builder.Services.AddControllers()
 .AddNewtonsoftJson(
     options =>
-        {
-            options.SerializerSettings.ContractResolver = new Newtonsoft.Json.Serialization.CamelCasePropertyNamesContractResolver();
-            options.SerializerSettings.ReferenceLoopHandling = Newtonsoft.Json.ReferenceLoopHandling.Ignore;
-        }
+    {
+        options.SerializerSettings.ContractResolver = new Newtonsoft.Json.Serialization.CamelCasePropertyNamesContractResolver();
+        options.SerializerSettings.ReferenceLoopHandling = Newtonsoft.Json.ReferenceLoopHandling.Ignore;
+    }
     );
 
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
 
 // Add database context
 builder.Services.ConfigureSqlContext(builder.Configuration);
@@ -78,18 +74,17 @@ builder.Services.AddScoped(typeof(Services.Administration.IAdministrationService
 builder.Services.AddScoped(typeof(Services.Security.ISecurityService), typeof(Services.Security.SecurityService));
 builder.Services.AddScoped(typeof(Services.TaxSystem.ITaxService), typeof(Services.TaxSystem.TaxService));
 
-// background jobs
-builder.Services.ConfigureHangFire(builder.Configuration);
-builder.Services.AddSingleton<Services.BackgroundJobs.ExpiryCheckJobService>();
-
-
-// background jobs
-builder.Services.ConfigureHangFire(builder.Configuration);
-builder.Services.AddSingleton<Services.BackgroundJobs.ExpiryCheckJobService>();
+//seed the database
+builder.Services.AddScoped<DatabaseSeeder>();
 
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
 
 //app.UseHttpsRedirection();
 app.UseRouting();
@@ -97,20 +92,6 @@ app.UseCors("AllowAll");
 
 app.UseAuthentication();
 app.UseAuthorization();
-
-app.UseHangfireDashboard();
-var jobService = app.Services.GetRequiredService<Services.BackgroundJobs.ExpiryCheckJobService>();
-jobService.AddExpiryCheckJob();
-
-
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI(s =>
-    {
-        s.SwaggerEndpoint("/swagger/v1/swagger.json", "Good Deed Books API v1");
-    });
-}
 
 app.MapControllers();
 
@@ -129,6 +110,9 @@ using (var scope = app.Services.CreateScope())
     {
         identityDbContext.Database.Migrate();
     }
+
+    var seeder = services.GetRequiredService<DatabaseSeeder>();
+    seeder.Seed();
 }
 
 app.Run();
