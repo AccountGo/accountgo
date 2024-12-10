@@ -25,6 +25,7 @@ builder.Services.AddAuthentication();
 builder.Services.ConfigureIdentity();
 builder.Services.ConfigureJWT(builder.Configuration);
 builder.Services.AddScoped<IFinancialService, FinancialService>();
+builder.Services.AddScoped<IAccountService, AccountService>();
 
 builder.Services.AddControllers()
 .AddNewtonsoftJson(
