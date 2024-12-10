@@ -47,7 +47,7 @@ namespace Api.Service
 
             _user!.RefreshToken = refreshToken;
 
-            if(populateExp)
+            if (populateExp)
                 _user.RefreshTokenExpiryTime = DateTime.Now.AddDays(7);
 
             await _userManager.UpdateAsync(_user);
@@ -67,7 +67,7 @@ namespace Api.Service
 
             _user = user;
 
-            return await CreateToken(populateExp: false);
+            return await CreateToken(populateExp: true);
         }
 
         private SigningCredentials GetSigningCredentials()
@@ -131,7 +131,7 @@ namespace Api.Service
                 ValidateIssuer = true,
                 ValidateIssuerSigningKey = true,
                 IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey!)),
-                ValidateLifetime = true,
+                ValidateLifetime = false,
                 ValidIssuer = validIssuer,
                 ValidAudience = validAudience
             };
@@ -141,7 +141,7 @@ namespace Api.Service
             var principal = tokenHandler.ValidateToken(token, tokenValidationParameters, out securityToken);
 
             var jwtSecurityToken = securityToken as JwtSecurityToken;
-            if(jwtSecurityToken == null || !jwtSecurityToken.Header.Alg.Equals(SecurityAlgorithms.HmacSha256, StringComparison.InvariantCultureIgnoreCase))
+            if (jwtSecurityToken == null || !jwtSecurityToken.Header.Alg.Equals(SecurityAlgorithms.HmacSha256, StringComparison.InvariantCultureIgnoreCase))
                 throw new SecurityTokenException("Invalid token");
 
             return principal;
