@@ -15,14 +15,12 @@
 {
     <p>Unable to get data. Please try again later.</p>
 }
+else if (isLoading)
+{
+    <p>Loading accounts...</p>
+}
 else
 {
-@*     <ul>
-        @foreach (var item in accounts)
-        {
-            <li>@item.AccountName</li>
-        }
-    </ul> *@
     <style>
         .hiddenRow {
             padding: 4px !important;
@@ -30,6 +28,8 @@ else
     </style>
 
     <div>
+        <button class="btn btn-success mb-3" @onclick="OpenAddModal">Add Account</button>
+
         <table class="table table-condensed table-striped">
 
             <thead>
@@ -39,6 +39,7 @@ else
                     <th>Balance</th>
                     <th>Debit</th>
                     <th>Credit</th>
+                    <th>Actions</th>
                 </tr>
             </thead>
 
@@ -54,6 +55,10 @@ else
                         <td>@account.TotalBalance</td>
                         <td>@account.TotalDebitBalance</td>
                         <td>@account.TotalCreditBalance</td>
+                        <td>
+                            <button class="btn btn-primary" @onclick="() => OpenEditModal(account)">Edit</button>
+                            <button class="btn btn-danger" @onclick="() => OpenDeleteModal(account)">Delete</button>
+                        </td>
                     </tr>
 
                     <tr>
@@ -72,6 +77,10 @@ else
                                             <td>@childAccount.TotalBalance</td>
                                             <td>@childAccount.TotalDebitBalance</td>
                                             <td>@childAccount.TotalCreditBalance</td>
+                                            <td>
+                                                <button class="btn btn-primary" @onclick="() => OpenEditModal(childAccount)">Edit</button>
+                                                <button class="btn btn-danger" @onclick="() => OpenDeleteModal(childAccount)">Delete</button>
+                                            </td>
                                         </tr>
 
                                         <tr>
@@ -90,6 +99,10 @@ else
                                                                 <td>@grandChildAccount.TotalBalance</td>
                                                                 <td>@grandChildAccount.TotalDebitBalance</td>
                                                                 <td>@grandChildAccount.TotalCreditBalance</td>
+                                                                <td>
+                                                                    <button class="btn btn-primary" @onclick="() => OpenEditModal(grandChildAccount)">Edit</button>
+                                                                    <button class="btn btn-danger" @onclick="() => OpenDeleteModal(grandChildAccount)">Delete</button>
+                                                                </td>
                                                             </tr>
 
                                                             <tr>
@@ -105,6 +118,10 @@ else
                                                                                     <td>@greatGrandChildAccount.TotalBalance</td>
                                                                                     <td>@greatGrandChildAccount.TotalDebitBalance</td>
                                                                                     <td>@greatGrandChildAccount.TotalCreditBalance</td>
+                                                                                    <td>
+                                                                                        <button class="btn btn-primary" @onclick="() => OpenEditModal(greatGrandChildAccount)">Edit</button>
+                                                                                        <button class="btn btn-danger" @onclick="() => OpenDeleteModal(greatGrandChildAccount)">Delete</button>
+                                                                                    </td>
                                                                                 </tr>
                                                                             }
                                                                         </table>
@@ -131,16 +148,86 @@ else
 
 }
 
+@if (isAddModalVisible || isEditModalVisible)
+{
+    <div class="modal show d-block" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">@((isEditModalVisible ? "Edit Account" : "Add Account"))</h5>
+                    <button type="button" class="btn-close" @onclick="CloseModal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="accountCode" class="form-label">Account Code</label>
+                        <input type="text" id="accountCode" class="form-control" 
+                               value="@selectedAccount?.AccountCode" 
+                               @oninput="e => selectedAccount!.AccountCode = e.Value?.ToString() ?? string.Empty" 
+                               disabled="@isEditModalVisible" />
+                    </div>
+                    <div class="mb-3">
+                        <label for="accountName" class="form-label">Account Name</label>
+                        <input type="text" id="accountName" class="form-control" 
+                               value="@selectedAccount?.AccountName" 
+                               @oninput="e => selectedAccount!.AccountName = e.Value?.ToString() ?? string.Empty" />
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="CloseModal">Cancel</button>
+                    <button class="btn btn-primary" @onclick="SaveAccount">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (isDeleteModalVisible)
+{
+    <div class="modal show d-block" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Delete Account</h5>
+                    <button type="button" class="btn-close" @onclick="CloseDeleteModal"></button>
+                </div>
+                <div class="modal-body">
+                    <p>
+                        Are you sure you want to delete the account 
+                        <strong>@selectedAccount?.AccountName</strong> 
+                        with code <strong>@selectedAccount?.AccountCode</strong>?
+                    </p>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="CloseDeleteModal">Cancel</button>
+                    <button class="btn btn-danger" @onclick="ConfirmDeleteAccount">Delete</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
-    private IEnumerable<Models.Financial.AccountViewModel>? accounts = [];
+    private List<AccountViewModel>? accounts = new();
+    private AccountViewModel? selectedAccount = null;
+    private bool isAddModalVisible = false;
+    private bool isEditModalVisible = false;
+    private bool isDeleteModalVisible = false;
     private bool getError;
     private bool shouldRender;
+    private string errorMessage = string.Empty;
+    private bool isLoading = true;
     private bool jsInteropCalled = false; // Flag to ensure JS interop is called only once
 
 
     protected override bool ShouldRender() => shouldRender;
 
     protected override async Task OnInitializedAsync()
+    {
+        await LoadAccountsFromApi();
+        isLoading = false;
+    }
+
+    protected async Task LoadAccountsFromApi()
     {
         string apiurl = System.Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
 
@@ -172,7 +259,7 @@ else
 
             try
             {
-                accounts = JsonSerializer.Deserialize<System.Collections.Generic.List<Models.Financial.AccountViewModel>>(responseString, options);
+                accounts = JsonSerializer.Deserialize<System.Collections.Generic.List<AccountViewModel>>(responseString, options);
             }
             catch (JsonException ex)
             {
@@ -198,5 +285,129 @@ else
             await JSRuntime.InvokeVoidAsync("console.log", accounts);
             jsInteropCalled = true; // Ensure this block runs only once
         }
+    }
+
+      // Open Add Modal
+    private void OpenAddModal()
+    {
+        selectedAccount = new AccountViewModel();
+        errorMessage = string.Empty;
+        isAddModalVisible = true;
+    }
+
+    // Open Edit Modal
+    private void OpenEditModal(AccountViewModel account)
+    {
+        selectedAccount = new AccountViewModel
+        {
+            AccountCode = account.AccountCode,
+            AccountName = account.AccountName,
+            TotalBalance = account.TotalBalance,
+            TotalDebitBalance = account.TotalDebitBalance,
+            TotalCreditBalance = account.TotalCreditBalance,
+            ChildAccounts = account.ChildAccounts
+        };
+        errorMessage = string.Empty;
+        isEditModalVisible = true;
+    }
+
+    // Close Add or Edit Modal
+    private void CloseModal()
+    {
+        isAddModalVisible = false;
+        isEditModalVisible = false;
+        selectedAccount = null;
+    }
+
+    // Open Delete Modal
+    private void OpenDeleteModal(AccountViewModel account)
+    {
+        selectedAccount = account;
+        isDeleteModalVisible = true;
+    }
+
+    // Close Delete Modal
+    private void CloseDeleteModal()
+    {
+        isDeleteModalVisible = false;
+        selectedAccount = null;
+    }
+
+    // Add or Update Account
+    private void SaveAccount()
+    {
+        if (selectedAccount == null)
+        {
+            errorMessage = "No account selected.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(selectedAccount.AccountCode) || string.IsNullOrWhiteSpace(selectedAccount.AccountName))
+        {
+            errorMessage = "Both Account Code and Account Name are required.";
+            return;
+        }
+
+        if (isEditModalVisible)
+        {
+            // Edit existing account locally
+            var account = accounts!.FirstOrDefault(a => a.AccountCode == selectedAccount.AccountCode);
+            if (account != null)
+            {
+                account.AccountName = selectedAccount.AccountName;
+                account.TotalBalance = selectedAccount.TotalBalance;
+                account.TotalDebitBalance = selectedAccount.TotalDebitBalance;
+                account.TotalCreditBalance = selectedAccount.TotalCreditBalance;
+            }
+            else
+            {
+                errorMessage = "Account not found.";
+            }
+        }
+        else
+        {
+            // Add new account locally
+            if (accounts!.Any(a => a.AccountCode == selectedAccount.AccountCode))
+            {
+                errorMessage = "An account with this Account Code already exists.";
+                return;
+            }
+
+            accounts!.Add(new AccountViewModel
+            {
+                AccountCode = selectedAccount.AccountCode,
+                AccountName = selectedAccount.AccountName,
+                TotalBalance = selectedAccount.TotalBalance,
+                TotalDebitBalance = selectedAccount.TotalDebitBalance,
+                TotalCreditBalance = selectedAccount.TotalCreditBalance,
+                ChildAccounts = new List<AccountViewModel>()
+            });
+        }
+
+        CloseModal();
+    }
+
+    // Delete Account
+    private void ConfirmDeleteAccount()
+    {
+        if (selectedAccount == null)
+        {
+            errorMessage = "No account selected.";
+            return;
+        }
+
+        accounts!.Remove(selectedAccount);
+        CloseDeleteModal();
+    }
+
+    // ViewModel for Accounts
+    public class AccountViewModel
+    {
+        public string AccountCode { get; set; } = string.Empty;
+        public string AccountName { get; set; } = string.Empty;
+        public decimal TotalBalance { get; set; }
+        public decimal TotalDebitBalance { get; set; }
+        public decimal TotalCreditBalance { get; set; }
+        public List<AccountViewModel> ChildAccounts { get; set; } = new();
     }
 }
