@@ -3,20 +3,23 @@ using Google.Protobuf.WellKnownTypes;
 
 var builder = DistributedApplication.CreateBuilder(args);
 
-var sql = builder.AddSqlServer("gdb-sql-server")
+var sqlServer = builder.AddSqlServer("gdb-sql-server")
                  .AddDatabase("gdb-db");
 
 // read environment variable for connection string
-var api = builder.AddProject<Projects.Api>("api")
-        .WithReference(sql)
-        .WithHttpEndpoint(port: 8001);
+var apiService = builder.AddProject<Projects.Api>("api")
+        .WithReference(sqlServer)
+        .WithHttpEndpoint(port: 8001)
+        .WaitFor(sqlServer);
 
 builder.AddProject<Projects.AccountGoWeb>("mvc")
         .WithHttpEndpoint(port: 8000)
-        .WithReference(api);
+        .WithReference(apiService)
+        .WaitFor(apiService);
 
 builder.AddProject<Projects.MigrationService>("migrations")
-    .WithReference(sql);
+    .WithReference(sqlServer)
+    .WaitFor(sqlServer);
 
 builder.Build().Run();
 
