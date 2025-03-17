@@ -1,4 +1,5 @@
-﻿using Api.Data.Seed;
+﻿using Api.Data.Configuration.Sales;
+using Api.Data.Seed;
 using Core.Domain;
 using Core.Domain.Auditing;
 using Core.Domain.Financials;
@@ -196,7 +197,9 @@ namespace Api.Data
 
             builder.Entity<SalesOrderLine>()
                 .Property(p => p.Quantity)
-                .HasColumnType("decimal(18, 2)"); 
+                .HasColumnType("decimal(18, 2)");
+
+            builder.ApplyConfiguration(new SalesProposalLineConfiguration());
 
             builder.Entity<SalesQuoteLine>()
                 .Property(p => p.Amount)
@@ -278,6 +281,8 @@ namespace Api.Data
         public virtual DbSet<SalesInvoiceLine> SalesInvoiceLines { get; set; }
         public virtual DbSet<SalesOrderHeader> SalesOrderHeaders { get; set; }
         public virtual DbSet<SalesOrderLine> SalesOrderLines { get; set; }
+        public virtual DbSet<SalesProposalHeader> SalesProposalHeaders { get; set; }
+        public virtual DbSet<SalesProposalLine> SalesProposalLines { get; set; }
         public virtual DbSet<SalesQuoteHeader> SalesQuoteHeaders { get; set; }
         public virtual DbSet<SalesQuoteLine> SalesQuoteLines { get; set; }
         public virtual DbSet<SalesReceiptHeader> SalesReceiptHeaders { get; set; }

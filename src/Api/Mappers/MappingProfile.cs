@@ -60,6 +60,26 @@ namespace Api
                 .ForMember(dest => dest.ItemId, opt => opt.MapFrom(src => src.ItemId.GetValueOrDefault()))
                 .ForMember(dest => dest.MeasurementId, opt => opt.MapFrom(src => src.MeasurementId.GetValueOrDefault()));
 
+
+            CreateMap<Core.Domain.Sales.SalesProposalHeader, Dto.Sales.SalesProposal>()
+                .ForMember(dest => dest.CustomerName, opt => opt.MapFrom(src => src.Customer.Party.Name))
+                .ForMember(dest => dest.StatusId, opt => opt.MapFrom(src => src.Status))
+                .ForMember(dest => dest.SalesProposalLines, opt => opt.MapFrom(src => src.SalesProposalLines));
+
+            CreateMap<Core.Domain.Sales.SalesProposalLine, Dto.Sales.SalesProposalLine>();
+
+            CreateMap<Dto.Sales.SalesProposalForCreation, Core.Domain.Sales.SalesProposalHeader>()
+                .ForMember(dest => dest.Status, opt => opt.MapFrom(src => src.StatusId))
+                .ForMember(dest => dest.SalesProposalLines, opt => opt.MapFrom(src => src.SalesProposalLines));
+
+            CreateMap<Dto.Sales.SalesProposalLineForCreation, Core.Domain.Sales.SalesProposalLine>();
+
+            CreateMap<Dto.Sales.SalesProposalForUpdate, Core.Domain.Sales.SalesProposalHeader>()
+                .ForMember(dest => dest.Status, opt => opt.MapFrom(src => (Core.Domain.SalesProposalStatus)src.StatusId))
+                .ForMember(dest => dest.SalesProposalLines, opt => opt.MapFrom(src => src.SalesProposalLines));
+
+            CreateMap<Dto.Sales.SalesProposalLineForUpdate, Core.Domain.Sales.SalesProposalLine>();
+
             #endregion
         }
     }

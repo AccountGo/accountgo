@@ -357,6 +357,67 @@ namespace Api.Controllers
             }
         }
 
+        [HttpPost("AddSalesProposal")]
+        public async Task<IActionResult> AddSalesProposal([FromBody] Dto.Sales.SalesProposalForCreation salesProposalForCreationDto)
+        {
+            var result = await _salesService.AddSalesProposalAsync(salesProposalForCreationDto);
+
+            if (result.IsFailure)
+                return BadRequest(result.Error.Message);
+
+            return Created();
+        }
+
+        [HttpGet("GetSalesProposalById")]
+        public async Task<IActionResult> GetSalesProposalById(int id)
+        {
+            var result = await _salesService.GetSalesProposalByIdAsync(id, trackChanges: false);
+
+            if (result.IsFailure)
+                return BadRequest(result.Error.Message);
+
+            var salesProposal = result.Value;
+
+            return Ok(salesProposal);
+        }
+
+        [HttpGet("GetSalesProposals")]
+        public async Task<IActionResult> GetSalesProposals()
+        {
+            var result = await _salesService.GetSalesProposalsAsync(trackChanges : false);
+
+            if (result.IsFailure)
+                return BadRequest(result.Error.Message);
+
+            var salesProposals = result.Value;
+
+            return Ok(salesProposals);
+        }
+
+        [HttpPost("UpdateSalesProposal")]
+        public async Task<IActionResult> UpdateSalesProposal([FromBody] Dto.Sales.SalesProposalForUpdate salesProposalForUpdateDto)
+        {
+            var result = await _salesService.UpdateSalesProposalAsync(salesProposalForUpdateDto, trackChanges : true);
+
+            if(result.IsFailure)
+                return BadRequest(result.Error.Message);
+
+            var salesProposalToReturn = result.Value;
+
+            return Ok(salesProposalToReturn);
+        }
+
+        [HttpDelete("DeleteSalesProposal")]
+        public async Task<IActionResult> DeleteSalesProposal(int id)
+        {
+            var result = await _salesService.DeleteSalesProposalAsync(id, trackChanges : false);
+
+            if (result.IsFailure)
+                return BadRequest(result.Error.Message);
+
+            return NoContent();
+        }
+
         [HttpGet]
         [Route("Quotations")] // api/Sales/Quotations
         public IActionResult Quotations()

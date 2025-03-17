@@ -75,6 +75,18 @@ namespace Api.Data
         }
 
         /// <summary>
+        /// Get entity by identifier asynchronously
+        /// </summary>
+        /// <param name="id">Identifier</param>
+        /// <returns>Entity</returns>
+        public async virtual Task<T> GetByIdAsync(object id)
+        {
+            var entity = await this.TableNoTracking.FirstOrDefaultAsync(x => x.Id == (int)id);
+
+            return entity;
+        }
+
+        /// <summary>
         /// Insert entity
         /// </summary>
         /// <param name="entity">Entity</param>
@@ -300,6 +312,28 @@ namespace Api.Data
         public IQueryable<T> GetAllIncluding(params System.Linq.Expressions.Expression<Func<T, object>>[] includeProperties)
         {
             IQueryable<T> queryable = Entities;
+            foreach (System.Linq.Expressions.Expression<Func<T, object>> includeProperty in includeProperties)
+            {
+                queryable = queryable.Include<T, object>(includeProperty);
+            }
+
+            return queryable;
+        }
+
+        public IQueryable<T> GetAllIncludingAsNoTracking(params System.Linq.Expressions.Expression<Func<T, object>>[] includeProperties)
+        {
+            IQueryable<T> queryable = TableNoTracking;
+            foreach (System.Linq.Expressions.Expression<Func<T, object>> includeProperty in includeProperties)
+            {
+                queryable = queryable.Include<T, object>(includeProperty);
+            }
+
+            return queryable;
+        }
+
+        public IQueryable<T> FindAllIncluding(bool trackChanges, params System.Linq.Expressions.Expression<Func<T, object>>[] includeProperties)
+        {
+            IQueryable<T> queryable = trackChanges ? Entities : TableNoTracking;
             foreach (System.Linq.Expressions.Expression<Func<T, object>> includeProperty in includeProperties)
             {
                 queryable = queryable.Include<T, object>(includeProperty);

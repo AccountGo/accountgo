@@ -222,9 +222,8 @@ namespace Api.Controllers
             return Ok(taxToReturn);
         }
 
-        [HttpDelete("{id:int}")]
-        [Route("deletetax")]
-        public async Task<IActionResult> DeleteTax(int id)
+        [HttpDelete("deletetax")]
+        public async Task<IActionResult> DeleteTax([FromQuery] int id)
         {
             var result = await _adminService.DeleteTaxAsync(id);
 
@@ -236,9 +235,8 @@ namespace Api.Controllers
             return NoContent();
         }
 
-        [HttpDelete("{id:int}")]
-        [Route("deletetaxgroup")]
-        public async Task<IActionResult> DeleteTaxGroup(int id)
+        [HttpDelete("deletetaxgroup")]
+        public async Task<IActionResult> DeleteTaxGroup([FromQuery] int id)
         {
             var result = await _adminService.DeleteTaxGroupAsync(id);
 
@@ -250,9 +248,8 @@ namespace Api.Controllers
             return NoContent();
         }
 
-        [HttpDelete("{id:int}")]
-        [Route("deleteitemtaxgroup")]
-        public async Task<IActionResult> DeleteItemTaxGroup(int id)
+        [HttpDelete("deleteitemtaxgroup")]
+        public async Task<IActionResult> DeleteItemTaxGroup([FromQuery] int id)
         {
             var result = await _adminService.DeleteItemTaxGroupAsync(id);
 

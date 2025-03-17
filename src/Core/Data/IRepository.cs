@@ -19,6 +19,7 @@ namespace Core.Data
     public partial interface IRepository<T> where T : BaseEntity
     {
         T GetById(object id);
+        Task<T> GetByIdAsync(object id);
         void Insert(T entity);
         Task InsertAsync(T entity);
         void Update(T entity);
@@ -28,5 +29,8 @@ namespace Core.Data
         IQueryable<T> Table { get; }
 
         IQueryable<T> GetAllIncluding(params System.Linq.Expressions.Expression<Func<T, object>>[] includeProperties);
+
+        IQueryable<T> GetAllIncludingAsNoTracking(params System.Linq.Expressions.Expression<Func<T, object>>[] includingProperties);
+        IQueryable<T> FindAllIncluding(bool trackChanges, params System.Linq.Expressions.Expression<Func<T, object>>[] includingProperties);
     }
 }

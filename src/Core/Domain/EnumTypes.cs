@@ -93,7 +93,7 @@ namespace Core.Domain
 
     public enum SequenceNumberTypes
     {
-        SalesQuote = 1,
+        SalesProposal = 1,
         SalesOrder,
         SalesDelivery,
         SalesInvoice,
@@ -172,6 +172,18 @@ namespace Core.Domain
         Overdue = 2,
         Closed = 3,
         Void = 4,
+        [Display(Name = "Closed - Order Created")]
+        ClosedOrderCreated = 5
+    }
+
+    public enum SalesProposalStatus
+    {
+        Draft = 0,
+        Open = 1,
+        Overdue = 2,
+        Accepted = 3,
+        Rejected = 4,
+        Void = 5,
         [Display(Name = "Closed - Order Created")]
         ClosedOrderCreated = 5
     }

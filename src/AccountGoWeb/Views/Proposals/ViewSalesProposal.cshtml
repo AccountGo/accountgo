@@ -1,0 +1,118 @@
+﻿@model Dto.Sales.SalesProposal
+
+<style>
+    tr td, div.row {
+        color: white;
+    }
+</style>
+
+<form action="~/Proposals/ViewSalesProposal" method="post">
+    <div class="col-sm-8">
+        @Html.AntiForgeryToken()
+        @Html.ValidationSummary(true)
+        <div class="card">
+            <div class="card-body">
+                @* Customer *@
+                <div class="row">
+                    <div class="col-sm-4">Customer</div>
+                    <div class="col-sm-8">
+                        <input class="form-control" id="optCustomer" readonly value="@ViewBag.Customer" />
+                    </div>
+                </div>
+                @* Payment Term *@
+                <div class="row">
+                    <div class="col-sm-4">Payment Term</div>
+                    <div class="col-sm-8">
+                        <input class="form-control" id="optPayment" readonly value="@ViewBag.PaymentTerm"></input>
+                    </div>
+                </div>
+                @* Proposal Date *@
+                <div class="row">
+                    <div class="col-sm-4">Start Date ~ Expiry Date</div>
+                    <div class="col-sm-4">
+                        <input asp-for="StartDate" class="form-control pull-right" id="startDate" readonly type="date">
+                    </div>
+                    <div class="col-sm-4">
+                        <input asp-for="ExpiryDate" class="form-control pull-right" id="expiryDate" readonly type="date">
+                    </div>
+                </div>
+                @* Delivery Date *@
+                <div class="row">
+                    <div class="col-sm-4">Delivery Date</div>
+                    <div class="col-sm-4">
+                        <input asp-for="DeliveryDate" class="form-control pull-right" id="deliveryDate" readonly type="date">
+                    </div>
+                </div>
+                @* Description *@
+                <div class="row">
+                    <div class="col-sm-4">Description</div>
+                    <div class="col-sm-8">
+                        <textarea class="form-control" asp-for="Description" readonly rows="2"></textarea>
+                    </div>
+                </div>
+                @* Hidden Property *@
+                <input asp-for="No" type="hidden" />
+                <input asp-for="Id" type="hidden" />
+                <input asp-for="CustomerId" type="hidden" />
+                <input asp-for="StatusId" id="statusId" type="hidden" />
+            </div>
+
+            <table class="table" id="table">
+                <thead>
+                <th>Item</th>
+                <th>Quantity</th>
+                <th>Amount</th>
+                <th>Discount</th>
+                <th>Measurement</th>
+
+                </thead>
+                <tbody>
+                    @for (int i = 0; i < Model.SalesProposalLines!.Count; i++)
+                    {
+                        <tr>
+                            <td>
+                                <input class="form-control" id="optCustomer" readonly value="@ViewBag.Item"></input>
+                            </td>
+                            <td>
+                                <input class="form-control" asp-for="@Model.SalesProposalLines[i].Quantity" type="text" placeholder="0.0 ..." readonly />
+                            </td>
+                            <td>
+                                <input class="form-control" asp-for="@Model.SalesProposalLines[i].Amount" type="text" placeholder="0.0 ..." readonly />
+                            </td>
+                            <td>
+                                <input class="form-control" asp-for="@Model.SalesProposalLines[i].Discount" type="text" placeholder="0.0 ..." readonly />
+                            </td>
+                            <td>
+                                <input class="form-control" id="optCustomer" readonly value="@ViewBag.Measurement"></input>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+
+            </table>
+        </div>
+    </div>
+
+    <div class="col-md-9">
+        @if (Model.StatusId != 2 && Model.StatusId != 3 && Model.StatusId != 4)
+        {
+            <button class="btn btn-sm btn-secondary btn-flat pull-left" id="btnAccept">Accept</button>
+            <button class="btn btn-sm btn-primary btn-flat pull-left" id="btnReject">Reject</button>
+        }
+        <a href="~/Proposals/proposals" class="btn btn-sm btn-default btn-flat pull-left">Close</a>
+    </div>
+</form>
+
+@section scripts{
+    <script>
+        document.getElementById("btnAccept").addEventListener("click", function () {
+            console.log("Accept button clicked.");
+            document.getElementById("statusId").value = 3;
+        });
+
+        document.getElementById("btnReject").addEventListener("click", function () {
+            console.log("Reject button clicked.");
+            document.getElementById("statusId").value = 4;
+        });
+    </script>
+}

@@ -1,0 +1,174 @@
+﻿@model string
+
+<style>
+    .ag-row-selected {
+        background-color: darkorange;
+        color: white;
+        border-color: aqua;
+        opacity: 0.9;
+    }
+
+    div {
+        margin-bottom : 0.2em;
+    }
+</style>
+
+<div>
+    <a href="~/proposals/addsalesproposal" class="btn btn-outline-light">
+        <i class="fa fa-plus"></i>
+        New Proposal
+    </a>
+    <a href="~/proposals/editsalesproposal" id="linkEditProposal" class="btn inactiveLink">
+        <i class="fa fa-edit"></i>
+        Edit
+    </a>
+    <a href="~/proposals/deletesalesproposal" id="linkDeleteProposal" class="btn inactiveLink">
+        <i class="fa fa-trash"></i>
+        Delete
+    </a>
+    <a href="~/sales/addsalesorder" id="linkNewOrder" class="btn inactiveLink" style="position: relative; float: right;">
+        <i class='fa fa-arrow-right'></i>
+        New Order
+    </a>
+</div>
+
+<div>
+    <div id="proposals" class="ag-fresh" style="height: 400px;"></div>
+</div>
+
+@* Delete Modal*@
+<div class="modal" id="deleteSalesProposal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Delete</h5>
+                <button aria-label="Close" class="btn-close" data-bs-dismiss="modal" type="button"></button>
+            </div>
+            <div class="modal-body">
+                <p>Do you want to delete it?</p>
+                <input type="hidden" id="hdnselectedsalesProposalId" />
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-sm btn-primary btn-flat" onclick="deleteSalesProposal()" type="button">Yes</button>
+                <button class="btn btn-sm btn-default btn-flat" data-bs-dismiss="modal" type="button">No</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    var columnDefs = [
+        { headerName: "No", field: "no", width: 50},
+        { headerName: "Customer Name", field: "customerName", width: 150 },
+        { headerName: "Description", field: "description", width: 200},
+        { headerName: "Start Date", 
+            field: "startDate", 
+            width: 200,
+            cellRenderer: function (params) {
+                var date = new Date(params.value);
+                var formattedDate = date.getFullYear() + '-' +
+                    String(date.getMonth() + 1).padStart(2, '0') + '-' +
+                    String(date.getDate()).padStart(2, '0');
+                return formattedDate;
+            }
+        },
+        { headerName: "Expiry Date", 
+            field: "expiryDate", 
+            width: 200,
+            cellRenderer: function (params) {
+                var date = new Date(params.value);
+                var formattedDate = date.getFullYear() + '-' +
+                    String(date.getMonth() + 1).padStart(2, '0') + '-' +
+                    String(date.getDate()).padStart(2, '0');
+                return formattedDate;
+            }
+        },
+        { headerName: "Delivery Date", 
+            field: "deliveryDate", 
+            width: 200,
+            cellRenderer: function (params) {
+                var date = new Date(params.value);
+                var formattedDate = date.getFullYear() + '-' +
+                    String(date.getMonth() + 1).padStart(2, '0') + '-' +
+                    String(date.getDate()).padStart(2, '0');
+                return formattedDate;
+            }
+        },
+        { headerName: "Amount" , 
+            field: "totalAmount", 
+            width : 130,
+            cellRenderer: function (params) {
+                return 'CAD ' + params.value;
+            }
+        },
+        { 
+            headerName: "Status", 
+            field: "statusId",
+            width: 150,
+            cellRenderer: function(params) {
+                if (params.value === 0) {
+                    return '<i class="fa fa-circle" data-toggle="tooltip" style="color: green;" title="The proposal is still being prepared."><span style="color : white;"> Draft</span></i>';
+                } else if (params.value === 1) {
+                    return '<i class="fa fa-circle" data-toggle="tooltip" style="color: deepskyblue;" title="The proposal is submitted and awaiting client review."><span style="color : white;"> Open</span></i>';
+                } else if (params.value === 2) {
+                    return '<i class="fa fa-circle" data-toggle="tooltip" style="color: coral;" title="The client has not responded by the expected deadline."><span style="color: white; "> Overdue</span></i>';
+                } else if (params.value === 3) {
+                    return '<i class="fa fa-circle" data-toggle="tooltip" style="color: #4CAF50;" title="The client agreed to the proposal."><span style="color: white;"> Accepted</span></i>';
+                } else if (params.value === 4) {
+                    return '<i class="fa fa-circle" data-toggle="tooltip" style="color: red;" title="The client declined the proposal."><span style="color: white;"> Rejected</span></i>';
+                }
+                else {
+                    return '';
+                }
+            }
+        }
+    ];
+
+    var gridOptions = {
+        columnDefs: columnDefs,
+        rowData: @Html.Raw(Model),
+        enableSorting: true,
+        // PROPERTIES - simple boolean / string / number properties
+        rowSelection: 'single',
+        onSelectionChanged: onSelectionChanged,
+    };
+
+    function onSelectionChanged() {
+        var selectedRows = gridOptions.api.getSelectedRows();
+        selectedRow = selectedRows[0];
+
+        document.getElementById('linkNewOrder').setAttribute('class', 'btn inactiveLink');
+        document.getElementById('linkNewOrder').innerHTML = "<i class='fa fa-arrow-right'></i> New Order ( No" + selectedRows[0].no + " Proposal)";
+
+        document.getElementById('linkDeleteProposal').setAttribute('class', 'btn btn-outline-light');
+        document.getElementById('linkDeleteProposal').setAttribute('data-bs-toggle', 'modal');
+        document.getElementById('linkDeleteProposal').setAttribute('data-bs-target', '#deleteSalesProposal');
+
+        if(selectedRow.statusId === 0 || selectedRow.statusId === 1){
+            document.getElementById('linkEditProposal').innerHTML = "<i class='fa fa-edit'></i> Edit";
+            document.getElementById('linkEditProposal').setAttribute('href', 'Proposals/EditSalesProposal?id=' + selectedRow.id);
+            document.getElementById('linkEditProposal').setAttribute('class', 'btn btn-outline-light');
+        }else{
+            document.getElementById('linkEditProposal').innerHTML = "<i class='fa fa-eye'></i> View";
+            document.getElementById('linkEditProposal').setAttribute('href', 'Proposals/ViewSalesProposal?id=' + selectedRow.id);
+            document.getElementById('linkEditProposal').setAttribute('class', 'btn btn-outline-light');
+
+            if (selectedRow.statusId === 3) document.getElementById('linkNewOrder').setAttribute('class', 'btn btn-outline-light');
+        }
+
+        $("#hdnselectedsalesProposalId").val(selectedRow.id);
+    }
+
+    // wait for the document to be loaded, otherwise
+    // ag-Grid will not find the div in the document.
+    document.addEventListener("DOMContentLoaded", function() {
+        var eGridDiv = document.querySelector('#proposals');
+        new agGrid.Grid(eGridDiv, gridOptions);
+    });
+
+    function deleteSalesProposal(){
+        var salesProposalId = $("#hdnselectedsalesProposalId").val();
+
+        location.href = '@Url.Action("DeleteSalesProposal", "Proposals")?id=' + salesProposalId;
+    }
+</script>

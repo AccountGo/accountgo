@@ -21,6 +21,7 @@ using Microsoft.Extensions.Logging;
 using AutoMapper;
 using Core.Domain.Error;
 using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
 
 namespace Services.Sales
 {
@@ -51,6 +52,7 @@ namespace Services.Sales
         private readonly IRepository<TaxGroup> _taxGroupRepo;
         private readonly IRepository<SalesQuoteHeader> _salesQuoteRepo;
         private readonly ISalesOrderRepository _salesOrderRepository;
+        private readonly IRepository<SalesProposalHeader> _salesProposalRepo;
     
         public SalesService(IFinancialService financialService,
             IInventoryService inventoryService,
@@ -71,6 +73,7 @@ namespace Services.Sales
             IRepository<TaxGroup> taxGroupRepo,
             IRepository<SalesQuoteHeader> salesQuoteRepo,
             ISalesOrderRepository salesOrderRepository,
+            IRepository<SalesProposalHeader> salesProposalRepo,
             IRepository<CustomerContact> customerContactRepo,
             IRepository<VendorContact> vendorContactRepo,
             ILogger<SalesService> logger,
@@ -96,6 +99,7 @@ namespace Services.Sales
             _salesQuoteRepo = salesQuoteRepo;
             _salesOrderRepository = salesOrderRepository;
             _salesOrderLineRepo = salesOrderLineRepo;
+            _salesProposalRepo = salesProposalRepo;
             _customerContactRepo = customerContactRepo;
             _vendorContactRepo = vendorContactRepo;
             _logger = logger;
@@ -266,6 +270,108 @@ namespace Services.Sales
 
                 _salesInvoiceRepo.Insert(salesInvoice);
             }
+        }
+
+        public async Task<Result<Dto.Sales.SalesProposal>> AddSalesProposalAsync(Dto.Sales.SalesProposalForCreation salesProposalForCreationDto)
+        {
+            if(salesProposalForCreationDto is null)
+            {
+                var message = "Sales proposal for creation is null";
+                return Result<Dto.Sales.SalesProposal>.Failure(Error.NullError(message));
+            }
+
+            var salesProposal = _mapper.Map<Core.Domain.Sales.SalesProposalHeader>(salesProposalForCreationDto);
+            if (string.IsNullOrEmpty(salesProposal.No))
+            {
+                salesProposal.No = GetNextNumber(SequenceNumberTypes.SalesProposal).ToString();
+            }
+
+            await _salesProposalRepo.InsertAsync(salesProposal);
+
+            var salesProposalDto = _mapper.Map<Dto.Sales.SalesProposal>(salesProposal);
+
+            return Result<Dto.Sales.SalesProposal>.Success(salesProposalDto);
+        }
+
+        public async Task<Result<Dto.Sales.SalesProposal>> GetSalesProposalByIdAsync(int id, bool trackChanges)
+        {
+            var salesProposal = await GetSalesProposalAsync(id, trackChanges);
+
+            if (salesProposal is null)
+            {
+                var message = "Sales proposal not found.";
+                return Result<Dto.Sales.SalesProposal>.Failure(Error.RecordNotFound(message));
+            }
+
+            var salesProposalDto = _mapper.Map<Dto.Sales.SalesProposal>(salesProposal);
+
+            return Result<Dto.Sales.SalesProposal>.Success(salesProposalDto);
+        }
+
+        private async Task<SalesProposalHeader> GetSalesProposalAsync(int id, bool trackChanges)
+        {
+            var salesProposal = await _salesProposalRepo.FindAllIncluding(trackChanges, proposal => proposal.Customer,
+                proposal => proposal.Customer.Party,
+                proposal => proposal.SalesProposalLines)
+                .Where(proposal => proposal.Id == id)
+                .FirstOrDefaultAsync();
+
+            if (salesProposal is not null)
+            {
+                foreach (var line in salesProposal.SalesProposalLines)
+                {
+                    line.Item = _itemRepo.GetById(line.ItemId);
+                    line.Measurement = _measurementRepo.GetById(line.MeasurementId);
+                }
+            }
+
+            return salesProposal;
+        }
+
+        public async Task<Result<IEnumerable<Dto.Sales.SalesProposal>>> GetSalesProposalsAsync(bool trackChanges)
+        {
+            var salesProposals = await _salesProposalRepo.FindAllIncluding(trackChanges, proposal => proposal.Customer,
+                proposal => proposal.Customer.Party,
+                proposal => proposal.SalesProposalLines)
+                .ToListAsync();
+
+            var salesProposalsDto = _mapper.Map<IEnumerable<Dto.Sales.SalesProposal>>(salesProposals);
+
+            return Result<IEnumerable<Dto.Sales.SalesProposal>>.Success(salesProposalsDto);
+        }
+
+        public async Task<Result<Dto.Sales.SalesProposal>> UpdateSalesProposalAsync(Dto.Sales.SalesProposalForUpdate salesProposalForUpdateDto, bool trackChanges)
+        {
+            if(salesProposalForUpdateDto is null)
+                return Result<Dto.Sales.SalesProposal>.Failure(Error.NullError("Sales proposal for update is null"));
+            
+            var salesProposal = await GetSalesProposalAsync(salesProposalForUpdateDto.Id, trackChanges);
+
+            if (salesProposal is null)
+                return Result<Dto.Sales.SalesProposal>.Failure(Error.RecordNotFound("Sales proposal not found."));
+            
+            _mapper.Map<Dto.Sales.SalesProposalForUpdate, Core.Domain.Sales.SalesProposalHeader>(salesProposalForUpdateDto, salesProposal);
+
+            await _salesProposalRepo.UpdateAsync(salesProposal);
+
+            var salesProposalDto = _mapper.Map<Dto.Sales.SalesProposal>(salesProposal);
+
+            return Result<Dto.Sales.SalesProposal>.Success(salesProposalDto);
+        }
+
+        public async Task<Result<Dto.Sales.SalesProposal>> DeleteSalesProposalAsync(int id, bool trackChanges)
+        {
+            var salesProposal = await GetSalesProposalAsync(id, trackChanges);
+
+            if (salesProposal is null)
+            {
+                var message = "Sales proposal not found.";
+                return Result<Dto.Sales.SalesProposal>.Failure(Error.RecordNotFound(message));
+            }
+
+            await _salesProposalRepo.DeleteAsync(salesProposal);
+
+            return Result<Dto.Sales.SalesProposal>.Success(null);
         }
 
         public void AddSalesReceipt(SalesReceiptHeader salesReceipt)
@@ -685,7 +791,8 @@ namespace Services.Sales
 
         public void AddSalesQuote(SalesQuoteHeader salesQuoteHeader)
         {
-            salesQuoteHeader.No = GetNextNumber(SequenceNumberTypes.SalesQuote).ToString();
+            // ToDo : Remove SalesQuote once Sales Proposal development is complete.
+            // salesQuoteHeader.No = GetNextNumber(SequenceNumberTypes.SalesQuote).ToString();
             _salesQuoteRepo.Insert(salesQuoteHeader);
         }
 
@@ -709,6 +816,7 @@ namespace Services.Sales
                 .Where(i => i.CustomerId == customerId);
 
             return invoices;
+
         }
 
         public SalesQuoteHeader GetSalesQuotationById(int id)

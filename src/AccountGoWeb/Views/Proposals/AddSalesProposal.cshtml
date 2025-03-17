@@ -1,0 +1,203 @@
+﻿@model Dto.Sales.SalesProposalForCreation
+
+<style>
+    tr td, div.row {
+        color: white;
+    }
+</style>
+
+<form action="~/Proposals/AddSalesProposal" method="post">
+    <div class="col-sm-8">
+        @Html.AntiForgeryToken()
+        @Html.ValidationSummary(true)
+        <div class="card">
+            <div class="card-body">
+                @* Customer *@
+                <div class="row">
+                    <div class="col-sm-4">Customer</div>
+                    <div class="col-sm-8">
+                        <select class="form-control" asp-for="CustomerId" asp-items="@ViewBag.Customers"
+                                id="optCustomer" onchange="customerOnChange();"></select>
+                        <span asp-validation-for="CustomerId" class="danger"></span>
+                    </div>
+                </div>
+                @* Payment Term *@
+                <div class="row">
+                    <div class="col-sm-4">Payment Term</div>
+                    <div class="col-sm-8">
+                        <select class="form-control" asp-for="PaymentTermId" asp-items="@ViewBag.PaymentTerms"
+                                id="optPayment"></select>
+                        <span asp-validation-for="PaymentTermId" class="text-danger"></span>
+                    </div>
+                </div>
+                @* Proposal Date *@
+                <div class="row">
+                    <div class="col-sm-4">Start Date ~ Expiry Date</div>
+                    <div class="col-sm-4">
+                        <input asp-for="StartDate" class="form-control pull-right" id="startDate" type="date">
+                    </div>
+                    <div class="col-sm-4">
+                        <input asp-for="ExpiryDate" class="form-control pull-right" id="expiryDate" type="date">
+                    </div>
+                </div>
+                @* Delivery Date *@
+                <div class="row">
+                    <div class="col-sm-4">Delivery Date</div>
+                    <div class="col-sm-4">
+                        <input asp-for="DeliveryDate" class="form-control pull-right" id="deliveryDate" type="date">
+                    </div>
+                </div>
+                @* Description *@
+                <div class="row">
+                    <div class="col-sm-4">Description</div>
+                    <div class="col-sm-8">
+                        <textarea class="form-control" asp-for="Description" rows="2"></textarea>
+                        <span asp-validation-for="Description" class="text-danger"></span>
+                    </div>
+                </div>
+            </div>
+
+            <table class="table" id="table">
+                <thead>
+                <th>Item</th>
+                <th>Quantity</th>
+                <th>Amount</th>
+                <th>Discount</th>
+                <th>Measurement</th>
+
+                </thead>
+                <tbody>
+                    @for (int i = 0; i < Model.SalesProposalLines!.Count; i++)
+                    {
+                        <tr>
+                            <td>
+                                <select class="form-control" asp-for="@Model.SalesProposalLines[i].ItemId" asp-items="@ViewBag.Items"
+                                        id="optCustomer"></select>
+                                <span asp-validation-for="@Model.SalesProposalLines[i].ItemId" class="text-danger"></span>
+                            </td>
+                            <td>
+                                <input class="form-control" asp-for="@Model.SalesProposalLines[i].Quantity" type="text" placeholder="0.0 ..." />
+                                <span asp-validation-for="@Model.SalesProposalLines[i].Quantity" class="text-danger"></span>
+                            </td>
+                            <td>
+                                <input class="form-control" asp-for="@Model.SalesProposalLines[i].Amount" type="text" placeholder="0.0 ..." />
+                                <span asp-validation-for="@Model.SalesProposalLines[i].Amount" class="text-danger"></span>
+                            </td>
+                            <td>
+                                <input class="form-control" asp-for="@Model.SalesProposalLines[i].Discount" type="text" placeholder="0.0 ..." />
+                                <span asp-validation-for="@Model.SalesProposalLines[i].Discount" class="text-danger"></span>
+                            </td>
+                            <td>
+                                <select class="form-control" asp-for="@Model.SalesProposalLines[i].MeasurementId" asp-items="@ViewBag.Measurements"
+                                        id="optCustomer"></select>
+                                <span asp-validation-for="@Model.SalesProposalLines[i].MeasurementId" class="text-danger"></span>
+                            </td>
+                        </tr>
+                    }
+
+                    <tr>
+                        <td class="rounded-1" style="border-color : #252525">
+                            <button class="btn btn-primary" name="addRowBtn" type="submit" value="true">Add Row</button>
+                        </td>
+                    </tr>
+                </tbody>
+
+            </table>
+        </div>
+    </div>
+    <div class="col-md-9">
+        <input asp-for="StatusId" id="statusId" type="hidden" />
+        <button class="btn btn-sm btn-secondary btn-flat pull-left" id="btnDraft" type="submit">Save Draft</button>
+        <button class="btn btn-sm btn-primary btn-flat pull-left" id="btnSubmit" type="submit">Submit</button>
+        <a href="~/Proposals/proposals" class="btn btn-sm btn-default btn-flat pull-left">Close</a>
+    </div>
+</form>
+
+@section scripts {
+    <script type="text/javascript">
+        var customers = @Html.Raw(ViewBag.CustomersDetail)
+
+        function customerOnChange() {
+            var customerId = document.getElementById("optCustomer").value;
+            var element = document.getElementById("optAccountToCreditId");
+
+            for (var i = 0; i < customers.length; i++) {
+                if (customerId === customers[i].Id.toString()) {
+                    var customer = customers[i];
+                    for (var i = 0; i < element.options.length; i++) {
+                        if (element.options[i].value === customer.PrepaymentAccountId.toString()) {
+                            element.selectedIndex = i;
+                            document.getElementById("optAccountToCreditId").value = customer.PrepaymentAccountId;
+                            break;
+                        }
+                    }
+                }
+                else
+                    element.selectedIndex = element.options.length - element.options.length;
+            }
+        }
+
+        // ValidateDate related to Proposal Date.
+        document.getElementById("startDate").addEventListener("change", function () {
+            var result = validateDate("Start");
+            if(result === false){
+                document.getElementById("startDate").value = "";
+            }
+        });
+
+        document.getElementById("expiryDate").addEventListener("change", function () {
+            var result = validateDate("Expiry");
+            if (result === false) {
+                document.getElementById("expiryDate").value = "";
+            }
+        });
+
+        document.getElementById("deliveryDate").addEventListener("change", function () {
+            var result = validateDate("Delivery");
+            if (result === false) {
+                document.getElementById("deliveryDate").value = "";
+            }
+        });
+
+        function validateDate(dateType) {
+            var startDate = new Date(document.getElementById("startDate").value);
+            var expriyDate = new Date(document.getElementById("expiryDate").value);
+            var deliveryDate = new Date(document.getElementById("deliveryDate").value);
+
+            switch(dateType){
+                case "Start":
+                    if (expriyDate < startDate || deliveryDate < startDate) {
+                        alert("Start Date must be less than Expiry Date and Delivery Date.");
+                        return false;
+                    }
+                    break;
+                case "Expiry":
+                    if (startDate > expriyDate) {
+                        alert("Expiry Date must be greater than Start Date.");
+                        return false;
+                    }
+                    break;
+                case "Delivery":
+                    if (startDate > deliveryDate) {
+                        alert("Delivery Date must be greater than Start Date");
+                        return false;
+                    }
+                    break;
+            }
+
+            return true;
+        }
+
+        // Set StatusId
+        document.getElementById("btnDraft").addEventListener("click", function () {
+            console.log("Draft button clicked.");
+            document.getElementById("statusId").value = 0;            
+        });
+
+        document.getElementById("btnSubmit").addEventListener("click", function () {
+            console.log("Submit button clicked.");
+            document.getElementById("statusId").value = 1;
+        });
+
+    </script>
+}
