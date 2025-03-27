@@ -76,13 +76,13 @@ namespace AccountGoWeb.Controllers
                     ItemId = 1,
                     MeasurementId = 1,
                 });
-
                 ViewBag.Customers = Models.SelectListItemHelper.Customers();
                 ViewBag.Items = Models.SelectListItemHelper.Items();
                 ViewBag.PaymentTerms = Models.SelectListItemHelper.PaymentTerms();
                 ViewBag.Measurements = Models.SelectListItemHelper.Measurements();
 
                 return View(model);
+
             }
             else if (ModelState.IsValid)
             {
@@ -97,11 +97,12 @@ namespace AccountGoWeb.Controllers
                     var response = await client.PostAsync("sales/savequotation", content);
 
                     if (response.IsSuccessStatusCode)
+                        _logger.LogInformation("Quotation has been successfully saved.");
                         return RedirectToAction("quotations");
                 }
             }
 
-            return View();
+            return RedirectToAction("quotations");
         }
 
         [HttpGet]
