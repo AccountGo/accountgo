@@ -63,7 +63,7 @@ namespace AccountGoWeb.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> AddSalesQuotation(Dto.Sales.SalesQuotation model, string addRowBtn)
+        public async Task<IActionResult> AddSalesQuotation(Dto.Sales.SalesQuotation model, string? addRowBtn)
         {
             if (!string.IsNullOrEmpty(addRowBtn))
             {
@@ -89,20 +89,25 @@ namespace AccountGoWeb.Controllers
                 var serialize = Newtonsoft.Json.JsonConvert.SerializeObject(model);
                 var content = new StringContent(serialize);
                 content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
-                _logger.LogInformation("Quotation ID is is : " + model.Id);
+
                 using (var client = new HttpClient())
                 {
                     var baseUri = _configuration!["ApiUrl"];
                     client.BaseAddress = new Uri(baseUri!);
                     var response = await client.PostAsync("sales/savequotation", content);
 
-                    if (response.IsSuccessStatusCode)
+                    if (response.IsSuccessStatusCode) {
                         _logger.LogInformation("Quotation has been successfully saved.");
-                        return RedirectToAction("quotations");
+                    } else {
+                        _logger.LogInformation("Quotation save failed.");
+                    }
+                    return RedirectToAction("quotations");
                 }
+            } else {
+                _logger.LogInformation("Model State is not valid.");
+                return RedirectToAction("quotations");
             }
-
-            return RedirectToAction("quotations");
+            
         }
 
         [HttpGet]
