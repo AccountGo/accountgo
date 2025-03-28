@@ -16,7 +16,7 @@
 <script>
     var columnDefs = [
         {headerName: "No", field: "no", width: 50, cellRenderer: function(params) {
-            return '<a href="customer/' + params.value + '">' + params.value + '</a>';
+            return '<a href="sales/customer/' + params.value + '">' + params.value + '</a>';
         }},
         {headerName: "Name", field: "name", width: 350},
         {headerName: "Phone", field: "phone", width: 100},
@@ -37,7 +37,7 @@
         var selectedRows = gridOptions.api.getSelectedRows();
         selectedRow = selectedRows[0];
 
-        document.getElementById('linkViewCustomer').setAttribute('href', 'customer/' + selectedRow.id);
+        document.getElementById('linkViewCustomer').setAttribute('href', 'sales/customer/' + selectedRow.id);
         document.getElementById('linkViewCustomer').setAttribute('class', 'btn');
     }
 
