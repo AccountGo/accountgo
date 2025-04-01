@@ -4,13 +4,18 @@ public class Allocate
 {
     [System.ComponentModel.DataAnnotations.Required]
     public int? CustomerId { get; set; }
+
     [System.ComponentModel.DataAnnotations.Required]
     public int? ReceiptId { get; set; }
+
     [System.ComponentModel.DataAnnotations.Required]
     public System.DateTime Date { get; set; }
     public decimal Amount { get; set; }
     public decimal RemainingAmountToAllocate { get; set; }
-    public decimal SumAllocatedAmount { get { return ComputeSumToAllocateAmount(); } }
+    public decimal SumAllocatedAmount
+    {
+        get { return ComputeSumToAllocateAmount(); }
+    }
     public IList<AllocationLine> AllocationLines { get; set; }
 
     public Allocate()
@@ -22,7 +27,8 @@ public class Allocate
     {
         decimal sum = 0;
 
-        foreach (var line in AllocationLines) {
+        foreach (var line in AllocationLines)
+        {
             sum += line.AmountToAllocate.GetValueOrDefault();
         }
 
@@ -45,4 +51,4 @@ public class AllocationLine
     public decimal? Amount { get; set; }
     public decimal? AllocatedAmount { get; set; }
     public decimal? AmountToAllocate { get; set; }
-}    
+}
