@@ -390,14 +390,33 @@ namespace Api.Controllers
             {
                 AccountCode = newAccountDto.AccountCode,
                 AccountName = newAccountDto.AccountName,
-                // Balance = 0, // Initialize read-only fields
-                // DebitBalance = 0,
-                // CreditBalance = 0
+                AccountClassId = newAccountDto.AccountClassId,
+                ParentAccountId = newAccountDto.ParentAccountId,
+                CompanyId = newAccountDto.CompanyId,
+                Description = newAccountDto.Description,
+                IsCash = newAccountDto.IsCash,
+                IsContraAccount = newAccountDto.IsContraAccount
             };
 
             var createdAccount = await _accountService.AddAccountAsync(newAccount);
 
-            return CreatedAtAction(nameof(GetAccountByCode), new { accountCode = createdAccount.AccountCode }, createdAccount);
+            var resultDto = new Dto.Financial.Account
+            {
+                Id = createdAccount.Id,
+                AccountCode = createdAccount.AccountCode,
+                AccountName = createdAccount.AccountName,
+                AccountClassId = createdAccount.AccountClassId,
+                ParentAccountId = createdAccount.ParentAccountId,
+                CompanyId = createdAccount.CompanyId,
+                Description = createdAccount.Description,
+                IsCash = createdAccount.IsCash,
+                IsContraAccount = createdAccount.IsContraAccount,
+                Balance = 0,
+                DebitBalance = 0,
+                CreditBalance = 0
+            };
+
+            return Ok(resultDto);
         }
 
         [HttpPut]
@@ -407,31 +426,63 @@ namespace Api.Controllers
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
-            var updatedAccount = await _accountService.UpdateAccountAsync(accountCode, new Core.Domain.Financials.Account
+            var updated = await _accountService.UpdateAccountAsync(accountCode, new Core.Domain.Financials.Account
             {
                 AccountCode = updatedAccountDto.AccountCode,
                 AccountName = updatedAccountDto.AccountName,
-                // Balance = updatedAccountDto.Balance,
-                // DebitBalance = updatedAccountDto.DebitBalance,
-                // CreditBalance = updatedAccountDto.CreditBalance
             });
-            if (updatedAccount == null)
+
+            if (updated == null)
                 return NotFound();
 
-            return Ok(updatedAccount);
+            // return simplified DTO to avoid Balance-related null issues
+            var resultDto = new Dto.Financial.Account
+            {
+                Id = updated.Id,
+                AccountCode = updated.AccountCode,
+                AccountName = updated.AccountName,
+                AccountClassId = updated.AccountClassId,
+                ParentAccountId = updated.ParentAccountId,
+                CompanyId = updated.CompanyId,
+                Description = updated.Description,
+                IsCash = updated.IsCash,
+                IsContraAccount = updated.IsContraAccount,
+                Balance = 0,
+                DebitBalance = 0,
+                CreditBalance = 0
+            };
+
+            return Ok(resultDto);
         }
+
 
         [HttpDelete]
         [Route("DeleteAccount/{accountCode}")]
         public async Task<IActionResult> DeleteAccount(string accountCode)
         {
             var result = await _accountService.DeleteAccountAsync(accountCode);
-
             if (result == null)
                 return NotFound();
 
-            return Ok(result);
+            var resultDto = new Dto.Financial.Account
+            {
+                Id = result.Id,
+                AccountCode = result.AccountCode,
+                AccountName = result.AccountName,
+                AccountClassId = result.AccountClassId,
+                ParentAccountId = result.ParentAccountId,
+                CompanyId = result.CompanyId,
+                Description = result.Description,
+                IsCash = result.IsCash,
+                IsContraAccount = result.IsContraAccount,
+                Balance = 0,
+                DebitBalance = 0,
+                CreditBalance = 0
+            };
+
+            return Ok(resultDto);
         }
+
 
         #endregion
 
