@@ -1,11 +1,11 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using Dto.TaxSystem;
-using Services.TaxSystem;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
+using Api.ActionFilters;
+using Dto.TaxSystem;
+using Microsoft.AspNetCore.Mvc;
 using Services.Administration;
 using Services.Financial;
-using Api.ActionFilters;
+using Services.TaxSystem;
 
 namespace Api.Controllers
 {
@@ -16,7 +16,11 @@ namespace Api.Controllers
         private readonly IAdministrationService _adminService;
         private readonly IFinancialService _financialService;
 
-        public TaxController(ITaxService taxService, IAdministrationService adminService, IFinancialService financialService)
+        public TaxController(
+            ITaxService taxService,
+            IAdministrationService adminService,
+            IFinancialService financialService
+        )
         {
             _taxService = taxService;
             _adminService = adminService;
@@ -24,7 +28,7 @@ namespace Api.Controllers
         }
 
         /// <summary>
-        /// Based on party type (e.g. Customer/Vendor), get the corresponding tax rates. 
+        /// Based on party type (e.g. Customer/Vendor), get the corresponding tax rates.
         /// Tax rates are intersection of tax group and item tax group
         /// </summary>
         /// <param name="itemId">Item</param>
@@ -57,7 +61,11 @@ namespace Api.Controllers
             }
             else
             {
-                var taxes = _taxService.GetIntersectionTaxes(itemId, partyId, (Core.Domain.PartyTypes)type);
+                var taxes = _taxService.GetIntersectionTaxes(
+                    itemId,
+                    partyId,
+                    (Core.Domain.PartyTypes)type
+                );
 
                 return new ObjectResult(taxes);
             }
@@ -77,7 +85,7 @@ namespace Api.Controllers
                     Id = group.Id,
                     Description = group.Description,
                     IsActive = group.IsActive,
-                    TaxAppliedToShipping = group.TaxAppliedToShipping
+                    TaxAppliedToShipping = group.TaxAppliedToShipping,
                 };
 
                 taxGroupsDto.Add(groupDto);
@@ -99,9 +107,9 @@ namespace Api.Controllers
                 {
                     Id = group.Id,
                     Name = group.Name,
-                    IsFullyExempt = group.IsFullyExempt
+                    IsFullyExempt = group.IsFullyExempt,
                 };
-                
+
                 itemTaxGroupsDto.Add(groupDto);
             }
 
@@ -118,14 +126,18 @@ namespace Api.Controllers
 
             var taxesDto = new List<Tax>();
 
-            foreach (var tax in taxes) {
-                taxesDto.Add(new Tax() {
-                    Id = tax.Id,
-                    TaxCode = tax.TaxCode,
-                    TaxName = tax.TaxName,
-                    Rate = tax.Rate,
-                    IsActive = tax.IsActive
-                });                
+            foreach (var tax in taxes)
+            {
+                taxesDto.Add(
+                    new Tax()
+                    {
+                        Id = tax.Id,
+                        TaxCode = tax.TaxCode,
+                        TaxName = tax.TaxName,
+                        Rate = tax.Rate,
+                        IsActive = tax.IsActive,
+                    }
+                );
             }
 
             taxSystemDto.Taxes = taxesDto;
@@ -133,21 +145,23 @@ namespace Api.Controllers
             var taxGroupsDto = new List<TaxGroup>();
             var taxGroups = _taxService.GetTaxGroups();
 
-            foreach (var group in taxGroups) {
+            foreach (var group in taxGroups)
+            {
                 var groupDto = new TaxGroup()
                 {
                     Id = group.Id,
                     Description = group.Description,
                     IsActive = group.IsActive,
-                    TaxAppliedToShipping = group.TaxAppliedToShipping
+                    TaxAppliedToShipping = group.TaxAppliedToShipping,
                 };
 
-                foreach (var tax in group.TaxGroupTax) {
+                foreach (var tax in group.TaxGroupTax)
+                {
                     var taxDto = new TaxGroupTax()
                     {
                         Id = tax.Id,
                         TaxId = tax.TaxId,
-                        TaxGroupId = tax.TaxGroupId
+                        TaxGroupId = tax.TaxGroupId,
                     };
 
                     groupDto.Taxes.Add(taxDto);
@@ -157,7 +171,7 @@ namespace Api.Controllers
             }
 
             taxSystemDto.TaxGroups = taxGroupsDto;
-            
+
             var itemTaxGroupsDto = new List<ItemTaxGroup>();
             var itemTaxGroups = _taxService.GetItemTaxGroups();
 
@@ -167,7 +181,7 @@ namespace Api.Controllers
                 {
                     Id = group.Id,
                     Name = group.Name,
-                    IsFullyExempt = group.IsFullyExempt
+                    IsFullyExempt = group.IsFullyExempt,
                 };
 
                 foreach (var tax in group.ItemTaxGroupTax)
@@ -176,7 +190,7 @@ namespace Api.Controllers
                     {
                         Id = tax.Id,
                         TaxId = tax.TaxId,
-                        ItemTaxGroupId = tax.ItemTaxGroupId
+                        ItemTaxGroupId = tax.ItemTaxGroupId,
                     };
 
                     groupDto.Taxes.Add(taxDto);
@@ -222,8 +236,7 @@ namespace Api.Controllers
             return Ok(taxToReturn);
         }
 
-        [HttpDelete("{id:int}")]
-        [Route("deletetax")]
+        [HttpDelete("deletetax/{id:int}")]
         public async Task<IActionResult> DeleteTax(int id)
         {
             var result = await _adminService.DeleteTaxAsync(id);
@@ -236,13 +249,12 @@ namespace Api.Controllers
             return NoContent();
         }
 
-        [HttpDelete("{id:int}")]
-        [Route("deletetaxgroup")]
+        [HttpDelete("deletetaxgroup/{id:int}")]
         public async Task<IActionResult> DeleteTaxGroup(int id)
         {
             var result = await _adminService.DeleteTaxGroupAsync(id);
 
-            if(result.IsFailure)
+            if (result.IsFailure)
             {
                 return BadRequest(result.Error.Message);
             }
@@ -250,13 +262,12 @@ namespace Api.Controllers
             return NoContent();
         }
 
-        [HttpDelete("{id:int}")]
-        [Route("deleteitemtaxgroup")]
+        [HttpDelete("deleteitemtaxgroup/{id:int}")]
         public async Task<IActionResult> DeleteItemTaxGroup(int id)
         {
             var result = await _adminService.DeleteItemTaxGroupAsync(id);
 
-            if(result.IsFailure)
+            if (result.IsFailure)
             {
                 return BadRequest(result.Error.Message);
             }
