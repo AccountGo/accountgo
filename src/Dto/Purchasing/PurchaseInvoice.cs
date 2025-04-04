@@ -9,7 +9,7 @@ namespace Dto.Purchasing
         public string? VendorInvoiceNo { get; set; }
         public int VendorId { get; set; }
         public string? VendorName { get; set; }
-        public DateTime InvoiceDate { get; set; }
+        public DateTime InvoiceDate { get; set; } = DateTime.Now;
         public decimal Amount { get { return GetTotalAmount(); } }
         public decimal AmountPaid { get; set; }
         public bool IsPaid { get; set; } = false;
