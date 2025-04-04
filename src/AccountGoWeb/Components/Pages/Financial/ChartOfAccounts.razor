@@ -6,6 +6,7 @@
 @using Microsoft.Net.Http.Headers
 @inject IHttpClientFactory ClientFactory
 @inject Microsoft.JSInterop.IJSRuntime JSRuntime
+@inject IConfiguration Configuration
 
 <PageTitle>Chart of Accounts</PageTitle>
 
@@ -218,7 +219,7 @@ else
     {
         try
         {
-            string apiUrl = Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
+            string? apiUrl = Configuration["ApiUrl"];
             var client = ClientFactory.CreateClient();
 
             var response = await client.GetAsync($"{apiUrl}financials/accounts");
@@ -246,7 +247,10 @@ else
       // Open Add Modal
     private void OpenAddModal()
     {
-        selectedAccount = new AccountViewModel();
+        selectedAccount = new AccountViewModel{
+            AccountClassId = 1, // Assets
+            CompanyId = 1
+        };
         errorMessage = string.Empty;
         isAddModalVisible = true;
     }
@@ -290,7 +294,7 @@ else
     }
 
     // Add or Update Account
-    private void SaveAccount()
+    private async Task SaveAccount()
     {
         if (selectedAccount == null)
         {
@@ -304,47 +308,56 @@ else
             return;
         }
 
-        if (isEditModalVisible)
+        try
         {
-            // Edit existing account locally
-            var account = accounts.FirstOrDefault(a => a.AccountCode == selectedAccount.AccountCode);
-            if (account != null)
+            string? apiUrl = Configuration["ApiUrl"];
+            var client = ClientFactory.CreateClient();
+
+            if (isEditModalVisible)
             {
-                account.AccountName = selectedAccount.AccountName;
-                account.TotalBalance = selectedAccount.TotalBalance;
-                account.TotalDebitBalance = selectedAccount.TotalDebitBalance;
-                account.TotalCreditBalance = selectedAccount.TotalCreditBalance;
+                // Edit existing account in DB
+                var response = await client.PutAsJsonAsync($"{apiUrl}financials/updateaccount/{selectedAccount.AccountCode}", selectedAccount);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    await LoadAccountsFromApi();
+                    CloseModal();
+                }
+                else
+                {
+                    errorMessage = $"Failed to update account: {response.StatusCode}";
+                }
             }
             else
             {
-                errorMessage = "Account not found.";
+                if (accounts.Any(a => a.AccountCode == selectedAccount.AccountCode))
+                {
+                    errorMessage = "An account with this Account Code already exists.";
+                    return;
+                }
+
+                var response = await client.PostAsJsonAsync($"{apiUrl}financials/addaccount", selectedAccount);
+                if (response.IsSuccessStatusCode)
+                {
+                    await LoadAccountsFromApi();
+                    CloseModal(); 
+                }
+                else
+                {
+                    errorMessage = $"Failed to add account. {response.ReasonPhrase}";
+                }
             }
         }
-        else
+        catch (Exception ex)
         {
-            // Add new account locally
-            if (accounts.Any(a => a.AccountCode == selectedAccount.AccountCode))
-            {
-                errorMessage = "An account with this Account Code already exists.";
-                return;
-            }
-
-            accounts.Add(new AccountViewModel
-            {
-                AccountCode = selectedAccount.AccountCode,
-                AccountName = selectedAccount.AccountName,
-                TotalBalance = selectedAccount.TotalBalance,
-                TotalDebitBalance = selectedAccount.TotalDebitBalance,
-                TotalCreditBalance = selectedAccount.TotalCreditBalance,
-                ChildAccounts = new List<AccountViewModel>()
-            });
+            errorMessage = $"An error occurred: {ex.Message}";
         }
 
         CloseModal();
     }
 
     // Delete Account
-    private void ConfirmDeleteAccount()
+    private async Task ConfirmDeleteAccount()
     {
         if (selectedAccount == null)
         {
@@ -352,8 +365,28 @@ else
             return;
         }
 
-        accounts.Remove(selectedAccount);
-        CloseDeleteModal();
+        try
+        {
+            string? apiUrl = Configuration["ApiUrl"];
+            var client = ClientFactory.CreateClient();
+
+            var response = await client.DeleteAsync($"{apiUrl}financials/deleteaccount/{selectedAccount.AccountCode}");
+
+            if (response.IsSuccessStatusCode)
+            {
+                accounts.Remove(selectedAccount);
+                selectedAccount = null;
+                CloseDeleteModal();
+            }
+            else
+            {
+                errorMessage = $"Failed to delete account. Status: {response.StatusCode}";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error: {ex.Message}";
+        }
     }
 
     // ViewModel for Accounts
@@ -364,6 +397,13 @@ else
         public decimal TotalBalance { get; set; }
         public decimal TotalDebitBalance { get; set; }
         public decimal TotalCreditBalance { get; set; }
+        public int AccountClassId { get; set; }
+        public int CompanyId { get; set; }
+        public int? ParentAccountId { get; set; }
+        public string? Description { get; set; }
+        public bool IsCash { get; set; }
+        public bool IsContraAccount { get; set; }
+
         public List<AccountViewModel> ChildAccounts { get; set; } = new();
     }
 }
