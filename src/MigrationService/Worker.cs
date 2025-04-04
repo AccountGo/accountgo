@@ -3,21 +3,24 @@ using Api.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage;
-
 using OpenTelemetry.Trace;
 
 namespace MigrationService;
 
 public class Worker(
     IServiceProvider serviceProvider,
-    IHostApplicationLifetime hostApplicationLifetime) : BackgroundService
+    IHostApplicationLifetime hostApplicationLifetime
+) : BackgroundService
 {
     public const string ActivitySourceName = "Migrations";
     private static readonly ActivitySource s_activitySource = new(ActivitySourceName);
 
     protected override async Task ExecuteAsync(CancellationToken cancellationToken)
     {
-        using var activity = s_activitySource.StartActivity("Migrating database", ActivityKind.Client);
+        using var activity = s_activitySource.StartActivity(
+            "Migrating database",
+            ActivityKind.Client
+        );
 
         try
         {
@@ -30,14 +33,17 @@ public class Worker(
         }
         catch (Exception ex)
         {
-            activity?.RecordException(ex);
+            activity?.AddException(ex); // Updated to use AddException
             throw;
         }
 
         hostApplicationLifetime.StopApplication();
     }
 
-    private static async Task EnsureDatabaseAsync(ApiDbContext dbContext, CancellationToken cancellationToken)
+    private static async Task EnsureDatabaseAsync(
+        ApiDbContext dbContext,
+        CancellationToken cancellationToken
+    )
     {
         var dbCreator = dbContext.GetService<IRelationalDatabaseCreator>();
 
@@ -53,13 +59,18 @@ public class Worker(
         });
     }
 
-    private static async Task RunMigrationAsync(ApiDbContext dbContext, CancellationToken cancellationToken)
+    private static async Task RunMigrationAsync(
+        ApiDbContext dbContext,
+        CancellationToken cancellationToken
+    )
     {
         var strategy = dbContext.Database.CreateExecutionStrategy();
         await strategy.ExecuteAsync(async () =>
         {
             // Run migration in a transaction to avoid partial migration if it fails.
-            await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+            await using var transaction = await dbContext.Database.BeginTransactionAsync(
+                cancellationToken
+            );
             await dbContext.Database.MigrateAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
         });
