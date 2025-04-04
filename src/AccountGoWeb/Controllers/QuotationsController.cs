@@ -113,7 +113,7 @@ namespace AccountGoWeb.Controllers
         [HttpGet]
         public IActionResult Quotation(int id)
         {
-            ViewBag.PageContentHeader = "Sales";
+            ViewBag.PageContentHeader = "Edit Sale Quotation";
 
             SalesQuotation? model = null;
 
@@ -126,7 +126,6 @@ namespace AccountGoWeb.Controllers
             {
                 model = GetAsync<SalesQuotation>("Sales/Quotation?id=" + id).Result;
                 @ViewBag.Id = model.Id;
-                @ViewBag.QuotationDate = model.QuotationDate;
                 @ViewBag.CustomerName = model.CustomerName;
                 @ViewBag.PaymentTermId = model.PaymentTermId;
                 @ViewBag.SalesQuotationLines = model.SalesQuotationLines;

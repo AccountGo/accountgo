@@ -11,7 +11,7 @@
 </style>
 
 <div>
-    <a href="#" id="linkEdit" class="btn" onclick="onClickEditButton();">
+    <a id="linkEdit" class="btn" onclick="onClickEditButton();">
         <i class="fa fa-edit"></i>
         Edit
     </a>
@@ -36,15 +36,10 @@
                     </div>
                     @* Quotation Date *@
                     <div class="row">
-                        <div class="col-sm-5">Quotation Date</div>
-                        <div class="col-sm-7">
-                            <input class="form-control pull-right" type="date" asp-for="QuotationDate">
-                        </div>
-                    </div>
-                    @* Payment Term *@
-                    <div class="row">
                         <div class="col-sm-5">Payment Term</div>
-                        <div class="col-sm-7">@ViewBag.PaymentTermId</div>
+                        <div class="col-sm-7">
+                            <select class="form-control" asp-for="PaymentTermId" asp-items="@ViewBag.PaymentTerms"></select>
+                        </div>
                     </div>
                     @* Total Amount *@
                     <div class="row">
@@ -97,7 +92,7 @@
     </div>
     <div class="col-sm-9">
         <input id="btnSave" class="btn btn-sm btn-primary btn-flat pull-left disabledControl" type="submit" value="Save"/>
-        <a href="~/sales/salesinvoices" class="btn btn-sm btn-default btn-flat pull-left">Close</a>
+        <a href="~/Quotations" class="btn btn-sm btn-default btn-flat pull-left">Close</a>
     </div>
 </form>
 

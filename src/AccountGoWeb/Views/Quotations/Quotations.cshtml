@@ -43,7 +43,7 @@
         var selectedRows = gridOptions.api.getSelectedRows();
         selectedRow = selectedRows[0];
 
-        document.getElementById('linkViewQuotation').setAttribute('href', 'Quotation?id=' + selectedRow.id);
+        document.getElementById('linkViewQuotation').setAttribute('href', 'Quotations/Quotation?id=' + selectedRow.id);
         document.getElementById('linkViewQuotation').setAttribute('class', 'btn');
 
         if(selectedRow.status == 3)
