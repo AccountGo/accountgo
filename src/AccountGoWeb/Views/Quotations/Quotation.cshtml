@@ -25,8 +25,8 @@
                 <div class="col-sm-6">
                     @* Customer Name *@
                     <div class="row">
-                        <div class="col-sm-5" id="customer-name">Customer Name</div>
-                        <div class="col-sm-7">
+                        <div class="col-sm-5 text-white" id="customer-name">Customer Name</div>
+                        <div class="col-sm-7 text-white">
                             <select class="form-control" asp-for="CustomerId" asp-items="@ViewBag.Customers"
                                     id="optCustomer">
                             </select>
@@ -36,15 +36,15 @@
                     </div>
                     @* Quotation Date *@
                     <div class="row">
-                        <div class="col-sm-5">Payment Term</div>
-                        <div class="col-sm-7">
+                        <div class="col-sm-5 text-white">Payment Term</div>
+                        <div class="col-sm-7 text-white">
                             <select class="form-control" asp-for="PaymentTermId" asp-items="@ViewBag.PaymentTerms"></select>
                         </div>
                     </div>
                     @* Total Amount *@
                     <div class="row">
-                        <div class="col-sm-5">Total Amount</div>
-                        <div class="col-sm-7">@ViewBag.TotalAmount</div>
+                        <div class="col-sm-5 text-white">Total Amount</div>
+                        <div class="col-sm-7 text-white">@ViewBag.TotalAmount</div>
                     </div>
                 </div>
                 @* Table *@

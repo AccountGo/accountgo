@@ -129,7 +129,7 @@ namespace AccountGoWeb.Controllers
                 @ViewBag.CustomerName = model.CustomerName;
                 @ViewBag.PaymentTermId = model.PaymentTermId;
                 @ViewBag.SalesQuotationLines = model.SalesQuotationLines;
-                @ViewBag.TotalAmount = model.Amount;
+                @ViewBag.TotalAmount = Math.Round(model.Amount, 2);
             }
 
             @ViewBag.Customers = Models.SelectListItemHelper.Customers();
