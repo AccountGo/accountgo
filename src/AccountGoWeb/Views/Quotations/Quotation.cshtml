@@ -36,15 +36,10 @@
                     </div>
                     @* Quotation Date *@
                     <div class="row">
-                        <div class="col-sm-5">Quotation Date</div>
-                        <div class="col-sm-7">
-                            <input class="form-control pull-right" type="date" asp-for="QuotationDate">
-                        </div>
-                    </div>
-                    @* Payment Term *@
-                    <div class="row">
                         <div class="col-sm-5">Payment Term</div>
-                        <div class="col-sm-7">@ViewBag.PaymentTermId</div>
+                        <div class="col-sm-7">
+                            <select class="form-control" asp-for="PaymentTermId" asp-items="@ViewBag.PaymentTerms"></select>
+                        </div>
                     </div>
                     @* Total Amount *@
                     <div class="row">
