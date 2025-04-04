@@ -1,9 +1,12 @@
-﻿using System;
+﻿#nullable enable
+
+using System;
 using System.Reflection.Metadata.Ecma335;
 
 namespace Core.Domain.Error
 {
-    public class Result<T> where T : class
+    public class Result<T>
+        where T : class
     {
         private readonly T? _value;
 
@@ -34,7 +37,9 @@ namespace Core.Domain.Error
             {
                 if (IsFailure)
                 {
-                    throw new InvalidOperationException("There is no value for failure result. Use 'Error' property instead.");
+                    throw new InvalidOperationException(
+                        "There is no value for failure result. Use 'Error' property instead."
+                    );
                 }
 
                 return _value!;
@@ -43,7 +48,9 @@ namespace Core.Domain.Error
         }
 
         public Error Error { get; }
+
         public static Result<T> Success(T value) => new Result<T>(value);
+
         public static Result<T> Failure(Error error) => new Result<T>(error);
     }
 }
