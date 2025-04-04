@@ -1,5 +1,6 @@
 ﻿using Dto.Purchasing;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore.Metadata.Internal;
 
 namespace AccountGoWeb.Controllers
 {
@@ -51,9 +52,10 @@ namespace AccountGoWeb.Controllers
         }
 
         [HttpPost]
-        public IActionResult AddPurchaseOrder(PurchaseOrder purchaseOrder, string addRowBtn)
+        public IActionResult AddPurchaseOrder(PurchaseOrder purchaseOrder, string? addRowBtn)
         {
             ViewBag.PageContentHeader = "Add Purchase Order";
+
 
             if (!string.IsNullOrEmpty(addRowBtn))
             {
@@ -78,8 +80,8 @@ namespace AccountGoWeb.Controllers
                 var content = new StringContent(serialize);
                 content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
 
-                var response = PostAsync("purchasing/savepurchaseorder", content);
-
+                var response =  PostAsync("purchasing/savepurchaseorder", content);
+                return Json(response);
                 return RedirectToAction("PurchaseOrders");
             }
 

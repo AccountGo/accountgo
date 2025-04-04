@@ -36,7 +36,7 @@ namespace AccountGoWeb.Controllers
             }
         }
 
-        protected async System.Threading.Tasks.Task<string> PostAsync(string uri, StringContent data)
+        protected async Task<string> PostAsync(string uri, StringContent data)
         {
             string responseJson = string.Empty;
             using (var client = new HttpClient())

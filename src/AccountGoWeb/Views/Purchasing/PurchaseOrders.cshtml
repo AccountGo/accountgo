@@ -15,7 +15,7 @@
     </a>
 </div>
 <div>
-    <div id="purchaseorders" class="ag-fresh" style="height: 400px;"></div>
+    <div id="purchaseorders" class="ag-fresh"></div>
 </div>
 <script>
     var columnDefs = [
@@ -41,8 +41,8 @@
         selectedRow = selectedRows[0];
 
         //document.getElementById('linkNewReceipt').setAttribute('href', 'addreceipt?purchId=' + selectedRow.id);
-        document.getElementById('linkCreateInvoice').setAttribute('href', 'addpurchaseinvoice?purchId=' + selectedRow.id);
-        document.getElementById('linkViewOrder').setAttribute('href', 'purchaseorder?id=' + selectedRow.id);
+        document.getElementById('linkCreateInvoice').setAttribute('href', 'purchasing/addpurchaseinvoice?purchId=' + selectedRow.id);
+        document.getElementById('linkViewOrder').setAttribute('href', 'purchasing/purchaseorder?id=' + selectedRow.id);
 
         if(selectedRow.purchaseInvoiceHeaderId === undefined){
             document.getElementById('linkCreateInvoice').setAttribute('class', 'btn');
