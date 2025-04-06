@@ -65,6 +65,11 @@ namespace AccountGoWeb.Controllers
         [HttpPost]
         public async Task<IActionResult> AddSalesQuotation(Dto.Sales.SalesQuotation model, string? addRowBtn)
         {
+
+            ViewBag.Customers = Models.SelectListItemHelper.Customers();
+                ViewBag.Items = Models.SelectListItemHelper.Items();
+                ViewBag.PaymentTerms = Models.SelectListItemHelper.PaymentTerms();
+                ViewBag.Measurements = Models.SelectListItemHelper.Measurements();
             if (!string.IsNullOrEmpty(addRowBtn))
             {
                 _logger.LogInformation("Add Row Button Clicked");
@@ -76,10 +81,6 @@ namespace AccountGoWeb.Controllers
                     ItemId = 1,
                     MeasurementId = 1,
                 });
-                ViewBag.Customers = Models.SelectListItemHelper.Customers();
-                ViewBag.Items = Models.SelectListItemHelper.Items();
-                ViewBag.PaymentTerms = Models.SelectListItemHelper.PaymentTerms();
-                ViewBag.Measurements = Models.SelectListItemHelper.Measurements();
 
                 return View(model);
 
@@ -98,14 +99,15 @@ namespace AccountGoWeb.Controllers
 
                     if (response.IsSuccessStatusCode) {
                         _logger.LogInformation("Quotation has been successfully saved.");
+                        return RedirectToAction("quotations");
                     } else {
                         _logger.LogInformation("Quotation save failed.");
+                        return View(model);
                     }
-                    return RedirectToAction("quotations");
                 }
             } else {
                 _logger.LogInformation("Model State is not valid.");
-                return RedirectToAction("quotations");
+                return View(model);
             }
             
         }
