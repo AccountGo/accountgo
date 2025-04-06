@@ -26,6 +26,7 @@ builder.Services.ConfigureIdentity();
 builder.Services.ConfigureJWT(builder.Configuration);
 builder.Services.AddScoped<IFinancialService, FinancialService>();
 builder.Services.AddScoped<IAccountService, AccountService>();
+builder.Services.ConfigureRateLimiting();
 
 builder.Services.AddControllers()
 .AddNewtonsoftJson(
@@ -76,10 +77,12 @@ if (app.Environment.IsDevelopment())
 app.UseRouting();
 app.UseCors("AllowAll");
 
+app.UseRateLimiter();
+
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapControllers();
+app.MapControllers().RequireRateLimiting("fixed");
 
 using (var scope = app.Services.CreateScope())
 {

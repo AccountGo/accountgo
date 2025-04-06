@@ -4,6 +4,8 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using Microsoft.AspNetCore.RateLimiting;
+using System.Threading.RateLimiting;
 
 namespace Api.Extensions
 {
@@ -81,7 +83,7 @@ namespace Api.Extensions
                 dbName = System.Environment.GetEnvironmentVariable("DBNAME") ?? "accountgodb";
 
                 connectionString = string.Format(configuration.GetConnectionString("DefaultConnection")!, dbServer, dbUserID, dbUserPassword, dbName);
-            } 
+            }
 
             Console.WriteLine("DB Connection String: " + connectionString);
 
@@ -90,6 +92,29 @@ namespace Api.Extensions
                 , options => options.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery)))
                 //.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery) // Add this line
                 .AddDbContext<ApplicationIdentityDbContext>(options => options.UseSqlServer(connectionString));
+        }
+
+        // This method is used to configure rate limiting in the application.
+        // It sets up a fixed window rate limiter with a 10-second window, allowing 5 requests per window.
+        public static void ConfigureRateLimiting(this IServiceCollection services)
+        {
+            services.AddRateLimiter(options =>
+            {
+                options.OnRejected = async (context, token) =>
+                {
+                    context.HttpContext.Response.StatusCode = 429;
+                    await context.HttpContext.Response.WriteAsync("Too many requests. Please try again later.");
+                };
+
+                options.AddFixedWindowLimiter("fixed", config =>
+                {
+                    config.PermitLimit = 5;
+                    config.Window = TimeSpan.FromSeconds(10);
+                    config.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+                    config.QueueLimit = 2;
+                });
+            });
+
         }
     }
 }
