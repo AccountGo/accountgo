@@ -146,21 +146,21 @@ namespace AccountGoWeb.Controllers
                 ViewBag.TotalAmount = salesInvoiceModel.Amount;
             }
 
-            @ViewBag.Customers = Models.SelectListItemHelper.Customers();
-            @ViewBag.PaymentTerms = Models.SelectListItemHelper.PaymentTerms();
-            @ViewBag.Items = Models.SelectListItemHelper.Items();
-            @ViewBag.Measurements = Models.SelectListItemHelper.Measurements();
+            @ViewBag.Customers = SelectListItemHelper.Customers();
+            @ViewBag.PaymentTerms = SelectListItemHelper.PaymentTerms();
+            @ViewBag.Items = SelectListItemHelper.Items();
+            @ViewBag.Measurements = SelectListItemHelper.Measurements();
 
             return View("SalesInvoice", salesInvoiceModel);
         }
 
-        public async System.Threading.Tasks.Task<IActionResult> SalesInvoices()
+        public async Task<IActionResult> SalesInvoices()
         {
             ViewBag.PageContentHeader = "Sales Invoices";
             using (var client = new HttpClient())
             {
                 var baseUri = _configuration!["ApiUrl"];
-                client.BaseAddress = new System.Uri(baseUri!);
+                client.BaseAddress = new Uri(baseUri!);
                 client.DefaultRequestHeaders.Accept.Clear();
                 var response = await client.GetAsync(baseUri + "sales/salesinvoices");
                 if (response.IsSuccessStatusCode)
@@ -169,10 +169,10 @@ namespace AccountGoWeb.Controllers
                     return View(model: responseJson);
                 }
 
-                @ViewBag.Customers = Models.SelectListItemHelper.Customers();
-                @ViewBag.PaymentTerms = Models.SelectListItemHelper.PaymentTerms();
-                @ViewBag.Items = Models.SelectListItemHelper.Items();
-                @ViewBag.Measurements = Models.SelectListItemHelper.Measurements();
+                @ViewBag.Customers = SelectListItemHelper.Customers();
+                @ViewBag.PaymentTerms = SelectListItemHelper.PaymentTerms();
+                @ViewBag.Items = SelectListItemHelper.Items();
+                @ViewBag.Measurements = SelectListItemHelper.Measurements();
             }
             return View();
         }
@@ -227,7 +227,7 @@ namespace AccountGoWeb.Controllers
         }
 
         [HttpPost]
-        public async System.Threading.Tasks.Task<IActionResult> AddSalesInvoice(SalesInvoice Dto, string? addRowBtn)
+        public async Task<IActionResult> AddSalesInvoice(SalesInvoice Dto, string? addRowBtn)
         {
             if (!string.IsNullOrEmpty(addRowBtn))
             {

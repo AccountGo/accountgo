@@ -83,7 +83,7 @@
                                         @Html.HiddenFor(m => Model.AllocationLines[i].InvoiceId)
                                     </td>
                                     <td>
-                                        @Model.AllocationLines[i].Amount
+                                        @Model.AllocationLines[i].Amount?.ToString("F2")
                                     </td>
                                     <td>
                                         @Model.AllocationLines[i].AllocatedAmount

@@ -875,6 +875,8 @@ namespace Services.Sales
             Dto.Sales.SalesInvoice salesInvoiceDto
         )
         {
+            _logger.LogInformation("Posted value from SaveSalesInvoice API: " + salesInvoiceDto.Posted); // The Posted value from frontend checkbox
+
             Core.Domain.Sales.SalesOrderHeader? salesOrder = null;
             Core.Domain.Sales.SalesInvoiceHeader? salesInvoice = null;
 
@@ -909,6 +911,18 @@ namespace Services.Sales
             }
 
             _logger.LogInformation("SaveSalesInvoice API " + salesInvoice.CustomerId);
+
+            // Create GeneralLedgerHeader only if posted from api is true
+            if (salesInvoiceDto.Posted)
+            {
+                // Create the GeneralLedgerHeader entry
+                // Use the Service/Financial/FinancialService methods to create GerenearlLedgerHeader
+                // Can be modified as needed
+                var glHeader = _financialService.CreateGeneralLedgerHeader(DocumentTypes.SalesInvoice, salesInvoice.Date, "");
+
+                // Add GeneralLedgerHeader to the SalesInvoice
+                salesInvoice.GeneralLedgerHeader = glHeader;
+            }
 
             SaveSalesInvoice(salesInvoice, salesOrder);
 

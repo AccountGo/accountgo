@@ -36,8 +36,9 @@
                 <div class="row">
                     <div class="col-sm-3">Posted</div>
                     <div class="col-sm-8">
-                        <input type="hidden" asp-for="Posted" value="false" />
-                        <input class="form-check" asp-for="Posted" type="checkbox" value="true" id="chkPosted" />
+                        <input asp-for="Posted" class="form-check-input" id="chkPosted" />
+                        @* <input type="hidden" name="Posted" value="false" />
+                        <input class="form-check" asp-for="Posted" type="checkbox" value="true" id="chkPosted" /> *@
                         <span asp-validation-for="Posted" class="text-danger"></span>
                     </div>
                 </div>
