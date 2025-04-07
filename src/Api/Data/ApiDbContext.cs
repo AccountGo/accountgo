@@ -296,17 +296,20 @@ namespace Api.Data
         public virtual DbSet<VendorPayment> VendorPayments { get; set; }
         public virtual DbSet<Party> Parties { get; set; }
 
-        public override int SaveChanges()
-        {
-            // TODO : Implementation Required
-            //SaveAuditLog();
+public override int SaveChanges()
+{
+    // Enable audit logging
+    SaveAuditLog();
 
-            var ret = base.SaveChanges();
+    var ret = base.SaveChanges();
 
-            //UpdateAuditLogRecordId();
+    // Update record IDs for newly added entities
+    UpdateAuditLogRecordId();
 
-            return ret;
-        }
+    return ret;
+}
+
+
 
         #region Audit Logs
         private void SaveAuditLog()

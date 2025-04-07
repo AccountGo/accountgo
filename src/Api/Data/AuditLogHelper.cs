@@ -16,12 +16,18 @@ namespace Api.Data
         {
             var result = new List<AuditLog>();
 
+
+            // Use AuditContext.CurrentUser if the provided username is "Unknown" or empty
+            if (string.IsNullOrEmpty(username) || username == "Unknown")
+            {
+                username = AuditContext.CurrentUser;
+            }
             // Get the Table() attribute, if one exists
             Type entryType = dbEntry.Entity.GetType();
 
             TableAttribute? tableAttr = entryType.GetCustomAttributes(typeof(TableAttribute), false).SingleOrDefault() as TableAttribute;
 
-            if(tableAttr == null)
+            if (tableAttr == null)
             {
                 tableAttr = entryType.BaseType!.GetCustomAttributes(typeof(TableAttribute), false).SingleOrDefault() as TableAttribute;
             }
@@ -88,7 +94,7 @@ namespace Api.Data
                 else if (dbEntry.State == EntityState.Modified)
                 {
                     var properties = dbEntry.Metadata.GetProperties().GetEnumerator();
-                    while(properties.MoveNext())
+                    while (properties.MoveNext())
                     {
                         string propertyName = properties.Current.Name;
                         if (isSchemaExt || IsAttributeAuditable(tableName, propertyName))
@@ -98,11 +104,11 @@ namespace Api.Data
 
                             if (!Equals(property.CurrentValue, property.OriginalValue))
                             {
-                                var auditLog = CreateAuditLog(username, 
-                                    changeTime, 
-                                    AuditEventTypes.Modified, 
-                                    tableName, 
-                                    keyValue, 
+                                var auditLog = CreateAuditLog(username,
+                                    changeTime,
+                                    AuditEventTypes.Modified,
+                                    tableName,
+                                    keyValue,
                                     propertyName,
                                     property.OriginalValue == null ? null : property.OriginalValue.ToString(),
                                     property.CurrentValue == null ? null : property.CurrentValue.ToString());
@@ -113,7 +119,7 @@ namespace Api.Data
                     }
                 }
             }
-            catch(Exception ex)
+            catch (Exception ex)
             {
                 Console.WriteLine(ex.Message);
             }
@@ -124,6 +130,12 @@ namespace Api.Data
         #region Private Methods
         private static AuditLog CreateAuditLog(string username, DateTime changeTime, AuditEventTypes type, string tableName, string? recordId, string? fieldname, string? originalvalue, string? newvalue)
         {
+
+            // Use AuditContext.CurrentUser if the provided username is "Unknown" or empty
+            if (string.IsNullOrEmpty(username) || username == "Unknown")
+            {
+                username = AuditContext.CurrentUser;
+            }
             var auditLog = new AuditLog()
             {
                 UserName = username,

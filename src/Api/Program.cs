@@ -19,7 +19,10 @@ builder.Services.AddScoped<ValidationFilterAttribute>();
 // Mapping
 builder.Services.AddAutoMapper(typeof(Program));
 
-// authentication
+// Register IHttpContextAccessor
+builder.Services.AddHttpContextAccessor();  // Add this line here
+
+// Authentication
 builder.Services.AddScoped<IAuthenticationService, AuthenticationService>();
 builder.Services.AddAuthentication();
 builder.Services.ConfigureIdentity();
@@ -28,30 +31,28 @@ builder.Services.AddScoped<IFinancialService, FinancialService>();
 builder.Services.AddScoped<IAccountService, AccountService>();
 
 builder.Services.AddControllers()
-.AddNewtonsoftJson(
-    options =>
-        {
-            options.SerializerSettings.ContractResolver = new Newtonsoft.Json.Serialization.CamelCasePropertyNamesContractResolver();
-            options.SerializerSettings.ReferenceLoopHandling = Newtonsoft.Json.ReferenceLoopHandling.Ignore;
-        }
-    );
+    .AddNewtonsoftJson(options =>
+    {
+        options.SerializerSettings.ContractResolver = new Newtonsoft.Json.Serialization.CamelCasePropertyNamesContractResolver();
+        options.SerializerSettings.ReferenceLoopHandling = Newtonsoft.Json.ReferenceLoopHandling.Ignore;
+    });
 
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// cors
+// CORS
 builder.Services.ConfigureCors();
 
-// generic repository
+// Generic repository
 builder.Services.AddScoped(typeof(Core.Data.IRepository<>), typeof(EfRepository<>));
 
-// custom repositories
+// Custom repositories
 builder.Services.AddScoped(typeof(Core.Data.ISalesOrderRepository), typeof(SalesOrderRepository));
 builder.Services.AddScoped(typeof(Core.Data.IPurchaseOrderRepository), typeof(PurchaseOrderRepository));
 builder.Services.AddScoped(typeof(Core.Data.ISecurityRepository), typeof(SecurityRepository));
 
-// domain services
+// Domain services
 builder.Services.AddScoped(typeof(Services.Sales.ISalesService), typeof(Services.Sales.SalesService));
 builder.Services.AddScoped(typeof(Services.Financial.IFinancialService), typeof(Services.Financial.FinancialService));
 builder.Services.AddScoped(typeof(Services.Inventory.IInventoryService), typeof(Services.Inventory.InventoryService));
@@ -60,7 +61,7 @@ builder.Services.AddScoped(typeof(Services.Administration.IAdministrationService
 builder.Services.AddScoped(typeof(Services.Security.ISecurityService), typeof(Services.Security.SecurityService));
 builder.Services.AddScoped(typeof(Services.TaxSystem.ITaxService), typeof(Services.TaxSystem.TaxService));
 
-//seed the database
+// Seed the database
 builder.Services.AddScoped<DatabaseSeeder>();
 
 var app = builder.Build();
