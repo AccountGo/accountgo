@@ -158,6 +158,10 @@ else
             // get total property from JSON response data
             error += "3\n";
             error += data.GetProperty("accountName").GetInt32();
+            var responseString = data.ToString();
+            var accountsList = JsonSerializer.Deserialize<List<AccountViewModel>>(responseString, options);
+            accounts = accountsList?.ToArray(); // Convert List to array
+            shouldRender = true;
         }
         catch (Exception ex)
         {
