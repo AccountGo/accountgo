@@ -1,6 +1,13 @@
 using System.Reflection;
 using Google.Protobuf.WellKnownTypes;
 
+// using Infrastructure.Module;
+
+// Console.WriteLine("Using Infrastructure.Module.ModuleManager");
+// var moduleManager = new ModuleManager();
+
+// Console.WriteLine("Infrastructure project is referenced.");
+
 var builder = DistributedApplication.CreateBuilder(args);
 
 var sqlServer = builder.AddSqlServer("gdb-sql-server")

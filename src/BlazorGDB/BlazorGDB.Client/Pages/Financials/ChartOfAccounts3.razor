@@ -135,7 +135,6 @@ else
     private bool shouldRender;
     private bool jsInteropCalled = false; // Flag to ensure JS interop is called only once
     private string url = string.Empty;
-    JsonElement data;
     string error = string.Empty;
 
     protected override bool ShouldRender() => shouldRender;
@@ -143,25 +142,36 @@ else
     protected override async Task OnInitializedAsync()
     {
         error += "HERE 1\n";
-        using var httpResponse = await _httpClient.GetAsync($"{Constants.API_URL}financials/accounts");
-        error += "HERE 2\n";
-        if (!httpResponse.IsSuccessStatusCode)
+        try 
         {
-            error += "HERE 3\n";
-            // set error message for display, log to console and return
-            var errorMessage = httpResponse.ReasonPhrase;
-            Console.WriteLine($"There was an error! {errorMessage}");
-            return;
-        }
+            using var httpResponse = await _httpClient.GetAsync($"{Constants.API_URL}financials/accounts");
+            error += "HERE 2\n";
+            if (!httpResponse.IsSuccessStatusCode)
+            {
+                error += "HERE 3\n";
+                // set error message for display, log to console and return
+                var errorMessage = httpResponse.ReasonPhrase;
+                Console.WriteLine($"There was an error! {errorMessage}");
+                getError = true; // Set getError to true here
+                return;
+            }
 
-        var options = new JsonSerializerOptions
+            var options = new JsonSerializerOptions
             {
                 PropertyNameCaseInsensitive = true
             };
-        error += "HERE 4\n";
-        // convert http response data to UsersResponse object
-        accounts = await httpResponse.Content.ReadFromJsonAsync<AccountViewModel[]>(options);
-        error += "HERE 5\n";
+            error += "HERE 4\n";
+            // convert http response data to UsersResponse object
+            accounts = await httpResponse.Content.ReadFromJsonAsync<AccountViewModel[]>(options);
+            error += "HERE 5\n";
+            shouldRender = true;
+        }
+        catch (Exception ex)
+        {
+            error += $"Error: {ex.Message}\n"; 
+            getError = true; // Set getError to true for any exceptions
+            Console.WriteLine($"Exception occurred: {ex.Message}");
+        }
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)

@@ -78,7 +78,7 @@ namespace AccountGoWeb.Controllers
             return View(model);
         }
 
-        public async Task<IActionResult> SignOut()
+        public new async Task<IActionResult> SignOut()
         {
             await HttpContext.SignOutAsync();
 
