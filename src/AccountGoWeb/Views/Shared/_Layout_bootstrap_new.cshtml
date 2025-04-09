@@ -24,80 +24,83 @@
     <link href="https://cdn.jsdelivr.net/npm/pace-js@latest/pace-theme-default.min.css" rel="stylesheet">
 
 </head>
+
 <body class="app header-fixed sidebar-fixed aside-menu-fixed sidebar-lg-show">
     <style>
-            nav {
-                position: relative;
-                margin: 0px;
-                top: 0;
-                bottom: 0;
-                width: 250px;
-                background: linear-gradient(to bottom, #007b89, #007b81);
-                overflow: hidden; 
-            }
+        nav {
+            position: relative;
+            margin: 0px;
+            top: 0;
+            bottom: 0;
+            width: 250px;
+            background: linear-gradient(to bottom, #007b89, #007b81);
+            overflow: hidden; 
+        }
 
-            nav ul {
-                list-style: none;
-                margin: 0;
-                padding: 5px;
-            }
+        nav ul {
+            list-style: none;
+            margin: 0;
+            padding: 5px;
+        }
 
-            nav ul li {
-                /* Sub Menu */
+        nav ul li {
+            /* Sub Menu */
 
-            }
+        }
 
-            nav ul li a {
-                display: block;
-                padding: 12px 20px;
-                color: lightblue;
-                text-decoration: none;
-                font-weight: bold;
-                -webkit-transition: 0.2s linear;
-                -moz-transition: 0.2s linear;
-                -ms-transition: 0.2s linear;
-                -o-transition: 0.2s linear;
-                transition: 0.2s linear;
-            }
+        nav ul li a {
+            display: block;
+            padding: 12px 20px;
+            color: lightblue;
+            text-decoration: none;
+            font-weight: bold;
+            -webkit-transition: 0.2s linear;
+            -moz-transition: 0.2s linear;
+            -ms-transition: 0.2s linear;
+            -o-transition: 0.2s linear;
+            transition: 0.2s linear;
+        }
 
-            nav ul li a:hover {
-                background: #1d4f71;
-                color: #fff;
-            }
+        nav ul li a:hover {
+            background: #1d4f71;
+            color: #fff;
+        }
 
-            nav ul li a .fa {
-                width: 16px;
-                text-align: center;
-                margin-right: 5px;
-                float: right;
-            }
+        nav ul li a .fa {
+            width: 16px;
+            text-align: center;
+            margin-right: 5px;
+            float: right;
+        }
 
-            nav ul ul {
-                background: rgba(0, 0, 0, 0.2);
-            }
+        nav ul ul {
+            background: rgba(0, 0, 0, 0.2);
+        }
 
-            nav ul li ul li a {
+        nav ul li ul li a {
 
             border-left: 4px solid transparent;
             padding: 10px 20px;
         }
 
-            nav ul li ul li a:hover {
-                border-left: 4px solid #3498db;
-            }
+        nav ul li ul li a:hover {
+            border-left: 4px solid #3498db;
+        }
 
-            nav ul::-webkit-scrollbar {
-                display: none;
-            }
+        nav ul::-webkit-scrollbar {
+            display: none; /* For Chrome, Safari, and Edge */
+        }
 
-            header.app-header {
-                border-bottom: 2px solid #ccc;
-                padding: 1rem 0;
-            }
+        header.app-header {
+            border-bottom: 2px solid #ccc;
+            padding: 1rem 0;
+        }
 
-            header .fa-book {
-                color: #f8f9fa;
-            }
+        header .fa-book {
+            color: #f8f9fa;
+        }
+
+        
     </style>
     <header class="app-header navbar p-3" style="color: white; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
         <div class="container-fluid d-flex justify-content-center align-items-center">
@@ -109,7 +112,9 @@
         </div>
     </header>
 
-    <!-- Sidebar navigation on the left -->
+    <div class="app-body">
+
+        <!-- left side navigation -->
         <nav class='animated bounceInDown bg-dark'>
             <ul>
                 <li>
@@ -322,6 +327,7 @@
                                 Audit Logs
                             </a>
                         </li>
+                        @* } *@
                     </ul>
                 </li>
 
@@ -339,8 +345,7 @@
             </ul>
         </nav>
 
-
-                <div class="container-fluid"></div>
+        <div class="container-fluid">
             <div class="animated fadeIn">
                 <!-- PAGE CONTENT -->
                 <h2>
@@ -368,10 +373,10 @@
                     </a>
                 </li>
             </ul>
-        </aside>
-        </div>
 
-    <footer class="app-footer"></footer>
+        </aside>
+    </div>
+    <footer class="app-footer">
         <div>
             <span>Good Deed Books</span>
             <span>&copy; @DateTime.Now.Year All rights reserved.</span>
@@ -385,7 +390,6 @@
             <a href="http://accountgo.net">Good Deed Books</a>
         </div>
     </footer>
-    
     <!-- Bootstrap and necessary plugins-->
     <script src="https://code.jquery.com/jquery-3.4.1.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/popper.js@1.12.9/dist/umd/popper.min.js"></script>
@@ -397,8 +401,7 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/ag-grid/31.0.1/ag-grid-community.min.js"></script>
 
-
-        <script>
+    <script>
         $(document).ready(function () {
             $('.sub-menu ul').hide();
             $(".sub-menu > a").click(function (e) {
@@ -406,15 +409,19 @@
                 var $submenu = $(this).next("ul");
                 var $icon = $(this).find(".fa").last();
 
+
+                // Toggle current submenu
                 $submenu.slideToggle(100);
 
+                // Toggle caret direction
                 $icon.toggleClass("fa-caret-right fa-caret-down");
             });
         });
     </script>
+    @* <script src="_framework/blazor.web.js"></script> *@
     <script src="~/_framework/blazor.server.js" ></script>
     <!-- PLugins and scripts required by the views -->
     @RenderSection("Scripts", required: false)
-
 </body>
+
 </html>
