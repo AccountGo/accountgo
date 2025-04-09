@@ -13,7 +13,6 @@
     <link rel="icon" type="image/x-icon" href="~/images/favicon.ico">
     <link rel="stylesheet" href="~/GoodBooks.styles.css" asp-append-version="true" />
     <!-- Icons-->
-    @* <link href="~/css/coreui/icons/css/all.min.css" rel="stylesheet"> *@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/simple-line-icons/2.5.5/css/simple-line-icons.min.css"
@@ -99,10 +98,9 @@
         header .fa-book {
             color: #f8f9fa;
         }
-
         
     </style>
-    <header class="app-header navbar p-3" style="color: white; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
+    <header class="app-header navbar p-3" style="color: white; text-align: left; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
         <div class="container-fluid d-flex justify-content-center align-items-center">
             <a href="/" class="d-flex align-items-center text-decoration-none text-white">
                 <i class="fa fa-book fa-2x me-3" aria-hidden="true"></i>
@@ -305,8 +303,6 @@
                         </div>
                     </a>
                     <ul>
-                        @* @if (User.IsInRole("SystemAdministrators"))
-                        { *@
                         <li>
                             <a class="nav-link" href="~/administration/users">
                                 Security Users
