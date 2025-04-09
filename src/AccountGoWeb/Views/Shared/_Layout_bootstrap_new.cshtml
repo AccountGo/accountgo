@@ -397,5 +397,24 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/ag-grid/31.0.1/ag-grid-community.min.js"></script>
 
+
+        <script>
+        $(document).ready(function () {
+            $('.sub-menu ul').hide();
+            $(".sub-menu > a").click(function (e) {
+                e.preventDefault();
+                var $submenu = $(this).next("ul");
+                var $icon = $(this).find(".fa").last();
+
+                $submenu.slideToggle(100);
+
+                $icon.toggleClass("fa-caret-right fa-caret-down");
+            });
+        });
+    </script>
+    <script src="~/_framework/blazor.server.js" ></script>
+    <!-- PLugins and scripts required by the views -->
+    @RenderSection("Scripts", required: false)
+
 </body>
 </html>
