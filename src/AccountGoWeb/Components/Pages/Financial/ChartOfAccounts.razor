@@ -162,6 +162,16 @@ else
                                value="@selectedAccount?.AccountName" 
                                @oninput="e => selectedAccount!.AccountName = e.Value?.ToString() ?? string.Empty" />
                     </div>
+                    <div class="mb-3">
+                        <label for="parentAccountCode" class="form-label">Parent Account</label>
+                        <select id="parentAccountCode" class="form-select" @bind="selectedParentCode">
+                            <option value="None">None</option>
+                            @foreach (var acc in FlattenAccounts(accounts))
+                            {
+                                <option value="@acc.AccountCode">@acc.AccountCode - @acc.AccountName</option>
+                            }
+                        </select>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button class="btn btn-secondary" @onclick="CloseModal">Cancel</button>
@@ -206,6 +216,10 @@ else
     private string errorMessage = string.Empty;
     private bool isLoading = true;
     private bool getError = false;
+    private string parentAccountCode = string.Empty;
+    private string selectedParentCode = "None";
+
+
 
     // Fetch accounts from API on initialization
     protected override async Task OnInitializedAsync()
@@ -253,6 +267,8 @@ else
         };
         errorMessage = string.Empty;
         isAddModalVisible = true;
+        parentAccountCode = string.Empty;
+        selectedParentCode = "None";
     }
 
     // Open Edit Modal
@@ -269,6 +285,9 @@ else
         };
         errorMessage = string.Empty;
         isEditModalVisible = true;
+        parentAccountCode = string.Empty;
+        selectedParentCode = "None";
+        
     }
 
     // Close Add or Edit Modal
@@ -307,6 +326,22 @@ else
             errorMessage = "Both Account Code and Account Name are required.";
             return;
         }
+
+        if (selectedParentCode != "None")
+        {
+            var parentAccount = FindAccountByCode(accounts, selectedParentCode);
+            if (parentAccount == null)
+            {
+                errorMessage = "Parent Account not found.";
+                return;
+            }
+            selectedAccount.ParentAccountId = parentAccount.Id;
+        }
+        else
+        {
+            selectedAccount.ParentAccountId = null;
+        }
+
 
         try
         {
@@ -389,9 +424,45 @@ else
         }
     }
 
+    private AccountViewModel? FindAccountByCode(IEnumerable<AccountViewModel> accountList, string code)
+    {
+        foreach (var account in accountList)
+        {
+            if (account.AccountCode.Equals(code, StringComparison.OrdinalIgnoreCase))
+                return account;
+
+            if (account.ChildAccounts != null && account.ChildAccounts.Any())
+            {
+                var childResult = FindAccountByCode(account.ChildAccounts, code);
+                if (childResult != null)
+                    return childResult;
+            }
+        }
+        return null;
+    }
+
+    private List<AccountViewModel> FlattenAccounts(IEnumerable<AccountViewModel> nestedAccounts)
+    {
+        var result = new List<AccountViewModel>();
+
+        foreach (var acc in nestedAccounts)
+        {
+            result.Add(acc);
+            if (acc.ChildAccounts != null && acc.ChildAccounts.Any())
+            {
+                result.AddRange(FlattenAccounts(acc.ChildAccounts));
+            }
+        }
+
+        return result;
+    }
+
+
+
     // ViewModel for Accounts
     public class AccountViewModel
     {
+        public int Id { get; set; }
         public string AccountCode { get; set; } = string.Empty;
         public string AccountName { get; set; } = string.Empty;
         public decimal TotalBalance { get; set; }
