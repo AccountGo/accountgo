@@ -26,12 +26,55 @@
 </head>
 <body class="app header-fixed sidebar-fixed aside-menu-fixed sidebar-lg-show">
     <style>
+            nav {
+                position: relative;
+                margin: 0px;
+                top: 0;
+                bottom: 0;
+                width: 250px;
+                background: linear-gradient(to bottom, #007b89, #007b81);
+                overflow: hidden; 
+            }
 
+            nav ul {
+                list-style: none;
+                margin: 0;
+                padding: 5px;
+            }
 
+            nav ul li {
+                /* Sub Menu */
 
+            }
 
+            nav ul li a {
+                display: block;
+                padding: 12px 20px;
+                color: lightblue;
+                text-decoration: none;
+                font-weight: bold;
+                -webkit-transition: 0.2s linear;
+                -moz-transition: 0.2s linear;
+                -ms-transition: 0.2s linear;
+                -o-transition: 0.2s linear;
+                transition: 0.2s linear;
+            }
 
-        
+            nav ul li a:hover {
+                background: #1d4f71;
+                color: #fff;
+            }
+
+            nav ul li a .fa {
+                width: 16px;
+                text-align: center;
+                margin-right: 5px;
+                float: right;
+            }
+
+            nav ul ul {
+                background: rgba(0, 0, 0, 0.2);
+            }
     </style>
 
 
