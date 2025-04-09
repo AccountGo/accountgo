@@ -109,6 +109,236 @@
         </div>
     </header>
 
+    <!-- Sidebar navigation on the left -->
+        <nav class='animated bounceInDown bg-dark'>
+            <ul>
+                <li>
+                    <a class="nav-link" asp-area="" asp-controller="Home" asp-action="Index">
+                        <div class="d-flex justify-content-start align-items-center">
+                            <i class="nav-icon fa fa-dashboard me-2"></i>
+                            <span>Dashboard</span>
+                        </div>
+                    </a>
+                </li>
+                <li class='sub-menu'>
+                    <a href="javascript:;" onclick="document.location.hash='#settings';">
+                        <div class="d-flex justify-content-start align-items-center">
+                            <i class="nav-icon fa fa-industry me-2"></i>
+                            Accounts Receivable
+                            <div class='fa fa-caret-right ml-auto'></div>
+                        </div>
+                    </a>
+                    <ul>
+                        <li>
+                            <a class="nav-link" asp-area="" asp-controller="Quotations" asp-action="Quotations">
+                                Sales Quotations
+                            </a>
+                        </li>
+                        <li>
+                            <a class="nav-link" asp-area="" asp-controller="Sales" asp-action="SalesOrders">
+                                Sales Orders
+                            </a>
+                        </li>
+                        <li>
+                            <a class="nav-link" asp-area="" asp-controller="Sales" asp-action="SalesReceipts">
+                                Sales Receipts
+                            </a>
+                        </li>
+                        <li>
+                            <a class="nav-link" asp-area="" asp-controller="Sales" asp-action="SalesInvoices">
+                                Sales Invoices
+                            </a>
+                        </li>
+                        <li>
+                            <a class="nav-link" asp-area="" asp-controller="Sales" asp-action="DonationInvoices">
+                                Donation Invoices
+                            </a>
+                        </li>
+                        <li>
+                            <a class="nav-link" asp-area="" asp-controller="Sales" asp-action="Customers">
+                                Customers
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+                <li class='sub-menu'>
+                    <a href="javascript:;" onclick="document.location.hash='#message';">
+                        <div class="d-flex justify-content-start align-items-center">
+                            <i class="nav-icon fa fa-link me-2"></i>
+                            Accounts Payable
+                            <div class='fa fa-caret-right ml-auto'></div>
+                        </div>
+                    </a>
+                    <ul>
+                        <li>
+                            <a class="nav-link" asp-area="" asp-controller="Purchasing" asp-action="PurchaseOrders">
+                                Purchase Orders
+                            </a>
+                        </li>
+                        <li>
+                            <a class="nav-link" asp-area="" asp-controller="Purchasing" asp-action="PurchaseInvoices">
+                                Purchase Invoices
+                            </a>
+                        </li>
+                        <li>
+                            <a class="nav-link" asp-area="" asp-controller="Purchasing" asp-action="Vendors">
+                                Vendors
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+                <li class='sub-menu'>
+                    <a href="javascript:;" onclick="document.location.hash='#message';">
+                        <div class="d-flex justify-content-start align-items-center">
+                            <i class="nav-icon fa fa-wrench me-2"></i>
+                            Inventory Control
+                            <div class='fa fa-caret-right ml-auto'></div>
+                        </div>
+                    </a>
+                    <ul>
+                        <li>
+                            <a class="nav-link" asp-area="" asp-controller="Inventory" asp-action="Index">
+                                Items
+                            </a>
+                        </li>
+                        <li>
+                            <a class="nav-link" asp-area="" asp-controller="Inventory" asp-action="ICJ">
+                                Inventory Control Journal
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+                <li class='sub-menu'>
+                    <a href="javascript:;" onclick="document.location.hash='#message';">
+                        <div class="d-flex justify-content-start align-items-center">
+                            <i class="nav-icon fa fa-bank me-2"></i>
+                            Financials
+                            <div class='fa fa-caret-right ml-auto'></div>
+                        </div>
+                    </a>
+                    <ul>
+                        <li>
+                            <a class="nav-link" asp-area="" asp-controller="Financials" asp-action="JournalEntries">
+                                Journal Entries
+                            </a>
+                        </li>
+                        <li>
+                            <a class="nav-link" asp-area="" asp-controller="Financials" asp-action="GeneralLedger">
+                                General Ledgers
+                            </a>
+                        </li>
+                        <li>
+                            <a class="nav-link" asp-area="" asp-controller="Tax" asp-action="Taxes">
+                                Taxes
+                            </a>
+                        </li>
+                        <li>
+                            <a class="nav-link" asp-area="" asp-controller="Financials" asp-action="Accounts">
+                                Chart of Accounts
+                            </a>
+                        </li>
+                        <li>
+                            <a class="nav-link" asp-area="" asp-controller="Financials" asp-action="Banks">
+                                Banks
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+                <li class='sub-menu'>
+                    <a href="javascript:;" onclick="document.location.hash='#message';">
+                        <div class="d-flex justify-content-start align-items-center">
+                            <i class="nav-icon fa fa-line-chart me-2"></i>
+                            Reports
+                            <div class='fa fa-caret-right ml-auto'></div>
+                        </div>
+                    </a>
+                    <ul>
+                        <li>
+                            <a class="nav-link" asp-area="" asp-controller="Financials" asp-action="BalanceSheet">
+                                Balance Sheet
+                            </a>
+                        </li>
+                        <li>
+                            <a class="nav-link" asp-area="" asp-controller="Financials" asp-action="IncomeStatement">
+                                Income Statement
+                            </a>
+                        </li>
+                        <li>
+                            <a class="nav-link" asp-area="" asp-controller="Financials" asp-action="TrialBalance">
+                                Trial Balance
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+                <li class='sub-menu'>
+                    <a href="javascript:;" onclick="document.location.hash='#message';">
+                        <div class="d-flex justify-content-start align-items-center">
+                            <i class="nav-icon fa fa-group me-2"></i>
+                            Organization Settings
+                            <div class='fa fa-caret-right ml-auto'></div>
+                        </div>
+                    </a>
+                    <ul>
+                        <li>
+                            <a class="nav-link" asp-area="" asp-controller="Administration" asp-action="Company">
+                                Company
+                            </a>
+                        </li>
+                        <li>
+                            <a class="nav-link" asp-area="" asp-controller="Administration" asp-action="Settings">
+                                Settings
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+                <li class='sub-menu'>
+                    <a href="javascript:;" onclick="document.location.hash='#message';">
+                        <div class="d-flex justify-content-start align-items-center">
+                            <i class="nav-icon fa fa-desktop me-2"></i>
+                            System Administration
+                            <div class='fa fa-caret-right ml-auto'></div>
+                        </div>
+                    </a>
+                    <ul>
+                        @* @if (User.IsInRole("SystemAdministrators"))
+                        { *@
+                        <li>
+                            <a class="nav-link" href="~/administration/users">
+                                Security Users
+                            </a>
+                        </li>
+                        <li>
+                            <a class="nav-link" href="~/administration/roles">
+                                Security Roles
+                            </a>
+                        </li>
+                        <li>
+                            <a class="nav-link" href="~/administration/groups">
+                                Security Groups
+                            </a>
+                        </li>
+                        <li>
+                            <a class="nav-link" href="~/administration/auditlogs">
+                                Audit Logs
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+
+    <li>
+        <form id="logoutForm" asp-area="" asp-controller="Account" asp-action="SignIn" method="post">
+            <button type="submit" class="nav-link btn btn-link text-start text-light" style="width: 100%; padding: 12px 20px;">
+                <div class="d-flex justify-content-start align-items-center">
+                    <i class="nav-icon fa fa-sign-out me-2"></i>
+                    Logout
+                </div>
+            </button>
+        </form>
+    </li>
+
+            </ul>
+        </nav>
+
 
 </body>
 </html>
