@@ -166,7 +166,7 @@ else
                         <label for="parentAccountCode" class="form-label">Parent Account</label>
                         <select id="parentAccountCode" class="form-select" @bind="selectedParentCode">
                             <option value="None">None</option>
-                            @foreach (var acc in FlattenAccounts(accounts))
+                            @foreach (var acc in FlattenAccounts(accounts ?? Enumerable.Empty<AccountViewModel>()))
                             {
                                 <option value="@acc.AccountCode">@acc.AccountCode - @acc.AccountName</option>
                             }
@@ -443,6 +443,11 @@ else
 
     private List<AccountViewModel> FlattenAccounts(IEnumerable<AccountViewModel> nestedAccounts)
     {
+        if (nestedAccounts == null)
+        {
+            return new List<AccountViewModel>();
+        }
+
         var result = new List<AccountViewModel>();
 
         foreach (var acc in nestedAccounts)
