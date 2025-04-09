@@ -1,5 +1,7 @@
-﻿
-<canvas width="500" height="250"></canvas>
+﻿<canvas width="500" height="250" id="salesChart"></canvas>
+<div id="noDataMessage" style="display:none; text-align:center; padding:20px;">
+    <p>No sales data available for the current period.</p>
+</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
 
@@ -12,58 +14,69 @@
         height = canvas.height - margin.top - margin.bottom;
 
     var x = d3.scaleBand()
-        .rangeRound([0, width])
+        .range([0, width])
         .padding(0.1);
 
     var y = d3.scaleLinear()
-        .rangeRound([height, 0]);
+        .range([height, 0]);
 
     context.translate(margin.left, margin.top);
 
-    d3.json("@ViewBag.ApiMontlySales", function (data) {
-
-        data.forEach(function (d) {
+    // Use d3.json with promise pattern for D3.js v7+
+    d3.json("@ViewBag.ApiMonthlySales").then(function(data) {
+        // Check if data exists and has elements
+        if (!data || data.length === 0) {
+            // Show the no data message and hide the canvas
+            document.getElementById("noDataMessage").style.display = "block";
+            document.getElementById("salesChart").style.display = "none";
+            return; // Exit the function early
+        }
+        
+        // If we have data, proceed as normal
+        data.forEach(function(d) {
             d.month = d.month;
             d.amount = +d.amount;
         });
 
-
-        x.domain(data.map(function (d) { return d.month; }));
-        y.domain([0, d3.max(data, function (d) { return d.amount; })]);
+        x.domain(data.map(function(d) { return d.month; }));
+        y.domain([0, d3.max(data, function(d) { return d.amount; })]);
 
         var yTickCount = 10,
-            yTicks = y.ticks(yTickCount),
-            yTickFormat = y.tickFormat(yTickCount, "%");
-        console.log(yTickFormat);
+            yTicks = y.ticks(yTickCount);
+
+        // Draw x-axis ticks
         context.beginPath();
-        x.domain().forEach(function (d) {
+        x.domain().forEach(function(d) {
             context.moveTo(x(d) + x.bandwidth() / 2, height);
             context.lineTo(x(d) + x.bandwidth() / 2, height + 6);
         });
         context.strokeStyle = "black";
         context.stroke();
 
+        // Draw x-axis labels
         context.textAlign = "center";
         context.textBaseline = "top";
-        x.domain().forEach(function (d) {
+        x.domain().forEach(function(d) {
             context.fillText(d, x(d) + x.bandwidth() / 2, height + 6);
         });
 
+        // Draw y-axis ticks
         context.beginPath();
-        yTicks.forEach(function (d) {
+        yTicks.forEach(function(d) {
             context.moveTo(0, y(d) + 0.5);
             context.lineTo(-6, y(d) + 0.5);
         });
         context.strokeStyle = "black";
         context.stroke();
 
+        // Draw y-axis labels
         context.textAlign = "right";
         context.textBaseline = "middle";
-        yTicks.forEach(function (d) {
-            //context.fillText(yTickFormat(d), -9, y(d));
+        yTicks.forEach(function(d) {
             context.fillText(d, -9, y(d));
         });
 
+        // Draw axis lines
         context.beginPath();
         context.moveTo(-6.5, 0 + 0.5);
         context.lineTo(0.5, 0 + 0.5);
@@ -72,6 +85,7 @@
         context.strokeStyle = "black";
         context.stroke();
 
+        // Draw y-axis title
         context.save();
         context.rotate(-Math.PI / 2);
         context.textAlign = "right";
@@ -79,18 +93,29 @@
         context.font = "bold 10px sans-serif";
         context.fillText("amount", -10, 10);
         context.restore();
-        context.strokeStyle = "black";
-        context.stroke();
-        context.fillStyle = "steelblue";
-        context.strokeStyle = "black";
-        context.stroke();
-        context.font = "bold 13px sans-serif";
-        context.fillText("Monthly Sales", 250, canvas.height - 260);
 
-        data.forEach(function (d) {
-            context.fillText(d.amount, x(d.month) + 35, y(d.amount) - 10, height - y(d.amount));
+        // Draw chart title
+        context.font = "bold 13px sans-serif";
+        context.textAlign = "center";
+        context.fillText("Monthly Sales", width / 2, -5);
+
+        // Draw bars
+        context.fillStyle = "steelblue";
+        data.forEach(function(d) {
             context.fillRect(x(d.month), y(d.amount), x.bandwidth(), height - y(d.amount));
+            
+            // Add value labels on top of bars
+            context.fillStyle = "black";
+            context.textAlign = "center";
             context.font = "bold 10px arial";
+            context.fillText(d.amount, x(d.month) + x.bandwidth() / 2, y(d.amount) - 5);
+            context.fillStyle = "steelblue";
         });
+    }).catch(function(error) {
+        console.error("Error loading data:", error);
+        // Display error message when API call fails
+        document.getElementById("noDataMessage").innerHTML = "<p>Error loading sales data. Please try again later.</p>";
+        document.getElementById("noDataMessage").style.display = "block";
+        document.getElementById("salesChart").style.display = "none";
     });
 </script>

@@ -18,7 +18,7 @@ namespace AccountGoWeb.Controllers
 
         public IActionResult MonthlySales()
         {
-            ViewBag.ApiMontlySales = _baseConfig!["ApiUrl"] + "sales/getmonthlysales";
+            ViewBag.ApiMontlySales = _baseConfig!["ApiUrl"] + "Sales/GetMonthlySales";
             return View();
         }
     }
