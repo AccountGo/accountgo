@@ -340,5 +340,37 @@
         </nav>
 
 
+                <div class="container-fluid"></div>
+            <div class="animated fadeIn">
+                <!-- PAGE CONTENT -->
+                <h2>
+                    @Html.Raw(ViewBag.PageContentHeader)
+                </h2>
+                @RenderBody()
+                <!-- /PAGE CONTENT -->
+            </div>
+        </div>
+        <aside class="aside-menu">
+            <ul class="nav nav-tabs" role="tablist">
+                <li class="nav-item">
+                    <a class="nav-link active" data-toggle="tab" href="#timeline" role="tab">
+                        <i class="icon-list"></i>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" data-toggle="tab" href="#messages" role="tab">
+                        <i class="icon-speech"></i>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" data-toggle="tab" href="#settings" role="tab">
+                        <i class="icon-settings"></i>
+                    </a>
+                </li>
+            </ul>
+            </div>
+        </aside>
+
+
 </body>
 </html>
