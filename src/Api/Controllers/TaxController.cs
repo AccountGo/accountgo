@@ -1,10 +1,9 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
-using Api.ActionFilters;
+using System.Threading.Tasks;
 using Dto.TaxSystem;
 using Microsoft.AspNetCore.Mvc;
 using Services.Administration;
-using Services.Financial;
 using Services.TaxSystem;
 
 namespace Api.Controllers
@@ -14,263 +13,104 @@ namespace Api.Controllers
     {
         private readonly ITaxService _taxService;
         private readonly IAdministrationService _adminService;
-        private readonly IFinancialService _financialService;
 
-        public TaxController(
-            ITaxService taxService,
-            IAdministrationService adminService,
-            IFinancialService financialService
-        )
+        public TaxController(ITaxService taxService, IAdministrationService adminService)
         {
             _taxService = taxService;
             _adminService = adminService;
-            _financialService = financialService;
         }
 
-        /// <summary>
-        /// Based on party type (e.g. Customer/Vendor), get the corresponding tax rates.
-        /// Tax rates are intersection of tax group and item tax group
-        /// </summary>
-        /// <param name="itemId">Item</param>
-        /// <param name="partyId">Customer or Vendor</param>
-        /// <returns></returns>
-        [HttpGet]
-        [Route("GetTax")]
-        public IActionResult GetTax(int itemId, int partyId, int type = 0)
-        {
-            //var taxes = _taxService.GetIntersectionTaxes(itemId, partyId);
-            //var taxesDto = new List<Tax>();
-
-            //foreach (var tax in taxes) {
-            //    var taxDto = new Tax()
-            //    {
-            //        Id = tax.Id,
-            //        TaxCode = tax.TaxCode,
-            //        TaxName = tax.TaxName,
-            //        Rate = tax.Rate,
-            //        IsActive = tax.IsActive
-            //    };
-            //    taxesDto.Add(taxDto);
-            //}
-
-            //return new ObjectResult(taxesDto);
-
-            if (type == 0)
-            {
-                return new BadRequestObjectResult("Type is zero.");
-            }
-            else
-            {
-                var taxes = _taxService.GetIntersectionTaxes(
-                    itemId,
-                    partyId,
-                    (Core.Domain.PartyTypes)type
-                );
-
-                return new ObjectResult(taxes);
-            }
-        }
-
-        [HttpGet]
-        [Route("TaxGroups")] // api/Tax/TaxGroups
-        public IActionResult TaxGroups()
-        {
-            var taxGroupsDto = new List<TaxGroup>();
-            var taxGroups = _taxService.GetTaxGroups();
-
-            foreach (var group in taxGroups)
-            {
-                var groupDto = new TaxGroup()
-                {
-                    Id = group.Id,
-                    Description = group.Description,
-                    IsActive = group.IsActive,
-                    TaxAppliedToShipping = group.TaxAppliedToShipping,
-                };
-
-                taxGroupsDto.Add(groupDto);
-            }
-
-            return new ObjectResult(taxGroupsDto);
-        }
-
-        [HttpGet]
-        [Route("ItemTaxGroups")] // api/Tax/ItemTaxGroups
-        public IActionResult ItemTaxGroups()
-        {
-            var itemTaxGroupsDto = new List<ItemTaxGroup>();
-            var itemTaxGroups = _taxService.GetItemTaxGroups();
-
-            foreach (var group in itemTaxGroups)
-            {
-                var groupDto = new ItemTaxGroup()
-                {
-                    Id = group.Id,
-                    Name = group.Name,
-                    IsFullyExempt = group.IsFullyExempt,
-                };
-
-                itemTaxGroupsDto.Add(groupDto);
-            }
-
-            return new ObjectResult(itemTaxGroupsDto);
-        }
-
-        [HttpGet]
-        [Route("Taxes")] // api/Tax/Taxes
-        public IActionResult Taxes()
+        [HttpGet("Taxes")]
+        public IActionResult GetTaxes()
         {
             var taxes = _taxService.GetTaxes(true);
-
-            var taxSystemDto = new TaxSystemDto();
-
-            var taxesDto = new List<Tax>();
-
-            foreach (var tax in taxes)
+            var taxesDto = taxes.Select(t => new Tax
             {
-                taxesDto.Add(
-                    new Tax()
-                    {
-                        Id = tax.Id,
-                        TaxCode = tax.TaxCode,
-                        TaxName = tax.TaxName,
-                        Rate = tax.Rate,
-                        IsActive = tax.IsActive,
-                    }
-                );
-            }
+                Id = t.Id,
+                TaxCode = t.TaxCode,
+                TaxName = t.TaxName,
+                Rate = t.Rate,
+                IsActive = t.IsActive
+            }).ToList();
 
-            taxSystemDto.Taxes = taxesDto;
-
-            var taxGroupsDto = new List<TaxGroup>();
-            var taxGroups = _taxService.GetTaxGroups();
-
-            foreach (var group in taxGroups)
-            {
-                var groupDto = new TaxGroup()
-                {
-                    Id = group.Id,
-                    Description = group.Description,
-                    IsActive = group.IsActive,
-                    TaxAppliedToShipping = group.TaxAppliedToShipping,
-                };
-
-                foreach (var tax in group.TaxGroupTax)
-                {
-                    var taxDto = new TaxGroupTax()
-                    {
-                        Id = tax.Id,
-                        TaxId = tax.TaxId,
-                        TaxGroupId = tax.TaxGroupId,
-                    };
-
-                    groupDto.Taxes.Add(taxDto);
-                }
-
-                taxGroupsDto.Add(groupDto);
-            }
-
-            taxSystemDto.TaxGroups = taxGroupsDto;
-
-            var itemTaxGroupsDto = new List<ItemTaxGroup>();
-            var itemTaxGroups = _taxService.GetItemTaxGroups();
-
-            foreach (var group in itemTaxGroups)
-            {
-                var groupDto = new ItemTaxGroup()
-                {
-                    Id = group.Id,
-                    Name = group.Name,
-                    IsFullyExempt = group.IsFullyExempt,
-                };
-
-                foreach (var tax in group.ItemTaxGroupTax)
-                {
-                    var taxDto = new ItemTaxGroupTax()
-                    {
-                        Id = tax.Id,
-                        TaxId = tax.TaxId,
-                        ItemTaxGroupId = tax.ItemTaxGroupId,
-                    };
-
-                    groupDto.Taxes.Add(taxDto);
-                }
-
-                itemTaxGroupsDto.Add(groupDto);
-            }
-
-            taxSystemDto.ItemTaxGroups = itemTaxGroupsDto;
-
-            return new ObjectResult(taxSystemDto);
+            return Ok(taxesDto);
         }
 
-        [HttpPost("addnewtax")]
-        [ServiceFilter(typeof(ValidationFilterAttribute))]
+        [HttpGet("TaxGroups")]
+        public IActionResult GetTaxGroups()
+        {
+            var taxGroups = _taxService.GetTaxGroups();
+            var taxGroupsDto = taxGroups.Select(g => new TaxGroup
+            {
+                Id = g.Id,
+                Description = g.Description,
+                TaxAppliedToShipping = g.TaxAppliedToShipping,
+                IsActive = g.IsActive
+            }).ToList();
+
+            return Ok(taxGroupsDto);
+        }
+
+        [HttpGet("ItemTaxGroups")]
+        public IActionResult GetItemTaxGroups()
+        {
+            var itemTaxGroups = _taxService.GetItemTaxGroups();
+            var itemTaxGroupsDto = itemTaxGroups.Select(g => new ItemTaxGroup
+            {
+                Id = g.Id,
+                Name = g.Name,
+                IsFullyExempt = g.IsFullyExempt
+            }).ToList();
+
+            return Ok(itemTaxGroupsDto);
+        }
+
+        [HttpPost("AddNewTax")]
         public async Task<IActionResult> AddNewTax([FromBody] TaxForCreation taxForCreationDto)
         {
             var result = await _adminService.CreateTaxAsync(taxForCreationDto);
-
             if (result.IsFailure)
-            {
                 return BadRequest(result.Error.Message);
-            }
 
-            var taxToReturn = result.Value;
-
-            return Ok(taxToReturn);
+            return Ok(result.Value);
         }
 
-        [HttpPut("edittax")]
-        [ServiceFilter(typeof(ValidationFilterAttribute))]
+        [HttpPut("EditTax")]
         public async Task<IActionResult> EditTax([FromBody] TaxForUpdate taxForUpdateDto)
         {
             var result = await _adminService.EditTaxAsync(taxForUpdateDto);
-
             if (result.IsFailure)
-            {
                 return BadRequest(result.Error.Message);
-            }
 
-            var taxToReturn = result.Value;
-
-            return Ok(taxToReturn);
+            return Ok(result.Value);
         }
 
-        [HttpDelete("tax/{id:int}")]
+        [HttpDelete("DeleteTax/{id:int}")]
         public async Task<IActionResult> DeleteTax(int id)
         {
             var result = await _adminService.DeleteTaxAsync(id);
-
             if (result.IsFailure)
-            {
                 return BadRequest(result.Error.Message);
-            }
 
             return NoContent();
         }
 
-        [HttpDelete("taxgroup/{id:int}")]
+        [HttpDelete("DeleteTaxGroup/{id:int}")]
         public async Task<IActionResult> DeleteTaxGroup(int id)
         {
             var result = await _adminService.DeleteTaxGroupAsync(id);
-
             if (result.IsFailure)
-            {
                 return BadRequest(result.Error.Message);
-            }
 
             return NoContent();
         }
 
-        [HttpDelete("itemtaxgroup/{id:int}")]
+        [HttpDelete("DeleteItemTaxGroup/{id:int}")]
         public async Task<IActionResult> DeleteItemTaxGroup(int id)
         {
             var result = await _adminService.DeleteItemTaxGroupAsync(id);
-
             if (result.IsFailure)
-            {
                 return BadRequest(result.Error.Message);
-            }
 
             return NoContent();
         }

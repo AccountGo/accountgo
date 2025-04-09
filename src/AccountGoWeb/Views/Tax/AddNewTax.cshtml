@@ -188,6 +188,11 @@
 
 @section scripts {
     <script>
+        document.getElementById('btnSave').addEventListener('click', function (event) {
+            console.log('Save button clicked');
+        });
+    </script>
+    <script>
         document.getElementById('taxGroupButton').addEventListener('click', function () {
             var taxGroup = {
                 Description: document.getElementById('taxGroupDescription').value,

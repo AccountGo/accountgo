@@ -1,38 +1,37 @@
 ﻿@model AccountGoWeb.Models.TaxSystem.TaxSystemViewModel
 @using AccountGoWeb.Models;
 
+
 <style>
     tr th { color: yellow; }
-    tr td { color: #fff;  }
+    tr td { color: #fff; }
+    .btn { margin-right: 5px; }
 </style>
 
-<div class="nav-tabs-custom">
 
+<div class="nav-tabs-custom">
     <ul class="nav nav-tabs">
-        <li class="active">
-            <a href="#tab_1" data-bs-toggle="tab">Taxes</a>
-            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+        <li class="nav-item">
+            <a class="nav-link active" href="#tab_1" data-bs-toggle="tab">Taxes</a>
         </li>
-        <li>
-            <a href="#tab_2" data-bs-toggle="tab">Tax Groups</a>
-            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+        <li class="nav-item">
+            <a class="nav-link" href="#tab_2" data-bs-toggle="tab">Tax Groups</a>
         </li>
-        <li>
-            <a href="#tab_3" data-bs-toggle="tab">Item Tax Groups</a>
-            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+        <li class="nav-item">
+            <a class="nav-link" href="#tab_3" data-bs-toggle="tab">Item Tax Groups</a>
         </li>
     </ul>
 
-    <div class="tab-content">
 
-        <div class="tab-pane" id="tab_1">
-            <div>
-                <a href="~/Tax/AddNewTax" class="btn btn-primary" style="margin-bottom: 2px;">
-                    <i class="fa fa-plus"></i>
-                    New Tax
+    <div class="tab-content">
+        <!-- Taxes Tab -->
+        <div class="tab-pane fade show active" id="tab_1">
+            <div class="mt-3">
+                <a href="~/Tax/AddNewTax" class="btn btn-primary">
+                    <i class="fa fa-plus"></i> New Tax
                 </a>
             </div>
-            <div id="taxes" class="box-body table-responsive">
+            <div class="table-responsive mt-3">
                 <table class="table table-hover">
                     <thead>
                         <tr>
@@ -43,16 +42,28 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var tax in Model.Taxes!)
+                        @if (Model.Taxes != null && Model.Taxes.Any())
+                        {
+                            @foreach (var tax in Model.Taxes)
+                            {
+                                <tr>
+                                    <td>@tax.TaxCode</td>
+                                    <td>@tax.TaxName</td>
+                                    <td>@tax.Rate</td>
+                                    <td>
+                                        <a href="~/Tax/EditTax?id=@tax.Id" class="btn btn-sm btn-info">Edit</a>
+                                        <form action="~/Tax/DeleteTax" method="post" style="display:inline;">
+                                            <input type="hidden" name="id" value="@tax.Id" />
+                                            <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Are you sure you want to delete this tax?');">Delete</button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                        else
                         {
                             <tr>
-                                <td>@tax.TaxCode</td>
-                                <td>@tax.TaxName</td>
-                                <td>@tax.Rate</td>
-                                <td>
-                                    <button class="taxId btn btn-sm btn-info btn-flat" onclick="updateTax(@tax.Id)">Edit</button>
-                                    <button id="@tax.Id" class="taxId btn btn-sm btn-danger btn-flat" data-bs-toggle="modal" data-bs-target="#deleteTax">Delete</button>
-                                </td>
+                                <td colspan="4" class="text-center">No taxes available.</td>
                             </tr>
                         }
                     </tbody>
@@ -60,8 +71,10 @@
             </div>
         </div>
 
-        <div class="tab-pane" id="tab_2">
-            <div id="taxGroups" class="box-body table-responsive">
+
+        <!-- Tax Groups Tab -->
+        <div class="tab-pane fade" id="tab_2">
+            <div class="table-responsive mt-3">
                 <table class="table table-hover">
                     <thead>
                         <tr>
@@ -71,49 +84,34 @@
                             <th>Action</th>
                         </tr>
                     </thead>
-                    <tbody data-bind="foreach: model.TaxGroups">
-                        <tr data-bind="click: $root.selectTaxGroup">
-                            <td>
-                                <input data-bind="value:Description" readonly="readonly" type="text"/>
-                            </td>
-                            <td>
-                                <input data-bind="checked:TaxAppliedToShipping" type="checkbox" />
-                            </td>
-                            <td>
-                                <input data-bind="checked:IsActive" type="checkbox" />
-                            </td>
-                            <td>
-                                <button class="btn btn-sm btn-danger btn-flat" data-bind="click: $root.clickTaxGroup" data-bs-toggle="modal" data-bs-target="#deleteTaxGroup">Delete</button>
-                            </td>
-                        </tr>
+                    <tbody>
+                        @foreach (var taxGroup in Model.TaxGroups!)
+                        {
+                            <tr>
+                                <td>@taxGroup.Description</td>
+                                <td>
+                                    <input type="checkbox" disabled @(taxGroup.TaxAppliedToShipping ? "checked" : "") />
+                                </td>
+                                <td>
+                                    <input type="checkbox" disabled @(taxGroup.IsActive ? "checked" : "") />
+                                </td>
+                                <td>
+                                    <form action="~/Tax/DeleteTaxGroup" method="post" style="display:inline;">
+                                        <input type="hidden" name="id" value="@taxGroup.Id" />
+                                        <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Are you sure you want to delete this tax group?');">Delete</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        }
                     </tbody>
                 </table>
             </div>
-            <div data-bind="if:model.selectedTaxGroup">
-                Tax(es) included: <span data-bind="text: model.selectedTaxGroup().Taxes().length"></span>
-                <div id="taxGroupsIncludedTaxes" class="box-body table-responsive">
-                    <table class="table table-hover">
-                        <thead>
-                            <tr>
-                                <th>Code</th>
-                                <th>Name</th>
-                                <th>Rate (%)</th>
-                            </tr>
-                        </thead>
-                        <tbody data-bind="foreach: model.selectedTaxGroup().Taxes()">
-                            <tr>
-                                <td><span data-bind="text: $root.taxDetail(TaxId()).TaxCode"></span></td>
-                                <td><span data-bind="text: $root.taxDetail(TaxId()).TaxName"></span></td>
-                                <td><span data-bind="text: $root.taxDetail(TaxId()).Rate"></span></td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
         </div>
 
-        <div class="tab-pane" id="tab_3">
-            <div id="itemTaxGroups" class="box-body table-responsive">
+
+        <!-- Item Tax Groups Tab -->
+        <div class="tab-pane fade" id="tab_3">
+            <div class="table-responsive mt-3">
                 <table class="table table-hover">
                     <thead>
                         <tr>
@@ -122,291 +120,26 @@
                             <th>Action</th>
                         </tr>
                     </thead>
-                    <tbody data-bind="foreach: model.ItemTaxGroups">
-                        <tr data-bind="click: $root.selectItemTaxGroup">
-                            <td>
-                                <input data-bind="value:Name" type="text" readonly="readonly" />
-                            </td>
-                            <td>
-                                <input data-bind="checked:IsFullyExempt" type="checkbox" />
-                            </td>
-                            <td>
-                                <button class="btn btn-sm btn-danger btn-flat" data-bind="click: $root.clickItemTaxGroup" data-bs-toggle="modal" data-bs-target="#deleteItemTaxGroup">Delete</button>
-                            </td>
-                        </tr>
+                    <tbody>
+                        @foreach (var itemTaxGroup in Model.ItemTaxGroups!)
+                        {
+                            <tr>
+                                <td>@itemTaxGroup.Name</td>
+                                <td>
+                                    <input type="checkbox" disabled @(itemTaxGroup.IsFullyExempt ? "checked" : "") />
+                                </td>
+                                <td>
+                                    <form action="~/Tax/DeleteItemTaxGroup" method="post" style="display:inline;">
+                                        <input type="hidden" name="id" value="@itemTaxGroup.Id" />
+                                        <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Are you sure you want to delete this item tax group?');">Delete</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        }
                     </tbody>
                 </table>
             </div>
-            <div data-bind="if:model.selectedItemTaxGroup">
-                Tax(es) included: <span data-bind="text: model.selectedItemTaxGroup().Taxes().length"></span>
-                <div id="itemTaxGroupsIncludedTaxes" class="box-body table-responsive">
-                    <table class="table table-hover">
-                        <thead>
-                            <tr>
-                                <th>Code</th>
-                                <th>Name</th>
-                                <th>Rate (%)</th>
-                            </tr>
-                        </thead>
-                        <tbody data-bind="foreach: model.selectedItemTaxGroup().Taxes()">
-                            <tr>
-                                <td><span data-bind="text: $root.taxDetail(TaxId()).TaxCode"></span></td>
-                                <td><span data-bind="text: $root.taxDetail(TaxId()).TaxName"></span></td>
-                                <td><span data-bind="text: $root.taxDetail(TaxId()).Rate"></span></td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-
-    </div>
-</div>
-
-@* Delete Modal*@
-<div class="modal" id="deleteTax" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Delete</h5>
-                <button aria-label="Close" class="btn-close" data-bs-dismiss="modal" type="button"></button>
-            </div>
-            <div class="modal-body">
-                <p>Do you want to delete it?</p>
-                <input type="hidden" id="hdnselectedtaxId" />
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-sm btn-primary btn-flat" onclick="deleteTax()" type="button">Yes</button>
-                <button class="btn btn-sm btn-default btn-flat" data-bs-dismiss="modal" type="button">No</button>
-            </div>
         </div>
     </div>
 </div>
 
-<div class="modal" id="deleteTaxGroup" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Delete Tax Group</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <p>
-                    Do you want to delete it?
-                </p>
-                <input type="hidden" id="hdnselectedtaxgroupId" />
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-sm btn-primary btn-flat" data-bind="click: $root.deleteTaxGroup" type="button">Yes</button>
-                <button class="btn btn-sm btn-default btn-flat" data-bs-dismiss="modal" type="button">No</button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="modal" id="deleteItemTaxGroup" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Delete Item Tax Group</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <p>
-                    Do you want to delete it?
-                </p>
-                <input type="hidden" id="hdnselectedItemTaxGroupId" />
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-sm btn-primary btn-flat" data-bind="click: $root.deleteItemTaxGroup" type="button">Yes</button>
-                <button class="btn btn-sm btn-default btn-flat" data-bs-dismiss="modal" type="button">No</button>
-            </div>
-        </div>
-    </div>
-</div>
-
-@section scripts{
-    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/knockout/3.5.1/knockout-latest.js"></script>
-    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/knockout.mapping/2.4.1/knockout.mapping.js"></script>
-
-    <script>
-        function updateTax(taxId){
-            var self = this;
-            self.model = ko.mapping.fromJS(@Html.Raw(Model.ToJson()));
-
-            var serializedTax = null;
-            for (var i = 0; i < self.model.Taxes().length; i++) {
-                var tax = self.model.Taxes()[i];
-                if (taxId == self.model.Taxes()[i].Id()) {
-                    serializedTax  = ko.toJSON(tax);
-                    break;
-                }
-            }
-
-            var serializedTaxGroup = null; 
-            for (var i = 0; i < self.model.TaxGroups().length; i++) {
-                var taxGroup = self.model.TaxGroups()[i];
-                if (taxGroup.Taxes().some(function (tax) { return tax.TaxId() === taxId; })) {
-                    serializedTaxGroup = ko.toJSON(taxGroup);
-                    break;
-                }
-            }
-
-            var serializedItemTaxGroup = null;
-            for (var i = 0; i < self.model.ItemTaxGroups().length; i++) {
-                var itemTaxGroup = self.model.ItemTaxGroups()[i];
-                if (itemTaxGroup.Taxes().some(function (tax) { return tax.TaxId() === taxId; })) {
-                    serializedItemTaxGroup = ko.toJSON(itemTaxGroup);
-                    break;
-                }
-            }
-
-            location.href = '@Url.Action("EditTax", "Tax")?tax=' + serializedTax + '&taxGroup=' + serializedTaxGroup + '&itemTaxGroup=' + serializedItemTaxGroup;
-        }
-
-        $(".taxId").on("click", function () {
-            $("#hdnselectedtaxId").val($(this).attr('id'));
-        })
-        function deleteTax(){
-            var taxId = $("#hdnselectedtaxId").val();
-
-            location.href = '@Url.Action("DeleteTax", "Tax")?id=' + taxId;
-        }
-
-        function viewModel() {
-            var self = this;
-
-            self.model = ko.mapping.fromJS(@Html.Raw(Model.ToJson()));
-
-            self.model.selectedTaxGroup = ko.observable();
-            self.model.selectedItemTaxGroup = ko.observable();
-
-            self.selectTaxGroup = function (item) {
-                self.model.selectedTaxGroup(item);
-            };
-
-            self.selectItemTaxGroup = function (item) {
-                self.model.selectedItemTaxGroup(item);
-            };
-
-            self.taxDetail = function (taxid) {                
-                for (var i = 0; i < self.model.Taxes().length; i++) {
-                    if (taxid == self.model.Taxes()[i].Id()) {
-                        return self.model.Taxes()[i];
-                    }
-                }
-                return null;
-            }
-
-            self.clickTaxGroup = function(item){
-                $("#hdnselectedtaxgroupId").val(item.Id());
-            }
-
-            self.deleteTaxGroup = function() {
-                var taxGroupId = $("#hdnselectedtaxgroupId").val();
-
-                location.href = '@Url.Action("DeleteTaxGroup", "Tax")?id=' + taxGroupId;
-            }
-
-            self.clickItemTaxGroup = function(item){
-                $("#hdnselectedItemTaxGroupId").val(item.Id());
-            }
-
-            self.deleteItemTaxGroup = function(){
-                var itemTaxGroupId = $("#hdnselectedItemTaxGroupId").val();
-
-                location.href = '@Url.Action("DeleteItemTaxGroup", "Tax")?id=' + itemTaxGroupId;
-            }
-        }
-
-        ko.applyBindings(new viewModel());
-    </script>
-}
-
-@*
-    @model string
-    <div class="nav-tabs-custom">
-        <ul class="nav nav-tabs">
-            <li class="active"><a href="#tab_1" data-toggle="tab">Taxes</a></li>
-            <li><a href="#tab_2" data-toggle="tab">Tax Groups</a></li>
-            <li><a href="#tab_3" data-toggle="tab">Item Tax Groups</a></li>
-        </ul>
-        <div class="tab-content">
-            <div class="tab-pane active" id="tab_1">
-                <div id="taxes" class="ag-fresh"></div>
-            </div>
-            <!-- /.tab-pane -->
-            <div class="tab-pane" id="tab_2">
-                <div id="taxGroups" class="ag-fresh"></div>
-            </div>
-            <!-- /.tab-pane -->
-            <div class="tab-pane" id="tab_3">
-                <div id="itemTaxGroups" class="ag-fresh"></div>
-            </div>
-            <!-- /.tab-pane -->
-        </div>
-        <!-- /.tab-content -->
-    </div>
-    <script>
-        var Dto = @Html.Raw(Model);
-
-        var columnDefsTaxes = [
-        {headerName: "Tax", field: "id", width: 50},
-        {headerName: "Code", field: "taxCode", width: 100},
-        {headerName: "Name", field: "taxName", width: 350},
-        {headerName: "Rate", field: "rate", width: 100},
-        {headerName: "Active", field: "isActive", width: 100},
-        ];
-
-        var gridOptionsTaxes = {
-            columnDefs: columnDefsTaxes,
-            rowData: Dto.taxes,
-            // PROPERTIES
-            rowSelection: 'multiple',
-        };
-
-        // wait for the document to be loaded, otherwise
-        // ag-Grid will not find the div in the document.
-        document.addEventListener("DOMContentLoaded", function() {
-            var eGridDiv = document.querySelector('#taxes');
-            new agGrid.Grid(eGridDiv, gridOptionsTaxes);
-        });
-
-        var columnDefsTaxGroups = [
-        {headerName: "Tax Group", field: "id", width: 50},
-        {headerName: "Description", field: "description", width: 350},
-        {headerName: "Applied To Shippine", field: "isAppliedToShipping", width: 100},
-        {headerName: "Active", field: "isActive", width: 100},
-        ];
-
-        var gridOptionsTaxGroups = {
-            columnDefs: columnDefsTaxGroups,
-            rowData: Dto.taxGroups,
-            // PROPERTIES
-            rowSelection: 'multiple',
-        };
-
-        document.addEventListener("DOMContentLoaded", function() {
-            var eGridDiv = document.querySelector('#taxGroups');
-            new agGrid.Grid(eGridDiv, gridOptionsTaxGroups);
-        });
-
-        var columnDefsItemTaxGroups = [
-        {headerName: "Item Tax Group", field: "id", width: 50},
-        {headerName: "Name", field: "name", width: 350},
-        {headerName: "Is Fully Exempt", field: "isFullyExempt", width: 100},
-        ];
-
-        var gridOptionsItemTaxGroups = {
-            columnDefs: columnDefsItemTaxGroups,
-            rowData: Dto.itemTaxGroups,
-            // PROPERTIES
-            rowSelection: 'multiple',
-        };
-
-        document.addEventListener("DOMContentLoaded", function() {
-            var eGridDiv = document.querySelector('#itemTaxGroups');
-            new agGrid.Grid(eGridDiv, gridOptionsItemTaxGroups);
-        });
-    </script>
-*@
