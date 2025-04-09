@@ -1,0 +1,79 @@
+@* <div class="sidebar-logo position-absolute top-0 end-0 mt-3 me-3">
+    <img src="~/images/gbd/logo2_trans.png" alt="Logo" class="img-fluid" style="max-width: 120px;" />
+</div>
+
+<nav class="nav flex-column">
+    <a class="nav-link text-light" asp-controller="Dashboard" asp-action="MonthlySales">
+       
+    </a>
+
+    <div class="mt-3">
+        <small class="text-uppercase text-muted ps-2">Accounts Receivable</small>
+        <nav class="nav flex-column ms-3">
+            <a class="nav-link text-light" asp-controller="Quotations" asp-action="Quotations">Sales Quotations</a>
+            <a class="nav-link text-light" asp-controller="Sales" asp-action="SalesOrders">Sales Orders</a>
+            <a class="nav-link text-light" asp-controller="Sales" asp-action="SalesReceipts">Sales Receipts</a>
+            <a class="nav-link text-light" asp-controller="Sales" asp-action="SalesInvoices">Sales Invoices</a>
+            <a class="nav-link text-light" asp-controller="Sales" asp-action="DonationInvoices">Donation Invoices</a>
+            <a class="nav-link text-light" asp-controller="Sales" asp-action="Customers">Customers</a>
+        </nav>
+    </div>
+
+    <div class="mt-3">
+        <small class="text-uppercase text-muted ps-2">Accounts Payable</small>
+        <nav class="nav flex-column ms-3">
+            <a class="nav-link text-light" asp-controller="Purchasing" asp-action="PurchaseOrders">Purchase Orders</a>
+            <a class="nav-link text-light" asp-controller="Purchasing" asp-action="PurchaseInvoices">Purchase Invoices</a>
+            <a class="nav-link text-light" asp-controller="Purchasing" asp-action="Vendors">Vendors</a>
+        </nav>
+    </div>
+
+    <div class="mt-3">
+        <small class="text-uppercase text-muted ps-2">Inventory Control</small>
+        <nav class="nav flex-column ms-3">
+            <a class="nav-link text-light" asp-controller="Inventory" asp-action="Index">Items</a>
+            <a class="nav-link text-light" asp-controller="Inventory" asp-action="ICJ">Inventory Control Journal</a>
+        </nav>
+    </div>
+
+    <div class="mt-3">
+        <small class="text-uppercase text-muted ps-2">Financials</small>
+        <nav class="nav flex-column ms-3">
+            <a class="nav-link text-light" asp-controller="Financials" asp-action="JournalEntries">Journal Entries</a>
+            <a class="nav-link text-light" asp-controller="Financials" asp-action="GeneralLedger">General Ledgers</a>
+            <a class="nav-link text-light" asp-controller="Tax" asp-action="Taxes">Taxes</a>
+            <a class="nav-link text-light" asp-controller="Financials" asp-action="Accounts">Chart of Accounts</a>
+            <a class="nav-link text-light" asp-controller="Financials" asp-action="Banks">Banks</a>
+        </nav>
+    </div>
+
+    <div class="mt-3">
+        <small class="text-uppercase text-muted ps-2">Reports</small>
+        <nav class="nav flex-column ms-3">
+            <a class="nav-link text-light" asp-controller="Financials" asp-action="BalanceSheet">Balance Sheet</a>
+            <a class="nav-link text-light" asp-controller="Financials" asp-action="IncomeStatement">Income Statement</a>
+            <a class="nav-link text-light" asp-controller="Financials" asp-action="TrialBalance">Trial Balance</a>
+        </nav>
+    </div>
+
+    <div class="mt-3">
+        <small class="text-uppercase text-muted ps-2">Organization Settings</small>
+        <nav class="nav flex-column ms-3">
+            <a class="nav-link text-light" asp-controller="Administration" asp-action="Company">Company</a>
+            <a class="nav-link text-light" asp-controller="Administration" asp-action="Settings">Settings</a>
+        </nav>
+    </div>
+
+    @if (User.IsInRole("SystemAdministrators"))
+    {
+        <div class="mt-3">
+            <small class="text-uppercase text-muted ps-2">System Administration</small>
+            <nav class="nav flex-column ms-3">
+                <a class="nav-link text-light" href="~/administration/users">Users</a>
+                <a class="nav-link text-light" href="~/administration/roles">Roles</a>
+                <a class="nav-link text-light" href="~/administration/groups">Groups</a>
+                <a class="nav-link text-light" href="~/administration/auditlogs">Audit Logs</a>
+            </nav>
+        </div>
+    }
+</nav> *@
