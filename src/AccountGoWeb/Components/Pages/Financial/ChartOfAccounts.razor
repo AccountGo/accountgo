@@ -1,19 +1,24 @@
 ﻿@page "/financials/chart-of-accounts"
 @using System.Text.Json
 @using System.Text.Json.Serialization
-@using LibraryGDB.Models.Financial
+@using System.ComponentModel.DataAnnotations
 @using Microsoft.JSInterop
 @using Microsoft.Net.Http.Headers
 @inject IHttpClientFactory ClientFactory
-@inject Microsoft.JSInterop.IJSRuntime JSRuntime
+@inject IJSRuntime JSRuntime
+@inject IConfiguration Configuration
 
 <PageTitle>Chart of Accounts</PageTitle>
 
-<h3>Chart Of Accounts</h3>
-
 @if (getError || accounts is null)
 {
-   <div class="alert alert-danger">Unable to get data. Please try again later.</div>
+    <div class="alert alert-danger">
+        <p>Unable to get data. Please try again later.</p>
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <p>@errorMessage</p>
+        }
+    </div>
 }
 else if (isLoading)
 {
@@ -21,19 +26,16 @@ else if (isLoading)
 }
 else
 {
-    @*     <ul>
-        @foreach (var item in accounts)
-        {
-            <li>@item.AccountName</li>
-        }
-    </ul> *@
     <style>
         .hiddenRow {
             padding: 4px !important;
         }
+        .account-row:hover {
+            cursor: pointer;
+        }
     </style>
     <div>
- <button class="btn btn-success mb-3" @onclick="OpenAddModal">Add Account</button>
+        <button class="btn btn-success mb-3" @onclick="OpenAddModal">Add Account</button>
 
         <table class="table table-condensed table-striped">
             <thead>
@@ -47,88 +49,98 @@ else
                 </tr>
             </thead>
             <tbody>
-    @for (int accountIdx = 0; accountIdx < accounts.Count(); ++accountIdx)
+                @for (int accountIdx = 0; accountIdx < accounts.Count(); ++accountIdx)
                 {
                     var account = accounts.ToList()[accountIdx];
                     var accountTargetId = $"asset-{accountIdx}";
 
-                    <tr data-bs-toggle="collapse" data-bs-target="#@accountTargetId" aria-expanded="false" aria-controls="@accountTargetId">
+                    <tr class="account-row" data-bs-toggle="collapse" data-bs-target="#@accountTargetId" aria-expanded="false" aria-controls="@accountTargetId">
                         <td>@account.AccountCode</td>
                         <td>@account.AccountName</td>
                         <td>@account.TotalBalance</td>
                         <td>@account.TotalDebitBalance</td>
                         <td>@account.TotalCreditBalance</td>
-<td>
-    <button class="btn btn-primary" @onclick="() => OpenEditModal(account)">Edit</button>
-    <button class="btn btn-danger" @onclick="() => OpenDeleteModal(account)">Delete</button>
-</td>
-  </tr>
+                        <td>
+                            <button class="btn btn-primary" @onclick="(e) => OpenEditModal(account)">Edit</button>
+                            <button class="btn btn-danger" @onclick="(e) => OpenDeleteModal(account)">Delete</button>
+                            <button class="btn btn-success add-child-btn" @onclick="(e) => OpenAddChildModal(account)">Add</button>
+                        </td>
+                    </tr>
 
-                    <tr>
+                    <tr class="account-row">
                         <td colspan="12">
                             <div class="collapse" id="@accountTargetId" aria-expanded="false" aria-controls="@accountTargetId">
-
                                 <table class="table table-striped">
                                     @for (int childAccountIdx = 0; childAccountIdx < account.ChildAccounts!.Count; ++childAccountIdx)
                                     {
                                         var childAccount = account.ChildAccounts.ToList()[childAccountIdx];
                                         var childAccountTargetId = $"asset-{accountIdx}-{childAccountIdx}";
 
-                                        <tr data-bs-toggle="collapse" data-bs-target="#@childAccountTargetId" aria-expanded="false" aria-controls="@childAccountTargetId">
+                                        <tr class="account-row" data-bs-toggle="collapse" data-bs-target="#@childAccountTargetId" aria-expanded="false" aria-controls="@childAccountTargetId">
                                             <td>@childAccount.AccountCode</td>
                                             <td>@childAccount.AccountName</td>
                                             <td>@childAccount.TotalBalance</td>
                                             <td>@childAccount.TotalDebitBalance</td>
                                             <td>@childAccount.TotalCreditBalance</td>
+                                            <td>
+                                                <button class="btn btn-primary" @onclick="(e) => OpenEditModal(childAccount)">Edit</button>
+                                                <button class="btn btn-danger" @onclick="(e) => OpenDeleteModal(childAccount)">Delete</button>
+                                                <button class="btn btn-success add-child-btn" @onclick="(e) => OpenAddChildModal(childAccount)">Add Child</button>
+                                            </td>
                                         </tr>
 
-                                        <tr>
+                                        <tr class="account-row">
                                             <td colspan="12">
                                                 <div class="collapse" id="@childAccountTargetId" aria-expanded="false" aria-controls="@childAccountTargetId">
-
                                                     <table class="table table-striped">
                                                         @for (int grandChildAccountIdx = 0; grandChildAccountIdx < childAccount.ChildAccounts!.Count; ++grandChildAccountIdx)
                                                         {
                                                             var grandChildAccount = childAccount.ChildAccounts.ToList()[grandChildAccountIdx];
                                                             var grandChildAccountTargetId = $"asset-{accountIdx}-{childAccountIdx}-{grandChildAccountIdx}";
 
-                                                            <tr data-bs-toggle="collapse" data-bs-target="#@grandChildAccountTargetId" aria-expanded="false" aria-controls="@grandChildAccountTargetId">
+                                                            <tr class="account-row" data-bs-toggle="collapse" data-bs-target="#@grandChildAccountTargetId" aria-expanded="false" aria-controls="@grandChildAccountTargetId">
                                                                 <td>@grandChildAccount.AccountCode</td>
                                                                 <td>@grandChildAccount.AccountName</td>
                                                                 <td>@grandChildAccount.TotalBalance</td>
                                                                 <td>@grandChildAccount.TotalDebitBalance</td>
                                                                 <td>@grandChildAccount.TotalCreditBalance</td>
+                                                                <td>
+                                                                    <button class="btn btn-primary" @onclick="(e) => OpenEditModal(grandChildAccount)">Edit</button>
+                                                                    <button class="btn btn-danger" @onclick="(e) => OpenDeleteModal(grandChildAccount)">Delete</button>
+                                                                    <button class="btn btn-success add-child-btn" @onclick="(e) => OpenAddChildModal(grandChildAccount)">Add Child</button>
+                                                                </td>
                                                             </tr>
 
-                                                            <tr>
+                                                            <tr class="account-row">
                                                                 <td colspan="12">
                                                                     <div class="collapse" id="@grandChildAccountTargetId" aria-expanded="false" aria-controls="@grandChildAccountTargetId">
-
                                                                         <table class="table table-striped">
                                                                             @foreach (var greatGrandChildAccount in grandChildAccount.ChildAccounts!)
                                                                             {
-                                                                                <tr>
+                                                                                <tr class="account-row">
                                                                                     <td>@greatGrandChildAccount.AccountCode</td>
                                                                                     <td>@greatGrandChildAccount.AccountName</td>
                                                                                     <td>@greatGrandChildAccount.TotalBalance</td>
                                                                                     <td>@greatGrandChildAccount.TotalDebitBalance</td>
                                                                                     <td>@greatGrandChildAccount.TotalCreditBalance</td>
+                                                                                    <td>
+                                                                                        <button class="btn btn-primary" @onclick="(e) => OpenEditModal(greatGrandChildAccount)">Edit</button>
+                                                                                        <button class="btn btn-danger" @onclick="(e) => OpenDeleteModal(greatGrandChildAccount)">Delete</button>
+                                                                                        <button class="btn btn-success add-child-btn" @onclick="(e) => OpenAddChildModal(greatGrandChildAccount)">Add Child</button>
+                                                                                    </td>
                                                                                 </tr>
                                                                             }
                                                                         </table>
-
                                                                     </div>
                                                                 </td>
                                                             </tr>
                                                         }
                                                     </table>
-
                                                 </div>
                                             </td>
                                         </tr>
                                     }
                                 </table>
-
                             </div>
                         </td>
                     </tr>
@@ -136,30 +148,75 @@ else
             </tbody>
         </table>
     </div>
-
 }
-@if (isAddModalVisible || isEditModalVisible)
+
+@if (isAddModalVisible || isAddChildModalVisible)
 {
     <div class="modal show d-block" tabindex="-1">
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">@((isEditModalVisible ? "Edit Account" : "Add Account"))</h5>
+                    <h5 class="modal-title">@(isAddChildModalVisible ? $"Add Child Account to {parentAccount?.AccountName}" : "Add Account")</h5>
                     <button type="button" class="btn-close" @onclick="CloseModal"></button>
                 </div>
                 <div class="modal-body">
                     <div class="mb-3">
                         <label for="accountCode" class="form-label">Account Code</label>
-                        <input type="text" id="accountCode" class="form-control" 
+                        <input type="text" id="accountCode" class="form-control @(validationErrors.ContainsKey(nameof(AccountViewModel.AccountCode)) ? "is-invalid" : "")"
                                value="@selectedAccount?.AccountCode" 
-                               @oninput="e => selectedAccount!.AccountCode = e.Value?.ToString() ?? string.Empty" 
-                               disabled="@isEditModalVisible" />
+                               @oninput="e => selectedAccount!.AccountCode = e.Value?.ToString() ?? string.Empty" />
+                        @if (validationErrors.ContainsKey(nameof(AccountViewModel.AccountCode)))
+                        {
+                            <div class="invalid-feedback">@validationErrors[nameof(AccountViewModel.AccountCode)]</div>
+                        }
                     </div>
                     <div class="mb-3">
                         <label for="accountName" class="form-label">Account Name</label>
-                        <input type="text" id="accountName" class="form-control" 
-                               value="@selectedAccount?.AccountName" 
-                               @oninput="e => selectedAccount!.AccountName = e.Value?.ToString() ?? string.Empty" />
+                        <input type="text" id="accountName" class="form-control @(validationErrors.ContainsKey(nameof(AccountViewModel.AccountName)) ? "is-invalid" : "")" 
+                               @bind="selectedAccount!.AccountName" />
+                        @if (validationErrors.ContainsKey(nameof(AccountViewModel.AccountName)))
+                        {
+                            <div class="invalid-feedback">@validationErrors[nameof(AccountViewModel.AccountName)]</div>
+                        }
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="CloseModal">Cancel</button>
+                    <button class="btn btn-primary" @onclick="SaveAccount">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (isEditModalVisible)
+{
+    <div class="modal show d-block" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Edit Account</h5>
+                    <button type="button" class="btn-close" @onclick="CloseModal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="accountCode" class="form-label">Account Code</label>
+                        <input type="text" id="accountCode" class="form-control @(validationErrors.ContainsKey(nameof(AccountViewModel.AccountCode)) ? "is-invalid" : "")"
+                               value="@selectedAccount?.AccountCode" 
+                               @oninput="e => selectedAccount!.AccountCode = e.Value?.ToString() ?? string.Empty" />
+                        @if (validationErrors.ContainsKey(nameof(AccountViewModel.AccountCode)))
+                        {
+                            <div class="invalid-feedback">@validationErrors[nameof(AccountViewModel.AccountCode)]</div>
+                        }
+                    </div>
+                    <div class="mb-3">
+                        <label for="accountName" class="form-label">Account Name</label>
+                        <input type="text" id="accountName" class="form-control @(validationErrors.ContainsKey(nameof(AccountViewModel.AccountName)) ? "is-invalid" : "")" 
+                               @bind="selectedAccount!.AccountName" />
+                        @if (validationErrors.ContainsKey(nameof(AccountViewModel.AccountName)))
+                        {
+                            <div class="invalid-feedback">@validationErrors[nameof(AccountViewModel.AccountName)]</div>
+                        }
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -186,6 +243,10 @@ else
                         <strong>@selectedAccount?.AccountName</strong> 
                         with code <strong>@selectedAccount?.AccountCode</strong>?
                     </p>
+                    @if (!string.IsNullOrEmpty(errorMessage))
+                    {
+                        <div class="alert alert-danger">@errorMessage</div>
+                    }
                 </div>
                 <div class="modal-footer">
                     <button class="btn btn-secondary" @onclick="CloseDeleteModal">Cancel</button>
@@ -199,171 +260,391 @@ else
 @code {
     private List<AccountViewModel> accounts = new();
     private AccountViewModel? selectedAccount = null;
+    private AccountViewModel? parentAccount = null;
+    private string originalAccountCode = string.Empty;
     private bool isAddModalVisible = false;
+    private bool isAddChildModalVisible = false;
     private bool isEditModalVisible = false;
     private bool isDeleteModalVisible = false;
     private string errorMessage = string.Empty;
     private bool isLoading = true;
     private bool getError = false;
+    private Dictionary<string, string> validationErrors = new();
 
-    // Fetch accounts from API on initialization
     protected override async Task OnInitializedAsync()
     {
         await LoadAccountsFromApi();
         isLoading = false;
     }
 
-    // Load accounts from API
     private async Task LoadAccountsFromApi()
     {
+        isLoading = true;
+        getError = false;
+        errorMessage = string.Empty;
+        
         try
         {
-            string apiUrl = Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
-            var client = ClientFactory.CreateClient();
-
-            var response = await client.GetAsync($"{apiUrl}financials/accounts");
-
-            if (response.IsSuccessStatusCode)
+            string? apiUrl = Configuration["ApiUrl"];
+            if (string.IsNullOrEmpty(apiUrl))
             {
-                var jsonString = await response.Content.ReadAsStringAsync();
-                accounts = JsonSerializer.Deserialize<List<AccountViewModel>>(jsonString, new JsonSerializerOptions
-                {
-                    PropertyNameCaseInsensitive = true
-                }) ?? new List<AccountViewModel>();
-            }
-            else
-            {
+                errorMessage = "API URL not configured";
                 getError = true;
+                return;
             }
+
+            var response = await ClientFactory.CreateClient().GetAsync($"{apiUrl}financials/accounts");
+            response.EnsureSuccessStatusCode();
+
+            var jsonString = await response.Content.ReadAsStringAsync();
+            accounts = JsonSerializer.Deserialize<List<AccountViewModel>>(jsonString, 
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) 
+                ?? new List<AccountViewModel>();
         }
-        catch
+        catch (Exception ex)
         {
+            errorMessage = $"Failed to load accounts: {ex.Message}";
             getError = true;
         }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
     }
 
-
-      // Open Add Modal
     private void OpenAddModal()
     {
-        selectedAccount = new AccountViewModel();
+        validationErrors.Clear();
         errorMessage = string.Empty;
-        isAddModalVisible = true;
-    }
-
-    // Open Edit Modal
-    private void OpenEditModal(AccountViewModel account)
-    {
         selectedAccount = new AccountViewModel
         {
+            AccountClassId = 1, // Assets
+            CompanyId = 1
+        };
+        parentAccount = null;
+        isAddModalVisible = true;
+        isAddChildModalVisible = false;
+    }
+
+    private void OpenAddChildModal(AccountViewModel parent)
+    {
+        validationErrors.Clear();
+        errorMessage = string.Empty;
+        parentAccount = parent;
+        selectedAccount = new AccountViewModel
+        {
+            ParentAccountId = parent.Id,
+            AccountClassId = parent.AccountClassId,
+            CompanyId = parent.CompanyId,
+            // Suggest a code based on parent's code
+            AccountCode = SuggestChildCode(parent.AccountCode)
+        };
+        isAddChildModalVisible = true;
+        isAddModalVisible = false;
+    }
+
+    private string SuggestChildCode(string parentCode)
+    {
+        // Find existing child accounts with the same parent code prefix
+        var existingCodes = GetAllAccounts()
+            .Where(a => a.AccountCode.StartsWith(parentCode) && a.AccountCode != parentCode)
+            .Select(a => a.AccountCode)
+            .ToList();
+            
+        // If no existing child accounts, append "01" to parent code
+        if (!existingCodes.Any())
+        {
+            return $"{parentCode}01";
+        }
+        
+        // Otherwise, increment the highest existing code
+        var highestCode = existingCodes
+            .OrderBy(c => c)
+            .LastOrDefault();
+            
+        // Try to parse the suffix
+        if (highestCode != null && highestCode.Length > parentCode.Length)
+        {
+            string suffix = highestCode.Substring(parentCode.Length);
+            if (int.TryParse(suffix, out int suffixValue))
+            {
+                return $"{parentCode}{(suffixValue + 1).ToString().PadLeft(suffix.Length, '0')}";
+            }
+        }
+        
+        // Fallback
+        return $"{parentCode}01";
+    }
+
+    private List<AccountViewModel> GetAllAccounts()
+    {
+        var allAccounts = new List<AccountViewModel>();
+        
+        foreach (var account in accounts)
+        {
+            allAccounts.Add(account);
+            allAccounts.AddRange(GetAllChildAccountsRecursive(account.ChildAccounts));
+        }
+        
+        return allAccounts;
+    }
+    
+    private List<AccountViewModel> GetAllChildAccountsRecursive(List<AccountViewModel> children)
+    {
+        var result = new List<AccountViewModel>();
+        
+        foreach (var child in children)
+        {
+            result.Add(child);
+            result.AddRange(GetAllChildAccountsRecursive(child.ChildAccounts));
+        }
+        
+        return result;
+    }
+
+    private void OpenEditModal(AccountViewModel account)
+    {
+        validationErrors.Clear();
+        errorMessage = string.Empty;
+        originalAccountCode = account.AccountCode; // Store the original code for API calls
+        selectedAccount = new AccountViewModel
+        {
+            Id = account.Id,
             AccountCode = account.AccountCode,
             AccountName = account.AccountName,
             TotalBalance = account.TotalBalance,
             TotalDebitBalance = account.TotalDebitBalance,
             TotalCreditBalance = account.TotalCreditBalance,
+            AccountClassId = account.AccountClassId,
+            CompanyId = account.CompanyId,
+            ParentAccountId = account.ParentAccountId,
             ChildAccounts = account.ChildAccounts
         };
-        errorMessage = string.Empty;
         isEditModalVisible = true;
     }
 
-    // Close Add or Edit Modal
     private void CloseModal()
     {
         isAddModalVisible = false;
+        isAddChildModalVisible = false;
         isEditModalVisible = false;
         selectedAccount = null;
+        parentAccount = null;
+        validationErrors.Clear();
+        errorMessage = string.Empty;
     }
 
-    // Open Delete Modal
     private void OpenDeleteModal(AccountViewModel account)
     {
         selectedAccount = account;
+        errorMessage = string.Empty;
         isDeleteModalVisible = true;
     }
 
-    // Close Delete Modal
     private void CloseDeleteModal()
     {
         isDeleteModalVisible = false;
         selectedAccount = null;
+        errorMessage = string.Empty;
     }
 
-    // Add or Update Account
-    private void SaveAccount()
+    private bool ValidateAccount()
     {
-        if (selectedAccount == null)
-        {
-            errorMessage = "No account selected.";
-            return;
-        }
+        validationErrors.Clear();
+        bool isValid = true;
 
-        if (string.IsNullOrWhiteSpace(selectedAccount.AccountCode) || string.IsNullOrWhiteSpace(selectedAccount.AccountName))
+        // Validate Account Code
+        if (string.IsNullOrWhiteSpace(selectedAccount?.AccountCode))
         {
-            errorMessage = "Both Account Code and Account Name are required.";
-            return;
+            validationErrors[nameof(AccountViewModel.AccountCode)] = "Account Code is required";
+            isValid = false;
         }
-
-        if (isEditModalVisible)
+        else if (selectedAccount.AccountCode.Any(c => !char.IsDigit(c)))
         {
-            // Edit existing account locally
-            var account = accounts.FirstOrDefault(a => a.AccountCode == selectedAccount.AccountCode);
-            if (account != null)
+            validationErrors[nameof(AccountViewModel.AccountCode)] = "Account Code must contain only digits";
+            isValid = false;
+        }
+        else 
+        {
+            // Check for duplicates, considering the edit case
+            bool isDuplicate = false;
+            
+            if (isEditModalVisible)
             {
-                account.AccountName = selectedAccount.AccountName;
-                account.TotalBalance = selectedAccount.TotalBalance;
-                account.TotalDebitBalance = selectedAccount.TotalDebitBalance;
-                account.TotalCreditBalance = selectedAccount.TotalCreditBalance;
+                // When editing, we only have a conflict if:
+                // 1. The code has changed from the original
+                // 2. The new code exists elsewhere in the system
+                if (selectedAccount.AccountCode != originalAccountCode)
+                {
+                    isDuplicate = GetAllAccounts().Any(a => 
+                        a.AccountCode == selectedAccount.AccountCode && 
+                        a.Id != selectedAccount.Id);
+                }
             }
             else
             {
-                errorMessage = "Account not found.";
+                // For new accounts, simply check if the code exists
+                isDuplicate = GetAllAccounts().Any(a => 
+                    a.AccountCode == selectedAccount.AccountCode);
+            }
+            
+            if (isDuplicate)
+            {
+                validationErrors[nameof(AccountViewModel.AccountCode)] = "Account Code already exists";
+                isValid = false;
             }
         }
-        else
+
+        // Validate Account Name
+        if (string.IsNullOrWhiteSpace(selectedAccount?.AccountName))
         {
-            // Add new account locally
-            if (accounts.Any(a => a.AccountCode == selectedAccount.AccountCode))
-            {
-                errorMessage = "An account with this Account Code already exists.";
-                return;
-            }
-
-            accounts.Add(new AccountViewModel
-            {
-                AccountCode = selectedAccount.AccountCode,
-                AccountName = selectedAccount.AccountName,
-                TotalBalance = selectedAccount.TotalBalance,
-                TotalDebitBalance = selectedAccount.TotalDebitBalance,
-                TotalCreditBalance = selectedAccount.TotalCreditBalance,
-                ChildAccounts = new List<AccountViewModel>()
-            });
+            validationErrors[nameof(AccountViewModel.AccountName)] = "Account Name is required";
+            isValid = false;
         }
 
-        CloseModal();
+        return isValid;
     }
 
-    // Delete Account
-    private void ConfirmDeleteAccount()
+    private async Task SaveAccount()
     {
-        if (selectedAccount == null)
+        if (selectedAccount == null) return;
+
+        if (!ValidateAccount())
         {
-            errorMessage = "No account selected.";
+            StateHasChanged();
             return;
         }
 
-        accounts.Remove(selectedAccount);
-        CloseDeleteModal();
+        isLoading = true;
+        errorMessage = string.Empty;
+        
+        try
+        {
+            string? apiUrl = Configuration["ApiUrl"];
+            if (string.IsNullOrEmpty(apiUrl))
+            {
+                errorMessage = "API URL not configured";
+                return;
+            }
+            
+            var client = ClientFactory.CreateClient();
+            HttpResponseMessage response;
+
+            if (isEditModalVisible)
+            {
+                Console.WriteLine($"Updating account: {originalAccountCode} -> {selectedAccount.AccountCode}");
+                
+                // Use the original account code in the URL for the API to find the account
+                response = await client.PutAsJsonAsync(
+                    $"{apiUrl}financials/updateaccount/{originalAccountCode}", 
+                    selectedAccount);
+            }
+            else
+            {
+                response = await client.PostAsJsonAsync(
+                    $"{apiUrl}financials/addaccount", 
+                    selectedAccount);
+            }
+
+            string responseBody = await response.Content.ReadAsStringAsync();
+            
+            if (response.IsSuccessStatusCode)
+            {
+                await LoadAccountsFromApi();
+                CloseModal();
+            }
+            else
+            {
+                errorMessage = string.IsNullOrEmpty(responseBody) 
+                    ? $"Failed to save account. Status: {response.StatusCode}" 
+                    : responseBody;
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"An error occurred: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
     }
 
-    // ViewModel for Accounts
+    private async Task ConfirmDeleteAccount()
+    {
+        if (selectedAccount == null) return;
+
+        isLoading = true;
+        errorMessage = string.Empty;
+        
+        try
+        {
+            string? apiUrl = Configuration["ApiUrl"];
+            if (string.IsNullOrEmpty(apiUrl))
+            {
+                errorMessage = "API URL not configured";
+                return;
+            }
+            
+            // First check if the account has children
+            if (selectedAccount.ChildAccounts.Count > 0)
+            {
+                errorMessage = "Cannot delete an account that has child accounts.";
+                isLoading = false;
+                return;
+            }
+
+            var response = await ClientFactory.CreateClient()
+                .DeleteAsync($"{apiUrl}financials/deleteaccount/{selectedAccount.AccountCode}");
+
+            if (response.IsSuccessStatusCode)
+            {
+                await LoadAccountsFromApi();
+                CloseDeleteModal();
+            }
+            else
+            {
+                string responseBody = await response.Content.ReadAsStringAsync();
+                errorMessage = string.IsNullOrEmpty(responseBody) 
+                    ? $"Failed to delete account. Status: {response.StatusCode}" 
+                    : responseBody;
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
     public class AccountViewModel
     {
+        public int Id { get; set; }
+
+        [Required(ErrorMessage = "Account Code is required")]
+        [RegularExpression(@"^[0-9]+$", ErrorMessage = "Account Code must be numeric")]
         public string AccountCode { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Account Name is required")]
+        [StringLength(100, ErrorMessage = "Account Name cannot exceed 100 characters")]
         public string AccountName { get; set; } = string.Empty;
+
         public decimal TotalBalance { get; set; }
         public decimal TotalDebitBalance { get; set; }
         public decimal TotalCreditBalance { get; set; }
+        public int AccountClassId { get; set; }
+        public int CompanyId { get; set; }
+        public int? ParentAccountId { get; set; }
+        public string? Description { get; set; }
+        public bool IsCash { get; set; }
+        public bool IsContraAccount { get; set; }
+
         public List<AccountViewModel> ChildAccounts { get; set; } = new();
     }
 }
