@@ -37,7 +37,7 @@
         var selectedRows = gridOptions.api.getSelectedRows();
         selectedRow = selectedRows[0];
 
-        document.getElementById('linkViewCustomer').setAttribute('href', 'customer/' + selectedRow.id);
+        document.getElementById('linkViewCustomer').setAttribute('href', '/sales/customer/' + selectedRow.id);
         document.getElementById('linkViewCustomer').setAttribute('class', 'btn');
     }
 
