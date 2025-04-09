@@ -36,6 +36,27 @@ namespace Api.Controllers
             return Ok(taxesDto);
         }
 
+        [HttpGet("Taxes/{id:int}")]
+        public IActionResult GetTaxById(int id)
+        {
+            var tax = _taxService.GetTaxById(id);
+            if (tax == null)
+            {
+                return NotFound($"Tax with ID {id} not found.");
+            }
+
+            var taxDto = new Tax
+            {
+                Id = tax.Id,
+                TaxCode = tax.TaxCode,
+                TaxName = tax.TaxName,
+                Rate = tax.Rate,
+                IsActive = tax.IsActive
+            };
+
+            return Ok(taxDto);
+        }
+
         [HttpGet("TaxGroups")]
         public IActionResult GetTaxGroups()
         {
@@ -65,6 +86,38 @@ namespace Api.Controllers
             return Ok(itemTaxGroupsDto);
         }
 
+        [HttpGet("TaxGroupTaxes/{taxId:int}")]
+        public IActionResult GetTaxGroupTaxes(int taxId)
+        {
+            var taxGroupTaxes = _taxService.GetTaxGroupTaxesByTaxId(taxId);
+            return Ok(taxGroupTaxes);
+        }
+
+        [HttpGet("ItemTaxGroupTaxes/{taxId:int}")]
+        public IActionResult GetItemTaxGroupTaxes(int taxId)
+        {
+            var itemTaxGroupTaxes = _taxService.GetItemTaxGroupTaxesByTaxId(taxId);
+            return Ok(itemTaxGroupTaxes);
+        }
+
+        [HttpGet("TaxAccounts/{taxId:int}")]
+        public IActionResult GetTaxAccounts(int taxId)
+        {
+            try
+            {
+                var (salesAccountId, purchasingAccountId) = _taxService.GetTaxAccountsByTaxId(taxId);
+                return Ok(new
+                {
+                    SalesAccountId = salesAccountId,
+                    PurchasingAccountId = purchasingAccountId
+                });
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(ex.Message);
+            }
+        }
+
         [HttpPost("AddNewTax")]
         public async Task<IActionResult> AddNewTax([FromBody] TaxForCreation taxForCreationDto)
         {
@@ -78,11 +131,27 @@ namespace Api.Controllers
         [HttpPut("EditTax")]
         public async Task<IActionResult> EditTax([FromBody] TaxForUpdate taxForUpdateDto)
         {
-            var result = await _adminService.EditTaxAsync(taxForUpdateDto);
-            if (result.IsFailure)
-                return BadRequest(result.Error.Message);
+            try
+            {
+                Console.WriteLine("EditTax API called with data:");
+                Console.WriteLine(Newtonsoft.Json.JsonConvert.SerializeObject(taxForUpdateDto));
 
-            return Ok(result.Value);
+                var result = await _adminService.EditTaxAsync(taxForUpdateDto);
+                if (result.IsFailure)
+                {
+                    Console.WriteLine($"EditTax failed: {result.Error.Message}");
+                    return BadRequest(result.Error.Message);
+                }
+
+                return Ok(result.Value);
+            }
+            catch (Exception ex)
+            {
+                // Log the exception
+                Console.WriteLine($"Error in EditTax API: {ex.Message}");
+                Console.WriteLine(ex.StackTrace);
+                return StatusCode(500, "An error occurred while updating the tax.");
+            }
         }
 
         [HttpDelete("DeleteTax/{id:int}")]

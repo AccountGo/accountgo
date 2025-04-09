@@ -1,5 +1,6 @@
 ﻿using Core.Domain.Purchases;
 using Core.Domain.Sales;
+using Dto.TaxSystem;
 using System.Collections.Generic;
 
 namespace Services.TaxSystem
@@ -19,6 +20,9 @@ namespace Services.TaxSystem
         List<KeyValuePair<int, decimal>> GetSalesTaxes(int customerId, int itemId, decimal quantity, decimal amount, decimal discount);
         decimal GetItemPrice(int itemId);
         decimal GetItemCost(int itemId);
+        IEnumerable<TaxGroupTax> GetTaxGroupTaxesByTaxId(int taxId);
+        IEnumerable<ItemTaxGroupTax> GetItemTaxGroupTaxesByTaxId(int taxId);
+        (int SalesAccountId, int PurchasingAccountId) GetTaxAccountsByTaxId(int taxId);
         /// <summary>
         /// Deduct tax from a price which includes tax
         /// </summary>

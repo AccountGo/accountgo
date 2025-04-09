@@ -1,10 +1,11 @@
 ﻿@model AccountGoWeb.Models.TaxSystem.EditTaxViewModel
+
 <style>
-    tr th{
+    tr th {
         color: #fff;
     }
 
-    tr td, div.row{
+    tr td, div.row {
         color: #fff;
     }
 
@@ -14,38 +15,38 @@
     }
 </style>
 
-<form action="~/Tax/EditTax" method="post">
-
+<form asp-action="EditTax" method="post">
     <div class="col-sm-10">
         <div class="card">
-            <div class="card-body">
+            <div class="card-body"> 
+                <!-- Hidden input for Tax.Id -->
+                <input asp-for="Tax.Id" type="hidden" /> 
                 <div class="row">
                     <div class="col-sm-3">Sales Account</div>
                     <div class="col-sm-8">
-                        <input hidden asp-for="Tax.Id" />
                         <select class="form-control" asp-for="SalesAccountId">
-                            <option value="20300">
+                            <option value="20300" selected="@((Model.SalesAccountId == 20300) ? "selected" : null)">
                                 Sales Tax
                             </option>
                         </select>
-                        <span asp-validation-for="SalesAccountId" class="danger"></span>
+                        <span asp-validation-for="SalesAccountId" class="text-danger"></span>
                     </div>
                 </div>
                 <div class="row">
                     <div class="col-sm-3">Purchase Account</div>
                     <div class="col-sm-8">
                         <select class="form-control" asp-for="PurchaseAccountId">
-                            <option value="50700">
+                            <option value="50700" selected="@((Model.PurchaseAccountId == 50700) ? "selected" : null)">
                                 Purchase Tax
                             </option>
                         </select>
-                        <span asp-validation-for="PurchaseAccountId" class="danger"></span>
+                        <span asp-validation-for="PurchaseAccountId" class="text-danger"></span>
                     </div>
                 </div>
                 <div class="row">
                     <div class="col-sm-3">Tax Group</div>
                     <div class="col-sm-8">
-                        <select asp-for="TaxGroup.Id" asp-items="@ViewBag.TaxGroups" class="form-control" id="optTaxGroups" onchange="onSelectedTaxGroup(this)"></select>
+                        <select class="form-control" asp-for="TaxGroup.Id" asp-items="@ViewBag.TaxGroups" id="optTaxGroups"></select>
                         <span asp-validation-for="TaxGroup.Id" class="text-danger"></span>
                         <button type="button" class="btn-primary float-end" data-bs-toggle="modal" data-bs-target="#taxGroup">
                             Create New Tax Group
@@ -55,7 +56,7 @@
                 <div class="row">
                     <div class="col-sm-3">Item Tax Group</div>
                     <div class="col-sm-8">
-                        <select class="form-control" asp-for="ItemTaxGroup.Id" asp-items="@ViewBag.ItemTaxGroups" id="optItemTaxGroups" onchange="onSelectedItemTaxGroup(this)"></select>
+                        <select class="form-control" asp-for="ItemTaxGroup.Id" asp-items="@ViewBag.ItemTaxGroups" id="optItemTaxGroups"></select>
                         <span asp-validation-for="ItemTaxGroup.Id" class="text-danger"></span>
                         <button type="button" class="btn-primary float-end" data-bs-toggle="modal" data-bs-target="#itemTaxGroup">
                             Create New Item Tax Group
@@ -95,7 +96,7 @@
                             <div class="col-sm-3">Active</div>
                             <div class="col-sm-9">
                                 <input asp-for="Tax.IsActive" class="form-check" type="checkbox" />
-                                <span asp-validation-for="Tax.IsActive" class="danger"></span>
+                                <span asp-validation-for="Tax.IsActive" class="text-danger"></span>
                             </div>
                         </div>
                     </div>
@@ -120,26 +121,22 @@
                     <div class="row mb-3">
                         <div class="col-sm-4">Description</div>
                         <div class="col-sm-6">
-                            <input asp-for="TaxGroup!.Description" class="form-control" id="taxGroupDescription" type="text">
-                            <span asp-validation-for="TaxGroup!.Description" class="text-danger"></span>
+                            <input class="form-control" id="taxGroupDescription" asp-for="TaxGroup.Description" type="text">
+                            <span asp-validation-for="TaxGroup.Description" class="text-danger"></span>
                         </div>
                     </div>
                     <div class="row mb-3">
-                        @* <div class="col-sm-4">TaxAppliedToShipping</div> *@
-                        <div class="col-sm-4">
-                            <label asp-for="TaxGroup!.TaxAppliedToShipping" class="control-label"></label>
-                        </div>
-
+                        <div class="col-sm-4">Tax Applied To Shipping</div>
                         <div class="col-sm-8">
-                            <input class="form-check" asp-for="TaxGroup!.TaxAppliedToShipping" type="checkbox">
-                            <span asp-validation-for="TaxGroup!.TaxAppliedToShipping" class="text-danger"></span>
+                            <input class="form-check" asp-for="TaxGroup.TaxAppliedToShipping" type="checkbox">
+                            <span asp-validation-for="TaxGroup.TaxAppliedToShipping" class="text-danger"></span>
                         </div>
                     </div>
                     <div class="row mb-3">
                         <div class="col-sm-4">Is Active</div>
                         <div class="col-sm-8">
-                            <input asp-for="TaxGroup!.IsActive" type="checkbox" class="form-check">
-                            <span asp-validation-for="TaxGroup!.IsActive" class="text-danger"></span>
+                            <input asp-for="TaxGroup.IsActive" type="checkbox" class="form-check">
+                            <span asp-validation-for="TaxGroup.IsActive" class="text-danger"></span>
                         </div>
                     </div>
                 </div>
@@ -160,21 +157,18 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                        <div class="row mb-3">
-                            <div class="col-sm-4">Name</div>
-                            <div class="col-sm-6">
-                            <input asp-for="ItemTaxGroup!.Name" id="itemTaxGroupName" type="text" class="form-control">
-                            </div>
+                    <div class="row mb-3">
+                        <div class="col-sm-4">Name</div>
+                        <div class="col-sm-6">
+                            <input id="itemTaxGroupName" asp-for="ItemTaxGroup.Name" type="text" class="form-control">
                         </div>
-                        <div class="row mb-3">
-                            @* <div class="col-sm-4">IsFullyExempt</div> *@
-                            <div class="col-sm-4">
-                                <label asp-for="ItemTaxGroup!.IsFullyExempt" class="control-label"></label>
-                            </div>
-                            <div class="col-sm-8">
-                                <input asp-for="ItemTaxGroup!.IsFullyExempt" type="checkbox" class="form-check">
-                            </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-sm-4">Is Fully Exempt</div>
+                        <div class="col-sm-8">
+                            <input asp-for="ItemTaxGroup.IsFullyExempt" type="checkbox" class="form-check">
                         </div>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button class="btn btn-sm btn-primary btn-flat" id="itemTaxGroupButton" type="button" data-bs-dismiss="modal">Save</button>
@@ -183,10 +177,9 @@
             </div>
         </div>
     </div>
-
 </form>
 
-@section scripts{
+@section scripts {
     <script>
         document.getElementById('taxGroupButton').addEventListener('click', function () {
             var taxGroup = {
@@ -197,7 +190,7 @@
 
             var option = document.createElement('option');
             option.value = 0; option.text = taxGroup.Description; option.selected = true;
-          
+
             select.add(option);
         });
 
@@ -212,16 +205,6 @@
             option.value = 0; option.text = itemTaxGroup.Name; option.selected = true;
 
             select.add(option);
-        })
-
-        function onSelectedTaxGroup(value){
-            var textValue = value.options[value.selectedIndex].text;
-            document.getElementById('taxGroupDescription').value = textValue;
-        }
-
-        function onSelectedItemTaxGroup(value) {
-            var textValue = value.options[value.selectedIndex].text;
-            document.getElementById('itemTaxGroupName').value = textValue;
-        }
+        });
     </script>
 }
