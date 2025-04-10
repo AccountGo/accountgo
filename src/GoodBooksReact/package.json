@@ -60,7 +60,7 @@
     "tsd": "^0.30.0",
     "typescript": "^5.2.2",
     "vite": "^6.2.6",
-    "webpack": "^5.89.0",
+    "webpack": "^5.99.5",
     "webpack-cli": "^5.1.4"
   }
 }
