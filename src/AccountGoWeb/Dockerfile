@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/dotnet/sdk:7.0-bullseye-slim-amd64 AS build-env
+FROM mcr.microsoft.com/dotnet/sdk:8.0-bullseye-slim-amd64 AS build-env
 
 WORKDIR /app
 
@@ -36,7 +36,7 @@ RUN dotnet build ./Modules/SampleModule/*.csproj
 RUN dotnet restore ./AccountGoWeb/*.csproj
 RUN dotnet publish ./AccountGoWeb/*.csproj -c Release -o out
 
-FROM mcr.microsoft.com/dotnet/aspnet:7.0-bullseye-slim-amd64
+FROM mcr.microsoft.com/dotnet/aspnet:8.0-bullseye-slim-amd64
 
 WORKDIR /app
 
