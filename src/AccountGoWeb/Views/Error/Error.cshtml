@@ -1,0 +1,24 @@
+@{
+    ViewData["Title"] = $"{ViewBag.PageContentHeader}";
+}
+
+<div class="container">
+    <div class="row">
+        <div class="col-md-6 mx-auto text-center">
+            <div class="mt-4">
+                <h1 class="display-4">@ViewBag.PageContentHeader</h1>
+                <div class="my-4">
+                    <i class="fa fa-exclamation-triangle text-warning fa-5x mb-4"></i>
+                </div>
+                <p class="lead">@ViewBag.ErrorMessage</p>
+                <hr>
+                <p>Please try again or contact the system administrator if the problem persists.</p>
+                <div class="mt-4">
+                    <a href="/" class="btn btn-primary">
+                        <i class="fa fa-home"></i> Return to Home
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

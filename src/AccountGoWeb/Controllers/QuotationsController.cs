@@ -63,8 +63,13 @@ namespace AccountGoWeb.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> AddSalesQuotation(Dto.Sales.SalesQuotation model, string addRowBtn)
+        public async Task<IActionResult> AddSalesQuotation(Dto.Sales.SalesQuotation model, string? addRowBtn)
         {
+
+            ViewBag.Customers = Models.SelectListItemHelper.Customers();
+                ViewBag.Items = Models.SelectListItemHelper.Items();
+                ViewBag.PaymentTerms = Models.SelectListItemHelper.PaymentTerms();
+                ViewBag.Measurements = Models.SelectListItemHelper.Measurements();
             if (!string.IsNullOrEmpty(addRowBtn))
             {
                 _logger.LogInformation("Add Row Button Clicked");
@@ -77,37 +82,40 @@ namespace AccountGoWeb.Controllers
                     MeasurementId = 1,
                 });
 
-                ViewBag.Customers = Models.SelectListItemHelper.Customers();
-                ViewBag.Items = Models.SelectListItemHelper.Items();
-                ViewBag.PaymentTerms = Models.SelectListItemHelper.PaymentTerms();
-                ViewBag.Measurements = Models.SelectListItemHelper.Measurements();
-
                 return View(model);
+
             }
             else if (ModelState.IsValid)
             {
                 var serialize = Newtonsoft.Json.JsonConvert.SerializeObject(model);
                 var content = new StringContent(serialize);
                 content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
-                _logger.LogInformation("Quotation ID is is : " + model.Id);
+
                 using (var client = new HttpClient())
                 {
                     var baseUri = _configuration!["ApiUrl"];
                     client.BaseAddress = new Uri(baseUri!);
                     var response = await client.PostAsync("sales/savequotation", content);
 
-                    if (response.IsSuccessStatusCode)
+                    if (response.IsSuccessStatusCode) {
+                        _logger.LogInformation("Quotation has been successfully saved.");
                         return RedirectToAction("quotations");
+                    } else {
+                        _logger.LogInformation("Quotation save failed.");
+                        return View(model);
+                    }
                 }
+            } else {
+                _logger.LogInformation("Model State is not valid.");
+                return View(model);
             }
-
-            return View();
+            
         }
 
         [HttpGet]
         public IActionResult Quotation(int id)
         {
-            ViewBag.PageContentHeader = "Sales";
+            ViewBag.PageContentHeader = "Edit Sale Quotation";
 
             SalesQuotation? model = null;
 
@@ -120,11 +128,10 @@ namespace AccountGoWeb.Controllers
             {
                 model = GetAsync<SalesQuotation>("Sales/Quotation?id=" + id).Result;
                 @ViewBag.Id = model.Id;
-                @ViewBag.QuotationDate = model.QuotationDate;
                 @ViewBag.CustomerName = model.CustomerName;
                 @ViewBag.PaymentTermId = model.PaymentTermId;
                 @ViewBag.SalesQuotationLines = model.SalesQuotationLines;
-                @ViewBag.TotalAmount = model.Amount;
+                @ViewBag.TotalAmount = Math.Round(model.Amount, 2);
             }
 
             @ViewBag.Customers = Models.SelectListItemHelper.Customers();

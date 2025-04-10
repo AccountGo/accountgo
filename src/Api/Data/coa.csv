@@ -5,6 +5,7 @@ AccountCode,AccountName,ParentAccountCode,AccountClass,ContraAccount,Cash,Compan
 10111,Regular Checking Account,10110,1,FALSE,FALSE,100,DR
 10112,Savings Account,10110,1,FALSE,FALSE,100,DR
 10113,Cash in Hand A/C,10110,1,FALSE,FALSE,100,DR
+10114,Advances,10100,1,FALSE,FALSE,100,DR
 10120,Accounts Receivable,10100,1,FALSE,FALSE,100,DR
 10130,Other Receivables,10100,1,FALSE,FALSE,100,DR
 10121,Allowance for Doubtful Accounts,10100,1,TRUE,FALSE,100,CR
@@ -58,6 +59,7 @@ AccountCode,AccountName,ParentAccountCode,AccountClass,ContraAccount,Cash,Compan
 40400,Sales Discounts,40000,4,FALSE,FALSE,100,CR
 40500,Shipping and Handling,40000,4,FALSE,FALSE,100,CR
 40600,Other Income,40000,4,FALSE,FALSE,100,CR
+40700,Donations,40000,4,FALSE,FALSE,100,CR
 50000,Expenses,,5,FALSE,FALSE,100,DR
 50100,General and Admin Expenses,50000,5,FALSE,FALSE,100,DR
 50101,Salary Expenses,50100,5,FALSE,FALSE,100,DR

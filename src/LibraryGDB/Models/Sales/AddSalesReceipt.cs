@@ -1,19 +1,28 @@
-﻿namespace LibraryGDB.Models.Sales;
+﻿using System;
+using System.ComponentModel.DataAnnotations;
+using LibraryGDB.Validation;
 
-public class AddReceipt
+namespace LibraryGDB.Models.Sales
 {
-    [System.ComponentModel.DataAnnotations.Required]
-    public int? AccountToDebitId { get; set; }
-    [System.ComponentModel.DataAnnotations.Required]
-    public int? AccountToCreditId { get; set; }
-    [System.ComponentModel.DataAnnotations.Required]
-    public int? CustomerId { get; set; }
-    public System.DateTime ReceiptDate {get;set;}
-    [ExpressiveAnnotations.Attributes.AssertThat("Amount > 0", ErrorMessage = "Amount cannot be zero.")]
-    public decimal Amount { get; set; }
-
-    public AddReceipt()
+    public class AddReceipt
     {
-        ReceiptDate = System.DateTime.Now;
+        [Required]
+        public int? AccountToDebitId { get; set; }
+
+        [Required]
+        public int? AccountToCreditId { get; set; }
+
+        [Required]
+        public int? CustomerId { get; set; }
+
+        public DateTime ReceiptDate { get; set; }
+
+        [PositiveAmount]
+        public decimal Amount { get; set; }
+
+        public AddReceipt()
+        {
+            ReceiptDate = DateTime.Now;
+        }
     }
 }

@@ -9,6 +9,7 @@
     <Nullable>enable</Nullable>
     <IsAspireHost>true</IsAspireHost>
     <UserSecretsId>13ebf7e1-4bc3-4178-925c-d2b16f2f0006</UserSecretsId>
+    <NoWarn>ASPIRE004</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
@@ -17,6 +18,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="../Infrastructure/Infrastructure.csproj" IsAspireProjectResource="false" />
     <ProjectReference Include="../MigrationService/MigrationService.csproj" />
     <ProjectReference Include="..\AccountGoWeb\AccountGoWeb.csproj" />
     <ProjectReference Include="..\Api\Api.csproj" />

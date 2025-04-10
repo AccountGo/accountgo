@@ -1,14 +1,17 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 
 namespace Dto.Sales
 {
     public class SalesQuotation : BaseDto
     {
         public string? No { get; set; }
+        [Required (ErrorMessage = "Customer is required.")]
         public int? CustomerId { get; set; }
         public string? CustomerName { get; set; }
         public DateTime QuotationDate { get; set; }
+        [Required (ErrorMessage = "Payment Term is required.")]
         public int? PaymentTermId { get; set; }
         public string? ReferenceNo { get; set; }
         public decimal Amount { get { return GetTotalAmount(); } }
