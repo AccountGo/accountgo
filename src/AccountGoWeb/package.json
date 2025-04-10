@@ -41,7 +41,7 @@
     "ag-grid": "18.1.2",
     "d3": "7.8.2",
     "font-awesome": "^4.7.0",
-    "jspdf": "2.5.1",
+    "jspdf": "3.0.1",
     "knockout": "^3.5.0",
     "knockout-mapping": "2.6.0",
     "pace-progress": "^1.0.2",
