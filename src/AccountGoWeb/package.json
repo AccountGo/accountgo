@@ -10,7 +10,7 @@
     "css-compile-minified": "node-sass --output-style compressed --source-map true --source-map-contents true --precision 6 Scss -o wwwroot/css"
   },
   "devDependencies": {
-    "@coreui/coreui": "^2.1.16",
+    "@coreui/coreui": "^5.2.0",
     "@coreui/icons": "^0.3.0",
     "ag-grid-community": "^19.1.4",
     "ajv": "^6.12.6",
