@@ -12,7 +12,7 @@
   "devDependencies": {
     "@coreui/coreui": "^2.1.16",
     "@coreui/icons": "^0.3.0",
-    "ag-grid-community": "^19.1.4",
+    "ag-grid-community": "^31.3.4",
     "ajv": "^6.12.6",
     "axios": "^1.8.2",
     "bootstrap": "^5.2.3",
