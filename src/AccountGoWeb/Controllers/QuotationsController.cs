@@ -141,5 +141,55 @@ namespace AccountGoWeb.Controllers
 
             return View(model);
         }
+
+        [HttpPost]
+        public async Task<IActionResult> Quotation(Dto.Sales.SalesQuotation model)
+        {
+            ViewBag.PageContentHeader = "Edit Sale Quotation";
+
+            ViewBag.Customers = Models.SelectListItemHelper.Customers();
+            ViewBag.Items = Models.SelectListItemHelper.Items();
+            ViewBag.PaymentTerms = Models.SelectListItemHelper.PaymentTerms();
+            ViewBag.Measurements = Models.SelectListItemHelper.Measurements();
+
+            if (!ModelState.IsValid)
+            {
+                _logger.LogInformation("Model state is invalid.");
+                return View(model);
+            }
+
+            try
+            {
+                var serialize = Newtonsoft.Json.JsonConvert.SerializeObject(model);
+                var content = new StringContent(serialize);
+                content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+
+                using (var client = new HttpClient())
+                {
+                    var baseUri = _configuration["ApiUrl"];
+                    client.BaseAddress = new Uri(baseUri);
+            
+                    // POST to the same SaveQuotation endpoint
+                    var response = await client.PostAsync("sales/savequotation", content);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    _logger.LogInformation("Quotation updated successfully.");
+                    return RedirectToAction("quotations");
+                }
+                else
+                {
+                    _logger.LogError("Failed to update quotation.");
+                    return View(model);
+                }
+                }
+            }
+            catch (Exception ex)
+            {
+            _logger.LogError(ex, "Exception occurred while updating quotation.");
+            return View(model);
+            }
+        }
+
     }
 }

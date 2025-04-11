@@ -17,7 +17,8 @@
     </a>
 </div>
 
-<form action="~/Quotations/AddSalesQuotation" method="post">
+<form asp-action="@(Model.Id > 0 ? "Quotation" : "AddSalesQuotation")" asp-controller="Quotations" method="post">
+
     <div id="divSalesQuotationCard" class="col-md-9">
         @Html.HiddenFor(m => m.Id)
         <div class="card">
@@ -59,6 +60,8 @@
                     <tbody>
                     @for (int i = 0; i < Model.SalesQuotationLines.Count; i++) {
                         <tr>
+                            <input type="hidden" asp-for="@Model.SalesQuotationLines[i].Id" />
+                            
                             <td>
                                 <select class="form-control" asp-for="@Model.SalesQuotationLines[i].ItemId" asp-items="@ViewBag.Items"
                                         id="optCustomer" required>
