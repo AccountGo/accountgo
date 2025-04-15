@@ -249,8 +249,6 @@ public IActionResult SaveCompany([FromBody]Company companyDto)
     string[] errors;
     try
     {
-        Console.WriteLine($"User.Identity.IsAuthenticated: {User.Identity.IsAuthenticated}");
-    Console.WriteLine($"User.Identity.Name: {User.Identity.Name ?? "null"}");
         if (!ModelState.IsValid)
         {
             errors = new string[ModelState.ErrorCount];
@@ -260,6 +258,24 @@ public IActionResult SaveCompany([FromBody]Company companyDto)
             return new BadRequestObjectResult(errors);
         }
 
+        // Check if the user is authenticated
+        string username;
+        if (User.Identity.IsAuthenticated && !string.IsNullOrEmpty(User.Identity.Name))
+        {
+            // Use the authenticated user's username
+            username = User.Identity.Name;
+            Console.WriteLine($"Using authenticated username: {username}");
+        }
+        else
+        {
+            // Fall back to the test username
+            username = "admin";
+            Console.WriteLine($"Using fallback test username: {username}");
+        }
+        
+        // Set the current user in the AuditContext
+        Core.Domain.Auditing.AuditContext.CurrentUser = username;
+
         Core.Domain.Company company = companyDto.Id == 0
             ? new Core.Domain.Company()
             : _adminService.GetDefaultCompany();
@@ -268,9 +284,12 @@ public IActionResult SaveCompany([FromBody]Company companyDto)
         company.Name = companyDto.Name;
         company.ShortName = companyDto.ShortName;
         company.CRA = companyDto.CRA;
-
-        // Set the current user in the AuditContext
-        Core.Domain.Auditing.AuditContext.CurrentUser = User.Identity.Name ?? "System";
+        
+        // Set the ModifiedBy property if it exists
+        if (company.GetType().GetProperty("ModifiedBy") != null)
+        {
+            company.GetType().GetProperty("ModifiedBy").SetValue(company, username);
+        }
 
         // Call SaveCompany in the service
         _adminService.SaveCompany(company);
@@ -286,4 +305,3 @@ public IActionResult SaveCompany([FromBody]Company companyDto)
 
     }
 }
-

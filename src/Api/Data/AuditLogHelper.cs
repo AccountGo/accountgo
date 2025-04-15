@@ -165,7 +165,14 @@ namespace Api.Data
         {
             bool auditable = true;
 
-            if (null == _auditableEntity!.AuditableAttributes
+            // Add null check before accessing AuditableAttributes
+            if (_auditableEntity == null || _auditableEntity.AuditableAttributes == null)
+            {
+                // If there's no AuditableEntity configuration, default to auditing everything
+                return true;
+            }
+
+            if (null == _auditableEntity.AuditableAttributes
                 .FirstOrDefault(attr => attr.AttributeName == columnname && attr.AuditableEntity.EntityName == tablename))
                 auditable = false;
 

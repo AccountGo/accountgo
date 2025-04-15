@@ -295,13 +295,14 @@ namespace Api.Data
         public virtual DbSet<Vendor> Vendors { get; set; }
         public virtual DbSet<VendorPayment> VendorPayments { get; set; }
         public virtual DbSet<Party> Parties { get; set; }
-
 public override int SaveChanges()
 {
-    // Enable audit logging
+    // Enable audit logging with detailed logging
+    Console.WriteLine("ApiDbContext.SaveChanges called");
     SaveAuditLog();
 
     var ret = base.SaveChanges();
+    Console.WriteLine($"Base.SaveChanges returned {ret}");
 
     // Update record IDs for newly added entities
     UpdateAuditLogRecordId();
@@ -309,32 +310,46 @@ public override int SaveChanges()
     return ret;
 }
 
-
-
-        #region Audit Logs
-        private void SaveAuditLog()
+#region Audit Logs
+private void SaveAuditLog()
+{
+    // Get username directly from AuditContext
+    string username = Core.Domain.Auditing.AuditContext.CurrentUser;
+    Console.WriteLine($"SaveAuditLog using username: {username}");
+    
+    var dbEntityEntries = ChangeTracker.Entries().ToList()
+        .Where(p => p.State == EntityState.Modified || p.State == EntityState.Added || p.State == EntityState.Deleted);
+    
+    Console.WriteLine($"Found {dbEntityEntries.Count()} changed entities");
+    
+    foreach (var dbEntityEntry in dbEntityEntries)
+    {
+        try
         {
-            string username = string.Empty;
-
-            var dbEntityEntries = ChangeTracker.Entries().ToList()
-                .Where(p => p.State == EntityState.Modified || p.State == EntityState.Added || p.State == EntityState.Deleted);
-
-            foreach (var dbEntityEntry in dbEntityEntries)
+            Console.WriteLine($"Processing entity: {dbEntityEntry.Entity.GetType().Name}, State: {dbEntityEntry.State}");
+            
+            // Pass the username from AuditContext
+            var auditLogs = AuditLogHelper.GetChangesForAuditLog(dbEntityEntry, username);
+            
+            Console.WriteLine($"Generated {auditLogs.Count} audit logs");
+            
+            foreach (var auditlog in auditLogs)
             {
-                try
+                if (auditlog != null)
                 {
-                    username = ((BaseEntity)dbEntityEntry.Entity).ModifiedBy;
-                    var auditLogs = AuditLogHelper.GetChangesForAuditLog(dbEntityEntry, username);
-                    foreach (var auditlog in auditLogs)
-                        if (auditlog != null)
-                            AuditLogs.Add(auditlog);
-                }
-                catch
-                {
-                    continue;
+                    Console.WriteLine($"Adding audit log: UserName={auditlog.UserName}, TableName={auditlog.TableName}, EventType={auditlog.AuditEventType}");
+                    AuditLogs.Add(auditlog);
                 }
             }
         }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error in SaveAuditLog: {ex.Message}");
+            continue;
+        }
+    }
+}
+
 
         private void UpdateAuditLogRecordId()
         {
