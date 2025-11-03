@@ -223,7 +223,7 @@ FakesAssemblies/
 /src/Api/Plugins/*
 /src/AccountGoWeb/Modules/*
 /src/AccountGoWeb/Plugins/*
-/src/Api/Data/Migrations
+# /src/Api/Data/Migrations
 
 .vscode
 exclude
