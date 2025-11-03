@@ -40,10 +40,10 @@ jobs:
         run: |
           echo "++++ current directory"
           pwd
-          echo "++++ add ApplicationIdentityDbContext migration M1"
-          dotnet ef migrations add M1 --project ./src/Api/ --startup-project ./src/Api/Api.csproj --msbuildprojectextensionspath .build/obj/Api/ --context ApplicationIdentityDbContext --output-dir Data/Migrations/IdentityDb
-          echo "++++ add ApiDbContext migration M2"
-          dotnet ef migrations add M2 --project ./src/Api/ --startup-project ./src/Api/Api.csproj --msbuildprojectextensionspath .build/obj/Api/ --context ApiDbContext --output-dir Data/Migrations/ApiDb
+          echo "++++ add ApplicationIdentityDbContext migration IdentityMig"
+          dotnet ef migrations add IdentityMig --project ./src/Api/ --startup-project ./src/Api/Api.csproj --msbuildprojectextensionspath .build/obj/Api/ --context ApplicationIdentityDbContext --output-dir Data/Migrations/IdentityDb
+          echo "++++ add ApiDbContext migration ApiMig"
+          dotnet ef migrations add ApiMig --project ./src/Api/ --startup-project ./src/Api/Api.csproj --msbuildprojectextensionspath .build/obj/Api/ --context ApiDbContext --output-dir Data/Migrations/ApiDb
           echo "++++ contents of ./src/Api/Data/Migrations/IdentityDb"
           ls ./src/Api/Data/Migrations/IdentityDb
           echo "++++ contents of ./src/Api/Data/Migrations/ApiDb"
