@@ -133,7 +133,7 @@ else
 @code {
     private AccountViewModel[]? accounts = [];
     private bool getError;
-    private bool shouldRender;
+    private bool shouldRender = true;
     private bool jsInteropCalled = false; // Flag to ensure JS interop is called only once
     private string url = string.Empty;
     JsonElement data;
