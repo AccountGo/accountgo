@@ -17,14 +17,14 @@ builder.AddProject<Projects.AccountGoWeb>("mvc")
         .WithReference(apiService)
         .WaitFor(apiService);
 
+builder.AddProject<Projects.BlazorGDB>("blazor")
+        .WithHttpEndpoint(port: 5000, name: "blazor")
+        .WithReference(apiService)
+        .WaitFor(apiService);
+
 builder.AddProject<Projects.MigrationService>("migrations")
     .WithReference(sqlServer)
     .WaitFor(sqlServer);
-
-builder.AddProject<Projects.BlazorGDB>("blazor")
-    .WithHttpEndpoint(port: 8002)
-    .WithReference(apiService)
-    .WaitFor(apiService);
 
 builder.Build().Run();
 
