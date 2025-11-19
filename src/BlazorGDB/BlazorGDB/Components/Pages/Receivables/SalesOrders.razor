@@ -1,9 +1,175 @@
 ﻿@page "/receivables/sales-orders"
+@using System.Text.Json
+@using System.Text.Json.Serialization
 
 <PageTitle>Sales Orders</PageTitle>
 
-<h3>Sales Orders</h3>
+<div class="container-fluid">
+    <div class="row mb-3">
+        <div class="col">
+            <h3>Sales Orders</h3>
+        </div>
+        <div class="col text-end">
+        @* NEW SALES ORDER BUTTON *@
+            <a href="/receivables/sales-order/new" class="btn btn-primary">
+                <i class="fa fa-plus"></i> New Sales Order
+            </a>
+        </div>
+    </div>
+
+    @* SALES ORDER LIST *@
+
+    @if (loading)
+    {
+        <p><em>Loading...</em></p>
+    }
+    else if (errorMessage != null)
+    {
+        <div class="alert alert-danger" role="alert">
+            <strong>Error:</strong> @errorMessage
+        </div>
+    }
+    else if (salesOrders == null || !salesOrders.Any())
+    {
+        <p>No sales orders found.</p>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-striped table-hover">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Order #</th>
+                        <th>Customer</th>
+                        <th>Order Date</th>
+                        <th>Total Amount</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var order in salesOrders)
+                    {
+                        <tr>
+                            <td>@GetValue(order, "no")</td>
+                            <td>@GetValue(order, "customerName")</td>
+                            <td>@GetValue(order, "orderDate")</td>
+                            <td>$@GetValue(order, "amount")</td>
+                            <td>
+                                <span class="badge bg-info">Active</span>
+                            </td>
+                            <td>
+                            @* Placeholder action buttons: No 'view' or 'create invoice' functionality implemented yet on the original MVC *@
+                                <a href="/receivables/sales-order/@GetValue(order, "id")" class="btn btn-sm btn-outline-primary">View</a>
+                                <a href="/receivables/sales-order/@GetValue(order, "id")/create-invoice" class="btn btn-sm btn-outline-warning">Create Invoice</a>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
 
 @code {
+    [Inject]
+    private IHttpClientFactory ClientFactory { get; set; } = null!;
 
+    [Inject]
+    private NavigationManager Navigation { get; set; } = null!;
+
+    private List<dynamic> salesOrders   = new();
+    private bool loading                = true;
+    private string? errorMessage        = null;
+    private bool shouldRefresh          = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSalesOrders();
+        Navigation.LocationChanged += OnLocationChanged;
+    }
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        // Refresh data when navigating back to this page
+        if (e.Location.Contains("/receivables/sales-orders"))
+        {
+            shouldRefresh = true;
+            InvokeAsync(StateHasChanged);
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (shouldRefresh && !firstRender)
+        {
+            shouldRefresh = false;
+            await LoadSalesOrders();
+        }
+    }
+
+    public void Dispose()
+    {
+        Navigation.LocationChanged -= OnLocationChanged;
+    }
+
+    private async Task LoadSalesOrders()
+    {
+        try
+        {
+            loading         = true;
+            string apiurl   = System.Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
+
+            var client      = ClientFactory.CreateClient();
+            var response    = await client.GetAsync($"{apiurl}sales/salesorders");
+
+            if (response.IsSuccessStatusCode)
+            {
+                var responseString  = await response.Content.ReadAsStringAsync();
+                var options         = new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive     = true,
+                    DefaultIgnoreCondition          = JsonIgnoreCondition.WhenWritingNull,
+                };
+
+                var data            = JsonSerializer.Deserialize<List<System.Text.Json.JsonElement>>(responseString, options);
+                salesOrders         = data?.Cast<dynamic>().ToList() ?? new();
+            }
+            else
+            {
+                errorMessage = $"Failed to load sales orders. Status: {response.StatusCode}";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading sales orders: {ex.Message}";
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private string GetValue(dynamic obj, string propertyName)
+    {
+        try
+        {
+            if (obj is System.Text.Json.JsonElement je)
+            {
+                if (je.TryGetProperty(propertyName, out var prop))
+                {
+                    if (propertyName == "amount" && prop.ValueKind == System.Text.Json.JsonValueKind.Number)
+                    {
+                        return prop.GetDecimal().ToString("F2");
+                    }
+                    return prop.GetString() ?? prop.ToString();
+                }
+            }
+            return "N/A";
+        }
+        catch
+        {
+            return "N/A";
+        }
+    }
 }
