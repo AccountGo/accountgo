@@ -1,9 +1,136 @@
 ﻿@page "/receivables/sales-receipts"
+@inject HttpClient Http
+@inject NavigationManager Navigation
 
 <PageTitle>Sales Receipts</PageTitle>
 
-<h3>Sales Receipts</h3>
+<div class="container-fluid">
+    <div class="row mb-3">
+        <div class="col">
+            <a href="/add-receipt" class="btn btn-primary">
+                <i class="fa fa-plus"></i>
+                New Receipt
+            </a>
+            <a href="#" id="linkAllocate" class="btn btn-secondary inactiveLink">
+                <i class="fa fa-tasks"></i>
+                Allocate
+            </a>
+            <a href="#" id="linkViewReceipt" class="btn btn-secondary inactiveLink">
+                <i class="fa fa-edit"></i>
+                View
+            </a>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col">
+            @if (salesReceipts == null)
+            {
+                <div class="text-center">
+                    <div class="spinner-border" role="status">
+                        <span class="sr-only">Loading...</span>
+                    </div>
+                </div>
+            }
+            else if (!salesReceipts.Any())
+            {
+                <div class="alert alert-info">No sales receipts found.</div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Receipt</th>
+                                <th>No</th>
+                                <th>Customer Name</th>
+                                <th>Receipt Date</th>
+                                <th>Amount</th>
+                                <th>Left to Allocate</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var receipt in salesReceipts)
+                            {
+                                <tr class="@(selectedReceipt?.Id == receipt.Id ? "table-primary" : "")"
+                                    @onclick="() => SelectReceipt(receipt)">
+                                    <td>@receipt.Id</td>
+                                    <td>@receipt.ReceiptNo</td>
+                                    <td>@receipt.CustomerName</td>
+                                    <td>@receipt.ReceiptDate.ToString("MM/dd/yyyy")</td>
+                                    <td>@receipt.Amount.ToString("F2")</td>
+                                    <td>@receipt.RemainingAmountToAllocate.ToString("F2")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+</div>
 
 @code {
+    private List<SalesReceipt>? salesReceipts;
+    private SalesReceipt? selectedReceipt;
 
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSalesReceipts();
+    }
+
+    private async Task LoadSalesReceipts()
+    {
+        try
+        {
+            salesReceipts = await Http.GetFromJsonAsync<List<SalesReceipt>>("api/sales/salesreceipts");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading sales receipts: {ex.Message}");
+            salesReceipts = new List<SalesReceipt>();
+        }
+    }
+
+    private void SelectReceipt(SalesReceipt receipt)
+    {
+        selectedReceipt = receipt;
+
+        // Update Allocate link
+        var allocateLink = $"allocate/{receipt.Id}";
+        // Note: In a real implementation, you'd update the href attribute
+
+        // Update View Receipt link
+        var viewLink = $"sales-receipt?id={receipt.Id}";
+        // Note: In a real implementation, you'd update the href attribute
+
+        // Enable/disable buttons based on remaining amount to allocate
+        if (receipt.RemainingAmountToAllocate > 0)
+        {
+            // Enable allocate button
+        }
+        else
+        {
+            // Disable allocate button
+        }
+
+        // Enable view button
+        // Enable view button
+    }
+
+    public class SalesReceipt
+    {
+        public int Id { get; set; }
+        public string? ReceiptNo { get; set; }
+        public int CustomerId { get; set; }
+        public string? CustomerName { get; set; }
+        public decimal Amount { get; set; }
+        public decimal RemainingAmountToAllocate { get; set; }
+        public int AccountToDebitId { get; set; }
+        public string? AccountToDebit { get; set; }
+        public int GeneralLedgerHederId { get; set; }
+        public DateTime ReceiptDate { get; set; }
+        public string? ReferenceNo { get; set; }
+    }
 }
