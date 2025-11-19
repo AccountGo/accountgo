@@ -20,6 +20,7 @@
     <ProjectReference Include="../MigrationService/MigrationService.csproj" />
     <ProjectReference Include="..\AccountGoWeb\AccountGoWeb.csproj" />
     <ProjectReference Include="..\Api\Api.csproj" />
+    <ProjectReference Include="..\BlazorGDB\BlazorGDB\BlazorGDB.csproj" />
   </ItemGroup>
 
 </Project>
