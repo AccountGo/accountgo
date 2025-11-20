@@ -12,9 +12,8 @@
         New
     </a>
 
-    <a href="@ViewLinkHref"
-       class="btn @(SelectedEntry is null ? "btn-secondary disabled" : "btn-secondary")"
-       aria-disabled="@(SelectedEntry is null)">
+    <a href="@ViewLinkHref" class="btn @(SelectedEntry is null ? "btn-secondary disabled" : "btn-secondary")"
+        aria-disabled="@(SelectedEntry is null)">
         <i class="fa fa-edit"></i>
         View
     </a>
@@ -38,27 +37,28 @@
         }
         else
         {
-            <table class="table table-sm table-hover mb-0">
-                <thead>
+            <table class="table table-sm table-hover mb-0 text-center table-bordered rounded-3 overflow-hidden">
+                <thead class="table-light">
                     <tr>
-                        <th style="width: 50px;">Journal</th>
-                        <th style="width: 80px;">Voucher Type</th>
-                        <th style="width: 80px;">Debit</th>
-                        <th style="width: 80px;">Credit</th>
-                        <th style="width: 100px;">Date</th>
-                        <th style="width: 100px;">Reference No</th>
-                        <th style="width: 80px;">Posted</th>
+                        <th >Journal</th>
+                        <th >Voucher Type</th>
+                        <th >Debit</th>
+                        <th >Credit</th>
+                        <th >Date</th>
+                        <th >Reference No</th>
+                        <th >Posted</th>
                         <th>Memo</th>
                     </tr>
                 </thead>
+
                 <tbody>
                     @foreach (var e in Entries)
                     {
                         var isSelected = SelectedEntry?.Id == e.Id;
 
-                        <tr class="@(isSelected ? "table-primary" : "")"
-                            style="cursor: pointer;"
+                        <tr class="@(isSelected ? "table-primary" : "")" style="cursor: pointer;"
                             @onclick="@(() => OnRowClick(e))">
+
                             <td>@e.Id</td>
                             <td>@e.VoucherType</td>
                             <td>@e.debitAmount</td>
@@ -66,13 +66,14 @@
                             <td>@e.JournalDate.ToShortDateString()</td>
                             <td>@e.ReferenceNo</td>
                             <td>
-                                <input type="checkbox" disabled @(e.Posted == true ? "checked" : null) />
+                                <input type="checkbox" disabled @(e.Posted==true ? "checked" : null) />
                             </td>
                             <td>@e.Memo</td>
                         </tr>
                     }
                 </tbody>
             </table>
+
         }
     </div>
 </div>
@@ -86,8 +87,8 @@
     private JournalEntryDto? SelectedEntry;
 
     private string ViewLinkHref => SelectedEntry is null
-        ? "/Financials/JournalEntry"
-        : $"/Financials/JournalEntry?id={SelectedEntry.Id}";
+    ? "/Financials/JournalEntry"
+    : $"/Financials/JournalEntry?id={SelectedEntry.Id}";
 
     protected override async Task OnInitializedAsync()
     {
