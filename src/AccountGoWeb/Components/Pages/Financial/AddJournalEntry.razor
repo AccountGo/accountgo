@@ -1,0 +1,342 @@
+@using System.Net.Http.Json
+@using Dto.Financial
+@inject IHttpClientFactory HttpFactory
+@inject IConfiguration Config
+@using JournalEntryDto = Dto.Financial.JournalEntry
+@using JournalEntryLineDto = Dto.Financial.JournalEntryLine
+
+
+@* <h3>Add Journal Entry</h3> *@
+
+@if (!string.IsNullOrEmpty(SuccessMessage))
+{
+    <div class="alert alert-success">@SuccessMessage</div>
+}
+
+@if (!string.IsNullOrEmpty(ErrorMessage))
+{
+    <div class="alert alert-danger">@ErrorMessage</div>
+}
+
+<EditForm Model="Entry" OnValidSubmit="HandleValidSubmit">
+    <DataAnnotationsValidator />
+    <ValidationSummary />
+
+    <!-- ========== HEADER ========== -->
+    <div class="panel panel-default">
+        <div class="panel-heading"><strong>Header</strong></div>
+        <div class="panel-body">
+            <div class="form-group">
+                <label>Date</label>
+                <InputDate class="form-control" @bind-Value="Entry.JournalDate" />
+            </div>
+
+            <div class="form-group">
+                <label>Reference No</label>
+                <InputText class="form-control" @bind-Value="Entry.ReferenceNo" />
+            </div>
+
+            <div class="form-group">
+                <label>Voucher Type</label>
+                <InputSelect class="form-control" @bind-Value="Entry.VoucherType">
+                    <option value="">-- select type --</option>
+                    <option value="1">Opening Balances</option>
+                    <option value="2">Closing Entries</option>
+                    <option value="3">Adjustment Entries</option>
+                    <option value="4">Correction Entries</option>
+                    <option value="5">Transfer Entries</option>
+                </InputSelect>
+            </div>
+
+            <div class="form-group">
+                <label>Memo</label>
+                <InputTextArea class="form-control" @bind-Value="Entry.Memo" />
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== LINES ========== -->
+    <div class="panel panel-default">
+        <div class="panel-heading">
+            <strong>Lines</strong>
+            <button type="button" class="btn btn-sm btn-primary pull-right" @onclick="AddLine">
+                <i class="fa fa-plus"></i> Add Line
+            </button>
+        </div>
+
+        <div class="panel-body">
+            @if (Accounts == null || Accounts.Count == 0)
+            {
+                <div class="alert alert-warning">
+                    Accounts are not loaded yet. You won’t be able to save until accounts are available.
+                </div>
+            }
+
+            <table class="table table-bordered table-striped">
+                <thead>
+                    <tr>
+                        <th style="width:25%">Account</th>
+                        <th style="width:10%">Dr/Cr</th>
+                        <th style="width:15%">Amount</th>
+                        <th>Memo</th>
+                        <th style="width:5%"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (Entry.JournalEntryLines != null)
+                    {
+                        @foreach (var line in Entry.JournalEntryLines)
+                        {
+                            var currentLine = line;
+                            <tr>
+                                <td>
+                                    @if (Accounts != null && Accounts.Count > 0)
+                                    {
+                                        <InputSelect class="form-control" @bind-Value="currentLine.AccountId">
+                                            <option value="">-- select account --</option>
+                                            @foreach (var acct in Accounts)
+                                            {
+                                                <option value="@acct.Id">
+                                                    @acct.AccountCode - @acct.AccountName
+                                                </option>
+                                            }
+                                        </InputSelect>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-danger">No accounts</span>
+                                    }
+                                </td>
+
+                                <td>
+                                    <InputSelect class="form-control" @bind-Value="currentLine.DrCr">
+                                        <option value="1">Debit</option>
+                                        <option value="2">Credit</option>
+                                    </InputSelect>
+
+                                </td>
+
+                                <td>
+                                    <InputNumber class="form-control" Step="0.01" @bind-Value="currentLine.Amount" />
+                                </td>
+
+                                <td>
+                                    <InputText class="form-control" @bind-Value="currentLine.Memo" />
+                                </td>
+
+                                <td>
+                                    <button type="button" class="btn btn-danger btn-sm"
+                                        @onclick="() => RemoveLine(currentLine)">
+                                        <i class="fa fa-trash"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <th colspan="2" class="text-right">Total Debit</th>
+                        <th>@TotalDebit.ToString("0.00")</th>
+                        <th colspan="2"></th>
+                    </tr>
+                    <tr>
+                        <th colspan="2" class="text-right">Total Credit</th>
+                        <th>@TotalCredit.ToString("0.00")</th>
+                        <th colspan="2"></th>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+
+    <!-- ========== ACTIONS ========== -->
+    <div class="text-right">
+        <button type="submit" class="btn btn-success" disabled="@IsSaving">
+            @if (IsSaving)
+            {
+                <span><i class="fa fa-spinner fa-spin"></i> Saving...</span>
+            }
+            else
+            {
+                <span><i class="fa fa-save"></i> Save</span>
+            }
+        </button>
+    </div>
+</EditForm>
+
+
+@code {
+    private JournalEntryDto Entry = new();
+
+    private bool IsSaving;
+    private string? ErrorMessage;
+    private string? SuccessMessage;
+
+    private List<Dto.Financial.Account> AccountTree = new();
+    private List<Dto.Financial.Account> Accounts = new();
+
+    private decimal TotalDebit =>
+        Entry.JournalEntryLines?
+            .Where(l => l.DrCr == 1)   // 1 = Debit
+            .Sum(l => l.Amount ?? 0) ?? 0;
+
+    private decimal TotalCredit =>
+        Entry.JournalEntryLines?
+            .Where(l => l.DrCr == 2)   // 2 = Credit
+            .Sum(l => l.Amount ?? 0) ?? 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // remove this if BaseDto doesn't have Id
+        // Entry.Id = 0;
+
+        Entry.JournalDate = DateTime.Today;
+        Entry.Posted = false;
+        Entry.VoucherType ??= 1;
+        Entry.JournalEntryLines ??= new List<JournalEntryLineDto>();
+
+        AddLine();
+        await LoadAccountsAsync();
+    }
+
+    private async Task LoadAccountsAsync()
+    {
+        try
+        {
+            var apiBaseUrl = Config["ApiUrl"];
+            if (string.IsNullOrWhiteSpace(apiBaseUrl))
+            {
+                ErrorMessage = "ApiUrl is not configured.";
+                return;
+            }
+
+            var client = HttpFactory.CreateClient();
+            var url = $"{apiBaseUrl}financials/accounts";
+
+            var tree = await client.GetFromJsonAsync<List<Dto.Financial.Account>>(url);
+
+            if (tree != null)
+            {
+                AccountTree = tree;
+                Accounts = FlattenAccounts(AccountTree)
+                    .OrderBy(a => a.AccountCode)
+                    .ToList();
+            }
+            else
+            {
+                ErrorMessage = "Could not load accounts (empty response).";
+            }
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Error loading accounts: {ex.Message}";
+        }
+    }
+
+    private List<Dto.Financial.Account> FlattenAccounts(IEnumerable<Dto.Financial.Account> nodes)
+    {
+        var list = new List<Dto.Financial.Account>();
+
+        void Walk(IEnumerable<Dto.Financial.Account> items)
+        {
+            foreach (var a in items)
+            {
+                list.Add(a);
+                if (a.ChildAccounts != null && a.ChildAccounts.Count > 0)
+                    Walk(a.ChildAccounts);
+            }
+        }
+
+        Walk(nodes);
+        return list;
+    }
+
+    private void AddLine()
+    {
+        Entry.JournalEntryLines!.Add(new JournalEntryLineDto
+        {
+   
+            DrCr = 1,
+            Amount = 0
+        });
+    }
+
+    private void RemoveLine(JournalEntryLineDto line)
+    {
+        Entry.JournalEntryLines!.Remove(line);
+    }
+
+    private async Task HandleValidSubmit()
+    {
+        ErrorMessage = null;
+        SuccessMessage = null;
+        IsSaving = true;
+
+        @* if (TotalDebit != TotalCredit)
+        {
+            ErrorMessage = "Debits and credits are not equal.";
+            IsSaving = false;
+            return;
+        } *@
+
+        if (Entry.JournalEntryLines == null || Entry.JournalEntryLines.Any(l => l.AccountId == null))
+        {
+            ErrorMessage = "All lines must have an account selected.";
+            IsSaving = false;
+            return;
+        }
+
+        try
+        {
+            var apiBaseUrl = Config["ApiUrl"];
+            if (string.IsNullOrWhiteSpace(apiBaseUrl))
+            {
+                ErrorMessage = "ApiUrl is not configured.";
+                return;
+            }
+
+            var client = HttpFactory.CreateClient();
+            var url = $"{apiBaseUrl}financials/SaveJournalEntry";
+
+            var response = await client.PostAsJsonAsync(url, Entry);
+
+            if (response.IsSuccessStatusCode)
+            {
+                SuccessMessage = "Journal entry saved successfully.";
+
+                // reset using DTO alias
+                Entry = new JournalEntryDto
+                {
+                    JournalDate = DateTime.Today,
+                    VoucherType = 1,
+                    Posted = false,
+                    JournalEntryLines = new List<JournalEntryLineDto>()
+                };
+                AddLine();
+            }
+            else
+            {
+                try
+                {
+                    var errors = await response.Content.ReadFromJsonAsync<string[]>();
+                    ErrorMessage = errors != null && errors.Length > 0
+                        ? string.Join("; ", errors)
+                        : $"Error saving (HTTP {(int)response.StatusCode})";
+                }
+                catch
+                {
+                    ErrorMessage = $"Error saving (HTTP {(int)response.StatusCode})";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Unexpected error: {ex.Message}";
+        }
+        finally
+        {
+            IsSaving = false;
+        }
+    }
+}

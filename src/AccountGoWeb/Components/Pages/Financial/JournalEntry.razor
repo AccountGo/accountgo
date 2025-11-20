@@ -1,0 +1,254 @@
+@using System.Net.Http.Json
+@using Dto.Financial
+@inject IHttpClientFactory HttpFactory
+@inject IConfiguration Config
+@using JournalEntryDto = Dto.Financial.JournalEntry
+@using JournalEntryLineDto = Dto.Financial.JournalEntryLine
+
+
+
+@if (IsLoading)
+{
+    <p><i class="fa fa-spinner fa-spin"></i> Loading...</p>
+}
+else if (!string.IsNullOrEmpty(ErrorMessage))
+{
+    <div class="alert alert-danger">@ErrorMessage</div>
+}
+else if (Entry is null)
+{
+    <div class="alert alert-warning">Journal entry not found.</div>
+}
+else
+{
+    @if (!string.IsNullOrEmpty(SuccessMessage))
+    {
+        <div class="alert alert-success">@SuccessMessage</div>
+    }
+
+    <!-- ========== HEADER ========== -->
+    <div class="panel panel-default">
+        <div class="panel-heading text-primary "><strong>Header</strong></div>
+        <div class="panel-body mt-2">
+            <div class="form-group d-flex align-items-center justify-content-start border-bottom pb-2 gap-3"
+                style="border-color: #ccc;">
+                <label class="mb-0 fw-bold">Date</label>
+                <p class="mb-0 text-end">@Entry.JournalDate.ToString("yyyy-MM-dd")</p>
+            </div>
+
+            <div class="form-group d-flex align-items-center justify-content-start border-bottom pb-2 gap-3"
+                style="border-color: #ccc;">
+                <label class="mb-0 fw-bold">Reference No</label>
+                <p class="mb-0 text-end">@Entry.ReferenceNo</p>
+            </div>
+
+            <div class="form-group d-flex align-items-center justify-content-start border-bottom pb-2 gap-3"
+                style="border-color: #ccc;">
+                <label class="mb-0 fw-bold">Voucher Type</label>
+                <p class="mb-0 text-end">@Entry.VoucherType</p>
+            </div>
+
+            <div class="form-group d-flex align-items-center justify-content-start border-bottom pb-2 gap-3"
+                style="border-color: #ccc;">
+                <label class="mb-0 fw-bold">Memo</label>
+                <p class="mb-0 text-end">@Entry.Memo</p>
+            </div>
+
+            <div class="form-group d-flex align-items-center justify-content-start border-bottom pb-2 gap-3"
+                style="border-color: #ccc;">
+                <label class="mb-0 fw-bold">Status</label>
+                @if (Entry.Posted.GetValueOrDefault())
+                {
+                    <span class="label label-success">Posted</span>
+                }
+                else
+                {
+                    <span class="label label-warning">Not Posted</span>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== LINES ========== -->
+    <div class="panel panel-default">
+        <div class="panel-heading"><strong>Lines</strong></div>
+
+        <div class="panel-body">
+            @if (Entry.JournalEntryLines == null || Entry.JournalEntryLines.Count == 0)
+            {
+                <div class="alert alert-info">No lines found for this journal entry.</div>
+            }
+            else
+            {
+                <div
+                    style="border-radius: 20px; overflow: hidden; border: 1px solid rgba(255,255,255,0.2); backdrop-filter: blur(4px);">
+                    <table class="table mb-0" style="background-color: transparent; color: inherit;">
+                        <thead style="background-color: rgba(255,255,255,0.05);">
+                            <tr>
+                                <th style="width:20%">Account Id</th>
+                                <th style="width:10%">Dr/Cr</th>
+                                <th style="width:15%">Amount</th>
+                                <th>Memo</th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+                            @foreach (var line in Entry.JournalEntryLines)
+                            {
+                                <tr style="background-color: transparent;">
+                                    <td>@line.AccountId</td>
+                                    <td>
+                                        @(line.DrCr == 1 ? "Debit"
+                                                                            : line.DrCr == 2 ? "Credit"
+                                                                            : line.DrCr.ToString())
+                                    </td>
+                                    <td>@(line.Amount ?? 0)</td>
+                                    <td>@line.Memo</td>
+                                </tr>
+                            }
+                        </tbody>
+
+                        <tfoot style="background-color: rgba(255,255,255,0.05);">
+                            <tr>
+                                <th colspan="2" class="text-right">Total Debit</th>
+                                <th>@TotalDebit.ToString("0.00")</th>
+                                <th></th>
+                            </tr>
+                            <tr>
+                                <th colspan="2" class="text-right">Total Credit</th>
+                                <th>@TotalCredit.ToString("0.00")</th>
+                                <th></th>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+
+
+            }
+        </div>
+    </div>
+
+    <div class="text-right">
+        @if (!Entry.Posted.GetValueOrDefault())
+        {
+            <button class="btn btn-primary" disabled="@(IsPosting || !Entry.ReadyForPosting.GetValueOrDefault())"
+                @onclick="PostEntry">
+                @if (IsPosting)
+                {
+                    <span><i class="fa fa-spinner fa-spin"></i> Posting...</span>
+                }
+                else if (!Entry.ReadyForPosting.GetValueOrDefault())
+                {
+                    <span><i class="fa fa-ban"></i> Not Ready for Posting</span>
+                }
+                else
+                {
+                    <span><i class="fa fa-check"></i> Post</span>
+                }
+            </button>
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private JournalEntryDto? Entry;
+    private bool IsLoading = true;
+    private bool IsPosting = false;
+    private string? ErrorMessage;
+    private string? SuccessMessage;
+
+    private decimal TotalDebit =>
+    Entry?.JournalEntryLines?
+    .Where(l => l.DrCr == 1)
+    .Sum(l => l.Amount ?? 0) ?? 0;
+
+    private decimal TotalCredit =>
+    Entry?.JournalEntryLines?
+    .Where(l => l.DrCr == 2)
+    .Sum(l => l.Amount ?? 0) ?? 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadEntryAsync();
+    }
+
+    private async Task LoadEntryAsync()
+    {
+        try
+        {
+            ErrorMessage = null;
+            IsLoading = true;
+
+            var apiBaseUrl = Config["ApiUrl"];
+            if (string.IsNullOrWhiteSpace(apiBaseUrl))
+            {
+                ErrorMessage = "ApiUrl is not configured.";
+                return;
+            }
+
+            var client = HttpFactory.CreateClient();
+            var url = $"{apiBaseUrl}financials/JournalEntry?id={Id}";
+
+            Entry = await client.GetFromJsonAsync<JournalEntryDto>(url);
+
+            if (Entry == null)
+                ErrorMessage = "Journal entry not found.";
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Error loading journal entry: {ex.Message}";
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private async Task PostEntry()
+    {
+        if (Entry == null)
+            return;
+
+        ErrorMessage = null;
+        SuccessMessage = null;
+        IsPosting = true;
+
+        try
+        {
+            var apiBaseUrl = Config["ApiUrl"];
+            if (string.IsNullOrWhiteSpace(apiBaseUrl))
+            {
+                ErrorMessage = "ApiUrl is not configured.";
+                return;
+            }
+
+            var client = HttpFactory.CreateClient();
+            var url = $"{apiBaseUrl}financials/PostJournalEntry";
+
+            var response = await client.PostAsJsonAsync(url, Entry);
+
+            if (response.IsSuccessStatusCode)
+            {
+                SuccessMessage = "Journal entry posted successfully.";
+                await LoadEntryAsync(); // refresh Posted/ReadyForPosting
+            }
+            else
+            {
+                var errors = await response.Content.ReadFromJsonAsync<string[]>();
+                ErrorMessage = errors != null && errors.Length > 0
+                                                ? string.Join("; ", errors)
+                : $"Error posting (HTTP {(int)response.StatusCode})";
+            }
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Unexpected error while posting: {ex.Message}";
+        }
+        finally
+        {
+            IsPosting = false;
+        }
+    }
+}

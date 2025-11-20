@@ -1,0 +1,122 @@
+@namespace AccountGoWeb.Components.Pages.Financial
+@using JournalEntryDto = Dto.Financial.JournalEntry
+@using JournalEntryLineDto = Dto.Financial.JournalEntryLine
+@using System.Net.Http.Json
+
+@inject HttpClient Http
+@inject IConfiguration Config
+
+<div>
+    <a href="/Financials/AddJournalEntry" class="btn btn-primary me-2">
+        <i class="fa fa-plus"></i>
+        New
+    </a>
+
+    <a href="@ViewLinkHref"
+       class="btn @(SelectedEntry is null ? "btn-secondary disabled" : "btn-secondary")"
+       aria-disabled="@(SelectedEntry is null)">
+        <i class="fa fa-edit"></i>
+        View
+    </a>
+</div>
+
+<div class="mt-3">
+    <div class="ag-fresh" style="height: 400px; overflow-y: auto;">
+        @if (IsLoading && ErrorMessage is null)
+        {
+            <p class="mt-3">Loading journal entries...</p>
+        }
+        else if (ErrorMessage is not null)
+        {
+            <p class="mt-3 text-danger">Error: @ErrorMessage</p>
+        }
+        else if (Entries is null || !Entries.Any())
+        {
+            <div class="d-flex h-100 align-items-center justify-content-center">
+                <span class="text-muted">No journal entries found.</span>
+            </div>
+        }
+        else
+        {
+            <table class="table table-sm table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th style="width: 50px;">Journal</th>
+                        <th style="width: 80px;">Voucher Type</th>
+                        <th style="width: 80px;">Debit</th>
+                        <th style="width: 80px;">Credit</th>
+                        <th style="width: 100px;">Date</th>
+                        <th style="width: 100px;">Reference No</th>
+                        <th style="width: 80px;">Posted</th>
+                        <th>Memo</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var e in Entries)
+                    {
+                        var isSelected = SelectedEntry?.Id == e.Id;
+
+                        <tr class="@(isSelected ? "table-primary" : "")"
+                            style="cursor: pointer;"
+                            @onclick="@(() => OnRowClick(e))">
+                            <td>@e.Id</td>
+                            <td>@e.VoucherType</td>
+                            <td>@e.debitAmount</td>
+                            <td>@e.creditAmount</td>
+                            <td>@e.JournalDate.ToShortDateString()</td>
+                            <td>@e.ReferenceNo</td>
+                            <td>
+                                <input type="checkbox" disabled @(e.Posted == true ? "checked" : null) />
+                            </td>
+                            <td>@e.Memo</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+</div>
+
+@code {
+    // 🔴 CHANGE THESE TYPES TO THE DTO ALIAS
+    private List<JournalEntryDto>? Entries;
+    private string? ErrorMessage;
+    private bool IsLoading = true;
+
+    private JournalEntryDto? SelectedEntry;
+
+    private string ViewLinkHref => SelectedEntry is null
+        ? "/Financials/JournalEntry"
+        : $"/Financials/JournalEntry?id={SelectedEntry.Id}";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var baseUrl = Config["ApiUrl"];
+            if (string.IsNullOrWhiteSpace(baseUrl))
+            {
+                ErrorMessage = "ApiUrl is not configured.";
+                return;
+            }
+
+            var url = $"{baseUrl}financials/journalentries";
+
+            // 🔴 ALSO USE THE DTO ALIAS HERE
+            Entries = await Http.GetFromJsonAsync<List<JournalEntryDto>>(url);
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private void OnRowClick(JournalEntryDto entry)
+    {
+        SelectedEntry = entry;
+    }
+}
