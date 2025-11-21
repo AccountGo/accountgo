@@ -3,6 +3,7 @@
 @inject NavigationManager Navigation
 
 <div class="container-fluid">
+
     <div class="row mb-3">
         <div class="col">
             <h3>Items</h3>
@@ -34,7 +35,9 @@
             </div>
         </div>
     }
+
     else if (errorMessage != null)
+
     {
         <div class="row">
             <div class="col">
@@ -44,7 +47,9 @@
             </div>
         </div>
     }
+
     else if (items == null || !items.Any())
+
     {
         <div class="row">
             <div class="col">
@@ -60,6 +65,7 @@
             <div class="col">
                 <div class="table-responsive">
                     <table class="table table-striped table-hover table-bordered">
+
                         <thead class="thead-dark">
                             <tr>
                                 <th @onclick="() => SortBy(nameof(Item.Id))" style="cursor: pointer;">
@@ -88,26 +94,31 @@
                                 </th>
                             </tr>
                         </thead>
+
                         <tbody>
                             @foreach (var item in items)
                             {
                                 <tr @onclick="() => SelectItem(item)"
                                     class="@(selectedItem?.Id == item.Id ? "table-active" : "")" style="cursor: pointer;">
+                                    
                                     <td>
                                         <a href="/Inventory/Item/@item.Id">
                                             @item.Id
                                         </a>
                                     </td>
+
                                     <td>@item.Code</td>
                                     <td>@item.Description</td>
                                     <td>@item.Measurement</td>
                                     <td>@item.ItemTaxGroupName</td>
+
                                     <td class="text-right">@item.Cost?.ToString("N2")</td>
                                     <td class="text-right">@item.Price?.ToString("N2")</td>
                                     <td class="text-right">@item.QuantityOnHand?.ToString("N2")</td>
                                 </tr>
                             }
                         </tbody>
+
                     </table>
                 </div>
             </div>
@@ -156,14 +167,17 @@
                 errorMessage = $"Failed to load items. Status: {response.StatusCode}";
             }
         }
+
         catch (HttpRequestException ex)
         {
             errorMessage = $"Network error: {ex.Message}. Please ensure the API is running on port 8001.";
         }
+
         catch (Exception ex)
         {
             errorMessage = $"Error loading items: {ex.Message}";
         }
+        
         finally
         {
             isLoading = false;
@@ -207,24 +221,31 @@
             nameof(Item.Id) => sortAscending
             ? items.OrderBy(i => i.Id).ToList()
             : items.OrderByDescending(i => i.Id).ToList(),
+
             nameof(Item.Code) => sortAscending
             ? items.OrderBy(i => i.Code).ToList()
             : items.OrderByDescending(i => i.Code).ToList(),
+
             nameof(Item.Description) => sortAscending
             ? items.OrderBy(i => i.Description).ToList()
             : items.OrderByDescending(i => i.Description).ToList(),
+
             nameof(Item.Measurement) => sortAscending
             ? items.OrderBy(i => i.Measurement).ToList()
             : items.OrderByDescending(i => i.Measurement).ToList(),
+
             nameof(Item.ItemTaxGroupName) => sortAscending
             ? items.OrderBy(i => i.ItemTaxGroupName).ToList()
             : items.OrderByDescending(i => i.ItemTaxGroupName).ToList(),
+
             nameof(Item.Cost) => sortAscending
             ? items.OrderBy(i => i.Cost).ToList()
             : items.OrderByDescending(i => i.Cost).ToList(),
+
             nameof(Item.Price) => sortAscending
             ? items.OrderBy(i => i.Price).ToList()
             : items.OrderByDescending(i => i.Price).ToList(),
+
             nameof(Item.QuantityOnHand) => sortAscending
             ? items.OrderBy(i => i.QuantityOnHand).ToList()
             : items.OrderByDescending(i => i.QuantityOnHand).ToList(),
