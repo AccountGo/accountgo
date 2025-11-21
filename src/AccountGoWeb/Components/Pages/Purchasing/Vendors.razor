@@ -1,0 +1,226 @@
+@using Dto.Purchasing
+@inject HttpClient Http
+@inject NavigationManager Navigation
+
+<div class="container-fluid">
+    <div class="row mb-3">
+        <div class="col">
+            <h3>Vendors</h3>
+        </div>
+    </div>
+
+    <div class="row mb-3">
+        <div class="col">
+            <button class="btn btn-primary" @onclick="NavigateToNewVendor">
+                <i class="fa fa-plus"></i> New Vendor
+            </button>
+            @if (selectedVendor != null)
+            {
+                <button class="btn btn-secondary ms-2" @onclick="NavigateToViewVendor">
+                    <i class="fa fa-edit"></i> View/Edit
+                </button>
+            }
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="row">
+            <div class="col text-center">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mt-2">Loading vendors...</p>
+            </div>
+        </div>
+    }
+    else if (errorMessage != null)
+    {
+        <div class="row">
+            <div class="col">
+                <div class="alert alert-danger" role="alert">
+                    <i class="fa fa-exclamation-triangle"></i> @errorMessage
+                </div>
+            </div>
+        </div>
+    }
+    else if (vendors == null || !vendors.Any())
+    {
+        <div class="row">
+            <div class="col">
+                <div class="alert alert-info" role="alert">
+                    <i class="fa fa-info-circle"></i> No vendors found.
+                </div>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="row">
+            <div class="col">
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover table-bordered">
+                        <thead class="thead-dark">
+                            <tr>
+                                <th @onclick="() => SortBy(nameof(Vendor.No))" style="cursor: pointer;">
+                                    No @GetSortIcon(nameof(Vendor.No))
+                                </th>
+                                <th @onclick="() => SortBy(nameof(Vendor.Name))" style="cursor: pointer;">
+                                    Name @GetSortIcon(nameof(Vendor.Name))
+                                </th>
+                                <th @onclick="() => SortBy(nameof(Vendor.Phone))" style="cursor: pointer;">
+                                    Phone @GetSortIcon(nameof(Vendor.Phone))
+                                </th>
+                                <th @onclick="() => SortBy(nameof(Vendor.Contact))" style="cursor: pointer;">
+                                    Contact @GetSortIcon(nameof(Vendor.Contact))
+                                </th>
+                                <th @onclick="() => SortBy(nameof(Vendor.TaxGroup))" style="cursor: pointer;">
+                                    Tax Group @GetSortIcon(nameof(Vendor.TaxGroup))
+                                </th>
+                                <th @onclick="() => SortBy(nameof(Vendor.Balance))" style="cursor: pointer;">
+                                    Balance @GetSortIcon(nameof(Vendor.Balance))
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var vendor in vendors)
+                            {
+                                <tr @onclick="() => SelectVendor(vendor)"
+                                    class="@(selectedVendor?.Id == vendor.Id ? "table-active" : "")" style="cursor: pointer;">
+                                    <td>
+                                        <a href="/purchasing/vendor/@vendor.Id">
+                                            @vendor.No
+                                        </a>
+                                    </td>
+                                    <td>@vendor.Name</td>
+                                    <td>@vendor.Phone</td>
+                                    <td>@vendor.Contact</td>
+                                    <td>@vendor.TaxGroup</td>
+                                    <td class="text-right">@vendor.Balance.ToString("N2")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col">
+                <p class="text-muted">Total: @vendors.Count() vendor(s)</p>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private List<Vendor>? vendors;
+    private List<Vendor>? allVendors;
+    private Vendor? selectedVendor;
+    private bool isLoading = true;
+    private string? errorMessage;
+    private string? sortColumn;
+    private bool sortAscending = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadVendors();
+    }
+
+    private async Task LoadVendors()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            string baseApiUrl = Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
+            var apiUrl = baseApiUrl + "purchasing/vendors";
+            var response = await Http.GetAsync(apiUrl);
+
+            if (response.IsSuccessStatusCode)
+            {
+                allVendors = await response.Content.ReadFromJsonAsync<List<Vendor>>();
+                vendors = allVendors;
+            }
+            else
+            {
+                errorMessage = $"Failed to load vendors. Status: {response.StatusCode}";
+            }
+        }
+        catch (HttpRequestException ex)
+        {
+            errorMessage = $"Network error: {ex.Message}. Please ensure the API is running on port 8001.";
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading vendors: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void SelectVendor(Vendor vendor)
+    {
+        selectedVendor = vendor;
+    }
+
+    private void NavigateToNewVendor()
+    {
+        Navigation.NavigateTo("/purchasing/vendor/-1");
+    }
+
+    private void NavigateToViewVendor()
+    {
+        if (selectedVendor != null)
+        {
+            Navigation.NavigateTo($"/purchasing/vendor/{selectedVendor.Id}");
+        }
+    }
+
+    private void SortBy(string column)
+    {
+        if (vendors == null) return;
+
+        if (sortColumn == column)
+        {
+            sortAscending = !sortAscending;
+        }
+        else
+        {
+            sortColumn = column;
+            sortAscending = true;
+        }
+
+        vendors = column switch
+        {
+            nameof(Vendor.No) => sortAscending
+            ? vendors.OrderBy(v => v.No).ToList()
+            : vendors.OrderByDescending(v => v.No).ToList(),
+            nameof(Vendor.Name) => sortAscending
+            ? vendors.OrderBy(v => v.Name).ToList()
+            : vendors.OrderByDescending(v => v.Name).ToList(),
+            nameof(Vendor.Phone) => sortAscending
+            ? vendors.OrderBy(v => v.Phone).ToList()
+            : vendors.OrderByDescending(v => v.Phone).ToList(),
+            nameof(Vendor.Contact) => sortAscending
+            ? vendors.OrderBy(v => v.Contact).ToList()
+            : vendors.OrderByDescending(v => v.Contact).ToList(),
+            nameof(Vendor.TaxGroup) => sortAscending
+            ? vendors.OrderBy(v => v.TaxGroup).ToList()
+            : vendors.OrderByDescending(v => v.TaxGroup).ToList(),
+            nameof(Vendor.Balance) => sortAscending
+            ? vendors.OrderBy(v => v.Balance).ToList()
+            : vendors.OrderByDescending(v => v.Balance).ToList(),
+            _ => vendors
+        };
+    }
+
+    private string GetSortIcon(string column)
+    {
+        if (sortColumn != column) return "";
+        return sortAscending ? "▲" : "▼";
+    }
+}
