@@ -8,6 +8,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <InvariantGlobalization>true</InvariantGlobalization>
     <UserSecretsId>aspnet-GoodBooks-21ac3a7f-d42e-4136-9340-b4f6254706df</UserSecretsId>
+    <!-- Ensure Razor views/pages targeting MVC are compiled correctly -->
+    <AddRazorSupportForMvc>true</AddRazorSupportForMvc>
     <NoWarn>NU1701</NoWarn>
   </PropertyGroup>
   <ItemGroup>
