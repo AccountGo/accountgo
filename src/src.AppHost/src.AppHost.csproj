@@ -18,8 +18,12 @@
 
   <ItemGroup>
     <ProjectReference Include="../MigrationService/MigrationService.csproj" />
-    <ProjectReference Include="..\AccountGoWeb\AccountGoWeb.csproj" />
-    <ProjectReference Include="..\Api\Api.csproj" />
+    <ProjectReference Include="../AccountGoWeb/AccountGoWeb.csproj" />
+    <ProjectReference Include="../Api/Api.csproj" />
+    <!-- Exclude Infrastructure from Aspire metadata generation - it's a class library -->
+    <ProjectReference Include="../Infrastructure/Infrastructure.csproj">
+      <IsAspireProjectResource>false</IsAspireProjectResource>
+    </ProjectReference>
   </ItemGroup>
 
 </Project>
