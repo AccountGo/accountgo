@@ -1,0 +1,222 @@
+@page "/Sales/SalesOrder"
+@using System.Text.Json
+@using System.Text.Json.Serialization
+@inject IHttpClientFactory ClientFactory
+@inject NavigationManager Navigation
+
+<div>
+    <a href="#" class="btn" @onclick="OnClickEditButton">
+        <i class="fa fa-edit"></i>
+        Edit me
+    </a>
+</div>
+
+@if (loading)
+{
+    <p><em>Loading...</em></p>
+}
+else if (errorMessage != null)
+{
+    <div class="alert alert-danger" role="alert">
+        <strong>Error:</strong> @errorMessage
+    </div>
+}
+else if (!HasSalesOrder())
+{
+    <div class="alert alert-warning" role="alert">
+        <strong>Sales order not found.</strong>
+    </div>
+}
+else
+{
+    <form>
+        <div class="col-md-9">
+            <div class="card">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="mb-0">Sales Order Details</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-sm-6">
+                            <div class="row mb-2">
+                                <div class="col-sm-5 fw-bold">Customer Name</div>
+                                <div class="col-sm-7">@GetValue(salesOrder, "customerName")</div>
+                            </div>
+                            <div class="row mb-2">
+                                <div class="col-sm-5 fw-bold">Order Date</div>
+                                <div class="col-sm-7">@GetValue(salesOrder, "orderDate")</div>
+                            </div>
+                            <div class="row mb-2">
+                                <div class="col-sm-5 fw-bold">Total Amount</div>
+                                <div class="col-sm-7">@GetValue(salesOrder, "amount")</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <h6 class="mt-4 mb-3">Order Items</h6>
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Item</th>
+                                    <th>Quantity</th>
+                                    <th>Amount</th>
+                                    <th>Discount</th>
+                                    <th>Measurement</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (salesOrderLines != null && salesOrderLines.Count > 0)
+                                {
+                                    @foreach (var line in salesOrderLines)
+                                    {
+                                        <tr>
+                                            <td>@GetLineValue(line, "itemDescription")</td>
+                                            <td>@GetLineValue(line, "quantity")</td>
+                                            <td>@GetLineValue(line, "amount")</td>
+                                            <td>@GetLineValue(line, "discount")</td>
+                                            <td>@GetLineValue(line, "measurementDescription")</td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+}
+
+@code {
+    [SupplyParameterFromQuery]
+    public int Id { get; set; }
+
+    private System.Text.Json.JsonElement? salesOrder;
+    private List<dynamic> salesOrderLines = new();
+    private bool loading = true;
+    private string? errorMessage = null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSalesOrder();
+    }
+
+    private bool HasSalesOrder()
+    {
+        return salesOrder.HasValue && salesOrder.Value.ValueKind != System.Text.Json.JsonValueKind.Null;
+    }
+
+    private async Task LoadSalesOrder()
+    {
+        try
+        {
+            loading = true;
+            string apiurl = System.Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
+            string fullUrl = $"{apiurl}sales/SalesOrder?id={Id}";
+
+            var client = ClientFactory.CreateClient();
+            client.Timeout = TimeSpan.FromSeconds(60);
+
+            var response = await client.GetAsync(fullUrl);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var responseString = await response.Content.ReadAsStringAsync();
+                var options = new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true,
+                    DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+                };
+
+                try
+                {
+                    var doc = System.Text.Json.JsonDocument.Parse(responseString);
+                    salesOrder = doc.RootElement;
+
+                    // Extract sales order lines
+                    if (salesOrder.Value.TryGetProperty("salesOrderLines", out var linesProperty))
+                    {
+                        var linesList = JsonSerializer.Deserialize<List<System.Text.Json.JsonElement>>(linesProperty.GetRawText(), options);
+                        salesOrderLines = linesList?.Cast<dynamic>().ToList() ?? new();
+                    }
+                }
+                catch (Exception parseEx)
+                {
+                    errorMessage = $"Error parsing response: {parseEx.Message}";
+                }
+            }
+            else
+            {
+                errorMessage = $"Failed to load sales order. Status: {response.StatusCode}. URL: {fullUrl}";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading sales order: {ex.Message}";
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+    private string GetValue(System.Text.Json.JsonElement? obj, string propertyName)
+    {
+        try
+        {
+            if (obj.HasValue && obj.Value is System.Text.Json.JsonElement je)
+            {
+                if (je.TryGetProperty(propertyName, out var prop))
+                {
+                    if (propertyName == "amount" && prop.ValueKind == System.Text.Json.JsonValueKind.Number)
+                    {
+                        return prop.GetDecimal().ToString("F2");
+                    }
+                    if (propertyName == "orderDate" && prop.ValueKind == System.Text.Json.JsonValueKind.String)
+                    {
+                        return prop.GetString()?.Substring(0, 10) ?? "N/A";
+                    }
+                    return prop.GetString() ?? prop.ToString();
+                }
+            }
+            return "N/A";
+        }
+        catch
+        {
+            return "N/A";
+        }
+    }
+
+    private string GetLineValue(dynamic obj, string propertyName)
+    {
+        try
+        {
+            if (obj is System.Text.Json.JsonElement je)
+            {
+                if (je.TryGetProperty(propertyName, out var prop))
+                {
+                    if ((propertyName == "amount" || propertyName == "discount") && prop.ValueKind == System.Text.Json.JsonValueKind.Number)
+                    {
+                        return prop.GetDecimal().ToString("F2");
+                    }
+                    if (propertyName == "quantity" && prop.ValueKind == System.Text.Json.JsonValueKind.Number)
+                    {
+                        return prop.GetDecimal().ToString("F2");
+                    }
+                    return prop.GetString() ?? prop.ToString();
+                }
+            }
+            return "N/A";
+        }
+        catch
+        {
+            return "N/A";
+        }
+    }
+
+    private async Task OnClickEditButton()
+    {
+        // Navigate to edit page
+        Navigation.NavigateTo($"/Sales/AddSalesOrder?id={Id}");
+    }
+}
