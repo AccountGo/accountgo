@@ -43,15 +43,6 @@
     }
     else
     {
-        @if (selectedRowIndex >= 0)
-        {
-            <div class="alert alert-success" role="alert">
-                Selected Row Index: @selectedRowIndex, Order ID: @selectedOrderId
-                <br />
-                <small>Raw JSON: @GetRawJson(selectedRowIndex)</small>
-            </div>
-        }
-
         <div class="table-responsive">
             <table class="table table-striped table-hover">
                 <thead class="table-dark">

@@ -4,32 +4,34 @@
 @inject IHttpClientFactory ClientFactory
 @inject NavigationManager Navigation
 
-<div>
-    <a href="#" class="btn" @onclick="OnClickEditButton">
-        <i class="fa fa-edit"></i>
-        Edit me
-    </a>
-</div>
+<div class="container-fluid">
+    <div class="row mb-3">
+        <div class="col text-end">
+            <a href="#" class="btn" @onclick="OnClickEditButton">
+                <i class="fa fa-edit"></i>
+                Edit
+            </a>
+        </div>
+    </div>
 
-@if (loading)
-{
-    <p><em>Loading...</em></p>
-}
-else if (errorMessage != null)
-{
-    <div class="alert alert-danger" role="alert">
-        <strong>Error:</strong> @errorMessage
-    </div>
-}
-else if (!HasSalesOrder())
-{
-    <div class="alert alert-warning" role="alert">
-        <strong>Sales order not found.</strong>
-    </div>
-}
-else
-{
-    <form>
+    @if (loading)
+    {
+        <p><em>Loading...</em></p>
+    }
+    else if (errorMessage != null)
+    {
+        <div class="alert alert-danger" role="alert">
+            <strong>Error:</strong> @errorMessage
+        </div>
+    }
+    else if (!HasSalesOrder())
+    {
+        <div class="alert alert-warning" role="alert">
+            <strong>Sales order not found.</strong>
+        </div>
+    }
+    else
+    {
         <div class="col-md-9">
             <div class="card">
                 <div class="card-header bg-dark text-white">
@@ -40,15 +42,15 @@ else
                         <div class="col-sm-6">
                             <div class="row mb-2">
                                 <div class="col-sm-5 fw-bold">Customer Name</div>
-                                <div class="col-sm-7">@GetValue(salesOrder, "customerName")</div>
+                                <div class="col-sm-7">@GetValue("customerName")</div>
                             </div>
                             <div class="row mb-2">
                                 <div class="col-sm-5 fw-bold">Order Date</div>
-                                <div class="col-sm-7">@GetValue(salesOrder, "orderDate")</div>
+                                <div class="col-sm-7">@GetValue("orderDate")</div>
                             </div>
                             <div class="row mb-2">
-                                <div class="col-sm-5 fw-bold">Total Amount</div>
-                                <div class="col-sm-7">@GetValue(salesOrder, "amount")</div>
+                                <div class="col-sm-5 fw-bold">Amount</div>
+                                <div class="col-sm-7">@GetValue("amount")</div>
                             </div>
                         </div>
                     </div>
@@ -85,8 +87,8 @@ else
                 </div>
             </div>
         </div>
-    </form>
-}
+    }
+</div>
 
 @code {
     [SupplyParameterFromQuery]
@@ -113,12 +115,10 @@ else
         {
             loading = true;
             string apiurl = System.Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
-            string fullUrl = $"{apiurl}sales/SalesOrder?id={Id}";
-
             var client = ClientFactory.CreateClient();
             client.Timeout = TimeSpan.FromSeconds(60);
 
-            var response = await client.GetAsync(fullUrl);
+            var response = await client.GetAsync($"{apiurl}sales/SalesOrder?id={Id}");
 
             if (response.IsSuccessStatusCode)
             {
@@ -129,54 +129,49 @@ else
                     DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
                 };
 
-                try
-                {
-                    var doc = System.Text.Json.JsonDocument.Parse(responseString);
-                    salesOrder = doc.RootElement;
+                var doc = System.Text.Json.JsonDocument.Parse(responseString);
+                salesOrder = doc.RootElement;
 
-                    // Extract sales order lines
-                    if (salesOrder.Value.TryGetProperty("salesOrderLines", out var linesProperty))
-                    {
-                        var linesList = JsonSerializer.Deserialize<List<System.Text.Json.JsonElement>>(linesProperty.GetRawText(), options);
-                        salesOrderLines = linesList?.Cast<dynamic>().ToList() ?? new();
-                    }
-                }
-                catch (Exception parseEx)
+                // Extract sales order lines
+                if (salesOrder.Value.TryGetProperty("salesOrderLines", out var linesProperty))
                 {
-                    errorMessage = $"Error parsing response: {parseEx.Message}";
+                    var linesList = JsonSerializer.Deserialize<List<System.Text.Json.JsonElement>>(linesProperty.GetRawText(), options);
+                    salesOrderLines = linesList?.Cast<dynamic>().ToList() ?? new();
                 }
             }
             else
             {
-                errorMessage = $"Failed to load sales order. Status: {response.StatusCode}. URL: {fullUrl}";
+                errorMessage = $"Failed to load sales order. Status: {response.StatusCode}";
             }
         }
         catch (Exception ex)
         {
-            errorMessage = $"Error loading sales order: {ex.Message}";
+            errorMessage = $"Error: {ex.Message}";
         }
         finally
         {
             loading = false;
         }
     }
-    private string GetValue(System.Text.Json.JsonElement? obj, string propertyName)
+
+    private string GetValue(string propertyName)
     {
         try
         {
-            if (obj.HasValue && obj.Value is System.Text.Json.JsonElement je)
+            if (salesOrder.HasValue && salesOrder.Value is System.Text.Json.JsonElement je)
             {
                 if (je.TryGetProperty(propertyName, out var prop))
                 {
-                    if (propertyName == "amount" && prop.ValueKind == System.Text.Json.JsonValueKind.Number)
+                    return FormatValue(prop, propertyName);
+                }
+
+                // Try case-insensitive
+                foreach (var objProp in je.EnumerateObject())
+                {
+                    if (objProp.Name.Equals(propertyName, StringComparison.OrdinalIgnoreCase))
                     {
-                        return prop.GetDecimal().ToString("F2");
+                        return FormatValue(objProp.Value, propertyName);
                     }
-                    if (propertyName == "orderDate" && prop.ValueKind == System.Text.Json.JsonValueKind.String)
-                    {
-                        return prop.GetString()?.Substring(0, 10) ?? "N/A";
-                    }
-                    return prop.GetString() ?? prop.ToString();
                 }
             }
             return "N/A";
@@ -195,15 +190,16 @@ else
             {
                 if (je.TryGetProperty(propertyName, out var prop))
                 {
-                    if ((propertyName == "amount" || propertyName == "discount") && prop.ValueKind == System.Text.Json.JsonValueKind.Number)
+                    return FormatValue(prop, propertyName);
+                }
+
+                // Try case-insensitive
+                foreach (var objProp in je.EnumerateObject())
+                {
+                    if (objProp.Name.Equals(propertyName, StringComparison.OrdinalIgnoreCase))
                     {
-                        return prop.GetDecimal().ToString("F2");
+                        return FormatValue(objProp.Value, propertyName);
                     }
-                    if (propertyName == "quantity" && prop.ValueKind == System.Text.Json.JsonValueKind.Number)
-                    {
-                        return prop.GetDecimal().ToString("F2");
-                    }
-                    return prop.GetString() ?? prop.ToString();
                 }
             }
             return "N/A";
@@ -214,9 +210,34 @@ else
         }
     }
 
-    private async Task OnClickEditButton()
+    private string FormatValue(System.Text.Json.JsonElement prop, string propertyName)
     {
-        // Navigate to edit page
+        if ((propertyName == "amount" || propertyName == "discount") && prop.ValueKind == System.Text.Json.JsonValueKind.Number)
+        {
+            return prop.GetDecimal().ToString("F2");
+        }
+        if (propertyName == "quantity" && prop.ValueKind == System.Text.Json.JsonValueKind.Number)
+        {
+            return prop.GetDecimal().ToString("F2");
+        }
+        if (propertyName == "orderDate" && prop.ValueKind == System.Text.Json.JsonValueKind.String)
+        {
+            var dateStr = prop.GetString();
+            return dateStr?.Substring(0, Math.Min(10, dateStr.Length)) ?? "N/A";
+        }
+        if (prop.ValueKind == System.Text.Json.JsonValueKind.String)
+        {
+            return prop.GetString() ?? "N/A";
+        }
+        if (prop.ValueKind == System.Text.Json.JsonValueKind.Number)
+        {
+            return prop.GetDecimal().ToString();
+        }
+        return prop.ToString();
+    }
+
+    private void OnClickEditButton()
+    {
         Navigation.NavigateTo($"/Sales/AddSalesOrder?id={Id}");
     }
 }
