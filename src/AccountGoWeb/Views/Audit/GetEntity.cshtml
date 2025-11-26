@@ -1,0 +1,48 @@
+@model Dto.Auditing.AuditableEntity
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="box box-primary">
+            <!-- Title changes based on whether adding or editing an entity -->
+            <div class="box-header with-border">
+                <h3 class="box-title">@(Model.Id == 0 ? "Add New" : "Edit") Auditable Entity</h3>
+            </div>
+
+            <!-- Form to add or edit an auditable entity -->
+            <form asp-controller="Audit" asp-action="SaveEntity" method="post">
+                <div class="box-body">
+                    <!-- ID is not editable -->
+                    <input type="hidden" asp-for="Id" />
+                    
+                    <!-- Entity Name input field -->
+                    <div class="form-group">
+                        <label asp-for="EntityName">Entity Name</label>
+                        <input asp-for="EntityName" class="form-control" placeholder="Enter entity name (e.g., Customer, Product)" required />
+                        <span asp-validation-for="EntityName" class="text-danger"></span>
+                    </div>
+                
+                    <!-- Enable Audit checkbox -->
+                    <div class="form-group">
+                        <div class="checkbox">
+                            <label>
+                                <input asp-for="EnableAudit" type="checkbox" />
+                                Enable Audit
+                            </label>
+                        </div>
+                        <span asp-validation-for="EnableAudit" class="text-danger"></span>
+                    </div>
+                </div>
+
+                <!-- Form submission buttons -->
+                <div class="box-footer">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fa fa-save"></i> Save
+                    </button>
+                    <a asp-controller="Audit" asp-action="GetAuditableEntities" class="btn btn-default">
+                        <i class="fa fa-times"></i> Cancel
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

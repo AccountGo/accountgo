@@ -1,0 +1,71 @@
+@model List<Dto.Auditing.AuditableAttribute>
+@using AccountGoWeb.Models;
+
+<div class="row">
+    <div class="col-12">
+        <div class="box">
+
+            <div class="box-header">
+                <!-- Back to Auditable Entities -->
+                <a asp-controller="Audit" asp-action="GetAuditableEntities" class="btn btn-default">
+                    <i class="fa fa-arrow-left"></i> Back to Entities
+                </a>
+                
+                <!-- Adding new Auditable Attribute -->
+                <a asp-controller="Audit" asp-action="GetAttribute" asp-route-entityId="@ViewBag.EntityId" class="btn btn-primary">
+                    <i class="fa fa-plus"></i> Add New Attribute
+                </a>
+            </div>
+
+            <!-- Auditable Attributes List -->
+            <div class="box-body">
+                <div id="auditableAttributes" class="ag-blue" style="height: 400px;"></div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<script>
+    var entityId = @ViewBag.EntityId;
+    
+    // Define columns for the Auditable Attributes grid
+    var columnDefs = [
+        { headerName: "ID", field: "Id", width: 80 },
+        { headerName: "Attribute Name", field: "AttributeName", width: 250 },
+        { headerName: "Enable Audit", field: "EnableAudit", width: 120,
+          cellRenderer: function(params) {
+              return params.value ? '<i class="fa fa-check text-success"></i>' : '<i class="fa fa-times text-danger"></i>';
+          }
+        },
+        {   
+            // This section appear when new attribute is added (edit, delete).
+            headerName: "Actions", 
+            width: 180,
+            cellRenderer: function(params) {
+                return `
+                    <a href="/Audit/GetAttribute?id=${params.data.Id}&entityId=${entityId}" class="btn btn-sm btn-info">
+                        <i class="fa fa-edit"></i> Edit
+                    </a>
+                    <a href="/Audit/DeleteAttribute?id=${params.data.Id}&entityId=${entityId}" class="btn btn-sm btn-danger" 
+                       onclick="return confirm('Are you sure you want to delete this attribute?')">
+                        <i class="fa fa-trash"></i> Delete
+                    </a>
+                `;
+            }
+        }
+    ];
+
+    var gridOptions = {
+        columnDefs: columnDefs,
+        rowData: @Html.Raw(Model.ToJson()),
+        rowSelection: 'single',
+        enableFilter: true,
+        enableColResize: true,
+    };
+
+    document.addEventListener("DOMContentLoaded", function() {
+        var eGridDiv = document.querySelector('#auditableAttributes');
+        new agGrid.Grid(eGridDiv, gridOptions);
+    });
+</script>
