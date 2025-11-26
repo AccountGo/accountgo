@@ -1,0 +1,448 @@
+@page "/payables/purchase-order/{id:int}"
+@page "/payables/purchase-order/add"
+@using System.Text.Json
+@using System.Text.Json.Serialization
+@inject IHttpClientFactory ClientFactory
+@inject NavigationManager Navigation
+
+<PageTitle>@pageTitle</PageTitle>
+
+<h3>@pageTitle</h3>
+
+@if (loadError)
+{
+    <div class="alert alert-danger" role="alert">
+        Unable to load purchase order. Please try again later.
+    </div>
+}
+else if (purchaseOrder is null)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <EditForm Model="purchaseOrder" OnValidSubmit="HandleSubmit">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+
+        <div class="card">
+            <div class="card-body">
+                <div class="row mb-3">
+                    <label class="col-sm-2 col-form-label">Order No</label>
+                    <div class="col-sm-10">
+                        <InputText class="form-control" @bind-Value="purchaseOrder.No" disabled="@isViewMode" />
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <label class="col-sm-2 col-form-label">Vendor</label>
+                    <div class="col-sm-10">
+                        @if (vendors != null && vendors.Any())
+                        {
+                            <InputSelect class="form-control" @bind-Value="purchaseOrder.VendorId" disabled="@isViewMode">
+                                <option value="0">-- Select Vendor --</option>
+                                @foreach (var vendor in vendors)
+                                {
+                                    <option value="@vendor.Id">@vendor.Name</option>
+                                }
+                            </InputSelect>
+                        }
+                        else
+                        {
+                            <InputText class="form-control" @bind-Value="purchaseOrder.VendorName" disabled="true" />
+                        }
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <label class="col-sm-2 col-form-label">Order Date</label>
+                    <div class="col-sm-10">
+                        <InputDate class="form-control" @bind-Value="purchaseOrder.OrderDate" disabled="@isViewMode" />
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <label class="col-sm-2 col-form-label">Reference No</label>
+                    <div class="col-sm-10">
+                        <InputText class="form-control" @bind-Value="purchaseOrder.ReferenceNo" disabled="@isViewMode" />
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <label class="col-sm-2 col-form-label">Completed</label>
+                    <div class="col-sm-10">
+                        <InputCheckbox @bind-Value="purchaseOrder.Completed" disabled="@isViewMode" />
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <label class="col-sm-2 col-form-label">Total Amount</label>
+                    <div class="col-sm-10">
+                        <input type="text" class="form-control" value="@purchaseOrder.Amount.ToString("C")" disabled />
+                    </div>
+                </div>
+
+                <h4 class="mt-4">Order Lines</h4>
+                <table class="table table-bordered">
+                    <thead>
+                        <tr>
+                            <th>Item</th>
+                            <th>Quantity</th>
+                            <th>Amount</th>
+                            <th>Discount %</th>
+                            <th>Measurement</th>
+                            @if (!isViewMode)
+                            {
+                                <th>Actions</th>
+                            }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (purchaseOrder.PurchaseOrderLines != null)
+                        {
+                            @for (int i = 0; i < purchaseOrder.PurchaseOrderLines.Count; i++)
+                            {
+                                var line = purchaseOrder.PurchaseOrderLines[i];
+                                var lineIndex = i;
+                                <tr>
+                                    <td>
+                                        @if (items != null && items.Any())
+                                        {
+                                            <InputSelect class="form-control" @bind-Value="line.ItemId" disabled="@isViewMode">
+                                                <option value="0">-- Select Item --</option>
+                                                @foreach (var item in items)
+                                                {
+                                                    <option value="@item.Id">@item.Name</option>
+                                                }
+                                            </InputSelect>
+                                        }
+                                        else
+                                        {
+                                            <InputNumber class="form-control" @bind-Value="line.ItemId" disabled="@isViewMode" />
+                                        }
+                                    </td>
+                                    <td>
+                                        <InputNumber class="form-control" @bind-Value="line.Quantity" disabled="@isViewMode" 
+                                                   @oninput="@((e) => OnLineValueChanged(lineIndex))" />
+                                    </td>
+                                    <td>
+                                        <InputNumber class="form-control" @bind-Value="line.Amount" disabled="@isViewMode"
+                                                   @oninput="@((e) => OnLineValueChanged(lineIndex))" />
+                                    </td>
+                                    <td>
+                                        <InputNumber class="form-control" @bind-Value="line.Discount" disabled="@isViewMode"
+                                                   @oninput="@((e) => OnLineValueChanged(lineIndex))" />
+                                    </td>
+                                    <td>
+                                        @if (measurements != null && measurements.Any())
+                                        {
+                                            <InputSelect class="form-control" @bind-Value="line.MeasurementId" disabled="@isViewMode">
+                                                <option value="0">-- Select Measurement --</option>
+                                                @foreach (var measurement in measurements)
+                                                {
+                                                    <option value="@measurement.Id">@measurement.Name</option>
+                                                }
+                                            </InputSelect>
+                                        }
+                                        else
+                                        {
+                                            <InputNumber class="form-control" @bind-Value="line.MeasurementId" disabled="@isViewMode" />
+                                        }
+                                    </td>
+                                    @if (!isViewMode)
+                                    {
+                                        <td>
+                                            <button type="button" class="btn btn-sm btn-danger" @onclick="() => RemoveLine(lineIndex)">
+                                                Remove
+                                            </button>
+                                        </td>
+                                    }
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+
+                @if (!isViewMode)
+                {
+                    <button type="button" class="btn btn-secondary mb-3" @onclick="AddLine">
+                        <i class="fa fa-plus"></i> Add Line
+                    </button>
+                }
+            </div>
+        </div>
+
+        <div class="mt-3">
+            @if (isViewMode)
+            {
+                <button type="button" class="btn btn-primary" @onclick="EnableEdit">
+                    <i class="fa fa-edit"></i> Edit
+                </button>
+            }
+            else
+            {
+                <button type="submit" class="btn btn-success">
+                    <i class="fa fa-save"></i> Save
+                </button>
+            }
+            <button type="button" class="btn btn-secondary" @onclick="Cancel">
+                Close
+            </button>
+        </div>
+    </EditForm>
+
+    @if (saveError)
+    {
+        <div class="alert alert-danger mt-3" role="alert">
+            Error saving purchase order. Please try again.
+        </div>
+    }
+    @if (saveSuccess)
+    {
+        <div class="alert alert-success mt-3" role="alert">
+            Purchase order saved successfully!
+        </div>
+    }
+}
+
+@code {
+    [Parameter]
+    public int? Id { get; set; }
+
+    private PurchaseOrderDto? purchaseOrder;
+    private List<VendorDto>? vendors;
+    private List<ItemDto>? items;
+    private List<MeasurementDto>? measurements;
+    private bool loadError;
+    private bool saveError;
+    private bool saveSuccess;
+    private bool isViewMode = true;
+    private string pageTitle = "Purchase Order";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadReferenceData();
+
+        if (Id.HasValue && Id.Value > 0)
+        {
+            pageTitle = "Purchase Order Details";
+            await LoadPurchaseOrder(Id.Value);
+            isViewMode = true;
+        }
+        else
+        {
+            pageTitle = "New Purchase Order";
+            InitializeNewPurchaseOrder();
+            isViewMode = false;
+        }
+    }
+
+    private void InitializeNewPurchaseOrder()
+    {
+        purchaseOrder = new PurchaseOrderDto
+        {
+            No = new Random().Next(1, 99999).ToString(),
+            OrderDate = DateTime.Now,
+            Completed = false,
+            PurchaseOrderLines = new List<PurchaseOrderLineDto>
+            {
+                new PurchaseOrderLineDto
+                {
+                    Quantity = 1,
+                    Amount = 0,
+                    Discount = 0
+                }
+            }
+        };
+    }
+
+    private async Task LoadReferenceData()
+    {
+        try
+        {
+            string apiurl = System.Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
+            var client = ClientFactory.CreateClient();
+
+            // Load vendors, items, measurements - simplified for now
+            // In a real scenario, you'd load these from API endpoints
+            vendors = new List<VendorDto>();
+            items = new List<ItemDto>();
+            measurements = new List<MeasurementDto>();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading reference data: {ex.Message}");
+        }
+    }
+
+    private async Task LoadPurchaseOrder(int id)
+    {
+        try
+        {
+            string apiurl = System.Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
+
+            var request = new HttpRequestMessage(HttpMethod.Get, $"{apiurl}purchasing/purchaseorder?id={id}");
+            request.Headers.Add("Accept", "application/json");
+
+            var client = ClientFactory.CreateClient();
+            client.DefaultRequestHeaders.Accept.Clear();
+            client.DefaultRequestHeaders.Clear();
+            client.DefaultRequestHeaders.CacheControl = new System.Net.Http.Headers.CacheControlHeaderValue() { NoCache = true };
+            client.DefaultRequestHeaders.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
+
+            var response = await client.SendAsync(request);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var responseString = await response.Content.ReadAsStringAsync();
+                var options = new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true,
+                    DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+                };
+
+                purchaseOrder = JsonSerializer.Deserialize<PurchaseOrderDto>(responseString, options);
+            }
+            else
+            {
+                loadError = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading purchase order: {ex.Message}");
+            loadError = true;
+        }
+    }
+
+    private async Task HandleSubmit()
+    {
+        try
+        {
+            saveError = false;
+            saveSuccess = false;
+
+            string apiurl = System.Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
+
+            var options = new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true,
+                DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+            };
+
+            var json = JsonSerializer.Serialize(purchaseOrder, options);
+            var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
+
+            var client = ClientFactory.CreateClient();
+            var response = await client.PostAsync($"{apiurl}purchasing/savepurchaseorder", content);
+
+            if (response.IsSuccessStatusCode)
+            {
+                saveSuccess = true;
+                await Task.Delay(1000);
+                Navigation.NavigateTo("/payables/purchase-orders");
+            }
+            else
+            {
+                saveError = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error saving purchase order: {ex.Message}");
+            saveError = true;
+        }
+    }
+
+    private void EnableEdit()
+    {
+        isViewMode = false;
+    }
+
+    private void Cancel()
+    {
+        Navigation.NavigateTo("/payables/purchase-orders");
+    }
+
+    private void AddLine()
+    {
+        purchaseOrder?.PurchaseOrderLines?.Add(new PurchaseOrderLineDto
+        {
+            Quantity = 1,
+            Amount = 0,
+            Discount = 0
+        });
+    }
+
+    private void RemoveLine(int index)
+    {
+        if (purchaseOrder?.PurchaseOrderLines != null && purchaseOrder.PurchaseOrderLines.Count > 1)
+        {
+            purchaseOrder.PurchaseOrderLines.RemoveAt(index);
+            StateHasChanged();
+        }
+    }
+
+    private void OnLineValueChanged(int index)
+    {
+        StateHasChanged();
+    }
+
+    // DTOs
+    public class PurchaseOrderDto
+    {
+        public int Id { get; set; }
+        public string? No { get; set; }
+        public int VendorId { get; set; }
+        public string? VendorName { get; set; }
+        public DateTime OrderDate { get; set; }
+        public decimal Amount
+        {
+            get
+            {
+                if (PurchaseOrderLines == null) return 0;
+                return PurchaseOrderLines.Sum(l =>
+                {
+                    var qty = l.Quantity ?? 0;
+                    var amt = l.Amount ?? 0;
+                    var disc = l.Discount ?? 0;
+                    var lineTotal = qty * amt;
+                    var discountAmount = lineTotal * (disc / 100);
+                    return lineTotal - discountAmount;
+                });
+            }
+        }
+        public bool Completed { get; set; }
+        public string? ReferenceNo { get; set; }
+        public List<PurchaseOrderLineDto>? PurchaseOrderLines { get; set; }
+    }
+
+    public class PurchaseOrderLineDto
+    {
+        public int Id { get; set; }
+        public int? ItemId { get; set; }
+        public int? MeasurementId { get; set; }
+        public decimal? Quantity { get; set; }
+        public decimal? Amount { get; set; }
+        public decimal? Discount { get; set; }
+    }
+
+    public class VendorDto
+    {
+        public int Id { get; set; }
+        public string? Name { get; set; }
+    }
+
+    public class ItemDto
+    {
+        public int Id { get; set; }
+        public string? Name { get; set; }
+    }
+
+    public class MeasurementDto
+    {
+        public int Id { get; set; }
+        public string? Name { get; set; }
+    }
+}
+
