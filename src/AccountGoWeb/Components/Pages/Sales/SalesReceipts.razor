@@ -1,0 +1,296 @@
+@using Dto.Sales
+@using System.Text.Json
+@using System.Text.Json.Serialization
+
+<style>
+    .selected-row {
+        background-color: #e7f3ff;
+    }
+</style>
+
+<div class="container-fluid">
+    <div class="row mb-3">
+        <div class="col">
+        </div>
+        <div class="col text-end">
+            <a href="/Sales/AddReceipt" class="btn">
+                <i class="fa fa-plus"></i>
+                New Receipt
+            </a>
+            <a href="@GetViewReceiptLink()" id="linkViewReceipt"
+                class="btn @(selectedReceiptId == null ? "inactiveLink" : "")">
+                <i class="fa fa-edit"></i>
+                View
+            </a>
+            <a href="@GetAllocateLink()" id="linkAllocate"
+                class="btn @(selectedReceiptId == null || isAllocateDisabled ? "inactiveLink" : "")">
+                <i class="fa fa-tasks"></i>
+                Allocate
+            </a>
+        </div>
+    </div>
+
+    @* SALES RECEIPTS LIST *@
+
+    @if (loading)
+    {
+        <p><em>Loading...</em></p>
+    }
+    else if (errorMessage != null)
+    {
+        <div class="alert alert-danger" role="alert">
+            <strong>Error:</strong> @errorMessage
+        </div>
+    }
+    else if (salesReceipts.Count == 0)
+    {
+        <div class="alert alert-info" role="alert">
+            <strong>No sales receipts found.</strong>
+        </div>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-striped table-hover">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Receipt ID</th>
+                        <th>Receipt No</th>
+                        <th>Customer Name</th>
+                        <th>Receipt Date</th>
+                        <th>Amount</th>
+                        <th>Left to Allocate</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (salesReceipts.Count > 0)
+                    {
+                        @for (int i = 0; i < salesReceipts.Count; i++)
+                        {
+                            int index = i;
+                            <tr class="@(selectedRowIndex == index ? "selected-row" : "")" @onclick="@(() => OnRowSelected(index))">
+                                <td>@GetValue(salesReceipts[index], "id")</td>
+                                <td>@GetValue(salesReceipts[index], "receiptNo")</td>
+                                <td>@GetValue(salesReceipts[index], "customerName")</td>
+                                <td>@FormatDate(GetValue(salesReceipts[index], "receiptDate"))</td>
+                                <td>@FormatAmount(GetValue(salesReceipts[index], "amount"))</td>
+                                <td>@FormatAmount(GetValue(salesReceipts[index], "remainingAmountToAllocate"))</td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@code {
+    [Inject]
+    private IHttpClientFactory ClientFactory { get; set; } = null!;
+
+    [Inject]
+    private NavigationManager Navigation { get; set; } = null!;
+
+    private List<dynamic> salesReceipts = new();
+    private bool loading = true;
+    private string? errorMessage = null;
+    private bool shouldRefresh = false;
+    private string? selectedReceiptId = null;
+    private int selectedRowIndex = -1;
+    private bool isAllocateDisabled = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSalesReceipts();
+        Navigation.LocationChanged += OnLocationChanged;
+    }
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        // Refresh data when navigating back to this page
+        if (e.Location.Contains("/sales/salesreceipts") || e.Location.Contains("/sales/SalesReceipts"))
+        {
+            shouldRefresh = true;
+            InvokeAsync(StateHasChanged);
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (shouldRefresh && !firstRender)
+        {
+            shouldRefresh = false;
+            await LoadSalesReceipts();
+        }
+    }
+
+    public void Dispose()
+    {
+        Navigation.LocationChanged -= OnLocationChanged;
+    }
+
+    private async Task LoadSalesReceipts()
+    {
+        try
+        {
+            loading = true;
+            string apiurl = System.Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
+
+            var client = ClientFactory.CreateClient();
+            client.Timeout = TimeSpan.FromSeconds(60);
+
+            var response = await client.GetAsync($"{apiurl}sales/salesreceipts");
+
+            if (response.IsSuccessStatusCode)
+            {
+                var responseString = await response.Content.ReadAsStringAsync();
+                var options = new System.Text.Json.JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true,
+                    DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
+                };
+
+                var data = System.Text.Json.JsonSerializer.Deserialize<List<System.Text.Json.JsonElement>>(responseString, options);
+                salesReceipts = data?.Cast<dynamic>().ToList() ?? new();
+            }
+            else
+            {
+                errorMessage = $"Failed to load sales receipts. Status: {response.StatusCode}";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading sales receipts: {ex.Message}";
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private string GetValue(dynamic obj, string propertyName)
+    {
+        try
+        {
+            if (obj is System.Text.Json.JsonElement je)
+            {
+                if (je.TryGetProperty(propertyName, out var prop))
+                {
+                    if ((propertyName == "amount" || propertyName == "remainingAmountToAllocate") && prop.ValueKind ==
+                    System.Text.Json.JsonValueKind.Number)
+                    {
+                        return prop.GetDecimal().ToString("F2");
+                    }
+                    // Handle numeric ID
+                    if (propertyName == "id" && prop.ValueKind == System.Text.Json.JsonValueKind.Number)
+                    {
+                        return prop.GetInt32().ToString();
+                    }
+                    return prop.GetString() ?? prop.ToString();
+                }
+            }
+            return "N/A";
+        }
+        catch
+        {
+            return "N/A";
+        }
+    }
+
+    private string FormatAmount(string value)
+    {
+        if (decimal.TryParse(value, out var amount))
+        {
+            return amount.ToString("F2");
+        }
+        return value;
+    }
+
+    private string FormatDate(string value)
+    {
+        if (DateTime.TryParse(value, out var date))
+        {
+            return date.ToString("yyyy-MM-dd");
+        }
+        return value;
+    }
+
+    private void OnRowSelected(int index)
+    {
+        selectedRowIndex = index;
+
+        try
+        {
+            if (index >= 0 && index < salesReceipts.Count)
+            {
+                var receipt = salesReceipts[index];
+                if (receipt is System.Text.Json.JsonElement je)
+                {
+                    string? receiptId = null;
+
+                    if (je.TryGetProperty("id", out var idProp))
+                    {
+                        if (idProp.ValueKind == System.Text.Json.JsonValueKind.String)
+                        {
+                            receiptId = idProp.GetString();
+                        }
+                        else if (idProp.ValueKind == System.Text.Json.JsonValueKind.Number)
+                        {
+                            receiptId = idProp.GetInt32().ToString();
+                        }
+                    }
+                    else if (je.TryGetProperty("Id", out var idProp2))
+                    {
+                        if (idProp2.ValueKind == System.Text.Json.JsonValueKind.String)
+                        {
+                            receiptId = idProp2.GetString();
+                        }
+                        else if (idProp2.ValueKind == System.Text.Json.JsonValueKind.Number)
+                        {
+                            receiptId = idProp2.GetInt32().ToString();
+                        }
+                    }
+
+                    if (!string.IsNullOrEmpty(receiptId))
+                    {
+                        selectedReceiptId = receiptId;
+
+                        // Check if there's remaining amount to allocate
+                        isAllocateDisabled = true;
+                        if (je.TryGetProperty("remainingAmountToAllocate", out var amountProp))
+                        {
+                            try
+                            {
+                                if (amountProp.ValueKind == System.Text.Json.JsonValueKind.Number)
+                                {
+                                    var remaining = amountProp.GetDecimal();
+                                    isAllocateDisabled = remaining <= 0;
+                                }
+                            }
+                            catch
+                            {
+                                // Amount might not be a number, skip
+                            }
+                        }
+
+                        StateHasChanged();
+                    }
+                }
+            }
+        }
+        catch
+        {
+            selectedReceiptId = null;
+        }
+    }
+
+    private string GetViewReceiptLink()
+    {
+        return selectedReceiptId != null ? $"/Sales/SalesReceipt?id={selectedReceiptId}" : "javascript:void(0)";
+    }
+
+    private string GetAllocateLink()
+    {
+        return selectedReceiptId != null ? $"/Sales/Allocate/{selectedReceiptId}" : "javascript:void(0)";
+    }
+}
