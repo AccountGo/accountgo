@@ -35,25 +35,36 @@ namespace AccountGoWeb.Controllers
             return View();
         }
 
-        public async Task<IActionResult> ICJ()
+        // public async Task<IActionResult> ICJ()
+        // {
+        //     ViewBag.PageContentHeader = "Inventory Control Journal";
+
+        //     using (var client = new System.Net.Http.HttpClient())
+        //     {
+        //         var baseUri = _baseConfig!["ApiUrl"];
+        //         client.BaseAddress = new System.Uri(baseUri!);
+        //         client.DefaultRequestHeaders.Accept.Clear();
+        //         var response = await client.GetAsync(baseUri + "inventory/icj");
+        //         if (response.IsSuccessStatusCode)
+        //         {
+        //             var responseJson = await response.Content.ReadAsStringAsync();
+        //             return View(model: responseJson);
+        //         }
+        //     }
+
+        //     return View();
+        // }
+
+        public IActionResult ICJ()
         {
-            ViewBag.PageContentHeader = "Inventory Control Journal";
-
-            using (var client = new System.Net.Http.HttpClient())
-            {
-                var baseUri = _baseConfig!["ApiUrl"];
-                client.BaseAddress = new System.Uri(baseUri!);
-                client.DefaultRequestHeaders.Accept.Clear();
-                var response = await client.GetAsync(baseUri + "inventory/icj");
-                if (response.IsSuccessStatusCode)
-                {
-                    var responseJson = await response.Content.ReadAsStringAsync();
-                    return View(model: responseJson);
-                }
-            }
-
+            // Use sample data for testing
+           
+            // OR if you have a real service/repository:
+            // var data = _inventoryService.GetInventoryControlJournal();
+            
             return View();
         }
+
 
         public IActionResult Item(int id)
         {

@@ -16,9 +16,19 @@ namespace AccountGoWeb.Controllers
 
         public IActionResult Index()
         {
-            return RedirectToAction("quotations");
+            return RedirectToAction("SalesQuotations");
         }
 
+
+       [HttpGet]
+        public IActionResult SalesQuotations()
+        {
+            return View();
+        }
+
+
+
+        
         public async System.Threading.Tasks.Task<IActionResult> Quotations()
         {
             ViewBag.PageContentHeader = "Quotations";

@@ -22,6 +22,8 @@
     <link href="~/css/dark.css" rel="stylesheet">
     <link href="~/css/gdbdark.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/pace-js@latest/pace-theme-default.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/ag-grid-community/styles/ag-grid.css">
+    <link rel="stylesheet" href="https://unpkg.com/ag-grid-community/styles/ag-theme-alpine.css">
 
 </head>
 
@@ -111,7 +113,7 @@
                     </a>
                     <ul>
                         <li>
-                            <a class="nav-link" asp-area="" asp-controller="Quotations" asp-action="Quotations">
+                            <a class="nav-link" asp-area="" asp-controller="Quotations" asp-action="SalesQuotations">
                                 Sales Quotations
                             </a>
                         </li>
@@ -319,6 +321,7 @@
                     @Html.Raw(ViewBag.PageContentHeader)
                 </h2>
                 @RenderBody()
+                @* <component type="typeof(App)" render-mode="ServerPrerendered" /> *@
                 <!-- /PAGE CONTENT -->
             </div>
         </div>
@@ -365,8 +368,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.perfect-scrollbar/1.5.5/perfect-scrollbar.js"></script>
 
     <script src="https://cdn.jsdelivr.net/npm/@@coreui/coreui@4.3.2/dist/js/coreui.bundle.min.js"></script>
-
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/ag-grid/31.0.1/ag-grid-community.min.js"></script>
+    <script src="https://unpkg.com/ag-grid-community/dist/ag-grid-community.noStyle.js"></script>
+    <script src="~/js/quotations.js"></script>
 
     <script>
         $('.sub-menu ul').hide();
