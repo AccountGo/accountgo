@@ -22,9 +22,9 @@ namespace Api.Controllers
 
         public SalesController(IAdministrationService adminService,
             ISalesService salesService,
-            IFinancialService financialService, 
-            IInventoryService inventoryService, 
-            ITaxService taxService, 
+            IFinancialService financialService,
+            IInventoryService inventoryService,
+            ITaxService taxService,
             ILogger<SalesController> logger)
         {
             _adminService = adminService;
@@ -37,7 +37,7 @@ namespace Api.Controllers
 
         [HttpPost]
         [Route("SaveCustomer")]
-        public IActionResult SaveCustomer([FromBody]Dto.Sales.Customer customerDto)
+        public IActionResult SaveCustomer([FromBody] Dto.Sales.Customer customerDto)
         {
             bool isNew = customerDto.Id == 0;
             Core.Domain.Sales.Customer? customer = null;
@@ -232,42 +232,49 @@ namespace Api.Controllers
             {
                 var salesOrder = _salesService.GetSalesOrderById(id);
 
+                if (salesOrder == null)
+                {
+                    return new NotFoundObjectResult(new { error = "Sales order not found." });
+                }
+
                 var salesOrderDto = new Dto.Sales.SalesOrder()
                 {
                     Id = salesOrder.Id,
-                    CustomerId = salesOrder.CustomerId!.Value,
-                    CustomerNo = salesOrder.Customer.No,
-                    CustomerName = _salesService.GetCustomerById(salesOrder.CustomerId.Value).Party.Name,
+                    CustomerId = salesOrder.CustomerId.HasValue ? salesOrder.CustomerId.Value : 0,
+                    CustomerNo = salesOrder.Customer?.No ?? "N/A",
+                    CustomerName = salesOrder.CustomerId.HasValue ? _salesService.GetCustomerById(salesOrder.CustomerId.Value)?.Party?.Name ?? "Unknown" : "Unknown",
                     OrderDate = salesOrder.Date,
                     PaymentTermId = salesOrder.PaymentTermId,
                     ReferenceNo = salesOrder.ReferenceNo,
-                    StatusId = (int) salesOrder.Status!,
+                    StatusId = salesOrder.Status.HasValue ? (int)salesOrder.Status.Value : 0,
                     SalesOrderLines = new List<Dto.Sales.SalesOrderLine>()
                 };
 
-                foreach (var line in salesOrder.SalesOrderLines)
+                if (salesOrder.SalesOrderLines != null)
                 {
-                    var lineDto = new Dto.Sales.SalesOrderLine();
-                    lineDto.Id = line.Id;
-                    lineDto.Amount = line.Amount;
-                    lineDto.Discount = line.Discount;
-                    lineDto.Quantity = line.Quantity;
-                    lineDto.ItemId = line.ItemId;
-                    lineDto.ItemDescription = line.Item.Description;
-                    lineDto.MeasurementId = line.MeasurementId;
-                    lineDto.MeasurementDescription = line.Measurement.Description;
-                    lineDto.RemainingQtyToInvoice = line.GetRemainingQtyToInvoice();
+                    foreach (var line in salesOrder.SalesOrderLines)
+                    {
+                        var lineDto = new Dto.Sales.SalesOrderLine();
+                        lineDto.Id = line.Id;
+                        lineDto.Amount = line.Amount;
+                        lineDto.Discount = line.Discount;
+                        lineDto.Quantity = line.Quantity;
+                        lineDto.ItemId = line.ItemId;
+                        lineDto.ItemDescription = line.Item?.Description ?? "Unknown";
+                        lineDto.MeasurementId = line.MeasurementId;
+                        lineDto.MeasurementDescription = line.Measurement?.Description ?? "Unknown";
+                        lineDto.RemainingQtyToInvoice = line.GetRemainingQtyToInvoice();
 
-                    salesOrderDto.SalesOrderLines.Add(lineDto);
+                        salesOrderDto.SalesOrderLines.Add(lineDto);
+                    }
                 }
-
 
                 return new ObjectResult(salesOrderDto);
             }
             catch (Exception ex)
             {
                 _logger.LogInformation(ex.ToString());
-                return new ObjectResult(ex);
+                return new BadRequestObjectResult(new { error = "An error occurred while loading the sales order.", details = ex.Message });
             }
         }
 
@@ -303,7 +310,7 @@ namespace Api.Controllers
                     lineDto.MeasurementId = line.MeasurementId;
                     lineDto.ItemDescription = line.Item.Description;
                     lineDto.MeasurementDescription = line.Measurement.Description;
-                    
+
                     salesInvoiceDto.SalesInvoiceLines.Add(lineDto);
                 }
 
@@ -323,7 +330,7 @@ namespace Api.Controllers
 
         [HttpPost]
         [Route("addsalesorder")]
-        public IActionResult AddSalesOrder([FromBody]Dto.Sales.SalesOrder salesorderDto)
+        public IActionResult AddSalesOrder([FromBody] Dto.Sales.SalesOrder salesorderDto)
         {
             try
             {
@@ -377,7 +384,7 @@ namespace Api.Controllers
                     QuotationDate = quote.Date,
                     ReferenceNo = quote.ReferenceNo,
                     SalesQuoteStatus = quote.Status.ToString(),
-                    StatusId = (int) quote.Status!
+                    StatusId = (int)quote.Status!
                 };
 
                 foreach (var line in quote.SalesQuoteLines)
@@ -413,7 +420,7 @@ namespace Api.Controllers
                 QuotationDate = quote.Date,
                 PaymentTermId = quote.PaymentTermId,
                 ReferenceNo = quote.ReferenceNo,
-                StatusId = (int) quote.Status!
+                StatusId = (int)quote.Status!
             };
 
             foreach (var line in quote.SalesQuoteLines)
@@ -569,7 +576,7 @@ namespace Api.Controllers
 
         [HttpPost]
         [Route("SaveSalesOrder")]
-        public IActionResult SaveSalesOrder([FromBody]Dto.Sales.SalesOrder salesOrderDto)
+        public IActionResult SaveSalesOrder([FromBody] Dto.Sales.SalesOrder salesOrderDto)
         {
             string[]? errors = null;
             try
@@ -684,7 +691,7 @@ namespace Api.Controllers
 
         [HttpPost]
         [Route("PostSalesInvoice")]
-        public IActionResult PostSalesInvoice([FromBody]Dto.Sales.SalesInvoice salesInvoiceDto)
+        public IActionResult PostSalesInvoice([FromBody] Dto.Sales.SalesInvoice salesInvoiceDto)
         {
             string[]? errors = null;
 
@@ -715,7 +722,7 @@ namespace Api.Controllers
 
         [HttpPost]
         [Route("SaveSalesInvoice")]
-        public IActionResult SaveSalesInvoice([FromBody]Dto.Sales.SalesInvoice salesInvoiceDto)
+        public IActionResult SaveSalesInvoice([FromBody] Dto.Sales.SalesInvoice salesInvoiceDto)
         {
             string[]? errors = null;
 
@@ -920,7 +927,7 @@ namespace Api.Controllers
 
         [HttpPost]
         [Route("SaveQuotation")]
-        public IActionResult SaveQuotation([FromBody]Dto.Sales.SalesQuotation quotationDto)
+        public IActionResult SaveQuotation([FromBody] Dto.Sales.SalesQuotation quotationDto)
         {
             string[]? errors = null;
             _logger.LogInformation("SaveQuotation");
@@ -956,7 +963,7 @@ namespace Api.Controllers
 
                 salesQuote.ReferenceNo = quotationDto.ReferenceNo;
                 salesQuote.PaymentTermId = quotationDto.PaymentTermId;
-                
+
                 foreach (var line in quotationDto.SalesQuotationLines)
                 {
                     if (!isNew)
@@ -1025,7 +1032,7 @@ namespace Api.Controllers
 
         [HttpPost]
         [Route("SaveReceipt")]
-        public IActionResult SaveReceipt([FromBody]dynamic receiptDto)
+        public IActionResult SaveReceipt([FromBody] dynamic receiptDto)
         {
             string[]? errors = null;
 
@@ -1074,7 +1081,7 @@ namespace Api.Controllers
 
         [HttpPost]
         [Route("SaveAllocation")]
-        public IActionResult SaveAllocation([FromBody]dynamic allocationDto)
+        public IActionResult SaveAllocation([FromBody] dynamic allocationDto)
         {
             string[]? errors = null;
 
