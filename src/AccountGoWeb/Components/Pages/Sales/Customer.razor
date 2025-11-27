@@ -131,6 +131,40 @@
                                     <InputText class="form-control" @bind-Value="Model.PrimaryContact!.FirstName" placeholder="First Name ..." disabled="@(!isEditMode)" />
                                 </div>
                             </div>
+                            <div class="row mb-3">
+                                <div class="col-sm-4">
+                                    <label class="form-label">Last Name</label>
+                                </div>
+                                <div class="col-sm-8">
+                                    <InputText class="form-control" @bind-Value="Model.PrimaryContact!.LastName" placeholder="Last Name ..." disabled="@(!isEditMode)" />
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-sm-6">
+                            <div class="row mb-3">
+                                <div class="col-sm-4">
+                                    <label class="form-label">Phone</label>
+                                </div>
+                                <div class="col-sm-8">
+                                    <InputText class="form-control" @bind-Value="Model.PrimaryContact!.Party.Phone" placeholder="Phone ..." disabled="@(!isEditMode)" />
+                                </div>
+                            </div>
+                            <div class="row mb-3">
+                                <div class="col-sm-4">
+                                    <label class="form-label">Website</label>
+                                </div>
+                                <div class="col-sm-8">
+                                    <InputText class="form-control" @bind-Value="Model.PrimaryContact!.Party.Website" placeholder="Website ..." disabled="@(!isEditMode)" />
+                                </div>
+                            </div>
+                            <div class="row mb-3">
+                                <div class="col-sm-4">
+                                    <label class="form-label">Email</label>
+                                </div>
+                                <div class="col-sm-8">
+                                    <InputText class="form-control" @bind-Value="Model.PrimaryContact!.Party.Email" placeholder="Email ..." disabled="@(!isEditMode)" />
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
