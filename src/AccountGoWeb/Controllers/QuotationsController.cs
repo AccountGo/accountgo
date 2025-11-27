@@ -96,18 +96,23 @@ namespace AccountGoWeb.Controllers
                     client.BaseAddress = new Uri(baseUri!);
                     var response = await client.PostAsync("sales/savequotation", content);
 
-                    if (response.IsSuccessStatusCode) {
+                    if (response.IsSuccessStatusCode)
+                    {
                         _logger.LogInformation("Quotation has been successfully saved.");
-                    } else {
+                    }
+                    else
+                    {
                         _logger.LogInformation("Quotation save failed.");
                     }
                     return RedirectToAction("quotations");
                 }
-            } else {
+            }
+            else
+            {
                 _logger.LogInformation("Model State is not valid.");
                 return RedirectToAction("quotations");
             }
-            
+
         }
 
         [HttpGet]
@@ -140,5 +145,37 @@ namespace AccountGoWeb.Controllers
 
             return View(model);
         }
+
+        [HttpPost]
+        public IActionResult Quotation(SalesQuotation model)
+        {
+            ViewBag.Customers = Models.SelectListItemHelper.Customers();
+            ViewBag.Items = Models.SelectListItemHelper.Items();
+            ViewBag.PaymentTerms = Models.SelectListItemHelper.PaymentTerms();
+            ViewBag.Measurements = Models.SelectListItemHelper.Measurements();
+
+            var serialize = Newtonsoft.Json.JsonConvert.SerializeObject(model);
+            var content = new StringContent(serialize);
+            content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+
+            using (var client = new HttpClient())
+            {
+                var baseUri = _configuration!["ApiUrl"];
+                client.BaseAddress = new Uri(baseUri!);
+                var response = client.PostAsync("sales/savequotation", content).Result;
+
+                if (response.IsSuccessStatusCode)
+                {
+                    _logger.LogInformation("Quotation has been successfully saved.");
+                }
+                else
+                {
+                    _logger.LogInformation("Quotation save failed.");
+                }
+            }
+
+            return RedirectToAction("Quotations");
+        }
+
     }
 }
