@@ -4,11 +4,14 @@ using Google.Protobuf.WellKnownTypes;
 var builder = DistributedApplication.CreateBuilder(args);
 
 var sqlServer = builder.AddSqlServer("gdb-sql-server")
-    .WithImageRegistry("mcr.microsoft.com")
-    .WithImage("mssql/server", "2022-latest")
-    .WithEnvironment("ACCEPT_EULA", "Y")
-    .WithEnvironment("MSSQL_SA_PASSWORD", "YourStrong!Passw0rd")
-    .AddDatabase("gdb-db");
+                 .AddDatabase("gdb-db");
+
+// var sqlServer = builder.AddSqlServer("gdb-sql-server")
+//     .WithImageRegistry("mcr.microsoft.com")
+//     .WithImage("mssql/server", "2022-latest")
+//     .WithEnvironment("ACCEPT_EULA", "Y")
+//     .WithEnvironment("MSSQL_SA_PASSWORD", "YourStrong!Passw0rd")
+//     .AddDatabase("gdb-db");
 
 // read environment variable for connection string
 var apiService = builder.AddProject<Projects.Api>("api")
