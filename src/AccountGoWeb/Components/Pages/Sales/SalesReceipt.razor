@@ -37,117 +37,90 @@
     }
     else
     {
-        <form @onsubmit="HandleSubmit">
-            <div class="col-sm-6">
-                @if (!string.IsNullOrEmpty(errorMessage))
-                {
-                    <div class="alert alert-danger" role="alert">
-                        <strong>Error:</strong> @errorMessage
+        <div class="col-sm-6">
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="alert alert-danger" role="alert">
+                    <strong>Error:</strong> @errorMessage
+                </div>
+            }
+            <div class="card">
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <label class="col-sm-3 col-form-label">Receipt ID</label>
+                        <div class="col-sm-9">
+                            <input type="text" class="form-control" value="@receiptId" readonly />
+                        </div>
                     </div>
-                }
-                <div class="card">
-                    <div class="card-body">
-                        <div class="row mb-3">
-                            <label class="col-sm-3 col-form-label">Receipt ID</label>
-                            <div class="col-sm-9">
-                                <input type="text" class="form-control" value="@receiptId" readonly />
-                            </div>
+                    <div class="row mb-3">
+                        <label class="col-sm-3 col-form-label">Receipt No</label>
+                        <div class="col-sm-9">
+                            <input type="text" class="form-control" @bind="receiptNo" readonly />
                         </div>
-                        <div class="row mb-3">
-                            <label class="col-sm-3 col-form-label">Receipt No</label>
-                            <div class="col-sm-9">
-                                <input type="text" class="form-control" @bind="receiptNo" readonly />
-                            </div>
-                        </div>
-                        <div class="row mb-3">
-                            <label class="col-sm-3 col-form-label">Customer</label>
-                            <div class="col-sm-9">
-                                <select class="form-control @(customerId == 0 && submitAttempted ? "is-invalid" : "")"
-                                    @onchange="OnCustomerChanged" disabled>
-                                    <option value="">-- Select Customer --</option>
-                                    @foreach (var customer in customers)
-                                    {
-                                        <option value="@customer.Value" selected="@(customerId.ToString() == customer.Value)">
-                                            @customer.Text</option>
-                                    }
-                                </select>
-                                @if (customerId == 0 && submitAttempted)
+                    </div>
+                    <div class="row mb-3">
+                        <label class="col-sm-3 col-form-label">Customer</label>
+                        <div class="col-sm-9">
+                            <select class="form-control" disabled>
+                                <option value="">-- Select Customer --</option>
+                                @foreach (var customer in customers)
                                 {
-                                    <div class="invalid-feedback d-block">Customer is required</div>
+                                    <option value="@customer.Value" selected="@(customerId.ToString() == customer.Value)">
+                                        @customer.Text</option>
                                 }
-                            </div>
+                            </select>
                         </div>
-                        <div class="row mb-3">
-                            <label class="col-sm-3 col-form-label">Date</label>
-                            <div class="col-sm-9">
-                                <input type="date" class="form-control" @bind="receiptDate" />
-                            </div>
+                    </div>
+                    <div class="row mb-3">
+                        <label class="col-sm-3 col-form-label">Date</label>
+                        <div class="col-sm-9">
+                            <input type="date" class="form-control" @bind="receiptDate" readonly />
                         </div>
-                        <div class="row mb-3">
-                            <label class="col-sm-3 col-form-label">Debit</label>
-                            <div class="col-sm-9">
-                                <select class="form-control @(accountToDebitId == 0 && submitAttempted ? "is-invalid" : "")"
-                                    @bind="accountToDebitId">
-                                    <option value="">-- Select Account --</option>
-                                    @foreach (var account in debitAccounts)
-                                    {
-                                        <option value="@account.Value">@account.Text</option>
-                                    }
-                                </select>
-                                @if (accountToDebitId == 0 && submitAttempted)
+                    </div>
+                    @* 
+                    <div class="row mb-3">
+                        <label class="col-sm-3 col-form-label">Debit</label>
+                        <div class="col-sm-9">
+                            <select class="form-control" disabled>
+                                <option value="">-- Select Account --</option>
+                                @foreach (var account in debitAccounts)
                                 {
-                                    <div class="invalid-feedback d-block">Debit account is required</div>
+                                    <option value="@account.Value" selected="@(accountToDebitId.ToString() == account.Value)">
+                                        @account.Text</option>
                                 }
-                            </div>
+                            </select>
                         </div>
-                        <div class="row mb-3">
-                            <label class="col-sm-3 col-form-label">Credit</label>
-                            <div class="col-sm-9">
-                                <select
-                                    class="form-control @((!IsValidCreditAccount() && submitAttempted) ? "is-invalid" : "")"
-                                    @bind="accountToCreditId" id="optAccountToCreditId" disabled>
-                                    <option value="">-- Select Account --</option>
-                                    @foreach (var account in creditAccounts)
-                                    {
-                                        <option value="@account.Value"
-                                            selected="@(accountToCreditId.ToString() == account.Value)">@account.Text</option>
-                                    }
-                                </select>
-                                @if (!IsValidCreditAccount() && submitAttempted)
+                    </div>
+                    *@
+                    <div class="row mb-3">
+                        <label class="col-sm-3 col-form-label">Credit</label>
+                        <div class="col-sm-9">
+                            <select class="form-control" disabled>
+                                <option value="">-- Select Account --</option>
+                                @foreach (var account in creditAccounts)
                                 {
-                                    <div class="invalid-feedback d-block">Credit account must be the customer's advance account
-                                    </div>
+                                    <option value="@account.Value" selected="@(accountToCreditId.ToString() == account.Value)">
+                                        @account.Text</option>
                                 }
-                            </div>
+                            </select>
                         </div>
-                        <div class="row mb-3">
-                            <label class="col-sm-3 col-form-label">Amount</label>
-                            <div class="col-sm-9">
-                                <input type="number" step="0.01"
-                                    class="form-control @(amount <= 0 && submitAttempted ? "is-invalid" : "")"
-                                    @bind="amount" placeholder="0.0" />
-                                @if (amount <= 0 && submitAttempted)
-                                {
-                                    <div class="invalid-feedback d-block">Amount must be greater than 0</div>
-                                }
-                            </div>
+                    </div>
+                    <div class="row mb-3">
+                        <label class="col-sm-3 col-form-label">Amount</label>
+                        <div class="col-sm-9">
+                            <input type="number" step="0.01" class="form-control" @bind="amount" placeholder="0.0"
+                                readonly />
                         </div>
                     </div>
                 </div>
             </div>
-
-            <div class="col-md-9 mt-3">
-                <button id="btnSave" class="btn btn-sm btn-primary btn-flat pull-left" type="submit">Save</button>
-                <a href="/Sales/SalesReceipts" class="btn btn-sm btn-default btn-flat pull-left">Close</a>
-            </div>
-        </form>
+        </div>
     }
 </div>
 
 @code {
     private bool loading = true;
     private string errorMessage = "";
-    private bool submitAttempted = false;
     private int receiptId = 0;
     private string receiptNo = "";
     private int customerId = 0;
@@ -334,96 +307,6 @@
         {
             errorMessage = $"Error loading receipt: {ex.Message}";
         }
-    }
-
-    private async Task OnCustomerChanged(ChangeEventArgs e)
-    {
-        if (e.Value == null || string.IsNullOrEmpty(e.Value.ToString()))
-        {
-            customerId = 0;
-            accountToCreditId = 0;
-            return;
-        }
-
-        if (int.TryParse(e.Value.ToString(), out var selectedCustomerId))
-        {
-            customerId = selectedCustomerId;
-
-            // Auto-select the customer's prepayment account
-            if (customerAdvanceAccounts.TryGetValue(selectedCustomerId, out var advanceAccountId))
-            {
-                accountToCreditId = advanceAccountId;
-            }
-        }
-    }
-
-    private async Task HandleSubmit()
-    {
-        submitAttempted = true;
-
-        // Validate form
-        if (customerId == 0 ||
-        accountToDebitId == 0 ||
-        !IsValidCreditAccount() ||
-        amount <= 0)
-        {
-            return;
-        }
-
-        try
-        {
-            string apiurl = System.Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
-            var client = ClientFactory.CreateClient();
-
-            // Create an object with the form data
-            var receiptData = new
-            {
-                Id = receiptId,
-                CustomerId = customerId,
-                ReceiptDate = receiptDate,
-                AccountToDebitId = accountToDebitId,
-                AccountToCreditId = accountToCreditId,
-                Amount = amount
-            };
-
-            // Submit to API
-            var json = System.Text.Json.JsonSerializer.Serialize(receiptData);
-            var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
-
-            var response = await client.PostAsync($"{apiurl}sales/savereceipt", content);
-
-            if (response.IsSuccessStatusCode)
-            {
-                Navigation.NavigateTo("/Sales/SalesReceipts", forceLoad: true);
-            }
-            else
-            {
-                var responseContent = await response.Content.ReadAsStringAsync();
-                errorMessage = $"Failed to save receipt. Status: {response.StatusCode}. Details: {responseContent}";
-            }
-        }
-        catch (Exception ex)
-        {
-            errorMessage = $"Error saving receipt: {ex.Message}";
-        }
-    }
-
-    private bool IsValidCreditAccount()
-    {
-        // Credit account must be selected
-        if (accountToCreditId == 0)
-        {
-            return false;
-        }
-
-        // Credit account must match the customer's advance account
-        if (customerId > 0 && customerAdvanceAccounts.TryGetValue(customerId, out var advanceAccountId))
-        {
-            return accountToCreditId == advanceAccountId;
-        }
-
-        // If no customer selected, we can't validate
-        return false;
     }
 
     private int? GetJsonInt(JsonElement elem, string propName)
