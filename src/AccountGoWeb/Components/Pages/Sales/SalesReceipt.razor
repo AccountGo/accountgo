@@ -1,0 +1,464 @@
+@using System.Text.Json
+@using System.Text.Json.Serialization
+@using AccountGoWeb.Models
+@using AccountGoWeb.Models.Sales
+@using Microsoft.AspNetCore.Components
+
+<style>
+    label,
+    h5 {
+        color: #fff !important;
+    }
+
+    div.row {
+        color: #fff;
+    }
+</style>
+
+<div class="container-fluid">
+    <div class="row mb-3">
+        <div class="col text-end">
+            <a href="/Sales/SalesReceipts" class="btn btn-outline-secondary">
+                <i class="fa fa-arrow-left"></i>
+                Back to Receipts
+            </a>
+        </div>
+    </div>
+
+    @if (loading)
+    {
+        <p><em>Loading receipt...</em></p>
+    }
+    else if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="alert alert-danger" role="alert">
+            <strong>Error:</strong> @errorMessage
+        </div>
+    }
+    else
+    {
+        <form @onsubmit="HandleSubmit">
+            <div class="col-sm-6">
+                @if (!string.IsNullOrEmpty(errorMessage))
+                {
+                    <div class="alert alert-danger" role="alert">
+                        <strong>Error:</strong> @errorMessage
+                    </div>
+                }
+                <div class="card">
+                    <div class="card-body">
+                        <div class="row mb-3">
+                            <label class="col-sm-3 col-form-label">Receipt ID</label>
+                            <div class="col-sm-9">
+                                <input type="text" class="form-control" value="@receiptId" readonly />
+                            </div>
+                        </div>
+                        <div class="row mb-3">
+                            <label class="col-sm-3 col-form-label">Receipt No</label>
+                            <div class="col-sm-9">
+                                <input type="text" class="form-control" @bind="receiptNo" readonly />
+                            </div>
+                        </div>
+                        <div class="row mb-3">
+                            <label class="col-sm-3 col-form-label">Customer</label>
+                            <div class="col-sm-9">
+                                <select class="form-control @(customerId == 0 && submitAttempted ? "is-invalid" : "")"
+                                    @onchange="OnCustomerChanged" disabled>
+                                    <option value="">-- Select Customer --</option>
+                                    @foreach (var customer in customers)
+                                    {
+                                        <option value="@customer.Value" selected="@(customerId.ToString() == customer.Value)">
+                                            @customer.Text</option>
+                                    }
+                                </select>
+                                @if (customerId == 0 && submitAttempted)
+                                {
+                                    <div class="invalid-feedback d-block">Customer is required</div>
+                                }
+                            </div>
+                        </div>
+                        <div class="row mb-3">
+                            <label class="col-sm-3 col-form-label">Date</label>
+                            <div class="col-sm-9">
+                                <input type="date" class="form-control" @bind="receiptDate" />
+                            </div>
+                        </div>
+                        <div class="row mb-3">
+                            <label class="col-sm-3 col-form-label">Debit</label>
+                            <div class="col-sm-9">
+                                <select class="form-control @(accountToDebitId == 0 && submitAttempted ? "is-invalid" : "")"
+                                    @bind="accountToDebitId">
+                                    <option value="">-- Select Account --</option>
+                                    @foreach (var account in debitAccounts)
+                                    {
+                                        <option value="@account.Value">@account.Text</option>
+                                    }
+                                </select>
+                                @if (accountToDebitId == 0 && submitAttempted)
+                                {
+                                    <div class="invalid-feedback d-block">Debit account is required</div>
+                                }
+                            </div>
+                        </div>
+                        <div class="row mb-3">
+                            <label class="col-sm-3 col-form-label">Credit</label>
+                            <div class="col-sm-9">
+                                <select
+                                    class="form-control @((!IsValidCreditAccount() && submitAttempted) ? "is-invalid" : "")"
+                                    @bind="accountToCreditId" id="optAccountToCreditId" disabled>
+                                    <option value="">-- Select Account --</option>
+                                    @foreach (var account in creditAccounts)
+                                    {
+                                        <option value="@account.Value"
+                                            selected="@(accountToCreditId.ToString() == account.Value)">@account.Text</option>
+                                    }
+                                </select>
+                                @if (!IsValidCreditAccount() && submitAttempted)
+                                {
+                                    <div class="invalid-feedback d-block">Credit account must be the customer's advance account
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                        <div class="row mb-3">
+                            <label class="col-sm-3 col-form-label">Amount</label>
+                            <div class="col-sm-9">
+                                <input type="number" step="0.01"
+                                    class="form-control @(amount <= 0 && submitAttempted ? "is-invalid" : "")"
+                                    @bind="amount" placeholder="0.0" />
+                                @if (amount <= 0 && submitAttempted)
+                                {
+                                    <div class="invalid-feedback d-block">Amount must be greater than 0</div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-9 mt-3">
+                <button id="btnSave" class="btn btn-sm btn-primary btn-flat pull-left" type="submit">Save</button>
+                <a href="/Sales/SalesReceipts" class="btn btn-sm btn-default btn-flat pull-left">Close</a>
+            </div>
+        </form>
+    }
+</div>
+
+@code {
+    private bool loading = true;
+    private string errorMessage = "";
+    private bool submitAttempted = false;
+    private int receiptId = 0;
+    private string receiptNo = "";
+    private int customerId = 0;
+    private DateTime receiptDate = DateTime.Now;
+    private int accountToDebitId = 0;
+    private int accountToCreditId = 0;
+    private decimal amount = 0;
+
+    private List<(string Text, string Value)> customers = new();
+    private List<(string Text, string Value)> debitAccounts = new();
+    private List<(string Text, string Value)> creditAccounts = new();
+    private Dictionary<int, int> customerAdvanceAccounts = new();
+    private Dictionary<int, string> accountNames = new();
+
+    [SupplyParameterFromQuery(Name = "id")]
+    public int Id { get; set; }
+
+    [Inject]
+    private IHttpClientFactory ClientFactory { get; set; } = null!;
+
+    [Inject]
+    private NavigationManager Navigation { get; set; } = null!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            string apiurl = System.Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
+            var client = ClientFactory.CreateClient();
+            client.Timeout = TimeSpan.FromSeconds(60);
+
+            // Load customers from API
+            var customersResponse = await client.GetAsync($"{apiurl}sales/customers");
+            if (customersResponse.IsSuccessStatusCode)
+            {
+                var json = await customersResponse.Content.ReadAsStringAsync();
+                var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                var customersData = JsonSerializer.Deserialize<List<JsonElement>>(json, options);
+                if (customersData != null)
+                {
+                    foreach (var customer in customersData)
+                    {
+                        var id = GetJsonPropertyString(customer, "id");
+                        var name = GetJsonPropertyString(customer, "name");
+                        var prepaymentAccountId = GetJsonPropertyString(customer, "prepaymentAccountId");
+                        customers.Add((name ?? "Unknown", id));
+
+                        // Store the prepayment account ID for this customer
+                        if (int.TryParse(id, out var customerId_int) && int.TryParse(prepaymentAccountId, out var accountId_int))
+                        {
+                            customerAdvanceAccounts[customerId_int] = accountId_int;
+                        }
+                    }
+                }
+            }
+
+            // Load debit accounts from API (Cash & Banks)
+            var debitResponse = await client.GetAsync($"{apiurl}financials/CashBanks");
+            if (debitResponse.IsSuccessStatusCode)
+            {
+                var json = await debitResponse.Content.ReadAsStringAsync();
+                var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                var accountsData = JsonSerializer.Deserialize<List<JsonElement>>(json, options);
+                if (accountsData != null)
+                {
+                    foreach (var account in accountsData)
+                    {
+                        var id = GetJsonPropertyString(account, "id");
+                        var name = GetJsonPropertyString(account, "name");
+                        debitAccounts.Add((name ?? "Unknown", id));
+                    }
+                }
+            }
+
+            // Load credit accounts from API (posting accounts only)
+            var creditResponse = await client.GetAsync($"{apiurl}common/postingaccounts");
+            if (creditResponse.IsSuccessStatusCode)
+            {
+                var json = await creditResponse.Content.ReadAsStringAsync();
+                var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                var accountsData = JsonSerializer.Deserialize<List<JsonElement>>(json, options);
+                if (accountsData != null)
+                {
+                    foreach (var account in accountsData)
+                    {
+                        var id = GetJsonPropertyString(account, "id");
+                        var name = GetJsonPropertyString(account, "accountName");
+                        if (!string.IsNullOrEmpty(id) && !string.IsNullOrEmpty(name))
+                        {
+                            creditAccounts.Add((name, id));
+                            // Store account name for display
+                            if (int.TryParse(id, out var accountId))
+                            {
+                                accountNames[accountId] = name;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Load all accounts to get customer advance account names
+            var allAccountsResponse = await client.GetAsync($"{apiurl}financials/accounts");
+            if (allAccountsResponse.IsSuccessStatusCode)
+            {
+                var json = await allAccountsResponse.Content.ReadAsStringAsync();
+                var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                var accountsData = JsonSerializer.Deserialize<List<JsonElement>>(json, options);
+                if (accountsData != null)
+                {
+                    foreach (var account in accountsData)
+                    {
+                        var id = GetJsonPropertyString(account, "id");
+                        var name = GetJsonPropertyString(account, "name");
+                        if (!string.IsNullOrEmpty(id) && !string.IsNullOrEmpty(name))
+                        {
+                            // Store account name for display
+                            if (int.TryParse(id, out var accountId))
+                            {
+                                accountNames[accountId] = name;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Load receipt data if editing
+            if (Id > 0)
+            {
+                await LoadReceiptData();
+            }
+
+            loading = false;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to load form data: {ex.Message}";
+            loading = false;
+        }
+    }
+
+    private async Task LoadReceiptData()
+    {
+        try
+        {
+            string apiurl = System.Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
+            var client = ClientFactory.CreateClient();
+            var response = await client.GetAsync($"{apiurl}sales/salesreceipt?id={Id}");
+
+            if (response.IsSuccessStatusCode)
+            {
+                var json = await response.Content.ReadAsStringAsync();
+                var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                var receiptData = JsonSerializer.Deserialize<JsonElement>(json, options);
+
+                if (receiptData.ValueKind == JsonValueKind.Object)
+                {
+                    receiptId = GetJsonInt(receiptData, "id") ?? 0;
+                    receiptNo = GetJsonPropertyString(receiptData, "receiptNo");
+                    customerId = GetJsonInt(receiptData, "customerId") ?? 0;
+                    accountToDebitId = GetJsonInt(receiptData, "accountToDebitId") ?? 0;
+                    accountToCreditId = GetJsonInt(receiptData, "accountToCreditId") ?? 0;
+                    amount = GetJsonDecimal(receiptData, "amount") ?? 0;
+
+                    // If credit account is empty but customer is set, auto-populate it
+                    if (accountToCreditId == 0 && customerId > 0 && customerAdvanceAccounts.TryGetValue(customerId, out var
+                    advanceAccountId))
+                    {
+                        accountToCreditId = advanceAccountId;
+                    }
+
+                    if (receiptData.TryGetProperty("receiptDate", out var dateElem))
+                    {
+                        if (DateTime.TryParse(dateElem.GetString(), out var date))
+                            receiptDate = date;
+                    }
+                }
+            }
+            else
+            {
+                errorMessage = $"Failed to load receipt. Status: {response.StatusCode}";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading receipt: {ex.Message}";
+        }
+    }
+
+    private async Task OnCustomerChanged(ChangeEventArgs e)
+    {
+        if (e.Value == null || string.IsNullOrEmpty(e.Value.ToString()))
+        {
+            customerId = 0;
+            accountToCreditId = 0;
+            return;
+        }
+
+        if (int.TryParse(e.Value.ToString(), out var selectedCustomerId))
+        {
+            customerId = selectedCustomerId;
+
+            // Auto-select the customer's prepayment account
+            if (customerAdvanceAccounts.TryGetValue(selectedCustomerId, out var advanceAccountId))
+            {
+                accountToCreditId = advanceAccountId;
+            }
+        }
+    }
+
+    private async Task HandleSubmit()
+    {
+        submitAttempted = true;
+
+        // Validate form
+        if (customerId == 0 ||
+        accountToDebitId == 0 ||
+        !IsValidCreditAccount() ||
+        amount <= 0)
+        {
+            return;
+        }
+
+        try
+        {
+            string apiurl = System.Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
+            var client = ClientFactory.CreateClient();
+
+            // Create an object with the form data
+            var receiptData = new
+            {
+                Id = receiptId,
+                CustomerId = customerId,
+                ReceiptDate = receiptDate,
+                AccountToDebitId = accountToDebitId,
+                AccountToCreditId = accountToCreditId,
+                Amount = amount
+            };
+
+            // Submit to API
+            var json = System.Text.Json.JsonSerializer.Serialize(receiptData);
+            var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
+
+            var response = await client.PostAsync($"{apiurl}sales/savereceipt", content);
+
+            if (response.IsSuccessStatusCode)
+            {
+                Navigation.NavigateTo("/Sales/SalesReceipts", forceLoad: true);
+            }
+            else
+            {
+                var responseContent = await response.Content.ReadAsStringAsync();
+                errorMessage = $"Failed to save receipt. Status: {response.StatusCode}. Details: {responseContent}";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error saving receipt: {ex.Message}";
+        }
+    }
+
+    private bool IsValidCreditAccount()
+    {
+        // Credit account must be selected
+        if (accountToCreditId == 0)
+        {
+            return false;
+        }
+
+        // Credit account must match the customer's advance account
+        if (customerId > 0 && customerAdvanceAccounts.TryGetValue(customerId, out var advanceAccountId))
+        {
+            return accountToCreditId == advanceAccountId;
+        }
+
+        // If no customer selected, we can't validate
+        return false;
+    }
+
+    private int? GetJsonInt(JsonElement elem, string propName)
+    {
+        if (elem.TryGetProperty(propName, out var prop))
+        {
+            if (prop.ValueKind == JsonValueKind.Number && prop.TryGetInt32(out var val))
+                return val;
+        }
+        return null;
+    }
+
+    private decimal? GetJsonDecimal(JsonElement elem, string propName)
+    {
+        if (elem.TryGetProperty(propName, out var prop))
+        {
+            if (prop.ValueKind == JsonValueKind.Number && prop.TryGetDecimal(out var val))
+                return val;
+        }
+        return null;
+    }
+
+    private string GetJsonPropertyString(JsonElement element, string propertyName)
+    {
+        if (element.TryGetProperty(propertyName, out var property))
+        {
+            if (property.ValueKind == JsonValueKind.String)
+            {
+                return property.GetString() ?? "";
+            }
+            else if (property.ValueKind == JsonValueKind.Number)
+            {
+                return property.GetInt32().ToString();
+            }
+        }
+        return "";
+    }
+}

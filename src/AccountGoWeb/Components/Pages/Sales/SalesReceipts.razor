@@ -3,8 +3,19 @@
 @using System.Text.Json.Serialization
 
 <style>
-    .selected-row {
-        background-color: #e7f3ff;
+    .table-hover tbody tr.selected-row {
+        background-color: lightblue !important;
+        color: black;
+    }
+
+    .table-hover tbody tr.selected-row td {
+        background-color: lightblue;
+        font-weight: bold;
+        color: black;
+    }
+
+    .table-hover tbody tr {
+        cursor: pointer;
     }
 </style>
 
@@ -217,6 +228,15 @@
 
     private void OnRowSelected(int index)
     {
+        // Toggle selection: deselect if clicking the same row
+        if (selectedRowIndex == index)
+        {
+            selectedRowIndex = -1;
+            selectedReceiptId = null;
+            isAllocateDisabled = false;
+            return;
+        }
+
         selectedRowIndex = index;
 
         try

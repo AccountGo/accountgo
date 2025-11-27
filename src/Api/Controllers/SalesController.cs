@@ -22,9 +22,9 @@ namespace Api.Controllers
 
         public SalesController(IAdministrationService adminService,
             ISalesService salesService,
-            IFinancialService financialService, 
-            IInventoryService inventoryService, 
-            ITaxService taxService, 
+            IFinancialService financialService,
+            IInventoryService inventoryService,
+            ITaxService taxService,
             ILogger<SalesController> logger)
         {
             _adminService = adminService;
@@ -37,7 +37,7 @@ namespace Api.Controllers
 
         [HttpPost]
         [Route("SaveCustomer")]
-        public IActionResult SaveCustomer([FromBody]Dto.Sales.Customer customerDto)
+        public IActionResult SaveCustomer([FromBody] Dto.Sales.Customer customerDto)
         {
             bool isNew = customerDto.Id == 0;
             Core.Domain.Sales.Customer? customer = null;
@@ -241,7 +241,7 @@ namespace Api.Controllers
                     OrderDate = salesOrder.Date,
                     PaymentTermId = salesOrder.PaymentTermId,
                     ReferenceNo = salesOrder.ReferenceNo,
-                    StatusId = (int) salesOrder.Status!,
+                    StatusId = (int)salesOrder.Status!,
                     SalesOrderLines = new List<Dto.Sales.SalesOrderLine>()
                 };
 
@@ -303,7 +303,7 @@ namespace Api.Controllers
                     lineDto.MeasurementId = line.MeasurementId;
                     lineDto.ItemDescription = line.Item.Description;
                     lineDto.MeasurementDescription = line.Measurement.Description;
-                    
+
                     salesInvoiceDto.SalesInvoiceLines.Add(lineDto);
                 }
 
@@ -323,7 +323,7 @@ namespace Api.Controllers
 
         [HttpPost]
         [Route("addsalesorder")]
-        public IActionResult AddSalesOrder([FromBody]Dto.Sales.SalesOrder salesorderDto)
+        public IActionResult AddSalesOrder([FromBody] Dto.Sales.SalesOrder salesorderDto)
         {
             try
             {
@@ -377,7 +377,7 @@ namespace Api.Controllers
                     QuotationDate = quote.Date,
                     ReferenceNo = quote.ReferenceNo,
                     SalesQuoteStatus = quote.Status.ToString(),
-                    StatusId = (int) quote.Status!
+                    StatusId = (int)quote.Status!
                 };
 
                 foreach (var line in quote.SalesQuoteLines)
@@ -413,7 +413,7 @@ namespace Api.Controllers
                 QuotationDate = quote.Date,
                 PaymentTermId = quote.PaymentTermId,
                 ReferenceNo = quote.ReferenceNo,
-                StatusId = (int) quote.Status!
+                StatusId = (int)quote.Status!
             };
 
             foreach (var line in quote.SalesQuoteLines)
@@ -569,7 +569,7 @@ namespace Api.Controllers
 
         [HttpPost]
         [Route("SaveSalesOrder")]
-        public IActionResult SaveSalesOrder([FromBody]Dto.Sales.SalesOrder salesOrderDto)
+        public IActionResult SaveSalesOrder([FromBody] Dto.Sales.SalesOrder salesOrderDto)
         {
             string[]? errors = null;
             try
@@ -684,7 +684,7 @@ namespace Api.Controllers
 
         [HttpPost]
         [Route("PostSalesInvoice")]
-        public IActionResult PostSalesInvoice([FromBody]Dto.Sales.SalesInvoice salesInvoiceDto)
+        public IActionResult PostSalesInvoice([FromBody] Dto.Sales.SalesInvoice salesInvoiceDto)
         {
             string[]? errors = null;
 
@@ -715,7 +715,7 @@ namespace Api.Controllers
 
         [HttpPost]
         [Route("SaveSalesInvoice")]
-        public IActionResult SaveSalesInvoice([FromBody]Dto.Sales.SalesInvoice salesInvoiceDto)
+        public IActionResult SaveSalesInvoice([FromBody] Dto.Sales.SalesInvoice salesInvoiceDto)
         {
             string[]? errors = null;
 
@@ -920,7 +920,7 @@ namespace Api.Controllers
 
         [HttpPost]
         [Route("SaveQuotation")]
-        public IActionResult SaveQuotation([FromBody]Dto.Sales.SalesQuotation quotationDto)
+        public IActionResult SaveQuotation([FromBody] Dto.Sales.SalesQuotation quotationDto)
         {
             string[]? errors = null;
             _logger.LogInformation("SaveQuotation");
@@ -956,7 +956,7 @@ namespace Api.Controllers
 
                 salesQuote.ReferenceNo = quotationDto.ReferenceNo;
                 salesQuote.PaymentTermId = quotationDto.PaymentTermId;
-                
+
                 foreach (var line in quotationDto.SalesQuotationLines)
                 {
                     if (!isNew)
@@ -1025,7 +1025,7 @@ namespace Api.Controllers
 
         [HttpPost]
         [Route("SaveReceipt")]
-        public IActionResult SaveReceipt([FromBody]dynamic receiptDto)
+        public IActionResult SaveReceipt([FromBody] dynamic receiptDto)
         {
             string[]? errors = null;
 
@@ -1074,7 +1074,7 @@ namespace Api.Controllers
 
         [HttpPost]
         [Route("SaveAllocation")]
-        public IActionResult SaveAllocation([FromBody]dynamic allocationDto)
+        public IActionResult SaveAllocation([FromBody] dynamic allocationDto)
         {
             string[]? errors = null;
 

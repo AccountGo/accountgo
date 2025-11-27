@@ -305,6 +305,12 @@ namespace AccountGoWeb.Controllers
         }
 
         [HttpGet]
+        public IActionResult SalesReceipt(int id)
+        {
+            return View();
+        }
+
+        [HttpGet]
         public IActionResult AddReceipt()
         {
             try
