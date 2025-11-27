@@ -131,8 +131,8 @@ else
 
 @code {
     private AccountViewModel[]? accounts = [];
-    private bool getError;
-    private bool shouldRender;
+    private bool getError = false;
+    private bool shouldRender = true;
     private bool jsInteropCalled = false; // Flag to ensure JS interop is called only once
     private string url = string.Empty;
     JsonElement data;
@@ -161,8 +161,19 @@ else
         error += "HERE 4\n";
         // convert http response data to UsersResponse object
         accounts = await httpResponse.Content.ReadFromJsonAsync<AccountViewModel[]>(options);
+
+        // capture raw JSON response and deserialize to JsonElement for debugging / inspection
+        var jsonResponse = await httpResponse.Content.ReadAsStringAsync();
+        data = JsonSerializer.Deserialize<JsonElement>(jsonResponse);
+        Console.WriteLine(data);
+
+        // allow the component to render now that data is available
+        shouldRender = true;
+        StateHasChanged();
+
         error += "HERE 5\n";
     }
+    
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
