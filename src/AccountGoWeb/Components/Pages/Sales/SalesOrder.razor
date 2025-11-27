@@ -2,23 +2,6 @@
 @using System.Text.Json.Serialization
 @using Dto.Sales
 
-<!-- DEBUG PANEL - ALWAYS VISIBLE -->
-<div
-    style="background: #333; color: #0f0; padding: 10px; border-radius: 4px; font-family: monospace; font-size: 12px; margin-bottom: 10px; margin: 10px;">
-    <div><strong>DEBUG INFO:</strong></div>
-    <div>ID: @Id</div>
-    <div>Loading: @loading</div>
-    <div>Has SalesOrder: @HasSalesOrder()</div>
-    <div>Error: @errorMessage</div>
-    <div>SalesOrderLines Count: @salesOrderLines.Count</div>
-    <div style="margin-top: 10px; border-top: 1px solid #0f0; padding-top: 10px;">
-        <div><strong>API Response:</strong></div>
-        <div
-            style="max-height: 300px; overflow-y: auto; background: #222; padding: 5px; word-break: break-all; white-space: pre-wrap;">
-            @apiResponse</div>
-    </div>
-</div>
-
 <!-- NOTE: If a sales order displays an error about "Nullable object must have a value", 
      it means the order in the database has incomplete data (null CustomerId or Status). 
      The sales order needs to be edited to complete the required fields. -->
@@ -32,10 +15,10 @@
                 <i class="fa fa-arrow-left"></i>
                 Back to Orders
             </a>
-            <a href="#" class="btn btn-outline-warning" @onclick="OnClickEditButton">
+            @* <a href="#" class="btn btn-outline-warning" @onclick="OnClickEditButton">
                 <i class="fa fa-edit"></i>
                 Edit
-            </a>
+            </a> *@
         </div>
     </div>
 

@@ -1,6 +1,23 @@
 @using System.Text.Json
 @using System.Text.Json.Serialization
 
+<style>
+    .table-hover tbody tr.selected {
+        background-color: white !important;
+        color: black;
+    }
+
+    .table-hover tbody tr.selected td {
+        background-color: lightblue;
+        font-weight: bold;
+        color: black;
+    }
+
+    .table-hover tbody tr:hover {
+        cursor: pointer;
+    }
+</style>
+
 <div class="container-fluid">
     <div class="row mb-3">
         <div class="col">
@@ -61,8 +78,7 @@
                         @for (int i = 0; i < salesOrders.Count; i++)
                         {
                             int index = i;
-                            <tr style="@(selectedRowIndex == index ? "background-color: #e7f3ff;" : "")"
-                                @onclick="@(() => OnRowSelected(index))">
+                            <tr class="@(selectedRowIndex == index ? "selected" : "")" @onclick="@(() => OnRowSelected(index))">
                                 <td>@GetValue(salesOrders[index], "no")</td>
                                 <td>@GetValue(salesOrders[index], "customerName")</td>
                                 <td>@GetValue(salesOrders[index], "orderDate")</td>
@@ -187,83 +203,93 @@
 
     private void OnRowSelected(int index)
     {
-        selectedRowIndex = index;
-
-        try
+        // Toggle selection - if clicking the same row, deselect it
+        if (selectedRowIndex == index)
         {
-            if (index >= 0 && index < salesOrders.Count)
+            selectedRowIndex = -1;
+            selectedOrderId = null;
+            isInvoiceDisabled = false;
+        }
+        else
+        {
+            selectedRowIndex = index;
+
+            try
             {
-                var order = salesOrders[index];
-                if (order is System.Text.Json.JsonElement je)
+                if (index >= 0 && index < salesOrders.Count)
                 {
-                    // Try to get ID - it might be a number or string
-                    string? orderId = null;
+                    var order = salesOrders[index];
+                    if (order is System.Text.Json.JsonElement je)
+                    {
+                        // Try to get ID - it might be a number or string
+                        string? orderId = null;
 
-                    if (je.TryGetProperty("id", out var idProp))
-                    {
-                        // Handle both string and numeric IDs
-                        if (idProp.ValueKind == System.Text.Json.JsonValueKind.String)
+                        if (je.TryGetProperty("id", out var idProp))
                         {
-                            orderId = idProp.GetString();
-                        }
-                        else if (idProp.ValueKind == System.Text.Json.JsonValueKind.Number)
-                        {
-                            orderId = idProp.GetInt32().ToString();
-                        }
-                    }
-                    else if (je.TryGetProperty("Id", out var idProp2))
-                    {
-                        if (idProp2.ValueKind == System.Text.Json.JsonValueKind.String)
-                        {
-                            orderId = idProp2.GetString();
-                        }
-                        else if (idProp2.ValueKind == System.Text.Json.JsonValueKind.Number)
-                        {
-                            orderId = idProp2.GetInt32().ToString();
-                        }
-                    }
-                    else if (je.TryGetProperty("salesOrderId", out var soIdProp))
-                    {
-                        if (soIdProp.ValueKind == System.Text.Json.JsonValueKind.String)
-                        {
-                            orderId = soIdProp.GetString();
-                        }
-                        else if (soIdProp.ValueKind == System.Text.Json.JsonValueKind.Number)
-                        {
-                            orderId = soIdProp.GetInt32().ToString();
-                        }
-                    }
-
-                    if (!string.IsNullOrEmpty(orderId))
-                    {
-                        selectedOrderId = orderId;
-
-                        // Check if status is 6 (Fully Invoiced)
-                        isInvoiceDisabled = false;
-                        if (je.TryGetProperty("statusId", out var statusProp))
-                        {
-                            try
+                            // Handle both string and numeric IDs
+                            if (idProp.ValueKind == System.Text.Json.JsonValueKind.String)
                             {
-                                if (statusProp.ValueKind == System.Text.Json.JsonValueKind.Number && statusProp.GetInt32() == 6)
+                                orderId = idProp.GetString();
+                            }
+                            else if (idProp.ValueKind == System.Text.Json.JsonValueKind.Number)
+                            {
+                                orderId = idProp.GetInt32().ToString();
+                            }
+                        }
+                        else if (je.TryGetProperty("Id", out var idProp2))
+                        {
+                            if (idProp2.ValueKind == System.Text.Json.JsonValueKind.String)
+                            {
+                                orderId = idProp2.GetString();
+                            }
+                            else if (idProp2.ValueKind == System.Text.Json.JsonValueKind.Number)
+                            {
+                                orderId = idProp2.GetInt32().ToString();
+                            }
+                        }
+                        else if (je.TryGetProperty("salesOrderId", out var soIdProp))
+                        {
+                            if (soIdProp.ValueKind == System.Text.Json.JsonValueKind.String)
+                            {
+                                orderId = soIdProp.GetString();
+                            }
+                            else if (soIdProp.ValueKind == System.Text.Json.JsonValueKind.Number)
+                            {
+                                orderId = soIdProp.GetInt32().ToString();
+                            }
+                        }
+
+                        if (!string.IsNullOrEmpty(orderId))
+                        {
+                            selectedOrderId = orderId;
+
+                            // Check if status is 6 (Fully Invoiced)
+                            isInvoiceDisabled = false;
+                            if (je.TryGetProperty("statusId", out var statusProp))
+                            {
+                                try
                                 {
-                                    isInvoiceDisabled = true;
+                                    if (statusProp.ValueKind == System.Text.Json.JsonValueKind.Number && statusProp.GetInt32() == 6)
+                                    {
+                                        isInvoiceDisabled = true;
+                                    }
+                                }
+                                catch
+                                {
+                                    // Status might not be an int, skip
                                 }
                             }
-                            catch
-                            {
-                                // Status might not be an int, skip
-                            }
                         }
-
-                        StateHasChanged();
                     }
                 }
             }
+            catch
+            {
+                selectedOrderId = null;
+            }
         }
-        catch
-        {
-            selectedOrderId = null;
-        }
+
+        StateHasChanged();
     }
     private void UpdateButtonLinks()
     {

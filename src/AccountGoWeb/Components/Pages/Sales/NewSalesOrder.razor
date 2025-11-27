@@ -19,7 +19,6 @@
                     <i class="fa fa-edit"></i> @(editMode ? "Cancel" : "Edit")
                 </button>
             }
-            <a href="/Sales/SalesOrders" class="btn btn-outline-secondary">Back to List</a>
         </div>
     </div>
 
@@ -148,7 +147,7 @@
                     @if (editMode)
                     {
                         <button class="btn btn-success" @onclick="SaveSalesOrder">Save Order</button>
-                        <button class="btn btn-secondary ms-2" @onclick="() => editMode = false">Cancel</button>
+                        <a href="/Sales/SalesOrders" class="btn btn-secondary ms-2">Cancel</a>
                     }
                 </div>
             </div>
@@ -438,8 +437,8 @@
             {
                 editMode = false;
                 errorMessage = null;
-                StateHasChanged();
-                // Stay on the page after successful save
+                await Task.Delay(100);
+                Navigation.NavigateTo("/Sales/SalesOrders", forceLoad: true);
             }
             else
             {
@@ -453,5 +452,10 @@
             errorMessage = $"Error saving sales order: {ex.Message}";
             StateHasChanged();
         }
+    }
+
+    private void CancelSalesOrder()
+    {
+        Navigation.NavigateTo("/Sales/SalesOrders");
     }
 }
