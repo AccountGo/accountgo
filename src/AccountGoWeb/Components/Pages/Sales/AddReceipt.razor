@@ -322,7 +322,7 @@
 
             if (response.IsSuccessStatusCode)
             {
-                Navigation.NavigateTo("/Sales/SalesReceipts");
+                Navigation.NavigateTo("/Sales/SalesReceipts", forceLoad: true);
             }
             else
             {
