@@ -61,7 +61,9 @@
                     @* Total Amount *@
                     <div class="row">
                         <div class="col-sm-5">Total Amount</div>
-                        <div class="col-sm-7">@ViewBag.TotalAmount</div>
+                        <div class="col-sm-7">$@string.Format("{0:N2}", ViewBag.TotalAmount)</div>
+
+
                     </div>
                 </div>
                 @* Table *@
