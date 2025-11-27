@@ -16,9 +16,9 @@
     </button>
 </div>
 
-<form action="~/Quotations/AddSalesQuotation" method="post">
+<form action="~/Quotations/Quotation" method="post">
+    @Html.HiddenFor(m => m.Id)
     <div id="divSalesQuotationCard" class="col-md-9">
-        @Html.HiddenFor(m => m.Id)
         <div class="card">
             <div class="card-body show row" id="general">
                 <div class="col-sm-6">
@@ -30,7 +30,6 @@
                                 id="optCustomer">
                             </select>
                             <span asp-validation-for="CustomerId" class="danger"></span>
-                            @Html.HiddenFor(m => m.CustomerId)
                         </div>
                     </div>
                     @* Quotation Date *@
@@ -65,35 +64,31 @@
                         {
                             <tr>
                                 <td>
-                                    <select class="form-control" asp-for="@Model.SalesQuotationLines[i].ItemId"
-                                        asp-items="@ViewBag.Items" id="optCustomer" required>
+                                    <select class="form-control" asp-for="SalesQuotationLines[i].ItemId"
+                                        asp-items="@ViewBag.Items" id="item_@i">
                                     </select>
-                                    <span asp-validation-for="@Model.SalesQuotationLines[i].ItemId" class="danger"></span>
                                 </td>
+
                                 <td>
-                                    <input class="form-control" asp-for="@Model.SalesQuotationLines[i].Quantity" type="text"
-                                        placeholder="0.0 ..." required />
-                                    <span asp-validation-for="@Model.SalesQuotationLines[i].Quantity" class="danger"></span>
+                                    <input class="form-control" asp-for="SalesQuotationLines[i].Quantity" id="qty_@i" />
                                 </td>
+
                                 <td>
-                                    <input class="form-control" asp-for="@Model.SalesQuotationLines[i].Amount" type="text"
-                                        placeholder="0.0 ..." required />
-                                    <span asp-validation-for="@Model.SalesQuotationLines[i].Amount" class="danger"></span>
+                                    <input class="form-control" asp-for="SalesQuotationLines[i].Amount" id="amt_@i" />
                                 </td>
+
                                 <td>
-                                    <input class="form-control" asp-for="@Model.SalesQuotationLines[i].Discount" type="text"
-                                        placeholder="0.0 ..." required />
-                                    <span asp-validation-for="@Model.SalesQuotationLines[i].Discount" class="danger"></span>
+                                    <input class="form-control" asp-for="SalesQuotationLines[i].Discount" id="disc_@i" />
                                 </td>
+
                                 <td>
-                                    <select class="form-control" asp-for="@Model.SalesQuotationLines[i].MeasurementId"
-                                        asp-items="@ViewBag.Measurements" id="optCustomer" required>
+                                    <select class="form-control" asp-for="SalesQuotationLines[i].MeasurementId"
+                                        asp-items="@ViewBag.Measurements" id="meas_@i">
                                     </select>
-                                    <span asp-validation-for="@Model.SalesQuotationLines[i].MeasurementId"
-                                        class="danger"></span>
                                 </td>
                             </tr>
                         }
+
                     </tbody>
                 </table>
             </div>
