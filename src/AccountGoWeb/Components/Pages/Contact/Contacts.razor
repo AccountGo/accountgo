@@ -95,7 +95,7 @@
                             @foreach (var contact in contacts)
                             {
                                 <tr @onclick="() => SelectContact(contact)"
-                                    class="@(selectedContact?.Id == contact.Id ? "table-active" : "")" style="cursor: pointer;">
+                                    style="cursor: pointer; @(selectedContact?.Id == contact.Id ? "background-color: #007bff33; border-left: 3px solid #007bff;" : "")">
                                     <td>
                                         <a href="/contact/contact/@contact.Id?partyId=@contact.HoldingPartyId&partyType=@contact.HoldingPartyType">
                                             @contact.Id

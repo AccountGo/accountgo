@@ -51,7 +51,7 @@
             
             <div class="card mb-3">
                 <div class="card-header" style="background-color: #3a3f44; color: white;">
-                    <i class="fa fa-align-justify"></i> Contact
+                    <i class="fa fa-align-justify"></i> @(Id == 0 ? "New Contact" : isEditMode ? "Edit Contact" : "Contact")
                 </div>
                 <div class="card-body" style="background-color: #2b2f33;">
                     <div class="row mb-3">
