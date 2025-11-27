@@ -230,6 +230,82 @@ namespace Api.Data.Migrations.ApiDb
                     b.ToTable("CustomerContact");
                 });
 
+            modelBuilder.Entity("Core.Domain.Donations.DonationInvoiceHeader", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("Date")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("DonorId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsTaxReceiptIssued")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("No")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("Posted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Purpose")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ReferenceNo")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("TaxReceiptNo")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DonorId");
+
+                    b.ToTable("DonationInvoiceHeader");
+                });
+
+            modelBuilder.Entity("Core.Domain.Donations.DonationInvoiceLine", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("DonationInvoiceHeaderId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ItemId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("MeasurementId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Notes")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal>("Quantity")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DonationInvoiceHeaderId");
+
+                    b.HasIndex("ItemId");
+
+                    b.HasIndex("MeasurementId");
+
+                    b.ToTable("DonationInvoiceLine");
+                });
+
             modelBuilder.Entity("Core.Domain.Financials.Account", b =>
                 {
                     b.Property<int>("Id")
@@ -2083,6 +2159,44 @@ namespace Api.Data.Migrations.ApiDb
                     b.Navigation("Customer");
                 });
 
+            modelBuilder.Entity("Core.Domain.Donations.DonationInvoiceHeader", b =>
+                {
+                    b.HasOne("Core.Domain.Sales.Customer", "Donor")
+                        .WithMany()
+                        .HasForeignKey("DonorId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Donor");
+                });
+
+            modelBuilder.Entity("Core.Domain.Donations.DonationInvoiceLine", b =>
+                {
+                    b.HasOne("Core.Domain.Donations.DonationInvoiceHeader", "DonationInvoiceHeader")
+                        .WithMany("DonationInvoiceLines")
+                        .HasForeignKey("DonationInvoiceHeaderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Core.Domain.Items.Item", "Item")
+                        .WithMany()
+                        .HasForeignKey("ItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Core.Domain.Items.Measurement", "Measurement")
+                        .WithMany()
+                        .HasForeignKey("MeasurementId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("DonationInvoiceHeader");
+
+                    b.Navigation("Item");
+
+                    b.Navigation("Measurement");
+                });
+
             modelBuilder.Entity("Core.Domain.Financials.Account", b =>
                 {
                     b.HasOne("Core.Domain.Financials.AccountClass", "AccountClass")
@@ -3031,6 +3145,11 @@ namespace Api.Data.Migrations.ApiDb
             modelBuilder.Entity("Core.Domain.Auditing.AuditableEntity", b =>
                 {
                     b.Navigation("AuditableAttributes");
+                });
+
+            modelBuilder.Entity("Core.Domain.Donations.DonationInvoiceHeader", b =>
+                {
+                    b.Navigation("DonationInvoiceLines");
                 });
 
             modelBuilder.Entity("Core.Domain.Financials.Account", b =>

@@ -222,6 +222,7 @@ namespace Api.Controllers
             return Ok(taxToReturn);
         }
 
+
         [HttpDelete]
         [Route("deletetax/{id:int}")]
         public async Task<IActionResult> DeleteTax(int id)

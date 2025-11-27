@@ -732,8 +732,8 @@ namespace Services.Sales
 
         public Result<Dto.Sales.SalesInvoice> CreateSalesInvoice(Dto.Sales.SalesInvoice salesInvoiceDto)
         {
-            Core.Domain.Sales.SalesOrderHeader? salesOrder = null;
-            Core.Domain.Sales.SalesInvoiceHeader? salesInvoice = null;
+            Core.Domain.Sales.SalesOrderHeader salesOrder = null;
+            Core.Domain.Sales.SalesInvoiceHeader salesInvoice = null;
            
             if (!salesInvoiceDto.FromSalesOrderId.HasValue)
             {
@@ -771,8 +771,8 @@ namespace Services.Sales
 
         public Result<Dto.Sales.SalesInvoice> UpdateSalesInvoice(Dto.Sales.SalesInvoice salesInvoiceDto)
         {
-            Core.Domain.Sales.SalesInvoiceHeader? salesInvoice = null;
-            Core.Domain.Sales.SalesOrderHeader? salesOrder = null;
+            Core.Domain.Sales.SalesInvoiceHeader salesInvoice = null;
+            Core.Domain.Sales.SalesOrderHeader salesOrder = null;
 
             salesInvoice = GetSalesInvoiceById(salesInvoiceDto.Id);
             

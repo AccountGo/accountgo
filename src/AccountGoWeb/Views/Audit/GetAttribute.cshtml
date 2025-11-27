@@ -1,0 +1,53 @@
+@model Dto.Auditing.AuditableAttribute
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="box box-primary">
+
+            <!-- Title changes based on whether adding or editing an attribute -->
+            <div class="box-header with-border">
+                <h3 class="box-title">@(Model.Id == 0 ? "Add New" : "Edit") Auditable Attribute</h3>
+            </div>
+
+            <!-- Form to add or edit an auditable attribute -->
+            <form asp-controller="Audit" asp-action="SaveAttribute" method="post">
+                <div class="box-body">
+
+                    <!-- Hidden, cuz these fields are not editable -->
+                    <input type="hidden" asp-for="Id" />
+                    <input type="hidden" asp-for="AuditableEntityId" />
+                    <input type="hidden" name="entityId" value="@ViewBag.EntityId" />
+                    
+                    <!-- Attribute Name input field -->
+                    <div class="form-group">
+                        <label asp-for="AttributeName">Attribute Name</label>
+                        <input asp-for="AttributeName" class="form-control" placeholder="Enter attribute name (e.g., Email, PhoneNumber)" required />
+                        <span asp-validation-for="AttributeName" class="text-danger"></span>
+                    </div>
+
+                    <!-- Enable Audit checkbox -->
+                    <div class="form-group">
+                        <div class="checkbox">
+                            <label>
+                                <input asp-for="EnableAudit" type="checkbox" />
+                                Enable Audit
+                            </label>
+                        </div>
+                        <span asp-validation-for="EnableAudit" class="text-danger"></span>
+                    </div>
+
+                </div>
+    
+                <!-- Form submission buttons -->
+                <div class="box-footer">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fa fa-save"></i> Save
+                    </button>
+                    <a asp-controller="Audit" asp-action="GetAuditableAttributes" asp-route-entityId="@ViewBag.EntityId" class="btn btn-default">
+                        <i class="fa fa-times"></i> Cancel
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
