@@ -26,7 +26,13 @@ else
         <div class="alert alert-success">@SuccessMessage</div>
     }
 
-    <!-- ========== HEADER ========== -->
+    <div class="mb-3">
+        <a href="/Financials/JournalEntries" class="btn btn-default">
+            <i class="fa fa-arrow-left"></i> Back to Journal Entries
+        </a>
+    </div>
+
+
     <div class="panel panel-default">
         <div class="panel-heading text-primary "><strong>Header</strong></div>
         <div class="panel-body mt-2">
@@ -69,7 +75,6 @@ else
         </div>
     </div>
 
-    <!-- ========== LINES ========== -->
     <div class="panel panel-default">
         <div class="panel-heading"><strong>Lines</strong></div>
 
@@ -96,17 +101,43 @@ else
                             @foreach (var line in Entry.JournalEntryLines)
                             {
                                 <tr style="background-color: transparent;">
-                                    <td>@line.AccountId</td>
+                                    <!-- Account (dropdown) -->
                                     <td>
-                                        @(line.DrCr == 1 ? "Debit"
-                                                                            : line.DrCr == 2 ? "Credit"
-                                                                            : line.DrCr.ToString())
+                                        <select class="form-control" @bind="line.AccountId"
+                                            disabled="@Entry.Posted.GetValueOrDefault()">
+                                            <option value="">-- Select Account --</option>
+                                            @foreach (var acc in Accounts)
+                                            {
+                                                <option value="@acc.Id">
+                                                    @acc.AccountCode - @acc.AccountName
+                                                </option>
+                                            }
+                                        </select>
                                     </td>
-                                    <td>@(line.Amount ?? 0)</td>
-                                    <td>@line.Memo</td>
+
+                                    <!-- Dr/Cr -->
+                                    <td>
+                                        <select class="form-control" @bind="line.DrCr" disabled="@Entry.Posted.GetValueOrDefault()">
+                                            <option value="1">Debit</option>
+                                            <option value="2">Credit</option>
+                                        </select>
+                                    </td>
+
+                                    <!-- Amount -->
+                                    <td>
+                                        <input class="form-control" type="number" step="0.01" @bind="line.Amount"
+                                            disabled="@Entry.Posted.GetValueOrDefault()" />
+                                    </td>
+
+                                    <!-- Memo -->
+                                    <td>
+                                        <input class="form-control" type="text" @bind="line.Memo"
+                                            disabled="@Entry.Posted.GetValueOrDefault()" />
+                                    </td>
                                 </tr>
                             }
                         </tbody>
+
 
                         <tfoot style="background-color: rgba(255,255,255,0.05);">
                             <tr>
@@ -131,6 +162,18 @@ else
     <div class="text-right">
         @if (!Entry.Posted.GetValueOrDefault())
         {
+            <!-- Save button -->
+            <button class="btn btn-success me-2" disabled="@IsSaving" @onclick="SaveEntry">
+                @if (IsSaving)
+                {
+                    <span><i class="fa fa-spinner fa-spin"></i> Saving...</span>
+                }
+                else
+                {
+                    <span><i class="fa fa-save"></i> Save</span>
+                }
+            </button>
+
             <button class="btn btn-primary" disabled="@(IsPosting || !Entry.ReadyForPosting.GetValueOrDefault())"
                 @onclick="PostEntry">
                 @if (IsPosting)
@@ -148,6 +191,7 @@ else
             </button>
         }
     </div>
+
 }
 
 @code {
@@ -156,9 +200,10 @@ else
     private JournalEntryDto? Entry;
     private bool IsLoading = true;
     private bool IsPosting = false;
+    private bool IsSaving = false;
     private string? ErrorMessage;
     private string? SuccessMessage;
-
+    private List<Account> Accounts = new();
     private decimal TotalDebit =>
     Entry?.JournalEntryLines?
     .Where(l => l.DrCr == 1)
@@ -171,7 +216,51 @@ else
 
     protected override async Task OnInitializedAsync()
     {
+        await LoadAccountsAsync();
         await LoadEntryAsync();
+    }
+
+    private async Task LoadAccountsAsync()
+    {
+        try
+        {
+            var apiBaseUrl = Config["ApiUrl"];
+            if (string.IsNullOrWhiteSpace(apiBaseUrl))
+            {
+                return;
+            }
+
+            var client = HttpFactory.CreateClient();
+            var url = $"{apiBaseUrl}financials/Accounts";
+
+            var result = await client.GetFromJsonAsync<List<Account>>(url);
+
+            // result is a tree (each Account may have ChildAccounts)
+            var flatList = new List<Account>();
+            if (result != null)
+            {
+                FlattenAccounts(result, flatList);
+            }
+
+            Accounts = flatList;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading accounts: {ex.Message}");
+        }
+    }
+
+    private void FlattenAccounts(IEnumerable<Account> source, List<Account> destination)
+    {
+        foreach (var acc in source)
+        {
+            destination.Add(acc);
+
+            if (acc.ChildAccounts != null && acc.ChildAccounts.Count > 0)
+            {
+                FlattenAccounts(acc.ChildAccounts, destination);
+            }
+        }
     }
 
     private async Task LoadEntryAsync()
@@ -238,7 +327,7 @@ else
             {
                 var errors = await response.Content.ReadFromJsonAsync<string[]>();
                 ErrorMessage = errors != null && errors.Length > 0
-                                                ? string.Join("; ", errors)
+                ? string.Join("; ", errors)
                 : $"Error posting (HTTP {(int)response.StatusCode})";
             }
         }
@@ -251,4 +340,52 @@ else
             IsPosting = false;
         }
     }
+
+
+    private async Task SaveEntry()
+    {
+        if (Entry == null)
+            return;
+
+        ErrorMessage = null;
+        SuccessMessage = null;
+        IsSaving = true;
+
+        try
+        {
+            var apiBaseUrl = Config["ApiUrl"];
+            if (string.IsNullOrWhiteSpace(apiBaseUrl))
+            {
+                ErrorMessage = "ApiUrl is not configured.";
+                return;
+            }
+
+            var client = HttpFactory.CreateClient();
+            var url = $"{apiBaseUrl}financials/SaveJournalEntry";
+
+            var response = await client.PostAsJsonAsync(url, Entry);
+
+            if (response.IsSuccessStatusCode)
+            {
+                SuccessMessage = "Journal entry saved successfully.";
+                await LoadEntryAsync(); // refresh from DB (lines, totals, ReadyForPosting)
+            }
+            else
+            {
+                var errors = await response.Content.ReadFromJsonAsync<string[]>();
+                ErrorMessage = errors != null && errors.Length > 0
+                ? string.Join("; ", errors)
+                : $"Error saving (HTTP {(int)response.StatusCode})";
+            }
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Unexpected error while saving: {ex.Message}";
+        }
+        finally
+        {
+            IsSaving = false;
+        }
+    }
+
 }
