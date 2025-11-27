@@ -481,7 +481,7 @@ namespace AccountGoWeb.Controllers
 
             try
             {
-                ViewBag.PageContentHeader = "Receipt Allocation";
+                ViewBag.PageContentHeader = "Sales Receipt Allocation";
 
                 var model = new Models.Sales.Allocate();
 

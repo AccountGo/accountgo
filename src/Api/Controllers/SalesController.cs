@@ -455,6 +455,7 @@ namespace Api.Controllers
                     CustomerName = salesInvoice.Customer.Party.Name,
                     InvoiceDate = salesInvoice.Date,
                     ReferenceNo = salesInvoice.ReferenceNo,
+                    TotalAllocatedAmount = (decimal)salesInvoice.CustomerAllocations.Sum(i => i.Amount),
                     Posted = salesInvoice.GeneralLedgerHeaderId != null
                 };
 

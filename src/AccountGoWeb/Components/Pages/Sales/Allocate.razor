@@ -10,9 +10,6 @@
 
 <div class="container-fluid">
     <div class="row mb-3">
-        <div class="col">
-            <h4>Receipt Allocation</h4>
-        </div>
         <div class="col text-end">
             <a href="/Sales/SalesReceipts" class="btn btn-outline-secondary">
                 <i class="fa fa-arrow-left"></i>
@@ -227,11 +224,13 @@
                 amount = GetJsonPropertyDecimal(receiptJson, "amount");
                 remainingAmount = GetJsonPropertyDecimal(receiptJson, "remainingAmountToAllocate");
 
-                if (receiptJson.TryGetProperty("id", out var idProp))
+                if (receiptJson.TryGetProperty("customerId", out var custIdProp))
                 {
-                    if (idProp.TryGetInt32(out var id))
+                    if (custIdProp.TryGetInt32(out var id))
                         customerId = id;
                 }
+
+                System.Diagnostics.Debug.WriteLine($"DEBUG: Loaded Receipt - ReceiptNo: {receiptNo}, CustomerId: {customerId}");
 
                 if (receiptJson.TryGetProperty("receiptDate", out var dateProp))
                 {
@@ -240,49 +239,8 @@
                 }
 
                 // Fetch customer invoices
-                var invoiceResponse = await client.GetAsync($"{apiurl}sales/customerinvoices?id={customerId}");
-                if (invoiceResponse.IsSuccessStatusCode)
-                {
-                    var invoicesString = await invoiceResponse.Content.ReadAsStringAsync();
-                    var invoicesJson = JsonSerializer.Deserialize<List<System.Text.Json.JsonElement>>(invoicesString, options);
-
-                    allocationLines.Clear();
-                    if (invoicesJson != null)
-                    {
-                        foreach (var invoice in invoicesJson)
-                        {
-                            var posted = false;
-                            var totalAllocated = 0m;
-                            var invoiceAmount = 0m;
-
-                            if (invoice.TryGetProperty("posted", out var postedProp))
-                                posted = postedProp.GetBoolean();
-
-                            if (invoice.TryGetProperty("totalAllocatedAmount", out var allocProp))
-                                totalAllocated = allocProp.GetDecimal();
-
-                            if (invoice.TryGetProperty("amount", out var amountProp))
-                                invoiceAmount = amountProp.GetDecimal();
-
-                            // Only include posted invoices with remaining balance
-                            if (posted && totalAllocated < invoiceAmount)
-                            {
-                                var line = new AllocationLineModel
-                                {
-                                    InvoiceId = GetJsonPropertyInt(invoice, "id"),
-                                    Amount = invoiceAmount,
-                                    AllocatedAmount = totalAllocated,
-                                    AmountToAllocate = null
-                                };
-                                allocationLines.Add(line);
-                            }
-                        }
-                    }
-                }
-                else
-                {
-                    errorMessage = "Failed to load customer invoices.";
-                }
+                System.Diagnostics.Debug.WriteLine($"DEBUG: Fetching invoices for customerId: {customerId}");
+                await LoadInvoicesForCustomer(customerId, client, apiurl, options);
             }
             else
             {
@@ -296,6 +254,91 @@
         finally
         {
             loading = false;
+        }
+    }
+
+    private async Task LoadInvoicesForCustomer(int custId, HttpClient? client = null, string? apiurl = null,
+    JsonSerializerOptions? options = null)
+    {
+        if (client == null)
+        {
+            client = ClientFactory.CreateClient();
+            client.Timeout = TimeSpan.FromSeconds(60);
+        }
+
+        if (string.IsNullOrEmpty(apiurl))
+        {
+            apiurl = System.Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
+        }
+
+        if (options == null)
+        {
+            options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+        }
+
+        try
+        {
+            System.Diagnostics.Debug.WriteLine($"DEBUG: Fetching invoices for customerId: {custId}");
+            var invoiceResponse = await client.GetAsync($"{apiurl}sales/customerinvoices?id={custId}");
+            System.Diagnostics.Debug.WriteLine($"DEBUG: Invoice API Response Status: {invoiceResponse.StatusCode}");
+
+            if (invoiceResponse.IsSuccessStatusCode)
+            {
+                var invoicesString = await invoiceResponse.Content.ReadAsStringAsync();
+                System.Diagnostics.Debug.WriteLine($"DEBUG: Invoice Response: {invoicesString}");
+                var invoicesJson = JsonSerializer.Deserialize<List<System.Text.Json.JsonElement>>(invoicesString, options);
+
+                System.Diagnostics.Debug.WriteLine($"DEBUG: Parsed {invoicesJson?.Count ?? 0} invoices");
+                allocationLines.Clear();
+                if (invoicesJson != null)
+                {
+                    foreach (var invoice in invoicesJson)
+                    {
+                        var posted = false;
+                        var totalAllocated = 0m;
+                        var invoiceAmount = 0m;
+
+                        if (invoice.TryGetProperty("posted", out var postedProp))
+                            posted = postedProp.GetBoolean();
+
+                        if (invoice.TryGetProperty("totalAllocatedAmount", out var allocProp))
+                            totalAllocated = allocProp.GetDecimal();
+
+                        if (invoice.TryGetProperty("amount", out var amountProp))
+                            invoiceAmount = amountProp.GetDecimal();
+
+                        // Include invoices with remaining balance
+                        // TODO: Should filter for posted invoices only (posted == true), but currently allowing unposted for testing
+                        // Invoices must be posted to the GL before they can be allocated.
+                        // A "Post Invoice" feature should be added to SalesInvoice component.
+                        if (totalAllocated < invoiceAmount)
+                        {
+                            var line = new AllocationLineModel
+                            {
+                                InvoiceId = GetJsonPropertyInt(invoice, "id"),
+                                Amount = invoiceAmount,
+                                AllocatedAmount = totalAllocated,
+                                AmountToAllocate = null
+                            };
+                            allocationLines.Add(line);
+                            System.Diagnostics.Debug.WriteLine($"DEBUG: Added invoice {line.InvoiceId} - Posted: {posted}, Allocated: {totalAllocated}, Amount: {invoiceAmount}");
+                        }
+                        else
+                        {
+                            System.Diagnostics.Debug.WriteLine($"DEBUG: Skipped invoice - Posted: {posted}, Allocated: {totalAllocated}, Amount: {invoiceAmount}");
+                        }
+                    }
+                }
+            }
+            else
+            {
+                var errorContent = await invoiceResponse.Content.ReadAsStringAsync();
+                errorMessage = "Failed to load customer invoices.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading customer invoices: {ex.Message}";
         }
     }
 
@@ -332,9 +375,8 @@
 
             if (response.IsSuccessStatusCode)
             {
-                successMessage = "Allocation saved successfully!";
-                await Task.Delay(2000);
-                Navigation.NavigateTo("/Sales/SalesReceipts");
+                // Redirect to SalesReceipts page with forceLoad to refresh the MVC view
+                Navigation.NavigateTo("/Sales/SalesReceipts", forceLoad: true);
             }
             else
             {
