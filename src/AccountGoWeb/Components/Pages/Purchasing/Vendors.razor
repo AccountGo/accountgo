@@ -1,6 +1,5 @@
 @using Dto.Purchasing
 @inject HttpClient Http
-@inject NavigationManager Navigation
 
 <div class="container-fluid">
 
@@ -12,14 +11,14 @@
 
     <div class="row mb-3">
         <div class="col">
-            <button class="btn btn-primary" @onclick="NavigateToNewVendor">
+            <a href="/purchasing/vendor/-1" class="btn btn-primary">
                 <i class="fa fa-plus"></i> New Vendor
-            </button>
+            </a>
             @if (selectedVendor != null)
             {
-                <button class="btn btn-secondary ms-2" @onclick="NavigateToViewVendor">
+                <a href="/purchasing/vendor/@selectedVendor.Id" class="btn btn-secondary ms-2">
                     <i class="fa fa-edit"></i> View/Edit
-                </button>
+                </a>
             }
         </div>
     </div>
@@ -94,7 +93,7 @@
                             {
                                 <tr @onclick="() => SelectVendor(vendor)"
                                     class="@(selectedVendor?.Id == vendor.Id ? "table-active" : "")" style="cursor: pointer;">
-                                    
+
                                     <td>
                                         <a href="/purchasing/vendor/@vendor.Id">
                                             @vendor.No
@@ -181,19 +180,6 @@
         selectedVendor = vendor;
     }
 
-    private void NavigateToNewVendor()
-    {
-        Navigation.NavigateTo("/purchasing/vendor/-1");
-    }
-
-    private void NavigateToViewVendor()
-    {
-        if (selectedVendor != null)
-        {
-            Navigation.NavigateTo($"/purchasing/vendor/{selectedVendor.Id}");
-        }
-    }
-
     private void SortBy(string column)
     {
         if (vendors == null) return;
@@ -221,7 +207,7 @@
             nameof(Vendor.Phone) => sortAscending
             ? vendors.OrderBy(v => v.Phone).ToList()
             : vendors.OrderByDescending(v => v.Phone).ToList(),
-            
+
             nameof(Vendor.Contact) => sortAscending
             ? vendors.OrderBy(v => v.Contact).ToList()
             : vendors.OrderByDescending(v => v.Contact).ToList(),
@@ -229,7 +215,7 @@
             nameof(Vendor.TaxGroup) => sortAscending
             ? vendors.OrderBy(v => v.TaxGroup).ToList()
             : vendors.OrderByDescending(v => v.TaxGroup).ToList(),
-            
+
             nameof(Vendor.Balance) => sortAscending
             ? vendors.OrderBy(v => v.Balance).ToList()
             : vendors.OrderByDescending(v => v.Balance).ToList(),

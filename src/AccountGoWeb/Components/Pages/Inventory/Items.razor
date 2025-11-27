@@ -1,6 +1,5 @@
 @using Dto.Inventory
 @inject HttpClient Http
-@inject NavigationManager Navigation
 
 <div class="container-fluid">
 
@@ -12,14 +11,14 @@
 
     <div class="row mb-3">
         <div class="col">
-            <button class="btn btn-primary" @onclick="NavigateToNewItem">
+            <a href="/Inventory/AddItem" class="btn btn-primary">
                 <i class="fa fa-plus"></i> New Item
-            </button>
+            </a>
             @if (selectedItem != null)
             {
-                <button class="btn btn-secondary ms-2" @onclick="NavigateToViewItem">
+                <a href="/Inventory/Item/@selectedItem.Id" class="btn btn-secondary ms-2">
                     <i class="fa fa-edit"></i> View/Edit
-                </button>
+                </a>
             }
         </div>
     </div>
@@ -100,7 +99,7 @@
                             {
                                 <tr @onclick="() => SelectItem(item)"
                                     class="@(selectedItem?.Id == item.Id ? "table-active" : "")" style="cursor: pointer;">
-                                    
+
                                     <td>
                                         <a href="/Inventory/Item/@item.Id">
                                             @item.Id
@@ -177,7 +176,7 @@
         {
             errorMessage = $"Error loading items: {ex.Message}";
         }
-        
+
         finally
         {
             isLoading = false;
@@ -187,19 +186,6 @@
     private void SelectItem(Item item)
     {
         selectedItem = item;
-    }
-
-    private void NavigateToNewItem()
-    {
-        Navigation.NavigateTo("/Inventory/AddItem");
-    }
-
-    private void NavigateToViewItem()
-    {
-        if (selectedItem != null)
-        {
-            Navigation.NavigateTo($"/Inventory/Item/{selectedItem.Id}");
-        }
     }
 
     private void SortBy(string column)
