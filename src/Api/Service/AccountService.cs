@@ -1,5 +1,7 @@
 using Api.Data;
+using Core.Domain;
 using Core.Domain.Items;
+using Core.Domain.Financials;
 using Dto.Financial;
 using Microsoft.EntityFrameworkCore;
 
@@ -15,9 +17,35 @@ public class AccountService : IAccountService
     // Add a new account
     public async Task<Core.Domain.Financials.Account> AddAccountAsync(Core.Domain.Financials.Account newAccount)
     {
-        // newAccount.Balance = 0; // Ensure read-only fields are initialized
-        // newAccount.DebitBalance = 0;
-        // newAccount.CreditBalance = 0;
+        // Set default values for required fields if not already set
+        if (newAccount.CompanyId == 0)
+        {
+            newAccount.CompanyId = 1; // Default company ID
+        }
+
+        if (newAccount.AccountClassId == 0)
+        {
+            // Get the first AccountClass (usually "Assets" with ID 1)
+            // Use fully qualified name to avoid ambiguity with Dto.Financial.AccountClass
+            var firstAccountClass = await _context.Set<Core.Domain.Financials.AccountClass>()
+                .FirstOrDefaultAsync();
+            
+            if (firstAccountClass != null)
+            {
+                newAccount.AccountClassId = firstAccountClass.Id;
+            }
+            else
+            {
+                // If no AccountClass exists, throw an error
+                throw new InvalidOperationException("No AccountClass found in the database. Please ensure the database is properly initialized.");
+            }
+        }
+
+        // Set default DrOrCrSide if not set (default to Dr)
+        if (newAccount.DrOrCrSide == Core.Domain.DrOrCrSide.NA)
+        {
+            newAccount.DrOrCrSide = Core.Domain.DrOrCrSide.Dr;
+        }
 
         _context.Accounts.Add(newAccount);
         await _context.SaveChangesAsync();

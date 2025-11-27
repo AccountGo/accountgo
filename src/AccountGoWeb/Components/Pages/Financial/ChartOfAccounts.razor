@@ -9,7 +9,7 @@
 @inject IHttpClientFactory ClientFactory
 @inject Microsoft.JSInterop.IJSRuntime JSRuntime
 
-<PageTitle>My Updated Chart of Accounts</PageTitle>
+<PageTitle>Chart of Accounts</PageTitle>
 
 @if (getError || accounts is null)
 {
@@ -33,7 +33,7 @@ else
         }
     </style>
     <div>
- <button class="btn btn-success mb-3" @onclick="OpenAddModal">Add Account</button>
+ <button class="btn btn-success mb-3" @onclick="() => OpenAddModal()">Add Account</button>
 
         <table class="table table-condensed table-striped">
             <thead>
@@ -58,9 +58,10 @@ else
                         <td>@account.TotalBalance</td>
                         <td>@account.TotalDebitBalance</td>
                         <td>@account.TotalCreditBalance</td>
-<td>
-    <button class="btn btn-primary" @onclick="() => OpenEditModal(account)">Edit</button>
-    <button class="btn btn-danger" @onclick="() => OpenDeleteModal(account)">Delete</button>
+<td @onclick:stopPropagation="true">
+    <button class="btn btn-success" @onclick="() => OpenAddModal(account)" @onclick:stopPropagation="true">Add Account</button>
+    <button class="btn btn-primary" @onclick="() => OpenEditModal(account)" @onclick:stopPropagation="true">Edit</button>
+    <button class="btn btn-danger" @onclick="() => OpenDeleteModal(account)" @onclick:stopPropagation="true">Delete</button>
 </td>
   </tr>
 
@@ -91,9 +92,10 @@ else
                                             <td>@childAccount.TotalBalance</td>
                                             <td>@childAccount.TotalDebitBalance</td>
                                             <td>@childAccount.TotalCreditBalance</td>
-                                            <td>
-    <button class="btn btn-primary btn-sm" @onclick="() => OpenEditModal(childAccount)">Edit</button>
-    <button class="btn btn-danger btn-sm" @onclick="() => OpenDeleteModal(childAccount)">Delete</button>
+                                            <td @onclick:stopPropagation="true">
+    <button class="btn btn-success btn-sm" @onclick="() => OpenAddModal(childAccount)" @onclick:stopPropagation="true">Add Account</button>
+    <button class="btn btn-primary btn-sm" @onclick="() => OpenEditModal(childAccount)" @onclick:stopPropagation="true">Edit</button>
+    <button class="btn btn-danger btn-sm" @onclick="() => OpenDeleteModal(childAccount)" @onclick:stopPropagation="true">Delete</button>
 </td>
                                         </tr>
 
@@ -124,9 +126,10 @@ else
                                                                 <td>@grandChildAccount.TotalBalance</td>
                                                                 <td>@grandChildAccount.TotalDebitBalance</td>
                                                                 <td>@grandChildAccount.TotalCreditBalance</td>
-                                                                <td>
-                                                                    <button class="btn btn-primary btn-sm" @onclick="() => OpenEditModal(grandChildAccount)">Edit</button>
-                                                                    <button class="btn btn-danger btn-sm" @onclick="() => OpenDeleteModal(grandChildAccount)">Delete</button>
+                                                                <td @onclick:stopPropagation="true">
+                                                                    <button class="btn btn-success btn-sm" @onclick="() => OpenAddModal(grandChildAccount)" @onclick:stopPropagation="true">Add Account</button>
+                                                                    <button class="btn btn-primary btn-sm" @onclick="() => OpenEditModal(grandChildAccount)" @onclick:stopPropagation="true">Edit</button>
+                                                                    <button class="btn btn-danger btn-sm" @onclick="() => OpenDeleteModal(grandChildAccount)" @onclick:stopPropagation="true">Delete</button>
                                                                 </td>
                                                             </tr>
 
@@ -157,8 +160,9 @@ else
                                                                                     <td>@greatGrandChildAccount.TotalBalance</td>
                                                                                     <td>@greatGrandChildAccount.TotalDebitBalance</td>
                                                                                     <td>@greatGrandChildAccount.TotalCreditBalance</td>
-                                                                                    <td>
-                                                                                        <button class="btn btn-primary btn-sm" @onclick="() => OpenEditModal(greatGrandChildAccount)">Edit</button>
+                                                                                    <td @onclick:stopPropagation="true">
+                                                                                        <button class="btn btn-success btn-sm" @onclick="() => OpenAddModal(greatGrandChildAccount)" @onclick:stopPropagation="true">Add Account</button>
+                                                                                        <button class="btn btn-primary btn-sm" @onclick="() => OpenEditModal(greatGrandChildAccount)" @onclick:stopPropagation="true">Edit</button>
                                                                                     </td>
                                                                                 </tr>
 
@@ -205,7 +209,9 @@ else
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">@((isEditModalVisible ? "Edit Account" : "Add Account"))</h5>
+                    <h5 class="modal-title">
+                        @((isEditModalVisible ? "Edit Account" : parentAccount != null ? $"Add Sub-Account to {parentAccount.AccountName}" : "Add Account"))
+                    </h5>
                     <button type="button" class="btn-close" @onclick="CloseModal"></button>
                 </div>
                 <div class="modal-body">
@@ -268,6 +274,7 @@ else
 @code {
     private List<AccountViewModel> accounts = new();
     private AccountViewModel? selectedAccount = null;
+    private AccountViewModel? parentAccount = null; // Track parent account when adding sub-account
     private bool isAddModalVisible = false;
     private bool isEditModalVisible = false;
     private bool isDeleteModalVisible = false;
@@ -327,14 +334,23 @@ else
                 builder.CloseElement();
                 
                 builder.OpenElement(sequence++, "td");
+                builder.AddAttribute(sequence++, "onclick:stopPropagation", "true");
+                builder.OpenElement(sequence++, "button");
+                builder.AddAttribute(sequence++, "class", "btn btn-success btn-sm");
+                builder.AddAttribute(sequence++, "onclick", EventCallback.Factory.Create(this, () => OpenAddModal(account)));
+                builder.AddAttribute(sequence++, "onclick:stopPropagation", "true");
+                builder.AddContent(sequence++, "Add Account");
+                builder.CloseElement(); // button
                 builder.OpenElement(sequence++, "button");
                 builder.AddAttribute(sequence++, "class", "btn btn-primary btn-sm");
                 builder.AddAttribute(sequence++, "onclick", EventCallback.Factory.Create(this, () => OpenEditModal(account)));
+                builder.AddAttribute(sequence++, "onclick:stopPropagation", "true");
                 builder.AddContent(sequence++, "Edit");
                 builder.CloseElement(); // button
                 builder.OpenElement(sequence++, "button");
                 builder.AddAttribute(sequence++, "class", "btn btn-danger btn-sm");
                 builder.AddAttribute(sequence++, "onclick", EventCallback.Factory.Create(this, () => OpenDeleteModal(account)));
+                builder.AddAttribute(sequence++, "onclick:stopPropagation", "true");
                 builder.AddContent(sequence++, "Delete");
                 builder.CloseElement(); // button
                 builder.CloseElement(); // td
@@ -409,8 +425,9 @@ else
 
 
       // Open Add Modal
-    private void OpenAddModal()
+    private void OpenAddModal(AccountViewModel? parent = null)
     {
+        parentAccount = parent;
         selectedAccount = new AccountViewModel();
         errorMessage = string.Empty;
         isAddModalVisible = true;
@@ -438,6 +455,7 @@ else
         isAddModalVisible = false;
         isEditModalVisible = false;
         selectedAccount = null;
+        parentAccount = null;
         errorMessage = string.Empty;
     }
 
@@ -464,7 +482,8 @@ else
             var accountDto = new
             {
                 AccountCode = selectedAccount.AccountCode,
-                AccountName = selectedAccount.AccountName
+                AccountName = selectedAccount.AccountName,
+                ParentAccountId = parentAccount?.Id // Include parent account ID if adding a sub-account
             };
 
             HttpResponseMessage response;
@@ -498,13 +517,49 @@ else
             else
             {
                 var errorContent = await response.Content.ReadAsStringAsync();
-                errorMessage = $"Failed to save account: {response.StatusCode}. {errorContent}";
+                
+                // Try to parse JSON error response for better error messages
+                string detailedError = errorContent;
+                try
+                {
+                    // If the response is JSON, try to extract meaningful error messages
+                    if (errorContent.Trim().StartsWith("{") || errorContent.Trim().StartsWith("["))
+                    {
+                        var errorObj = JsonSerializer.Deserialize<JsonElement>(errorContent);
+                        if (errorObj.TryGetProperty("errors", out var errors))
+                        {
+                            var errorList = new List<string>();
+                            foreach (var error in errors.EnumerateObject())
+                            {
+                                foreach (var msg in error.Value.EnumerateArray())
+                                {
+                                    errorList.Add($"{error.Name}: {msg.GetString()}");
+                                }
+                            }
+                            detailedError = string.Join("; ", errorList);
+                        }
+                        else if (errorObj.TryGetProperty("message", out var message))
+                        {
+                            detailedError = message.GetString() ?? errorContent;
+                        }
+                    }
+                }
+                catch
+                {
+                    // If parsing fails, use the raw error content
+                }
+                
+                errorMessage = $"Failed to save account ({response.StatusCode}): {detailedError}";
                 StateHasChanged(); // Update UI to show error message
             }
         }
         catch (Exception ex)
         {
             errorMessage = $"Error saving account: {ex.Message}";
+            if (ex.InnerException != null)
+            {
+                errorMessage += $" ({ex.InnerException.Message})";
+            }
             StateHasChanged(); // Update UI to show error message
         }
     }
@@ -571,6 +626,8 @@ else
     // ViewModel for Accounts
     public class AccountViewModel
     {
+        public int Id { get; set; }
+        public int? ParentAccountId { get; set; }
         public string AccountCode { get; set; } = string.Empty;
         public string AccountName { get; set; } = string.Empty;
         public decimal TotalBalance { get; set; }

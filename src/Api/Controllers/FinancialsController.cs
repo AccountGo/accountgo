@@ -393,6 +393,7 @@ namespace Api.Controllers
             {
                 AccountCode = newAccountDto.AccountCode,
                 AccountName = newAccountDto.AccountName,
+                ParentAccountId = newAccountDto.ParentAccountId
                 // Balance = 0, // Initialize read-only fields
                 // DebitBalance = 0,
                 // CreditBalance = 0
