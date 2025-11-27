@@ -1,0 +1,395 @@
+@using Dto.Sales
+@using SalesInvoiceDto = Dto.Sales.SalesInvoice
+@inject HttpClient Http
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+
+<PageTitle>Sales Invoice</PageTitle>
+
+<style>
+    .form-label {
+        color: white;
+    }
+</style>
+
+<div class="container-fluid">
+    <div class="row mb-3">
+        <div class="col">
+            @if (!isEditMode)
+            {
+                <button class="btn btn-primary" @onclick="EnableEditMode">
+                    <i class="fa fa-edit"></i> Edit
+                </button>
+            }
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="row">
+            <div class="col text-center">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mt-2">Loading invoice...</p>
+            </div>
+        </div>
+    }
+    else if (errorMessage != null)
+    {
+        <div class="row">
+            <div class="col">
+                <div class="alert alert-danger" role="alert">
+                    <i class="fa fa-exclamation-triangle"></i> @errorMessage
+                </div>
+            </div>
+        </div>
+    }
+    else
+    {
+        <EditForm Model="@Model" OnValidSubmit="HandleValidSubmit" FormName="salesInvoiceForm">
+            <DataAnnotationsValidator />
+            
+            <div class="card">
+                <div class="card-header" style="background-color: #3a3f44; color: white;">
+                    <i class="fa fa-align-justify"></i> Sales Invoice
+                </div>
+                <div class="card-body" style="background-color: #2b2f33;">
+                    @* Invoice ID *@
+                    <div class="row mb-3">
+                        <div class="col-sm-2">
+                            <label class="form-label">ID</label>
+                        </div>
+                        <div class="col-sm-10">
+                            <input type="text" class="form-control" value="@Model.Id" readonly />
+                        </div>
+                    </div>
+                    
+                    @* Customer *@
+                    <div class="row mb-3">
+                        <div class="col-sm-2">
+                            <label class="form-label">Customer Name</label>
+                        </div>
+                        <div class="col-sm-10">
+                            <InputSelect class="form-control" @bind-Value="Model.CustomerId" id="optCustomer" disabled="@(!isEditMode)">
+                                <option value="">-- Select Customer --</option>
+                                @foreach (var customer in Customers)
+                                {
+                                    <option value="@customer.Value">@customer.Text</option>
+                                }
+                            </InputSelect>
+                            <ValidationMessage For="@(() => Model.CustomerId)" class="text-danger" />
+                        </div>
+                    </div>
+
+                    @* Invoice Date *@
+                    <div class="row mb-3">
+                        <div class="col-sm-2">
+                            <label class="form-label">Invoice Date</label>
+                        </div>
+                        <div class="col-sm-10">
+                            <InputDate class="form-control" @bind-Value="Model.InvoiceDate" disabled="@(!isEditMode)" />
+                        </div>
+                    </div>
+
+                    @* Total Amount *@
+                    <div class="row mb-4">
+                        <div class="col-sm-2">
+                            <label class="form-label">Total Amount</label>
+                        </div>
+                        <div class="col-sm-10">
+                            <input type="text" class="form-control" value="@Model.Amount.ToString("F2")" readonly />
+                        </div>
+                    </div>
+
+                    @* Invoice Lines Table *@
+                    <div class="table-responsive">
+                        <table class="table table-striped table-bordered">
+                            <thead class="thead-dark">
+                                <tr>
+                                    <th>Item</th>
+                                    <th>Quantity</th>
+                                    <th>Amount</th>
+                                    <th>Discount</th>
+                                    <th>Measurement</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @for (int i = 0; i < Model.SalesInvoiceLines!.Count; i++)
+                                {
+                                    var index = i;
+                                    var line = Model.SalesInvoiceLines[i];
+                                    
+                                    <tr>
+                                        <td>
+                                            <InputSelect class="form-control" 
+                                                        @bind-Value="line.ItemId" 
+                                                        disabled="@(!isEditMode)">
+                                                <option value="">-- Select Item --</option>
+                                                @foreach (var item in Items)
+                                                {
+                                                    <option value="@item.Value">@item.Text</option>
+                                                }
+                                            </InputSelect>
+                                            <ValidationMessage For="@(() => line.ItemId)" class="text-danger" />
+                                        </td>
+                                        <td>
+                                            <InputNumber class="form-control" 
+                                                        @bind-Value="line.Quantity"
+                                                        disabled="@(!isEditMode)"
+                                                        placeholder="0.0 ..." />
+                                            <ValidationMessage For="@(() => line.Quantity)" class="text-danger" />
+                                        </td>
+                                        <td>
+                                            <InputNumber class="form-control" 
+                                                        @bind-Value="line.Amount"
+                                                        disabled="@(!isEditMode)"
+                                                        placeholder="0.0 ..." />
+                                            <ValidationMessage For="@(() => line.Amount)" class="text-danger" />
+                                        </td>
+                                        <td>
+                                            <InputNumber class="form-control" 
+                                                        @bind-Value="line.Discount"
+                                                        disabled="@(!isEditMode)"
+                                                        placeholder="0.0 ..." />
+                                            <ValidationMessage For="@(() => line.Discount)" class="text-danger" />
+                                        </td>
+                                        <td>
+                                            <InputSelect class="form-control" 
+                                                        @bind-Value="line.MeasurementId"
+                                                        disabled="@(!isEditMode)">
+                                                <option value="">-- Select Measurement --</option>
+                                                @foreach (var measurement in Measurements)
+                                                {
+                                                    <option value="@measurement.Value">@measurement.Text</option>
+                                                }
+                                            </InputSelect>
+                                            <ValidationMessage For="@(() => line.MeasurementId)" class="text-danger" />
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row mt-3">
+                <div class="col">
+                    @if (isEditMode)
+                    {
+                        <button class="btn btn-primary" type="submit">
+                            <i class="fa fa-save"></i> Save
+                        </button>
+                    }
+                    <button class="btn btn-secondary ms-2" type="button" @onclick="NavigateToInvoiceList">
+                        <i class="fa fa-times"></i> Close
+                    </button>
+                </div>
+            </div>
+        </EditForm>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+
+    private SalesInvoiceDto Model { get; set; } = new();
+    
+    private List<SelectListItem> Customers { get; set; } = new();
+    private List<SelectListItem> PaymentTerms { get; set; } = new();
+    private List<SelectListItem> Items { get; set; } = new();
+    private List<SelectListItem> Measurements { get; set; } = new();
+    
+    private bool isLoading = true;
+    private bool isEditMode = false;
+    private string? errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        isLoading = true;
+        
+        // Load dropdown data first
+        await LoadDropdownData();
+        
+        // Load the invoice
+        await LoadInvoice();
+        
+        isLoading = false;
+    }
+
+    private async Task LoadInvoice()
+    {
+        errorMessage = null;
+
+        try
+        {
+            string baseApiUrl = Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
+            var apiUrl = $"{baseApiUrl}sales/SalesInvoice?id={Id}";
+            var response = await Http.GetAsync(apiUrl);
+
+            if (response.IsSuccessStatusCode)
+            {
+                Model = await response.Content.ReadFromJsonAsync<SalesInvoiceDto>() ?? new();
+                
+                if (Model?.SalesInvoiceLines == null || !Model.SalesInvoiceLines.Any())
+                {
+                    Model!.SalesInvoiceLines = new List<SalesInvoiceLine> { new SalesInvoiceLine() };
+                }
+            }
+            else
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                errorMessage = $"Failed to load invoice. Status: {response.StatusCode}. {errorContent}";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading invoice: {ex.Message}";
+        }
+    }
+
+    private async Task LoadDropdownData()
+    {
+        errorMessage = null;
+
+        try
+        {
+            string baseApiUrl = Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
+            
+            // Load Customers from API
+            var customersResponse = await Http.GetAsync(baseApiUrl + "sales/customers");
+            if (customersResponse.IsSuccessStatusCode)
+            {
+                var customers = await customersResponse.Content.ReadFromJsonAsync<List<CustomerResponse>>();
+                Customers = new List<SelectListItem>();
+                if (customers != null)
+                {
+                    foreach (var customer in customers)
+                    {
+                        Customers.Add(new SelectListItem { Value = customer.Id.ToString(), Text = customer.Name ?? string.Empty });
+                    }
+                }
+            }
+
+            // Load Payment Terms from API
+            var paymentTermsResponse = await Http.GetAsync(baseApiUrl + "common/paymentterms");
+            if (paymentTermsResponse.IsSuccessStatusCode)
+            {
+                var paymentTerms = await paymentTermsResponse.Content.ReadFromJsonAsync<List<PaymentTermResponse>>();
+                PaymentTerms = new List<SelectListItem>();
+                if (paymentTerms != null)
+                {
+                    foreach (var term in paymentTerms)
+                    {
+                        PaymentTerms.Add(new SelectListItem { Value = term.Id.ToString(), Text = term.Description ?? string.Empty });
+                    }
+                }
+            }
+
+            // Load Items from API
+            var itemsResponse = await Http.GetAsync(baseApiUrl + "inventory/items");
+            if (itemsResponse.IsSuccessStatusCode)
+            {
+                var items = await itemsResponse.Content.ReadFromJsonAsync<List<ItemResponse>>();
+                Items = new List<SelectListItem>();
+                if (items != null)
+                {
+                    foreach (var item in items)
+                    {
+                        Items.Add(new SelectListItem { Value = item.Id.ToString(), Text = item.Description ?? string.Empty });
+                    }
+                }
+            }
+
+            // Load Measurements from API
+            var measurementsResponse = await Http.GetAsync(baseApiUrl + "common/measurements");
+            if (measurementsResponse.IsSuccessStatusCode)
+            {
+                var measurements = await measurementsResponse.Content.ReadFromJsonAsync<List<MeasurementResponse>>();
+                Measurements = new List<SelectListItem>();
+                if (measurements != null)
+                {
+                    foreach (var measurement in measurements)
+                    {
+                        Measurements.Add(new SelectListItem { Value = measurement.Id.ToString(), Text = measurement.Description ?? string.Empty });
+                    }
+                }
+            }
+        }
+        catch (HttpRequestException ex)
+        {
+            errorMessage = $"Network error: {ex.Message}. Please ensure the API is running on port 8001.";
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading form data: {ex.Message}";
+        }
+    }
+
+    private async Task HandleValidSubmit()
+    {
+        try
+        {
+            string baseApiUrl = Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
+            var apiUrl = baseApiUrl + "sales/UpdateSalesInvoice";
+            
+            var response = await Http.PostAsJsonAsync(apiUrl, Model);
+            
+            if (response.IsSuccessStatusCode)
+            {
+                Navigation.NavigateTo("/sales/salesinvoices", forceLoad: true);
+            }
+            else
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                errorMessage = $"Failed to update invoice. Status: {response.StatusCode}. Details: {errorContent}";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error updating invoice: {ex.Message}";
+        }
+    }
+
+    private void NavigateToInvoiceList()
+    {
+        Navigation.NavigateTo("/sales/salesinvoices", forceLoad: true);
+    }
+
+    private void EnableEditMode()
+    {
+        isEditMode = true;
+    }
+
+    public class SelectListItem
+    {
+        public string Value { get; set; } = string.Empty;
+        public string Text { get; set; } = string.Empty;
+    }
+
+    public class CustomerResponse
+    {
+        public int Id { get; set; }
+        public string? Name { get; set; }
+    }
+
+    public class PaymentTermResponse
+    {
+        public int Id { get; set; }
+        public string? Description { get; set; }
+    }
+
+    public class ItemResponse
+    {
+        public int Id { get; set; }
+        public string? Description { get; set; }
+    }
+
+    public class MeasurementResponse
+    {
+        public int Id { get; set; }
+        public string? Description { get; set; }
+    }
+}

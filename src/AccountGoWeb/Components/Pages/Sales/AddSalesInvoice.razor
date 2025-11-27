@@ -1,14 +1,18 @@
-@page "/sales/add-sales-invoice"
-@page "/sales/sales-invoice/{Id:int}"
 @using Dto.Sales
+@using SalesInvoiceDto = Dto.Sales.SalesInvoice
 @inject HttpClient Http
 @inject NavigationManager Navigation
 @rendermode InteractiveServer
 
-<PageTitle>@(Id.HasValue ? "Edit" : "Add") Sales Invoice</PageTitle>
+<PageTitle>Add Sales Invoice</PageTitle>
+
+<style>
+    .form-label {
+        color: white;
+    }
+</style>
 
 <div class="container-fluid">
-
     @if (isLoading)
     {
         <div class="row">
@@ -36,24 +40,14 @@
             <DataAnnotationsValidator />
             
             <div class="card">
-                <div class="card-body">
-                    @* Invoice ID *@
-                    @if (Id.HasValue)
-                    {
-                        <div class="row mb-3">
-                            <div class="col-sm-2">
-                                <label class="form-label" style="color: white;">Invoice ID</label>
-                            </div>
-                            <div class="col-sm-10">
-                                <input type="text" class="form-control" value="@Id" readonly />
-                            </div>
-                        </div>
-                    }
-                    
+                <div class="card-header" style="background-color: #3a3f44; color: white;">
+                    <i class="fa fa-align-justify"></i> New Sales Invoice
+                </div>
+                <div class="card-body" style="background-color: #2b2f33;">
                     @* Customer *@
                     <div class="row mb-3">
                         <div class="col-sm-2">
-                            <label class="form-label" style="color: white;">Customer</label>
+                            <label class="form-label">Customer</label>
                         </div>
                         <div class="col-sm-10">
                             <InputSelect class="form-control" @bind-Value="Model.CustomerId" id="optCustomer">
@@ -70,7 +64,7 @@
                     @* Payment Term *@
                     <div class="row mb-3">
                         <div class="col-sm-2">
-                            <label class="form-label" style="color: white;">Payment Term</label>
+                            <label class="form-label">Payment Term</label>
                         </div>
                         <div class="col-sm-10">
                             <InputSelect class="form-control" @bind-Value="Model.PaymentTermId" id="optPayment">
@@ -87,7 +81,7 @@
                     @* Posted *@
                     <div class="row mb-4">
                         <div class="col-sm-2">
-                            <label class="form-label" style="color: white;">Posted</label>
+                            <label class="form-label">Posted</label>
                         </div>
                         <div class="col-sm-10">
                             <InputCheckbox @bind-Value="Model.Posted" id="chkPosted" />
@@ -162,7 +156,7 @@
             <div class="row mt-3">
                 <div class="col">
                     <button class="btn btn-primary" type="submit">
-                        <i class="fa fa-save"></i> @(Id.HasValue ? "Update" : "Save")
+                        <i class="fa fa-save"></i> Save
                     </button>
                     <button class="btn btn-secondary ms-2" type="button" @onclick="NavigateToInvoiceList">
                         <i class="fa fa-times"></i> Close
@@ -174,10 +168,7 @@
 </div>
 
 @code {
-    [Parameter]
-    public int? Id { get; set; }
-
-    private SalesInvoice Model { get; set; } = new();
+    private SalesInvoiceDto Model { get; set; } = new();
     
     private List<SelectListItem> Customers { get; set; } = new();
     private List<SelectListItem> PaymentTerms { get; set; } = new();
@@ -189,63 +180,23 @@
 
     protected override async Task OnInitializedAsync()
     {
+        Console.WriteLine("Creating new invoice");
         isLoading = true;
         
-        if (Id.HasValue)
-        {
-            await LoadInvoice();
-        }
-        else
-        {
-            Model.SalesInvoiceLines = new List<SalesInvoiceLine>
-            {
-                new SalesInvoiceLine()
-            };
-        }
-        
+        // Load dropdown data
         await LoadDropdownData();
+        
+        // Initialize with one empty invoice line
+        Model.SalesInvoiceLines = new List<SalesInvoiceLine>
+        {
+            new SalesInvoiceLine()
+        };
         
         isLoading = false;
     }
 
-    private async Task LoadInvoice()
-    {
-        isLoading = true;
-        errorMessage = null;
-
-        try
-        {
-            string baseApiUrl = Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
-            var apiUrl = $"{baseApiUrl}sales/SalesInvoice?id={Id}";
-            var response = await Http.GetAsync(apiUrl);
-
-            if (response.IsSuccessStatusCode)
-            {
-                Model = await response.Content.ReadFromJsonAsync<SalesInvoice>() ?? new();
-                
-                if (Model?.SalesInvoiceLines == null || !Model.SalesInvoiceLines.Any())
-                {
-                    Model!.SalesInvoiceLines = new List<SalesInvoiceLine> { new SalesInvoiceLine() };
-                }
-            }
-            else
-            {
-                errorMessage = $"Failed to load invoice. Status: {response.StatusCode}";
-            }
-        }
-        catch (Exception ex)
-        {
-            errorMessage = $"Error loading invoice: {ex.Message}";
-        }
-        finally
-        {
-            isLoading = false;
-        }
-    }
-
     private async Task LoadDropdownData()
     {
-        isLoading = true;
         errorMessage = null;
 
         try
@@ -265,6 +216,7 @@
                         Customers.Add(new SelectListItem { Value = customer.Id.ToString(), Text = customer.Name ?? string.Empty });
                     }
                 }
+                Console.WriteLine($"Loaded {Customers.Count} customers");
             }
 
             // Load Payment Terms from API
@@ -280,6 +232,7 @@
                         PaymentTerms.Add(new SelectListItem { Value = term.Id.ToString(), Text = term.Description ?? string.Empty });
                     }
                 }
+                Console.WriteLine($"Loaded {PaymentTerms.Count} payment terms");
             }
 
             // Load Items from API
@@ -295,6 +248,7 @@
                         Items.Add(new SelectListItem { Value = item.Id.ToString(), Text = item.Description ?? string.Empty });
                     }
                 }
+                Console.WriteLine($"Loaded {Items.Count} items");
             }
 
             // Load Measurements from API
@@ -310,19 +264,18 @@
                         Measurements.Add(new SelectListItem { Value = measurement.Id.ToString(), Text = measurement.Description ?? string.Empty });
                     }
                 }
+                Console.WriteLine($"Loaded {Measurements.Count} measurements");
             }
         }
         catch (HttpRequestException ex)
         {
             errorMessage = $"Network error: {ex.Message}. Please ensure the API is running on port 8001.";
+            Console.WriteLine(errorMessage);
         }
         catch (Exception ex)
         {
             errorMessage = $"Error loading form data: {ex.Message}";
-        }
-        finally
-        {
-            isLoading = false;
+            Console.WriteLine(errorMessage);
         }
     }
 
@@ -331,33 +284,29 @@
         try
         {
             string baseApiUrl = Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
-            var apiUrl = Id.HasValue 
-                ? baseApiUrl + "sales/UpdateSalesInvoice"
-                : baseApiUrl + "sales/SaveSalesInvoice";
+            var apiUrl = baseApiUrl + "sales/SaveSalesInvoice";
             
             var response = await Http.PostAsJsonAsync(apiUrl, Model);
             
             if (response.IsSuccessStatusCode)
             {
-                Navigation.NavigateTo("/Sales/SalesInvoices", forceLoad: true);
+                Navigation.NavigateTo("/sales/salesinvoices", forceLoad: true);
             }
             else
             {
                 var errorContent = await response.Content.ReadAsStringAsync();
-                var action = Id.HasValue ? "update" : "save";
-                errorMessage = $"Failed to {action} invoice. Status: {response.StatusCode}. Details: {errorContent}";
+                errorMessage = $"Failed to save invoice. Status: {response.StatusCode}. Details: {errorContent}";
             }
         }
         catch (Exception ex)
         {
-            var action = Id.HasValue ? "updating" : "saving";
-            errorMessage = $"Error {action} invoice: {ex.Message}";
+            errorMessage = $"Error saving invoice: {ex.Message}";
         }
     }
 
     private void NavigateToInvoiceList()
     {
-        Navigation.NavigateTo("/Sales/SalesInvoices", forceLoad: true);
+        Navigation.NavigateTo("/sales/salesinvoices", forceLoad: true);
     }
 
     private void OnItemChanged(int index)

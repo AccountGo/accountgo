@@ -1,5 +1,5 @@
-﻿@page "/sales/sales-invoices"
-@using Dto.Sales
+﻿@using Dto.Sales
+@using SalesInvoiceDto = Dto.Sales.SalesInvoice
 @inject HttpClient Http
 @inject NavigationManager Navigation
 @rendermode InteractiveServer
@@ -14,7 +14,7 @@
             </button>
             @if (selectedInvoice != null)
             {
-                <button class="btn btn-secondary ms-2" @onclick="NavigateToEditInvoice">
+                <button class="btn btn-info ms-2" @onclick="NavigateToEditInvoice">
                     <i class="fa fa-edit"></i> Edit
                 </button>
                 <button class="btn btn-danger ms-2" @onclick="ShowDeleteModal">
@@ -63,20 +63,20 @@
                     <table class="table table-striped table-hover table-bordered">
                         <thead class="thead-dark">
                             <tr>
-                                <th @onclick="() => SortBy(nameof(SalesInvoice.No))" style="cursor: pointer;">
-                                    No @GetSortIcon(nameof(SalesInvoice.No))
+                                <th @onclick="() => SortBy(nameof(SalesInvoiceDto.No))" style="cursor: pointer;">
+                                    No @GetSortIcon(nameof(SalesInvoiceDto.No))
                                 </th>
-                                <th @onclick="() => SortBy(nameof(SalesInvoice.CustomerName))" style="cursor: pointer;">
-                                    Customer Name @GetSortIcon(nameof(SalesInvoice.CustomerName))
+                                <th @onclick="() => SortBy(nameof(SalesInvoiceDto.CustomerName))" style="cursor: pointer;">
+                                    Customer Name @GetSortIcon(nameof(SalesInvoiceDto.CustomerName))
                                 </th>
-                                <th @onclick="() => SortBy(nameof(SalesInvoice.InvoiceDate))" style="cursor: pointer;">
-                                    Invoiced Date @GetSortIcon(nameof(SalesInvoice.InvoiceDate))
+                                <th @onclick="() => SortBy(nameof(SalesInvoiceDto.InvoiceDate))" style="cursor: pointer;">
+                                    Invoiced Date @GetSortIcon(nameof(SalesInvoiceDto.InvoiceDate))
                                 </th>
-                                <th @onclick="() => SortBy(nameof(SalesInvoice.Amount))" style="cursor: pointer;">
-                                    Amount @GetSortIcon(nameof(SalesInvoice.Amount))
+                                <th @onclick="() => SortBy(nameof(SalesInvoiceDto.Amount))" style="cursor: pointer;">
+                                    Amount @GetSortIcon(nameof(SalesInvoiceDto.Amount))
                                 </th>
-                                <th @onclick="() => SortBy(nameof(SalesInvoice.ReferenceNo))" style="cursor: pointer;">
-                                    Ref no @GetSortIcon(nameof(SalesInvoice.ReferenceNo))
+                                <th @onclick="() => SortBy(nameof(SalesInvoiceDto.ReferenceNo))" style="cursor: pointer;">
+                                    Ref no @GetSortIcon(nameof(SalesInvoiceDto.ReferenceNo))
                                 </th>
                                 <th>Posted</th>
                             </tr>
@@ -87,7 +87,7 @@
                                 <tr @onclick="() => SelectInvoice(invoice)"
                                     style="cursor: pointer; @(selectedInvoice?.Id == invoice.Id ? "background-color: #d1ecf1; border-left: 3px solid #0c5460;" : "")">
                                     <td>
-                                        <a href="/sales/AddSalesInvoice/@invoice.Id">
+                                        <a href="/sales/salesinvoice?id=@invoice.Id">
                                             @invoice.No
                                         </a>
                                     </td>
@@ -137,9 +137,9 @@
 }
 
 @code {
-    private List<SalesInvoice>? salesInvoices;
-    private List<SalesInvoice>? allInvoices;
-    private SalesInvoice? selectedInvoice;
+    private List<SalesInvoiceDto>? salesInvoices;
+    private List<SalesInvoiceDto>? allInvoices;
+    private SalesInvoiceDto? selectedInvoice;
     private bool isLoading = true;
     private bool showDeleteModal = false;
     private string? errorMessage;
@@ -164,7 +164,7 @@
 
             if (response.IsSuccessStatusCode)
             {
-                allInvoices = await response.Content.ReadFromJsonAsync<List<SalesInvoice>>();
+                allInvoices = await response.Content.ReadFromJsonAsync<List<SalesInvoiceDto>>();
                 salesInvoices = allInvoices;
             }
             else
@@ -186,21 +186,21 @@
         }
     }
 
-    private void SelectInvoice(SalesInvoice invoice)
+    private void SelectInvoice(SalesInvoiceDto invoice)
     {
         selectedInvoice = invoice;
     }
 
     private void NavigateToNewInvoice()
     {
-        Navigation.NavigateTo("/sales/AddSalesInvoice", forceLoad: true);
+        Navigation.NavigateTo("/sales/addsalesinvoice", forceLoad: true);
     }
 
     private void NavigateToEditInvoice()
     {
         if (selectedInvoice != null)
         {
-            Navigation.NavigateTo($"/sales/AddSalesInvoice/{selectedInvoice.Id}", forceLoad: true);
+            Navigation.NavigateTo($"/sales/salesinvoice?id={selectedInvoice.Id}", forceLoad: true);
         }
     }
 
@@ -265,19 +265,19 @@
 
         salesInvoices = column switch
         {
-            nameof(SalesInvoice.No) => sortAscending
+            nameof(SalesInvoiceDto.No) => sortAscending
                 ? salesInvoices.OrderBy(i => i.No).ToList()
                 : salesInvoices.OrderByDescending(i => i.No).ToList(),
-            nameof(SalesInvoice.CustomerName) => sortAscending
+            nameof(SalesInvoiceDto.CustomerName) => sortAscending
                 ? salesInvoices.OrderBy(i => i.CustomerName).ToList()
                 : salesInvoices.OrderByDescending(i => i.CustomerName).ToList(),
-            nameof(SalesInvoice.InvoiceDate) => sortAscending
+            nameof(SalesInvoiceDto.InvoiceDate) => sortAscending
                 ? salesInvoices.OrderBy(i => i.InvoiceDate).ToList()
                 : salesInvoices.OrderByDescending(i => i.InvoiceDate).ToList(),
-            nameof(SalesInvoice.Amount) => sortAscending
+            nameof(SalesInvoiceDto.Amount) => sortAscending
                 ? salesInvoices.OrderBy(i => i.Amount).ToList()
                 : salesInvoices.OrderByDescending(i => i.Amount).ToList(),
-            nameof(SalesInvoice.ReferenceNo) => sortAscending
+            nameof(SalesInvoiceDto.ReferenceNo) => sortAscending
                 ? salesInvoices.OrderBy(i => i.ReferenceNo).ToList()
                 : salesInvoices.OrderByDescending(i => i.ReferenceNo).ToList(),
             _ => salesInvoices
