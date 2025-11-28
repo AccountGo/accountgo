@@ -40,13 +40,13 @@
             <table class="table table-sm table-hover mb-0 text-center table-bordered rounded-3 overflow-hidden">
                 <thead class="table-light">
                     <tr>
-                        <th >Journal</th>
-                        <th >Voucher Type</th>
-                        <th >Debit</th>
-                        <th >Credit</th>
-                        <th >Date</th>
-                        <th >Reference No</th>
-                        <th >Posted</th>
+                        <th>Journal</th>
+                        <th>Voucher Type</th>
+                        <th>Debit</th>
+                        <th>Credit</th>
+                        <th>Date</th>
+                        <th>Reference No</th>
+                        <th>Posted</th>
                         <th>Memo</th>
                     </tr>
                 </thead>
@@ -66,7 +66,11 @@
                             <td>@e.JournalDate.ToShortDateString()</td>
                             <td>@e.ReferenceNo</td>
                             <td>
-                                <input type="checkbox" disabled @(e.Posted==true ? "checked" : null) />
+                                <div class="form-check d-flex justify-content-center">
+                                    <input class="form-check-input" type="checkbox" id="posted-@e.Id" checked="@e.Posted"
+                                        disabled>
+                                </div>
+
                             </td>
                             <td>@e.Memo</td>
                         </tr>
@@ -76,6 +80,7 @@
 
         }
     </div>
+
 </div>
 
 @code {
@@ -103,7 +108,6 @@
 
             var url = $"{baseUrl}financials/journalentries";
 
-            // 🔴 ALSO USE THE DTO ALIAS HERE
             Entries = await Http.GetFromJsonAsync<List<JournalEntryDto>>(url);
         }
         catch (Exception ex)

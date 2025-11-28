@@ -18,11 +18,16 @@
     <div class="alert alert-danger">@ErrorMessage</div>
 }
 
+<div class="mb-3">
+    <a href="/Financials/JournalEntries" class="btn btn-default">
+        <i class="fa fa-arrow-left"></i> Back to Journal Entries
+    </a>
+</div>
+
 <EditForm Model="Entry" OnValidSubmit="HandleValidSubmit">
     <DataAnnotationsValidator />
     <ValidationSummary />
 
-    <!-- ========== HEADER ========== -->
     <div class="panel panel-default">
         <div class="panel-heading"><strong>Header</strong></div>
         <div class="panel-body">
@@ -177,14 +182,14 @@
     private List<Dto.Financial.Account> Accounts = new();
 
     private decimal TotalDebit =>
-        Entry.JournalEntryLines?
-            .Where(l => l.DrCr == 1)   // 1 = Debit
-            .Sum(l => l.Amount ?? 0) ?? 0;
+    Entry.JournalEntryLines?
+    .Where(l => l.DrCr == 1) // 1 = Debit
+    .Sum(l => l.Amount ?? 0) ?? 0;
 
     private decimal TotalCredit =>
-        Entry.JournalEntryLines?
-            .Where(l => l.DrCr == 2)   // 2 = Credit
-            .Sum(l => l.Amount ?? 0) ?? 0;
+    Entry.JournalEntryLines?
+    .Where(l => l.DrCr == 2) // 2 = Credit
+    .Sum(l => l.Amount ?? 0) ?? 0;
 
     protected override async Task OnInitializedAsync()
     {
@@ -220,8 +225,8 @@
             {
                 AccountTree = tree;
                 Accounts = FlattenAccounts(AccountTree)
-                    .OrderBy(a => a.AccountCode)
-                    .ToList();
+                .OrderBy(a => a.AccountCode)
+                .ToList();
             }
             else
             {
@@ -256,7 +261,7 @@
     {
         Entry.JournalEntryLines!.Add(new JournalEntryLineDto
         {
-   
+
             DrCr = 1,
             Amount = 0
         });
@@ -321,8 +326,8 @@
                 {
                     var errors = await response.Content.ReadFromJsonAsync<string[]>();
                     ErrorMessage = errors != null && errors.Length > 0
-                        ? string.Join("; ", errors)
-                        : $"Error saving (HTTP {(int)response.StatusCode})";
+                    ? string.Join("; ", errors)
+                    : $"Error saving (HTTP {(int)response.StatusCode})";
                 }
                 catch
                 {
