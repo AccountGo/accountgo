@@ -205,9 +205,18 @@ namespace Api.Controllers
                 if (!ModelState.IsValid)
                 {
                     errors = new string[ModelState.ErrorCount];
+                    int idx = 0;
+
                     foreach (var val in ModelState.Values)
-                        for (int i = 0; i < ModelState.ErrorCount; i++)
-                            errors[i] = val.Errors[i].ErrorMessage;
+                    {
+                        foreach (var err in val.Errors)
+                        {
+                            if (idx < errors.Length)
+                            {
+                                errors[idx++] = err.ErrorMessage;
+                            }
+                        }
+                    }
 
                     return new BadRequestObjectResult(errors);
                 }
@@ -226,6 +235,22 @@ namespace Api.Controllers
                 else
                 {
                     journalEntry = _financialService.GetJournalEntry(journalEntryDto.Id, false);
+                    if (journalEntry == null)
+                        throw new Exception("Journal entry not found.");
+
+                    var dtoLineIds = journalEntryDto.JournalEntryLines
+                        .Where(l => l.Id != 0)
+                        .Select(l => l.Id)
+                        .ToHashSet();
+
+                    var linesToRemove = journalEntry.JournalEntryLines
+                        .Where(l => l.Id != 0 && !dtoLineIds.Contains(l.Id))
+                        .ToList();
+
+                    foreach (var lineToRemove in linesToRemove)
+                    {
+                        journalEntry.JournalEntryLines.Remove(lineToRemove);
+                    }
                 }
 
                 journalEntry.Date = journalEntryDto.JournalDate;

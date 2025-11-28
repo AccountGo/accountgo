@@ -22,7 +22,7 @@ namespace AccountGoWeb.Controllers
     public IActionResult JournalEntry(int id)
     {
       ViewBag.PageContentHeader = "Journal Entry";
-      return View();
+      return View(model: id);
     }
 
     public async Task<IActionResult> Accounts()

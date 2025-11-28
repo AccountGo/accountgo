@@ -1,3 +1,14 @@
-﻿<div id="divJournalEntry"></div>
+﻿@* <div id="divJournalEntry"></div>
 <script type="text/javascript" src="~/scripts/financials/journalentry.chunk.js">
-</script>
+</script> *@
+
+@model int
+@using AccountGoWeb.Components.Pages.Financial
+
+@{
+    ViewBag.Title = "Journal Entry";
+}
+
+<div class="container">
+    <component type="typeof(JournalEntry)" render-mode="ServerPrerendered" param-Id="Model" />
+</div>
