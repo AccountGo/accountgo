@@ -326,6 +326,12 @@ namespace AccountGoWeb.Controllers
         }
 
         [HttpGet]
+        public IActionResult SalesReceipt(int id)
+        {
+            return View();
+        }
+
+        [HttpGet]
         public IActionResult AddReceipt()
         {
             try
@@ -496,7 +502,7 @@ namespace AccountGoWeb.Controllers
 
             try
             {
-                ViewBag.PageContentHeader = "Receipt Allocation";
+                ViewBag.PageContentHeader = "Sales Receipt Allocation";
 
                 var model = new Models.Sales.Allocate();
 

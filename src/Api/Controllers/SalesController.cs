@@ -246,7 +246,7 @@ namespace Api.Controllers
                     OrderDate = salesOrder.Date,
                     PaymentTermId = salesOrder.PaymentTermId,
                     ReferenceNo = salesOrder.ReferenceNo,
-                    StatusId = salesOrder.Status.HasValue ? (int)salesOrder.Status.Value : 0,
+                    StatusId = (int)salesOrder.Status!,
                     SalesOrderLines = new List<Dto.Sales.SalesOrderLine>()
                 };
 
@@ -462,6 +462,7 @@ namespace Api.Controllers
                     CustomerName = salesInvoice.Customer.Party.Name,
                     InvoiceDate = salesInvoice.Date,
                     ReferenceNo = salesInvoice.ReferenceNo,
+                    TotalAllocatedAmount = (decimal)salesInvoice.CustomerAllocations.Sum(i => i.Amount),
                     Posted = salesInvoice.GeneralLedgerHeaderId != null
                 };
 
@@ -515,6 +516,9 @@ namespace Api.Controllers
         public IActionResult SalesReceipt(int id)
         {
             var salesReceipt = _salesService.GetSalesReceiptById(id);
+            var creditAccountId = salesReceipt.SalesReceiptLines.FirstOrDefault()?.AccountToCreditId ?? 0;
+            var debitCashBankId = _financialService.GetCashAndBanks().Where(cb => cb.AccountId == salesReceipt.AccountToDebitId).FirstOrDefault()?.Id ?? 0;
+
             var salesReceiptDto = new Dto.Sales.SalesReceipt()
             {
                 Id = salesReceipt.Id,
@@ -523,7 +527,9 @@ namespace Api.Controllers
                 CustomerName = salesReceipt.Customer.Party.Name,
                 ReceiptDate = salesReceipt.Date,
                 Amount = salesReceipt.Amount,
-                RemainingAmountToAllocate = salesReceipt.AvailableAmountToAllocate
+                RemainingAmountToAllocate = salesReceipt.AvailableAmountToAllocate,
+                AccountToDebitId = debitCashBankId,
+                AccountToCreditId = creditAccountId
             };
 
             return new ObjectResult(salesReceiptDto);
@@ -1069,6 +1075,63 @@ namespace Api.Controllers
                 salesReceipt.SalesReceiptLines.Add(salesReceiptLine);
 
                 _salesService.AddSalesReceiptNoInvoice(salesReceipt);
+
+                return new ObjectResult(Ok());
+            }
+            catch (Exception ex)
+            {
+                errors = new string[1] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
+                return new BadRequestObjectResult(errors);
+            }
+        }
+
+        [HttpPost]
+        [Route("UpdateReceipt")]
+        public IActionResult UpdateReceipt([FromBody] dynamic receiptDto)
+        {
+            string[]? errors = null;
+
+            try
+            {
+                if (!ModelState.IsValid)
+                {
+                    errors = new string[ModelState.ErrorCount];
+                    foreach (var val in ModelState.Values)
+                        for (int i = 0; i < ModelState.ErrorCount; i++)
+                            errors[i] = val.Errors[i].ErrorMessage;
+
+                    return new BadRequestObjectResult(errors);
+                }
+
+                int receiptId = receiptDto.Id;
+                var existingReceipt = _salesService.GetSalesReceiptById(receiptId);
+
+                if (existingReceipt == null)
+                {
+                    return new BadRequestObjectResult(new string[] { "Sales receipt not found." });
+                }
+
+                var bank = _financialService.GetCashAndBanks().Where(id => id.Id == (int)receiptDto.AccountToDebitId).FirstOrDefault();
+
+                existingReceipt.Date = receiptDto.ReceiptDate;
+                existingReceipt.CustomerId = receiptDto.CustomerId;
+                existingReceipt.AccountToDebitId = bank!.AccountId;
+                existingReceipt.Amount = receiptDto.Amount;
+
+                var customer = _salesService.GetCustomerById((int)receiptDto.CustomerId);
+                if (customer.CustomerAdvancesAccountId != (int)receiptDto.AccountToCreditId)
+                    throw new Exception("Invalid account.");
+
+                // Update the first receipt line
+                var receiptLine = existingReceipt.SalesReceiptLines.FirstOrDefault();
+                if (receiptLine != null)
+                {
+                    receiptLine.AccountToCreditId = receiptDto.AccountToCreditId;
+                    receiptLine.AmountPaid = receiptDto.Amount;
+                    receiptLine.Amount = receiptDto.Amount;
+                }
+
+                _salesService.UpdateSalesReceipt(existingReceipt);
 
                 return new ObjectResult(Ok());
             }

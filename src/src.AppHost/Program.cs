@@ -29,4 +29,3 @@ builder.AddProject<Projects.MigrationService>("migrations")
     .WaitFor(sqlServer);
 
 builder.Build().Run();
-

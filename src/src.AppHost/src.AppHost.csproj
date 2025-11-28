@@ -17,6 +17,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="../BlazorGDB/BlazorGDB/BlazorGDB.csproj" />
     <ProjectReference Include="../MigrationService/MigrationService.csproj" />
     <ProjectReference Include="../AccountGoWeb/AccountGoWeb.csproj" />
     <ProjectReference Include="../Api/Api.csproj" />
