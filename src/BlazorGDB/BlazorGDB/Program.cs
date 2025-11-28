@@ -59,6 +59,10 @@ else
 app.UseHttpsRedirection();
 
 app.UseStaticFiles();
+
+// added next line on Nov 27, 2025 by MZE
+app.UseBlazorFrameworkFiles();
+
 app.UseAntiforgery();
 
 app.MapRazorComponents<App>()
