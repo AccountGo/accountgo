@@ -232,12 +232,17 @@ namespace Api.Controllers
             {
                 var salesOrder = _salesService.GetSalesOrderById(id);
 
+                if (salesOrder == null)
+                {
+                    return new NotFoundObjectResult(new { error = "Sales order not found." });
+                }
+
                 var salesOrderDto = new Dto.Sales.SalesOrder()
                 {
                     Id = salesOrder.Id,
-                    CustomerId = salesOrder.CustomerId!.Value,
-                    CustomerNo = salesOrder.Customer.No,
-                    CustomerName = _salesService.GetCustomerById(salesOrder.CustomerId.Value).Party.Name,
+                    CustomerId = salesOrder.CustomerId.HasValue ? salesOrder.CustomerId.Value : 0,
+                    CustomerNo = salesOrder.Customer?.No ?? "N/A",
+                    CustomerName = salesOrder.CustomerId.HasValue ? _salesService.GetCustomerById(salesOrder.CustomerId.Value)?.Party?.Name ?? "Unknown" : "Unknown",
                     OrderDate = salesOrder.Date,
                     PaymentTermId = salesOrder.PaymentTermId,
                     ReferenceNo = salesOrder.ReferenceNo,
@@ -245,29 +250,31 @@ namespace Api.Controllers
                     SalesOrderLines = new List<Dto.Sales.SalesOrderLine>()
                 };
 
-                foreach (var line in salesOrder.SalesOrderLines)
+                if (salesOrder.SalesOrderLines != null)
                 {
-                    var lineDto = new Dto.Sales.SalesOrderLine();
-                    lineDto.Id = line.Id;
-                    lineDto.Amount = line.Amount;
-                    lineDto.Discount = line.Discount;
-                    lineDto.Quantity = line.Quantity;
-                    lineDto.ItemId = line.ItemId;
-                    lineDto.ItemDescription = line.Item.Description;
-                    lineDto.MeasurementId = line.MeasurementId;
-                    lineDto.MeasurementDescription = line.Measurement.Description;
-                    lineDto.RemainingQtyToInvoice = line.GetRemainingQtyToInvoice();
+                    foreach (var line in salesOrder.SalesOrderLines)
+                    {
+                        var lineDto = new Dto.Sales.SalesOrderLine();
+                        lineDto.Id = line.Id;
+                        lineDto.Amount = line.Amount;
+                        lineDto.Discount = line.Discount;
+                        lineDto.Quantity = line.Quantity;
+                        lineDto.ItemId = line.ItemId;
+                        lineDto.ItemDescription = line.Item?.Description ?? "Unknown";
+                        lineDto.MeasurementId = line.MeasurementId;
+                        lineDto.MeasurementDescription = line.Measurement?.Description ?? "Unknown";
+                        lineDto.RemainingQtyToInvoice = line.GetRemainingQtyToInvoice();
 
-                    salesOrderDto.SalesOrderLines.Add(lineDto);
+                        salesOrderDto.SalesOrderLines.Add(lineDto);
+                    }
                 }
-
 
                 return new ObjectResult(salesOrderDto);
             }
             catch (Exception ex)
             {
                 _logger.LogInformation(ex.ToString());
-                return new ObjectResult(ex);
+                return new BadRequestObjectResult(new { error = "An error occurred while loading the sales order.", details = ex.Message });
             }
         }
 

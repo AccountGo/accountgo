@@ -53,12 +53,15 @@ builder.Services.AddScoped(typeof(Core.Data.ISecurityRepository), typeof(Securit
 
 // domain services
 builder.Services.AddScoped(typeof(Services.Sales.ISalesService), typeof(Services.Sales.SalesService));
+builder.Services.AddScoped(typeof(Services.Donations.IDonationsService), typeof(Services.Donations.DonationsService));
 builder.Services.AddScoped(typeof(Services.Financial.IFinancialService), typeof(Services.Financial.FinancialService));
 builder.Services.AddScoped(typeof(Services.Inventory.IInventoryService), typeof(Services.Inventory.InventoryService));
 builder.Services.AddScoped(typeof(Services.Purchasing.IPurchasingService), typeof(Services.Purchasing.PurchasingService));
 builder.Services.AddScoped(typeof(Services.Administration.IAdministrationService), typeof(Services.Administration.AdministrationService));
 builder.Services.AddScoped(typeof(Services.Security.ISecurityService), typeof(Services.Security.SecurityService));
 builder.Services.AddScoped(typeof(Services.TaxSystem.ITaxService), typeof(Services.TaxSystem.TaxService));
+builder.Services.AddScoped(typeof(Services.Auditing.IAuditableEntityService), typeof(Services.Auditing.AuditableEntityService));
+builder.Services.AddScoped(typeof(Services.Auditing.IAuditableAttributeService), typeof(Services.Auditing.AuditableAttributeService));
 
 //seed the database
 builder.Services.AddScoped<DatabaseSeeder>();

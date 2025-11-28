@@ -1,14 +1,16 @@
-@page "/receivables/sales-order/{Id}"
-@page "/receivables/sales-order/{Id}/edit"
 @using System.Text.Json
 @using System.Text.Json.Serialization
 
-<PageTitle>New Sales Order</PageTitle>
+<style>
+    label,
+    h5 {
+        color: #fff !important;
+    }
+</style>
 
 <div class="container-fluid">
     <div class="row mb-3">
         <div class="col">
-            <h3>New Sales Order</h3>
         </div>
         <div class="col text-end">
             @if (!isNew)
@@ -17,7 +19,6 @@
                     <i class="fa fa-edit"></i> @(editMode ? "Cancel" : "Edit")
                 </button>
             }
-            <a href="/receivables/sales-orders" class="btn btn-outline-secondary">Back to List</a>
         </div>
     </div>
 
@@ -43,57 +44,31 @@
                     <div class="card-body">
                         <div class="row mb-3">
                             <div class="col-md-6">
-                                <label class="form-label"><strong>Order Number</strong></label>
-                                @if (editMode)
-                                {
-                                    <input type="text" class="form-control" @bind="orderNo" />
-                                }
-                                else
-                                {
-                                    <p>@orderNo</p>
-                                }
+                                <label class="form-label"><strong>Customer</strong></label>
+                                <select class="form-control" @bind="customerId">
+                                    <option value="0">-- Select Customer --</option>
+                                    @foreach (var customer in customers)
+                                    {
+                                        <option value="@customer.id">@customer.name</option>
+                                    }
+                                </select>
                             </div>
                             <div class="col-md-6">
-                                <label class="form-label"><strong>Customer Name</strong></label>
-                                @if (editMode)
-                                {
-                                    <select class="form-control" @bind="customerId">
-                                        <option value="0">-- Select Customer --</option>
-                                        @foreach (var customer in customers)
-                                        {
-                                            <option value="@customer.id">@customer.name</option>
-                                        }
-                                    </select>
-                                }
-                                else
-                                {
-                                    <p>@customerName</p>
-                                }
+                                <label class="form-label"><strong>Payment Term</strong></label>
+                                <select class="form-control" @bind="paymentTermId">
+                                    <option value="0">-- Select Payment Term --</option>
+                                    @foreach (var term in paymentTerms)
+                                    {
+                                        <option value="@term.id">@term.description</option>
+                                    }
+                                </select>
                             </div>
                         </div>
 
                         <div class="row mb-3">
                             <div class="col-md-6">
-                                <label class="form-label"><strong>Order Date</strong></label>
-                                @if (editMode)
-                                {
-                                    <input type="date" class="form-control" @bind="orderDate" />
-                                }
-                                else
-                                {
-                                    <p>@orderDate.ToString("MM/dd/yyyy")</p>
-                                }
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label"><strong>Reference No</strong></label>
-                                @if (editMode)
-                                {
-                                    <input type="text" class="form-control" @bind="referenceNo" />
-                                }
-                                else
-                                {
-                                    <p>@referenceNo</p>
-                                }
+                                <label class="form-label"><strong>Amount</strong></label>
+                                <input type="number" class="form-control" @bind="totalAmount" step="0.01" readonly />
                             </div>
                         </div>
 
@@ -102,14 +77,12 @@
                             <table class="table table-sm table-bordered">
                                 <thead class="table-light">
                                     <tr>
-                                        <th>Item Description</th>
+                                        <th>Item</th>
                                         <th>Quantity</th>
                                         <th>Amount</th>
                                         <th>Discount (%)</th>
-                                        @if (editMode)
-                                        {
-                                            <th>Action</th>
-                                        }
+                                        <th>Measurement</th>
+                                        <th>Action</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -120,57 +93,42 @@
                                             var line = lineItems[i];
                                             <tr>
                                                 <td>
-                                                    @if (editMode)
-                                                    {
-                                                        <select class="form-control form-control-sm" @bind="line.ItemId">
-                                                            <option value="0">-- Select Item --</option>
-                                                            @foreach (var item in items)
-                                                            {
-                                                                <option value="@item.id">@item.description</option>
-                                                            }
-                                                        </select>
-                                                    }
-                                                    else
-                                                    {
-                                                        @line.ItemDescription
-                                                    }
+                                                    <select class="form-control form-control-sm" @bind="line.ItemId">
+                                                        <option value="0">-- Select Item --</option>
+                                                        @foreach (var item in items)
+                                                        {
+                                                            <option value="@item.id">@item.description</option>
+                                                        }
+                                                    </select>
                                                 </td>
                                                 <td>
-                                                    @if (editMode)
-                                                    {
-                                                        <input type="number" class="form-control form-control-sm" @bind="line.Quantity" step="0.01" />
-                                                    }
-                                                    else
-                                                    {
-                                                        @line.Quantity
-                                                    }
+                                                    <input type="number" class="form-control form-control-sm" @bind="line.Quantity"
+                                                        step="0.01" />
                                                 </td>
                                                 <td>
-                                                    @if (editMode)
-                                                    {
-                                                        <input type="number" class="form-control form-control-sm" @bind="line.Amount" step="0.01" />
-                                                    }
-                                                    else
-                                                    {
-                                                        @line.Amount.ToString("F2")
-                                                    }
+                                                    <input type="number" class="form-control form-control-sm" @bind="line.Amount"
+                                                        step="0.01" />
                                                 </td>
                                                 <td>
-                                                    @if (editMode)
-                                                    {
-                                                        <input type="number" class="form-control form-control-sm" @bind="line.Discount" step="0.01" />
-                                                    }
-                                                    else
-                                                    {
-                                                        @line.Discount
-                                                    }
+                                                    <input type="number" class="form-control form-control-sm" @bind="line.Discount"
+                                                        step="0.01" />
                                                 </td>
-                                                @if (editMode)
-                                                {
-                                                    <td>
-                                                        <button class="btn btn-sm btn-danger" @onclick="() => RemoveLineItem(i)">Remove</button>
-                                                    </td>
-                                                }
+                                                <td>
+                                                    <select class="form-control form-control-sm" @bind="line.MeasurementId">
+                                                        <option value="0">-- Select Measurement --</option>
+                                                        @foreach (var measurement in measurements)
+                                                        {
+                                                            <option value="@measurement.id">@measurement.description</option>
+                                                        }
+                                                    </select>
+                                                </td>
+                                                <td>
+                                                    @{
+                                                        int itemIndex = i;
+                                                    }
+                                                    <button class="btn btn-sm btn-danger"
+                                                        @onclick="() => RemoveLineItem(itemIndex)">Remove</button>
+                                                </td>
                                             </tr>
                                         }
                                     }
@@ -184,24 +142,13 @@
                         }
                     </div>
                 </div>
-            </div>
 
-            <div class="col-md-4">
-                <div class="card">
-                    <div class="card-header bg-primary text-white">
-                        <h5 class="mb-0">Order Summary</h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="mb-2">
-                            <span>Total Amount:</span>
-                            <h4>$@totalAmount.ToString("F2")</h4>
-                        </div>
-                        @if (editMode)
-                        {
-                            <button class="btn btn-success w-100" @onclick="SaveSalesOrder">Save Order</button>
-                            <button class="btn btn-secondary w-100 mt-2" @onclick="() => editMode = false">Cancel</button>
-                        }
-                    </div>
+                <div class="mt-4">
+                    @if (editMode)
+                    {
+                        <button class="btn btn-success" @onclick="SaveSalesOrder">Save Order</button>
+                        <a href="/Sales/SalesOrders" class="btn btn-secondary ms-2">Cancel</a>
+                    }
                 </div>
             </div>
         </div>
@@ -226,6 +173,18 @@
     }
 
     private class Item
+    {
+        public int id { get; set; }
+        public string description { get; set; } = "";
+    }
+
+    private class PaymentTerm
+    {
+        public int id { get; set; }
+        public string description { get; set; } = "";
+    }
+
+    private class Measurement
     {
         public int id { get; set; }
         public string description { get; set; } = "";
@@ -257,14 +216,18 @@
 
     private List<Customer> customers = new();
     private List<Item> items = new();
+    private List<PaymentTerm> paymentTerms = new();
+    private List<Measurement> measurements = new();
 
     protected override async Task OnInitializedAsync()
     {
         await LoadCustomers();
         await LoadItems();
-        
+        await LoadPaymentTerms();
+        await LoadMeasurements();
+
         isNew = Id == "new" || string.IsNullOrEmpty(Id);
-        
+
         if (isNew)
         {
             order = new Dictionary<string, dynamic>();
@@ -276,7 +239,7 @@
         }
         else
         {
-            Navigation.NavigateTo("/receivables/sales-order/new");
+            Navigation.NavigateTo("/Sales/AddSalesOrder");
         }
     }
 
@@ -320,12 +283,52 @@
         }
     }
 
+    private async Task LoadPaymentTerms()
+    {
+        try
+        {
+            string apiurl = System.Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
+            var client = ClientFactory.CreateClient();
+            var response = await client.GetAsync($"{apiurl}common/paymentterms");
+
+            if (response.IsSuccessStatusCode)
+            {
+                var responseString = await response.Content.ReadAsStringAsync();
+                paymentTerms = JsonSerializer.Deserialize<List<PaymentTerm>>(responseString) ?? new List<PaymentTerm>();
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading payment terms: {ex.Message}";
+        }
+    }
+
+    private async Task LoadMeasurements()
+    {
+        try
+        {
+            string apiurl = System.Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
+            var client = ClientFactory.CreateClient();
+            var response = await client.GetAsync($"{apiurl}common/measurements");
+
+            if (response.IsSuccessStatusCode)
+            {
+                var responseString = await response.Content.ReadAsStringAsync();
+                measurements = JsonSerializer.Deserialize<List<Measurement>>(responseString) ?? new List<Measurement>();
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading measurements: {ex.Message}";
+        }
+    }
+
     private void MapJsonToProperties(System.Text.Json.JsonElement data)
     {
         orderNo = GetJsonProperty(data, "no");
         customerName = GetJsonProperty(data, "customerName");
         referenceNo = GetJsonProperty(data, "referenceNo");
-        
+
         if (data.TryGetProperty("orderDate", out var dateElem))
         {
             if (DateTime.TryParse(dateElem.GetString(), out var date))
@@ -333,7 +336,8 @@
         }
 
         lineItems = new();
-        if (data.TryGetProperty("salesOrderLines", out var linesElem) && linesElem.ValueKind == System.Text.Json.JsonValueKind.Array)
+        if (data.TryGetProperty("salesOrderLines", out var linesElem) && linesElem.ValueKind ==
+        System.Text.Json.JsonValueKind.Array)
         {
             foreach (var lineElem in linesElem.EnumerateArray())
             {
@@ -373,6 +377,8 @@
     private void AddLineItem()
     {
         lineItems.Add(new LineItem());
+        CalculateTotalAmount();
+        StateHasChanged();
     }
 
     private void RemoveLineItem(int index)
@@ -381,6 +387,8 @@
         {
             lineItems.RemoveAt(index);
         }
+        CalculateTotalAmount();
+        StateHasChanged();
     }
 
     private void CalculateTotalAmount()
@@ -429,17 +437,25 @@
             {
                 editMode = false;
                 errorMessage = null;
-                // Stay on the page after successful save
+                await Task.Delay(100);
+                Navigation.NavigateTo("/Sales/SalesOrders", forceLoad: true);
             }
             else
             {
                 var errorContent = await response.Content.ReadAsStringAsync();
                 errorMessage = $"Failed to save sales order. Status: {response.StatusCode}. Response: {errorContent}";
+                StateHasChanged();
             }
         }
         catch (Exception ex)
         {
             errorMessage = $"Error saving sales order: {ex.Message}";
+            StateHasChanged();
         }
+    }
+
+    private void CancelSalesOrder()
+    {
+        Navigation.NavigateTo("/Sales/SalesOrders");
     }
 }

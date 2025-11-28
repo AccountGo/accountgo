@@ -27,7 +27,11 @@
                 <div class="row">
                     <div class="col-sm-3">Date</div>
                     <div class="col-sm-8">
-                        <input class="form-control pull-right" type="date" asp-for="OrderDate">
+                        <input class="form-control pull-right"
+       type="date"
+       asp-for="OrderDate"
+       value="@(Model.OrderDate == DateTime.MinValue ? DateTime.Today.ToString("yyyy-MM-dd") : Model.OrderDate.ToString("yyyy-MM-dd"))" />
+
                     </div>
                 </div>
             </div>

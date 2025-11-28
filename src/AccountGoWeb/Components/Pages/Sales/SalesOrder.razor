@@ -1,0 +1,313 @@
+@using System.Text.Json
+@using System.Text.Json.Serialization
+@using Dto.Sales
+
+<!-- NOTE: If a sales order displays an error about "Nullable object must have a value", 
+     it means the order in the database has incomplete data (null CustomerId or Status). 
+     The sales order needs to be edited to complete the required fields. -->
+
+<div class="container-fluid">
+    <div class="row mb-3">
+        <div class="col">
+        </div>
+        <div class="col text-end">
+            <a href="/Sales/SalesOrders" class="btn btn-outline-secondary">
+                <i class="fa fa-arrow-left"></i>
+                Back to Orders
+            </a>
+            @* <a href="#" class="btn btn-outline-warning" @onclick="OnClickEditButton">
+                <i class="fa fa-edit"></i>
+                Edit
+            </a> *@
+        </div>
+    </div>
+
+    @if (loading)
+    {
+        <p><em>Loading...</em></p>
+    }
+    else if (errorMessage != null)
+    {
+        <div class="alert alert-danger" role="alert">
+            <strong>Error:</strong> @errorMessage
+        </div>
+    }
+    else if (!HasSalesOrder())
+    {
+        <div class="alert alert-warning" role="alert">
+            <strong>Sales order not found.</strong>
+        </div>
+    }
+    else
+    {
+        <div class="col-md-9">
+            <div class="card">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="mb-0">Sales Order Details</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-sm-6">
+                            <div class="row mb-2">
+                                <div class="col-sm-5 fw-bold" style="color: white;">Customer Name</div>
+                                <div class="col-sm-7" style="color: white;">
+                                    @GetValue("customerName")</div>
+                            </div>
+                            <div class="row mb-2">
+                                <div class="col-sm-5 fw-bold" style="color: white;">Order Date</div>
+                                <div class="col-sm-7" style="color: white;">
+                                    @GetValue("orderDate")</div>
+                            </div>
+                            <div class="row mb-2">
+                                <div class="col-sm-5 fw-bold" style="color: white;">Amount</div>
+                                <div class="col-sm-7" style="color: white;">
+                                    @GetTotalAmount().ToString("F2")</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <h6 class="mt-4 mb-3" style="color: white;">Order Items</h6>
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Item</th>
+                                    <th>Quantity</th>
+                                    <th>Amount</th>
+                                    <th>Discount</th>
+                                    <th>Measurement</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (salesOrderLines != null && salesOrderLines.Count > 0)
+                                {
+                                    @foreach (var line in salesOrderLines)
+                                    {
+                                        <tr>
+                                            <td>@GetLineValue(line, "itemDescription")</td>
+                                            <td>@GetLineValue(line, "quantity")</td>
+                                            <td>@GetLineValue(line, "amount")</td>
+                                            <td>@GetLineValue(line, "discount")</td>
+                                            <td>@GetLineValue(line, "measurementDescription")</td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [SupplyParameterFromQuery]
+    public int Id { get; set; }
+
+    [Inject]
+    private IHttpClientFactory ClientFactory { get; set; } = null!;
+
+    [Inject]
+    private NavigationManager Navigation { get; set; } = null!;
+
+    private System.Text.Json.JsonElement? salesOrder;
+    private List<dynamic> salesOrderLines = new();
+    private bool loading = true;
+    private string? errorMessage = null;
+    private string apiResponse = "No response yet";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSalesOrder();
+    }
+
+    private bool HasSalesOrder()
+    {
+        return salesOrder.HasValue && salesOrder.Value.ValueKind != System.Text.Json.JsonValueKind.Null;
+    }
+
+    private async Task LoadSalesOrder()
+    {
+        try
+        {
+            loading = true;
+            string apiurl = System.Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
+            var client = ClientFactory.CreateClient();
+            client.Timeout = TimeSpan.FromSeconds(60);
+
+            var fullUrl = $"{apiurl}sales/SalesOrder?id={Id}";
+            var response = await client.GetAsync(fullUrl);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var responseString = await response.Content.ReadAsStringAsync();
+                apiResponse = responseString;
+
+                var options = new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true,
+                    DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+                };
+
+                // Check if response is an exception (has "ClassName" property)
+                using (var doc = System.Text.Json.JsonDocument.Parse(responseString))
+                {
+                    if (doc.RootElement.TryGetProperty("ClassName", out var classNameProp))
+                    {
+                        // This is an exception response
+                        var className = classNameProp.GetString() ?? "Unknown Error";
+                        if (className.Contains("InvalidOperationException") &&
+                        doc.RootElement.TryGetProperty("Message", out var messageProp) &&
+                        messageProp.GetString()?.Contains("Nullable object") == true)
+                        {
+                            errorMessage = "This sales order is incomplete or missing required data (e.g., customer information). Please edit the order to complete it.";
+                        }
+                        else if (doc.RootElement.TryGetProperty("Message", out var msgProp))
+                        {
+                            errorMessage = $"API Error: {msgProp.GetString()}";
+                        }
+                        else
+                        {
+                            errorMessage = "API Error: Unknown error occurred";
+                        }
+                        loading = false;
+                        return;
+                    }
+                }
+
+                var doc2 = System.Text.Json.JsonDocument.Parse(responseString);
+                salesOrder = doc2.RootElement;
+
+                // Extract sales order lines - try both cases
+                if (salesOrder.Value.TryGetProperty("salesOrderLines", out var linesProperty) ||
+                salesOrder.Value.TryGetProperty("SalesOrderLines", out linesProperty))
+                {
+                    var linesList = JsonSerializer.Deserialize<List<System.Text.Json.JsonElement>>(linesProperty.GetRawText(), options);
+                    salesOrderLines = linesList?.Cast<dynamic>().ToList() ?? new();
+                }
+            }
+            else
+            {
+                var content = await response.Content.ReadAsStringAsync();
+                apiResponse = content;
+                errorMessage = $"Failed to load sales order. Status: {response.StatusCode}";
+            }
+        }
+        catch (Exception ex)
+        {
+            apiResponse = ex.ToString();
+            errorMessage = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private string GetValue(string propertyName)
+    {
+        try
+        {
+            if (salesOrder.HasValue && salesOrder.Value is System.Text.Json.JsonElement je)
+            {
+                if (je.TryGetProperty(propertyName, out var prop))
+                {
+                    return FormatValue(prop, propertyName);
+                }
+
+                // Try case-insensitive
+                foreach (var objProp in je.EnumerateObject())
+                {
+                    if (objProp.Name.Equals(propertyName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return FormatValue(objProp.Value, propertyName);
+                    }
+                }
+            }
+            return "N/A";
+        }
+        catch
+        {
+            return "N/A";
+        }
+    }
+
+    private string GetLineValue(dynamic obj, string propertyName)
+    {
+        try
+        {
+            if (obj is System.Text.Json.JsonElement je)
+            {
+                if (je.TryGetProperty(propertyName, out var prop))
+                {
+                    return FormatValue(prop, propertyName);
+                }
+
+                // Try case-insensitive
+                foreach (var objProp in je.EnumerateObject())
+                {
+                    if (objProp.Name.Equals(propertyName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return FormatValue(objProp.Value, propertyName);
+                    }
+                }
+            }
+            return "N/A";
+        }
+        catch
+        {
+            return "N/A";
+        }
+    }
+
+    private string FormatValue(System.Text.Json.JsonElement prop, string propertyName)
+    {
+        if ((propertyName == "amount" || propertyName == "discount") && prop.ValueKind == System.Text.Json.JsonValueKind.Number)
+        {
+            return prop.GetDecimal().ToString("F2");
+        }
+        if (propertyName == "quantity" && prop.ValueKind == System.Text.Json.JsonValueKind.Number)
+        {
+            return prop.GetDecimal().ToString("F2");
+        }
+        if (propertyName == "orderDate" && prop.ValueKind == System.Text.Json.JsonValueKind.String)
+        {
+            var dateStr = prop.GetString();
+            return dateStr?.Substring(0, Math.Min(10, dateStr.Length)) ?? "N/A";
+        }
+        if (prop.ValueKind == System.Text.Json.JsonValueKind.String)
+        {
+            return prop.GetString() ?? "N/A";
+        }
+        if (prop.ValueKind == System.Text.Json.JsonValueKind.Number)
+        {
+            return prop.GetDecimal().ToString();
+        }
+        return prop.ToString();
+    }
+
+    private decimal GetTotalAmount()
+    {
+        decimal total = 0;
+        if (salesOrderLines != null && salesOrderLines.Count > 0)
+        {
+            foreach (var line in salesOrderLines)
+            {
+                if (line is System.Text.Json.JsonElement je)
+                {
+                    if (je.TryGetProperty("amount", out var amountProp) && amountProp.ValueKind == System.Text.Json.JsonValueKind.Number)
+                    {
+                        total += amountProp.GetDecimal();
+                    }
+                }
+            }
+        }
+        return total;
+    }
+
+    private void OnClickEditButton()
+    {
+        Navigation.NavigateTo($"/Sales/AddSalesOrder?id={Id}");
+    }
+}

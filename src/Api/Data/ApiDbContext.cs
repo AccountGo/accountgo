@@ -1,6 +1,7 @@
 ﻿using Api.Data.Seed;
 using Core.Domain;
 using Core.Domain.Auditing;
+using Core.Domain.Donations;
 using Core.Domain.Financials;
 using Core.Domain.Items;
 using Core.Domain.Purchases;
@@ -56,179 +57,179 @@ namespace Api.Data
             /* Medhat START */
             builder.Entity<GeneralLedgerLine>()
                 .Property(p => p.Amount)
-                .HasColumnType("decimal(18, 2)"); 
+                .HasColumnType("decimal(18, 2)");
 
             builder.Entity<JournalEntryLine>()
                 .Property(p => p.Amount)
-                .HasColumnType("decimal(18, 2)"); 
+                .HasColumnType("decimal(18, 2)");
 
             builder.Entity<InventoryControlJournal>()
                 .Property(p => p.INQty)
-                .HasColumnType("decimal(18, 2)"); 
+                .HasColumnType("decimal(18, 2)");
 
             builder.Entity<InventoryControlJournal>()
                 .Property(p => p.OUTQty)
-                .HasColumnType("decimal(18, 2)"); 
+                .HasColumnType("decimal(18, 2)");
 
             builder.Entity<InventoryControlJournal>()
                 .Property(p => p.TotalAmount)
-                .HasColumnType("decimal(18, 2)"); 
+                .HasColumnType("decimal(18, 2)");
 
             builder.Entity<InventoryControlJournal>()
                 .Property(p => p.TotalCost)
-                .HasColumnType("decimal(18, 2)"); 
+                .HasColumnType("decimal(18, 2)");
 
             builder.Entity<Item>()
                 .Property(p => p.Cost)
-                .HasColumnType("decimal(18, 2)"); 
+                .HasColumnType("decimal(18, 2)");
 
             builder.Entity<Item>()
                 .Property(p => p.Price)
-                .HasColumnType("decimal(18, 2)"); 
+                .HasColumnType("decimal(18, 2)");
 
             builder.Entity<PurchaseInvoiceLine>()
                 .Property(p => p.Amount)
-                .HasColumnType("decimal(18, 2)"); 
+                .HasColumnType("decimal(18, 2)");
 
             builder.Entity<PurchaseInvoiceLine>()
                 .Property(p => p.Cost)
-                .HasColumnType("decimal(18, 2)"); 
+                .HasColumnType("decimal(18, 2)");
 
             builder.Entity<PurchaseInvoiceLine>()
                 .Property(p => p.Discount)
-                .HasColumnType("decimal(18, 2)"); 
+                .HasColumnType("decimal(18, 2)");
 
             builder.Entity<JournalEntryLine>()
                 .Property(p => p.Amount)
-                .HasColumnType("decimal(18, 2)"); 
+                .HasColumnType("decimal(18, 2)");
 
             builder.Entity<PurchaseInvoiceLine>()
                 .Property(p => p.Quantity)
-                .HasColumnType("decimal(18, 2)"); 
+                .HasColumnType("decimal(18, 2)");
 
             builder.Entity<PurchaseInvoiceLine>()
                 .Property(p => p.ReceivedQuantity)
-                .HasColumnType("decimal(18, 2)"); 
+                .HasColumnType("decimal(18, 2)");
 
             builder.Entity<PurchaseOrderLine>()
                 .Property(p => p.Amount)
-                .HasColumnType("decimal(18, 2)"); 
+                .HasColumnType("decimal(18, 2)");
 
             builder.Entity<PurchaseOrderLine>()
                 .Property(p => p.Quantity)
-                .HasColumnType("decimal(18, 2)"); 
+                .HasColumnType("decimal(18, 2)");
 
             builder.Entity<PurchaseOrderLine>()
                 .Property(p => p.Cost)
-                .HasColumnType("decimal(18, 2)"); 
+                .HasColumnType("decimal(18, 2)");
 
             builder.Entity<PurchaseOrderLine>()
                 .Property(p => p.Discount)
-                .HasColumnType("decimal(18, 2)"); 
+                .HasColumnType("decimal(18, 2)");
 
             builder.Entity<PurchaseReceiptLine>()
                 .Property(p => p.Amount)
-                .HasColumnType("decimal(18, 2)"); 
+                .HasColumnType("decimal(18, 2)");
 
             builder.Entity<PurchaseReceiptLine>()
                 .Property(p => p.Cost)
-                .HasColumnType("decimal(18, 2)"); 
+                .HasColumnType("decimal(18, 2)");
 
             builder.Entity<PurchaseReceiptLine>()
                 .Property(p => p.Discount)
-                .HasColumnType("decimal(18, 2)"); 
+                .HasColumnType("decimal(18, 2)");
 
             builder.Entity<PurchaseReceiptLine>()
                 .Property(p => p.Quantity)
-                .HasColumnType("decimal(18, 2)"); 
+                .HasColumnType("decimal(18, 2)");
 
             builder.Entity<PurchaseReceiptLine>()
                 .Property(p => p.ReceivedQuantity)
-                .HasColumnType("decimal(18, 2)"); 
+                .HasColumnType("decimal(18, 2)");
 
             builder.Entity<VendorPayment>()
                 .Property(p => p.Amount)
-                .HasColumnType("decimal(18, 2)"); 
+                .HasColumnType("decimal(18, 2)");
 
             builder.Entity<CustomerAllocation>()
                 .Property(p => p.Amount)
-                .HasColumnType("decimal(18, 2)"); 
+                .HasColumnType("decimal(18, 2)");
 
             builder.Entity<SalesDeliveryLine>()
                 .Property(p => p.Discount)
-                .HasColumnType("decimal(18, 2)"); 
+                .HasColumnType("decimal(18, 2)");
 
             builder.Entity<SalesDeliveryLine>()
                 .Property(p => p.Price)
-                .HasColumnType("decimal(18, 2)"); 
+                .HasColumnType("decimal(18, 2)");
 
             builder.Entity<SalesDeliveryLine>()
                 .Property(p => p.Quantity)
-                .HasColumnType("decimal(18, 2)"); 
+                .HasColumnType("decimal(18, 2)");
 
             builder.Entity<PurchaseReceiptLine>()
                 .Property(p => p.Quantity)
-                .HasColumnType("decimal(18, 2)"); 
+                .HasColumnType("decimal(18, 2)");
 
             builder.Entity<SalesInvoiceHeader>()
                 .Property(p => p.ShippingHandlingCharge)
-                .HasColumnType("decimal(18, 2)"); 
+                .HasColumnType("decimal(18, 2)");
 
             builder.Entity<SalesInvoiceLine>()
                 .Property(p => p.Amount)
-                .HasColumnType("decimal(18, 2)"); 
+                .HasColumnType("decimal(18, 2)");
 
             builder.Entity<SalesInvoiceLine>()
                 .Property(p => p.Discount)
-                .HasColumnType("decimal(18, 2)"); 
+                .HasColumnType("decimal(18, 2)");
 
             builder.Entity<SalesInvoiceLine>()
                 .Property(p => p.Quantity)
-                .HasColumnType("decimal(18, 2)"); 
+                .HasColumnType("decimal(18, 2)");
 
             builder.Entity<SalesOrderLine>()
                 .Property(p => p.Amount)
-                .HasColumnType("decimal(18, 2)"); 
+                .HasColumnType("decimal(18, 2)");
 
             builder.Entity<SalesOrderLine>()
                 .Property(p => p.Discount)
-                .HasColumnType("decimal(18, 2)"); 
+                .HasColumnType("decimal(18, 2)");
 
             builder.Entity<SalesOrderLine>()
                 .Property(p => p.Quantity)
-                .HasColumnType("decimal(18, 2)"); 
+                .HasColumnType("decimal(18, 2)");
 
             builder.Entity<SalesQuoteLine>()
                 .Property(p => p.Amount)
-                .HasColumnType("decimal(18, 2)"); 
+                .HasColumnType("decimal(18, 2)");
 
             builder.Entity<SalesQuoteLine>()
                 .Property(p => p.Discount)
-                .HasColumnType("decimal(18, 2)"); 
+                .HasColumnType("decimal(18, 2)");
 
             builder.Entity<SalesQuoteLine>()
                 .Property(p => p.Quantity)
-                .HasColumnType("decimal(18, 2)"); 
+                .HasColumnType("decimal(18, 2)");
 
             builder.Entity<SalesReceiptHeader>()
                 .Property(p => p.Amount)
-                .HasColumnType("decimal(18, 2)"); 
+                .HasColumnType("decimal(18, 2)");
 
             builder.Entity<SalesReceiptLine>()
                 .Property(p => p.Amount)
-                .HasColumnType("decimal(18, 2)"); 
+                .HasColumnType("decimal(18, 2)");
 
             builder.Entity<SalesReceiptLine>()
                 .Property(p => p.AmountPaid)
-                .HasColumnType("decimal(18, 2)"); 
+                .HasColumnType("decimal(18, 2)");
 
             builder.Entity<SalesReceiptLine>()
                 .Property(p => p.Discount)
-                .HasColumnType("decimal(18, 2)"); 
+                .HasColumnType("decimal(18, 2)");
 
             builder.Entity<SalesReceiptLine>()
                 .Property(p => p.Quantity)
-                .HasColumnType("decimal(18, 2)"); 
+                .HasColumnType("decimal(18, 2)");
 
             builder.Entity<Tax>()
                 .Property(p => p.Rate)
@@ -237,7 +238,7 @@ namespace Api.Data
             builder.Seed();
             /* Medhat END */
 
-            
+
         }
         public virtual DbSet<Account> Accounts { get; set; }
         public virtual DbSet<AccountClass> AccountClasses { get; set; }
@@ -282,6 +283,8 @@ namespace Api.Data
         public virtual DbSet<SalesQuoteLine> SalesQuoteLines { get; set; }
         public virtual DbSet<SalesReceiptHeader> SalesReceiptHeaders { get; set; }
         public virtual DbSet<SalesReceiptLine> SalesReceiptLines { get; set; }
+        public virtual DbSet<DonationInvoiceHeader> DonationInvoiceHeaders { get; set; }
+        public virtual DbSet<DonationInvoiceLine> DonationInvoiceLines { get; set; }
         public virtual DbSet<SecurityGroup> SecurityGroups { get; set; }
         public virtual DbSet<SecurityPermission> SecurityPermissions { get; set; }
         public virtual DbSet<SecurityRole> SecurityRoles { get; set; }

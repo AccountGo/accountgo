@@ -36,6 +36,9 @@ jobs:
           echo "++++ dotnet build"
           dotnet build --configuration Release
 
+      - name: Run unit tests
+        run: dotnet test ./test/GoodBooks.BackendTests/GoodBooks.BackendTests.csproj --configuration Release
+
       - name: Add migrations
         run: |
           echo "++++ current directory"
