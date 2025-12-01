@@ -18,7 +18,7 @@
         <i class="fa fa-edit"></i>
         Edit
     </a>
-        <a href="~/sales/deletesalesinvoice" id="linkDeleteInvoice" class="btn inactiveLink">
+    <a href="~/sales/deletesalesinvoice" id="linkDeleteInvoice" class="btn inactiveLink">
         <i class="fa fa-trash"></i>
         Delete
     </a>
@@ -40,20 +40,30 @@
                 <input type="hidden" id="hdnselectedsalesInvoiceId" />
             </div>
             <div class="modal-footer">
-                <button class="btn btn-sm btn-primary btn-flat" onclick="deleteSalesInvoice()" type="button">Yes</button>
+                <button class="btn btn-sm btn-primary btn-flat" onclick="deleteSalesInvoice()"
+                    type="button">Yes</button>
                 <button class="btn btn-sm btn-default btn-flat" data-bs-dismiss="modal" type="button">No</button>
             </div>
         </div>
     </div>
 </div>
 
-@section scripts{
+@section scripts {
     <script>
         var columnDefs = [
             { headerName: "No", field: "no", width: 50 },
             { headerName: "Customer Name", field: "customerName", width: 200 },
             { headerName: "Invoiced Date", field: "invoiceDate", width: 250 },
             { headerName: "Amount", field: "amount", width: 100 },
+            { headerName: "Allocated", field: "totalAllocatedAmount", width: 100 },
+            {
+                headerName: "Remaining",
+                width: 100,
+                cellRenderer: function (val) {
+                    var remaining = (val.data.amount || 0) - (val.data.totalAllocatedAmount || 0);
+                    return remaining.toFixed(2);
+                }
+            },
             { headerName: "Ref no", field: "referenceNo", width: 100 },
             {
                 headerName: "Posted", width: 100, cellRenderer: function (val) {
@@ -97,7 +107,7 @@
 
         function deleteSalesInvoice() {
             var salesInvoiceId = $("#hdnselectedsalesInvoiceId").val();
-            
+
             location.href = '@Url.Action("DeleteSalesInvoice", "Sales")?id=' + salesInvoiceId;
         }
     </script>

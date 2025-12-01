@@ -11,7 +11,8 @@ public interface IAccountService
     Task<Account?> UpdateAccountAsync(string accountCode, Account updatedAccount);
 
     // Delete an account by AccountCode
-    Task<Account?> DeleteAccountAsync(string accountCode);
+    // Returns (account, errorMessage) - account is null if deletion failed
+    Task<(Account? account, string? errorMessage)> DeleteAccountAsync(string accountCode);
 
     // Get an account by AccountCode
     Task<Account?> GetAccountByCodeAsync(string accountCode);

@@ -1,0 +1,301 @@
+@page "/receivables/sales-receipt/new"
+@using System.Text.Json
+@using System.Text.Json.Serialization
+
+<PageTitle>New Sales Receipt</PageTitle>
+
+<div class="container-fluid">
+    <div class="row mb-3">
+        <div class="col">
+            <h3>New Sales Receipt</h3>
+        </div>
+        <div class="col text-end">
+            <a href="/receivables/sales-receipts" class="btn btn-outline-secondary">Back to List</a>
+        </div>
+    </div>
+
+    @if (loading)
+    {
+        <p><em>Loading...</em></p>
+    }
+    else if (errorMessage != null)
+    {
+        <div class="alert alert-danger" role="alert">
+            <strong>Error:</strong> @errorMessage
+        </div>
+    }
+    else
+    {
+        <div class="row">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label"><strong>Customer Name</strong></label>
+                                <select class="form-control" @bind="CustomerId">
+                                    <option value="0">-- Select Customer --</option>
+                                    @foreach (var customer in customers)
+                                    {
+                                        <option value="@customer.id">@customer.name</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label"><strong>Receipt Date</strong></label>
+                                <input type="date" class="form-control" @bind="receiptDate" />
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label"><strong>Account to Debit (Cash/Bank)</strong></label>
+                                <select class="form-control" @bind="accountToDebitId">
+                                    <option value="0">-- Select Account --</option>
+                                    @foreach (var account in cashBanks)
+                                    {
+                                        <option value="@account.id">@account.name (@account.accountNo)</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label"><strong>Account to Credit</strong></label>
+                                <!-- CURRENT: Auto-populated from customer's prepayment account (better UX) -->
+                                <!-- TO CHANGE BACK TO MVC STYLE: Replace this input with a select dropdown -->
+                                <!-- <select class="form-control" @bind="accountToCreditId"> -->
+                                <!--     <option value="0">-- Select Account --</option> -->
+                                <!--     @foreach (var account in creditAccounts) { <option value="@account.id">@account.accountName</option> } -->
+                                <!-- </select> -->
+                                <!-- And remove the CustomerId property setter logic -->
+                                <input type="text" class="form-control" readonly value="@(creditAccounts.FirstOrDefault(a => a.id == accountToCreditId)?.accountName ?? "Select customer first")" />
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label"><strong>Amount</strong></label>
+                                <input type="number" class="form-control" @bind="amount" step="0.01" min="0" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">Receipt Summary</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-2">
+                            <span>Customer:</span>
+                            <strong>@customerName</strong>
+                        </div>
+                        <div class="mb-2">
+                            <span>Credit Account:</span>
+                            <strong>@(creditAccounts.FirstOrDefault(a => a.id == accountToCreditId)?.accountName ?? "None")</strong>
+                        </div>
+                        <div class="mb-2">
+                            <span>Amount:</span>
+                            <h4>$@amount.ToString("F2")</h4>
+                        </div>
+                        <button class="btn btn-success w-100" @onclick="SaveSalesReceipt">Save Receipt</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private class Customer
+    {
+        public int id { get; set; }
+        public string name { get; set; } = "";
+        public int? prepaymentAccountId { get; set; }
+    }
+
+    private class CashBank
+    {
+        public int id { get; set; }
+        public string name { get; set; } = "";
+        public string accountNo { get; set; } = "";
+    }
+
+    private class CreditAccount
+    {
+        public int id { get; set; }
+        public string accountName { get; set; } = "";
+    }
+
+    [Inject]
+    private IHttpClientFactory ClientFactory { get; set; } = null!;
+
+    [Inject]
+    private NavigationManager Navigation { get; set; } = null!;
+
+    private bool loading = true;
+    private string? errorMessage = null;
+
+    private int customerId = 0;
+    private string customerName = "";
+    private DateTime receiptDate = DateTime.Now;
+    private int accountToDebitId = 0;
+    private int accountToCreditId = 0;
+    private decimal amount = 0;
+
+    private int CustomerId
+    {
+        get => customerId;
+        set
+        {
+            customerId = value;
+            UpdateCustomerInfo(); // Auto-updates credit account when customer changes
+        }
+    }
+
+    private List<Customer> customers = new();
+    private List<CashBank> cashBanks = new();
+    private List<CreditAccount> creditAccounts = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCustomers();
+        await LoadCashBanks();
+        await LoadCreditAccounts();
+        loading = false;
+    }    private async Task LoadCustomers()
+    {
+        try
+        {
+            string apiurl = System.Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
+            var client = ClientFactory.CreateClient();
+            var response = await client.GetAsync($"{apiurl}sales/customers");
+
+            if (response.IsSuccessStatusCode)
+            {
+                var responseString = await response.Content.ReadAsStringAsync();
+                customers = JsonSerializer.Deserialize<List<Customer>>(responseString) ?? new List<Customer>();
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading customers: {ex.Message}";
+        }
+    }
+
+    private async Task LoadCashBanks()
+    {
+        try
+        {
+            string apiurl = System.Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
+            var client = ClientFactory.CreateClient();
+            var response = await client.GetAsync($"{apiurl}financials/cashbanks");
+
+            if (response.IsSuccessStatusCode)
+            {
+                var responseString = await response.Content.ReadAsStringAsync();
+                cashBanks = JsonSerializer.Deserialize<List<CashBank>>(responseString) ?? new List<CashBank>();
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading cash/bank accounts: {ex.Message}";
+        }
+    }
+
+    private async Task LoadCreditAccounts()
+    {
+        try
+        {
+            string apiurl = System.Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
+            var client = ClientFactory.CreateClient();
+            var response = await client.GetAsync($"{apiurl}common/postingaccounts");
+
+            if (response.IsSuccessStatusCode)
+            {
+                var responseString = await response.Content.ReadAsStringAsync();
+                creditAccounts = JsonSerializer.Deserialize<List<CreditAccount>>(responseString) ?? new List<CreditAccount>();
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading credit accounts: {ex.Message}";
+        }
+    }
+
+    private void UpdateCustomerInfo()
+    {
+        // CURRENT: Auto-sets credit account to customer's prepayment account
+        // TO CHANGE BACK: Comment out or remove the accountToCreditId assignment
+        var customer = customers.FirstOrDefault(c => c.id == CustomerId);
+        if (customer != null)
+        {
+            customerName = customer.name;
+            accountToCreditId = customer.prepaymentAccountId ?? 0;
+        }
+        else
+        {
+            customerName = "";
+            accountToCreditId = 0;
+        }
+    }
+
+    private async Task SaveSalesReceipt()
+    {
+        try
+        {
+            if (CustomerId == 0)
+            {
+                errorMessage = "Please select a customer.";
+                return;
+            }
+
+            if (accountToDebitId == 0)
+            {
+                errorMessage = "Please select a cash/bank account.";
+                return;
+            }
+
+            UpdateCustomerInfo();
+
+            if (accountToCreditId == 0)
+            {
+                errorMessage = "Selected customer does not have a prepayment account configured.";
+                return;
+            }
+
+            string apiurl = System.Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
+
+            var payload = new
+            {
+                ReceiptDate = receiptDate,
+                CustomerId = CustomerId,
+                AccountToDebitId = accountToDebitId,
+                AccountToCreditId = accountToCreditId,
+                Amount = amount
+            };
+
+            var client = ClientFactory.CreateClient();
+            var json = JsonSerializer.Serialize(payload);
+            var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
+
+            var response = await client.PostAsync($"{apiurl}sales/savereceipt", content);
+
+            if (response.IsSuccessStatusCode)
+            {
+                errorMessage = null;
+                Navigation.NavigateTo("/receivables/sales-receipts");
+            }
+            else
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                errorMessage = $"Failed to save sales receipt. Status: {response.StatusCode}. Response: {errorContent}";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error saving sales receipt: {ex.Message}";
+        }
+    }
+}
