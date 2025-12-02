@@ -21,7 +21,6 @@
     <ProjectReference Include="../MigrationService/MigrationService.csproj" />
     <ProjectReference Include="../AccountGoWeb/AccountGoWeb.csproj" />
     <ProjectReference Include="../Api/Api.csproj" />
-    <ProjectReference Include="../BlazorGDB/BlazorGDB/BlazorGDB.csproj" />
     <!-- Exclude Infrastructure from Aspire metadata generation - it's a class library -->
     <ProjectReference Include="../Infrastructure/Infrastructure.csproj">
       <IsAspireProjectResource>false</IsAspireProjectResource>
