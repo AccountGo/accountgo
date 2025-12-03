@@ -8,6 +8,11 @@
     tr td {
         color: #fff;
     }
+
+    .card,
+    .card-body {
+        color: #fff;
+    }
 </style>
 
 <div>
@@ -42,7 +47,7 @@
                     @* Payment Term *@
                     <div class="row">
                         <div class="col-sm-5">Payment Term</div>
-                        <div class="col-sm-7">@ViewBag.PaymentTermId</div>
+                        <div class="col-sm-7">@ViewBag.SelectedPaymentTerm</div>
                     </div>
                     @* Total Amount *@
                     <div class="row">
@@ -90,7 +95,6 @@
                                 </td>
                             </tr>
                         }
-
                     </tbody>
                 </table>
             </div>
