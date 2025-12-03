@@ -1,6 +1,7 @@
 using Dto;
 using Dto.Administration;
 using System.ComponentModel.DataAnnotations;
+using Xunit;
 
 namespace GoodBooks.ServicesTests.Dto.Administration;
 
