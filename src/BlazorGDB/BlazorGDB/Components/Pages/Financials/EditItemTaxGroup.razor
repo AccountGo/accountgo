@@ -8,12 +8,12 @@
 
 <div class="container-fluid">
     <h3>Edit Item Tax Group</h3>
-    
+
     <div class="alert alert-info">
-        <strong>Note:</strong> Item Tax Groups are currently edited through the tax editing process. 
+        <strong>Note:</strong> Item Tax Groups are currently edited through the tax editing process.
         Standalone editing is not yet supported by the API.
     </div>
-    
+
     @if (isLoading)
     {
         <div class="text-center">
@@ -26,23 +26,24 @@
     {
         <EditForm Model="@itemTaxGroup" OnValidSubmit="@HandleSubmit">
             <DataAnnotationsValidator />
-            
+
             <div class="card mb-3">
                 <div class="card-body">
                     <div class="row mb-3">
                         <label class="col-sm-3 col-form-label">Name</label>
                         <div class="col-sm-9">
-                            <InputText @bind-Value="itemTaxGroup.Name" class="form-control" placeholder="Item Tax Group Name" />
+                            <InputText @bind-Value="itemTaxGroup.Name" class="form-control"
+                                placeholder="Item Tax Group Name" />
                         </div>
                     </div>
-                    
+
                     <div class="row mb-3">
                         <label class="col-sm-3 col-form-label">Fully Exempt</label>
                         <div class="col-sm-9">
                             <InputCheckbox @bind-Value="itemTaxGroup.IsFullyExempt" class="form-check-input" />
                         </div>
                     </div>
-                    
+
                     @if (itemTaxGroup.Taxes?.Any() == true)
                     {
                         <div class="row mb-3">
@@ -59,14 +60,14 @@
                     }
                 </div>
             </div>
-            
+
             <div class="mb-3">
                 @if (errorMessage != null)
                 {
                     <div class="alert alert-danger">@errorMessage</div>
                 }
             </div>
-            
+
             <div class="mb-3">
                 <button type="submit" class="btn btn-primary" disabled>
                     Update (Not Available)
@@ -80,7 +81,7 @@
 @code {
     [Parameter]
     public int GroupId { get; set; }
-    
+
     private Dto.TaxSystem.ItemTaxGroup? itemTaxGroup;
     private bool isLoading = true;
     private string? errorMessage = "This feature requires API support for standalone item tax group editing.";
@@ -97,19 +98,19 @@
         {
             var baseUri = Configuration["ApiUrl"];
             var httpClient = HttpClientFactory.CreateClient();
-            
+
             var response = await httpClient.GetAsync($"{baseUri}tax/taxes");
-            
+
             if (response.IsSuccessStatusCode)
             {
                 var content = await response.Content.ReadAsStringAsync();
                 var taxSystemDto = System.Text.Json.JsonSerializer.Deserialize<Dto.TaxSystem.TaxSystemDto>(
-                    content, 
-                    new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true }
+                content,
+                new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true }
                 );
-                
+
                 itemTaxGroup = taxSystemDto?.ItemTaxGroups?.FirstOrDefault(itg => itg.Id == GroupId);
-                
+
                 if (itemTaxGroup == null)
                 {
                     errorMessage = "Item Tax Group not found.";
