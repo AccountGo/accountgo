@@ -63,6 +63,8 @@
                         @for (int i = 0; i < Model.SalesQuotationLines.Count; i++)
                         {
                             <tr>
+                                <input type="hidden" asp-for="SalesQuotationLines[i].Id" />
+
                                 <td>
                                     <select class="form-control" asp-for="SalesQuotationLines[i].ItemId"
                                         asp-items="@ViewBag.Items" id="item_@i">
