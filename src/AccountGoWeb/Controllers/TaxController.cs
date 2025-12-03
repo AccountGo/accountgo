@@ -60,7 +60,7 @@ namespace AccountGoWeb.Controllers
         public IActionResult EditTax(string tax, string taxGroup, string itemTaxGroup)
         {
             ViewBag.PageContentHeader = "Edit Tax";
-          
+
             // Mapping Dto to View Model
             var taxObj = Newtonsoft.Json.JsonConvert.DeserializeObject<Dto.TaxSystem.Tax>(tax);
             var taxGroupObj = Newtonsoft.Json.JsonConvert.DeserializeObject<Dto.TaxSystem.TaxGroup>(taxGroup);
@@ -82,7 +82,7 @@ namespace AccountGoWeb.Controllers
         {
             if (ModelState.IsValid)
             {
-                var taxForUpdateDto = _mapper.Map<Dto.TaxSystem.TaxForUpdate>(editTaxViewModel); 
+                var taxForUpdateDto = _mapper.Map<Dto.TaxSystem.TaxForUpdate>(editTaxViewModel);
 
                 using (var client = new System.Net.Http.HttpClient())
                 {
@@ -120,7 +120,7 @@ namespace AccountGoWeb.Controllers
                 client.DefaultRequestHeaders.Accept.Clear();
                 var response = await client.DeleteAsync(baseUri + "Tax/deletetax?id=" + id);
 
-                if(response.IsSuccessStatusCode)
+                if (response.IsSuccessStatusCode)
                     return RedirectToAction("Taxes");
             }
 
