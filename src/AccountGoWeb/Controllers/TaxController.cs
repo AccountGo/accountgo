@@ -19,31 +19,12 @@ namespace AccountGoWeb.Controllers
 
         public IActionResult Index()
         {
-            return RedirectToAction("taxes");
+            return View("TaxesBlazor");
         }
 
-        public async Task<IActionResult> Taxes()
+        public IActionResult Taxes()
         {
-            ViewBag.PageContentHeader = "Tax";
-
-            using (var client = new System.Net.Http.HttpClient())
-            {
-                var baseUri = _baseConfig!["ApiUrl"];
-                client.BaseAddress = new System.Uri(baseUri!);
-                client.DefaultRequestHeaders.Accept.Clear();
-                var response = await client.GetAsync(baseUri + "tax/taxes");
-                if (response.IsSuccessStatusCode)
-                {
-                    var responseJson = await response.Content.ReadAsStringAsync();
-
-                    var taxSystemDto = Newtonsoft.Json.JsonConvert.DeserializeObject<Dto.TaxSystem.TaxSystemDto>(responseJson);
-                    var taxSystemViewModel = _mapper.Map<Models.TaxSystem.TaxSystemViewModel>(taxSystemDto);
-                  
-                    return View(taxSystemViewModel);
-                }
-            }
-
-            return View();
+            return View("TaxesBlazor");
         }
 
         public IActionResult AddNewTax()
