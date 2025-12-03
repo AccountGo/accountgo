@@ -103,21 +103,27 @@ namespace Services.Administration
             taxEntity.SalesAccount = salesTaxAccount;
             taxEntity.PurchasingAccount = purchaseTaxAccount;
 
-            var taxGroupEntity = AddNewTaxGroup(taxForCreationDto.TaxGroup);
-            taxEntity.TaxGroupTaxes.Add(new Core.Domain.TaxSystem.TaxGroupTax
+            if (taxForCreationDto.TaxGroup != null)
             {
-                TaxId = taxEntity.Id,
-                TaxGroupId = taxGroupEntity.Id,
-                TaxGroup = taxGroupEntity,
-            });
+                var taxGroupEntity = AddNewTaxGroup(taxForCreationDto.TaxGroup);
+                taxEntity.TaxGroupTaxes.Add(new Core.Domain.TaxSystem.TaxGroupTax
+                {
+                    TaxId = taxEntity.Id,
+                    TaxGroupId = taxGroupEntity.Id,
+                    TaxGroup = taxGroupEntity,
+                });
+            }
 
-            var itemTaxGroupEntity = AddNewItemTaxGroup(taxForCreationDto.ItemTaxGroup);
-            taxEntity.ItemTaxGroupTaxes.Add(new Core.Domain.TaxSystem.ItemTaxGroupTax
+            if (taxForCreationDto.ItemTaxGroup != null)
             {
-                TaxId = taxEntity.Id,
-                ItemTaxGroupId = itemTaxGroupEntity.Id,
-                ItemTaxGroup = itemTaxGroupEntity,
-            });
+                var itemTaxGroupEntity = AddNewItemTaxGroup(taxForCreationDto.ItemTaxGroup);
+                taxEntity.ItemTaxGroupTaxes.Add(new Core.Domain.TaxSystem.ItemTaxGroupTax
+                {
+                    TaxId = taxEntity.Id,
+                    ItemTaxGroupId = itemTaxGroupEntity.Id,
+                    ItemTaxGroup = itemTaxGroupEntity,
+                });
+            }
 
             await AddNewTaxAsync(taxEntity);
             var taxToReturn = _mapper.Map<Dto.TaxSystem.Tax>(taxEntity);
@@ -179,23 +185,29 @@ namespace Services.Administration
 
             taxEntity.TaxGroupTaxes.Clear();
 
-            var taxGroupEntity = AddNewTaxGroup(taxForUpdateDto.TaxGroup);
-            taxEntity.TaxGroupTaxes.Add(new Core.Domain.TaxSystem.TaxGroupTax
+            if (taxForUpdateDto.TaxGroup != null)
             {
-                TaxId = taxEntity.Id,
-                TaxGroupId = taxGroupEntity.Id,
-                TaxGroup = taxGroupEntity,
-            });
+                var taxGroupEntity = AddNewTaxGroup(taxForUpdateDto.TaxGroup);
+                taxEntity.TaxGroupTaxes.Add(new Core.Domain.TaxSystem.TaxGroupTax
+                {
+                    TaxId = taxEntity.Id,
+                    TaxGroupId = taxGroupEntity.Id,
+                    TaxGroup = taxGroupEntity,
+                });
+            }
 
             taxEntity.ItemTaxGroupTaxes.Clear();
             
-            var itemTaxGroupEntity = AddNewItemTaxGroup(taxForUpdateDto.ItemTaxGroup);
-            taxEntity.ItemTaxGroupTaxes.Add(new Core.Domain.TaxSystem.ItemTaxGroupTax
+            if (taxForUpdateDto.ItemTaxGroup != null)
             {
-                TaxId = taxEntity.Id,
-                ItemTaxGroupId = itemTaxGroupEntity.Id,
-                ItemTaxGroup = itemTaxGroupEntity
-            });
+                var itemTaxGroupEntity = AddNewItemTaxGroup(taxForUpdateDto.ItemTaxGroup);
+                taxEntity.ItemTaxGroupTaxes.Add(new Core.Domain.TaxSystem.ItemTaxGroupTax
+                {
+                    TaxId = taxEntity.Id,
+                    ItemTaxGroupId = itemTaxGroupEntity.Id,
+                    ItemTaxGroup = itemTaxGroupEntity
+                });
+            }
 
             await UpdateTaxAsync(taxEntity);
             var taxToRetun = _mapper.Map<Dto.TaxSystem.Tax>(taxEntity);

@@ -1,0 +1,67 @@
+@page "/financials/itemtaxgroups/add"
+@rendermode InteractiveServer
+@inject NavigationManager Navigation
+
+<PageTitle>Add New Item Tax Group</PageTitle>
+
+<div class="container-fluid">
+    <h3>Add New Item Tax Group</h3>
+    
+    <div class="alert alert-info">
+        <strong>Note:</strong> Item Tax Groups are currently created automatically when creating or editing taxes. 
+        This standalone creation page is not yet supported by the API.
+    </div>
+    
+    <EditForm Model="@itemTaxGroup" OnValidSubmit="@HandleSubmit">
+        <DataAnnotationsValidator />
+        
+        <div class="card mb-3">
+            <div class="card-body">
+                <div class="row mb-3">
+                    <label class="col-sm-3 col-form-label">Name</label>
+                    <div class="col-sm-9">
+                        <InputText @bind-Value="itemTaxGroup.Name" class="form-control" placeholder="Item Tax Group Name" />
+                        <ValidationMessage For="@(() => itemTaxGroup.Name)" />
+                    </div>
+                </div>
+                
+                <div class="row mb-3">
+                    <label class="col-sm-3 col-form-label">Fully Exempt</label>
+                    <div class="col-sm-9">
+                        <InputCheckbox @bind-Value="itemTaxGroup.IsFullyExempt" class="form-check-input" />
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="mb-3">
+            @if (errorMessage != null)
+            {
+                <div class="alert alert-danger">@errorMessage</div>
+            }
+        </div>
+        
+        <div class="mb-3">
+            <button type="submit" class="btn btn-primary" disabled>
+                Save (Not Available)
+            </button>
+            <a href="/financials/taxes" class="btn btn-secondary ms-2">Back to Taxes</a>
+        </div>
+    </EditForm>
+</div>
+
+@code {
+    private Dto.TaxSystem.ItemTaxGroup itemTaxGroup = new()
+    {
+        IsFullyExempt = false
+    };
+    
+    private string? errorMessage = "This feature requires API support for standalone item tax group creation.";
+
+    private Task HandleSubmit()
+    {
+        // This would require a dedicated API endpoint
+        errorMessage = "API endpoint for creating item tax groups independently is not available. Please create item tax groups through the Tax creation/edit process.";
+        return Task.CompletedTask;
+    }
+}

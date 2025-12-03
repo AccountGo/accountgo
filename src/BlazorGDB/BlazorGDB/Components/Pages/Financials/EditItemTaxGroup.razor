@@ -1,0 +1,135 @@
+@page "/financials/itemtaxgroups/edit/{GroupId:int}"
+@rendermode InteractiveServer
+@inject IHttpClientFactory HttpClientFactory
+@inject NavigationManager Navigation
+@inject IConfiguration Configuration
+
+<PageTitle>Edit Item Tax Group</PageTitle>
+
+<div class="container-fluid">
+    <h3>Edit Item Tax Group</h3>
+    
+    <div class="alert alert-info">
+        <strong>Note:</strong> Item Tax Groups are currently edited through the tax editing process. 
+        Standalone editing is not yet supported by the API.
+    </div>
+    
+    @if (isLoading)
+    {
+        <div class="text-center">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
+    }
+    else if (itemTaxGroup != null)
+    {
+        <EditForm Model="@itemTaxGroup" OnValidSubmit="@HandleSubmit">
+            <DataAnnotationsValidator />
+            
+            <div class="card mb-3">
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <label class="col-sm-3 col-form-label">Name</label>
+                        <div class="col-sm-9">
+                            <InputText @bind-Value="itemTaxGroup.Name" class="form-control" placeholder="Item Tax Group Name" />
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <label class="col-sm-3 col-form-label">Fully Exempt</label>
+                        <div class="col-sm-9">
+                            <InputCheckbox @bind-Value="itemTaxGroup.IsFullyExempt" class="form-check-input" />
+                        </div>
+                    </div>
+                    
+                    @if (itemTaxGroup.Taxes?.Any() == true)
+                    {
+                        <div class="row mb-3">
+                            <div class="col-sm-12">
+                                <h5>Associated Taxes</h5>
+                                <ul>
+                                    @foreach (var tax in itemTaxGroup.Taxes)
+                                    {
+                                        <li>Tax ID: @tax.TaxId</li>
+                                    }
+                                </ul>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+            
+            <div class="mb-3">
+                @if (errorMessage != null)
+                {
+                    <div class="alert alert-danger">@errorMessage</div>
+                }
+            </div>
+            
+            <div class="mb-3">
+                <button type="submit" class="btn btn-primary" disabled>
+                    Update (Not Available)
+                </button>
+                <a href="/financials/taxes" class="btn btn-secondary ms-2">Back to Taxes</a>
+            </div>
+        </EditForm>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public int GroupId { get; set; }
+    
+    private Dto.TaxSystem.ItemTaxGroup? itemTaxGroup;
+    private bool isLoading = true;
+    private string? errorMessage = "This feature requires API support for standalone item tax group editing.";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadItemTaxGroup();
+    }
+
+    private async Task LoadItemTaxGroup()
+    {
+        isLoading = true;
+        try
+        {
+            var baseUri = Configuration["ApiUrl"];
+            var httpClient = HttpClientFactory.CreateClient();
+            
+            var response = await httpClient.GetAsync($"{baseUri}tax/taxes");
+            
+            if (response.IsSuccessStatusCode)
+            {
+                var content = await response.Content.ReadAsStringAsync();
+                var taxSystemDto = System.Text.Json.JsonSerializer.Deserialize<Dto.TaxSystem.TaxSystemDto>(
+                    content, 
+                    new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true }
+                );
+                
+                itemTaxGroup = taxSystemDto?.ItemTaxGroups?.FirstOrDefault(itg => itg.Id == GroupId);
+                
+                if (itemTaxGroup == null)
+                {
+                    errorMessage = "Item Tax Group not found.";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading item tax group: {ex.Message}";
+            Console.WriteLine($"Error loading item tax group: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private Task HandleSubmit()
+    {
+        errorMessage = "API endpoint for updating item tax groups independently is not available. Please edit item tax groups through the Tax editing process.";
+        return Task.CompletedTask;
+    }
+}

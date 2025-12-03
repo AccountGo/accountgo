@@ -1,0 +1,206 @@
+@page "/financials/taxes/edit/{TaxId:int}"
+@rendermode InteractiveServer
+@inject IHttpClientFactory HttpClientFactory
+@inject NavigationManager Navigation
+@inject IConfiguration Configuration
+
+<PageTitle>Edit Tax</PageTitle>
+
+<div class="container-fluid">
+    <h3>Edit Tax</h3>
+    
+    @if (isLoading)
+    {
+        <div class="text-center">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
+    }
+    else if (taxForUpdate != null)
+    {
+        <EditForm Model="@taxForUpdate" OnValidSubmit="@HandleSubmit">
+            <DataAnnotationsValidator />
+            
+            <div class="card mb-3">
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <label class="col-sm-3 col-form-label">Tax Name</label>
+                        <div class="col-sm-9">
+                            <InputText @bind-Value="taxForUpdate.Tax!.TaxName" class="form-control" placeholder="Tax Name" />
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <label class="col-sm-3 col-form-label">Tax Code</label>
+                        <div class="col-sm-9">
+                            <InputText @bind-Value="taxForUpdate.Tax!.TaxCode" class="form-control" placeholder="Tax Code" />
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <label class="col-sm-3 col-form-label">Rate (%)</label>
+                        <div class="col-sm-9">
+                            <InputNumber @bind-Value="taxForUpdate.Tax!.Rate" class="form-control" placeholder="Rate" />
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <label class="col-sm-3 col-form-label">Active</label>
+                        <div class="col-sm-9">
+                            <InputCheckbox @bind-Value="taxForUpdate.Tax!.IsActive" class="form-check-input" />
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <label class="col-sm-3 col-form-label">Sales Account</label>
+                        <div class="col-sm-9">
+                            <InputNumber @bind-Value="taxForUpdate.SalesAccountId" class="form-control" />
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <label class="col-sm-3 col-form-label">Purchase Account</label>
+                        <div class="col-sm-9">
+                            <InputNumber @bind-Value="taxForUpdate.PurchaseAccountId" class="form-control" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="mb-3">
+                @if (errorMessage != null)
+                {
+                    <div class="alert alert-danger">@errorMessage</div>
+                }
+                @if (successMessage != null)
+                {
+                    <div class="alert alert-success">@successMessage</div>
+                }
+            </div>
+            
+            <div class="mb-3">
+                <button type="submit" class="btn btn-primary" disabled="@isSubmitting">
+                    @if (isSubmitting)
+                    {
+                        <span class="spinner-border spinner-border-sm me-2"></span>
+                    }
+                    Update
+                </button>
+                <a href="/financials/taxes" class="btn btn-secondary ms-2">Cancel</a>
+            </div>
+        </EditForm>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public int TaxId { get; set; }
+    
+    private Dto.TaxSystem.TaxForUpdate? taxForUpdate;
+    private bool isLoading = true;
+    private bool isSubmitting = false;
+    private string? errorMessage;
+    private string? successMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTax();
+    }
+
+    private async Task LoadTax()
+    {
+        isLoading = true;
+        try
+        {
+            var baseUri = Configuration["ApiUrl"];
+            var httpClient = HttpClientFactory.CreateClient();
+            
+            // Load all taxes to find the one we need
+            var response = await httpClient.GetAsync($"{baseUri}tax/taxes");
+            
+            if (response.IsSuccessStatusCode)
+            {
+                var content = await response.Content.ReadAsStringAsync();
+                var taxSystemDto = System.Text.Json.JsonSerializer.Deserialize<Dto.TaxSystem.TaxSystemDto>(
+                    content, 
+                    new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true }
+                );
+                
+                var tax = taxSystemDto?.Taxes?.FirstOrDefault(t => t.Id == TaxId);
+                
+                if (tax != null)
+                {
+                    // Find the tax group and item tax group that contain this tax
+                    var taxGroup = taxSystemDto?.TaxGroups?.FirstOrDefault(tg => 
+                        tg.Taxes?.Any(t => t.TaxId == TaxId) ?? false);
+                    
+                    var itemTaxGroup = taxSystemDto?.ItemTaxGroups?.FirstOrDefault(itg => 
+                        itg.Taxes?.Any(t => t.TaxId == TaxId) ?? false);
+                    
+                    taxForUpdate = new Dto.TaxSystem.TaxForUpdate
+                    {
+                        SalesAccountId = 20300,
+                        PurchaseAccountId = 50700,
+                        Tax = tax,
+                        TaxGroup = taxGroup ?? new Dto.TaxSystem.TaxGroup { Description = "Default", IsActive = true },
+                        ItemTaxGroup = itemTaxGroup ?? new Dto.TaxSystem.ItemTaxGroup { Name = "Default", IsFullyExempt = false }
+                    };
+                }
+                else
+                {
+                    errorMessage = "Tax not found.";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading tax: {ex.Message}";
+            Console.WriteLine($"Error loading tax: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task HandleSubmit()
+    {
+        if (taxForUpdate?.Tax == null) return;
+        
+        isSubmitting = true;
+        errorMessage = null;
+        successMessage = null;
+        
+        try
+        {
+            var baseUri = Configuration["ApiUrl"];
+            var httpClient = HttpClientFactory.CreateClient();
+            
+            var json = System.Text.Json.JsonSerializer.Serialize(taxForUpdate);
+            var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
+            
+            var response = await httpClient.PutAsync($"{baseUri}tax/edittax", content);
+            
+            if (response.IsSuccessStatusCode)
+            {
+                Navigation.NavigateTo("/financials/taxes");
+            }
+            else
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                errorMessage = $"Error updating tax: {response.StatusCode} - {errorContent}";
+                Console.WriteLine(errorMessage);
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error: {ex.Message}";
+            Console.WriteLine($"Error updating tax: {ex.Message}");
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+}
