@@ -1,7 +1,7 @@
 @using Dto.Purchasing
 @using Dto.Common
 @using Microsoft.AspNetCore.Components.Forms
-@inject HttpClient Http
+@inject IHttpClientFactory HttpClientFactory
 @inject NavigationManager Navigation
 
 <div>
@@ -278,8 +278,9 @@
     {
         try
         {
+            var http = HttpClientFactory.CreateClient();
             var apiUrl = Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
-            var response = await Http.GetAsync($"{apiUrl}purchasing/vendor?id={VendorId}");
+            var response = await http.GetAsync($"{apiUrl}purchasing/vendor?id={VendorId}");
 
             if (response.IsSuccessStatusCode)
             {
@@ -304,10 +305,11 @@
     {
         try
         {
+            var http = HttpClientFactory.CreateClient();
             var apiUrl = Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
 
             // Load accounts
-            var accountsResponse = await Http.GetAsync($"{apiUrl}common/accounts");
+            var accountsResponse = await http.GetAsync($"{apiUrl}common/accounts");
             if (accountsResponse.IsSuccessStatusCode)
             {
                 var accountsList = await accountsResponse.Content.ReadFromJsonAsync<List<Account>>() ?? new();
@@ -315,7 +317,7 @@
             }
 
             // Load tax groups
-            var taxGroupsResponse = await Http.GetAsync($"{apiUrl}taxsystem/taxgroups");
+            var taxGroupsResponse = await http.GetAsync($"{apiUrl}taxsystem/taxgroups");
             if (taxGroupsResponse.IsSuccessStatusCode)
             {
                 var taxGroupsList = await taxGroupsResponse.Content.ReadFromJsonAsync<List<TaxGroup>>() ?? new();
@@ -323,7 +325,7 @@
             }
 
             // Load payment terms
-            var paymentTermsResponse = await Http.GetAsync($"{apiUrl}financial/paymentterms");
+            var paymentTermsResponse = await http.GetAsync($"{apiUrl}financial/paymentterms");
             if (paymentTermsResponse.IsSuccessStatusCode)
             {
                 var paymentTermsList = await paymentTermsResponse.Content.ReadFromJsonAsync<List<PaymentTerm>>() ?? new();
@@ -353,8 +355,9 @@
 
         try
         {
+            var http = HttpClientFactory.CreateClient();
             var apiUrl = Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
-            var response = await Http.PostAsJsonAsync($"{apiUrl}purchasing/savevendor", vendor);
+            var response = await http.PostAsJsonAsync($"{apiUrl}purchasing/savevendor", vendor);
 
             if (response.IsSuccessStatusCode)
             {

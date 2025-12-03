@@ -1,6 +1,6 @@
 @using Dto.Inventory
 @using Microsoft.AspNetCore.Components.Forms
-@inject HttpClient Http
+@inject IHttpClientFactory HttpClientFactory
 @inject NavigationManager Navigation
 
 <div>
@@ -275,8 +275,9 @@
     {
         try
         {
+            var http = HttpClientFactory.CreateClient();
             var apiUrl = Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
-            var response = await Http.GetAsync($"{apiUrl}inventory/item?id={ItemId}");
+            var response = await http.GetAsync($"{apiUrl}inventory/item?id={ItemId}");
 
             if (response.IsSuccessStatusCode)
             {
@@ -297,10 +298,11 @@
     {
         try
         {
+            var http = HttpClientFactory.CreateClient();
             var apiUrl = Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
 
             // Load accounts
-            var accountsResponse = await Http.GetAsync($"{apiUrl}common/accounts");
+            var accountsResponse = await http.GetAsync($"{apiUrl}common/accounts");
             if (accountsResponse.IsSuccessStatusCode)
             {
                 var accountsList = await accountsResponse.Content.ReadFromJsonAsync<List<Account>>() ?? new();
@@ -308,7 +310,7 @@
             }
 
             // Load measurements
-            var measurementsResponse = await Http.GetAsync($"{apiUrl}inventory/measurements");
+            var measurementsResponse = await http.GetAsync($"{apiUrl}inventory/measurements");
             if (measurementsResponse.IsSuccessStatusCode)
             {
                 var measurementsList = await measurementsResponse.Content.ReadFromJsonAsync<List<Measurement>>() ?? new();
@@ -320,7 +322,7 @@
             }
 
             // Load item categories
-            var categoriesResponse = await Http.GetAsync($"{apiUrl}inventory/itemcategories");
+            var categoriesResponse = await http.GetAsync($"{apiUrl}inventory/itemcategories");
             if (categoriesResponse.IsSuccessStatusCode)
             {
                 var categoriesList = await categoriesResponse.Content.ReadFromJsonAsync<List<ItemCategory>>() ?? new();
@@ -328,7 +330,7 @@
             }
 
             // Load item tax groups
-            var taxGroupsResponse = await Http.GetAsync($"{apiUrl}inventory/itemtaxgroups");
+            var taxGroupsResponse = await http.GetAsync($"{apiUrl}inventory/itemtaxgroups");
             if (taxGroupsResponse.IsSuccessStatusCode)
             {
                 var taxGroupsList = await taxGroupsResponse.Content.ReadFromJsonAsync<List<ItemTaxGroup>>() ?? new();
@@ -354,8 +356,9 @@
 
         try
         {
+            var http = HttpClientFactory.CreateClient();
             var apiUrl = Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
-            var response = await Http.PostAsJsonAsync($"{apiUrl}inventory/saveitem", item);
+            var response = await http.PostAsJsonAsync($"{apiUrl}inventory/saveitem", item);
 
             if (response.IsSuccessStatusCode)
             {
