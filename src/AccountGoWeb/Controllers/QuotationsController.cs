@@ -136,6 +136,10 @@ namespace AccountGoWeb.Controllers
                 @ViewBag.PaymentTermId = model.PaymentTermId;
                 @ViewBag.SalesQuotationLines = model.SalesQuotationLines;
                 @ViewBag.TotalAmount = model.Amount;
+
+                var paymentTermsList = Models.SelectListItemHelper.PaymentTerms();
+                var selectedPaymentTerm = paymentTermsList.FirstOrDefault(pt => pt.Value == model.PaymentTermId.ToString());
+                @ViewBag.SelectedPaymentTerm = selectedPaymentTerm?.Text ?? "N/A";
             }
 
             @ViewBag.Customers = Models.SelectListItemHelper.Customers();
