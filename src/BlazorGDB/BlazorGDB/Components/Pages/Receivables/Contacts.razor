@@ -1,0 +1,345 @@
+@page "/receivables/contacts"
+@using ContactDto = Dto.Common.Contact
+@inject HttpClient Http
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+
+<PageTitle>Contacts</PageTitle>
+
+<div class="container-fluid">
+    <div class="row mb-3">
+        <div class="col">
+            <h3>Contacts</h3>
+        </div>
+    </div>
+
+    <div class="row mb-3">
+        <div class="col">
+            <button class="btn btn-primary" @onclick="NavigateToNewContact">
+                <i class="fa fa-plus"></i> New Contact
+            </button>
+            @if (selectedContact != null)
+            {
+                <button class="btn btn-secondary ms-2" @onclick="NavigateToViewContact">
+                    <i class="fa fa-edit"></i> View
+                </button>
+                <button class="btn btn-success ms-2" @onclick="SetAsPrimaryContact">
+                    <i class="fa fa-check"></i> Set as Primary Contact
+                </button>
+            }
+            <button class="btn btn-secondary ms-2" @onclick="NavigateToCustomers">
+                <i class="fa fa-arrow-left"></i> Back to Customers
+            </button>
+        </div>
+    </div>
+
+    @if (successMessage != null)
+    {
+        <div class="row mb-3">
+            <div class="col">
+                <div class="alert alert-success alert-dismissible fade show" role="alert">
+                    <i class="fa fa-check-circle"></i> @successMessage
+                    <button type="button" class="btn-close" @onclick="() => successMessage = null"></button>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (isLoading)
+    {
+        <div class="row">
+            <div class="col text-center">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mt-2">Loading contacts...</p>
+            </div>
+        </div>
+    }
+    else if (errorMessage != null)
+    {
+        <div class="row">
+            <div class="col">
+                <div class="alert alert-danger" role="alert">
+                    <i class="fa fa-exclamation-triangle"></i> @errorMessage
+                </div>
+            </div>
+        </div>
+    }
+    else if (contacts == null || !contacts.Any())
+    {
+        <div class="row">
+            <div class="col">
+                <div class="alert alert-info" role="alert">
+                    <i class="fa fa-info-circle"></i> No contacts found.
+                </div>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="row">
+            <div class="col">
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover table-bordered">
+                        <thead class="thead-dark">
+                            <tr>
+                                <th @onclick="() => SortBy(nameof(ContactDto.Id))" style="cursor: pointer;">
+                                    Id @GetSortIcon(nameof(ContactDto.Id))
+                                </th>
+                                <th @onclick="() => SortBy(nameof(ContactDto.FirstName))" style="cursor: pointer;">
+                                    First Name @GetSortIcon(nameof(ContactDto.FirstName))
+                                </th>
+                                <th @onclick="() => SortBy(nameof(ContactDto.LastName))" style="cursor: pointer;">
+                                    Last Name @GetSortIcon(nameof(ContactDto.LastName))
+                                </th>
+                                <th>Primary</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var contact in contacts)
+                            {
+                                <tr @onclick="() => SelectContact(contact)"
+                                    class="@(selectedContact?.Id == contact.Id ? "table-active" : "")" style="cursor: pointer;">
+                                    <td>
+                                        <a href="/receivables/contact/@contact.Id?partyId=@contact.HoldingPartyId&partyType=@contact.HoldingPartyType">
+                                            @contact.Id
+                                        </a>
+                                    </td>
+                                    <td>@contact.FirstName</td>
+                                    <td>@contact.LastName</td>
+                                    <td>
+                                        @if (IsPrimaryContact(contact))
+                                        {
+                                            <span class="badge bg-success">
+                                                <i class="fa fa-check"></i> Primary
+                                            </span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col">
+                <p class="text-muted">Total: @contacts.Count() contact(s)</p>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public int? PartyId { get; set; }
+
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public int? PartyType { get; set; }
+
+    private List<ContactDto>? contacts;
+    private ContactDto? selectedContact;
+    private Dto.Sales.Customer? currentCustomer;
+    private bool isLoading = true;
+    private string? errorMessage;
+    private string? successMessage;
+    private string? sortColumn;
+    private bool sortAscending = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCustomer();
+        await LoadContacts();
+    }
+
+    private async Task LoadCustomer()
+    {
+        if (!PartyId.HasValue) return;
+
+        try
+        {
+            string baseApiUrl = Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
+            var customerUrl = $"{baseApiUrl}sales/customer?id={PartyId}";
+            var customerResponse = await Http.GetAsync(customerUrl);
+            
+            if (customerResponse.IsSuccessStatusCode)
+            {
+                currentCustomer = await customerResponse.Content.ReadFromJsonAsync<Dto.Sales.Customer>();
+            }
+        }
+        catch (Exception)
+        {
+            // Silently fail - customer may not exist yet
+        }
+    }
+
+    private async Task LoadContacts()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            string baseApiUrl = Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
+            var apiUrl = baseApiUrl + $"contact/contacts?partyId={PartyId}&partyType={PartyType}";
+            var response = await Http.GetAsync(apiUrl);
+
+            if (response.IsSuccessStatusCode)
+            {
+                contacts = await response.Content.ReadFromJsonAsync<List<ContactDto>>();
+            }
+            else
+            {
+                errorMessage = $"Failed to load contacts. Status: {response.StatusCode}";
+            }
+        }
+        catch (HttpRequestException ex)
+        {
+            errorMessage = $"Network error: {ex.Message}. Please ensure the API is running on port 8001.";
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading contacts: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void SelectContact(ContactDto contact)
+    {
+        selectedContact = contact;
+    }
+
+    private async Task SetAsPrimaryContact()
+    {
+        if (selectedContact == null || !PartyId.HasValue) return;
+
+        try
+        {
+            string baseApiUrl = Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
+            
+            // Load the customer
+            var customerUrl = $"{baseApiUrl}sales/customer?id={PartyId}";
+            var customerResponse = await Http.GetAsync(customerUrl);
+            
+            if (customerResponse.IsSuccessStatusCode)
+            {
+                var customer = await customerResponse.Content.ReadFromJsonAsync<Dto.Sales.Customer>();
+                if (customer != null)
+                {
+                    // Update customer's primary contact data
+                    if (customer.PrimaryContact == null)
+                    {
+                        customer.PrimaryContact = new ContactDto();
+                    }
+                    customer.PrimaryContact.FirstName = selectedContact.FirstName;
+                    customer.PrimaryContact.LastName = selectedContact.LastName;
+                    customer.PrimaryContact.Party = selectedContact.Party;
+                    
+                    // Save the customer
+                    var saveUrl = baseApiUrl + "sales/savecustomer";
+                    var saveResponse = await Http.PostAsJsonAsync(saveUrl, customer);
+                    
+                    if (saveResponse.IsSuccessStatusCode)
+                    {
+                        successMessage = $"Set {selectedContact.FirstName} {selectedContact.LastName} as primary contact.";
+                        currentCustomer = customer;
+                        StateHasChanged();
+                    }
+                    else
+                    {
+                        errorMessage = $"Failed to update primary contact. Status: {saveResponse.StatusCode}";
+                    }
+                }
+            }
+            else
+            {
+                errorMessage = $"Failed to load customer. Status: {customerResponse.StatusCode}";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error setting primary contact: {ex.Message}";
+        }
+    }
+
+    private void NavigateToViewContact()
+    {
+        if (selectedContact != null)
+        {
+            Navigation.NavigateTo($"/receivables/contact/{selectedContact.Id}?partyId={selectedContact.HoldingPartyId}&partyType={selectedContact.HoldingPartyType}");
+        }
+    }
+
+    private void NavigateToNewContact()
+    {
+        if (PartyId.HasValue && PartyType.HasValue)
+        {
+            Navigation.NavigateTo($"/receivables/contact?partyId={PartyId}&partyType={PartyType}");
+        }
+        else
+        {
+            Navigation.NavigateTo("/receivables/contact");
+        }
+    }
+
+    private void NavigateToCustomers()
+    {
+        if (PartyId.HasValue)
+        {
+            Navigation.NavigateTo($"/receivables/customer/{PartyId}");
+        }
+        else
+        {
+            Navigation.NavigateTo("/receivables/customers");
+        }
+    }
+
+    private void SortBy(string column)
+    {
+        if (contacts == null) return;
+
+        if (sortColumn == column)
+        {
+            sortAscending = !sortAscending;
+        }
+        else
+        {
+            sortColumn = column;
+            sortAscending = true;
+        }
+
+        contacts = column switch
+        {
+            nameof(ContactDto.Id) => sortAscending
+                ? contacts.OrderBy(c => c.Id).ToList()
+                : contacts.OrderByDescending(c => c.Id).ToList(),
+            nameof(ContactDto.FirstName) => sortAscending
+                ? contacts.OrderBy(c => c.FirstName).ToList()
+                : contacts.OrderByDescending(c => c.FirstName).ToList(),
+            nameof(ContactDto.LastName) => sortAscending
+                ? contacts.OrderBy(c => c.LastName).ToList()
+                : contacts.OrderByDescending(c => c.LastName).ToList(),
+            _ => contacts
+        };
+    }
+
+    private string GetSortIcon(string column)
+    {
+        if (sortColumn != column) return "";
+        return sortAscending ? "▲" : "▼";
+    }
+
+    private bool IsPrimaryContact(ContactDto contact)
+    {
+        if (currentCustomer?.PrimaryContact == null) return false;
+        return currentCustomer.PrimaryContact.FirstName == contact.FirstName && 
+               currentCustomer.PrimaryContact.LastName == contact.LastName;
+    }
+}

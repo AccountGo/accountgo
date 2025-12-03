@@ -1,6 +1,6 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk.Web">
   <PropertyGroup>
-    <TargetFramework>net9.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <AssemblyName>GoodBooks</AssemblyName>
     <PackageId>GoodBooks</PackageId>
     <Version>1.0.0</Version>
@@ -8,6 +8,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <InvariantGlobalization>true</InvariantGlobalization>
     <UserSecretsId>aspnet-GoodBooks-21ac3a7f-d42e-4136-9340-b4f6254706df</UserSecretsId>
+    <!-- Ensure Razor views/pages targeting MVC are compiled correctly -->
+    <AddRazorSupportForMvc>true</AddRazorSupportForMvc>
     <NoWarn>NU1701</NoWarn>
   </PropertyGroup>
   <ItemGroup>

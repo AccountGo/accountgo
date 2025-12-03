@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Reflection.Metadata.Ecma335;
+#nullable enable
 
 namespace Core.Domain.Error
 {

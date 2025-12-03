@@ -36,6 +36,29 @@ namespace AccountGoWeb.Controllers
             }
         }
 
+        /*
+            This method performs an HTTP DELETE request to the specified URI.
+            Used in AuditController to delete auditable entities and attributes.
+        */
+        protected async System.Threading.Tasks.Task DeleteAsync(string uri)
+        {
+            using (var client = new HttpClient())
+            {
+                var baseUri = _baseConfig!["ApiUrl"];
+                client.BaseAddress = new System.Uri(baseUri!);
+                client.DefaultRequestHeaders.Accept.Clear();
+                client.DefaultRequestHeaders.Add("UserName", GetCurrentUserName());
+
+                var response = await client.DeleteAsync(baseUri + uri);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    var message = await response.Content.ReadAsStringAsync();
+                    throw new System.Exception($"DELETE {uri} failed: {message}");
+                }
+            }
+        }
+
         protected async System.Threading.Tasks.Task<string> PostAsync(string uri, StringContent data)
         {
             string responseJson = string.Empty;
