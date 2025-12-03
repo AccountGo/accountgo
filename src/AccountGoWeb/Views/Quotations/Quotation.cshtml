@@ -23,6 +23,7 @@
 
 <form action="~/Quotations/Quotation" method="post">
     @Html.HiddenFor(m => m.Id)
+    @Html.HiddenFor(m => m.PaymentTermId)
     <div id="divSalesQuotationCard" class="col-md-9">
         <div class="card">
             <div class="card-body show row" id="general">
