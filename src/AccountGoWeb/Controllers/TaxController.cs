@@ -57,27 +57,109 @@ namespace AccountGoWeb.Controllers
             return View();
         }
 
-        public IActionResult EditTax(string tax, string taxGroup, string itemTaxGroup)
+        [HttpGet]
+        public async Task<IActionResult> EditTax(int? id)
         {
             ViewBag.PageContentHeader = "Edit Tax";
 
-            // Mapping Dto to View Model
-            var taxObj = Newtonsoft.Json.JsonConvert.DeserializeObject<Dto.TaxSystem.Tax>(tax);
-            var taxGroupObj = Newtonsoft.Json.JsonConvert.DeserializeObject<Dto.TaxSystem.TaxGroup>(taxGroup);
-            var itemTaxGroupObj = Newtonsoft.Json.JsonConvert.DeserializeObject<Dto.TaxSystem.ItemTaxGroup>(itemTaxGroup);
+            if (!id.HasValue)
+            {
+                TempData["Error"] = "Tax ID is required.";
+                return RedirectToAction("Taxes");
+            }
 
-            var editTaxViewModel = new Models.TaxSystem.EditTaxViewModel();
-            editTaxViewModel.Tax = _mapper.Map<Models.TaxSystem.Tax>(taxObj);
-            editTaxViewModel.TaxGroup = _mapper.Map<Models.TaxSystem.TaxGroup>(taxGroupObj);
-            editTaxViewModel.ItemTaxGroup = _mapper.Map<Models.TaxSystem.ItemTaxGroup>(itemTaxGroupObj);
+            try
+            {
+                // Fetch the full tax system data from API
+                using (var client = new HttpClient())
+                {
+                    var baseUri = _baseConfig!["ApiUrl"];
+                    Console.WriteLine($"Fetching tax data from: {baseUri}tax/taxes");
+                    client.BaseAddress = new System.Uri(baseUri!);
+                    client.DefaultRequestHeaders.Accept.Clear();
+                    var response = await client.GetAsync(baseUri + "tax/taxes");
 
-            @ViewBag.TaxGroups = Models.SelectListItemHelper.TaxGroups();
-            @ViewBag.ItemTaxGroups = Models.SelectListItemHelper.ItemTaxGroups();
+                    Console.WriteLine($"API Response Status: {response.StatusCode}");
 
-            return View(editTaxViewModel);
+                    if (response.IsSuccessStatusCode)
+                    {
+                        var responseJson = await response.Content.ReadAsStringAsync();
+                        Console.WriteLine($"API Response received, length: {responseJson.Length}");
+
+                        var taxSystemDto = Newtonsoft.Json.JsonConvert.DeserializeObject<Dto.TaxSystem.TaxSystemDto>(responseJson);
+
+                        if (taxSystemDto?.Taxes != null)
+                        {
+                            Console.WriteLine($"Found {taxSystemDto.Taxes.Count()} taxes in response");
+
+                            var taxDto = taxSystemDto.Taxes.FirstOrDefault(t => t.Id == id.Value);
+                            if (taxDto == null)
+                            {
+                                TempData["Error"] = $"Tax with ID {id.Value} not found.";
+                                return RedirectToAction("Taxes");
+                            }
+
+                            Console.WriteLine($"Found tax: {taxDto.TaxName} (ID: {taxDto.Id})");
+
+                            var editTaxViewModel = new Models.TaxSystem.EditTaxViewModel();
+                            editTaxViewModel.Tax = _mapper.Map<Models.TaxSystem.Tax>(taxDto);
+
+                            // Initialize TaxGroup and ItemTaxGroup to avoid null reference
+                            editTaxViewModel.TaxGroup = new Models.TaxSystem.TaxGroup();
+                            editTaxViewModel.ItemTaxGroup = new Models.TaxSystem.ItemTaxGroup();
+
+                            // Find associated tax group
+                            var taxGroupDto = taxSystemDto.TaxGroups?.FirstOrDefault(tg =>
+                                tg.Taxes?.Any(t => t.TaxId == id.Value) ?? false);
+                            if (taxGroupDto != null)
+                            {
+                                editTaxViewModel.TaxGroup = _mapper.Map<Models.TaxSystem.TaxGroup>(taxGroupDto);
+                                Console.WriteLine($"Found tax group: {taxGroupDto.Description}");
+                            }
+
+                            // Find associated item tax group
+                            var itemTaxGroupDto = taxSystemDto.ItemTaxGroups?.FirstOrDefault(itg =>
+                                itg.Taxes?.Any(t => t.TaxId == id.Value) ?? false);
+                            if (itemTaxGroupDto != null)
+                            {
+                                editTaxViewModel.ItemTaxGroup = _mapper.Map<Models.TaxSystem.ItemTaxGroup>(itemTaxGroupDto);
+                                Console.WriteLine($"Found item tax group: {itemTaxGroupDto.Name}");
+                            }
+
+                            // Set account IDs (defaulting to standard accounts if not set)
+                            editTaxViewModel.SalesAccountId = 20300; // Sales Tax account
+                            editTaxViewModel.PurchaseAccountId = 50700; // Purchase Tax account
+
+                            @ViewBag.TaxGroups = Models.SelectListItemHelper.TaxGroups();
+                            @ViewBag.ItemTaxGroups = Models.SelectListItemHelper.ItemTaxGroups();
+
+                            Console.WriteLine("Returning EditTax view");
+                            return View("EditTax", editTaxViewModel);
+                        }
+                        else
+                        {
+                            Console.WriteLine("TaxSystemDto or Taxes is null");
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine($"API call failed with status: {response.StatusCode}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                // Log the error
+                Console.WriteLine($"Error loading tax for edit: {ex.Message}");
+                Console.WriteLine($"Stack trace: {ex.StackTrace}");
+                TempData["Error"] = $"Error loading tax: {ex.Message}";
+            }
+
+            return RedirectToAction("Taxes");
         }
 
         [HttpPost]
+        [ValidateAntiForgeryToken]
         public async Task<IActionResult> EditTax(EditTaxViewModel editTaxViewModel)
         {
             if (ModelState.IsValid)
@@ -100,9 +182,12 @@ namespace AccountGoWeb.Controllers
                     {
                         return RedirectToAction("Taxes");
                     }
+                    else
+                    {
+                        var errorContent = await response.Content.ReadAsStringAsync();
+                        ModelState.AddModelError(string.Empty, $"Error updating tax: {errorContent}");
+                    }
                 }
-
-                return RedirectToAction("Taxes");
             }
 
             @ViewBag.TaxGroups = Models.SelectListItemHelper.TaxGroups();

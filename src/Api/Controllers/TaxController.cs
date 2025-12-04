@@ -101,7 +101,7 @@ namespace Api.Controllers
                     Name = group.Name,
                     IsFullyExempt = group.IsFullyExempt
                 };
-                
+
                 itemTaxGroupsDto.Add(groupDto);
             }
 
@@ -118,14 +118,16 @@ namespace Api.Controllers
 
             var taxesDto = new List<Tax>();
 
-            foreach (var tax in taxes) {
-                taxesDto.Add(new Tax() {
+            foreach (var tax in taxes)
+            {
+                taxesDto.Add(new Tax()
+                {
                     Id = tax.Id,
                     TaxCode = tax.TaxCode,
                     TaxName = tax.TaxName,
                     Rate = tax.Rate,
                     IsActive = tax.IsActive
-                });                
+                });
             }
 
             taxSystemDto.Taxes = taxesDto;
@@ -133,7 +135,8 @@ namespace Api.Controllers
             var taxGroupsDto = new List<TaxGroup>();
             var taxGroups = _taxService.GetTaxGroups();
 
-            foreach (var group in taxGroups) {
+            foreach (var group in taxGroups)
+            {
                 var groupDto = new TaxGroup()
                 {
                     Id = group.Id,
@@ -142,7 +145,8 @@ namespace Api.Controllers
                     TaxAppliedToShipping = group.TaxAppliedToShipping
                 };
 
-                foreach (var tax in group.TaxGroupTax) {
+                foreach (var tax in group.TaxGroupTax)
+                {
                     var taxDto = new TaxGroupTax()
                     {
                         Id = tax.Id,
@@ -157,7 +161,7 @@ namespace Api.Controllers
             }
 
             taxSystemDto.TaxGroups = taxGroupsDto;
-            
+
             var itemTaxGroupsDto = new List<ItemTaxGroup>();
             var itemTaxGroups = _taxService.GetItemTaxGroups();
 
@@ -224,8 +228,8 @@ namespace Api.Controllers
 
 
         [HttpDelete]
-        [Route("deletetax/{id:int}")]
-        public async Task<IActionResult> DeleteTax(int id)
+        [Route("deletetax")]
+        public async Task<IActionResult> DeleteTax([FromQuery] int id)
         {
             var result = await _adminService.DeleteTaxAsync(id);
 
@@ -238,12 +242,12 @@ namespace Api.Controllers
         }
 
         [HttpDelete]
-        [Route("deletetaxgroup/{id:int}")]
-        public async Task<IActionResult> DeleteTaxGroup(int id)
+        [Route("deletetaxgroup")]
+        public async Task<IActionResult> DeleteTaxGroup([FromQuery] int id)
         {
             var result = await _adminService.DeleteTaxGroupAsync(id);
 
-            if(result.IsFailure)
+            if (result.IsFailure)
             {
                 return BadRequest(result.Error.Message);
             }
@@ -252,12 +256,12 @@ namespace Api.Controllers
         }
 
         [HttpDelete]
-        [Route("deleteitemtaxgroup/{id:int}")]
-        public async Task<IActionResult> DeleteItemTaxGroup(int id)
+        [Route("deleteitemtaxgroup")]
+        public async Task<IActionResult> DeleteItemTaxGroup([FromQuery] int id)
         {
             var result = await _adminService.DeleteItemTaxGroupAsync(id);
 
-            if(result.IsFailure)
+            if (result.IsFailure)
             {
                 return BadRequest(result.Error.Message);
             }

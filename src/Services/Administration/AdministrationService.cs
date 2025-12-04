@@ -167,6 +167,11 @@ namespace Services.Administration
 
         public async Task<Result<Dto.TaxSystem.Tax>> EditTaxAsync(Dto.TaxSystem.TaxForUpdate taxForUpdateDto)
         {
+            if (taxForUpdateDto == null || taxForUpdateDto.Tax == null)
+            {
+                return Result<Dto.TaxSystem.Tax>.Failure(Error.ValidationError("Tax data is required."));
+            }
+
             var taxEntity = _taxService.GetTaxById(taxForUpdateDto.Tax.Id);
             if (taxEntity is null)
             {
