@@ -4,6 +4,35 @@
 @inject IHttpClientFactory ClientFactory
 @inject IConfiguration Configuration
 @inject NavigationManager NavigationManager
+@inject IJSRuntime JSRuntime
+
+<script>
+    window.fixTableBackgroundOrder = function() {
+        setTimeout(function() {
+            var rows = document.querySelectorAll('.order-form-wrapper .table-container table tbody tr');
+            rows.forEach(function(row) {
+                row.style.setProperty('background-color', 'transparent', 'important');
+                var cells = row.querySelectorAll('td');
+                cells.forEach(function(cell) {
+                    cell.style.setProperty('background-color', 'transparent', 'important');
+                });
+            });
+        }, 100);
+    };
+    
+    document.addEventListener('focusin', function(e) {
+        if (e.target.closest('.table-container')) {
+            var row = e.target.closest('tr');
+            if (row) {
+                row.style.setProperty('background-color', 'transparent', 'important');
+                var cells = row.querySelectorAll('td');
+                cells.forEach(function(cell) {
+                    cell.style.setProperty('background-color', 'transparent', 'important');
+                });
+            }
+        }
+    });
+</script>
 
 @if (loadError)
 {
@@ -27,9 +56,10 @@ else
     </div>
 
     <EditForm Model="purchaseOrder" OnValidSubmit="HandleSubmit">
-        <div class="col-sm-9 mt-3">
-            <div class="card">
-                <div class="card-body">
+        <div class="order-form-wrapper">
+            <div class="col-sm-9 mt-3">
+                <div class="card">
+                    <div class="card-body">
                     <div class="row mb-2">
                         <div class="col-sm-3">Vendor Name</div>
                         <div class="col-sm-8">
@@ -56,7 +86,14 @@ else
                     <div class="row mb-2">
                         <div class="col-sm-3">Reference No</div>
                         <div class="col-sm-8">
-                            <InputText class="form-control" @bind-Value="purchaseOrder.ReferenceNo" disabled="@isViewMode" />
+                            @if (isViewMode)
+                            {
+                                <span class="form-control" style="background-color: #e9ecef; color: #000;">@(purchaseOrder.ReferenceNo ?? "-")</span>
+                            }
+                            else
+                            {
+                                <InputText class="form-control" @bind-Value="purchaseOrder.ReferenceNo" placeholder="e.g. 111" />
+                            }
                         </div>
                     </div>
 
@@ -65,33 +102,34 @@ else
                         <div class="row mb-2">
                             <div class="col-sm-3">Amount</div>
                             <div class="col-sm-8">
-                                <input type="text" class="form-control" value="@purchaseOrder.Amount.ToString("C")" disabled />
+                                <input type="text" class="form-control" value="@("$" + purchaseOrder.Amount.ToString("N2"))" disabled />
                             </div>
                         </div>
                     }
                 </div>
 
-                <table class="table">
-                    <thead>
-                        <tr>
-                            <th>Item</th>
-                            <th>Quantity</th>
-                            <th>Amount</th>
-                            <th>Discount</th>
-                            <th>Measurement</th>
-                            @if (!isViewMode)
-                            {
-                                <th>Actions</th>
-                            }
-                        </tr>
-                    </thead>
-                    <tbody>
+                <div class="table-container">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Item</th>
+                                <th>Quantity</th>
+                                <th>Amount</th>
+                                <th>Discount</th>
+                                <th>Measurement</th>
+                                @if (!isViewMode)
+                                {
+                                    <th>Actions</th>
+                                }
+                            </tr>
+                        </thead>
+                        <tbody>
                         @for (int i = 0; i < purchaseOrder.PurchaseOrderLines.Count; i++)
                         {
                             var line = purchaseOrder.PurchaseOrderLines[i];
                             var index = i;
-                            <tr>
-                                <td>
+                            <tr style="background-color: transparent !important;">
+                                <td style="background-color: transparent !important;">
                                     <InputSelect class="form-control" @bind-Value="line.ItemId" disabled="@isViewMode">
                                         <option value="0">-- Select Item --</option>
                                         @if (items != null)
@@ -103,16 +141,16 @@ else
                                         }
                                     </InputSelect>
                                 </td>
-                                <td>
+                                <td style="background-color: transparent !important;">
                                     <InputNumber class="form-control" @bind-Value="line.Quantity" disabled="@isViewMode" />
                                 </td>
-                                <td>
+                                <td style="background-color: transparent !important;">
                                     <InputNumber class="form-control" @bind-Value="line.Amount" disabled="@isViewMode" />
                                 </td>
-                                <td>
+                                <td style="background-color: transparent !important;">
                                     <InputNumber class="form-control" @bind-Value="line.Discount" disabled="@isViewMode" />
                                 </td>
-                                <td>
+                                <td style="background-color: transparent !important;">
                                     <InputSelect class="form-control" @bind-Value="line.MeasurementId" disabled="@isViewMode">
                                         <option value="0">-- Select Measurement --</option>
                                         @if (measurements != null)
@@ -126,7 +164,7 @@ else
                                 </td>
                                 @if (!isViewMode)
                                 {
-                                    <td>
+                                    <td style="background-color: transparent !important;">
                                         <button type="button" class="btn btn-sm btn-danger" @onclick="() => RemoveLine(index)" disabled="@(purchaseOrder.PurchaseOrderLines.Count <= 1)">
                                             Remove
                                         </button>
@@ -144,8 +182,9 @@ else
                                 </td>
                             </tr>
                         }
-                    </tbody>
-                </table>
+                        </tbody>
+                    </table>
+                </div>
             </div>
 
             <div class="col-md-9 mt-3">
@@ -155,7 +194,8 @@ else
                         @(isSaving ? "Saving..." : "Save")
                     </button>
                 }
-                <a href="/purchasing/purchaseorders" class="btn btn-sm btn-default btn-flat pull-left">Close</a>
+                <a href="/purchasing/purchaseorders" class="btn btn-sm btn-secondary btn-flat pull-left">Close</a>
+                </div>
             </div>
         </div>
     </EditForm>
@@ -213,6 +253,18 @@ else
         }
     }
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                await JSRuntime.InvokeVoidAsync("fixTableBackgroundOrder");
+            }
+            catch { }
+        }
+    }
+
     private void InitializeNewPurchaseOrder()
     {
         var random = new Random();
@@ -220,7 +272,7 @@ else
         {
             No = random.Next(1, 99999).ToString(),
             OrderDate = DateTime.Now,
-            ReferenceNo = "REF-" + random.Next(10000, 99999).ToString(),
+            ReferenceNo = "",
             Completed = false,
             PurchaseOrderLines = new List<PurchaseOrderLineDto>
             {
@@ -306,9 +358,19 @@ else
 
             if (purchaseOrder != null && purchaseOrder.PurchaseOrderLines != null)
             {
-                purchaseOrder.PurchaseOrderLines = purchaseOrder.PurchaseOrderLines
+                var validLines = purchaseOrder.PurchaseOrderLines
                     .Where(line => line.ItemId.HasValue && line.ItemId.Value > 0)
                     .ToList();
+                
+                if (validLines.Count == 0)
+                {
+                    errorMessage = "Please add at least one item line with a valid item selected.";
+                    saveError = true;
+                    isSaving = false;
+                    return;
+                }
+                
+                purchaseOrder.PurchaseOrderLines = validLines;
             }
 
             string apiurl = Configuration["ApiUrl"] ?? "http://localhost:8001/api/";

@@ -55,8 +55,8 @@ else
                         <td>@invoice.No</td>
                         <td>@invoice.VendorName</td>
                         <td>@invoice.InvoiceDate.ToString("yyyy-MM-dd")</td>
-                        <td>@invoice.Amount.ToString("C")</td>
-                        <td>@invoice.AmountPaid.ToString("C")</td>
+                        <td>@("$" + invoice.Amount.ToString("N2"))</td>
+                        <td>@("$" + invoice.AmountPaid.ToString("N2"))</td>
                         <td>@invoice.ReferenceNo</td>
                         <td>
                             <a href="/purchasing/purchaseinvoice?id=@invoice.Id" class="btn btn-sm btn-outline-primary" @onclick:stopPropagation="true">

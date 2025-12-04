@@ -55,7 +55,7 @@ else
                         <td>@order.No</td>
                         <td>@order.VendorName</td>
                         <td>@order.OrderDate.ToString("yyyy-MM-dd")</td>
-                        <td>@order.Amount.ToString("C")</td>
+                        <td>@("$" + order.Amount.ToString("N2"))</td>
                         <td>@order.ReferenceNo</td>
                         <td>
                             <a href="/purchasing/purchaseorder?id=@order.Id" class="btn btn-sm btn-outline-primary" @onclick:stopPropagation="true">
