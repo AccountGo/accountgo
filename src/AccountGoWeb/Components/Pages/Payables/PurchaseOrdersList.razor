@@ -43,7 +43,6 @@ else
                     <th>Order Date</th>
                     <th>Amount</th>
                     <th>Ref No</th>
-                    <th>Status</th>
                     <th>Actions</th>
                 </tr>
             </thead>
@@ -58,7 +57,6 @@ else
                         <td>@order.OrderDate.ToString("yyyy-MM-dd")</td>
                         <td>@order.Amount.ToString("C")</td>
                         <td>@order.ReferenceNo</td>
-                        <td>@GetStatusText(order.StatusId)</td>
                         <td>
                             <a href="/purchasing/purchaseorder?id=@order.Id" class="btn btn-sm btn-outline-primary" @onclick:stopPropagation="true">
                                 View
@@ -119,7 +117,6 @@ else
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error loading purchase orders: {ex.Message}");
             getError = true;
         }
 
@@ -130,17 +127,6 @@ else
     {
         selectedPurchaseOrder = order;
         StateHasChanged();
-    }
-
-    private string GetStatusText(int statusId)
-    {
-        return statusId switch
-        {
-            1 => "Open",
-            2 => "Partially Invoiced",
-            3 => "Fully Invoiced",
-            _ => "Unknown"
-        };
     }
 
     public class PurchaseOrderDto

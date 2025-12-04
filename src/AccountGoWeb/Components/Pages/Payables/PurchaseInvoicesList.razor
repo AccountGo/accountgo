@@ -43,8 +43,6 @@ else
                     <th>Amount</th>
                     <th>Amount Paid</th>
                     <th>Ref No</th>
-                    <th>Posted</th>
-                    <th>Is Paid</th>
                     <th>Actions</th>
                 </tr>
             </thead>
@@ -60,12 +58,6 @@ else
                         <td>@invoice.Amount.ToString("C")</td>
                         <td>@invoice.AmountPaid.ToString("C")</td>
                         <td>@invoice.ReferenceNo</td>
-                        <td>
-                            <input type="checkbox" checked="@invoice.Posted" disabled />
-                        </td>
-                        <td>
-                            <input type="checkbox" checked="@invoice.IsPaid" disabled />
-                        </td>
                         <td>
                             <a href="/purchasing/purchaseinvoice?id=@invoice.Id" class="btn btn-sm btn-outline-primary" @onclick:stopPropagation="true">
                                 View
@@ -132,7 +124,6 @@ else
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error loading purchase invoices: {ex.Message}");
             getError = true;
         }
 
