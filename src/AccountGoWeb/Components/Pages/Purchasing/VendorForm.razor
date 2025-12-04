@@ -260,7 +260,7 @@
     {
         await LoadDropdownData();
 
-        if (VendorId == -1)
+        if (VendorId == -1 || VendorId == 0)
         {
             // New vendor
             isEditMode = true;
@@ -309,7 +309,7 @@
             var apiUrl = Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
 
             // Load accounts
-            var accountsResponse = await http.GetAsync($"{apiUrl}common/accounts");
+            var accountsResponse = await http.GetAsync($"{apiUrl}financials/accounts");
             if (accountsResponse.IsSuccessStatusCode)
             {
                 var accountsList = await accountsResponse.Content.ReadFromJsonAsync<List<Account>>() ?? new();
@@ -317,7 +317,7 @@
             }
 
             // Load tax groups
-            var taxGroupsResponse = await http.GetAsync($"{apiUrl}taxsystem/taxgroups");
+            var taxGroupsResponse = await http.GetAsync($"{apiUrl}tax/taxgroups");
             if (taxGroupsResponse.IsSuccessStatusCode)
             {
                 var taxGroupsList = await taxGroupsResponse.Content.ReadFromJsonAsync<List<TaxGroup>>() ?? new();
@@ -363,7 +363,7 @@
             {
                 successMessage = "Vendor saved successfully!";
                 await Task.Delay(1000);
-                Navigation.NavigateTo("/purchasing/vendors");
+                Navigation.NavigateTo("/Purchasing/Vendors");
             }
             else
             {
