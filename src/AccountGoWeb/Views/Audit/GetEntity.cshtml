@@ -1,3 +1,4 @@
+@*
 @model Dto.Auditing.AuditableEntity
 
 <div class="row">
@@ -46,3 +47,11 @@
         </div>
     </div>
 </div>
+*@
+
+@using AccountGoWeb.Components.Pages.Audit
+@{
+    ViewData["Title"] = Model.Id == 0 ? "Add New Auditable Entity" : "Edit Auditable Entity";
+}
+
+<component type="typeof(EntityForm)" render-mode="ServerPrerendered" param-Id="@Model.Id" />

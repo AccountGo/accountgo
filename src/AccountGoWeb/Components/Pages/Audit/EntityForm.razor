@@ -1,0 +1,153 @@
+@page "/audit/entity-form"
+@page "/audit/entity-form/{Id:int}"
+@namespace AccountGoWeb.Components.Pages.Audit
+@using Dto.Auditing
+@using System.Text.Json
+@using System.Text
+@inject IHttpClientFactory ClientFactory
+@inject IConfiguration Configuration
+@inject NavigationManager Navigation
+
+<PageTitle>@(Id == 0 ? "Add New" : "Edit") Auditable Entity</PageTitle>
+
+@if (isLoading)
+{
+    <div class="text-center">
+        <div class="spinner-border" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+}
+else
+{
+    <div class="row">
+        <div class="col-md-6">
+            <div class="box box-primary">
+                <div class="box-header with-border">
+                    <h3 class="box-title">@(Id == 0 ? "Add New" : "Edit") Auditable Entity</h3>
+                </div>
+
+                <EditForm Model="@entity" OnValidSubmit="HandleSubmit">
+                    <DataAnnotationsValidator />
+                    
+                    <div class="box-body">
+                        <!-- Entity Name input field -->
+                        <div class="form-group">
+                            <label for="entityName">Entity Name</label>
+                            <InputText id="entityName" @bind-Value="entity.EntityName" 
+                                       class="form-control" 
+                                       placeholder="Enter entity name (e.g., Customer, Product)" />
+                            <ValidationMessage For="@(() => entity.EntityName)" class="text-danger" />
+                        </div>
+                    
+                        <!-- Enable Audit checkbox -->
+                        <div class="form-group">
+                            <div class="checkbox">
+                                <label>
+                                    <InputCheckbox @bind-Value="entity.EnableAudit" />
+                                    Enable Audit
+                                </label>
+                            </div>
+                        </div>
+
+                        @if (!string.IsNullOrEmpty(errorMessage))
+                        {
+                            <div class="alert alert-danger">@errorMessage</div>
+                        }
+                    </div>
+
+                    <!-- Form submission buttons -->
+                    <div class="box-footer">
+                        <button type="submit" class="btn btn-primary" disabled="@isSaving">
+                            <i class="fa fa-save"></i> @(isSaving ? "Saving..." : "Save")
+                        </button>
+                        <a href="/Audit/GetAuditableEntities" class="btn btn-default">
+                            <i class="fa fa-times"></i> Cancel
+                        </a>
+                    </div>
+                </EditForm>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public int Id { get; set; } = 0;
+
+    private AuditableEntity entity = new() { EnableAudit = true };
+    private bool isSaving = false;
+    private bool isLoading = false;
+    private string errorMessage = string.Empty;
+    private string apiUrl = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        apiUrl = Configuration["ApiUrl"] ?? "http://localhost:8001/api/";
+        
+        if (Id > 0)
+        {
+            isLoading = true;
+            await LoadEntity();
+            isLoading = false;
+        }
+    }
+
+    private async Task LoadEntity()
+    {
+        try
+        {
+            var client = ClientFactory.CreateClient();
+            var response = await client.GetAsync($"{apiUrl}audit/entity?id={Id}");
+
+            if (response.IsSuccessStatusCode)
+            {
+                var jsonString = await response.Content.ReadAsStringAsync();
+                entity = JsonSerializer.Deserialize<AuditableEntity>(jsonString, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                }) ?? new AuditableEntity { EnableAudit = true };
+            }
+            else
+            {
+                errorMessage = "Failed to load entity.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading entity: {ex.Message}";
+        }
+    }
+
+    private async Task HandleSubmit()
+    {
+        isSaving = true;
+        errorMessage = string.Empty;
+
+        try
+        {
+            var client = ClientFactory.CreateClient();
+            var json = JsonSerializer.Serialize(entity);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+            var response = await client.PostAsync($"{apiUrl}audit/entity", content);
+
+            if (response.IsSuccessStatusCode)
+            {
+                Navigation.NavigateTo("/Audit/GetAuditableEntities", forceLoad: true);
+            }
+            else
+            {
+                errorMessage = "Failed to save entity. Please try again.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error saving entity: {ex.Message}";
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+}
