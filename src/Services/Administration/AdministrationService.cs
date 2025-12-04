@@ -85,7 +85,7 @@ namespace Services.Administration
         public async Task<Result<Dto.TaxSystem.Tax>> CreateTaxAsync(Dto.TaxSystem.TaxForCreation taxForCreationDto)
         {
             var query = from f in _taxRepo.Table
-                        where f.TaxName == taxForCreationDto.TaxName || f.TaxCode == taxForCreationDto.TaxCode 
+                        where f.TaxName == taxForCreationDto.TaxName || f.TaxCode == taxForCreationDto.TaxCode
                         select f;
 
             if (query.Any())
@@ -103,25 +103,31 @@ namespace Services.Administration
             taxEntity.SalesAccount = salesTaxAccount;
             taxEntity.PurchasingAccount = purchaseTaxAccount;
 
-            var taxGroupEntity = AddNewTaxGroup(taxForCreationDto.TaxGroup);
-            taxEntity.TaxGroupTaxes.Add(new Core.Domain.TaxSystem.TaxGroupTax
+            if (taxForCreationDto.TaxGroup != null)
             {
-                TaxId = taxEntity.Id,
-                TaxGroupId = taxGroupEntity.Id,
-                TaxGroup = taxGroupEntity,
-            });
+                var taxGroupEntity = AddNewTaxGroup(taxForCreationDto.TaxGroup);
+                taxEntity.TaxGroupTaxes.Add(new Core.Domain.TaxSystem.TaxGroupTax
+                {
+                    TaxId = taxEntity.Id,
+                    TaxGroupId = taxGroupEntity.Id,
+                    TaxGroup = taxGroupEntity,
+                });
+            }
 
-            var itemTaxGroupEntity = AddNewItemTaxGroup(taxForCreationDto.ItemTaxGroup);
-            taxEntity.ItemTaxGroupTaxes.Add(new Core.Domain.TaxSystem.ItemTaxGroupTax
+            if (taxForCreationDto.ItemTaxGroup != null)
             {
-                TaxId = taxEntity.Id,
-                ItemTaxGroupId = itemTaxGroupEntity.Id,
-                ItemTaxGroup = itemTaxGroupEntity,
-            });
+                var itemTaxGroupEntity = AddNewItemTaxGroup(taxForCreationDto.ItemTaxGroup);
+                taxEntity.ItemTaxGroupTaxes.Add(new Core.Domain.TaxSystem.ItemTaxGroupTax
+                {
+                    TaxId = taxEntity.Id,
+                    ItemTaxGroupId = itemTaxGroupEntity.Id,
+                    ItemTaxGroup = itemTaxGroupEntity,
+                });
+            }
 
             await AddNewTaxAsync(taxEntity);
             var taxToReturn = _mapper.Map<Dto.TaxSystem.Tax>(taxEntity);
-            
+
             return Result<Dto.TaxSystem.Tax>.Success(taxToReturn);
         }
 
@@ -161,8 +167,13 @@ namespace Services.Administration
 
         public async Task<Result<Dto.TaxSystem.Tax>> EditTaxAsync(Dto.TaxSystem.TaxForUpdate taxForUpdateDto)
         {
+            if (taxForUpdateDto == null || taxForUpdateDto.Tax == null)
+            {
+                return Result<Dto.TaxSystem.Tax>.Failure(Error.ValidationError("Tax data is required."));
+            }
+
             var taxEntity = _taxService.GetTaxById(taxForUpdateDto.Tax.Id);
-            if(taxEntity is null)
+            if (taxEntity is null)
             {
                 var message = $"Tax with id {taxForUpdateDto.Tax.Id} is not found.";
                 return Result<Dto.TaxSystem.Tax>.Failure(Error.RecordNotFound(message));
@@ -179,28 +190,34 @@ namespace Services.Administration
 
             taxEntity.TaxGroupTaxes.Clear();
 
-            var taxGroupEntity = AddNewTaxGroup(taxForUpdateDto.TaxGroup);
-            taxEntity.TaxGroupTaxes.Add(new Core.Domain.TaxSystem.TaxGroupTax
+            if (taxForUpdateDto.TaxGroup != null)
             {
-                TaxId = taxEntity.Id,
-                TaxGroupId = taxGroupEntity.Id,
-                TaxGroup = taxGroupEntity,
-            });
+                var taxGroupEntity = AddNewTaxGroup(taxForUpdateDto.TaxGroup);
+                taxEntity.TaxGroupTaxes.Add(new Core.Domain.TaxSystem.TaxGroupTax
+                {
+                    TaxId = taxEntity.Id,
+                    TaxGroupId = taxGroupEntity.Id,
+                    TaxGroup = taxGroupEntity,
+                });
+            }
 
             taxEntity.ItemTaxGroupTaxes.Clear();
-            
-            var itemTaxGroupEntity = AddNewItemTaxGroup(taxForUpdateDto.ItemTaxGroup);
-            taxEntity.ItemTaxGroupTaxes.Add(new Core.Domain.TaxSystem.ItemTaxGroupTax
+
+            if (taxForUpdateDto.ItemTaxGroup != null)
             {
-                TaxId = taxEntity.Id,
-                ItemTaxGroupId = itemTaxGroupEntity.Id,
-                ItemTaxGroup = itemTaxGroupEntity
-            });
+                var itemTaxGroupEntity = AddNewItemTaxGroup(taxForUpdateDto.ItemTaxGroup);
+                taxEntity.ItemTaxGroupTaxes.Add(new Core.Domain.TaxSystem.ItemTaxGroupTax
+                {
+                    TaxId = taxEntity.Id,
+                    ItemTaxGroupId = itemTaxGroupEntity.Id,
+                    ItemTaxGroup = itemTaxGroupEntity
+                });
+            }
 
             await UpdateTaxAsync(taxEntity);
             var taxToRetun = _mapper.Map<Dto.TaxSystem.Tax>(taxEntity);
 
-            return Result<Dto.TaxSystem.Tax>.Success(taxToRetun);    
+            return Result<Dto.TaxSystem.Tax>.Success(taxToRetun);
         }
 
         public async Task UpdateTaxAsync(Tax tax)
@@ -212,7 +229,7 @@ namespace Services.Administration
         {
             var tax = _taxRepo.GetById(taxId);
 
-            if(tax is null)
+            if (tax is null)
             {
                 var message = $"Tax with id {taxId} not found";
                 return Result<Dto.TaxSystem.Tax>.Failure(Error.RecordNotFound(message));
@@ -232,7 +249,7 @@ namespace Services.Administration
                 var message = $"TaxGroup with id {taxGroupId} not found";
                 return Result<Dto.TaxSystem.TaxGroup>.Failure(Error.RecordNotFound(message));
             }
-                
+
             await _taxGroupRepo.DeleteAsync(taxGroup);
 
             return Result<Dto.TaxSystem.TaxGroup>.Success(null);
@@ -247,7 +264,7 @@ namespace Services.Administration
                 var message = $"ItemTaxGroup with id {itemTaxGroupId} not found";
                 return Result<Dto.TaxSystem.ItemTaxGroup>.Failure(Error.RecordNotFound(message));
             }
-                
+
             await _itemTaxGroupRepo.DeleteAsync(itemTaxGroup);
 
             return Result<Dto.TaxSystem.ItemTaxGroup>.Success(null);
@@ -296,8 +313,9 @@ namespace Services.Administration
 
         public void SaveCompany(Company company)
         {
-            if (company.Id == 0) { 
-                _company.Insert(company); 
+            if (company.Id == 0)
+            {
+                _company.Insert(company);
             }
             else { _company.Update(company); }
         }
