@@ -57,6 +57,7 @@ namespace Api.Controllers
             return new ObjectResult(accountTree);
         }
 
+        [HttpGet]
         [Route("Account")]
         public IActionResult Account(int id)
         {
@@ -204,9 +205,18 @@ namespace Api.Controllers
                 if (!ModelState.IsValid)
                 {
                     errors = new string[ModelState.ErrorCount];
+                    int idx = 0;
+
                     foreach (var val in ModelState.Values)
-                        for (int i = 0; i < ModelState.ErrorCount; i++)
-                            errors[i] = val.Errors[i].ErrorMessage;
+                    {
+                        foreach (var err in val.Errors)
+                        {
+                            if (idx < errors.Length)
+                            {
+                                errors[idx++] = err.ErrorMessage;
+                            }
+                        }
+                    }
 
                     return new BadRequestObjectResult(errors);
                 }
@@ -225,6 +235,22 @@ namespace Api.Controllers
                 else
                 {
                     journalEntry = _financialService.GetJournalEntry(journalEntryDto.Id, false);
+                    if (journalEntry == null)
+                        throw new Exception("Journal entry not found.");
+
+                    var dtoLineIds = journalEntryDto.JournalEntryLines
+                        .Where(l => l.Id != 0)
+                        .Select(l => l.Id)
+                        .ToHashSet();
+
+                    var linesToRemove = journalEntry.JournalEntryLines
+                        .Where(l => l.Id != 0 && !dtoLineIds.Contains(l.Id))
+                        .ToList();
+
+                    foreach (var lineToRemove in linesToRemove)
+                    {
+                        journalEntry.JournalEntryLines.Remove(lineToRemove);
+                    }
                 }
 
                 journalEntry.Date = journalEntryDto.JournalDate;
@@ -369,13 +395,15 @@ namespace Api.Controllers
             if (account == null)
                 return NotFound();
 
+            // Return a DTO without accessing computed properties that require navigation properties
+            // These computed properties would cause NullReferenceException if navigation properties aren't loaded
             return Ok(new Account
             {
                 AccountCode = account.AccountCode,
                 AccountName = account.AccountName,
-                Balance = account.Balance,
-                DebitBalance = account.DebitBalance,
-                CreditBalance = account.CreditBalance
+                Balance = 0, // Computed property - would require AccountClass and GeneralLedgerLines to be loaded
+                DebitBalance = 0, // Computed property - would require GeneralLedgerLines to be loaded
+                CreditBalance = 0 // Computed property - would require GeneralLedgerLines to be loaded
             });
         }
 
@@ -390,6 +418,7 @@ namespace Api.Controllers
             {
                 AccountCode = newAccountDto.AccountCode,
                 AccountName = newAccountDto.AccountName,
+                ParentAccountId = newAccountDto.ParentAccountId
                 // Balance = 0, // Initialize read-only fields
                 // DebitBalance = 0,
                 // CreditBalance = 0
@@ -397,7 +426,17 @@ namespace Api.Controllers
 
             var createdAccount = await _accountService.AddAccountAsync(newAccount);
 
-            return CreatedAtAction(nameof(GetAccountByCode), new { accountCode = createdAccount.AccountCode }, createdAccount);
+            // Return a DTO instead of the domain object to avoid serialization issues with computed properties
+            var accountDto = new Account
+            {
+                AccountCode = createdAccount.AccountCode,
+                AccountName = createdAccount.AccountName,
+                Balance = 0, // These would require navigation properties to be loaded
+                DebitBalance = 0,
+                CreditBalance = 0
+            };
+
+            return CreatedAtAction(nameof(GetAccountByCode), new { accountCode = createdAccount.AccountCode }, accountDto);
         }
 
         [HttpPut]
@@ -418,19 +457,35 @@ namespace Api.Controllers
             if (updatedAccount == null)
                 return NotFound();
 
-            return Ok(updatedAccount);
+            // Return a DTO instead of the domain object to avoid serialization issues with computed properties
+            // that require navigation properties to be loaded
+            return Ok(new Account
+            {
+                AccountCode = updatedAccount.AccountCode,
+                AccountName = updatedAccount.AccountName,
+                Balance = 0, // These would require navigation properties to be loaded
+                DebitBalance = 0,
+                CreditBalance = 0
+            });
         }
 
         [HttpDelete]
         [Route("DeleteAccount/{accountCode}")]
         public async Task<IActionResult> DeleteAccount(string accountCode)
         {
-            var result = await _accountService.DeleteAccountAsync(accountCode);
+            var (account, errorMessage) = await _accountService.DeleteAccountAsync(accountCode);
 
-            if (result == null)
-                return NotFound();
+            if (account == null)
+            {
+                if (errorMessage == "Account not found")
+                    return NotFound(errorMessage);
+                else
+                    return BadRequest(errorMessage);
+            }
 
-            return Ok(result);
+            // Return NoContent (204) for successful DELETE operations
+            // This is the standard HTTP response for DELETE operations
+            return NoContent();
         }
 
         #endregion

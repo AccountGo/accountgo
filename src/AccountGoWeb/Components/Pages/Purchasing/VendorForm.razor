@@ -1,0 +1,406 @@
+@using Dto.Purchasing
+@using Dto.Common
+@using Microsoft.AspNetCore.Components.Forms
+@inject IHttpClientFactory HttpClientFactory
+@inject NavigationManager Navigation
+
+<div>
+    <button type="button" @onclick="ToggleEdit" class="btn @(isEditMode ? "disabled" : "")">
+        <i class="fa fa-edit"></i> Edit
+    </button>
+    @if (vendor.Id > 0)
+    {
+        <a href="/contact/contact?id=0&partyId=@vendor.Id&partyType=2" class="btn">
+            <i class="fa fa-plus"></i> Add Contact
+        </a>
+    }
+</div>
+
+<EditForm Model="@vendor" OnValidSubmit="@HandleValidSubmit">
+    <DataAnnotationsValidator />
+
+    <div id="divVendorCard" class="col-md-9">
+        @* General Section *@
+        <div class="card">
+            <div class="card-header">
+                <a data-toggle="collapse" href="#general"><i class="fa fa-align-justify"></i></a> General
+            </div>
+            <div class="card-body collapse show row" id="general">
+                <div class="col-sm-6">
+                    <div class="row mb-2">
+                        <div class="col-sm-2">No</div>
+                        <div class="col-sm-10">@vendor.No</div>
+                    </div>
+                    <div class="row mb-2">
+                        <div class="col-sm-2">Name</div>
+                        <div class="col-sm-10">
+                            <InputText @bind-Value="vendor.Name" class="form-control" placeholder="Name ..."
+                                disabled="@(!isEditMode)" />
+                            <ValidationMessage For="@(() => vendor.Name)" />
+                        </div>
+                    </div>
+                </div>
+                <div class="col-sm-6">
+                    <div class="row mb-2">
+                        <div class="col-sm-2">Phone</div>
+                        <div class="col-sm-10">
+                            <InputText @bind-Value="vendor.Phone" class="form-control" placeholder="Phone ..."
+                                disabled="@(!isEditMode)" />
+                        </div>
+                    </div>
+                    <div class="row mb-2">
+                        <div class="col-sm-2">Fax</div>
+                        <div class="col-sm-10">
+                            <InputText @bind-Value="vendor.Fax" class="form-control" placeholder="Fax ..."
+                                disabled="@(!isEditMode)" />
+                        </div>
+                    </div>
+                    <div class="row mb-2">
+                        <div class="col-sm-2">Website</div>
+                        <div class="col-sm-10">
+                            <InputText @bind-Value="vendor.Website" class="form-control" placeholder="Website ..."
+                                disabled="@(!isEditMode)" />
+                        </div>
+                    </div>
+                    <div class="row mb-2">
+                        <div class="col-sm-2">Email</div>
+                        <div class="col-sm-10">
+                            <InputText @bind-Value="vendor.Email" class="form-control" placeholder="Email ..."
+                                disabled="@(!isEditMode)" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @* Contact Section *@
+        <div class="card">
+            <div class="card-header">
+                <a data-toggle="collapse" href="#contact"><i class="fa fa-align-justify"></i></a> Contact
+                @if (vendor.Id > 0)
+                {
+                    <a href="/contact/Contacts?partyId=@vendor.Id&partyType=2" class="btn">...</a>
+                }
+            </div>
+            <div class="card-body collapse show row" id="contact">
+                <div class="col-sm-6">
+                    <div class="row mb-2">
+                        <div class="col-sm-4">First Name</div>
+                        <div class="col-sm-8">
+                            <InputText @bind-Value="vendor.PrimaryContact.FirstName" class="form-control"
+                                placeholder="First Name ..." disabled="@(!isEditMode)" />
+                        </div>
+                    </div>
+                    <div class="row mb-2">
+                        <div class="col-sm-4">Last Name</div>
+                        <div class="col-sm-8">
+                            <InputText @bind-Value="vendor.PrimaryContact.LastName" class="form-control"
+                                placeholder="Last Name ..." disabled="@(!isEditMode)" />
+                        </div>
+                    </div>
+                </div>
+                <div class="col-sm-6">
+                    <div class="row mb-2">
+                        <div class="col-sm-4">Phone</div>
+                        <div class="col-sm-8">
+                            <InputText @bind-Value="vendor.PrimaryContact.Party.Phone" class="form-control"
+                                placeholder="Phone ..." disabled="@(!isEditMode)" />
+                        </div>
+                    </div>
+                    <div class="row mb-2">
+                        <div class="col-sm-4">Fax</div>
+                        <div class="col-sm-8">
+                            <InputText @bind-Value="vendor.PrimaryContact.Party.Fax" class="form-control"
+                                placeholder="Fax ..." disabled="@(!isEditMode)" />
+                        </div>
+                    </div>
+                    <div class="row mb-2">
+                        <div class="col-sm-4">Website</div>
+                        <div class="col-sm-8">
+                            <InputText @bind-Value="vendor.PrimaryContact.Party.Website" class="form-control"
+                                placeholder="Website ..." disabled="@(!isEditMode)" />
+                        </div>
+                    </div>
+                    <div class="row mb-2">
+                        <div class="col-sm-4">Email</div>
+                        <div class="col-sm-8">
+                            <InputText @bind-Value="vendor.PrimaryContact.Party.Email" class="form-control"
+                                placeholder="Email ..." disabled="@(!isEditMode)" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @* Invoicing Section *@
+        <div class="card">
+            <div class="card-header">
+                <a data-toggle="collapse" href="#invoicing"><i class="fa fa-align-justify"></i></a> Invoicing
+            </div>
+            <div class="card-body collapse show row" id="invoicing">
+                <div class="col-sm-6">
+                    <div class="row mb-2">
+                        <div class="col-sm-6">Accounts Payable</div>
+                        <div class="col-sm-6">
+                            <InputSelect @bind-Value="vendor.AccountsPayableAccountId" class="form-control"
+                                disabled="@(!isEditMode)">
+                                <option value="">Select...</option>
+                                @foreach (var account in accounts)
+                                {
+                                    <option value="@account.Value">@account.Text</option>
+                                }
+                            </InputSelect>
+                        </div>
+                    </div>
+                    <div class="row mb-2">
+                        <div class="col-sm-6">Purchase</div>
+                        <div class="col-sm-6">
+                            <InputSelect @bind-Value="vendor.PurchaseAccountId" class="form-control"
+                                disabled="@(!isEditMode)">
+                                <option value="">Select...</option>
+                                @foreach (var account in accounts)
+                                {
+                                    <option value="@account.Value">@account.Text</option>
+                                }
+                            </InputSelect>
+                        </div>
+                    </div>
+                    <div class="row mb-2">
+                        <div class="col-sm-6">Discount</div>
+                        <div class="col-sm-6">
+                            <InputSelect @bind-Value="vendor.PurchaseDiscountAccountId" class="form-control"
+                                disabled="@(!isEditMode)">
+                                <option value="">Select...</option>
+                                @foreach (var account in accounts)
+                                {
+                                    <option value="@account.Value">@account.Text</option>
+                                }
+                            </InputSelect>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-sm-6">
+                    <div class="row mb-2">
+                        <div class="col-sm-4">Tax Group</div>
+                        <div class="col-sm-8">
+                            <InputSelect @bind-Value="vendor.TaxGroupId" class="form-control" disabled="@(!isEditMode)">
+                                <option value="">Select...</option>
+                                @foreach (var taxGroup in taxGroups)
+                                {
+                                    <option value="@taxGroup.Value">@taxGroup.Text</option>
+                                }
+                            </InputSelect>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @* Payment Section *@
+        <div class="card">
+            <div class="card-header">
+                <a data-toggle="collapse" href="#payment"><i class="fa fa-align-justify"></i></a> Payment
+            </div>
+            <div class="card-body collapse show row" id="payment">
+                <div class="col-sm-6">
+                    <div class="row mb-2">
+                        <div class="col-sm-4">Payment Term</div>
+                        <div class="col-sm-8">
+                            <InputSelect @bind-Value="vendor.PaymentTermId" class="form-control"
+                                disabled="@(!isEditMode)">
+                                <option value="">Select...</option>
+                                @foreach (var term in paymentTerms)
+                                {
+                                    <option value="@term.Value">@term.Text</option>
+                                }
+                            </InputSelect>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-9 mt-3">
+        <button type="submit" class="btn btn-sm btn-primary btn-flat" disabled="@(!isEditMode || isSaving)">
+            @if (isSaving)
+            {
+                <span class="spinner-border spinner-border-sm me-1"></span>
+            }
+            Save
+        </button>
+        <a href="/purchasing/vendors" class="btn btn-sm btn-default btn-flat">Close</a>
+
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <div class="alert alert-danger mt-2">@errorMessage</div>
+        }
+        @if (!string.IsNullOrEmpty(successMessage))
+        {
+            <div class="alert alert-success mt-2">@successMessage</div>
+        }
+    </div>
+</EditForm>
+
+@code {
+    [Parameter]
+    public int VendorId { get; set; }
+
+    private Vendor vendor = new Vendor();
+    private bool isEditMode = false;
+    private bool isSaving = false;
+    private string? errorMessage;
+    private string? successMessage;
+
+    private List<SelectListItem> accounts = new();
+    private List<SelectListItem> taxGroups = new();
+    private List<SelectListItem> paymentTerms = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDropdownData();
+
+        if (VendorId == -1 || VendorId == 0)
+        {
+            // New vendor
+            isEditMode = true;
+            vendor.No = new Random().Next(1, 99999).ToString();
+            vendor.PrimaryContact = new Contact();
+        }
+        else
+        {
+            // Edit existing vendor
+            await LoadVendor();
+        }
+    }
+
+    private async Task LoadVendor()
+    {
+        try
+        {
+            var http = HttpClientFactory.CreateClient();
+            var apiUrl = Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
+            var response = await http.GetAsync($"{apiUrl}purchasing/vendor?id={VendorId}");
+
+            if (response.IsSuccessStatusCode)
+            {
+                vendor = await response.Content.ReadFromJsonAsync<Vendor>() ?? new Vendor();
+                if (vendor.PrimaryContact == null)
+                {
+                    vendor.PrimaryContact = new Contact();
+                }
+            }
+            else
+            {
+                errorMessage = "Failed to load vendor data.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading vendor: {ex.Message}";
+        }
+    }
+
+    private async Task LoadDropdownData()
+    {
+        try
+        {
+            var http = HttpClientFactory.CreateClient();
+            var apiUrl = Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
+
+            // Load accounts
+            var accountsResponse = await http.GetAsync($"{apiUrl}financials/accounts");
+            if (accountsResponse.IsSuccessStatusCode)
+            {
+                var accountsList = await accountsResponse.Content.ReadFromJsonAsync<List<Account>>() ?? new();
+                accounts = accountsList.Select(a => new SelectListItem { Value = a.Id.ToString(), Text = a.AccountName }).ToList();
+            }
+
+            // Load tax groups
+            var taxGroupsResponse = await http.GetAsync($"{apiUrl}tax/taxgroups");
+            if (taxGroupsResponse.IsSuccessStatusCode)
+            {
+                var taxGroupsList = await taxGroupsResponse.Content.ReadFromJsonAsync<List<TaxGroup>>() ?? new();
+                taxGroups = taxGroupsList.Select(t => new SelectListItem { Value = t.Id.ToString(), Text = t.Description }).ToList();
+            }
+
+            // Load payment terms
+            var paymentTermsResponse = await http.GetAsync($"{apiUrl}financial/paymentterms");
+            if (paymentTermsResponse.IsSuccessStatusCode)
+            {
+                var paymentTermsList = await paymentTermsResponse.Content.ReadFromJsonAsync<List<PaymentTerm>>() ?? new();
+                paymentTerms = paymentTermsList.Select(p => new SelectListItem
+                {
+                    Value = p.Id.ToString(),
+                    Text = p.Description
+                }).ToList();
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading dropdown data: {ex.Message}";
+        }
+    }
+
+    private void ToggleEdit()
+    {
+        isEditMode = !isEditMode;
+    }
+
+    private async Task HandleValidSubmit()
+    {
+        isSaving = true;
+        errorMessage = null;
+        successMessage = null;
+
+        try
+        {
+            var http = HttpClientFactory.CreateClient();
+            var apiUrl = Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
+            var response = await http.PostAsJsonAsync($"{apiUrl}purchasing/savevendor", vendor);
+
+            if (response.IsSuccessStatusCode)
+            {
+                successMessage = "Vendor saved successfully!";
+                await Task.Delay(1000);
+                Navigation.NavigateTo("/Purchasing/Vendors");
+            }
+            else
+            {
+                errorMessage = $"Failed to save vendor. Status: {response.StatusCode}";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error saving vendor: {ex.Message}";
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private class SelectListItem
+    {
+        public string Value { get; set; } = "";
+        public string Text { get; set; } = "";
+    }
+
+    private class Account
+    {
+        public int Id { get; set; }
+        public string AccountName { get; set; } = "";
+    }
+
+    private class TaxGroup
+    {
+        public int Id { get; set; }
+        public string Description { get; set; } = "";
+    }
+
+    private class PaymentTerm
+    {
+        public int Id { get; set; }
+        public string Description { get; set; } = "";
+    }
+}

@@ -1,0 +1,419 @@
+@using System.Text.Json
+@using System.Text.Json.Serialization
+
+<style>
+    label,
+    h5 {
+        color: #fff !important;
+    }
+</style>
+
+<div class="container-fluid">
+    <div class="row mb-3">
+        <div class="col text-end">
+            <a href="/Sales/SalesReceipts" class="btn btn-outline-secondary">
+                <i class="fa fa-arrow-left"></i>
+                Back to Receipts
+            </a>
+        </div>
+    </div>
+
+    @if (loading)
+    {
+        <p><em>Loading allocation data...</em></p>
+    }
+    else if (errorMessage != null)
+    {
+        <div class="alert alert-danger" role="alert">
+            <strong>Error:</strong> @errorMessage
+        </div>
+    }
+    else
+    {
+        <form @onsubmit="HandleSubmit">
+            <!-- General Information Section -->
+            <div class="card mb-3">
+                <div class="card-header bg-dark">
+                    <h5 class="mb-0">General</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label"><strong>Receipt No</strong></label>
+                            <input type="text" class="form-control" value="@receiptNo" readonly />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label"><strong>Customer Name</strong></label>
+                            <input type="text" class="form-control" value="@customerName" readonly />
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label"><strong>Receipt Date</strong></label>
+                            <input type="date" class="form-control" @bind="receiptDate" readonly />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label"><strong>Amount</strong></label>
+                            <input type="number" class="form-control" value="@amount.ToString("F2")" readonly step="0.01" />
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label"><strong>Remaining to Allocate</strong></label>
+                            <input type="number" class="form-control" value="@remainingAmount.ToString("F2")" readonly
+                                step="0.01" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Invoices Section -->
+            <div class="card mb-3">
+                <div class="card-header bg-dark">
+                    <h5 class="mb-0">Invoices</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Invoice No</th>
+                                    <th>Amount</th>
+                                    <th>Allocated Amount</th>
+                                    <th>To Allocate</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (allocationLines.Count > 0)
+                                {
+                                    @for (int i = 0; i < allocationLines.Count; i++)
+                                    {
+                                        int index = i;
+                                        var line = allocationLines[index];
+                                        <tr>
+                                            <td>
+                                                @line.InvoiceId
+                                            </td>
+                                            <td>
+                                                @line.Amount?.ToString("F2")
+                                            </td>
+                                            <td>
+                                                @line.AllocatedAmount?.ToString("F2")
+                                            </td>
+                                            <td>
+                                                <input type="number" class="form-control"
+                                                    @bind="allocationLines[index].AmountToAllocate" step="0.01" />
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="row mb-3">
+                <div class="col">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fa fa-save"></i>
+                        Save Allocation
+                    </button>
+                    <a href="/Sales/SalesReceipts" class="btn btn-secondary ms-2">
+                        <i class="fa fa-times"></i>
+                        Close
+                    </a>
+                </div>
+            </div>
+
+            @if (!string.IsNullOrEmpty(successMessage))
+            {
+                <div class="alert alert-success" role="alert">
+                    <strong>Success:</strong> @successMessage
+                </div>
+            }
+        </form>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public string? ReceiptId { get; set; }
+
+    [Inject]
+    private NavigationManager Navigation { get; set; } = null!;
+
+    [Inject]
+    private IHttpClientFactory ClientFactory { get; set; } = null!;
+
+    private bool loading = true;
+    private string? errorMessage = null;
+    private string? successMessage = null;
+
+    private string receiptNo = "";
+    private string customerName = "";
+    private DateTime receiptDate = DateTime.Now;
+    private decimal amount = 0;
+    private decimal remainingAmount = 0;
+    private int customerId = 0;
+
+    private List<AllocationLineModel> allocationLines = new();
+
+    private class AllocationLineModel
+    {
+        public int? InvoiceId { get; set; }
+        public decimal? Amount { get; set; }
+        public decimal? AllocatedAmount { get; set; }
+        public decimal? AmountToAllocate { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Extract ReceiptId from the current URL path
+        // URL format: /Sales/Allocate/123
+        var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
+        var segments = uri.AbsolutePath.Split('/');
+
+        // Find the ID from the URL segments (last segment should be the ID)
+        if (segments.Length > 0 && int.TryParse(segments[^1], out var receiptId))
+        {
+            ReceiptId = receiptId.ToString();
+        }
+
+        // Fallback to query parameter if not found in route
+        if (string.IsNullOrEmpty(ReceiptId))
+        {
+            var queryParams = System.Web.HttpUtility.ParseQueryString(uri.Query);
+            ReceiptId = queryParams["id"];
+        }
+
+        if (!string.IsNullOrEmpty(ReceiptId))
+        {
+            await LoadAllocationData();
+        }
+        else
+        {
+            errorMessage = "Receipt ID is required.";
+            loading = false;
+        }
+    }
+
+    private async Task LoadAllocationData()
+    {
+        try
+        {
+            loading = true;
+            string apiurl = System.Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
+
+            var client = ClientFactory.CreateClient();
+            client.Timeout = TimeSpan.FromSeconds(60);
+
+            // Fetch receipt details
+            var receiptResponse = await client.GetAsync($"{apiurl}sales/salesreceipt?id={ReceiptId}");
+            if (receiptResponse.IsSuccessStatusCode)
+            {
+                var receiptString = await receiptResponse.Content.ReadAsStringAsync();
+                var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                var receiptJson = JsonSerializer.Deserialize<System.Text.Json.JsonElement>(receiptString, options);
+
+                receiptNo = GetJsonProperty(receiptJson, "receiptNo");
+                customerName = GetJsonProperty(receiptJson, "customerName");
+                amount = GetJsonPropertyDecimal(receiptJson, "amount");
+                remainingAmount = GetJsonPropertyDecimal(receiptJson, "remainingAmountToAllocate");
+
+                if (receiptJson.TryGetProperty("customerId", out var custIdProp))
+                {
+                    if (custIdProp.TryGetInt32(out var id))
+                        customerId = id;
+                }
+
+                System.Diagnostics.Debug.WriteLine($"DEBUG: Loaded Receipt - ReceiptNo: {receiptNo}, CustomerId: {customerId}");
+
+                if (receiptJson.TryGetProperty("receiptDate", out var dateProp))
+                {
+                    if (DateTime.TryParse(dateProp.GetString(), out var date))
+                        receiptDate = date;
+                }
+
+                // Fetch customer invoices
+                System.Diagnostics.Debug.WriteLine($"DEBUG: Fetching invoices for customerId: {customerId}");
+                await LoadInvoicesForCustomer(customerId, client, apiurl, options);
+            }
+            else
+            {
+                errorMessage = "Failed to load receipt details.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading allocation data: {ex.Message}";
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task LoadInvoicesForCustomer(int custId, HttpClient? client = null, string? apiurl = null,
+    JsonSerializerOptions? options = null)
+    {
+        if (client == null)
+        {
+            client = ClientFactory.CreateClient();
+            client.Timeout = TimeSpan.FromSeconds(60);
+        }
+
+        if (string.IsNullOrEmpty(apiurl))
+        {
+            apiurl = System.Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
+        }
+
+        if (options == null)
+        {
+            options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+        }
+
+        try
+        {
+            System.Diagnostics.Debug.WriteLine($"DEBUG: Fetching invoices for customerId: {custId}");
+            var invoiceResponse = await client.GetAsync($"{apiurl}sales/customerinvoices?id={custId}");
+            System.Diagnostics.Debug.WriteLine($"DEBUG: Invoice API Response Status: {invoiceResponse.StatusCode}");
+
+            if (invoiceResponse.IsSuccessStatusCode)
+            {
+                var invoicesString = await invoiceResponse.Content.ReadAsStringAsync();
+                System.Diagnostics.Debug.WriteLine($"DEBUG: Invoice Response: {invoicesString}");
+                var invoicesJson = JsonSerializer.Deserialize<List<System.Text.Json.JsonElement>>(invoicesString, options);
+
+                System.Diagnostics.Debug.WriteLine($"DEBUG: Parsed {invoicesJson?.Count ?? 0} invoices");
+                allocationLines.Clear();
+                if (invoicesJson != null)
+                {
+                    foreach (var invoice in invoicesJson)
+                    {
+                        var posted = false;
+                        var totalAllocated = 0m;
+                        var invoiceAmount = 0m;
+
+                        if (invoice.TryGetProperty("posted", out var postedProp))
+                            posted = postedProp.GetBoolean();
+
+                        if (invoice.TryGetProperty("totalAllocatedAmount", out var allocProp))
+                            totalAllocated = allocProp.GetDecimal();
+
+                        if (invoice.TryGetProperty("amount", out var amountProp))
+                            invoiceAmount = amountProp.GetDecimal();
+
+                        // Include invoices with remaining balance
+                        // TODO: Should filter for posted invoices only (posted == true), but currently allowing unposted for testing
+                        // Invoices must be posted to the GL before they can be allocated.
+                        // A "Post Invoice" feature should be added to SalesInvoice component.
+                        if (totalAllocated < invoiceAmount)
+                        {
+                            var line = new AllocationLineModel
+                            {
+                                InvoiceId = GetJsonPropertyInt(invoice, "id"),
+                                Amount = invoiceAmount,
+                                AllocatedAmount = totalAllocated,
+                                AmountToAllocate = null
+                            };
+                            allocationLines.Add(line);
+                            System.Diagnostics.Debug.WriteLine($"DEBUG: Added invoice {line.InvoiceId} - Posted: {posted}, Allocated: {totalAllocated}, Amount: {invoiceAmount}");
+                        }
+                        else
+                        {
+                            System.Diagnostics.Debug.WriteLine($"DEBUG: Skipped invoice - Posted: {posted}, Allocated: {totalAllocated}, Amount: {invoiceAmount}");
+                        }
+                    }
+                }
+            }
+            else
+            {
+                var errorContent = await invoiceResponse.Content.ReadAsStringAsync();
+                errorMessage = "Failed to load customer invoices.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading customer invoices: {ex.Message}";
+        }
+    }
+
+    private async Task HandleSubmit()
+    {
+        try
+        {
+            string apiurl = System.Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
+
+            var payload = new
+            {
+                CustomerId = customerId,
+                ReceiptId = int.Parse(ReceiptId ?? "0"),
+                Date = receiptDate,
+                Amount = amount,
+                RemainingAmountToAllocate = remainingAmount,
+                AllocationLines = allocationLines
+            .Where(l => l.AmountToAllocate.HasValue && l.AmountToAllocate.Value > 0)
+            .Select(l => new
+            {
+                InvoiceId = l.InvoiceId,
+                Amount = l.Amount,
+                AllocatedAmount = l.AllocatedAmount,
+                AmountToAllocate = l.AmountToAllocate
+            })
+            .ToList()
+            };
+
+            var client = ClientFactory.CreateClient();
+            var json = JsonSerializer.Serialize(payload);
+            var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
+
+            var response = await client.PostAsync($"{apiurl}sales/saveallocation", content);
+
+            if (response.IsSuccessStatusCode)
+            {
+                // Redirect to SalesReceipts page with forceLoad to refresh the MVC view
+                Navigation.NavigateTo("/Sales/SalesReceipts", forceLoad: true);
+            }
+            else
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                errorMessage = $"Failed to save allocation. Status: {response.StatusCode}";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error saving allocation: {ex.Message}";
+        }
+    }
+
+    private string GetJsonProperty(System.Text.Json.JsonElement elem, string propName)
+    {
+        if (elem.TryGetProperty(propName, out var prop))
+            return prop.GetString() ?? "";
+        return "";
+    }
+
+    private decimal GetJsonPropertyDecimal(System.Text.Json.JsonElement elem, string propName)
+    {
+        if (elem.TryGetProperty(propName, out var prop))
+        {
+            if (prop.TryGetDecimal(out var val))
+                return val;
+        }
+        return 0;
+    }
+
+    private int GetJsonPropertyInt(System.Text.Json.JsonElement elem, string propName)
+    {
+        if (elem.TryGetProperty(propName, out var prop))
+        {
+            if (prop.TryGetInt32(out var val))
+                return val;
+        }
+        return 0;
+    }
+}
