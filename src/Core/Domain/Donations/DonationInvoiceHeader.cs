@@ -17,10 +17,10 @@ namespace Core.Domain.Donations
         public int DonorId { get; set; }
         public string No { get; set; }
         public DateTime Date { get; set; }
-        public string? ReferenceNo { get; set; }
-        public string? Purpose { get; set; }
+        public string ReferenceNo { get; set; }
+        public string Purpose { get; set; }
         public bool IsTaxReceiptIssued { get; set; }
-        public string? TaxReceiptNo { get; set; }
+        public string TaxReceiptNo { get; set; }
         public bool Posted { get; set; }
 
         public virtual Sales.Customer Donor { get; set; }

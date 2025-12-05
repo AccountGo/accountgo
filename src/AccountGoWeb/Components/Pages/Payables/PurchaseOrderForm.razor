@@ -315,7 +315,7 @@ else
                 measurements = measurementList?.Select(m => new SelectListItem { Value = m.Id.ToString(), Text = m.Description ?? "" }).ToList();
             }
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             vendors = new List<SelectListItem>();
             items = new List<SelectListItem>();
@@ -341,7 +341,7 @@ else
                 loadError = true;
             }
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             loadError = true;
         }

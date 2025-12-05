@@ -133,7 +133,7 @@ else
     protected override async Task OnInitializedAsync()
     {
         // Get API URL from configuration (same as Program.cs sets it)
-        apiUrl = Configuration["ApiUrl"];
+        apiUrl = Configuration["ApiUrl"]!;
         await LoadEntitiesFromApi();
         isLoading = false;
     }

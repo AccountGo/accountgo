@@ -18,19 +18,20 @@
     </None>
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="../Dto/Dto.csproj" />
-    <ProjectReference Include="../Infrastructure/Infrastructure.csproj" />
+    <!-- <ProjectReference Include="../Dto/Dto.csproj" /> -->
+    <!-- <ProjectReference Include="../Infrastructure/Infrastructure.csproj" /> -->
     <ProjectReference Include="../src.ServiceDefaults/src.ServiceDefaults.csproj" />
     <ProjectReference Include="../LibraryGDB/LibraryGDB.csproj" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="AutoMapper.Extensions.Microsoft.DependencyInjection" Version="12.0.1" />
-    <PackageReference Include="BundlerMinifier.Core" Version="3.2.449" />
+    <PackageReference Include="Microsoft.Build" Version="17.13.9" />
     <PackageReference Include="ExpressiveAnnotations" Version="2.9.6" />
     <PackageReference Include="Microsoft.AspNetCore.Components.QuickGrid" Version="9.0.3" />
     <PackageReference Include="Microsoft.AspNetCore.Components.QuickGrid.EntityFrameworkAdapter" Version="9.0.3" />
-    <PackageReference Include="Microsoft.Extensions.Logging" Version="9.0.3" />
     <PackageReference Include="Microsoft.VisualStudio.Web.CodeGeneration.Design" Version="9.0.0" />
+    <PackageReference Include="jQuery" Version="3.7.1" />
+    <PackageReference Include="jQuery.Validation" Version="1.19.5" />
   </ItemGroup>
   <!-- <Import Project="ModulesReferences.targets" /> -->
 </Project>
