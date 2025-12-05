@@ -11,7 +11,7 @@ namespace Core.Domain.Donations
         public int MeasurementId { get; set; }
         public decimal Quantity { get; set; }
         public decimal Amount { get; set; }
-        public string? Notes { get; set; }
+        public string Notes { get; set; }
 
         public virtual DonationInvoiceHeader DonationInvoiceHeader { get; set; }
         public virtual Item Item { get; set; }

@@ -399,7 +399,7 @@
             if (accountsResponse.IsSuccessStatusCode)
             {
                 var accounts = await accountsResponse.Content.ReadFromJsonAsync<List<Dto.Financial.Account>>();
-                Accounts = accounts?.Select(a => new SelectListItem { Value = a.Id.ToString(), Text = a.AccountName }).ToList() ?? new();
+                Accounts = accounts?.Select(a => new SelectListItem { Value = a.Id.ToString(), Text = a.AccountName! }).ToList() ?? new();
             }
 
             // Load tax groups
@@ -407,7 +407,7 @@
             if (taxGroupsResponse.IsSuccessStatusCode)
             {
                 var taxGroups = await taxGroupsResponse.Content.ReadFromJsonAsync<List<Dto.TaxSystem.TaxGroup>>();
-                TaxGroups = taxGroups?.Select(tg => new SelectListItem { Value = tg.Id.ToString(), Text = tg.Description }).ToList() ?? new();
+                TaxGroups = taxGroups?.Select(tg => new SelectListItem { Value = tg.Id.ToString(), Text = tg.Description! }).ToList() ?? new();
             }
 
             // Load payment terms

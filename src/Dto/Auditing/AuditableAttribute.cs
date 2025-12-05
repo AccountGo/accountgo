@@ -11,7 +11,7 @@ namespace Dto.Auditing
         
         // Name of the auditable attribute
         [Required]
-        public string AttributeName { get; set; }
+        public string? AttributeName { get; set; }
 
         // Indicates whether auditing is enabled for this attribute
         public bool EnableAudit { get; set; }

@@ -8,7 +8,7 @@ namespace Dto.Auditing
     {
         // Name of the auditable entity
         [Required]
-        public string EntityName { get; set; }
+        public string? EntityName { get; set; }
 
         // Indicates whether auditing is enabled for this entity
         public bool EnableAudit { get; set; }
