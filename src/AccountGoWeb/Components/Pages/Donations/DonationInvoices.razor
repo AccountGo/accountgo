@@ -1,0 +1,592 @@
+@page "/donations/donationinvoices"
+@rendermode InteractiveServer
+@using Dto.Donations
+@inject HttpClient Http
+@inject IConfiguration Configuration
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Donation Invoices</PageTitle>
+
+<style>
+    .app-container {
+        display: flex;
+        min-height: 100vh;
+    }
+    
+    .sidebar {
+        width: 180px;
+        background: #2d3748;
+        color: white;
+        padding: 0.75rem 0;
+        position: fixed;
+        height: 100vh;
+        overflow-y: auto;
+    }
+    
+    .sidebar-nav {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+    
+    .nav-item {
+        margin: 0;
+    }
+    
+    .nav-link {
+        display: flex;
+        align-items: center;
+        padding: 0.5rem 1rem;
+        color: #cbd5e0;
+        text-decoration: none;
+        transition: all 0.3s ease;
+        font-size: 13px;
+    }
+    
+    .nav-link:hover {
+        background: #4a5568;
+        color: white;
+    }
+    
+    .nav-link.active {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+    }
+    
+    .nav-icon {
+        margin-right: 0.5rem;
+        width: 16px;
+    }
+    
+    .nav-dropdown-toggle {
+        cursor: pointer;
+        padding: 0.5rem 1rem;
+        font-size: 13px;
+    }
+    
+    .nav-dropdown-toggle::after {
+        content: '▼';
+        float: right;
+        font-size: 10px;
+        transition: transform 0.3s ease;
+    }
+    
+    .nav-dropdown-items {
+        list-style: none;
+        padding-left: 0;
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height 0.3s ease;
+        background: rgba(0,0,0,0.2);
+    }
+    
+    .nav-dropdown.open .nav-dropdown-items {
+        max-height: 500px;
+    }
+    
+    .nav-dropdown.open .nav-dropdown-toggle::after {
+        transform: rotate(-180deg);
+    }
+    
+    .nav-dropdown-items .nav-link {
+        padding-left: 2rem;
+        font-size: 12px;
+    }
+    
+    .main-content {
+        margin-left: 180px;
+        flex: 1;
+        padding: 2rem;
+        background: #f7fafc;
+    }
+    
+    .page-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 2rem;
+        border-radius: 10px;
+        margin-bottom: 2rem;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    
+    .page-header h3 {
+        margin: 0;
+        font-weight: 600;
+    }
+    
+    .action-toolbar {
+        background: white;
+        padding: 1.5rem;
+        border-radius: 10px;
+        margin-bottom: 1.5rem;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+    }
+    
+    .btn {
+        border-radius: 6px;
+        font-weight: 500;
+        padding: 0.5rem 1.5rem;
+        transition: all 0.3s ease;
+    }
+    
+    .btn-primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border: none;
+    }
+    
+    .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
+    
+    .btn-secondary:hover {
+        transform: translateY(-2px);
+    }
+    
+    .btn-danger:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(220, 53, 69, 0.4);
+    }
+    
+    .table-container {
+        background: white;
+        padding: 1.5rem;
+        border-radius: 10px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+    }
+    
+    .table {
+        margin-bottom: 0;
+    }
+    
+    .table thead th {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        font-weight: 600;
+        text-transform: uppercase;
+        font-size: 0.85rem;
+        letter-spacing: 0.5px;
+        padding: 1rem;
+    }
+    
+    .table tbody tr {
+        transition: all 0.2s ease;
+        cursor: pointer;
+    }
+    
+    .table tbody tr:hover {
+        background-color: #f8f9fa;
+        transform: scale(1.01);
+    }
+    
+    .table tbody tr.table-active {
+        background-color: #e7e9fc !important;
+        border-left: 4px solid #667eea;
+    }
+    
+    .table tbody td {
+        vertical-align: middle;
+        padding: 1rem;
+    }
+    
+    .spinner-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 3rem;
+    }
+    
+    .spinner-border {
+        width: 3rem;
+        height: 3rem;
+        border-width: 0.3rem;
+        color: #667eea;
+    }
+    
+    .alert-info {
+        background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
+        border: 2px dashed #667eea;
+        border-radius: 10px;
+        color: #5a67d8;
+        font-weight: 500;
+        padding: 2rem;
+        text-align: center;
+    }
+    
+    .modal-content {
+        border-radius: 15px;
+        border: none;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+    }
+    
+    .modal-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 15px 15px 0 0;
+        border: none;
+    }
+    
+    .modal-footer {
+        border: none;
+        padding: 1.5rem;
+    }
+    
+    .badge {
+        padding: 0.5rem 1rem;
+        border-radius: 20px;
+        font-weight: 500;
+    }
+    
+    .badge-success {
+        background: #10b981;
+    }
+    
+    .badge-warning {
+        background: #f59e0b;
+    }
+</style>
+
+<div class="app-container">
+    <div class="sidebar">
+        <nav class="sidebar-nav">
+            <ul class="nav">
+                <li class="nav-item">
+                    <a class="nav-link" href="/">
+                        <i class="nav-icon fa fa-dashboard"></i> Dashboard
+                    </a>
+                </li>
+                <li class="nav-item nav-dropdown">
+                    <a class="nav-link nav-dropdown-toggle" onclick="toggleDropdown(this)">
+                        <i class="nav-icon fa fa-industry"></i> Accounts Receivable
+                    </a>
+                    <ul class="nav-dropdown-items">
+                        <li class="nav-item">
+                            <a class="nav-link" href="/sales/salesorders">Sales Orders</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/sales/salesinvoices">Sales Invoices</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link active" href="/donations/donationinvoices">Donation Invoices</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/sales/customers">Customers</a>
+                        </li>
+                    </ul>
+                </li>
+                <li class="nav-item nav-dropdown">
+                    <a class="nav-link nav-dropdown-toggle" onclick="toggleDropdown(this)">
+                        <i class="nav-icon fa fa-link"></i> Accounts Payable
+                    </a>
+                    <ul class="nav-dropdown-items">
+                        <li class="nav-item">
+                            <a class="nav-link" href="/purchasing/purchaseorders">Purchase Orders</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/purchasing/vendors">Vendors</a>
+                        </li>
+                    </ul>
+                </li>
+                <li class="nav-item nav-dropdown">
+                    <a class="nav-link nav-dropdown-toggle" onclick="toggleDropdown(this)">
+                        <i class="nav-icon fa fa-wrench"></i> Inventory Control
+                    </a>
+                    <ul class="nav-dropdown-items">
+                        <li class="nav-item">
+                            <a class="nav-link" href="/inventory/items">Items</a>
+                        </li>
+                    </ul>
+                </li>
+                <li class="nav-item nav-dropdown">
+                    <a class="nav-link nav-dropdown-toggle" onclick="toggleDropdown(this)">
+                        <i class="nav-icon fa fa-bank"></i> Financials
+                    </a>
+                    <ul class="nav-dropdown-items">
+                        <li class="nav-item">
+                            <a class="nav-link" href="/financials/accounts">Chart of Accounts</a>
+                        </li>
+                    </ul>
+                </li>
+                <li class="nav-item nav-dropdown">
+                    <a class="nav-link nav-dropdown-toggle" onclick="toggleDropdown(this)">
+                        <i class="nav-icon fa fa-line-chart"></i> Reports
+                    </a>
+                    <ul class="nav-dropdown-items">
+                        <li class="nav-item">
+                            <a class="nav-link" href="/financials/balancesheet">Balance Sheet</a>
+                        </li>
+                    </ul>
+                </li>
+                <li class="nav-item nav-dropdown">
+                    <a class="nav-link nav-dropdown-toggle" onclick="toggleDropdown(this)">
+                        <i class="nav-icon fa fa-group"></i> Organization Settings
+                    </a>
+                    <ul class="nav-dropdown-items">
+                        <li class="nav-item">
+                            <a class="nav-link" href="/administration/company">Company</a>
+                        </li>
+                    </ul>
+                </li>
+                <li class="nav-item nav-dropdown">
+                    <a class="nav-link nav-dropdown-toggle" onclick="toggleDropdown(this)">
+                        <i class="nav-icon fa fa-desktop"></i> System Administration
+                    </a>
+                    <ul class="nav-dropdown-items">
+                        <li class="nav-item">
+                            <a class="nav-link" href="/administration/users">Users</a>
+                        </li>
+                    </ul>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/account/logout">
+                        <i class="nav-icon fa fa-sign-out"></i> Logout
+                    </a>
+                </li>
+            </ul>
+        </nav>
+    </div>
+    
+    <div class="main-content">
+        <div class="page-header">
+            <h3><i class="fa fa-heart me-2"></i>Donation Invoices</h3>
+        </div>
+
+<div class="action-toolbar">
+    <div class="d-flex gap-2">
+        <a href="/donations/adddonationinvoice" class="btn btn-primary">
+            <i class="fa fa-plus me-2"></i>New Donation Invoice
+        </a>
+        <button class="btn btn-secondary" @onclick="EditInvoice" disabled="@(!HasSelection)">
+            <i class="fa fa-edit me-2"></i>Edit
+        </button>
+        <button class="btn btn-danger" @onclick="ShowDeleteModal" disabled="@(!HasSelection)">
+            <i class="fa fa-trash me-2"></i>Delete
+        </button>
+    </div>
+</div>
+
+@if (isLoading)
+{
+    <div class="spinner-container">
+        <div class="spinner-border" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+}
+else if (donationInvoices != null && donationInvoices.Any())
+{
+    <div class="table-container">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th style="width: 50px;"></th>
+                        <th>Invoice No</th>
+                        <th>Donor Name</th>
+                        <th>Date</th>
+                        <th>Amount</th>
+                        <th>Purpose</th>
+                        <th>Reference No</th>
+                        <th>Tax Receipt No</th>
+                        <th>Tax Receipt</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var invoice in donationInvoices)
+                    {
+                        <tr class="@(selectedInvoice?.Id == invoice.Id ? "table-active" : "")" 
+                            @onclick="() => SelectInvoice(invoice)">
+                            <td class="text-center">
+                                <input type="radio" name="selectedInvoice" checked="@(selectedInvoice?.Id == invoice.Id)" />
+                            </td>
+                            <td><strong>@invoice.No</strong></td>
+                            <td>@invoice.DonorName</td>
+                            <td>@invoice.DonationDate.ToString("MMM dd, yyyy")</td>
+                            <td><strong class="text-success">@invoice.Amount.ToString("C2")</strong></td>
+                            <td>@invoice.Purpose</td>
+                            <td>@invoice.ReferenceNo</td>
+                            <td>@invoice.TaxReceiptNo</td>
+                            <td class="text-center">
+                                @if (invoice.IsTaxReceiptIssued)
+                                {
+                                    <span class="badge badge-success">
+                                        <i class="fa fa-check"></i> Issued
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="badge badge-warning">
+                                        <i class="fa fa-clock"></i> Pending
+                                    </span>
+                                }
+                            </td>
+                            <td class="text-center">
+                                @if (invoice.Posted)
+                                {
+                                    <span class="badge badge-success">
+                                        <i class="fa fa-check"></i> Posted
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="badge badge-warning">
+                                        <i class="fa fa-clock"></i> Draft
+                                    </span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+else
+{
+    <div class="table-container">
+        <div class="alert alert-info mb-0">
+            <i class="fa fa-info-circle me-2"></i>
+            No donation invoices found. Click "New Donation Invoice" to create one.
+        </div>
+    </div>
+}
+
+@* Delete Confirmation Modal *@
+@if (showDeleteModal)
+{
+    <div class="modal fade show" style="display: block; background-color: rgba(0,0,0,0.5);" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Delete Donation Invoice</h5>
+                    <button type="button" class="btn-close" @onclick="CloseDeleteModal"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Do you want to delete this donation invoice?</p>
+                    @if (selectedInvoice != null)
+                    {
+                        <p><strong>Invoice No:</strong> @selectedInvoice.No</p>
+                        <p><strong>Donor:</strong> @selectedInvoice.DonorName</p>
+                        <p><strong>Amount:</strong> @selectedInvoice.Amount.ToString("C2")</p>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-danger" @onclick="DeleteInvoice">Yes, Delete</button>
+                    <button class="btn btn-secondary" @onclick="CloseDeleteModal">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<script>
+    function toggleDropdown(element) {
+        const dropdown = element.closest('.nav-dropdown');
+        const allDropdowns = document.querySelectorAll('.nav-dropdown');
+        
+        // Close all other dropdowns
+        allDropdowns.forEach(dd => {
+            if (dd !== dropdown) {
+                dd.classList.remove('open');
+            }
+        });
+        
+        // Toggle current dropdown
+        dropdown.classList.toggle('open');
+    }
+</script>
+
+@code {
+    private List<DonationInvoice>? donationInvoices;
+    private DonationInvoice? selectedInvoice;
+    private bool isLoading = true;
+    private bool showDeleteModal = false;
+    private bool HasSelection => selectedInvoice != null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDonationInvoices();
+    }
+
+    private async Task LoadDonationInvoices()
+    {
+        isLoading = true;
+        try
+        {
+            var apiUrl = Configuration["ApiUrl"];
+            var response = await Http.GetAsync($"{apiUrl}donations/donationinvoices");
+            
+            if (response.IsSuccessStatusCode)
+            {
+                var responseJson = await response.Content.ReadAsStringAsync();
+                donationInvoices = System.Text.Json.JsonSerializer.Deserialize<List<DonationInvoice>>(
+                    responseJson, 
+                    new System.Text.Json.JsonSerializerOptions 
+                    { 
+                        PropertyNameCaseInsensitive = true 
+                    });
+            }
+            else
+            {
+                donationInvoices = new List<DonationInvoice>();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading donation invoices: {ex.Message}");
+            donationInvoices = new List<DonationInvoice>();
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void SelectInvoice(DonationInvoice invoice)
+    {
+        selectedInvoice = invoice;
+        StateHasChanged();
+    }
+
+    private void EditInvoice()
+    {
+        if (selectedInvoice != null)
+        {
+            NavigationManager.NavigateTo($"/donations/donationinvoice?id={selectedInvoice.Id}");
+        }
+    }
+
+    private void ShowDeleteModal()
+    {
+        if (selectedInvoice != null)
+        {
+            showDeleteModal = true;
+        }
+    }
+
+    private void CloseDeleteModal()
+    {
+        showDeleteModal = false;
+    }
+
+    private async Task DeleteInvoice()
+    {
+        if (selectedInvoice != null)
+        {
+            try
+            {
+                NavigationManager.NavigateTo($"/donations/deletedonationinvoice?id={selectedInvoice.Id}");
+                showDeleteModal = false;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error deleting invoice: {ex.Message}");
+            }
+        }
+    }
+}
+    </div><!-- Close main-content -->
+</div><!-- Close app-container -->

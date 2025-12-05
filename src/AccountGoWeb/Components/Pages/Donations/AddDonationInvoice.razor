@@ -1,0 +1,663 @@
+@page "/donations/adddonationinvoice"
+@rendermode InteractiveServer
+@using Dto.Donations
+@using Dto.Sales
+@using Dto.Inventory
+@using System.Text.Json
+@inject HttpClient Http
+@inject IConfiguration Configuration
+@inject NavigationManager NavigationManager
+
+<PageTitle>Add Donation Invoice</PageTitle>
+
+<style>
+    .app-container {
+        display: flex;
+        min-height: 100vh;
+    }
+    
+    .sidebar {
+        width: 180px;
+        background: #2d3748;
+        color: white;
+        padding: 0.75rem 0;
+        position: fixed;
+        height: 100vh;
+        overflow-y: auto;
+    }
+    
+    .sidebar-nav {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+    
+    .nav-item {
+        margin: 0;
+    }
+    
+    .nav-link {
+        display: flex;
+        align-items: center;
+        padding: 0.5rem 1rem;
+        color: #cbd5e0;
+        text-decoration: none;
+        transition: all 0.3s ease;
+        font-size: 13px;
+    }
+    
+    .nav-link:hover {
+        background: #4a5568;
+        color: white;
+    }
+    
+    .nav-link.active {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+    }
+    
+    .nav-icon {
+        margin-right: 0.5rem;
+        width: 16px;
+    }
+    
+    .nav-dropdown-toggle {
+        cursor: pointer;
+        padding: 0.5rem 1rem;
+        font-size: 13px;
+    }
+    
+    .nav-dropdown-toggle::after {
+        content: '▼';
+        float: right;
+        font-size: 10px;
+        transition: transform 0.3s ease;
+    }
+    
+    .nav-dropdown-items {
+        list-style: none;
+        padding-left: 0;
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height 0.3s ease;
+        background: rgba(0,0,0,0.2);
+    }
+    
+    .nav-dropdown.open .nav-dropdown-items {
+        max-height: 500px;
+    }
+    
+    .nav-dropdown.open .nav-dropdown-toggle::after {
+        transform: rotate(-180deg);
+    }
+    
+    .nav-dropdown-items .nav-link {
+        padding-left: 2rem;
+        font-size: 12px;
+    }
+    
+    .main-content {
+        margin-left: 180px;
+        flex: 1;
+        padding: 2rem;
+        background: #f7fafc;
+    }
+    
+    .page-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 2rem;
+        border-radius: 10px;
+        margin-bottom: 2rem;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    
+    .page-header h3 {
+        margin: 0;
+        font-weight: 600;
+    }
+    
+    .form-container {
+        background: white;
+        padding: 2rem;
+        border-radius: 10px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+        margin-bottom: 2rem;
+    }
+    
+    .form-group {
+        margin-bottom: 1.5rem;
+    }
+    
+    .form-label {
+        font-weight: 600;
+        color: #4a5568;
+        margin-bottom: 0.5rem;
+        display: block;
+    }
+    
+    .form-control, .form-select {
+        border: 2px solid #e2e8f0;
+        border-radius: 6px;
+        padding: 0.75rem;
+        transition: all 0.3s ease;
+    }
+    
+    .form-control:focus, .form-select:focus {
+        border-color: #667eea;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+    
+    .form-check-input {
+        width: 1.5rem;
+        height: 1.5rem;
+        margin-top: 0;
+    }
+    
+    .table-container {
+        background: white;
+        padding: 1.5rem;
+        border-radius: 10px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+        margin-bottom: 2rem;
+    }
+    
+    .table thead th {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        font-weight: 600;
+        text-transform: uppercase;
+        font-size: 0.85rem;
+        padding: 1rem;
+    }
+    
+    .table tbody td {
+        vertical-align: middle;
+        padding: 1rem;
+    }
+    
+    .btn {
+        border-radius: 6px;
+        font-weight: 500;
+        padding: 0.75rem 2rem;
+        transition: all 0.3s ease;
+    }
+    
+    .btn-primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border: none;
+    }
+    
+    .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
+    
+    .btn-secondary {
+        background: #6c757d;
+        border: none;
+    }
+    
+    .btn-secondary:hover {
+        background: #5a6268;
+        transform: translateY(-2px);
+    }
+    
+    .btn-success {
+        background: #10b981;
+        border: none;
+    }
+    
+    .btn-success:hover {
+        background: #059669;
+        transform: translateY(-2px);
+    }
+    
+    .alert {
+        border-radius: 10px;
+        padding: 1rem;
+    }
+</style>
+
+<div class="app-container">
+    <div class="sidebar">
+        <nav class="sidebar-nav">
+            <ul class="nav">
+                <li class="nav-item">
+                    <a class="nav-link" href="/">
+                        <i class="nav-icon fa fa-dashboard"></i> Dashboard
+                    </a>
+                </li>
+                <li class="nav-item nav-dropdown">
+                    <a class="nav-link nav-dropdown-toggle" onclick="toggleDropdown(this)">
+                        <i class="nav-icon fa fa-industry"></i> Accounts Receivable
+                    </a>
+                    <ul class="nav-dropdown-items">
+                        <li class="nav-item">
+                            <a class="nav-link" href="/sales/salesorders">Sales Orders</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/sales/salesinvoices">Sales Invoices</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link active" href="/donations/donationinvoices">Donation Invoices</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/sales/customers">Customers</a>
+                        </li>
+                    </ul>
+                </li>
+                <li class="nav-item nav-dropdown">
+                    <a class="nav-link nav-dropdown-toggle" onclick="toggleDropdown(this)">
+                        <i class="nav-icon fa fa-link"></i> Accounts Payable
+                    </a>
+                    <ul class="nav-dropdown-items">
+                        <li class="nav-item">
+                            <a class="nav-link" href="/purchasing/purchaseorders">Purchase Orders</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/purchasing/vendors">Vendors</a>
+                        </li>
+                    </ul>
+                </li>
+                <li class="nav-item nav-dropdown">
+                    <a class="nav-link nav-dropdown-toggle" onclick="toggleDropdown(this)">
+                        <i class="nav-icon fa fa-wrench"></i> Inventory Control
+                    </a>
+                    <ul class="nav-dropdown-items">
+                        <li class="nav-item">
+                            <a class="nav-link" href="/inventory/items">Items</a>
+                        </li>
+                    </ul>
+                </li>
+                <li class="nav-item nav-dropdown">
+                    <a class="nav-link nav-dropdown-toggle" onclick="toggleDropdown(this)">
+                        <i class="nav-icon fa fa-bank"></i> Financials
+                    </a>
+                    <ul class="nav-dropdown-items">
+                        <li class="nav-item">
+                            <a class="nav-link" href="/financials/accounts">Chart of Accounts</a>
+                        </li>
+                    </ul>
+                </li>
+                <li class="nav-item nav-dropdown">
+                    <a class="nav-link nav-dropdown-toggle" onclick="toggleDropdown(this)">
+                        <i class="nav-icon fa fa-line-chart"></i> Reports
+                    </a>
+                    <ul class="nav-dropdown-items">
+                        <li class="nav-item">
+                            <a class="nav-link" href="/financials/balancesheet">Balance Sheet</a>
+                        </li>
+                    </ul>
+                </li>
+                <li class="nav-item nav-dropdown">
+                    <a class="nav-link nav-dropdown-toggle" onclick="toggleDropdown(this)">
+                        <i class="nav-icon fa fa-group"></i> Organization Settings
+                    </a>
+                    <ul class="nav-dropdown-items">
+                        <li class="nav-item">
+                            <a class="nav-link" href="/administration/company">Company</a>
+                        </li>
+                    </ul>
+                </li>
+                <li class="nav-item nav-dropdown">
+                    <a class="nav-link nav-dropdown-toggle" onclick="toggleDropdown(this)">
+                        <i class="nav-icon fa fa-desktop"></i> System Administration
+                    </a>
+                    <ul class="nav-dropdown-items">
+                        <li class="nav-item">
+                            <a class="nav-link" href="/administration/users">Users</a>
+                        </li>
+                    </ul>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/account/logout">
+                        <i class="nav-icon fa fa-sign-out"></i> Logout
+                    </a>
+                </li>
+            </ul>
+        </nav>
+    </div>
+    
+    <div class="main-content">
+        <div class="page-header">
+            <h3><i class="fa fa-plus-circle me-2"></i>Add Donation Invoice</h3>
+        </div>
+
+@if (!string.IsNullOrEmpty(errorMessage))
+{
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        <i class="fa fa-exclamation-triangle me-2"></i>@errorMessage
+        <button type="button" class="btn-close" @onclick="() => errorMessage = null"></button>
+    </div>
+}
+
+@if (isLoading)
+{
+    <div class="text-center p-5">
+        <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+}
+else if (invoice != null)
+{
+    <EditForm Model="invoice" OnValidSubmit="SaveInvoice">
+        <DataAnnotationsValidator />
+        
+        <div class="form-container">
+            <div class="table-responsive">
+                <table class="table table-borderless">
+                    <tbody>
+                        <tr>
+                            <td style="width: 15%; vertical-align: middle;">
+                                <label class="form-label mb-0">Donor *</label>
+                            </td>
+                            <td style="width: 35%;">
+                                <InputSelect class="form-select" @bind-Value="invoice.DonorId">
+                                    <option value="0">-- Select Donor --</option>
+                                    @foreach (var customer in customers)
+                                    {
+                                        <option value="@customer.Id">@customer.Name</option>
+                                    }
+                                </InputSelect>
+                                <ValidationMessage For="@(() => invoice.DonorId)" class="text-danger" />
+                            </td>
+                            <td style="width: 15%; vertical-align: middle;">
+                                <label class="form-label mb-0">Donation Date</label>
+                            </td>
+                            <td style="width: 35%;">
+                                <InputDate class="form-control" @bind-Value="invoice.DonationDate" />
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style="vertical-align: middle;">
+                                <label class="form-label mb-0">Purpose</label>
+                            </td>
+                            <td>
+                                <InputText class="form-control" @bind-Value="invoice.Purpose" placeholder="Donation purpose..." />
+                            </td>
+                            <td style="vertical-align: middle;">
+                                <label class="form-label mb-0">Reference No</label>
+                            </td>
+                            <td>
+                                <InputText class="form-control" @bind-Value="invoice.ReferenceNo" placeholder="Reference number..." />
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style="vertical-align: middle;">
+                                <label class="form-label mb-0">Tax Receipt</label>
+                            </td>
+                            <td>
+                                <div class="form-check">
+                                    <InputCheckbox class="form-check-input" @bind-Value="invoice.IsTaxReceiptIssued" id="taxReceipt" />
+                                    <label class="form-check-label" for="taxReceipt">
+                                        Tax Receipt Issued
+                                    </label>
+                                </div>
+                            </td>
+                            <td style="vertical-align: middle;">
+                                <label class="form-label mb-0">Status</label>
+                            </td>
+                            <td>
+                                <div class="form-check">
+                                    <InputCheckbox class="form-check-input" @bind-Value="invoice.Posted" id="posted" />
+                                    <label class="form-check-label" for="posted">
+                                        Posted
+                                    </label>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <div class="table-container">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="mb-0">Invoice Lines</h5>
+                <button type="button" class="btn btn-success btn-sm" @onclick="AddLine">
+                    <i class="fa fa-plus me-1"></i>Add Line
+                </button>
+            </div>
+            
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Item</th>
+                            <th>Quantity</th>
+                            <th>Amount</th>
+                            <th>Measurement</th>
+                            <th>Notes</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @for (int i = 0; i < (invoice.DonationInvoiceLines?.Count ?? 0); i++)
+                        {
+                            var index = i;
+                            var line = invoice.DonationInvoiceLines![index];
+                            <tr>
+                                <td>
+                                    <InputSelect class="form-select" @bind-Value="line.ItemId">
+                                        <option value="0">-- Select Item --</option>
+                                        @foreach (var item in items)
+                                        {
+                                            <option value="@item.Id">@item.Description</option>
+                                        }
+                                    </InputSelect>
+                                </td>
+                                <td>
+                                    <InputNumber class="form-control" @bind-Value="line.Quantity" />
+                                </td>
+                                <td>
+                                    <InputNumber class="form-control" @bind-Value="line.Amount" />
+                                </td>
+                                <td>
+                                    <InputSelect class="form-select" @bind-Value="line.MeasurementId">
+                                        <option value="0">-- Select --</option>
+                                        @foreach (var measurement in measurements)
+                                        {
+                                            <option value="@measurement.Id">@measurement.Description</option>
+                                        }
+                                    </InputSelect>
+                                </td>
+                                <td>
+                                    <InputText class="form-control" @bind-Value="line.Notes" placeholder="Notes..." />
+                                </td>
+                                <td>
+                                    @if (invoice.DonationInvoiceLines.Count > 1)
+                                    {
+                                        <button type="button" class="btn btn-danger btn-sm" @onclick="() => RemoveLine(index)">
+                                            <i class="fa fa-trash"></i>
+                                        </button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="mt-3 text-end">
+                <strong>Total: @invoice.Amount.ToString("C2")</strong>
+            </div>
+        </div>
+        
+        <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary" disabled="@isSaving">
+                @if (isSaving)
+                {
+                    <span class="spinner-border spinner-border-sm me-2"></span>
+                }
+                <i class="fa fa-save me-2"></i>Save
+            </button>
+            <button type="button" class="btn btn-secondary" @onclick="Cancel">
+                <i class="fa fa-times me-2"></i>Cancel
+            </button>
+        </div>
+    </EditForm>
+}
+
+<script>
+    function toggleDropdown(element) {
+        const dropdown = element.closest('.nav-dropdown');
+        const allDropdowns = document.querySelectorAll('.nav-dropdown');
+        
+        // Close all other dropdowns
+        allDropdowns.forEach(dd => {
+            if (dd !== dropdown) {
+                dd.classList.remove('open');
+            }
+        });
+        
+        // Toggle current dropdown
+        dropdown.classList.toggle('open');
+    }
+</script>
+
+@code {
+    private DonationInvoice? invoice;
+    private List<Customer> customers = new();
+    private List<Item> items = new();
+    private List<Measurement> measurements = new();
+    private bool isLoading = true;
+    private bool isSaving = false;
+    private string? errorMessage;
+
+    public class Measurement
+    {
+        public int Id { get; set; }
+        public string? Code { get; set; }
+        public string? Description { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        isLoading = true;
+        try
+        {
+            var apiUrl = Configuration["ApiUrl"];
+            
+            // Load customers
+            var customersResponse = await Http.GetAsync($"{apiUrl}sales/customers");
+            if (customersResponse.IsSuccessStatusCode)
+            {
+                var customersJson = await customersResponse.Content.ReadAsStringAsync();
+                customers = JsonSerializer.Deserialize<List<Customer>>(customersJson, 
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new();
+            }
+            
+            // Load items
+            var itemsResponse = await Http.GetAsync($"{apiUrl}inventory/items");
+            if (itemsResponse.IsSuccessStatusCode)
+            {
+                var itemsJson = await itemsResponse.Content.ReadAsStringAsync();
+                items = JsonSerializer.Deserialize<List<Item>>(itemsJson, 
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new();
+            }
+            
+            // Load measurements
+            var measurementsResponse = await Http.GetAsync($"{apiUrl}common/measurements");
+            if (measurementsResponse.IsSuccessStatusCode)
+            {
+                var measurementsJson = await measurementsResponse.Content.ReadAsStringAsync();
+                measurements = JsonSerializer.Deserialize<List<Measurement>>(measurementsJson, 
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new();
+            }
+            
+            // Initialize invoice
+            invoice = new DonationInvoice
+            {
+                No = new Random().Next(1, 99999).ToString(),
+                DonationDate = DateTime.Now,
+                DonationInvoiceLines = new List<DonationInvoiceLine>
+                {
+                    new DonationInvoiceLine
+                    {
+                        Amount = 0,
+                        Quantity = 1,
+                        ItemId = items.FirstOrDefault()?.Id ?? 0,
+                        MeasurementId = measurements.FirstOrDefault()?.Id ?? 0
+                    }
+                }
+            };
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading data: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void AddLine()
+    {
+        invoice?.DonationInvoiceLines?.Add(new DonationInvoiceLine
+        {
+            Amount = 0,
+            Quantity = 1,
+            ItemId = items.FirstOrDefault()?.Id ?? 0,
+            MeasurementId = measurements.FirstOrDefault()?.Id ?? 0
+        });
+    }
+
+    private void RemoveLine(int index)
+    {
+        if (invoice?.DonationInvoiceLines != null && invoice.DonationInvoiceLines.Count > 1)
+        {
+            invoice.DonationInvoiceLines.RemoveAt(index);
+        }
+    }
+
+    private async Task SaveInvoice()
+    {
+        if (invoice == null) return;
+        
+        isSaving = true;
+        errorMessage = null;
+        
+        try
+        {
+            var apiUrl = Configuration["ApiUrl"];
+            var json = JsonSerializer.Serialize(invoice);
+            var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
+            
+            var response = await Http.PostAsync($"{apiUrl}Donations/CreateDonationInvoice", content);
+            
+            if (response.IsSuccessStatusCode)
+            {
+                NavigationManager.NavigateTo("/donations/donationinvoices");
+            }
+            else
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                errorMessage = $"Failed to save: {response.StatusCode} - {error}";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error saving invoice: {ex.Message}";
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private void Cancel()
+    {
+        NavigationManager.NavigateTo("/donations/donationinvoices");
+    }
+}
+    </div><!-- Close main-content -->
+</div><!-- Close app-container -->

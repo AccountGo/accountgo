@@ -16,6 +16,12 @@ builder.Configuration["ApiUrl"] = apiurl;
 Console.WriteLine($"[ASPNETCORE SERVER] API URL {builder.Configuration["ApiUrl"]}");
 
 builder.Services.AddHttpClient();
+
+// Configure HttpClient for Blazor components
+builder.Services.AddScoped(sp => new HttpClient
+{
+    BaseAddress = new Uri(apiurl)
+});
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(o => o.LoginPath = new PathString("/account/signin"));
 
@@ -43,11 +49,12 @@ app.UseAuthentication();
 app.UseAntiforgery();
 app.UseAuthorization();
 
+// Map Blazor components first so they take precedence
+app.MapRazorComponents<App>()
+    .AddInteractiveServerRenderMode();
+
 app.MapControllerRoute(
     name: "default",
     pattern: "{controller=Home}/{action=Index}/{id?}");
-
-app.MapRazorComponents<App>()
-    .AddInteractiveServerRenderMode();
 
 app.Run();
