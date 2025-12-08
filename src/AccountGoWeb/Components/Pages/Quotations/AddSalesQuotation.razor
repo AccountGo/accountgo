@@ -1,0 +1,255 @@
+@using Dto.Sales
+@using Microsoft.AspNetCore.Mvc.Rendering
+@using Microsoft.EntityFrameworkCore.Metadata.Internal
+@inject HttpClient Http
+@inject IConfiguration Configuration
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Add Sales Quotation</PageTitle>
+
+<div class="col-sm-8">
+    <EditForm Model="@model" OnValidSubmit="SaveQuotation">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+
+        <div class="card">
+            <div class="card-body">
+                <!-- Customer -->
+                <div class="row mb-2">
+                    <div class="col-sm-2">Customer</div>
+                    <div class="col-sm-10">
+                        <InputSelect class="form-control" @bind-Value="model.CustomerId">
+                            <option value="">Select Customer</option>
+                            @foreach (var c in Customers)
+                            {
+                                <option value="@c.Id">@c.Name</option>
+                            }
+                        </InputSelect>
+                        <ValidationMessage For="@(() => model.CustomerId)" />
+                    </div>
+                </div>
+
+                <div class="row mb-2">
+                    <div class="col-sm-2">Payment Term</div>
+                    <div class="col-sm-10">
+                        <select class="form-control" id="optCustomer" name="PaymentTermId" @bind="model.PaymentTermId">
+                            <option value=""></option>
+                            <option value="1">Payment due within 10 days</option>
+                            <option value="2">Due 15th Of the Following Month &#x9;</option>
+                            <option value="3">Cash Only</option>
+                        </select>
+                        <ValidationMessage For="@(() => model.PaymentTermId)" />
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quotation Lines -->
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Item</th>
+                        <th>Quantity</th>
+                        <th>Amount</th>
+                        <th>Discount</th>
+                        <th>Measurement</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (model?.SalesQuotationLines != null)
+                    {
+                        @for (int i = 0; i < model.SalesQuotationLines.Count; i++)
+                        {
+                            var line = model.SalesQuotationLines[i];
+                            <tr @key="line">
+                                <td>
+                                    <select class="form-control" id="optItem" name="SalesQuotationLines[@i].ItemId"
+                                        @bind="line.ItemId">
+                                        <option value=""></option>
+                                        <option selected="selected" value="1">HOA Dues</option>
+                                        <option value="2">Car Sticker</option>
+                                        <option value="3">Optical Mouse</option>
+                                    </select>
+                                </td>
+
+                                <td>
+                                    <InputNumber class="form-control" @bind-Value="line.Quantity" placeholder="1.00" />
+                                </td>
+                                <td>
+                                    <InputNumber class="form-control" @bind-Value="line.Amount" placeholder="0.00" />
+                                </td>
+                                <td>
+                                    <InputNumber class="form-control" @bind-Value="line.Discount" placeholder="0.00" />
+                                </td>
+                                <td>
+                                    <select class="form-control" id="optMeasurement_@i"
+                                        name="SalesQuotationLines[@i].MeasurementId" @bind="line.MeasurementId">
+                                        <option value=""></option>
+                                        <option selected="selected" value="1">Each</option>
+                                        <option value="4">Hour</option>
+                                        <option value="3">Monthly</option>
+                                        <option value="2">Pack</option>
+                                    </select>
+                                </td>
+                            </tr>
+                        }
+                    }
+                    else
+                    {
+                        <tr>
+                            <td colspan="5">Loading...</td>
+                        </tr>
+                    }
+                    <tr>
+                        <td colspan="5">
+                            <button type="button" class="btn btn-primary" @onclick="AddRow">Add Row</button>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="mt-2">
+            <button type="submit" class="btn btn-primary">Save</button>
+            <button type="button" class="btn btn-secondary" @onclick="Close">Close</button>
+        </div>
+    </EditForm>
+</div>
+
+@code {
+private SalesQuotation model = new SalesQuotation
+{
+        QuotationDate = DateTime.Now,
+        SalesQuotationLines = new List<SalesQuotationLine>
+    {
+        new SalesQuotationLine
+        {
+            ItemId = 1,
+            MeasurementId = 1,
+            Quantity = 1.00m,
+            Amount = 0.00m,
+            Discount = 0.00m
+        }
+    }
+};
+
+    private List<ItemDto> Items = new();
+    private List<PaymentTermDto> PaymentTerms = new();
+    private List<MeasurementDto> Measurements = new();
+    private List<CustomerDto> Customers = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var api = Configuration["ApiUrl"];
+        if (!string.IsNullOrEmpty(api) && !api.EndsWith("/"))
+            api += "/";
+
+        Customers = await Load<List<CustomerDto>>(api + "sales/customers");
+        PaymentTerms = await Load<List<PaymentTermDto>>(api + "common/paymentterms");
+        Items = await Load<List<ItemDto>>(api + "inventory/items");
+        Measurements = await Load<List<MeasurementDto>>(api + "common/measurements");
+    }
+
+
+    private async Task<T> Load<T>(string url)
+    {
+        var response = await Http.GetAsync(url);
+
+        if (!response.IsSuccessStatusCode)
+            return default!;
+
+        var json = await response.Content.ReadAsStringAsync();
+        return System.Text.Json.JsonSerializer.Deserialize<T>(json,
+        new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true })!;
+    }
+
+
+
+    private void AddRow()
+    {
+        if (model?.SalesQuotationLines != null)
+            model.SalesQuotationLines.Add(new SalesQuotationLine
+            {
+                ItemId = 1,
+                MeasurementId = 1,
+                Quantity = 1.00m,
+                Amount = 0.00m,
+                Discount = 0.00m
+            });
+    }
+
+
+    private void Close()
+    {
+        Navigation.NavigateTo("/quotations/salesquotations");
+    }
+
+private async Task SaveQuotation()
+{
+    try
+    {
+        // Sanitize model before sending
+        if (model.CustomerId == null || model.CustomerId == 0)
+        {
+            Console.WriteLine("Error: Customer must be selected.");
+            return; // stop saving if customer not selected
+        }
+
+        // Populate dependent fields
+        model.CustomerName = Customers.FirstOrDefault(c => c.Id == model.CustomerId)?.Name;
+        model.QuotationDate = DateTime.Now;
+        model.StatusId = 0; // Draft
+        model.SalesQuoteStatus = "Draft";
+
+        // Ensure all SalesQuotationLines have valid IDs
+        foreach (var line in model.SalesQuotationLines)
+        {
+            if (line.ItemId == 0) line.ItemId = 1; // default to first item
+            if (line.MeasurementId == 0) line.MeasurementId = 1; // default to first measurement
+            if (line.Quantity == 0) line.Quantity = 1.0m;
+            if (line.Amount == 0) line.Amount = 0.0m;
+            if (line.Discount == 0) line.Discount = 0.0m;
+        }
+
+        // Serialize and log JSON
+        var json = System.Text.Json.JsonSerializer.Serialize(model, 
+            new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+        Console.WriteLine("Sending JSON to API:");
+        Console.WriteLine(json);
+
+        // Send to API
+        var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
+        var apiBase = Configuration["ApiUrl"] ?? "https://gdbapi.azurewebsites.net/api/";
+        if (!apiBase.EndsWith("/")) apiBase += "/";
+        var endpoint = apiBase + "sales/SaveQuotation";
+
+        var response = await Http.PostAsync(endpoint, content);
+
+        Console.WriteLine($"API response status: {response.StatusCode}");
+        var respContent = await response.Content.ReadAsStringAsync();
+        Console.WriteLine($"API response content: {respContent}");
+
+        if (response.IsSuccessStatusCode)
+        {
+            Console.WriteLine("Quotation saved successfully!");
+            Navigation.NavigateTo("/quotations/salesquotations");
+        }
+        else
+        {
+            Console.WriteLine("Save failed.");
+        }
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine("Error saving quotation: " + ex.Message);
+    }
+}
+
+
+
+
+    public class ItemDto { public int Id { get; set; } public string Name { get; set; } = string.Empty; }
+    public class PaymentTermDto { public int Id { get; set; } public string Name { get; set; } = string.Empty; }
+    public class MeasurementDto { public int Id { get; set; } public string Name { get; set; } = string.Empty; }
+    public class CustomerDto { public int Id { get; set; } public string Name { get; set; } = string.Empty; }
+}
