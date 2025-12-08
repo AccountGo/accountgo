@@ -1,0 +1,162 @@
+﻿@inject IHttpClientFactory HttpClientFactory
+@inject IConfiguration Configuration
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JSRuntime
+@inject IJSRuntime JS
+
+@inject HttpClient Http
+
+
+<PageTitle>Sales Quotations</PageTitle>
+
+<style>
+.quotationsTable {
+    width: 100%;
+    border-collapse: collapse;
+    background: transparent;
+    color: white; /* text visible on dark page */
+}
+.quotationsTable th, .quotationsTable td {
+    padding: 8px;
+    text-align: left;
+    border: none; /* no borders */
+}
+.quotationRow:hover {
+    background-color: rgba(255,255,255,0.1); /* optional hover effect */
+}
+</style>
+
+
+<h3>Quotations</h3>
+<div>
+    <a href="/quotations/addsalesquotation" class="btn">
+        <i class="fa fa-plus"></i>
+        New Quotation
+    </a>
+
+    <a href="@viewQuotationLink"
+       class="btn @(isViewLinkActive ? "" : "inactiveLink")">
+        <i class="fa fa-edit"></i>
+        View
+    </a>
+
+    <a href="@newOrderLink"
+       class="btn @(isNewOrderLinkActive ? "" : "inactiveLink")">
+        <i class="fa fa-plus"></i>
+        New Order
+    </a>
+</div>
+
+@if (isLoading)
+{
+    <div class="loading-container">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+}
+else if (hasError)
+{
+    <div class="alert alert-danger">
+        <i class="fa fa-exclamation-circle"></i>
+        <strong>Error!</strong> Unable to load quotations. Please try again.
+    </div>
+}
+else
+{
+    <div>
+       <table class="quotationsTable">
+    <thead>
+        <tr>
+            <th>No</th>
+            <th>Customer</th>
+            <th>Date</th>
+            <th>Amount</th>
+            <th>Status</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var q in quotations)
+        {
+            <tr @onclick="() => OnSelectionChanged(q.id, q.statusId)" class="quotationRow">
+                <td>@q.no</td>
+                <td>@q.customerName</td>
+                <td>@q.quotationDate.ToShortDateString()</td>
+                <td>@q.amount</td>
+                <td>@q.salesQuoteStatus</td>
+            </tr>
+        }
+    </tbody>
+</table>
+    </div>
+}
+@code {
+    private List<QuotationDto> quotations = new(); 
+
+    private string viewQuotationLink = "#";
+    private string newOrderLink = "#";
+    private bool isViewLinkActive = false;
+    private bool isNewOrderLinkActive = false;
+    private bool isLoading = true;
+    private bool hasError = false;
+protected override async Task OnInitializedAsync()
+{
+    try
+    {
+        var apiBase = Configuration["ApiUrl"] ?? "https://gdbapi.azurewebsites.net/api/";
+        if (!apiBase.EndsWith("/")) apiBase += "/";
+
+        var endpoint = apiBase + "Sales/Quotations";
+
+        var response = await Http.GetAsync(endpoint);
+
+        if (response.IsSuccessStatusCode)
+        {
+            quotations = await response.Content.ReadFromJsonAsync<List<QuotationDto>>() ?? new List<QuotationDto>();
+            isLoading = false;
+        }
+        else
+        {
+            hasError = true;
+            isLoading = false;
+            Console.WriteLine($"Error fetching quotations: {response.StatusCode}");
+        }
+    }
+    catch (Exception ex)
+    {
+        hasError = true;
+        isLoading = false;
+        Console.WriteLine($"Exception fetching quotations: {ex.Message}");
+    }
+}
+
+
+    private void OnSelectionChanged(int id, int status)
+    {
+        viewQuotationLink = $"/quotations/quotation?id={id}";
+        isViewLinkActive = true;
+
+        if (status == 3)
+        {
+            isNewOrderLinkActive = false;
+            newOrderLink = "#";
+        }
+        else if (status == 1)
+        {
+            newOrderLink = $"/sales/salesorder?quotationId={id}";
+            isNewOrderLinkActive = true;
+        }
+    }
+
+    // DTO class for deserialization
+    public class QuotationDto
+    {
+        public int id { get; set; }
+        public string no { get; set; } = "";
+        public int statusId { get; set; }
+        public string customerName { get; set; } = "";
+        public DateTime quotationDate { get; set; }
+        public decimal amount { get; set; }
+        public string salesQuoteStatus { get; set; } = "";
+    }
+}

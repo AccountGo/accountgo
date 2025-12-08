@@ -1,0 +1,461 @@
+@using System.Text.Json
+@using System.Text.Json.Serialization
+
+<style>
+    label,
+    h5 {
+        color: #fff !important;
+    }
+</style>
+
+<div class="container-fluid">
+    <div class="row mb-3">
+        <div class="col">
+        </div>
+        <div class="col text-end">
+            @if (!isNew)
+            {
+                <button class="btn btn-outline-warning" @onclick="() => editMode = !editMode">
+                    <i class="fa fa-edit"></i> @(editMode ? "Cancel" : "Edit")
+                </button>
+            }
+        </div>
+    </div>
+
+    @if (loading)
+    {
+        <p><em>Loading...</em></p>
+    }
+    else if (errorMessage != null)
+    {
+        <div class="alert alert-danger" role="alert">
+            <strong>Error:</strong> @errorMessage
+        </div>
+    }
+    else if (order == null)
+    {
+        <p>Sales order not found.</p>
+    }
+    else
+    {
+        <div class="row">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label"><strong>Customer</strong></label>
+                                <select class="form-control" @bind="customerId">
+                                    <option value="0">-- Select Customer --</option>
+                                    @foreach (var customer in customers)
+                                    {
+                                        <option value="@customer.id">@customer.name</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label"><strong>Payment Term</strong></label>
+                                <select class="form-control" @bind="paymentTermId">
+                                    <option value="0">-- Select Payment Term --</option>
+                                    @foreach (var term in paymentTerms)
+                                    {
+                                        <option value="@term.id">@term.description</option>
+                                    }
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label"><strong>Amount</strong></label>
+                                <input type="number" class="form-control" @bind="totalAmount" step="0.01" readonly />
+                            </div>
+                        </div>
+
+                        <h5 class="mt-4 mb-3">Line Items</h5>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-bordered">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Item</th>
+                                        <th>Quantity</th>
+                                        <th>Amount</th>
+                                        <th>Discount (%)</th>
+                                        <th>Measurement</th>
+                                        <th>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @if (lineItems != null && lineItems.Count > 0)
+                                    {
+                                        @for (int i = 0; i < lineItems.Count; i++)
+                                        {
+                                            var line = lineItems[i];
+                                            <tr>
+                                                <td>
+                                                    <select class="form-control form-control-sm" @bind="line.ItemId">
+                                                        <option value="0">-- Select Item --</option>
+                                                        @foreach (var item in items)
+                                                        {
+                                                            <option value="@item.id">@item.description</option>
+                                                        }
+                                                    </select>
+                                                </td>
+                                                <td>
+                                                    <input type="number" class="form-control form-control-sm" @bind="line.Quantity"
+                                                        step="0.01" />
+                                                </td>
+                                                <td>
+                                                    <input type="number" class="form-control form-control-sm" @bind="line.Amount"
+                                                        step="0.01" />
+                                                </td>
+                                                <td>
+                                                    <input type="number" class="form-control form-control-sm" @bind="line.Discount"
+                                                        step="0.01" />
+                                                </td>
+                                                <td>
+                                                    <select class="form-control form-control-sm" @bind="line.MeasurementId">
+                                                        <option value="0">-- Select Measurement --</option>
+                                                        @foreach (var measurement in measurements)
+                                                        {
+                                                            <option value="@measurement.id">@measurement.description</option>
+                                                        }
+                                                    </select>
+                                                </td>
+                                                <td>
+                                                    @{
+                                                        int itemIndex = i;
+                                                    }
+                                                    <button class="btn btn-sm btn-danger"
+                                                        @onclick="() => RemoveLineItem(itemIndex)">Remove</button>
+                                                </td>
+                                            </tr>
+                                        }
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+
+                        @if (editMode)
+                        {
+                            <button class="btn btn-primary mt-3" @onclick="AddLineItem">Add Line Item</button>
+                        }
+                    </div>
+                </div>
+
+                <div class="mt-4">
+                    @if (editMode)
+                    {
+                        <button class="btn btn-success" @onclick="SaveSalesOrder">Save Order</button>
+                        <a href="/Sales/SalesOrders" class="btn btn-secondary ms-2">Cancel</a>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private class LineItem
+    {
+        public int ItemId { get; set; } = 1;
+        public string ItemDescription { get; set; } = "";
+        public int MeasurementId { get; set; } = 1;
+        public decimal Quantity { get; set; } = 1;
+        public decimal Amount { get; set; } = 0;
+        public decimal Discount { get; set; } = 0;
+    }
+
+    private class Customer
+    {
+        public int id { get; set; }
+        public string name { get; set; } = "";
+    }
+
+    private class Item
+    {
+        public int id { get; set; }
+        public string description { get; set; } = "";
+    }
+
+    private class PaymentTerm
+    {
+        public int id { get; set; }
+        public string description { get; set; } = "";
+    }
+
+    private class Measurement
+    {
+        public int id { get; set; }
+        public string description { get; set; } = "";
+    }
+
+    [Parameter]
+    public string Id { get; set; } = null!;
+
+    [Inject]
+    private IHttpClientFactory ClientFactory { get; set; } = null!;
+
+    [Inject]
+    private NavigationManager Navigation { get; set; } = null!;
+
+    private Dictionary<string, dynamic> order = new();
+    private bool loading = true;
+    private bool editMode = false;
+    private bool isNew = false;
+    private string? errorMessage = null;
+
+    private string orderNo = "";
+    private int customerId = 1;
+    private string customerName = "";
+    private DateTime orderDate = DateTime.Now;
+    private string referenceNo = "";
+    private int paymentTermId = 1;
+    private decimal totalAmount = 0;
+    private List<LineItem> lineItems = new();
+
+    private List<Customer> customers = new();
+    private List<Item> items = new();
+    private List<PaymentTerm> paymentTerms = new();
+    private List<Measurement> measurements = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCustomers();
+        await LoadItems();
+        await LoadPaymentTerms();
+        await LoadMeasurements();
+
+        isNew = Id == "new" || string.IsNullOrEmpty(Id);
+
+        if (isNew)
+        {
+            order = new Dictionary<string, dynamic>();
+            orderNo = new Random().Next(1, 99999).ToString();
+            orderDate = DateTime.Now;
+            lineItems = new List<LineItem> { new LineItem() };
+            editMode = true;
+            loading = false;
+        }
+        else
+        {
+            Navigation.NavigateTo("/Sales/AddSalesOrder");
+        }
+    }
+
+    private async Task LoadCustomers()
+    {
+        try
+        {
+            string apiurl = System.Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
+            var client = ClientFactory.CreateClient();
+            var response = await client.GetAsync($"{apiurl}sales/customers");
+
+            if (response.IsSuccessStatusCode)
+            {
+                var responseString = await response.Content.ReadAsStringAsync();
+                customers = JsonSerializer.Deserialize<List<Customer>>(responseString) ?? new List<Customer>();
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading customers: {ex.Message}";
+        }
+    }
+
+    private async Task LoadItems()
+    {
+        try
+        {
+            string apiurl = System.Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
+            var client = ClientFactory.CreateClient();
+            var response = await client.GetAsync($"{apiurl}inventory/items");
+
+            if (response.IsSuccessStatusCode)
+            {
+                var responseString = await response.Content.ReadAsStringAsync();
+                items = JsonSerializer.Deserialize<List<Item>>(responseString) ?? new List<Item>();
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading items: {ex.Message}";
+        }
+    }
+
+    private async Task LoadPaymentTerms()
+    {
+        try
+        {
+            string apiurl = System.Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
+            var client = ClientFactory.CreateClient();
+            var response = await client.GetAsync($"{apiurl}common/paymentterms");
+
+            if (response.IsSuccessStatusCode)
+            {
+                var responseString = await response.Content.ReadAsStringAsync();
+                paymentTerms = JsonSerializer.Deserialize<List<PaymentTerm>>(responseString) ?? new List<PaymentTerm>();
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading payment terms: {ex.Message}";
+        }
+    }
+
+    private async Task LoadMeasurements()
+    {
+        try
+        {
+            string apiurl = System.Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
+            var client = ClientFactory.CreateClient();
+            var response = await client.GetAsync($"{apiurl}common/measurements");
+
+            if (response.IsSuccessStatusCode)
+            {
+                var responseString = await response.Content.ReadAsStringAsync();
+                measurements = JsonSerializer.Deserialize<List<Measurement>>(responseString) ?? new List<Measurement>();
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading measurements: {ex.Message}";
+        }
+    }
+
+    private void MapJsonToProperties(System.Text.Json.JsonElement data)
+    {
+        orderNo = GetJsonProperty(data, "no");
+        customerName = GetJsonProperty(data, "customerName");
+        referenceNo = GetJsonProperty(data, "referenceNo");
+
+        if (data.TryGetProperty("orderDate", out var dateElem))
+        {
+            if (DateTime.TryParse(dateElem.GetString(), out var date))
+                orderDate = date;
+        }
+
+        lineItems = new();
+        if (data.TryGetProperty("salesOrderLines", out var linesElem) && linesElem.ValueKind ==
+        System.Text.Json.JsonValueKind.Array)
+        {
+            foreach (var lineElem in linesElem.EnumerateArray())
+            {
+                var line = new LineItem
+                {
+                    ItemDescription = GetJsonProperty(lineElem, "itemDescription"),
+                    Quantity = GetJsonPropertyDecimal(lineElem, "quantity"),
+                    Amount = GetJsonPropertyDecimal(lineElem, "amount"),
+                    Discount = GetJsonPropertyDecimal(lineElem, "discount")
+                };
+                lineItems.Add(line);
+            }
+        }
+
+        CalculateTotalAmount();
+    }
+
+    private string GetJsonProperty(System.Text.Json.JsonElement elem, string propName)
+    {
+        if (elem.TryGetProperty(propName, out var prop))
+        {
+            return prop.GetString() ?? "";
+        }
+        return "";
+    }
+
+    private decimal GetJsonPropertyDecimal(System.Text.Json.JsonElement elem, string propName)
+    {
+        if (elem.TryGetProperty(propName, out var prop))
+        {
+            if (prop.TryGetDecimal(out var val))
+                return val;
+        }
+        return 0;
+    }
+
+    private void AddLineItem()
+    {
+        lineItems.Add(new LineItem());
+        CalculateTotalAmount();
+        StateHasChanged();
+    }
+
+    private void RemoveLineItem(int index)
+    {
+        if (index >= 0 && index < lineItems.Count)
+        {
+            lineItems.RemoveAt(index);
+        }
+        CalculateTotalAmount();
+        StateHasChanged();
+    }
+
+    private void CalculateTotalAmount()
+    {
+        totalAmount = lineItems.Sum(line =>
+        {
+            var qty = line.Quantity;
+            var amt = line.Amount;
+            var disc = line.Discount;
+            var total = qty * amt;
+            var discount = (disc / 100) * total;
+            return total - discount;
+        });
+    }
+
+    private async Task SaveSalesOrder()
+    {
+        try
+        {
+            CalculateTotalAmount();
+            string apiurl = System.Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
+
+            var payload = new
+            {
+                CustomerId = customerId,
+                OrderDate = orderDate,
+                PaymentTermId = paymentTermId,
+                ReferenceNo = referenceNo,
+                SalesOrderLines = lineItems.Select(line => new
+                {
+                    ItemId = line.ItemId,
+                    MeasurementId = line.MeasurementId,
+                    Quantity = line.Quantity,
+                    Amount = line.Amount,
+                    Discount = line.Discount
+                }).ToList()
+            };
+
+            var client = ClientFactory.CreateClient();
+            var json = JsonSerializer.Serialize(payload);
+            var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
+
+            var response = await client.PostAsync($"{apiurl}sales/addsalesorder", content);
+
+            if (response.IsSuccessStatusCode)
+            {
+                editMode = false;
+                errorMessage = null;
+                await Task.Delay(100);
+                Navigation.NavigateTo("/Sales/SalesOrders", forceLoad: true);
+            }
+            else
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                errorMessage = $"Failed to save sales order. Status: {response.StatusCode}. Response: {errorContent}";
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error saving sales order: {ex.Message}";
+            StateHasChanged();
+        }
+    }
+
+    private void CancelSalesOrder()
+    {
+        Navigation.NavigateTo("/Sales/SalesOrders");
+    }
+}

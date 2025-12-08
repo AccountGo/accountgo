@@ -1,9 +1,182 @@
 ﻿@page "/receivables/sales-receipts"
+@using System.Text.Json
+@using System.Text.Json.Serialization
 
 <PageTitle>Sales Receipts</PageTitle>
 
-<h3>Sales Receipts</h3>
+<div class="container-fluid">
+    <div class="row mb-3">
+        <div class="col">
+            <h3>Sales Receipts</h3>
+        </div>
+        <div class="col text-end">
+            <a href="/receivables/sales-receipt/new" class="btn btn-primary">
+                <i class="fa fa-plus"></i> New Sales Receipt
+            </a>
+        </div>
+    </div>
+
+    @if (loading)
+    {
+        <p><em>Loading...</em></p>
+    }
+    else if (errorMessage != null)
+    {
+        <div class="alert alert-danger" role="alert">
+            <strong>Error:</strong> @errorMessage
+        </div>
+    }
+    else if (salesReceipts == null || !salesReceipts.Any())
+    {
+        <p>No sales receipts found.</p>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-striped table-hover">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Receipt #</th>
+                        <th>Customer</th>
+                        <th>Receipt Date</th>
+                        <th>Amount</th>
+                        <th>Remaining Amount</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var receipt in salesReceipts)
+                    {
+                        <tr>
+                            <td>@GetValue(receipt, "receiptNo")</td>
+                            <td>@GetValue(receipt, "customerName")</td>
+                            <td>@GetValue(receipt, "receiptDate")</td>
+                            <td>$@GetValue(receipt, "amount")</td>
+                            <td>$@GetValue(receipt, "remainingAmountToAllocate")</td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-primary" @onclick="() => SelectReceipt(receipt)">View</button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
 
 @code {
+    [Inject]
+    private IHttpClientFactory ClientFactory { get; set; } = null!;
 
+    [Inject]
+    private NavigationManager Navigation { get; set; } = null!;
+
+    private List<dynamic> salesReceipts = new();
+    private bool loading = true;
+    private string? errorMessage = null;
+    private bool shouldRefresh = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSalesReceipts();
+        Navigation.LocationChanged += OnLocationChanged;
+    }
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        // Refresh data when navigating back to this page
+        if (e.Location.Contains("/receivables/sales-receipts"))
+        {
+            shouldRefresh = true;
+            InvokeAsync(StateHasChanged);
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (shouldRefresh && !firstRender)
+        {
+            shouldRefresh = false;
+            await LoadSalesReceipts();
+        }
+    }
+
+    public void Dispose()
+    {
+        Navigation.LocationChanged -= OnLocationChanged;
+    }
+
+    private async Task LoadSalesReceipts()
+    {
+        try
+        {
+            loading = true;
+            string apiurl = System.Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
+
+            var client = ClientFactory.CreateClient();
+            var response = await client.GetAsync($"{apiurl}sales/salesreceipts");
+
+            if (response.IsSuccessStatusCode)
+            {
+                var responseString = await response.Content.ReadAsStringAsync();
+                var options = new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true,
+                    DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+                };
+
+                var data = JsonSerializer.Deserialize<List<System.Text.Json.JsonElement>>(responseString, options);
+                salesReceipts = data?.Cast<dynamic>().ToList() ?? new();
+            }
+            else
+            {
+                errorMessage = $"Failed to load sales receipts. Status: {response.StatusCode}";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading sales receipts: {ex.Message}";
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private void SelectReceipt(dynamic receipt)
+    {
+        // For now, just show an alert. Could be extended to navigate to a detail view
+        var receiptNo = GetValue(receipt, "receiptNo");
+        // Navigation.NavigateTo($"/receivables/sales-receipt/{receiptNo}");
+    }
+
+    private string GetValue(dynamic obj, string propertyName)
+    {
+        try
+        {
+            if (obj is System.Text.Json.JsonElement je)
+            {
+                if (je.TryGetProperty(propertyName, out var prop))
+                {
+                    if ((propertyName == "amount" || propertyName == "remainingAmountToAllocate") && prop.ValueKind == System.Text.Json.JsonValueKind.Number)
+                    {
+                        return prop.GetDecimal().ToString("F2");
+                    }
+                    if (propertyName == "receiptDate" && prop.ValueKind == System.Text.Json.JsonValueKind.String)
+                    {
+                        if (DateTime.TryParse(prop.GetString(), out var date))
+                        {
+                            return date.ToString("MM/dd/yyyy");
+                        }
+                    }
+                    return prop.GetString() ?? prop.ToString();
+                }
+            }
+            return "N/A";
+        }
+        catch
+        {
+            return "N/A";
+        }
+    }
 }

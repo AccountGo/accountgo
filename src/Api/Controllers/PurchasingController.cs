@@ -258,7 +258,8 @@ namespace Api.Controllers
                 InvoiceDate = purchaseInvoice.Date,
                 AmountPaid = purchaseInvoice.AmountPaid(),
                 IsPaid = purchaseInvoice.IsPaid(),
-                Posted = purchaseInvoice.GeneralLedgerHeader != null
+                Posted = purchaseInvoice.GeneralLedgerHeader != null,
+                ReferenceNo = purchaseInvoice.ReferenceNo
             };
 
             foreach (var item in purchaseInvoice.PurchaseInvoiceLines)

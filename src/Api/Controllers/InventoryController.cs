@@ -23,49 +23,64 @@ namespace Api.Controllers
 
         [HttpPost]
         [Route("SaveItem")]
-        public IActionResult SaveItem([FromBody]Item itemDto)
+        public IActionResult SaveItem([FromBody] Item itemDto)
         {
-            bool isNew = itemDto.Id == 0;
-            Core.Domain.Items.Item? item = null;
-
-            if (isNew)
+            try
             {
-                item = new Core.Domain.Items.Item();
-            }
-            else
-            {
-                item = _inventoryService.GetItemById(itemDto.Id);
-            }
+                _logger.LogInformation($"SaveItem called: Code={itemDto.Code}, Description={itemDto.Description}");
 
-            _logger.LogInformation("Item is New: " + isNew);
+                bool isNew = itemDto.Id == 0;
+                Core.Domain.Items.Item? item = null;
 
-            item.No = itemDto.No;
-            item.Code = itemDto.Code;
-            item.Description = itemDto.Description;
-            item.SellDescription = itemDto.SellDescription;
-            item.PurchaseDescription = itemDto.PurchaseDescription;
-            item.Cost = itemDto.Cost;
-            item.Price = itemDto.Price;
-            item.SmallestMeasurementId = itemDto.SmallestMeasurementId;
-            item.SellMeasurementId = itemDto.SellMeasurementId;
-            item.PurchaseMeasurementId = itemDto.PurchaseMeasurementId;
-            item.ItemCategoryId = itemDto.ItemCategoryId;
-            item.ItemTaxGroupId = itemDto.ItemTaxGroupId;
-            item.SalesAccountId = itemDto.SalesAccountId;
-            item.InventoryAccountId = itemDto.InventoryAccountId;
-            item.InventoryAdjustmentAccountId = itemDto.InventoryAdjustmentAccountId;
-            item.CostOfGoodsSoldAccountId = itemDto.CostOfGoodsSoldAccountId;
-            
-            if (isNew)
-            {
-                _inventoryService.AddItem(item);
-            }
-            else
-            {
-                _inventoryService.UpdateItem(item);
-            }
+                if (isNew)
+                {
+                    item = new Core.Domain.Items.Item();
+                }
+                else
+                {
+                    item = _inventoryService.GetItemById(itemDto.Id);
+                    if (item == null)
+                    {
+                        _logger.LogWarning($"Item not found: {itemDto.Id}");
+                        return NotFound($"Item {itemDto.Id} not found");
+                    }
+                }
 
-            return Ok();
+                item.No = itemDto.No;
+                item.Code = itemDto.Code;
+                item.Description = itemDto.Description;
+                item.SellDescription = itemDto.SellDescription;
+                item.PurchaseDescription = itemDto.PurchaseDescription;
+                item.Cost = itemDto.Cost;
+                item.Price = itemDto.Price;
+                item.SmallestMeasurementId = itemDto.SmallestMeasurementId;
+                item.SellMeasurementId = itemDto.SellMeasurementId;
+                item.PurchaseMeasurementId = itemDto.PurchaseMeasurementId;
+                item.ItemCategoryId = itemDto.ItemCategoryId;
+                item.ItemTaxGroupId = itemDto.ItemTaxGroupId;
+                item.SalesAccountId = itemDto.SalesAccountId;
+                item.InventoryAccountId = itemDto.InventoryAccountId;
+                item.InventoryAdjustmentAccountId = itemDto.InventoryAdjustmentAccountId;
+                item.CostOfGoodsSoldAccountId = itemDto.CostOfGoodsSoldAccountId;
+
+                if (isNew)
+                {
+                    _inventoryService.AddItem(item);
+                    _logger.LogInformation($"Item created successfully: {item.Id}");
+                }
+                else
+                {
+                    _inventoryService.UpdateItem(item);
+                    _logger.LogInformation($"Item updated successfully: {item.Id}");
+                }
+
+                return Ok(new { id = item.Id, message = "Item saved successfully" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"SaveItem Error: {ex.Message}\n{ex.StackTrace}");
+                return BadRequest(new { error = ex.Message });
+            }
         }
 
         [HttpGet]

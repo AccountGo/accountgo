@@ -80,7 +80,7 @@ namespace Core.Domain
         Open = 1,
         PartiallyReceived = 2,
         FullReceived = 3,
-        Invoiced = 4 ,
+        Invoiced = 4,
         Closed = 5
     }
 
@@ -106,7 +106,8 @@ namespace Core.Domain
         Item,
         Customer,
         Vendor,
-        Contact
+        Contact,
+        DonationInvoice
     }
 
     public enum AddressTypes
