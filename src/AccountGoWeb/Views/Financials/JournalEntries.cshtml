@@ -1,6 +1,7 @@
 ﻿@model string
+@using AccountGoWeb.Components.Pages.Financial
 
-<div>
+@* <div>
     <a href="~/financials/addjournalentry" class="btn">
         <i class="fa fa-plus"></i>
         New
@@ -51,4 +52,7 @@
         var eGridDiv = document.querySelector('#journalentries');
         new agGrid.Grid(eGridDiv, gridOptions);
     });
-</script>
+</script> *@
+
+
+<component type="typeof(JournalEntries)" render-mode="ServerPrerendered" />

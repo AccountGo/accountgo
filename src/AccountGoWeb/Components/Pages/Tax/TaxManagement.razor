@@ -1,0 +1,428 @@
+@rendermode InteractiveServer
+@inject HttpClient Http
+@inject NavigationManager Navigation
+@inject IConfiguration Configuration
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Tax Management</PageTitle>
+
+<div class="nav-tabs-custom">
+    <ul class="nav nav-tabs" role="tablist">
+        <li class="nav-item">
+            <a class="nav-link @(activeTab == "taxes" ? "active" : "")" @onclick='() => SetActiveTab("taxes")'
+                style="cursor: pointer;">
+                Taxes
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link @(activeTab == "tax-groups" ? "active" : "")" @onclick='() => SetActiveTab("tax-groups")'
+                style="cursor: pointer;">
+                Tax Groups
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link @(activeTab == "item-tax-groups" ? "active" : "")"
+                @onclick='() => SetActiveTab("item-tax-groups")' style="cursor: pointer;">
+                Item Tax Groups
+            </a>
+        </li>
+    </ul>
+
+    <div class="tab-content mt-3">
+        @if (activeTab == "taxes")
+        {
+            <div class="tab-pane active">
+                <div class="mb-2">
+                    <a href="/Tax/AddNewTax" class="btn btn-primary">
+                        <i class="fa fa-plus"></i> New Tax
+                    </a>
+                </div>
+                <div class="box-body table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Code</th>
+                                <th>Name</th>
+                                <th>Rate (%)</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (taxes != null && taxes.Any())
+                            {
+                                @foreach (var tax in taxes)
+                                {
+                                    <tr>
+                                        <td>@tax.TaxCode</td>
+                                        <td>@tax.TaxName</td>
+                                        <td>@tax.Rate</td>
+                                        <td>
+                                            <button class="btn btn-sm btn-info btn-flat" @onclick="() => EditTax(tax)">Edit</button>
+                                            <button class="btn btn-sm btn-danger btn-flat"
+                                                @onclick="() => ConfirmDeleteTax(tax.Id)">Delete</button>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                            else if (isLoading)
+                            {
+                                <tr>
+                                    <td colspan="4" class="text-center">Loading...</td>
+                                </tr>
+                            }
+                            else
+                            {
+                                <tr>
+                                    <td colspan="4" class="text-center">No taxes found.</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+        else if (activeTab == "tax-groups")
+        {
+            <div class="tab-pane active">
+                <div class="box-body table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Description</th>
+                                <th>Tax Applied To Shipping</th>
+                                <th>Active</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (taxGroups != null && taxGroups.Any())
+                            {
+                                @foreach (var group in taxGroups)
+                                {
+                                    <tr @onclick="() => SelectTaxGroup(group)" style="cursor: pointer;">
+                                        <td>@group.Description</td>
+                                        <td><input type="checkbox" checked="@group.TaxAppliedToShipping" disabled /></td>
+                                        <td><input type="checkbox" checked="@group.IsActive" disabled /></td>
+                                        <td>
+                                            <button class="btn btn-sm btn-danger btn-flat" @onclick:stopPropagation="true"
+                                                @onclick="() => ConfirmDeleteTaxGroup(group.Id)">Delete</button>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                            else if (isLoading)
+                            {
+                                <tr>
+                                    <td colspan="4" class="text-center">Loading...</td>
+                                </tr>
+                            }
+                            else
+                            {
+                                <tr>
+                                    <td colspan="4" class="text-center">No tax groups found.</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                @if (selectedTaxGroup != null)
+                {
+                    <div class="mt-3">
+                        <h4>Tax(es) included: @GetTaxGroupTaxCount(selectedTaxGroup)</h4>
+                        <div class="box-body table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Code</th>
+                                        <th>Name</th>
+                                        <th>Rate (%)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var groupTax in GetTaxGroupTaxes(selectedTaxGroup))
+                                    {
+                                        <tr>
+                                            <td>@groupTax.TaxCode</td>
+                                            <td>@groupTax.TaxName</td>
+                                            <td>@groupTax.Rate</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+        else if (activeTab == "item-tax-groups")
+        {
+            <div class="tab-pane active">
+                <div class="box-body table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Fully Exempt</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (itemTaxGroups != null && itemTaxGroups.Any())
+                            {
+                                @foreach (var itemGroup in itemTaxGroups)
+                                {
+                                    <tr @onclick="() => SelectItemTaxGroup(itemGroup)" style="cursor: pointer;">
+                                        <td>@itemGroup.Name</td>
+                                        <td><input type="checkbox" checked="@itemGroup.IsFullyExempt" disabled /></td>
+                                        <td>
+                                            <button class="btn btn-sm btn-danger btn-flat" @onclick:stopPropagation="true"
+                                                @onclick="() => ConfirmDeleteItemTaxGroup(itemGroup.Id)">Delete</button>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                            else if (isLoading)
+                            {
+                                <tr>
+                                    <td colspan="3" class="text-center">Loading...</td>
+                                </tr>
+                            }
+                            else
+                            {
+                                <tr>
+                                    <td colspan="3" class="text-center">No item tax groups found.</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                @if (selectedItemTaxGroup != null)
+                {
+                    <div class="mt-3">
+                        <h4>Tax(es) included: @GetItemTaxGroupTaxCount(selectedItemTaxGroup)</h4>
+                        <div class="box-body table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Code</th>
+                                        <th>Name</th>
+                                        <th>Rate (%)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var groupTax in GetItemTaxGroupTaxes(selectedItemTaxGroup))
+                                    {
+                                        <tr>
+                                            <td>@groupTax.TaxCode</td>
+                                            <td>@groupTax.TaxName</td>
+                                            <td>@groupTax.Rate</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+</div>
+
+@* Delete Confirmation Modals would use JavaScript interop or a confirmation component *@
+
+@code {
+    private string activeTab = "taxes";
+    private bool isLoading = true;
+
+    private List<Dto.TaxSystem.Tax>? taxes;
+    private List<Dto.TaxSystem.TaxGroup>? taxGroups;
+    private List<Dto.TaxSystem.ItemTaxGroup>? itemTaxGroups;
+
+    private Dto.TaxSystem.TaxGroup? selectedTaxGroup;
+    private Dto.TaxSystem.ItemTaxGroup? selectedItemTaxGroup;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTaxData();
+    }
+
+    private async Task LoadTaxData()
+    {
+        isLoading = true;
+        try
+        {
+            var baseUri = Configuration["ApiUrl"];
+            var response = await Http.GetAsync($"{baseUri}tax/taxes");
+
+            if (response.IsSuccessStatusCode)
+            {
+                var content = await response.Content.ReadAsStringAsync();
+                var taxSystemDto = System.Text.Json.JsonSerializer.Deserialize<Dto.TaxSystem.TaxSystemDto>(
+                content,
+                new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true }
+                );
+
+                taxes = taxSystemDto?.Taxes?.ToList();
+                taxGroups = taxSystemDto?.TaxGroups?.ToList();
+                itemTaxGroups = taxSystemDto?.ItemTaxGroups?.ToList();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading tax data: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void SetActiveTab(string tab)
+    {
+        activeTab = tab;
+        selectedTaxGroup = null;
+        selectedItemTaxGroup = null;
+    }
+
+    private void EditTax(Dto.TaxSystem.Tax tax)
+    {
+        Navigation.NavigateTo($"/Tax/EditTax?id={tax.Id}", forceLoad: true);
+    }
+
+    private async Task ConfirmDeleteTax(int taxId)
+    {
+        bool confirmed = await JSRuntime.InvokeAsync<bool>("confirmDialog.show", "Are you sure you want to delete this tax?");
+        if (confirmed)
+        {
+            try
+            {
+                var baseUri = Configuration["ApiUrl"];
+                var response = await Http.DeleteAsync($"{baseUri}tax/deletetax?id={taxId}");
+
+                if (response.IsSuccessStatusCode)
+                {
+                    await LoadTaxData(); // Reload the data
+                }
+                else
+                {
+                    Console.WriteLine($"Error deleting tax: {response.StatusCode}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error deleting tax: {ex.Message}");
+            }
+        }
+    }
+
+    private void SelectTaxGroup(Dto.TaxSystem.TaxGroup group)
+    {
+        selectedTaxGroup = group;
+    }
+
+    private async Task ConfirmDeleteTaxGroup(int groupId)
+    {
+        bool confirmed = await JSRuntime.InvokeAsync<bool>("confirmDialog.show", "Are you sure you want to delete this tax group?");
+        if (confirmed)
+        {
+            try
+            {
+                var baseUri = Configuration["ApiUrl"];
+                var response = await Http.DeleteAsync($"{baseUri}tax/deletetaxgroup?id={groupId}");
+
+                if (response.IsSuccessStatusCode)
+                {
+                    await LoadTaxData(); // Reload the data
+                    selectedTaxGroup = null;
+                }
+                else
+                {
+                    Console.WriteLine($"Error deleting tax group: {response.StatusCode}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error deleting tax group: {ex.Message}");
+            }
+        }
+    }
+
+    private void SelectItemTaxGroup(Dto.TaxSystem.ItemTaxGroup group)
+    {
+        selectedItemTaxGroup = group;
+    }
+
+    private async Task ConfirmDeleteItemTaxGroup(int groupId)
+    {
+        bool confirmed = await JSRuntime.InvokeAsync<bool>("confirmDialog.show", "Are you sure you want to delete this item tax group?");
+        if (confirmed)
+        {
+            try
+            {
+                var baseUri = Configuration["ApiUrl"];
+                var response = await Http.DeleteAsync($"{baseUri}tax/deleteitemtaxgroup?id={groupId}");
+
+                if (response.IsSuccessStatusCode)
+                {
+                    await LoadTaxData(); // Reload the data
+                    selectedItemTaxGroup = null;
+                }
+                else
+                {
+                    Console.WriteLine($"Error deleting item tax group: {response.StatusCode}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error deleting item tax group: {ex.Message}");
+            }
+        }
+    }
+
+    private int GetTaxGroupTaxCount(Dto.TaxSystem.TaxGroup group)
+    {
+        return group.Taxes?.Count() ?? 0;
+    }
+
+    private IEnumerable<Dto.TaxSystem.Tax> GetTaxGroupTaxes(Dto.TaxSystem.TaxGroup group)
+    {
+        if (group.Taxes == null || taxes == null) return Enumerable.Empty<Dto.TaxSystem.Tax>();
+
+        return group.Taxes
+        .Select(gt => taxes.FirstOrDefault(t => t.Id == gt.TaxId))
+        .Where(t => t != null)
+        .Cast<Dto.TaxSystem.Tax>();
+    }
+
+    private int GetItemTaxGroupTaxCount(Dto.TaxSystem.ItemTaxGroup group)
+    {
+        return group.Taxes?.Count() ?? 0;
+    }
+
+    private IEnumerable<Dto.TaxSystem.Tax> GetItemTaxGroupTaxes(Dto.TaxSystem.ItemTaxGroup group)
+    {
+        if (group.Taxes == null || taxes == null) return Enumerable.Empty<Dto.TaxSystem.Tax>();
+
+        return group.Taxes
+        .Select(gt => taxes.FirstOrDefault(t => t.Id == gt.TaxId))
+        .Where(t => t != null)
+        .Cast<Dto.TaxSystem.Tax>();
+    }
+}
+
+<style>
+    tr th {
+        color: yellow;
+    }
+
+    tr td {
+        color: #fff;
+    }
+
+    .nav-link.active {
+        background-color: #3c8dbc !important;
+        color: white !important;
+    }
+</style>

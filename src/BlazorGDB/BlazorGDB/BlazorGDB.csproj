@@ -5,9 +5,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UserSecretsId>aspnet-BlazorGDB-1148a8f8-fb21-46ba-ad7a-f4bc4cd1bf04</UserSecretsId>
   </PropertyGroup>
-  <ItemGroup>
+  <!-- <ItemGroup>
     <None Update="Data\app.db" CopyToOutputDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
-  </ItemGroup>
+  </ItemGroup> -->
   <ItemGroup>
     <PackageReference Include="Blazor.Bootstrap" Version="3.3.1" />
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="10.0.0" />
@@ -18,13 +18,13 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.0" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../BlazorGDB.Client/BlazorGDB.Client.csproj" />
     <ProjectReference Include="../../Dto/Dto.csproj" />
     <ProjectReference Include="../../Infrastructure/Infrastructure.csproj" />
     <ProjectReference Include="../../LibraryGDB/LibraryGDB.csproj" />
+    <ProjectReference Include="../../src.ServiceDefaults/src.ServiceDefaults.csproj" />
   </ItemGroup>
   <ItemGroup>
     <None Update="good-deed-books.db" CopyToOutputDirectory="PreserveNewest" ExcludeFromSingleFile="true" />

@@ -1,0 +1,20 @@
+.table {
+    --bs-table-hover-bg: rgba(255, 255, 255, 0.05);
+    --bs-table-active-bg: rgba(13, 110, 253, 0.2);
+    --bs-table-striped-bg: transparent;
+}
+
+.table tbody tr.table-active,
+.table tbody tr.table-active td {
+    background-color: rgba(13, 110, 253, 0.2) !important;
+    border-left: 3px solid #0d6efd;
+}
+
+.table tbody tr:hover {
+    background-color: rgba(255, 255, 255, 0.05) !important;
+}
+
+.table tbody tr.table-active:hover {
+    background-color: rgba(13, 110, 253, 0.25) !important;
+}
+

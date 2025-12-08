@@ -1,0 +1,74 @@
+@page "/financials/taxgroups/add"
+@rendermode InteractiveServer
+@inject NavigationManager Navigation
+
+<PageTitle>Add New Tax Group</PageTitle>
+
+<div class="container-fluid">
+    <h3>Add New Tax Group</h3>
+    
+    <div class="alert alert-info">
+        <strong>Note:</strong> Tax Groups are currently created automatically when creating or editing taxes. 
+        This standalone creation page is not yet supported by the API.
+    </div>
+    
+    <EditForm Model="@taxGroup" OnValidSubmit="@HandleSubmit">
+        <DataAnnotationsValidator />
+        
+        <div class="card mb-3">
+            <div class="card-body">
+                <div class="row mb-3">
+                    <label class="col-sm-3 col-form-label">Description</label>
+                    <div class="col-sm-9">
+                        <InputText @bind-Value="taxGroup.Description" class="form-control" placeholder="Tax Group Description" />
+                        <ValidationMessage For="@(() => taxGroup.Description)" />
+                    </div>
+                </div>
+                
+                <div class="row mb-3">
+                    <label class="col-sm-3 col-form-label">Tax Applied To Shipping</label>
+                    <div class="col-sm-9">
+                        <InputCheckbox @bind-Value="taxGroup.TaxAppliedToShipping" class="form-check-input" />
+                    </div>
+                </div>
+                
+                <div class="row mb-3">
+                    <label class="col-sm-3 col-form-label">Active</label>
+                    <div class="col-sm-9">
+                        <InputCheckbox @bind-Value="taxGroup.IsActive" class="form-check-input" />
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="mb-3">
+            @if (errorMessage != null)
+            {
+                <div class="alert alert-danger">@errorMessage</div>
+            }
+        </div>
+        
+        <div class="mb-3">
+            <button type="submit" class="btn btn-primary" disabled>
+                Save (Not Available)
+            </button>
+            <a href="/financials/taxes" class="btn btn-secondary ms-2">Back to Taxes</a>
+        </div>
+    </EditForm>
+</div>
+
+@code {
+    private Dto.TaxSystem.TaxGroup taxGroup = new()
+    {
+        IsActive = true
+    };
+    
+    private string? errorMessage = "This feature requires API support for standalone tax group creation.";
+
+    private Task HandleSubmit()
+    {
+        // This would require a dedicated API endpoint
+        errorMessage = "API endpoint for creating tax groups independently is not available. Please create tax groups through the Tax creation/edit process.";
+        return Task.CompletedTask;
+    }
+}

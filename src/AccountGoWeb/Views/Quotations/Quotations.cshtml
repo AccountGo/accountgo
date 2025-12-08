@@ -16,18 +16,18 @@
 </div>
 <div>
     <div id="quotations" class="ag-fresh" style="height: 400px;"></div>
- 
 
- 
+
+
 </div>
 <script>
     var columnDefs = [
-    {headerName: "No", field: "no", width: 50},
-    {headerName: "Customer Name", field: "customerName", width: 350},
-    {headerName: "Date", field: "quotationDate", width: 100},
-    {headerName: "Amount", field: "amount", width: 100},
-    {headerName: "Ref no", field: "referenceNo", width: 100},
-    {headerName: "Status" , field: "salesQuoteStatus", width : 100}
+        { headerName: "No", field: "no", width: 50 },
+        { headerName: "Customer Name", field: "customerName", width: 350 },
+        { headerName: "Date", field: "quotationDate", width: 100 },
+        { headerName: "Amount", field: "amount", width: 100 },
+        { headerName: "Ref no", field: "referenceNo", width: 100 },
+        { headerName: "Status", field: "salesQuoteStatus", width: 100 }
     ];
 
     var gridOptions = {
@@ -43,14 +43,13 @@
         var selectedRows = gridOptions.api.getSelectedRows();
         selectedRow = selectedRows[0];
 
-        document.getElementById('linkViewQuotation').setAttribute('href', 'Quotation?id=' + selectedRow.id);
+        document.getElementById('linkViewQuotation').setAttribute('href', '/quotations/Quotation?id=' + selectedRow.id);
         document.getElementById('linkViewQuotation').setAttribute('class', 'btn');
 
-        if(selectedRow.status == 3)
-        {
+        if (selectedRow.status == 3) {
             document.getElementById('linkNewOrder').setAttribute('class', 'btn inactiveLink');
         }
-        else if (selectedRow.status == 1){
+        else if (selectedRow.status == 1) {
             document.getElementById('linkNewOrder').setAttribute('href', '/sales/salesorder?quotationId=' + selectedRow.id);
             document.getElementById('linkNewOrder').setAttribute('class', 'btn');
         }
@@ -58,7 +57,7 @@
 
     // wait for the document to be loaded, otherwise
     // ag-Grid will not find the div in the document.
-    document.addEventListener("DOMContentLoaded", function() {
+    document.addEventListener("DOMContentLoaded", function () {
         var eGridDiv = document.querySelector('#quotations');
         new agGrid.Grid(eGridDiv, gridOptions);
     });

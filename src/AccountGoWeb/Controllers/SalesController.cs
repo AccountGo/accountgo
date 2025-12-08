@@ -111,11 +111,32 @@ namespace AccountGoWeb.Controllers
             }
             else
             {
-                salesOrderModel = GetAsync<SalesOrder>("Sales/SalesOrder?id=" + id).Result;
-                ViewBag.CustomerName = salesOrderModel.CustomerName;
-                ViewBag.OrderDate = salesOrderModel.OrderDate;
-                ViewBag.SalesOrderLines = salesOrderModel.SalesOrderLines;
-                ViewBag.TotalAmount = salesOrderModel.Amount;
+                try
+                {
+                    salesOrderModel = GetAsync<SalesOrder>("Sales/SalesOrder?id=" + id).Result;
+                    if (salesOrderModel == null)
+                    {
+                        ViewBag.ErrorMessage = "Sales order not found. Please check the order ID and try again.";
+                        _logger.LogWarning("Sales order with id {Id} returned null from API", id);
+                        return View(salesOrderModel);
+                    }
+                    ViewBag.CustomerName = salesOrderModel.CustomerName ?? "Unknown";
+                    ViewBag.OrderDate = salesOrderModel.OrderDate;
+                    ViewBag.SalesOrderLines = salesOrderModel.SalesOrderLines ?? new List<SalesOrderLine>();
+                    ViewBag.TotalAmount = salesOrderModel.Amount;
+                }
+                catch (HttpRequestException hre)
+                {
+                    _logger.LogError(hre, "HTTP error loading sales order with id {Id}", id);
+                    ViewBag.ErrorMessage = $"Failed to load sales order. Status: {hre.Message}";
+                    return View(salesOrderModel);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Unexpected error loading sales order with id {Id}", id);
+                    ViewBag.ErrorMessage = "An unexpected error occurred while loading the sales order. Please try again later.";
+                    return View(salesOrderModel);
+                }
             }
 
             @ViewBag.Customers = Models.SelectListItemHelper.Customers();
@@ -305,6 +326,12 @@ namespace AccountGoWeb.Controllers
         }
 
         [HttpGet]
+        public IActionResult SalesReceipt(int id)
+        {
+            return View();
+        }
+
+        [HttpGet]
         public IActionResult AddReceipt()
         {
             try
@@ -475,7 +502,7 @@ namespace AccountGoWeb.Controllers
 
             try
             {
-                ViewBag.PageContentHeader = "Receipt Allocation";
+                ViewBag.PageContentHeader = "Sales Receipt Allocation";
 
                 var model = new Models.Sales.Allocate();
 

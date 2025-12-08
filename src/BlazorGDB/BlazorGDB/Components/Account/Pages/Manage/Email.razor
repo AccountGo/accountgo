@@ -44,7 +44,7 @@
                 </div>
             }
             <div class="form-floating mb-3">
-                <InputText @bind-Value="Input.NewEmail" class="form-control" autocomplete="email" aria-required="true" placeholder="Please enter new email." />
+                <InputText @bind-Value="Input!.NewEmail" class="form-control" autocomplete="email" aria-required="true" placeholder="Please enter new email." />
                 <label for="new-email" class="form-label">New email</label>
                 <ValidationMessage For="() => Input.NewEmail" class="text-danger" />
             </div>
@@ -63,7 +63,7 @@
     private HttpContext HttpContext { get; set; } = default!;
 
     [SupplyParameterFromForm(FormName = "change-email")]
-    private InputModel Input { get; set; } = new();
+    private InputModel? Input { get; set; }
 
     protected override async Task OnInitializedAsync()
     {
@@ -71,12 +71,12 @@
         email = await UserManager.GetEmailAsync(user);
         isEmailConfirmed = await UserManager.IsEmailConfirmedAsync(user);
 
-        Input.NewEmail ??= email;
+        Input!.NewEmail ??= email;
     }
 
     private async Task OnValidSubmitAsync()
     {
-        if (Input.NewEmail is null || Input.NewEmail == email)
+        if (Input!.NewEmail is null || Input.NewEmail == email)
         {
             message = "Your email is unchanged.";
             return;

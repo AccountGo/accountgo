@@ -1,7 +1,12 @@
 @model Dto.Inventory.Item
 
+@* New Blazor Component Implementation *@
+@using AccountGoWeb.Components.Pages.Inventory
+<component type="typeof(ItemForm)" render-mode="ServerPrerendered" param-ItemId="@Model.Id" />
+
 <style>
-    div.row {
+    div.row,
+    div.card-header {
         color: #fff;
     }
 

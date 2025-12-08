@@ -51,7 +51,7 @@ namespace Services.Sales
         private readonly IRepository<TaxGroup> _taxGroupRepo;
         private readonly IRepository<SalesQuoteHeader> _salesQuoteRepo;
         private readonly ISalesOrderRepository _salesOrderRepository;
-    
+
         public SalesService(IFinancialService financialService,
             IInventoryService inventoryService,
             IRepository<SalesOrderHeader> salesOrderRepo,
@@ -316,7 +316,8 @@ namespace Services.Sales
         {
             var query = _salesInvoiceRepo.GetAllIncluding(inv => inv.Customer,
                 inv => inv.Customer.Party,
-                inv => inv.SalesInvoiceLines);
+                inv => inv.SalesInvoiceLines,
+                inv => inv.CustomerAllocations);
 
             return query.AsEnumerable();
         }
@@ -332,7 +333,8 @@ namespace Services.Sales
                 .Where(inv => inv.Id == id)
                 .FirstOrDefault();
 
-            if (invoice != null) {
+            if (invoice != null)
+            {
                 foreach (var line in invoice.SalesInvoiceLines)
                 {
                     line.Item = _itemRepo.GetById(line.ItemId);
@@ -655,13 +657,13 @@ namespace Services.Sales
                 if (contact.Id > 0)
                 {
                     _contactRepo.Update(contact);
-                 
+
                 }
                 else
                 {
                     _contactRepo.Insert(contact);
                 }
-                
+
             }
             catch (Exception ex)
             {
@@ -719,7 +721,8 @@ namespace Services.Sales
                 .Where(q => q.Id == id)
                 .FirstOrDefault();
 
-            if (quotation != null) {
+            if (quotation != null)
+            {
                 foreach (var line in quotation.SalesQuoteLines)
                 {
                     line.Item = _itemRepo.GetById(line.ItemId);
@@ -734,7 +737,7 @@ namespace Services.Sales
         {
             Core.Domain.Sales.SalesOrderHeader salesOrder = null;
             Core.Domain.Sales.SalesInvoiceHeader salesInvoice = null;
-           
+
             if (!salesInvoiceDto.FromSalesOrderId.HasValue)
             {
                 salesOrder = _mapper.Map<Core.Domain.Sales.SalesOrderHeader>(salesInvoiceDto);
@@ -744,7 +747,7 @@ namespace Services.Sales
                 // your invoice is created from existing (open) sales order.
                 salesOrder = GetSalesOrderById(salesInvoiceDto.FromSalesOrderId.GetValueOrDefault());
 
-                if(salesOrder is null)
+                if (salesOrder is null)
                 {
                     var message = $"Sales order {salesInvoiceDto.FromSalesOrderId} in SalesInvoice not found.";
                     return Result<Dto.Sales.SalesInvoice>.Failure(Error.RecordNotFound(message));
@@ -753,9 +756,9 @@ namespace Services.Sales
 
             salesInvoice = _mapper.Map<Core.Domain.Sales.SalesInvoiceHeader>(salesInvoiceDto);
 
-            foreach(var invoiceLine in salesInvoice.SalesInvoiceLines)
+            foreach (var invoiceLine in salesInvoice.SalesInvoiceLines)
             {
-                if(invoiceLine.SalesOrderLineId == 0)
+                if (invoiceLine.SalesOrderLineId == 0)
                 {
                     salesOrder.SalesOrderLines.Add(invoiceLine.SalesOrderLine);
                     invoiceLine.SalesOrderLineId = invoiceLine.SalesOrderLine.Id;
@@ -775,8 +778,8 @@ namespace Services.Sales
             Core.Domain.Sales.SalesOrderHeader salesOrder = null;
 
             salesInvoice = GetSalesInvoiceById(salesInvoiceDto.Id);
-            
-            if(salesInvoice is null)
+
+            if (salesInvoice is null)
             {
                 var message = $"Sales invoice {salesInvoiceDto.Id} not found.";
                 return Result<Dto.Sales.SalesInvoice>.Failure(Error.RecordNotFound(message));
@@ -1047,10 +1050,10 @@ namespace Services.Sales
                 }
             }
         }
-        
+
         public Contact GetContacyById(int id)
         {
- 
+
             var contact = _contactRepo.GetAllIncluding(q => q.Party)
                 .Where(q => q.Id == id)
                 .FirstOrDefault();
@@ -1059,7 +1062,7 @@ namespace Services.Sales
 
         public CustomerContact GetCustomerContact(int id)
         {
-           return _customerContactRepo.GetById(id);
+            return _customerContactRepo.GetById(id);
 
 
         }
@@ -1070,8 +1073,8 @@ namespace Services.Sales
 
             quoatation.Status = SalesQuoteStatus.Open;
             _salesQuoteRepo.Update(quoatation);
-            
+
         }
- 
+
     }
 }
