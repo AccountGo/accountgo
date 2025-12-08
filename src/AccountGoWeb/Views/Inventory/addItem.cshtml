@@ -4,11 +4,50 @@
     div.row {
         color: #fff;
     }
+
+    .alert-danger {
+        margin-bottom: 20px;
+    }
+
+    .error-list {
+        margin: 10px 0;
+    }
+
+    .error-list li {
+        color: #dc3545;
+        list-style-type: none;
+        padding: 5px 0;
+    }
 </style>
 
- <form action="~/Inventory/SaveItem" method="post">
+ <form action="~/Inventory/AddItem" method="post">
     <div class="col-sm-10">
         @Html.AntiForgeryToken()
+
+<!-- Display validation/error messages -->
+    @if (!ViewData.ModelState.IsValid)
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            <h5 class="alert-heading"><i class="fa fa-exclamation-circle me-2"></i>Errors</h5>
+            
+            @if (ViewData.ModelState.Keys.Count() > 0)
+            {
+                <ul class="error-list">
+                    @foreach (var modelState in ViewData.ModelState.Values)
+                    {
+                        @foreach (var error in modelState.Errors)
+                        {
+                            <li>
+                                <strong>•</strong> @error.ErrorMessage
+                            </li>
+                        }
+                    }
+                </ul>
+            }
+        </div>
+    }
+
         @Html.ValidationSummary(true)
         <div class="card">
             <div class="card-body">
@@ -98,6 +137,14 @@
                     <div class="col-sm-8">
                         <select class="form-control" asp-for="InventoryAdjustmentAccountId" asp-items="ViewBag.Accounts"></select>
                         <span asp-validation-for="InventoryAdjustmentAccountId" class="danger"></span>
+                    </div>
+                </div>
+                @* Code *@
+                <div class="row">
+                    <div class="col-sm-3">Code</div>
+                    <div class="col-sm-8">
+                        <input class="form-control" asp-for="Code" type="text" required />
+                        <span asp-validation-for="Code" class="danger"></span>
                     </div>
                 </div>
                 @* Price *@
