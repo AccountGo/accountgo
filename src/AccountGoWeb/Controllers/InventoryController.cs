@@ -1,148 +1,154 @@
 ﻿using Dto.Inventory;
 using Microsoft.AspNetCore.Mvc;
 
-namespace AccountGoWeb.Controllers
+namespace AccountGoWeb.Controllers;
+
+public class InventoryController : BaseController
 {
-    public class InventoryController : BaseController
+    private readonly ILogger<InventoryController> _logger;
+
+    public InventoryController(Microsoft.Extensions.Configuration.IConfiguration config,
+        ILogger<InventoryController> logger)
     {
-        private readonly ILogger<InventoryController> _logger;
+        _baseConfig = config;
+        _logger = logger;
+    }
 
-        public InventoryController(Microsoft.Extensions.Configuration.IConfiguration config,
-            ILogger<InventoryController> logger)
+    [HttpGet]
+    public async Task<IActionResult> Index()
+    {
+        // Existing Index logic
+        using (var client = new System.Net.Http.HttpClient())
         {
-            _baseConfig = config;
-            _logger = logger;
-        }
-
-        [HttpGet]
-        public async Task<IActionResult> Index()
-        {
-            // Existing Index logic
-            using (var client = new System.Net.Http.HttpClient())
+            var baseUri = _baseConfig!["ApiUrl"];
+            client.BaseAddress = new System.Uri(baseUri!);
+            client.DefaultRequestHeaders.Accept.Clear();
+            var response = await client.GetAsync(baseUri + "inventory/items");
+            if (response.IsSuccessStatusCode)
             {
-                var baseUri = _baseConfig!["ApiUrl"];
-                client.BaseAddress = new System.Uri(baseUri!);
-                client.DefaultRequestHeaders.Accept.Clear();
-                var response = await client.GetAsync(baseUri + "inventory/items");
-                if (response.IsSuccessStatusCode)
-                {
-                    var responseJson = await response.Content.ReadAsStringAsync();
-                    return View(model: responseJson);
-                }
+                var responseJson = await response.Content.ReadAsStringAsync();
+                return View(model: responseJson);
             }
-            return View();
         }
+        return View();
+    }
 
-        [HttpGet]  // ← ADD THIS for initial page load
-        public IActionResult AddItem()
+    [HttpGet]  // ← ADD THIS for initial page load
+    public IActionResult AddItem()
+    {
+        var itemModel = new Item
         {
-            var itemModel = new Item
-            {
-                Id = 0
-            };
+            Id = 0
+        };
 
+        ViewBag.Accounts = Models.SelectListItemHelper.Accounts();
+        ViewBag.ItemTaxGroups = Models.SelectListItemHelper.ItemTaxGroups();
+        ViewBag.Measurements = Models.SelectListItemHelper.UnitOfMeasurements();
+        ViewBag.ItemCategories = Models.SelectListItemHelper.ItemCategories();
+        ViewBag.PreferredVendorId = Models.SelectListItemHelper.Vendors();
+        ViewBag.PageContentHeader = "New Item";
+
+        return View("addItem", itemModel);
+    }
+
+    [HttpPost]  // ← Keep this for form submission
+    public async Task<IActionResult> AddItem(Item itemModel, string? addRowBtn)
+    {
+        if (!string.IsNullOrEmpty(addRowBtn))
+        {
+            itemModel.Id = 0; // Reset for new row
             ViewBag.Accounts = Models.SelectListItemHelper.Accounts();
             ViewBag.ItemTaxGroups = Models.SelectListItemHelper.ItemTaxGroups();
             ViewBag.Measurements = Models.SelectListItemHelper.UnitOfMeasurements();
             ViewBag.ItemCategories = Models.SelectListItemHelper.ItemCategories();
             ViewBag.PreferredVendorId = Models.SelectListItemHelper.Vendors();
             ViewBag.PageContentHeader = "New Item";
-
             return View("addItem", itemModel);
         }
 
-        [HttpPost]  // ← Keep this for form submission
-        public async Task<IActionResult> AddItem(Item itemModel, string? addRowBtn)
+        return await SaveItem(itemModel);
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> SaveItem(Item itemModel)
+    {
+        if (ModelState.IsValid)
         {
-            if (!string.IsNullOrEmpty(addRowBtn))
+            var serialize = Newtonsoft.Json.JsonConvert.SerializeObject(itemModel);
+            var content = new StringContent(serialize);
+            content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+
+            try
             {
-                itemModel.Id = 0; // Reset for new row
-                ViewBag.Accounts = Models.SelectListItemHelper.Accounts();
-                ViewBag.ItemTaxGroups = Models.SelectListItemHelper.ItemTaxGroups();
-                ViewBag.Measurements = Models.SelectListItemHelper.UnitOfMeasurements();
-                ViewBag.ItemCategories = Models.SelectListItemHelper.ItemCategories();
-                ViewBag.PreferredVendorId = Models.SelectListItemHelper.Vendors();
-                ViewBag.PageContentHeader = "New Item";
-                return View("addItem", itemModel);
-            }
+                var response = Post("inventory/saveitem", content);
 
-            return await SaveItem(itemModel);
-        }
+                _logger.LogInformation($"SaveItem Response Status: {response.StatusCode}");
 
-        [HttpPost]
-        public async Task<IActionResult> SaveItem(Item itemModel)
-        {
-            if (ModelState.IsValid)
-            {
-                var serialize = Newtonsoft.Json.JsonConvert.SerializeObject(itemModel);
-                var content = new StringContent(serialize);
-                content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
-
-                try
+                if (response.IsSuccessStatusCode)
                 {
-                    var response = Post("inventory/saveitem", content);
+                    _logger.LogInformation($"Item saved successfully: {itemModel.Description}");
+                    return RedirectToAction("Index");
+                }
+                else
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    _logger.LogError($"API Error {response.StatusCode}: {errorContent}");
 
-                    _logger.LogInformation($"SaveItem Response Status: {response.StatusCode}");
-
-                    if (response.IsSuccessStatusCode)
+                    try
                     {
-                        _logger.LogInformation($"Item saved successfully: {itemModel.Description}");
-                        return RedirectToAction("Index");
-                    }
-                    else
-                    {
-                        var errorContent = await response.Content.ReadAsStringAsync();
-                        _logger.LogError($"API Error {response.StatusCode}: {errorContent}");
-
-                        try
+                        var errors = Newtonsoft.Json.JsonConvert.DeserializeObject(errorContent);
+                        if (errors is Newtonsoft.Json.Linq.JArray errorArray)
                         {
-                            var errors = Newtonsoft.Json.JsonConvert.DeserializeObject(errorContent);
-                            if (errors is Newtonsoft.Json.Linq.JArray errorArray)
+                            foreach (var error in errorArray)
                             {
-                                foreach (var error in errorArray)
-                                {
-                                    ModelState.AddModelError("", error.ToString());
-                                }
-                            }
-                            else if (errors is string errorString)
-                            {
-                                ModelState.AddModelError("", errorString);
-                            }
-                            else
-                            {
-                                ModelState.AddModelError("", $"API Error: {response.StatusCode}");
+                                ModelState.AddModelError("", error.ToString());
                             }
                         }
-                        catch
+                        else if (errors is string errorString)
                         {
-                            ModelState.AddModelError("", $"Failed to save item. Server error: {response.StatusCode}");
+                            ModelState.AddModelError("", errorString);
+                        }
+                        else
+                        {
+                            ModelState.AddModelError("", $"API Error: {response.StatusCode}");
                         }
                     }
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError($"SaveItem Exception: {ex.Message}\n{ex.StackTrace}");
-                    ModelState.AddModelError("", $"Error: {ex.Message}");
+                    catch
+                    {
+                        ModelState.AddModelError("", $"Failed to save item. Server error: {response.StatusCode}");
+                    }
                 }
             }
-            else
+            catch (Exception ex)
             {
-                var errors = ModelState.Values.SelectMany(v => v.Errors);
-                foreach (var error in errors)
-                {
-                    _logger.LogWarning($"Validation Error: {error.ErrorMessage}");
-                }
+                _logger.LogError($"SaveItem Exception: {ex.Message}\n{ex.StackTrace}");
+                ModelState.AddModelError("", $"Error: {ex.Message}");
             }
-
-            // Return to form with errors displayed
-            ViewBag.Accounts = Models.SelectListItemHelper.Accounts();
-            ViewBag.ItemTaxGroups = Models.SelectListItemHelper.ItemTaxGroups();
-            ViewBag.Measurements = Models.SelectListItemHelper.UnitOfMeasurements();
-            ViewBag.ItemCategories = Models.SelectListItemHelper.ItemCategories();
-            ViewBag.PreferredVendorId = Models.SelectListItemHelper.Vendors();
-            ViewBag.PageContentHeader = itemModel.Id > 0 ? "Edit Item" : "New Item";
-
-            return View("addItem", itemModel);
         }
+        else
+        {
+            var errors = ModelState.Values.SelectMany(v => v.Errors);
+            foreach (var error in errors)
+            {
+                _logger.LogWarning($"Validation Error: {error.ErrorMessage}");
+            }
+        }
+
+        // Return to form with errors displayed
+        ViewBag.Accounts = Models.SelectListItemHelper.Accounts();
+        ViewBag.ItemTaxGroups = Models.SelectListItemHelper.ItemTaxGroups();
+        ViewBag.Measurements = Models.SelectListItemHelper.UnitOfMeasurements();
+        ViewBag.ItemCategories = Models.SelectListItemHelper.ItemCategories();
+        ViewBag.PreferredVendorId = Models.SelectListItemHelper.Vendors();
+        ViewBag.PageContentHeader = itemModel.Id > 0 ? "Edit Item" : "New Item";
+
+        return View("addItem", itemModel);
+    }
+
+    [HttpGet]
+    public IActionResult ICJ()
+    {
+        ViewBag.PageContentHeader = "Inventory Control Journal";
+        return View();  // ← Just return the view, let Blazor handle the data
     }
 }

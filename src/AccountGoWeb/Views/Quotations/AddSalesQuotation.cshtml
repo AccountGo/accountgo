@@ -1,3 +1,5 @@
 ﻿@using AccountGoWeb.Components.Pages.Quotations
 
-@(await Html.RenderComponentAsync<AddSalesQuotation>(RenderMode.Server))
+@* @(await Html.RenderComponentAsync<AddSalesQuotation>(RenderMode.Server)) *@
+
+<component type="typeof(AddSalesQuotation)" render-mode="ServerPrerendered" />

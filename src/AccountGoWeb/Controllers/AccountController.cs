@@ -5,8 +5,8 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
 
-namespace AccountGoWeb.Controllers
-{
+namespace AccountGoWeb.Controllers;
+
     public class AccountController : GoodController
     {
         public AccountController(IConfiguration config)
@@ -159,4 +159,4 @@ namespace AccountGoWeb.Controllers
         }
         #endregion
     }
-}
+

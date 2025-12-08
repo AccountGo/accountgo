@@ -1,7 +1,7 @@
-﻿@model List<Dto.Inventory.InventoryControlJournal>
-@using AccountGoWeb.Components.Pages.Inventory
-@using System.Text.Json
+﻿@using AccountGoWeb.Components.Pages.Inventory
+
 @{
     ViewBag.PageContentHeader = "Inventory Control Journal";
 }
-@(await Html.RenderComponentAsync<ICJ>(RenderMode.Server))
+
+<component type="typeof(ICJ)" render-mode="ServerPrerendered" />
