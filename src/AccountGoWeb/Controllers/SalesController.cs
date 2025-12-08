@@ -496,71 +496,83 @@ namespace AccountGoWeb.Controllers
         }
 
         // [HttpGet]
-        public IActionResult Allocate(int id)
+        // ...existing code...
+public IActionResult Allocate(int id)
+{
+    _logger.LogInformation("Allocate called with ID: {Id}", id);
+
+    try
+    {
+        //receipt allocation
+        ViewBag.PageContentHeader = "Receipt Allocation";
+
+        //creating the allocated model
+        var model = new Models.Sales.Allocate();
+        //ensuring list is initialized
+        model.AllocationLines = model.AllocationLines ?? new List<Models.Sales.AllocationLine>();
+
+        //fetching receipt details
+        var receipt = GetAsync<Dto.Sales.SalesReceipt>("sales/salesreceipt?id=" + id).Result;
+        if (receipt == null)
         {
-            Console.WriteLine($"Allocate called with ID: {id}");
+            _logger.LogError("Failed to fetch receipt with id: {Id}", id);
+            return NotFound($"Receipt with id {id} not found.");
+        }
 
-            try
+
+        //setting viewbag variables
+        ViewBag.CustomerName = receipt.CustomerName;
+        ViewBag.ReceiptNo = receipt.ReceiptNo;
+
+        //setting model variables
+        model.CustomerId = receipt.CustomerId;
+        model.ReceiptId = receipt.Id;
+        model.Date = receipt.ReceiptDate;
+        model.Amount = receipt.Amount;
+        model.RemainingAmountToAllocate = receipt.RemainingAmountToAllocate;
+
+        //fetching customer invoices
+        _logger.LogInformation("Calling API: sales/customerinvoices?id={CustomerId}", receipt.CustomerId);
+        var invoices = GetAsync<IEnumerable<Dto.Sales.SalesInvoice>>("sales/customerinvoices?id=" + receipt.CustomerId).Result
+                       ?? Enumerable.Empty<Dto.Sales.SalesInvoice>();
+
+        _logger.LogInformation("Received {Count} invoices for customer {CustomerId}", invoices.Count(), receipt.CustomerId);
+
+        //going through each invoice to add/display
+        foreach (var invoice in invoices)
+        {
+            if (invoice == null)
+                continue;
+
+            _logger.LogDebug("Invoice: {Invoice}", JsonConvert.SerializeObject(invoice));
+
+            //including any invoice that has an outstanding balance
+            var outstanding = invoice.Amount - invoice.TotalAllocatedAmount;
+            if (outstanding > 0)
             {
-                ViewBag.PageContentHeader = "Sales Receipt Allocation";
-
-                var model = new Models.Sales.Allocate();
-
-                // Fetch receipt details
-                var receipt = GetAsync<Dto.Sales.SalesReceipt>("sales/salesreceipt?id=" + id).Result;
-                if (receipt == null)
+                model.AllocationLines.Add(new Models.Sales.AllocationLine()
                 {
-                    Console.WriteLine($"Receipt not found for ID: {id}");
-                    _logger.LogError("Failed to fetch receipt with id: {id}", id);
-                    return NotFound($"Receipt with id {id} not found.");
-                }
-
-                ViewBag.CustomerName = receipt.CustomerName;
-                ViewBag.ReceiptNo = receipt.ReceiptNo;
-
-                model.CustomerId = receipt.CustomerId;
-                model.ReceiptId = receipt.Id;
-                model.Date = receipt.ReceiptDate;
-                model.Amount = receipt.Amount;
-                model.RemainingAmountToAllocate = receipt.RemainingAmountToAllocate;
-
-                // Fetch customer invoices
-                _logger.LogInformation("Calling API: sales/customerinvoices?id={id}", receipt.CustomerId);
-
-                var invoices = GetAsync<IEnumerable<Dto.Sales.SalesInvoice>>("sales/customerinvoices?id=" + receipt.CustomerId).Result;
-                if (invoices == null)
-                {
-                    _logger.LogError("Failed to fetch invoices for customer with id: {CustomerId}", receipt.CustomerId);
-                    return NotFound($"Invoices for customer with id {receipt.CustomerId} not found.");
-                }
-
-                foreach (var invoice in invoices)
-                {
-                    _logger.LogInformation("Invoice: {Invoice}", JsonConvert.SerializeObject(invoice));
-                    if (invoice.Posted && invoice.TotalAllocatedAmount < invoice.Amount)
-                    {
-                        model.AllocationLines.Add(new Models.Sales.AllocationLine()
-                        {
-                            InvoiceId = invoice.Id,
-                            Amount = invoice.Amount,
-                            AllocatedAmount = invoice.TotalAllocatedAmount
-                        });
-                    }
-                    else
-                    {
-                        _logger.LogInformation("Invoice excluded: Posted={Posted}, TotalAllocatedAmount={TotalAllocatedAmount}, Amount={Amount}",
-                            invoice.Posted, invoice.TotalAllocatedAmount, invoice.Amount);
-                    }
-                }
-
-                return View(model);
+                    InvoiceId = invoice.Id,
+                    Amount = invoice.Amount,
+                    AllocatedAmount = invoice.TotalAllocatedAmount
+                });
             }
-            catch (Exception ex)
+            else
             {
-                _logger.LogError(ex, "An error occurred while processing the Allocate action for id: {id}", id);
-                return StatusCode(500, "An error occurred while processing your request.");
+                _logger.LogInformation("Invoice excluded: Id={Id}, Posted={Posted}, TotalAllocatedAmount={TotalAllocatedAmount}, Amount={Amount}",
+                    invoice.Id, invoice.Posted, invoice.TotalAllocatedAmount, invoice.Amount);
             }
         }
+
+        return View(model);
+    }
+    catch (Exception ex)
+    {
+        _logger.LogError(ex, "An error occurred while processing the Allocate action for id: {Id}", id);
+        return StatusCode(500, "An error occurred while processing your request.");
+    }
+}
+// ...existing code...
 
         [HttpPost]
         public IActionResult Allocate(Models.Sales.Allocate model)
