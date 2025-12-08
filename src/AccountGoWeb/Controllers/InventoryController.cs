@@ -96,7 +96,7 @@ namespace AccountGoWeb.Controllers
 
                         try
                         {
-                            dynamic errors = Newtonsoft.Json.JsonConvert.DeserializeObject(errorContent);
+                            var errors = Newtonsoft.Json.JsonConvert.DeserializeObject(errorContent);
                             if (errors is Newtonsoft.Json.Linq.JArray errorArray)
                             {
                                 foreach (var error in errorArray)

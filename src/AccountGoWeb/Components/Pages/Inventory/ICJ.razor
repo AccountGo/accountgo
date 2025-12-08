@@ -1,6 +1,8 @@
 ﻿@* ICJ.razor - fetches its own data *@
 @using Dto.Inventory
+@using Microsoft.Extensions.Configuration
 @inject IHttpClientFactory HttpClientFactory
+@inject IConfiguration Configuration
 
 @if (isLoading)
 {
@@ -91,7 +93,7 @@ else
         try
         {
             var httpClient = HttpClientFactory.CreateClient();
-            httpClient.BaseAddress = new Uri("https://gdbapi.azurewebsites.net/api/");
+            httpClient.BaseAddress = new Uri(Configuration["ApiUrl"] ?? "https://gdbapi.azurewebsites.net/api/");
             httpClient.DefaultRequestHeaders.Accept.Clear();
             httpClient.DefaultRequestHeaders.Accept.Add(
                 new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
