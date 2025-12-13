@@ -10,7 +10,7 @@
 </style>
 
 <div>
-    <a href="~/sales/addsalesinvoice" class="btn btn-outline-light">
+    <a href="~/Sales/SalesInvoice" class="btn btn-outline-light">
         <i class="fa fa-plus"></i>
         New Invoice
     </a>
@@ -74,6 +74,8 @@
             },
         ];
 
+        var gridApi;
+
         var gridOptions = {
             columnDefs: columnDefs,
             rowData: @Html.Raw(Model),
@@ -81,27 +83,31 @@
             // PROPERTIES - simple boolean / string / number properties
             rowSelection: 'single',
             onSelectionChanged: onSelectionChanged,
+            theme: 'legacy' // Use v32 style themes to match ag-grid.css
         };
 
         function onSelectionChanged() {
-            var selectedRows = gridOptions.api.getSelectedRows();
-            selectedRow = selectedRows[0];
-            console.log(selectedRow);
+            var selectedRows = gridApi.getSelectedRows();
+            var selectedRow = selectedRows[0];
+            
+            if (selectedRow) {
+                console.log(selectedRow);
 
-            document.getElementById('linkEditInvoice').setAttribute('href', 'Sales/SalesInvoice?id=' + selectedRow.id);
-            document.getElementById('linkEditInvoice').setAttribute('class', 'btn btn-outline-light');
+                document.getElementById('linkEditInvoice').setAttribute('href', 'Sales/SalesInvoice?id=' + selectedRow.id);
+                document.getElementById('linkEditInvoice').setAttribute('class', 'btn btn-outline-light');
 
-            document.getElementById('linkDeleteInvoice').setAttribute('class', 'btn btn-outline-light');
-            document.getElementById('linkDeleteInvoice').setAttribute('data-bs-toggle', 'modal');
-            document.getElementById('linkDeleteInvoice').setAttribute('data-bs-target', '#deleteSalesInvoice');
-            $("#hdnselectedsalesInvoiceId").val(selectedRow.id);
+                document.getElementById('linkDeleteInvoice').setAttribute('class', 'btn btn-outline-light');
+                document.getElementById('linkDeleteInvoice').setAttribute('data-bs-toggle', 'modal');
+                document.getElementById('linkDeleteInvoice').setAttribute('data-bs-target', '#deleteSalesInvoice');
+                $("#hdnselectedsalesInvoiceId").val(selectedRow.id);
+            }
         }
 
         // wait for the document to be loaded, otherwise
         // ag-Grid will not find the div in the document.
         document.addEventListener("DOMContentLoaded", function () {
             var eGridDiv = document.querySelector('#salesinvoices');
-            new agGrid.Grid(eGridDiv, gridOptions);
+            gridApi = agGrid.createGrid(eGridDiv, gridOptions);
         });
 
 

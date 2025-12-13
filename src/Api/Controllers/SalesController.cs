@@ -240,13 +240,13 @@ namespace Api.Controllers
                 var salesOrderDto = new Dto.Sales.SalesOrder()
                 {
                     Id = salesOrder.Id,
-                    CustomerId = salesOrder.CustomerId.HasValue ? salesOrder.CustomerId.Value : 0,
+                    CustomerId = salesOrder.CustomerId ?? 0,
                     CustomerNo = salesOrder.Customer?.No ?? "N/A",
-                    CustomerName = salesOrder.CustomerId.HasValue ? _salesService.GetCustomerById(salesOrder.CustomerId.Value)?.Party?.Name ?? "Unknown" : "Unknown",
+                    CustomerName = salesOrder.Customer?.Party?.Name ?? "Unknown",
                     OrderDate = salesOrder.Date,
-                    PaymentTermId = salesOrder.PaymentTermId,
+                    PaymentTermId = salesOrder.PaymentTermId ?? 0,
                     ReferenceNo = salesOrder.ReferenceNo,
-                    StatusId = (int)salesOrder.Status!,
+                    StatusId = salesOrder.Status.HasValue ? (int)salesOrder.Status.Value : 0,
                     SalesOrderLines = new List<Dto.Sales.SalesOrderLine>()
                 };
 
@@ -338,6 +338,8 @@ namespace Api.Controllers
                 {
                     CustomerId = salesorderDto.CustomerId,
                     Date = salesorderDto.OrderDate,
+                    PaymentTermId = salesorderDto.PaymentTermId,
+                    ReferenceNo = salesorderDto.ReferenceNo
                 };
 
                 foreach (var line in salesorderDto.SalesOrderLines)
@@ -459,13 +461,14 @@ namespace Api.Controllers
                     Id = salesInvoice.Id,
                     No = salesInvoice.No,
                     CustomerId = salesInvoice.CustomerId,
-                    CustomerName = salesInvoice.Customer.Party.Name,
+                    CustomerName = salesInvoice.Customer?.Party?.Name ?? "Unknown",
                     InvoiceDate = salesInvoice.Date,
                     ReferenceNo = salesInvoice.ReferenceNo,
                     TotalAllocatedAmount = (decimal)salesInvoice.CustomerAllocations.Sum(i => i.Amount),
                     Posted = salesInvoice.GeneralLedgerHeaderId != null
                 };
 
+                // Populate line items - Amount will be calculated automatically by the DTO
                 foreach (var line in salesInvoice.SalesInvoiceLines)
                 {
                     var lineDto = new Dto.Sales.SalesInvoiceLine()
