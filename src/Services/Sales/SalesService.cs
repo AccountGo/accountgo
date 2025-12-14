@@ -874,6 +874,7 @@ namespace Services.Sales
             catch (Exception ex)
             {
                 _logger.LogError(ex.Message);
+                throw; // Re-throw to let controller handle the error
             }
         }
 

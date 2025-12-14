@@ -1,5 +1,6 @@
 @using System.Text.Json
 @using System.Text.Json.Serialization
+@using System.Globalization
 
 <style>
     label,
@@ -24,14 +25,16 @@
     {
         <p><em>Loading invoice...</em></p>
     }
-    else if (!string.IsNullOrEmpty(errorMessage))
-    {
-        <div class="alert alert-danger" role="alert">
-            <strong>Error:</strong> @errorMessage
-        </div>
-    }
     else
     {
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                <strong>Error:</strong> @errorMessage
+                <button type="button" class="btn-close" @onclick="() => errorMessage = null"></button>
+            </div>
+        }
+
         <div class="row">
             <div class="col-md-10">
                 <div class="card">
@@ -73,7 +76,7 @@
                         <div class="row mb-3">
                             <div class="col-md-6">
                                 <label class="form-label"><strong>Total Amount</strong></label>
-                                <input type="number" class="form-control" @bind="totalAmount" step="0.01" readonly />
+                                <input type="text" class="form-control" value="@FormattedTotalAmount" readonly />
                             </div>
                         </div>
 
@@ -153,6 +156,7 @@
 @code {
     private class LineItem
     {
+        public int Id { get; set; } = 0; // SalesOrderLine.Id when creating from order
         public int? ItemId { get; set; } = 0;
         public decimal? Quantity { get; set; } = 0;
         public decimal? Amount { get; set; } = 0;
@@ -205,6 +209,8 @@
     private int paymentTermId = 0;
     private decimal totalAmount = 0;
     private List<LineItem> lineItems = new();
+
+    private string FormattedTotalAmount => "$" + totalAmount.ToString("N2", CultureInfo.InvariantCulture);
 
     private List<Customer> customers = new();
     private List<Item> items = new();
@@ -307,9 +313,22 @@
     {
         try
         {
+            // If saleOrderId is 0, we're creating a brand new invoice, no API call needed
+            if (saleOrderId == 0)
+            {
+                lineItems.Add(new LineItem { ItemId = 0, Quantity = 1, Amount = 0, Discount = 0, MeasurementId = 0 });
+                return;
+            }
+
             string apiurl = System.Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
             var client = ClientFactory.CreateClient();
-            var response = await client.GetAsync($"{apiurl}sales/SalesInvoice?id={saleOrderId}");
+
+            // If we have an orderId, load from the sales order instead
+            string endpoint = OrderId.HasValue && OrderId.Value > 0
+            ? $"{apiurl}sales/SalesOrder?id={saleOrderId}" // Load from order
+            : $"{apiurl}sales/SalesInvoice?id={saleOrderId}"; // Load existing invoice
+
+            var response = await client.GetAsync(endpoint);
 
             if (response.IsSuccessStatusCode)
             {
@@ -321,29 +340,42 @@
 
                 if (invoiceData.ValueKind == JsonValueKind.Object)
                 {
-                    // Parse invoice data
+                    // Parse invoice/order data
                     if (invoiceData.TryGetProperty("id", out var idElem))
-                        invoiceId = idElem.GetInt32();
+                        invoiceId = OrderId.HasValue ? 0 : idElem.GetInt32(); // New invoice gets id=0
 
                     if (invoiceData.TryGetProperty("customerId", out var custElem))
                         customerId = custElem.GetInt32();
 
-                    if (invoiceData.TryGetProperty("invoiceDate", out var dateElem))
+                    // For orders, use orderDate; for invoices, use invoiceDate
+                    if (invoiceData.TryGetProperty("invoiceDate", out var invDateElem))
                     {
-                        if (DateTime.TryParse(dateElem.GetString(), out var date))
+                        if (DateTime.TryParse(invDateElem.GetString(), out var date))
+                            invoiceDate = date;
+                    }
+                    else if (invoiceData.TryGetProperty("orderDate", out var ordDateElem))
+                    {
+                        if (DateTime.TryParse(ordDateElem.GetString(), out var date))
                             invoiceDate = date;
                     }
 
                     if (invoiceData.TryGetProperty("paymentTermId", out var termElem))
-                        paymentTermId = termElem.GetInt32();
+                    {
+                        if (termElem.ValueKind == JsonValueKind.Number)
+                            paymentTermId = termElem.GetInt32();
+                        else if (termElem.ValueKind == JsonValueKind.Null)
+                            paymentTermId = 0;
+                    }
 
-                    // Parse line items
-                    if (invoiceData.TryGetProperty("salesInvoiceLines", out var linesElem) && linesElem.ValueKind == JsonValueKind.Array)
+                    // Parse line items - works for both orders and invoices
+                    var linesProperty = OrderId.HasValue ? "salesOrderLines" : "salesInvoiceLines";
+                    if (invoiceData.TryGetProperty(linesProperty, out var linesElem) && linesElem.ValueKind == JsonValueKind.Array)
                     {
                         foreach (var lineElem in linesElem.EnumerateArray())
                         {
                             var line = new LineItem
                             {
+                                Id = GetJsonInt(lineElem, "id") ?? 0, // Capture the order line ID!
                                 ItemId = GetJsonInt(lineElem, "itemId"),
                                 Quantity = GetJsonDecimal(lineElem, "quantity"),
                                 Amount = GetJsonDecimal(lineElem, "amount"),
@@ -353,23 +385,19 @@
                             lineItems.Add(line);
                         }
                     }
-                    else if (saleOrderId == 0)
-                    {
-                        // For new invoices, add 1 empty row matching original implementation
-                        lineItems.Add(new LineItem { ItemId = 1, Quantity = 1, Amount = 0, Discount = 0, MeasurementId = 1 });
-                    }
 
                     CalculateTotalAmount();
                 }
             }
             else
             {
-                errorMessage = $"Failed to load invoice. Status: {response.StatusCode}";
+                var errorContent = await response.Content.ReadAsStringAsync();
+                errorMessage = $"Failed to load data. Status: {response.StatusCode}. Details: {errorContent}";
             }
         }
         catch (Exception ex)
         {
-            errorMessage = $"Error loading invoice: {ex.Message}";
+            errorMessage = $"Error loading data: {ex.Message}";
         }
         finally
         {
@@ -413,7 +441,7 @@
 
     private void AddLineItem()
     {
-        lineItems.Add(new LineItem { ItemId = 1, Quantity = 1, Amount = 0, Discount = 0, MeasurementId = 1 });
+        lineItems.Add(new LineItem { ItemId = 0, Quantity = 1, Amount = 0, Discount = 0, MeasurementId = 0 });
         StateHasChanged();
     }
 
@@ -421,28 +449,68 @@
     {
         try
         {
+            // Validate required fields
+            if (customerId == 0)
+            {
+                errorMessage = "Please select a customer";
+                StateHasChanged();
+                return;
+            }
+
+            if (paymentTermId == 0)
+            {
+                errorMessage = "Please select a payment term";
+                StateHasChanged();
+                return;
+            }
+
+            // Validate line items
+            if (lineItems == null || lineItems.Count == 0)
+            {
+                errorMessage = "Please add at least one line item";
+                StateHasChanged();
+                return;
+            }
+
+            // Check if all line items have valid data
+            var invalidLines = lineItems.Where(l => l.ItemId == 0 || l.MeasurementId == 0 || l.Quantity == 0 || l.Amount ==
+            0).ToList();
+            if (invalidLines.Any())
+            {
+                errorMessage = "All line items must have Item, Measurement, Quantity, and Amount selected";
+                StateHasChanged();
+                return;
+            }
+
             CalculateTotalAmount();
             string apiurl = System.Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
 
             // Use OrderId if provided, otherwise use Id
             var finalId = OrderId ?? Id;
 
-            var payload = new
+            // Build payload conditionally - only include FromSalesOrderId if we're creating from an existing order
+            var payload = new Dictionary<string, object>
+{
+{ "Id", invoiceId },
+{ "CustomerId", customerId },
+{ "InvoiceDate", invoiceDate },
+{ "PaymentTermId", paymentTermId },
+{ "SalesInvoiceLines", lineItems.Select(line => new
+{
+Id = line.Id, // Include the SalesOrderLine.Id to prevent duplication
+ItemId = line.ItemId,
+Quantity = line.Quantity,
+Amount = line.Amount,
+Discount = line.Discount,
+MeasurementId = line.MeasurementId
+}).ToList() }
+};
+
+            // Only include FromSalesOrderId if we're creating from an existing order
+            if (finalId > 0)
             {
-                Id = invoiceId,
-                CustomerId = customerId,
-                InvoiceDate = invoiceDate,
-                PaymentTermId = paymentTermId,
-                FromSalesOrderId = finalId, // The sales order this invoice is being created from
-                SalesInvoiceLines = lineItems.Select(line => new
-                {
-                    ItemId = line.ItemId,
-                    Quantity = line.Quantity,
-                    Amount = line.Amount,
-                    Discount = line.Discount,
-                    MeasurementId = line.MeasurementId
-                }).ToList()
-            };
+                payload["FromSalesOrderId"] = finalId;
+            }
 
             var client = ClientFactory.CreateClient();
             var json = JsonSerializer.Serialize(payload);
