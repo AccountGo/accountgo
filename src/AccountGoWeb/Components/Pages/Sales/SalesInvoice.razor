@@ -1,5 +1,6 @@
 @using System.Text.Json
 @using System.Text.Json.Serialization
+@using System.Globalization
 
 <style>
     label,
@@ -75,7 +76,7 @@
                         <div class="row mb-3">
                             <div class="col-md-6">
                                 <label class="form-label"><strong>Total Amount</strong></label>
-                                <input type="number" class="form-control" @bind="totalAmount" step="0.01" readonly />
+                                <input type="text" class="form-control" value="@FormattedTotalAmount" readonly />
                             </div>
                         </div>
 
@@ -155,7 +156,7 @@
 @code {
     private class LineItem
     {
-        public int Id { get; set; } = 0;  // SalesOrderLine.Id when creating from order
+        public int Id { get; set; } = 0; // SalesOrderLine.Id when creating from order
         public int? ItemId { get; set; } = 0;
         public decimal? Quantity { get; set; } = 0;
         public decimal? Amount { get; set; } = 0;
@@ -208,6 +209,8 @@
     private int paymentTermId = 0;
     private decimal totalAmount = 0;
     private List<LineItem> lineItems = new();
+
+    private string FormattedTotalAmount => "$" + totalAmount.ToString("N2", CultureInfo.InvariantCulture);
 
     private List<Customer> customers = new();
     private List<Item> items = new();
@@ -319,11 +322,11 @@
 
             string apiurl = System.Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
             var client = ClientFactory.CreateClient();
-            
+
             // If we have an orderId, load from the sales order instead
             string endpoint = OrderId.HasValue && OrderId.Value > 0
-                ? $"{apiurl}sales/SalesOrder?id={saleOrderId}"  // Load from order
-                : $"{apiurl}sales/SalesInvoice?id={saleOrderId}"; // Load existing invoice
+            ? $"{apiurl}sales/SalesOrder?id={saleOrderId}" // Load from order
+            : $"{apiurl}sales/SalesInvoice?id={saleOrderId}"; // Load existing invoice
 
             var response = await client.GetAsync(endpoint);
 
@@ -372,7 +375,7 @@
                         {
                             var line = new LineItem
                             {
-                                Id = GetJsonInt(lineElem, "id") ?? 0,  // Capture the order line ID!
+                                Id = GetJsonInt(lineElem, "id") ?? 0, // Capture the order line ID!
                                 ItemId = GetJsonInt(lineElem, "itemId"),
                                 Quantity = GetJsonDecimal(lineElem, "quantity"),
                                 Amount = GetJsonDecimal(lineElem, "amount"),
@@ -470,7 +473,8 @@
             }
 
             // Check if all line items have valid data
-            var invalidLines = lineItems.Where(l => l.ItemId == 0 || l.MeasurementId == 0 || l.Quantity == 0 || l.Amount == 0).ToList();
+            var invalidLines = lineItems.Where(l => l.ItemId == 0 || l.MeasurementId == 0 || l.Quantity == 0 || l.Amount ==
+            0).ToList();
             if (invalidLines.Any())
             {
                 errorMessage = "All line items must have Item, Measurement, Quantity, and Amount selected";
@@ -486,21 +490,21 @@
 
             // Build payload conditionally - only include FromSalesOrderId if we're creating from an existing order
             var payload = new Dictionary<string, object>
-            {
-                { "Id", invoiceId },
-                { "CustomerId", customerId },
-                { "InvoiceDate", invoiceDate },
-                { "PaymentTermId", paymentTermId },
-                { "SalesInvoiceLines", lineItems.Select(line => new
-                    {
-                        Id = line.Id,  // Include the SalesOrderLine.Id to prevent duplication
-                        ItemId = line.ItemId,
-                        Quantity = line.Quantity,
-                        Amount = line.Amount,
-                        Discount = line.Discount,
-                        MeasurementId = line.MeasurementId
-                    }).ToList() }
-            };
+{
+{ "Id", invoiceId },
+{ "CustomerId", customerId },
+{ "InvoiceDate", invoiceDate },
+{ "PaymentTermId", paymentTermId },
+{ "SalesInvoiceLines", lineItems.Select(line => new
+{
+Id = line.Id, // Include the SalesOrderLine.Id to prevent duplication
+ItemId = line.ItemId,
+Quantity = line.Quantity,
+Amount = line.Amount,
+Discount = line.Discount,
+MeasurementId = line.MeasurementId
+}).ToList() }
+};
 
             // Only include FromSalesOrderId if we're creating from an existing order
             if (finalId > 0)
