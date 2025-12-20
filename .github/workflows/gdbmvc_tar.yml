@@ -25,6 +25,9 @@ jobs:
       - name: Build with dotnet
         run: dotnet build --configuration Release
 
+      - name: Run unit tests
+        run: dotnet test ./test/GoodBooks.BackendTests/GoodBooks.BackendTests.csproj --configuration Release
+
       - name: dotnet publish
         run: dotnet publish ./src/AccountGoWeb/AccountGoWeb.csproj -c Release -o ${{runner.temp}}/myapp
 

@@ -30,7 +30,8 @@ public class Worker(
         }
         catch (Exception ex)
         {
-            activity?.RecordException(ex);
+            // Use Activity.AddException; RecordException is obsolete and will be removed in a future version
+            activity?.AddException(ex);
             throw;
         }
 

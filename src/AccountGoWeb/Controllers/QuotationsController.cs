@@ -16,9 +16,19 @@ namespace AccountGoWeb.Controllers
 
         public IActionResult Index()
         {
-            return RedirectToAction("quotations");
+            return RedirectToAction("SalesQuotations");
         }
 
+
+       [HttpGet]
+        public IActionResult SalesQuotations()
+        {
+            return View();
+        }
+
+
+
+        
         public async System.Threading.Tasks.Task<IActionResult> Quotations()
         {
             ViewBag.PageContentHeader = "Quotations";
@@ -96,18 +106,23 @@ namespace AccountGoWeb.Controllers
                     client.BaseAddress = new Uri(baseUri!);
                     var response = await client.PostAsync("sales/savequotation", content);
 
-                    if (response.IsSuccessStatusCode) {
+                    if (response.IsSuccessStatusCode)
+                    {
                         _logger.LogInformation("Quotation has been successfully saved.");
-                    } else {
+                    }
+                    else
+                    {
                         _logger.LogInformation("Quotation save failed.");
                     }
                     return RedirectToAction("quotations");
                 }
-            } else {
+            }
+            else
+            {
                 _logger.LogInformation("Model State is not valid.");
                 return RedirectToAction("quotations");
             }
-            
+
         }
 
         [HttpGet]
@@ -131,6 +146,10 @@ namespace AccountGoWeb.Controllers
                 @ViewBag.PaymentTermId = model.PaymentTermId;
                 @ViewBag.SalesQuotationLines = model.SalesQuotationLines;
                 @ViewBag.TotalAmount = model.Amount;
+
+                var paymentTermsList = Models.SelectListItemHelper.PaymentTerms();
+                var selectedPaymentTerm = paymentTermsList.FirstOrDefault(pt => pt.Value == model.PaymentTermId.ToString());
+                @ViewBag.SelectedPaymentTerm = selectedPaymentTerm?.Text ?? "N/A";
             }
 
             @ViewBag.Customers = Models.SelectListItemHelper.Customers();
@@ -140,5 +159,37 @@ namespace AccountGoWeb.Controllers
 
             return View(model);
         }
+
+        [HttpPost]
+        public IActionResult Quotation(SalesQuotation model)
+        {
+            ViewBag.Customers = Models.SelectListItemHelper.Customers();
+            ViewBag.Items = Models.SelectListItemHelper.Items();
+            ViewBag.PaymentTerms = Models.SelectListItemHelper.PaymentTerms();
+            ViewBag.Measurements = Models.SelectListItemHelper.Measurements();
+
+            var serialize = Newtonsoft.Json.JsonConvert.SerializeObject(model);
+            var content = new StringContent(serialize);
+            content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+
+            using (var client = new HttpClient())
+            {
+                var baseUri = _configuration!["ApiUrl"];
+                client.BaseAddress = new Uri(baseUri!);
+                var response = client.PostAsync("sales/savequotation", content).Result;
+
+                if (response.IsSuccessStatusCode)
+                {
+                    _logger.LogInformation("Quotation has been successfully saved.");
+                }
+                else
+                {
+                    _logger.LogInformation("Quotation save failed.");
+                }
+            }
+
+            return RedirectToAction("Quotations");
+        }
+
     }
 }

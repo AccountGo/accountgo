@@ -8,18 +8,23 @@
     tr td {
         color: #fff;
     }
+
+    .card,
+    .card-body {
+        color: #fff;
+    }
 </style>
 
 <div>
-    <a href="#" id="linkEdit" class="btn" onclick="onClickEditButton();">
-        <i class="fa fa-edit"></i>
-        Edit
-    </a>
+    <button type="button" id="linkEdit" class="btn" onclick="onClickEditButton();">
+        <i class="fa fa-edit"></i> Edit
+    </button>
 </div>
 
-<form action="~/Quotations/AddSalesQuotation" method="post">
+<form action="~/Quotations/Quotation" method="post">
+    @Html.HiddenFor(m => m.Id)
+    @Html.HiddenFor(m => m.PaymentTermId)
     <div id="divSalesQuotationCard" class="col-md-9">
-        @Html.HiddenFor(m => m.Id)
         <div class="card">
             <div class="card-body show row" id="general">
                 <div class="col-sm-6">
@@ -28,10 +33,9 @@
                         <div class="col-sm-5" id="customer-name">Customer Name</div>
                         <div class="col-sm-7">
                             <select class="form-control" asp-for="CustomerId" asp-items="@ViewBag.Customers"
-                                    id="optCustomer">
+                                id="optCustomer">
                             </select>
                             <span asp-validation-for="CustomerId" class="danger"></span>
-                            @Html.HiddenFor(m => m.CustomerId)
                         </div>
                     </div>
                     @* Quotation Date *@
@@ -44,64 +48,67 @@
                     @* Payment Term *@
                     <div class="row">
                         <div class="col-sm-5">Payment Term</div>
-                        <div class="col-sm-7">@ViewBag.PaymentTermId</div>
+                        <div class="col-sm-7">@ViewBag.SelectedPaymentTerm</div>
                     </div>
                     @* Total Amount *@
                     <div class="row">
                         <div class="col-sm-5">Total Amount</div>
-                        <div class="col-sm-7">@ViewBag.TotalAmount</div>
+                        <div class="col-sm-7">$@ViewBag.TotalAmount.ToString("N2")</div>
                     </div>
                 </div>
                 @* Table *@
                 <table class="table">
                     <thead>
-                    <th>Item</th>
-                    <th>Quantity</th>
-                    <th>Amount</th>
-                    <th>Discount</th>
-                    <th>Measurement</th>
+                        <th>Item</th>
+                        <th>Quantity</th>
+                        <th>Amount</th>
+                        <th>Discount</th>
+                        <th>Measurement</th>
                     </thead>
                     <tbody>
-                    @for (int i = 0; i < Model.SalesQuotationLines.Count; i++) {
-                        <tr>
-                            <td>
-                                <select class="form-control" asp-for="@Model.SalesQuotationLines[i].ItemId" asp-items="@ViewBag.Items"
-                                        id="optCustomer" required>
-                                </select>
-                                <span asp-validation-for="@Model.SalesQuotationLines[i].ItemId" class="danger"></span>
-                            </td>
-                            <td>
-                                <input class="form-control" asp-for="@Model.SalesQuotationLines[i].Quantity" type="text" placeholder="0.0 ..." required/>
-                                <span asp-validation-for="@Model.SalesQuotationLines[i].Quantity" class="danger"></span>
-                            </td>
-                            <td>
-                                <input class="form-control" asp-for="@Model.SalesQuotationLines[i].Amount" type="text" placeholder="0.0 ..." required/>
-                                <span asp-validation-for="@Model.SalesQuotationLines[i].Amount" class="danger"></span>
-                            </td>
-                            <td>
-                                <input class="form-control" asp-for="@Model.SalesQuotationLines[i].Discount" type="text" placeholder="0.0 ..." required/>
-                                <span asp-validation-for="@Model.SalesQuotationLines[i].Discount" class="danger"></span>
-                            </td>
-                            <td>
-                                <select class="form-control" asp-for="@Model.SalesQuotationLines[i].MeasurementId" asp-items="@ViewBag.Measurements"
-                                        id="optCustomer" required>
-                                </select>
-                                <span asp-validation-for="@Model.SalesQuotationLines[i].MeasurementId" class="danger"></span>
-                            </td>
-                        </tr>
-                    }
+                        @for (int i = 0; i < Model.SalesQuotationLines.Count; i++)
+                        {
+                            <tr>
+                                <input type="hidden" asp-for="SalesQuotationLines[i].Id" />
+
+                                <td>
+                                    <select class="form-control" asp-for="SalesQuotationLines[i].ItemId"
+                                        asp-items="@ViewBag.Items" id="item_@i">
+                                    </select>
+                                </td>
+
+                                <td>
+                                    <input class="form-control" asp-for="SalesQuotationLines[i].Quantity" id="qty_@i" />
+                                </td>
+
+                                <td>
+                                    <input class="form-control" asp-for="SalesQuotationLines[i].Amount" id="amt_@i" />
+                                </td>
+
+                                <td>
+                                    <input class="form-control" asp-for="SalesQuotationLines[i].Discount" id="disc_@i" />
+                                </td>
+
+                                <td>
+                                    <select class="form-control" asp-for="SalesQuotationLines[i].MeasurementId"
+                                        asp-items="@ViewBag.Measurements" id="meas_@i">
+                                    </select>
+                                </td>
+                            </tr>
+                        }
                     </tbody>
                 </table>
             </div>
         </div>
     </div>
     <div class="col-sm-9">
-        <input id="btnSave" class="btn btn-sm btn-primary btn-flat pull-left disabledControl" type="submit" value="Save"/>
+        <input id="btnSave" class="btn btn-sm btn-primary btn-flat pull-left disabledControl" type="submit"
+            value="Save" />
         <a href="~/sales/salesinvoices" class="btn btn-sm btn-default btn-flat pull-left">Close</a>
     </div>
 </form>
 
-@section scripts{
+@section scripts {
     <script src="~/js/custom.js" type="text/javascript"></script>
     <script>
 

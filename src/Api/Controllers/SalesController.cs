@@ -22,9 +22,9 @@ namespace Api.Controllers
 
         public SalesController(IAdministrationService adminService,
             ISalesService salesService,
-            IFinancialService financialService, 
-            IInventoryService inventoryService, 
-            ITaxService taxService, 
+            IFinancialService financialService,
+            IInventoryService inventoryService,
+            ITaxService taxService,
             ILogger<SalesController> logger)
         {
             _adminService = adminService;
@@ -37,7 +37,7 @@ namespace Api.Controllers
 
         [HttpPost]
         [Route("SaveCustomer")]
-        public IActionResult SaveCustomer([FromBody]Dto.Sales.Customer customerDto)
+        public IActionResult SaveCustomer([FromBody] Dto.Sales.Customer customerDto)
         {
             bool isNew = customerDto.Id == 0;
             Core.Domain.Sales.Customer? customer = null;
@@ -232,42 +232,49 @@ namespace Api.Controllers
             {
                 var salesOrder = _salesService.GetSalesOrderById(id);
 
+                if (salesOrder == null)
+                {
+                    return new NotFoundObjectResult(new { error = "Sales order not found." });
+                }
+
                 var salesOrderDto = new Dto.Sales.SalesOrder()
                 {
                     Id = salesOrder.Id,
-                    CustomerId = salesOrder.CustomerId!.Value,
-                    CustomerNo = salesOrder.Customer.No,
-                    CustomerName = _salesService.GetCustomerById(salesOrder.CustomerId.Value).Party.Name,
+                    CustomerId = salesOrder.CustomerId ?? 0,
+                    CustomerNo = salesOrder.Customer?.No ?? "N/A",
+                    CustomerName = salesOrder.Customer?.Party?.Name ?? "Unknown",
                     OrderDate = salesOrder.Date,
-                    PaymentTermId = salesOrder.PaymentTermId,
+                    PaymentTermId = salesOrder.PaymentTermId ?? 0,
                     ReferenceNo = salesOrder.ReferenceNo,
-                    StatusId = (int) salesOrder.Status!,
+                    StatusId = salesOrder.Status.HasValue ? (int)salesOrder.Status.Value : 0,
                     SalesOrderLines = new List<Dto.Sales.SalesOrderLine>()
                 };
 
-                foreach (var line in salesOrder.SalesOrderLines)
+                if (salesOrder.SalesOrderLines != null)
                 {
-                    var lineDto = new Dto.Sales.SalesOrderLine();
-                    lineDto.Id = line.Id;
-                    lineDto.Amount = line.Amount;
-                    lineDto.Discount = line.Discount;
-                    lineDto.Quantity = line.Quantity;
-                    lineDto.ItemId = line.ItemId;
-                    lineDto.ItemDescription = line.Item.Description;
-                    lineDto.MeasurementId = line.MeasurementId;
-                    lineDto.MeasurementDescription = line.Measurement.Description;
-                    lineDto.RemainingQtyToInvoice = line.GetRemainingQtyToInvoice();
+                    foreach (var line in salesOrder.SalesOrderLines)
+                    {
+                        var lineDto = new Dto.Sales.SalesOrderLine();
+                        lineDto.Id = line.Id;
+                        lineDto.Amount = line.Amount;
+                        lineDto.Discount = line.Discount;
+                        lineDto.Quantity = line.Quantity;
+                        lineDto.ItemId = line.ItemId;
+                        lineDto.ItemDescription = line.Item?.Description ?? "Unknown";
+                        lineDto.MeasurementId = line.MeasurementId;
+                        lineDto.MeasurementDescription = line.Measurement?.Description ?? "Unknown";
+                        lineDto.RemainingQtyToInvoice = line.GetRemainingQtyToInvoice();
 
-                    salesOrderDto.SalesOrderLines.Add(lineDto);
+                        salesOrderDto.SalesOrderLines.Add(lineDto);
+                    }
                 }
-
 
                 return new ObjectResult(salesOrderDto);
             }
             catch (Exception ex)
             {
                 _logger.LogInformation(ex.ToString());
-                return new ObjectResult(ex);
+                return new BadRequestObjectResult(new { error = "An error occurred while loading the sales order.", details = ex.Message });
             }
         }
 
@@ -303,7 +310,7 @@ namespace Api.Controllers
                     lineDto.MeasurementId = line.MeasurementId;
                     lineDto.ItemDescription = line.Item.Description;
                     lineDto.MeasurementDescription = line.Measurement.Description;
-                    
+
                     salesInvoiceDto.SalesInvoiceLines.Add(lineDto);
                 }
 
@@ -323,7 +330,7 @@ namespace Api.Controllers
 
         [HttpPost]
         [Route("addsalesorder")]
-        public IActionResult AddSalesOrder([FromBody]Dto.Sales.SalesOrder salesorderDto)
+        public IActionResult AddSalesOrder([FromBody] Dto.Sales.SalesOrder salesorderDto)
         {
             try
             {
@@ -331,6 +338,8 @@ namespace Api.Controllers
                 {
                     CustomerId = salesorderDto.CustomerId,
                     Date = salesorderDto.OrderDate,
+                    PaymentTermId = salesorderDto.PaymentTermId,
+                    ReferenceNo = salesorderDto.ReferenceNo
                 };
 
                 foreach (var line in salesorderDto.SalesOrderLines)
@@ -377,7 +386,7 @@ namespace Api.Controllers
                     QuotationDate = quote.Date,
                     ReferenceNo = quote.ReferenceNo,
                     SalesQuoteStatus = quote.Status.ToString(),
-                    StatusId = (int) quote.Status!
+                    StatusId = (int)quote.Status!
                 };
 
                 foreach (var line in quote.SalesQuoteLines)
@@ -413,7 +422,7 @@ namespace Api.Controllers
                 QuotationDate = quote.Date,
                 PaymentTermId = quote.PaymentTermId,
                 ReferenceNo = quote.ReferenceNo,
-                StatusId = (int) quote.Status!
+                StatusId = (int)quote.Status!
             };
 
             foreach (var line in quote.SalesQuoteLines)
@@ -452,12 +461,14 @@ namespace Api.Controllers
                     Id = salesInvoice.Id,
                     No = salesInvoice.No,
                     CustomerId = salesInvoice.CustomerId,
-                    CustomerName = salesInvoice.Customer.Party.Name,
+                    CustomerName = salesInvoice.Customer?.Party?.Name ?? "Unknown",
                     InvoiceDate = salesInvoice.Date,
                     ReferenceNo = salesInvoice.ReferenceNo,
+                    TotalAllocatedAmount = (decimal)salesInvoice.CustomerAllocations.Sum(i => i.Amount),
                     Posted = salesInvoice.GeneralLedgerHeaderId != null
                 };
 
+                // Populate line items - Amount will be calculated automatically by the DTO
                 foreach (var line in salesInvoice.SalesInvoiceLines)
                 {
                     var lineDto = new Dto.Sales.SalesInvoiceLine()
@@ -508,6 +519,9 @@ namespace Api.Controllers
         public IActionResult SalesReceipt(int id)
         {
             var salesReceipt = _salesService.GetSalesReceiptById(id);
+            var creditAccountId = salesReceipt.SalesReceiptLines.FirstOrDefault()?.AccountToCreditId ?? 0;
+            var debitCashBankId = _financialService.GetCashAndBanks().Where(cb => cb.AccountId == salesReceipt.AccountToDebitId).FirstOrDefault()?.Id ?? 0;
+
             var salesReceiptDto = new Dto.Sales.SalesReceipt()
             {
                 Id = salesReceipt.Id,
@@ -516,7 +530,9 @@ namespace Api.Controllers
                 CustomerName = salesReceipt.Customer.Party.Name,
                 ReceiptDate = salesReceipt.Date,
                 Amount = salesReceipt.Amount,
-                RemainingAmountToAllocate = salesReceipt.AvailableAmountToAllocate
+                RemainingAmountToAllocate = salesReceipt.AvailableAmountToAllocate,
+                AccountToDebitId = debitCashBankId,
+                AccountToCreditId = creditAccountId
             };
 
             return new ObjectResult(salesReceiptDto);
@@ -569,7 +585,7 @@ namespace Api.Controllers
 
         [HttpPost]
         [Route("SaveSalesOrder")]
-        public IActionResult SaveSalesOrder([FromBody]Dto.Sales.SalesOrder salesOrderDto)
+        public IActionResult SaveSalesOrder([FromBody] Dto.Sales.SalesOrder salesOrderDto)
         {
             string[]? errors = null;
             try
@@ -684,7 +700,7 @@ namespace Api.Controllers
 
         [HttpPost]
         [Route("PostSalesInvoice")]
-        public IActionResult PostSalesInvoice([FromBody]Dto.Sales.SalesInvoice salesInvoiceDto)
+        public IActionResult PostSalesInvoice([FromBody] Dto.Sales.SalesInvoice salesInvoiceDto)
         {
             string[]? errors = null;
 
@@ -715,7 +731,7 @@ namespace Api.Controllers
 
         [HttpPost]
         [Route("SaveSalesInvoice")]
-        public IActionResult SaveSalesInvoice([FromBody]Dto.Sales.SalesInvoice salesInvoiceDto)
+        public IActionResult SaveSalesInvoice([FromBody] Dto.Sales.SalesInvoice salesInvoiceDto)
         {
             string[]? errors = null;
 
@@ -920,7 +936,7 @@ namespace Api.Controllers
 
         [HttpPost]
         [Route("SaveQuotation")]
-        public IActionResult SaveQuotation([FromBody]Dto.Sales.SalesQuotation quotationDto)
+        public IActionResult SaveQuotation([FromBody] Dto.Sales.SalesQuotation quotationDto)
         {
             string[]? errors = null;
             _logger.LogInformation("SaveQuotation");
@@ -956,7 +972,7 @@ namespace Api.Controllers
 
                 salesQuote.ReferenceNo = quotationDto.ReferenceNo;
                 salesQuote.PaymentTermId = quotationDto.PaymentTermId;
-                
+
                 foreach (var line in quotationDto.SalesQuotationLines)
                 {
                     if (!isNew)
@@ -1025,7 +1041,7 @@ namespace Api.Controllers
 
         [HttpPost]
         [Route("SaveReceipt")]
-        public IActionResult SaveReceipt([FromBody]dynamic receiptDto)
+        public IActionResult SaveReceipt([FromBody] dynamic receiptDto)
         {
             string[]? errors = null;
 
@@ -1073,8 +1089,65 @@ namespace Api.Controllers
         }
 
         [HttpPost]
+        [Route("UpdateReceipt")]
+        public IActionResult UpdateReceipt([FromBody] dynamic receiptDto)
+        {
+            string[]? errors = null;
+
+            try
+            {
+                if (!ModelState.IsValid)
+                {
+                    errors = new string[ModelState.ErrorCount];
+                    foreach (var val in ModelState.Values)
+                        for (int i = 0; i < ModelState.ErrorCount; i++)
+                            errors[i] = val.Errors[i].ErrorMessage;
+
+                    return new BadRequestObjectResult(errors);
+                }
+
+                int receiptId = receiptDto.Id;
+                var existingReceipt = _salesService.GetSalesReceiptById(receiptId);
+
+                if (existingReceipt == null)
+                {
+                    return new BadRequestObjectResult(new string[] { "Sales receipt not found." });
+                }
+
+                var bank = _financialService.GetCashAndBanks().Where(id => id.Id == (int)receiptDto.AccountToDebitId).FirstOrDefault();
+
+                existingReceipt.Date = receiptDto.ReceiptDate;
+                existingReceipt.CustomerId = receiptDto.CustomerId;
+                existingReceipt.AccountToDebitId = bank!.AccountId;
+                existingReceipt.Amount = receiptDto.Amount;
+
+                var customer = _salesService.GetCustomerById((int)receiptDto.CustomerId);
+                if (customer.CustomerAdvancesAccountId != (int)receiptDto.AccountToCreditId)
+                    throw new Exception("Invalid account.");
+
+                // Update the first receipt line
+                var receiptLine = existingReceipt.SalesReceiptLines.FirstOrDefault();
+                if (receiptLine != null)
+                {
+                    receiptLine.AccountToCreditId = receiptDto.AccountToCreditId;
+                    receiptLine.AmountPaid = receiptDto.Amount;
+                    receiptLine.Amount = receiptDto.Amount;
+                }
+
+                _salesService.UpdateSalesReceipt(existingReceipt);
+
+                return new ObjectResult(Ok());
+            }
+            catch (Exception ex)
+            {
+                errors = new string[1] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
+                return new BadRequestObjectResult(errors);
+            }
+        }
+
+        [HttpPost]
         [Route("SaveAllocation")]
-        public IActionResult SaveAllocation([FromBody]dynamic allocationDto)
+        public IActionResult SaveAllocation([FromBody] dynamic allocationDto)
         {
             string[]? errors = null;
 

@@ -11,6 +11,7 @@ namespace Dto.Sales
         public decimal RemainingAmountToAllocate { get; set; }
         public int AccountToDebitId { get; set; }
         public string? AccountToDebit { get; set; }
+        public int AccountToCreditId { get; set; }
         public int GeneralLedgerHederId { get; set; }
         public DateTime ReceiptDate { get; set; }
         public string? ReferenceNo { get; set; }

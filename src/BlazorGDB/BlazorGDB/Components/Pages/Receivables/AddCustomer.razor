@@ -1,0 +1,452 @@
+@page "/receivables/customer/{Id:int}"
+@page "/receivables/customer"
+@using CustomerDto = Dto.Sales.Customer
+@using Dto.Common
+@inject HttpClient Http
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+
+<PageTitle>@(Id == 0 ? "New" : "Edit") Customer</PageTitle>
+
+<style>
+    .form-label {
+        color: white;
+    }
+</style>
+
+<div class="container-fluid">
+    <div class="row mb-3">
+        <div class="col">
+            @if (Id != 0 && !isEditMode)
+            {
+                <button class="btn btn-primary" @onclick="EnableEditMode">
+                    <i class="fa fa-edit"></i> Edit
+                </button>
+
+            }
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="row">
+            <div class="col text-center">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mt-2">Loading customer...</p>
+            </div>
+        </div>
+    }
+    else if (errorMessage != null)
+    {
+        <div class="row">
+            <div class="col">
+                <div class="alert alert-danger" role="alert">
+                    <i class="fa fa-exclamation-triangle"></i> @errorMessage
+                </div>
+            </div>
+        </div>
+    }
+    else
+    {
+        <EditForm Model="@Model" OnValidSubmit="HandleValidSubmit" FormName="customerForm">
+            <DataAnnotationsValidator />
+            
+            @* General Section *@
+            <div class="card mb-3">
+                <div class="card-header" style="background-color: #3a3f44; color: white;">
+                    <i class="fa fa-align-justify"></i> General
+                </div>
+                <div class="card-body" style="background-color: #2b2f33;">
+                    <div class="row">
+                        <div class="col-sm-6">
+                            <div class="row mb-3">
+                                <div class="col-sm-4">
+                                    <label class="form-label">No</label>
+                                </div>
+                                <div class="col-sm-8">
+                                    <input type="text" class="form-control" value="@(Model.No ?? "Auto-generated")" disabled />
+                                </div>
+                            </div>
+                            <div class="row mb-3">
+                                <div class="col-sm-4">
+                                    <label class="form-label">Name</label>
+                                </div>
+                                <div class="col-sm-8">
+                                    <InputText class="form-control" @bind-Value="Model.Name" placeholder="Name ..." disabled="@(!isEditMode)" />
+                                    <ValidationMessage For="@(() => Model.Name)" class="text-danger" />
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-sm-6">
+                            <div class="row mb-3">
+                                <div class="col-sm-4">
+                                    <label class="form-label">Phone</label>
+                                </div>
+                                <div class="col-sm-8">
+                                    <InputText class="form-control" @bind-Value="Model.Phone" placeholder="Phone ..." disabled="@(!isEditMode)" />
+                                </div>
+                            </div>
+                            <div class="row mb-3">
+                                <div class="col-sm-4">
+                                    <label class="form-label">Website</label>
+                                </div>
+                                <div class="col-sm-8">
+                                    <InputText class="form-control" @bind-Value="Model.Website" placeholder="Website ..." disabled="@(!isEditMode)" />
+                                </div>
+                            </div>
+                            <div class="row mb-3">
+                                <div class="col-sm-4">
+                                    <label class="form-label">Email</label>
+                                </div>
+                                <div class="col-sm-8">
+                                    <InputText class="form-control" @bind-Value="Model.Email" placeholder="Email ..." disabled="@(!isEditMode)" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            @* Contact Section *@
+            <div class="card mb-3">
+                <div class="card-header" style="background-color: #3a3f44; color: white;">
+                    <i class="fa fa-align-justify"></i> Contact
+                    <button type="button" class="btn btn-sm btn-secondary float-end ms-2" @onclick="NavigateToContacts">
+                        <i class="fa fa-list"></i> View Contacts
+                    </button>
+                    @if (Id != 0)
+                    {
+                        <button type="button" class="btn btn-sm btn-primary float-end" @onclick="NavigateToAddContact">
+                            <i class="fa fa-plus"></i> Add Contact
+                        </button>
+                    }
+                </div>
+                <div class="card-body" style="background-color: #2b2f33;">
+                    <div class="row">
+                        <div class="col-sm-6">
+                            <div class="row mb-3">
+                                <div class="col-sm-4">
+                                    <label class="form-label">First Name</label>
+                                </div>
+                                <div class="col-sm-8">
+                                    <InputText class="form-control" @bind-Value="Model.PrimaryContact!.FirstName" placeholder="First Name ..." disabled="@(!isEditMode)" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            @* Invoicing Section *@
+            <div class="card mb-3">
+                <div class="card-header" style="background-color: #3a3f44; color: white;">
+                    <i class="fa fa-align-justify"></i> Invoicing
+                </div>
+                <div class="card-body" style="background-color: #2b2f33;">
+                    <div class="row">
+                        <div class="col-sm-6">
+                            <div class="row mb-3">
+                                <div class="col-sm-4">
+                                    <label class="form-label">Accounts Receivable</label>
+                                </div>
+                                <div class="col-sm-8">
+                                    <InputSelect class="form-control" @bind-Value="Model.AccountsReceivableId" disabled="@(!isEditMode)">
+                                        <option value="">-- Select Account --</option>
+                                        @foreach (var account in Accounts)
+                                        {
+                                            <option value="@account.Value">@account.Text</option>
+                                        }
+                                    </InputSelect>
+                                </div>
+                            </div>
+                            <div class="row mb-3">
+                                <div class="col-sm-4">
+                                    <label class="form-label">Sales</label>
+                                </div>
+                                <div class="col-sm-8">
+                                    <InputSelect class="form-control" @bind-Value="Model.SalesAccountId" disabled="@(!isEditMode)">
+                                        <option value="">-- Select Account --</option>
+                                        @foreach (var account in Accounts)
+                                        {
+                                            <option value="@account.Value">@account.Text</option>
+                                        }
+                                    </InputSelect>
+                                </div>
+                            </div>
+                            <div class="row mb-3">
+                                <div class="col-sm-4">
+                                    <label class="form-label">Prepayment</label>
+                                </div>
+                                <div class="col-sm-8">
+                                    <InputSelect class="form-control" @bind-Value="Model.PrepaymentAccountId" disabled="@(!isEditMode)">
+                                        <option value="">-- Select Account --</option>
+                                        @foreach (var account in Accounts)
+                                        {
+                                            <option value="@account.Value">@account.Text</option>
+                                        }
+                                    </InputSelect>
+                                </div>
+                            </div>
+                            <div class="row mb-3">
+                                <div class="col-sm-4">
+                                    <label class="form-label">Discount</label>
+                                </div>
+                                <div class="col-sm-8">
+                                    <InputSelect class="form-control" @bind-Value="Model.SalesDiscountAccountId" disabled="@(!isEditMode)">
+                                        <option value="">-- Select Account --</option>
+                                        @foreach (var account in Accounts)
+                                        {
+                                            <option value="@account.Value">@account.Text</option>
+                                        }
+                                    </InputSelect>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-sm-6">
+                            <div class="row mb-3">
+                                <div class="col-sm-4">
+                                    <label class="form-label">Tax Group</label>
+                                </div>
+                                <div class="col-sm-8">
+                                    <InputSelect class="form-control" @bind-Value="Model.TaxGroupId" disabled="@(!isEditMode)">
+                                        <option value="">-- Select Tax Group --</option>
+                                        @foreach (var taxGroup in TaxGroups)
+                                        {
+                                            <option value="@taxGroup.Value">@taxGroup.Text</option>
+                                        }
+                                    </InputSelect>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            @* Payment Section *@
+            <div class="card mb-3">
+                <div class="card-header" style="background-color: #3a3f44; color: white;">
+                    <i class="fa fa-align-justify"></i> Payment
+                </div>
+                <div class="card-body" style="background-color: #2b2f33;">
+                    <div class="row">
+                        <div class="col-sm-6">
+                            <div class="row mb-3">
+                                <div class="col-sm-4">
+                                    <label class="form-label">Payment Term</label>
+                                </div>
+                                <div class="col-sm-8">
+                                    <InputSelect class="form-control" @bind-Value="Model.PaymentTermId" disabled="@(!isEditMode)">
+                                        <option value="">-- Select Payment Term --</option>
+                                        @foreach (var term in PaymentTerms)
+                                        {
+                                            <option value="@term.Value">@term.Text</option>
+                                        }
+                                    </InputSelect>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row mt-3">
+                <div class="col">
+                    @if (isEditMode || Id == 0)
+                    {
+                        <button class="btn btn-primary" type="submit">
+                            <i class="fa fa-save"></i> Save
+                        </button>
+                    }
+                    <button class="btn btn-secondary ms-2" type="button" @onclick="NavigateToCustomerList">
+                        <i class="fa fa-times"></i> Close
+                    </button>
+                </div>
+            </div>
+        </EditForm>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public int Id { get; set; } = 0;
+
+    private CustomerDto Model { get; set; } = new();
+    
+    private List<SelectListItem> Accounts { get; set; } = new();
+    private List<SelectListItem> TaxGroups { get; set; } = new();
+    private List<SelectListItem> PaymentTerms { get; set; } = new();
+    
+    private bool isLoading = true;
+    private bool isEditMode = false;
+    private string? errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        isLoading = true;
+        
+        if (Id != 0)
+        {
+            await LoadCustomer();
+        }
+        else
+        {
+            isEditMode = true;
+            await GenerateCustomerNumber();
+        }
+        
+        await LoadDropdownData();
+        
+        isLoading = false;
+    }
+
+    private async Task GenerateCustomerNumber()
+    {
+        try
+        {
+            string baseApiUrl = Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
+            var apiUrl = baseApiUrl + "sales/customers";
+            var response = await Http.GetAsync(apiUrl);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var customers = await response.Content.ReadFromJsonAsync<List<CustomerDto>>();
+                if (customers != null && customers.Any())
+                {
+                    // Find the highest customer number
+                    var maxNo = customers
+                        .Select(c => int.TryParse(c.No, out int num) ? num : 0)
+                        .DefaultIfEmpty(0)
+                        .Max();
+                    
+                    Model.No = (maxNo + 1).ToString();
+                }
+                else
+                {
+                    Model.No = "1";
+                }
+            }
+        }
+        catch (Exception)
+        {
+            Model.No = "1";
+        }
+    }
+
+    private async Task LoadCustomer()
+    {
+        try
+        {
+            string baseApiUrl = Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
+            var apiUrl = $"{baseApiUrl}sales/customer?id={Id}";
+            var response = await Http.GetAsync(apiUrl);
+
+            if (response.IsSuccessStatusCode)
+            {
+                Model = await response.Content.ReadFromJsonAsync<CustomerDto>() ?? new();
+            }
+            else
+            {
+                errorMessage = $"Failed to load customer. Status: {response.StatusCode}";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading customer: {ex.Message}";
+        }
+    }
+
+    private async Task LoadDropdownData()
+    {
+        try
+        {
+            string baseApiUrl = Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
+            
+            // Load accounts
+            var accountsResponse = await Http.GetAsync(baseApiUrl + "common/postingaccounts");
+            if (accountsResponse.IsSuccessStatusCode)
+            {
+                var accounts = await accountsResponse.Content.ReadFromJsonAsync<List<Dto.Financial.Account>>();
+                Accounts = accounts?.Select(a => new SelectListItem { Value = a.Id.ToString(), Text = a.AccountName! }).ToList() ?? new();
+            }
+
+            // Load tax groups
+            var taxGroupsResponse = await Http.GetAsync(baseApiUrl + "tax/taxgroups");
+            if (taxGroupsResponse.IsSuccessStatusCode)
+            {
+                var taxGroups = await taxGroupsResponse.Content.ReadFromJsonAsync<List<Dto.TaxSystem.TaxGroup>>();
+                TaxGroups = taxGroups?.Select(tg => new SelectListItem { Value = tg.Id.ToString(), Text = tg.Description! }).ToList() ?? new();
+            }
+
+            // Load payment terms
+            var paymentTermsResponse = await Http.GetAsync(baseApiUrl + "common/paymentterms");
+            if (paymentTermsResponse.IsSuccessStatusCode)
+            {
+                var paymentTerms = await paymentTermsResponse.Content.ReadFromJsonAsync<List<PaymentTermResponse>>();
+                PaymentTerms = paymentTerms?.Select(pt => new SelectListItem { Value = pt.Id.ToString(), Text = pt.Description }).ToList() ?? new();
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading form data: {ex.Message}";
+        }
+    }
+
+    private async Task HandleValidSubmit()
+    {
+        try
+        {
+            string baseApiUrl = Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
+            var apiUrl = baseApiUrl + "sales/savecustomer";
+            
+            var response = await Http.PostAsJsonAsync(apiUrl, Model);
+            
+            if (response.IsSuccessStatusCode)
+            {
+                Navigation.NavigateTo("/receivables/customers");
+            }
+            else
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                errorMessage = $"Failed to save customer. Status: {response.StatusCode}. {errorContent}";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error saving customer: {ex.Message}";
+        }
+    }
+
+    private void EnableEditMode()
+    {
+        isEditMode = true;
+    }
+
+    private void NavigateToCustomerList()
+    {
+        Navigation.NavigateTo("/receivables/customers");
+    }
+
+    private void NavigateToAddContact()
+    {
+        Navigation.NavigateTo($"/receivables/contact?partyId={Model.Id}&partyType=1");
+    }
+
+    private void NavigateToContacts()
+    {
+        Navigation.NavigateTo($"/receivables/contacts?partyId={Model.Id}&partyType=1");
+    }
+
+    public class SelectListItem
+    {
+        public string Value { get; set; } = string.Empty;
+        public string Text { get; set; } = string.Empty;
+    }
+
+    public class PaymentTermResponse
+    {
+        public int Id { get; set; }
+        public string Description { get; set; } = string.Empty;
+    }
+}

@@ -1,0 +1,232 @@
+@page "/receivables/contact/{Id:int}"
+@page "/receivables/contact"
+@using ContactDto = Dto.Common.Contact
+@inject HttpClient Http
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+
+<PageTitle>@(Id == 0 ? "New" : "Edit") Contact</PageTitle>
+
+<style>
+    .form-label {
+        color: white;
+    }
+</style>
+
+<div class="container-fluid">
+    <div class="row mb-3">
+        <div class="col">
+            @if (Id != 0 && !isEditMode)
+            {
+                <button class="btn btn-primary" @onclick="EnableEditMode">
+                    <i class="fa fa-edit"></i> Edit
+                </button>
+            }
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="row">
+            <div class="col text-center">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mt-2">Loading contact...</p>
+            </div>
+        </div>
+    }
+    else if (errorMessage != null)
+    {
+        <div class="row">
+            <div class="col">
+                <div class="alert alert-danger" role="alert">
+                    <i class="fa fa-exclamation-triangle"></i> @errorMessage
+                </div>
+            </div>
+        </div>
+    }
+    else
+    {
+        <EditForm Model="@Model" OnValidSubmit="HandleValidSubmit" FormName="contactForm">
+            <DataAnnotationsValidator />
+            
+            <div class="card mb-3">
+                <div class="card-header" style="background-color: #3a3f44; color: white;">
+                    <i class="fa fa-align-justify"></i> Contact
+                </div>
+                <div class="card-body" style="background-color: #2b2f33;">
+                    <div class="row mb-3">
+                        <div class="col-sm-4">
+                            <label class="form-label">First Name</label>
+                        </div>
+                        <div class="col-sm-8">
+                            <InputText class="form-control" @bind-Value="Model.FirstName" placeholder="First Name ..." disabled="@(!isEditMode)" />
+                            <ValidationMessage For="@(() => Model.FirstName)" class="text-danger" />
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-sm-4">
+                            <label class="form-label">Last Name</label>
+                        </div>
+                        <div class="col-sm-8">
+                            <InputText class="form-control" @bind-Value="Model.LastName" placeholder="Last Name ..." disabled="@(!isEditMode)" />
+                            <ValidationMessage For="@(() => Model.LastName)" class="text-danger" />
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-sm-4">
+                            <label class="form-label">Phone</label>
+                        </div>
+                        <div class="col-sm-8">
+                            <InputText class="form-control" @bind-Value="Model.Party.Phone" placeholder="Phone ..." disabled="@(!isEditMode)" />
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-sm-4">
+                            <label class="form-label">Website</label>
+                        </div>
+                        <div class="col-sm-8">
+                            <InputText class="form-control" @bind-Value="Model.Party.Website" placeholder="Website ..." disabled="@(!isEditMode)" />
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-sm-4">
+                            <label class="form-label">Email</label>
+                        </div>
+                        <div class="col-sm-8">
+                            <InputText class="form-control" @bind-Value="Model.Party.Email" placeholder="Email ..." disabled="@(!isEditMode)" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row mt-3">
+                <div class="col">
+                    @if (isEditMode || Id == 0)
+                    {
+                        <button class="btn btn-primary" type="submit">
+                            <i class="fa fa-save"></i> Save
+                        </button>
+                    }
+                    <button class="btn btn-secondary ms-2" type="button" @onclick="NavigateBack">
+                        <i class="fa fa-times"></i> Close
+                    </button>
+                </div>
+            </div>
+        </EditForm>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public int Id { get; set; } = 0;
+
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public int? PartyId { get; set; }
+
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public int? PartyType { get; set; }
+
+    private ContactDto Model { get; set; } = new();
+    
+    private bool isLoading = true;
+    private bool isEditMode = false;
+    private string? errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        isLoading = true;
+        
+        if (Id != 0)
+        {
+            await LoadContact();
+        }
+        else
+        {
+            isEditMode = true;
+            Model.HoldingPartyId = PartyId.GetValueOrDefault();
+            Model.HoldingPartyType = PartyType.GetValueOrDefault();
+        }
+        
+        isLoading = false;
+    }
+
+    private async Task LoadContact()
+    {
+        try
+        {
+            string baseApiUrl = Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
+            var apiUrl = $"{baseApiUrl}contact/contact?id={Id}";
+            var response = await Http.GetAsync(apiUrl);
+
+            if (response.IsSuccessStatusCode)
+            {
+                Model = await response.Content.ReadFromJsonAsync<ContactDto>() ?? new();
+            }
+            else
+            {
+                errorMessage = $"Failed to load contact. Status: {response.StatusCode}";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading contact: {ex.Message}";
+        }
+    }
+
+    private async Task HandleValidSubmit()
+    {
+        try
+        {
+            string baseApiUrl = Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
+            var apiUrl = baseApiUrl + "contact/savecontact";
+            
+            var response = await Http.PostAsJsonAsync(apiUrl, Model);
+            
+            if (response.IsSuccessStatusCode)
+            {
+                if (PartyId.HasValue && PartyType.HasValue)
+                {
+                    Navigation.NavigateTo($"/receivables/contacts?partyId={PartyId}&partyType={PartyType}");
+                }
+                else
+                {
+                    Navigation.NavigateTo("/receivables/customers");
+                }
+            }
+            else
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                errorMessage = $"Failed to save contact. Status: {response.StatusCode}. {errorContent}";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error saving contact: {ex.Message}";
+        }
+    }
+
+    private void EnableEditMode()
+    {
+        isEditMode = true;
+    }
+
+    private void NavigateBack()
+    {
+        if (PartyId.HasValue && PartyType.HasValue)
+        {
+            Navigation.NavigateTo($"/receivables/contacts?partyId={PartyId}&partyType={PartyType}");
+        }
+        else if (PartyId.HasValue)
+        {
+            Navigation.NavigateTo($"/receivables/customer/{PartyId}");
+        }
+        else
+        {
+            Navigation.NavigateTo("/receivables/customers");
+        }
+    }
+}

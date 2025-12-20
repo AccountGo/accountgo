@@ -1,0 +1,126 @@
+﻿@* ICJ.razor - fetches its own data *@
+@using Dto.Inventory
+@using Microsoft.Extensions.Configuration
+@inject IHttpClientFactory HttpClientFactory
+@inject IConfiguration Configuration
+
+@if (isLoading)
+{
+    <div class="loading-container">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+}
+else if (hasError)
+{
+    <div style="color: red;">Error loading inventory data.</div>
+}
+else
+{
+    <table class="icjTable">
+        <thead>
+            <tr>
+                <th>Id</th>
+                <th>Item</th>
+                <th>Measurement</th>
+                <th>IN</th>
+                <th>OUT</th>
+                <th>Date</th>
+            </tr>
+        </thead>
+        <tbody>
+            @if (InventoryData == null || InventoryData.Count == 0)
+            {
+                <tr>
+                    <td colspan="6" class="noRows">No Rows to Show</td>
+                </tr>
+            }
+            else
+            {
+                @foreach (var row in InventoryData)
+                {
+                    <tr @onclick="() => OnRowClicked(row)" class="icjRow">
+                        <td>@row.Id</td>
+                        <td>@row.Item</td>
+                        <td>@row.Measurement</td>
+                        <td>@row.In</td>
+                        <td>@row.Out</td>
+                        <td>@row.Date.ToShortDateString()</td>
+                    </tr>
+                }
+            }
+        </tbody>
+    </table>
+}
+
+<style>
+.icjTable {
+    width: 100%;
+    border-collapse: collapse;
+    background-color: transparent;
+    color: white; /* text for dark background */
+}
+.icjTable th, .icjTable td {
+    padding: 8px;
+    text-align: left;
+    border: none;
+}
+.icjRow:hover {
+    background-color: rgba(255,255,255,0.1);
+    cursor: pointer;
+}
+.noRows {
+    text-align: center;
+    font-style: italic;
+    color: rgba(255,255,255,0.7);
+}
+.loading-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100px;
+}
+</style>
+
+@code {
+    private List<InventoryControlJournal> InventoryData { get; set; } = new();
+    private bool isLoading = true;
+    private bool hasError = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var httpClient = HttpClientFactory.CreateClient();
+            httpClient.BaseAddress = new Uri(Configuration["ApiUrl"] ?? "https://gdbapi.azurewebsites.net/api/");
+            httpClient.DefaultRequestHeaders.Accept.Clear();
+            httpClient.DefaultRequestHeaders.Accept.Add(
+                new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
+
+            var response = await httpClient.GetAsync("Inventory/ICJ");
+            if (response.IsSuccessStatusCode)
+            {
+                InventoryData = await response.Content.ReadFromJsonAsync<List<InventoryControlJournal>>() ?? new List<InventoryControlJournal>();
+            }
+            else
+            {
+                hasError = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("Error loading ICJ data: " + ex.Message);
+            hasError = true;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void OnRowClicked(InventoryControlJournal row)
+    {
+        Console.WriteLine($"Row clicked: {row.Id} - {row.Item}");
+    }
+}

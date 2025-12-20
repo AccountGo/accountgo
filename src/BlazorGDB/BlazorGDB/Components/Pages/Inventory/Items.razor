@@ -1,9 +1,243 @@
 ﻿@page "/inventory/items"
+@using Dto.Inventory
+@inject HttpClient Http
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
 
 <PageTitle>Items</PageTitle>
 
-<h3>Items</h3>
+<div class="container-fluid">
+    <div class="row mb-3">
+        <div class="col">
+            <h3>Items</h3>
+        </div>
+    </div>
+
+    <div class="row mb-3">
+        <div class="col">
+            <button class="btn btn-primary" @onclick="NavigateToNewItem">
+                <i class="bi bi-plus-circle"></i> New Item
+            </button>
+            @if (selectedItem != null)
+            {
+                <button class="btn btn-secondary ms-2" @onclick="NavigateToViewItem">
+                    <i class="bi bi-pencil"></i> View/Edit
+                </button>
+            }
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="row">
+            <div class="col text-center">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mt-2">Loading items...</p>
+            </div>
+        </div>
+    }
+    else if (errorMessage != null)
+    {
+        <div class="row">
+            <div class="col">
+                <div class="alert alert-danger" role="alert">
+                    <i class="bi bi-exclamation-triangle"></i> @errorMessage
+                </div>
+            </div>
+        </div>
+    }
+    else if (items == null || !items.Any())
+    {
+        <div class="row">
+            <div class="col">
+                <div class="alert alert-info" role="alert">
+                    <i class="bi bi-info-circle"></i> No items found.
+                </div>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="row">
+            <div class="col">
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover table-bordered">
+                        <thead class="table-dark">
+                            <tr>
+                                <th @onclick="() => SortBy(nameof(Item.Id))">
+                                    Item @GetSortIcon(nameof(Item.Id))
+                                </th>
+                                <th @onclick="() => SortBy(nameof(Item.Code))">
+                                    Code @GetSortIcon(nameof(Item.Code))
+                                </th>
+                                <th @onclick="() => SortBy(nameof(Item.Description))">
+                                    Description @GetSortIcon(nameof(Item.Description))
+                                </th>
+                                <th @onclick="() => SortBy(nameof(Item.Measurement))">
+                                    Measurement @GetSortIcon(nameof(Item.Measurement))
+                                </th>
+                                <th @onclick="() => SortBy(nameof(Item.ItemTaxGroupName))">
+                                    Item Tax Group @GetSortIcon(nameof(Item.ItemTaxGroupName))
+                                </th>
+                                <th @onclick="() => SortBy(nameof(Item.Cost))">
+                                    Cost @GetSortIcon(nameof(Item.Cost))
+                                </th>
+                                <th @onclick="() => SortBy(nameof(Item.Price))">
+                                    Price @GetSortIcon(nameof(Item.Price))
+                                </th>
+                                <th @onclick="() => SortBy(nameof(Item.QuantityOnHand))">
+                                    On Hand @GetSortIcon(nameof(Item.QuantityOnHand))
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in items)
+                            {
+                                <tr @onclick="() => SelectItem(item)"
+                                    class="@(selectedItem?.Id == item.Id ? "table-active" : "")" style="cursor: pointer;">
+                                    <td>
+                                        <a href="/inventory/item/@item.Id" class="text-decoration-none">
+                                            @item.Id
+                                        </a>
+                                    </td>
+                                    <td>@item.Code</td>
+                                    <td>@item.Description</td>
+                                    <td>@item.Measurement</td>
+                                    <td>@item.ItemTaxGroupName</td>
+                                    <td class="text-end">@item.Cost?.ToString("N2")</td>
+                                    <td class="text-end">@item.Price?.ToString("N2")</td>
+                                    <td class="text-end">@item.QuantityOnHand?.ToString("N2")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col">
+                <p class="text-muted">Total: @items.Count() item(s)</p>
+            </div>
+        </div>
+    }
+</div>
 
 @code {
+    private List<Item>? items;
+    private List<Item>? allItems;
+    private Item? selectedItem;
+    private bool isLoading = true;
+    private string? errorMessage;
+    private string? sortColumn;
+    private bool sortAscending = true;
 
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadItems();
+    }
+
+    private async Task LoadItems()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            var apiUrl = "http://localhost:8001/api/inventory/items";
+            var response = await Http.GetAsync(apiUrl);
+
+            if (response.IsSuccessStatusCode)
+            {
+                allItems = await response.Content.ReadFromJsonAsync<List<Item>>();
+                items = allItems;
+            }
+            else
+            {
+                errorMessage = $"Failed to load items. Status: {response.StatusCode}";
+            }
+        }
+        catch (HttpRequestException ex)
+        {
+            errorMessage = $"Network error: {ex.Message}. Please ensure the API is running on port 8001.";
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading items: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void SelectItem(Item item)
+    {
+        selectedItem = item;
+    }
+
+    private void NavigateToNewItem()
+    {
+        Navigation.NavigateTo("/inventory/item/new");
+    }
+
+    private void NavigateToViewItem()
+    {
+        if (selectedItem != null)
+        {
+            Navigation.NavigateTo($"/inventory/item/{selectedItem.Id}");
+        }
+    }
+
+    private void SortBy(string column)
+    {
+        if (items == null) return;
+
+        if (sortColumn == column)
+        {
+            sortAscending = !sortAscending;
+        }
+        else
+        {
+            sortColumn = column;
+            sortAscending = true;
+        }
+
+        items = column switch
+        {
+            nameof(Item.Id) => sortAscending
+            ? items.OrderBy(i => i.Id).ToList()
+            : items.OrderByDescending(i => i.Id).ToList(),
+            nameof(Item.Code) => sortAscending
+            ? items.OrderBy(i => i.Code).ToList()
+            : items.OrderByDescending(i => i.Code).ToList(),
+            nameof(Item.Description) => sortAscending
+            ? items.OrderBy(i => i.Description).ToList()
+            : items.OrderByDescending(i => i.Description).ToList(),
+            nameof(Item.Measurement) => sortAscending
+            ? items.OrderBy(i => i.Measurement).ToList()
+            : items.OrderByDescending(i => i.Measurement).ToList(),
+            nameof(Item.ItemTaxGroupName) => sortAscending
+            ? items.OrderBy(i => i.ItemTaxGroupName).ToList()
+            : items.OrderByDescending(i => i.ItemTaxGroupName).ToList(),
+            nameof(Item.Cost) => sortAscending
+            ? items.OrderBy(i => i.Cost).ToList()
+            : items.OrderByDescending(i => i.Cost).ToList(),
+            nameof(Item.Price) => sortAscending
+            ? items.OrderBy(i => i.Price).ToList()
+            : items.OrderByDescending(i => i.Price).ToList(),
+            nameof(Item.QuantityOnHand) => sortAscending
+            ? items.OrderBy(i => i.QuantityOnHand).ToList()
+            : items.OrderByDescending(i => i.QuantityOnHand).ToList(),
+            _ => items
+        };
+    }
+
+    private string GetSortIcon(string column)
+    {
+        if (sortColumn != column) return "";
+        return sortAscending ? "▲" : "▼";
+    }
 }

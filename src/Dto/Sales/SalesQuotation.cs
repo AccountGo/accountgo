@@ -33,9 +33,10 @@ namespace Dto.Sales
             {
                 decimal quantityXamount = (line.Amount!.Value * line.Quantity!.Value);
                 decimal discount = 0;
-                if(line.Discount.HasValue)
+                if (line.Discount.HasValue)
                     discount = (line.Discount.Value / 100) > 0 ? (quantityXamount * (line.Discount.Value / 100)) : 0;
-                total += ((line.Amount.Value * line.Quantity.Value) - discount);
+                decimal lineTotal = quantityXamount - discount;
+                total += Math.Max(0, lineTotal);
             }
             return total;
         }
