@@ -19,7 +19,7 @@ jobs:
       - name: Set up .NET Core
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '9.x'
+          dotnet-version: '10.x'
           
       - name: Install dotnet-ef tool
         run: |
@@ -55,7 +55,7 @@ jobs:
       - name: dotnet publish
         run: |
           echo "++++ contents of dotnet publish ./src/Api/Api.csproj"
-          dotnet publish ./src/Api/Api.csproj -f net9.0 -c Release -o "${{runner.temp}}/myapp"
+          dotnet publish ./src/Api/Api.csproj -f net10.0 -c Release -o "${{runner.temp}}/myapp"
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
