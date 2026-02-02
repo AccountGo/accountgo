@@ -17,7 +17,7 @@
     "ag-grid": "^18.1.2",
     "d3": "^7.8.5",
     "font-awesome": "^4.7.0",
-    "jspdf": "^2.5.1",
+    "jspdf": "^4.1.0",
     "pace-progress": "^1.0.2",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
