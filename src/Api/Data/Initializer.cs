@@ -486,8 +486,8 @@ namespace Api.Data
             });
             paymentTerms.Add(new Core.Domain.PaymentTerm
             {
-                Description = "Cash Only",
-                PaymentType = Core.Domain.PaymentTypes.Cash,
+                Description = "E-Transfer",
+                PaymentType = Core.Domain.PaymentTypes.ETransfer,
                 IsActive = true,
             });
 

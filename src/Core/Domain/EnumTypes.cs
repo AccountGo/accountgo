@@ -135,6 +135,7 @@ namespace Core.Domain
     {
         Prepaymnet = 1,
         Cash,
+        ETransfer,
         AfterNoOfDays,
         DayInTheFollowingMonth
     }
