@@ -209,7 +209,12 @@
                                     <label class="form-label">Province</label>
                                 </div>
                                 <div class="col-sm-8">
-                                    <InputText class="form-control" @bind-Value="Model.Province" placeholder="Province ..." disabled="@(!isEditMode)" />
+                                    <InputSelect class="form-control" @bind-Value="Model.Province" disabled="@(!isEditMode)">
+                                        @foreach (var p in CanadianProvinces)
+                                        {
+                                            <option value="@p.Value">@p.Text</option>
+                                        }
+                                    </InputSelect>
                                 </div>
                             </div>
                             <div class="row mb-3">
@@ -237,65 +242,82 @@
             <div class="card mb-3">
                 <div class="card-header" style="background-color: #3a3f44; color: white;">
                     <i class="fa fa-truck"></i> Shipping Address
-                    <button type="button" class="btn btn-sm btn-secondary float-end" @onclick="CopyCustomerToShippingAddress" disabled="@(!isEditMode)">
-                        Copy from Customer Address
-                    </button>
                 </div>
                 <div class="card-body" style="background-color: #2b2f33;">
-                    <div class="row">
-                        <div class="col-sm-6">
-                            <div class="row mb-3">
-                                <div class="col-sm-4">
-                                    <label class="form-label">Street Line 1</label>
-                                </div>
-                                <div class="col-sm-8">
-                                    <InputText class="form-control" @bind-Value="Model.ShippingAddressLine1" placeholder="Street Line 1 ..." disabled="@(!isEditMode)" />
-                                </div>
-                            </div>
-                            <div class="row mb-3">
-                                <div class="col-sm-4">
-                                    <label class="form-label">Street Line 2</label>
-                                </div>
-                                <div class="col-sm-8">
-                                    <InputText class="form-control" @bind-Value="Model.ShippingAddressLine2" placeholder="Street Line 2 ..." disabled="@(!isEditMode)" />
-                                </div>
-                            </div>
-                            <div class="row mb-3">
-                                <div class="col-sm-4">
-                                    <label class="form-label">City</label>
-                                </div>
-                                <div class="col-sm-8">
-                                    <InputText class="form-control" @bind-Value="Model.ShippingCity" placeholder="City ..." disabled="@(!isEditMode)" />
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-sm-6">
-                            <div class="row mb-3">
-                                <div class="col-sm-4">
-                                    <label class="form-label">Province</label>
-                                </div>
-                                <div class="col-sm-8">
-                                    <InputText class="form-control" @bind-Value="Model.ShippingProvince" placeholder="Province ..." disabled="@(!isEditMode)" />
-                                </div>
-                            </div>
-                            <div class="row mb-3">
-                                <div class="col-sm-4">
-                                    <label class="form-label">Postal Code</label>
-                                </div>
-                                <div class="col-sm-8">
-                                    <InputText class="form-control" @bind-Value="Model.ShippingPostalCode" placeholder="Postal Code ..." disabled="@(!isEditMode)" />
-                                </div>
-                            </div>
-                            <div class="row mb-3">
-                                <div class="col-sm-4">
-                                    <label class="form-label">Country</label>
-                                </div>
-                                <div class="col-sm-8">
-                                    <InputText class="form-control" @bind-Value="Model.ShippingCountry" placeholder="Country ..." disabled="@(!isEditMode)" />
-                                </div>
+                    <div class="row mb-3">
+                        <div class="col-12">
+                            <div class="form-check">
+                                <InputCheckbox class="form-check-input" id="useMailingForShipping" @bind-Value="useMailingAddressForShipping" disabled="@(!isEditMode)" @onchange="OnUseMailingForShippingChanged" />
+                                <label class="form-check-label form-label" for="useMailingForShipping">Use mailing address for shipping</label>
                             </div>
                         </div>
                     </div>
+                    @if (!useMailingAddressForShipping)
+                    {
+                        <div class="row">
+                            <div class="col-sm-6">
+                                <div class="row mb-3">
+                                    <div class="col-sm-4">
+                                        <label class="form-label">Street Line 1</label>
+                                    </div>
+                                    <div class="col-sm-8">
+                                        <InputText class="form-control" @bind-Value="Model.ShippingAddressLine1" placeholder="Street Line 1 ..." disabled="@(!isEditMode)" />
+                                    </div>
+                                </div>
+                                <div class="row mb-3">
+                                    <div class="col-sm-4">
+                                        <label class="form-label">Street Line 2</label>
+                                    </div>
+                                    <div class="col-sm-8">
+                                        <InputText class="form-control" @bind-Value="Model.ShippingAddressLine2" placeholder="Street Line 2 ..." disabled="@(!isEditMode)" />
+                                    </div>
+                                </div>
+                                <div class="row mb-3">
+                                    <div class="col-sm-4">
+                                        <label class="form-label">City</label>
+                                    </div>
+                                    <div class="col-sm-8">
+                                        <InputText class="form-control" @bind-Value="Model.ShippingCity" placeholder="City ..." disabled="@(!isEditMode)" />
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-sm-6">
+                                <div class="row mb-3">
+                                    <div class="col-sm-4">
+                                        <label class="form-label">Province</label>
+                                    </div>
+                                    <div class="col-sm-8">
+                                        <InputSelect class="form-control" @bind-Value="Model.ShippingProvince" disabled="@(!isEditMode)">
+                                            @foreach (var p in CanadianProvinces)
+                                            {
+                                                <option value="@p.Value">@p.Text</option>
+                                            }
+                                        </InputSelect>
+                                    </div>
+                                </div>
+                                <div class="row mb-3">
+                                    <div class="col-sm-4">
+                                        <label class="form-label">Postal Code</label>
+                                    </div>
+                                    <div class="col-sm-8">
+                                        <InputText class="form-control" @bind-Value="Model.ShippingPostalCode" placeholder="Postal Code ..." disabled="@(!isEditMode)" />
+                                    </div>
+                                </div>
+                                <div class="row mb-3">
+                                    <div class="col-sm-4">
+                                        <label class="form-label">Country</label>
+                                    </div>
+                                    <div class="col-sm-8">
+                                        <InputText class="form-control" @bind-Value="Model.ShippingCountry" placeholder="Country ..." disabled="@(!isEditMode)" />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="text-muted mb-0">Shipping address is the same as the customer address above.</p>
+                    }
                 </div>
             </div>
 
@@ -320,7 +342,7 @@
                                     <label class="form-label">Discount (%)</label>
                                 </div>
                                 <div class="col-sm-8">
-                                    <InputNumber class="form-control" @bind-Value="Model.DiscountPercentage" disabled="@(!isEditMode)" step="0.01" placeholder="0" />
+                                    <InputNumber class="form-control" @bind-Value="Model.DiscountPercentage" disabled="@(!isEditMode)" step="0.01" min="0" max="100" placeholder="0" />
                                 </div>
                             </div>
                         </div>
@@ -394,9 +416,28 @@
 
     private CustomerDto Model { get; set; } = new();
     
-    private List<SelectListItem> Accounts { get; set; } = new();
     private List<SelectListItem> TaxGroups { get; set; } = new();
     private List<SelectListItem> PaymentTerms { get; set; } = new();
+    
+    private bool useMailingAddressForShipping = true;
+    
+    private static readonly List<SelectListItem> CanadianProvinces = new()
+    {
+        new() { Value = "", Text = "-- Select Province --" },
+        new() { Value = "AB", Text = "Alberta" },
+        new() { Value = "BC", Text = "British Columbia" },
+        new() { Value = "MB", Text = "Manitoba" },
+        new() { Value = "NB", Text = "New Brunswick" },
+        new() { Value = "NL", Text = "Newfoundland and Labrador" },
+        new() { Value = "NS", Text = "Nova Scotia" },
+        new() { Value = "NT", Text = "Northwest Territories" },
+        new() { Value = "NU", Text = "Nunavut" },
+        new() { Value = "ON", Text = "Ontario" },
+        new() { Value = "PE", Text = "Prince Edward Island" },
+        new() { Value = "QC", Text = "Quebec" },
+        new() { Value = "SK", Text = "Saskatchewan" },
+        new() { Value = "YT", Text = "Yukon" }
+    };
     
     private bool isLoading = true;
     private bool isEditMode = false;
@@ -465,6 +506,7 @@
             if (response.IsSuccessStatusCode)
             {
                 Model = await response.Content.ReadFromJsonAsync<CustomerDto>() ?? new();
+                useMailingAddressForShipping = ShippingEqualsMailing();
             }
             else
             {
@@ -483,14 +525,6 @@
         {
             string baseApiUrl = Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
             
-            // Load accounts
-            var accountsResponse = await Http.GetAsync(baseApiUrl + "common/postingaccounts");
-            if (accountsResponse.IsSuccessStatusCode)
-            {
-                var accounts = await accountsResponse.Content.ReadFromJsonAsync<List<Dto.Financial.Account>>();
-                Accounts = accounts?.Select(a => new SelectListItem { Value = a.Id.ToString(), Text = a.AccountName! }).ToList() ?? new();
-            }
-
             // Load tax groups
             var taxGroupsResponse = await Http.GetAsync(baseApiUrl + "tax/taxgroups");
             if (taxGroupsResponse.IsSuccessStatusCode)
@@ -517,6 +551,16 @@
     {
         try
         {
+            if (useMailingAddressForShipping)
+            {
+                Model.ShippingAddressLine1 = Model.AddressLine1;
+                Model.ShippingAddressLine2 = Model.AddressLine2;
+                Model.ShippingCity = Model.City;
+                Model.ShippingProvince = Model.Province;
+                Model.ShippingPostalCode = Model.PostalCode;
+                Model.ShippingCountry = Model.Country;
+            }
+            
             string baseApiUrl = Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
             var apiUrl = baseApiUrl + "sales/savecustomer";
             
@@ -558,14 +602,28 @@
         Navigation.NavigateTo($"/contact/contacts?partyId={Model.Id}&partyType=1", forceLoad: true);
     }
 
-    private void CopyCustomerToShippingAddress()
+    private bool ShippingEqualsMailing()
     {
-        Model.ShippingAddressLine1 = Model.AddressLine1;
-        Model.ShippingAddressLine2 = Model.AddressLine2;
-        Model.ShippingCity = Model.City;
-        Model.ShippingProvince = Model.Province;
-        Model.ShippingPostalCode = Model.PostalCode;
-        Model.ShippingCountry = Model.Country;
+        return string.Equals(Model.AddressLine1 ?? "", Model.ShippingAddressLine1 ?? "", StringComparison.OrdinalIgnoreCase)
+            && string.Equals(Model.AddressLine2 ?? "", Model.ShippingAddressLine2 ?? "", StringComparison.OrdinalIgnoreCase)
+            && string.Equals(Model.City ?? "", Model.ShippingCity ?? "", StringComparison.OrdinalIgnoreCase)
+            && string.Equals(Model.Province ?? "", Model.ShippingProvince ?? "", StringComparison.OrdinalIgnoreCase)
+            && string.Equals(Model.PostalCode ?? "", Model.ShippingPostalCode ?? "", StringComparison.OrdinalIgnoreCase)
+            && string.Equals(Model.Country ?? "", Model.ShippingCountry ?? "", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private void OnUseMailingForShippingChanged(ChangeEventArgs e)
+    {
+        var useMailing = e.Value as bool? ?? false;
+        if (!useMailing)
+        {
+            Model.ShippingAddressLine1 = Model.AddressLine1;
+            Model.ShippingAddressLine2 = Model.AddressLine2;
+            Model.ShippingCity = Model.City;
+            Model.ShippingProvince = Model.Province;
+            Model.ShippingPostalCode = Model.PostalCode;
+            Model.ShippingCountry = Model.Country;
+        }
     }
 
     public class SelectListItem
