@@ -1,4 +1,4 @@
-﻿using Api.ActionFilters;
+using Api.ActionFilters;
 using Core.Domain;
 using Dto.Sales;
 using Microsoft.AspNetCore.Mvc;
@@ -78,7 +78,8 @@ namespace Api.Controllers
             customer.PrimaryContact.Party.Email = customerDto.PrimaryContact.Party.Email;
             customer.PrimaryContact.Party.Fax = customerDto.PrimaryContact.Party.Fax;
             customer.PrimaryContact.Party.Website = customerDto.PrimaryContact.Party.Website;
-            customer.AccountsReceivableAccountId = customerDto.AccountsReceivableId;
+            var accountAr = _financialService.GetAccountByAccountCode("10120");
+            customer.AccountsReceivableAccountId = accountAr?.Id;
             customer.SalesAccountId = customerDto.SalesAccountId;
             customer.CustomerAdvancesAccountId = customerDto.PrepaymentAccountId;
             customer.SalesDiscountAccountId = customerDto.SalesDiscountAccountId;

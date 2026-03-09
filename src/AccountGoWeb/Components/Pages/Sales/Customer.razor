@@ -183,13 +183,7 @@
                                     <label class="form-label">Accounts Receivable</label>
                                 </div>
                                 <div class="col-sm-8">
-                                    <InputSelect class="form-control" @bind-Value="Model.AccountsReceivableId" disabled="@(!isEditMode)">
-                                        <option value="">-- Select Account --</option>
-                                        @foreach (var account in Accounts)
-                                        {
-                                            <option value="@account.Value">@account.Text</option>
-                                        }
-                                    </InputSelect>
+                                    <input type="text" class="form-control" value="10120 - Accounts Receivable" readonly />
                                 </div>
                             </div>
                             <div class="row mb-3">
