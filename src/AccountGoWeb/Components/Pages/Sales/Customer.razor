@@ -188,34 +188,6 @@
                             </div>
                             <div class="row mb-3">
                                 <div class="col-sm-4">
-                                    <label class="form-label">Sales</label>
-                                </div>
-                                <div class="col-sm-8">
-                                    <InputSelect class="form-control" @bind-Value="Model.SalesAccountId" disabled="@(!isEditMode)">
-                                        <option value="">-- Select Account --</option>
-                                        @foreach (var account in Accounts)
-                                        {
-                                            <option value="@account.Value">@account.Text</option>
-                                        }
-                                    </InputSelect>
-                                </div>
-                            </div>
-                            <div class="row mb-3">
-                                <div class="col-sm-4">
-                                    <label class="form-label">Prepayment</label>
-                                </div>
-                                <div class="col-sm-8">
-                                    <InputSelect class="form-control" @bind-Value="Model.PrepaymentAccountId" disabled="@(!isEditMode)">
-                                        <option value="">-- Select Account --</option>
-                                        @foreach (var account in Accounts)
-                                        {
-                                            <option value="@account.Value">@account.Text</option>
-                                        }
-                                    </InputSelect>
-                                </div>
-                            </div>
-                            <div class="row mb-3">
-                                <div class="col-sm-4">
                                     <label class="form-label">Discount</label>
                                 </div>
                                 <div class="col-sm-8">
