@@ -82,7 +82,9 @@ namespace Api.Controllers
             customer.AccountsReceivableAccountId = accountAr?.Id;
             customer.SalesAccountId = customerDto.SalesAccountId;
             customer.CustomerAdvancesAccountId = customerDto.PrepaymentAccountId;
-            customer.SalesDiscountAccountId = customerDto.SalesDiscountAccountId;
+            var accountDiscount = _financialService.GetAccountByAccountCode("40400");
+            customer.SalesDiscountAccountId = accountDiscount?.Id;
+            customer.DiscountPercentage = customerDto.DiscountPercentage;
             customer.PaymentTermId = customerDto.PaymentTermId;
             customer.TaxGroupId = customerDto.TaxGroupId;
             customer.ModifiedBy = GetUserNameFromRequestHeader();
@@ -111,6 +113,7 @@ namespace Api.Controllers
                     SalesAccountId = customer.SalesAccountId.GetValueOrDefault(),
                     PrepaymentAccountId = customer.CustomerAdvancesAccountId.GetValueOrDefault(),
                     SalesDiscountAccountId = customer.SalesDiscountAccountId.GetValueOrDefault(),
+                    DiscountPercentage = customer.DiscountPercentage,
                     PaymentTermId = customer.PaymentTermId.GetValueOrDefault(),
                     TaxGroupId = customer.TaxGroupId.GetValueOrDefault()
                 };

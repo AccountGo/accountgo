@@ -1,4 +1,4 @@
-﻿using Dto.Common;
+using Dto.Common;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
@@ -18,6 +18,7 @@ namespace Dto.Sales
         public int? SalesAccountId { get; set; }
         public int? PrepaymentAccountId { get; set; }
         public int? SalesDiscountAccountId { get; set; }
+        public decimal? DiscountPercentage { get; set; }
         public int? TaxGroupId { get; set; }
         public int? PaymentTermId { get; set; }
         public decimal Balance { get; set; }        

@@ -31,6 +31,7 @@ namespace Core.Domain.Sales
         public int? AccountsReceivableAccountId { get; set; }
         public int? SalesAccountId { get; set; }
         public int? SalesDiscountAccountId { get; set; }
+        public decimal? DiscountPercentage { get; set; }
         public int? PromptPaymentDiscountAccountId { get; set; }
         public int? PaymentTermId { get; set; }
         public int? CustomerAdvancesAccountId { get; set; }

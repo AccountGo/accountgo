@@ -188,16 +188,10 @@
                             </div>
                             <div class="row mb-3">
                                 <div class="col-sm-4">
-                                    <label class="form-label">Discount</label>
+                                    <label class="form-label">Discount (%)</label>
                                 </div>
                                 <div class="col-sm-8">
-                                    <InputSelect class="form-control" @bind-Value="Model.SalesDiscountAccountId" disabled="@(!isEditMode)">
-                                        <option value="">-- Select Account --</option>
-                                        @foreach (var account in Accounts)
-                                        {
-                                            <option value="@account.Value">@account.Text</option>
-                                        }
-                                    </InputSelect>
+                                    <InputNumber class="form-control" @bind-Value="Model.DiscountPercentage" disabled="@(!isEditMode)" step="0.01" placeholder="0" />
                                 </div>
                             </div>
                         </div>
