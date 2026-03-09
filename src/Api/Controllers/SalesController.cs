@@ -78,6 +78,18 @@ namespace Api.Controllers
             customer.PrimaryContact.Party.Email = customerDto.PrimaryContact.Party.Email;
             customer.PrimaryContact.Party.Fax = customerDto.PrimaryContact.Party.Fax;
             customer.PrimaryContact.Party.Website = customerDto.PrimaryContact.Party.Website;
+            customer.AddressLine1 = customerDto.AddressLine1;
+            customer.AddressLine2 = customerDto.AddressLine2;
+            customer.City = customerDto.City;
+            customer.Province = customerDto.Province;
+            customer.PostalCode = customerDto.PostalCode;
+            customer.Country = customerDto.Country;
+            customer.ShippingAddressLine1 = customerDto.ShippingAddressLine1;
+            customer.ShippingAddressLine2 = customerDto.ShippingAddressLine2;
+            customer.ShippingCity = customerDto.ShippingCity;
+            customer.ShippingProvince = customerDto.ShippingProvince;
+            customer.ShippingPostalCode = customerDto.ShippingPostalCode;
+            customer.ShippingCountry = customerDto.ShippingCountry;
             var accountAr = _financialService.GetAccountByAccountCode("10120");
             customer.AccountsReceivableAccountId = accountAr?.Id;
             customer.SalesAccountId = customerDto.SalesAccountId;
@@ -122,6 +134,18 @@ namespace Api.Controllers
                 customerDto.Website = customer.Party.Website;
                 customerDto.Phone = customer.Party.Phone;
                 customerDto.Fax = customer.Party.Fax;
+                customerDto.AddressLine1 = customer.AddressLine1;
+                customerDto.AddressLine2 = customer.AddressLine2;
+                customerDto.City = customer.City;
+                customerDto.Province = customer.Province;
+                customerDto.PostalCode = customer.PostalCode;
+                customerDto.Country = customer.Country;
+                customerDto.ShippingAddressLine1 = customer.ShippingAddressLine1;
+                customerDto.ShippingAddressLine2 = customer.ShippingAddressLine2;
+                customerDto.ShippingCity = customer.ShippingCity;
+                customerDto.ShippingProvince = customer.ShippingProvince;
+                customerDto.ShippingPostalCode = customer.ShippingPostalCode;
+                customerDto.ShippingCountry = customer.ShippingCountry;
 
                 if (customer.PrimaryContact != null)
                 {
