@@ -92,8 +92,6 @@ namespace Api.Controllers
             customer.ShippingCountry = customerDto.ShippingCountry;
             var accountAr = _financialService.GetAccountByAccountCode("10120");
             customer.AccountsReceivableAccountId = accountAr?.Id;
-            customer.SalesAccountId = customerDto.SalesAccountId;
-            customer.CustomerAdvancesAccountId = customerDto.PrepaymentAccountId;
             var accountDiscount = _financialService.GetAccountByAccountCode("40400");
             customer.SalesDiscountAccountId = accountDiscount?.Id;
             customer.DiscountPercentage = customerDto.DiscountPercentage;
@@ -189,7 +187,9 @@ namespace Api.Controllers
                     customerDto.Fax = customer.Party.Fax;
                     customerDto.Balance = customer.Balance;
                     customerDto.PrepaymentAccountId = customer.CustomerAdvancesAccountId;
-                    customerDto.Contact = customer.PrimaryContact.FirstName + " " + customer.PrimaryContact.LastName;
+                    customerDto.Contact = customer.PrimaryContact != null
+                        ? $"{customer.PrimaryContact.FirstName} {customer.PrimaryContact.LastName}".Trim()
+                        : string.Empty;
                     customerDto.TaxGroup = customer.TaxGroup == null ? string.Empty : customer.TaxGroup.Description;
                     customersDto.Add(customerDto);
                 }

@@ -31,6 +31,7 @@ namespace Dto.Sales
         public int? SalesAccountId { get; set; }
         public int? PrepaymentAccountId { get; set; }
         public int? SalesDiscountAccountId { get; set; }
+        [Range(0, 100, ErrorMessage = "Discount must be between 0 and 100 percent.")]
         public decimal? DiscountPercentage { get; set; }
         public int? TaxGroupId { get; set; }
         public int? PaymentTermId { get; set; }
