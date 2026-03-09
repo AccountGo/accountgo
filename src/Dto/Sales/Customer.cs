@@ -14,6 +14,19 @@ namespace Dto.Sales
         public string? Phone { get; set; }
         public string? Fax { get; set; }
 
+        public string? AddressLine1 { get; set; }
+        public string? AddressLine2 { get; set; }
+        public string? City { get; set; }
+        public string? Province { get; set; }
+        public string? PostalCode { get; set; }
+        public string? Country { get; set; }
+        public string? ShippingAddressLine1 { get; set; }
+        public string? ShippingAddressLine2 { get; set; }
+        public string? ShippingCity { get; set; }
+        public string? ShippingProvince { get; set; }
+        public string? ShippingPostalCode { get; set; }
+        public string? ShippingCountry { get; set; }
+
         public int? AccountsReceivableId { get; set; }
         public int? SalesAccountId { get; set; }
         public int? PrepaymentAccountId { get; set; }
