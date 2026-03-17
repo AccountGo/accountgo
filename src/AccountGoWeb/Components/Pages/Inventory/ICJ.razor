@@ -123,4 +123,16 @@ else
     {
         Console.WriteLine($"Row clicked: {row.Id} - {row.Item}");
     }
+
+    // adding a view Model 
+    private class ICJRowView
+{
+    public int Id { get; set; }
+    public string Item { get; set; }
+    public string Measurement { get; set; }
+    public int In { get; set; }
+    public int Out { get; set; }
+    public DateTime Date { get; set; }
+    public int Balance { get; set; }
+}
 }
