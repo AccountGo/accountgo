@@ -102,6 +102,28 @@ else
             if (response.IsSuccessStatusCode)
             {
                 InventoryData = await response.Content.ReadFromJsonAsync<List<InventoryControlJournal>>() ?? new List<InventoryControlJournal>();
+                    // Processing data after the fetch to calculate running balance
+                    var sorted = InventoryData
+    .OrderBy(x => x.Date)
+    .ToList();
+
+int runningBalance = 0;
+
+ProcessedData = sorted.Select(row =>
+{
+    runningBalance += row.In - row.Out;
+
+    return new ICJRowView
+    {
+        Id = row.Id,
+        Item = row.Item,
+        Measurement = row.Measurement,
+        In = row.In,
+        Out = row.Out,
+        Date = row.Date,
+        Balance = runningBalance
+    };
+}).ToList();
             }
             else
             {
@@ -135,4 +157,9 @@ else
     public DateTime Date { get; set; }
     public int Balance { get; set; }
 }
+
+// creating a processed list
+private List<ICJRowView> ProcessedData { get; set; } = new();
+
+
 }
