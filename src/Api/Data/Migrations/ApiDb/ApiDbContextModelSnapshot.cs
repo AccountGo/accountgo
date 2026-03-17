@@ -17,7 +17,7 @@ namespace Api.Data.Migrations.ApiDb
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "9.0.3")
+                .HasAnnotation("ProductVersion", "10.0.0")
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
@@ -967,6 +967,9 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.Property<int?>("PaymentTermId")
                         .HasColumnType("int");
+
+                    b.Property<string>("PurchaseOrderNumber")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ReferenceNo")
                         .HasColumnType("nvarchar(max)");
