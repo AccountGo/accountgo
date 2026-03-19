@@ -48,9 +48,10 @@ else
                 </tr>
             </thead>
             <tbody>
-                @for (int accountIdx = 0; accountIdx < accounts.Count; ++accountIdx)
+                @{ var sortedTopLevelAccounts = SortAccounts(accounts).ToList(); }
+                @for (int accountIdx = 0; accountIdx < sortedTopLevelAccounts.Count; ++accountIdx)
                 {
-                    var account = accounts[accountIdx];
+                    var account = sortedTopLevelAccounts[accountIdx];
                     var rowKey = accountIdx.ToString();
                     var hasChildren = account.ChildAccounts != null && account.ChildAccounts.Count > 0;
 
@@ -198,16 +199,47 @@ else
         expandedRows.RemoveWhere(x => x == rowKey || x.StartsWith(rowKey + "-"));
     }
 
+    private IEnumerable<AccountViewModel> SortAccounts(IEnumerable<AccountViewModel> items)
+    {
+        return items.OrderBy(account => account, AccountCodeSortComparer.Instance);
+    }
+
+    private sealed class AccountCodeSortComparer : IComparer<AccountViewModel>
+    {
+        public static AccountCodeSortComparer Instance { get; } = new();
+
+        public int Compare(AccountViewModel? x, AccountViewModel? y)
+        {
+            var xCode = x?.AccountCode ?? string.Empty;
+            var yCode = y?.AccountCode ?? string.Empty;
+
+            var xIsNumeric = long.TryParse(xCode, out var xNumber);
+            var yIsNumeric = long.TryParse(yCode, out var yNumber);
+
+            if (xIsNumeric && yIsNumeric)
+            {
+                var numericCompare = xNumber.CompareTo(yNumber);
+                if (numericCompare != 0)
+                {
+                    return numericCompare;
+                }
+            }
+
+            return string.Compare(xCode, yCode, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
     // Render nested accounts as rows in the same table body.
     private RenderFragment RenderNestedAccounts(List<AccountViewModel> nestedAccounts, string parentPath, int level)
     {
         return builder =>
         {
             int sequence = 0;
+            var sortedNestedAccounts = SortAccounts(nestedAccounts).ToList();
 
-            for (int idx = 0; idx < nestedAccounts.Count; idx++)
+            for (int idx = 0; idx < sortedNestedAccounts.Count; idx++)
             {
-                var account = nestedAccounts[idx];
+                var account = sortedNestedAccounts[idx];
                 var accountKey = account.Id != 0 ? account.Id.ToString() : account.AccountCode;
                 var accountPath = $"{parentPath}-{idx}";
                 var hasChildren = account.ChildAccounts != null && account.ChildAccounts.Count > 0;
