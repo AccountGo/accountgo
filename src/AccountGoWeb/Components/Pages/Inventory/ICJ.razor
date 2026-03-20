@@ -105,23 +105,26 @@ else
             {
                 InventoryData = await response.Content.ReadFromJsonAsync<List<InventoryControlJournal>>() ?? new List<InventoryControlJournal>();
                     // Processing data after the fetch to calculate running balance
-                    var sorted = InventoryData
+                  var sorted = InventoryData
     .OrderBy(x => x.Date)
     .ToList();
 
-int runningBalance = 0;
+decimal runningBalance = 0;
 
 ProcessedData = sorted.Select(row =>
 {
-    runningBalance += row.In - row.Out;
+    var inValue = row.In ?? 0;
+    var outValue = row.Out ?? 0;
+
+    runningBalance += inValue - outValue;
 
     return new ICJRowView
     {
         Id = row.Id,
         Item = row.Item,
         Measurement = row.Measurement,
-        In = row.In,
-        Out = row.Out,
+        In = inValue,
+        Out = outValue,
         Date = row.Date,
         Balance = runningBalance
     };
@@ -143,7 +146,7 @@ ProcessedData = sorted.Select(row =>
         }
     }
 
-    private void OnRowClicked(InventoryControlJournal row)
+    private void OnRowClicked(ICJRowView row)
     {
         Console.WriteLine($"Row clicked: {row.Id} - {row.Item}");
     }
@@ -152,12 +155,12 @@ ProcessedData = sorted.Select(row =>
     private class ICJRowView
 {
     public int Id { get; set; }
-    public string Item { get; set; }
-    public string Measurement { get; set; }
-    public int In { get; set; }
-    public int Out { get; set; }
+    public string? Item { get; set; }
+    public string? Measurement { get; set; }
+    public decimal In { get; set; }
+    public decimal Out { get; set; }
     public DateTime Date { get; set; }
-    public int Balance { get; set; }
+    public decimal Balance { get; set; }
 }
 
 // creating a processed list
