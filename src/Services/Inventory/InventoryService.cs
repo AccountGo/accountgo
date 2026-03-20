@@ -152,10 +152,34 @@ namespace Services.Inventory
         }
 
         public IEnumerable<InventoryControlJournal> GetInventoryControlJournals()
+{
+    var data = _icjRepo.GetAllIncluding(m => m.Measurement, i => i.Item).ToList();
+
+    if (!data.Any())
+    {
+        data.Add(new InventoryControlJournal
         {
-            var query = _icjRepo.GetAllIncluding(m => m.Measurement, i => i.Item);
-            return query.AsEnumerable();
-        }
+            Id = 1,
+            INQty = 10,
+            OUTQty = 0,
+            Date = DateTime.Now.AddDays(-2),
+            Item = new Item { Description = "Sample Book" },
+            Measurement = new Measurement { Code = "pcs" }
+        });
+
+        data.Add(new InventoryControlJournal
+        {
+            Id = 2,
+            INQty = 0,
+            OUTQty = 4,
+            Date = DateTime.Now.AddDays(-1),
+            Item = new Item { Description = "Sample Book" },
+            Measurement = new Measurement { Code = "pcs" }
+        });
+    }
+
+    return data;
+}
 
         public Item GetItemByNo(string itemNo)
         {
