@@ -31,7 +31,7 @@ else
             </tr>
         </thead>
         <tbody>
-            @if (InventoryData == null || InventoryData.Count == 0)
+          @if (ProcessedData == null || ProcessedData.Count == 0)
             {
                 <tr>
                     <td colspan="6" class="noRows">No Rows to Show</td>
@@ -39,7 +39,7 @@ else
             }
             else
             {
-                @foreach (var row in InventoryData)
+                @foreach (var row in ProcessedData)
                 {
                     <tr @onclick="() => OnRowClicked(row)" class="icjRow">
                         <td>@row.Id</td>
@@ -47,6 +47,7 @@ else
                         <td>@row.Measurement</td>
                         <td>@row.In</td>
                         <td>@row.Out</td>
+                        <td>@row.Balance</td>
                         <td>@row.Date.ToShortDateString()</td>
                     </tr>
                 }
