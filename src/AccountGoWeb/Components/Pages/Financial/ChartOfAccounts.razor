@@ -31,6 +31,15 @@ else
         .hiddenRow {
             padding: 4px !important;
         }
+
+        .coa-toggle-btn {
+            min-width: 42px;
+            min-height: 42px;
+            padding: 0.3rem 0.55rem;
+            font-size: 1.35rem;
+            line-height: 1;
+            font-weight: 700;
+        }
     </style>
     <div>
         <button class="btn btn-success mb-3" @onclick="() => OpenAddModal()">Add Account</button>
@@ -48,7 +57,7 @@ else
                 </tr>
             </thead>
             <tbody>
-                @{ var sortedTopLevelAccounts = SortAccounts(accounts).ToList(); }
+                @{ var sortedTopLevelAccounts = BuildDisplayHierarchy(accounts); }
                 @for (int accountIdx = 0; accountIdx < sortedTopLevelAccounts.Count; ++accountIdx)
                 {
                     var account = sortedTopLevelAccounts[accountIdx];
@@ -59,7 +68,7 @@ else
                         <td class="text-center align-middle">
                             @if (hasChildren)
                             {
-                                <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => ToggleRow(rowKey)"
+                                <button type="button" class="btn btn-outline-secondary coa-toggle-btn" @onclick="() => ToggleRow(rowKey)"
                                         @onclick:stopPropagation="true" title="Toggle child accounts">
                                     <span aria-hidden="true">@(IsExpanded(rowKey) ? "▾" : "▸")</span>
                                 </button>
@@ -204,6 +213,139 @@ else
         return items.OrderBy(account => account, AccountCodeSortComparer.Instance);
     }
 
+    // Build a display hierarchy by re-parenting accounts under their major sections based on account codes.
+    private List<AccountViewModel> BuildDisplayHierarchy(IEnumerable<AccountViewModel> sourceAccounts)
+    {
+        var workingRoots = sourceAccounts
+            .Select(CloneAccountTree)
+            .ToList();
+
+        var majorSections = workingRoots
+            .Where(account => IsMajorSectionCode(account.AccountCode))
+            .ToDictionary(account => account.AccountCode, StringComparer.OrdinalIgnoreCase);
+
+        var rootsToRehome = new List<AccountViewModel>();
+        foreach (var account in workingRoots)
+        {
+            if (IsMajorSectionCode(account.AccountCode) || IsIncomeSummaryCode(account.AccountCode))
+            {
+                continue;
+            }
+
+            if (!TryGetMajorSectionCode(account.AccountCode, out var targetSectionCode))
+            {
+                continue;
+            }
+
+            if (majorSections.TryGetValue(targetSectionCode, out var section))
+            {
+                section.ChildAccounts.Add(account);
+                rootsToRehome.Add(account);
+            }
+        }
+
+        if (rootsToRehome.Count > 0)
+        {
+            workingRoots.RemoveAll(account => rootsToRehome.Contains(account));
+        }
+
+        SortTree(workingRoots);
+        return workingRoots;
+    }
+
+    // Recursively clone accounts to avoid modifying original data when building display hierarchy
+    private AccountViewModel CloneAccountTree(AccountViewModel account)
+    {
+        return new AccountViewModel
+        {
+            Id = account.Id,
+            ParentAccountId = account.ParentAccountId,
+            AccountCode = account.AccountCode,
+            AccountName = account.AccountName,
+            TotalBalance = account.TotalBalance,
+            TotalDebitBalance = account.TotalDebitBalance,
+            TotalCreditBalance = account.TotalCreditBalance,
+            ChildAccounts = account.ChildAccounts?
+                .Select(CloneAccountTree)
+                .ToList() ?? new List<AccountViewModel>()
+        };
+    }
+
+    // Recursively sort accounts and their children by account code
+    private void SortTree(List<AccountViewModel> nodes)
+    {
+        var orderedNodes = SortAccounts(nodes).ToList();
+        nodes.Clear();
+        nodes.AddRange(orderedNodes);
+
+        foreach (var node in nodes)
+        {
+            if (node.ChildAccounts != null && node.ChildAccounts.Count > 0)
+            {
+                SortTree(node.ChildAccounts);
+            }
+        }
+    }
+
+    // Determine if the account code is a major section code (10000, 20000, 30000, 40000, 50000).
+    private bool IsMajorSectionCode(string? accountCode)
+    {
+        return string.Equals(accountCode, "10000", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(accountCode, "20000", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(accountCode, "30000", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(accountCode, "40000", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(accountCode, "50000", StringComparison.OrdinalIgnoreCase);
+    }
+
+    // Determine if the account code is the special "Income Summary" code (99999).
+    private bool IsIncomeSummaryCode(string? accountCode)
+    {
+        return string.Equals(accountCode, "99999", StringComparison.OrdinalIgnoreCase);
+    }
+
+    // Determine the major section code based on the account code.
+    private bool TryGetMajorSectionCode(string? accountCode, out string sectionCode)
+    {
+        sectionCode = string.Empty;
+
+        if (!int.TryParse(accountCode, out var numericCode))
+        {
+            return false;
+        }
+
+        if (numericCode >= 10000 && numericCode <= 19999)
+        {
+            sectionCode = "10000";
+            return true;
+        }
+
+        if (numericCode >= 20000 && numericCode <= 29999)
+        {
+            sectionCode = "20000";
+            return true;
+        }
+
+        if (numericCode >= 30000 && numericCode <= 39999)
+        {
+            sectionCode = "30000";
+            return true;
+        }
+
+        if (numericCode >= 40000 && numericCode <= 49999)
+        {
+            sectionCode = "40000";
+            return true;
+        }
+
+        if (numericCode >= 50000 && numericCode <= 59999)
+        {
+            sectionCode = "50000";
+            return true;
+        }
+
+        return false;
+    }
+
     private sealed class AccountCodeSortComparer : IComparer<AccountViewModel>
     {
         public static AccountCodeSortComparer Instance { get; } = new();
@@ -253,7 +395,7 @@ else
                 {
                     builder.OpenElement(sequence++, "button");
                     builder.AddAttribute(sequence++, "type", "button");
-                    builder.AddAttribute(sequence++, "class", "btn btn-sm btn-outline-secondary");
+                    builder.AddAttribute(sequence++, "class", "btn btn-outline-secondary coa-toggle-btn");
                     builder.AddAttribute(sequence++, "onclick", EventCallback.Factory.Create(this, () => ToggleRow(accountPath)));
                     builder.AddAttribute(sequence++, "onclick:stopPropagation", "true");
                     builder.AddAttribute(sequence++, "title", "Toggle child accounts");
