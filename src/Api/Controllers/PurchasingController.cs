@@ -480,44 +480,93 @@ namespace Api.Controllers
         [Route("SaveVendor")]
         public IActionResult SaveVendor([FromBody]Dto.Purchasing.Vendor vendorDto)
         {
-            bool isNew = vendorDto.Id == 0;
-            Core.Domain.Purchases.Vendor vendor;
-
-            if (isNew)
+            string[]? errors = null;
+            
+            try
             {
-                vendor = new Core.Domain.Purchases.Vendor();
-                vendor.Party = new Core.Domain.Party();
-                vendor.PrimaryContact = new Core.Domain.Contact();
-                vendor.PrimaryContact.Party = new Core.Domain.Party();
-            }
-            else
-            {
-                vendor = _purchasingService.GetVendorById(vendorDto.Id);
-            }
+                if (!ModelState.IsValid)
+                {
+                    errors = new string[ModelState.ErrorCount];
+                    int idx = 0;
+                    foreach (var val in ModelState.Values)
+                        foreach (var err in val.Errors)
+                            if (idx < errors.Length)
+                                errors[idx++] = err.ErrorMessage;
 
-            vendor.No = vendorDto.No;
-            vendor.Party.PartyType = Core.Domain.PartyTypes.Vendor;
-            vendor.Party.Name = vendorDto.Name;
-            vendor.Party.Phone = vendorDto.Phone;
-            vendor.Party.Fax = vendorDto.Fax;
-            vendor.Party.Email = vendorDto.Email;
-            vendor.Party.Website = vendorDto.Website;
-            vendor.AccountsPayableAccountId = vendorDto.AccountsPayableAccountId;
-            vendor.PurchaseAccountId = vendorDto.PurchaseAccountId;
-            vendor.PurchaseDiscountAccountId = vendorDto.PurchaseDiscountAccountId;
-            vendor.TaxGroupId = vendorDto.TaxGroupId;
-            vendor.PaymentTermId = vendorDto.PaymentTermId;
+                    return new BadRequestObjectResult(errors);
+                }
 
-            if (isNew)
-            {
-                _purchasingService.AddVendor(vendor);
-            }
-            else
-            {
-                _purchasingService.UpdateVendor(vendor);
-            }
+                bool isNew = vendorDto.Id == 0;
+                Core.Domain.Purchases.Vendor vendor;
 
-            return Ok();
+                if (isNew)
+                {
+                    vendor = new Core.Domain.Purchases.Vendor();
+                }
+                else
+                {
+                    vendor = _purchasingService.GetVendorById(vendorDto.Id);
+                }
+
+                if (vendor.Party == null) vendor.Party = new Core.Domain.Party();
+
+                vendor.No = vendorDto.No;
+                vendor.Party.PartyType = Core.Domain.PartyTypes.Vendor;
+                vendor.Party.Name = vendorDto.Name;
+                vendor.Party.Phone = vendorDto.Phone;
+                vendor.Party.Email = vendorDto.Email;
+                vendor.Party.Website = vendorDto.Website;
+                
+                // Set IDs to null if they are 0 to prevent foreign key constraint violations
+                vendor.AccountsPayableAccountId = vendorDto.AccountsPayableAccountId == 0 ? (int?)null : vendorDto.AccountsPayableAccountId;
+                vendor.PurchaseAccountId = vendorDto.PurchaseAccountId == 0 ? (int?)null : vendorDto.PurchaseAccountId;
+                vendor.PurchaseDiscountAccountId = vendorDto.PurchaseDiscountAccountId == 0 ? (int?)null : vendorDto.PurchaseDiscountAccountId;
+                vendor.TaxGroupId = vendorDto.TaxGroupId == 0 ? (int?)null : vendorDto.TaxGroupId;
+                vendor.PaymentTermId = vendorDto.PaymentTermId == 0 ? (int?)null : vendorDto.PaymentTermId;
+                vendor.PaymentMethod = vendorDto.PaymentMethod == 0 ? (int?)null : vendorDto.PaymentMethod;
+                
+                vendor.DiscountPercentage = vendorDto.DiscountPercentage;
+                vendor.Street1 = vendorDto.Street1;
+                vendor.Street2 = vendorDto.Street2;
+                vendor.City = vendorDto.City;
+                vendor.Province = vendorDto.Province;
+                vendor.PostalCode = vendorDto.PostalCode;
+                vendor.Country = vendorDto.Country;
+
+                if (vendorDto.PrimaryContact != null)
+                {
+                    if (vendor.PrimaryContact == null) vendor.PrimaryContact = new Core.Domain.Contact();
+                    if (vendor.PrimaryContact.Party == null) vendor.PrimaryContact.Party = new Core.Domain.Party();
+                    
+                    vendor.PrimaryContact.FirstName = vendorDto.PrimaryContact.FirstName;
+                    vendor.PrimaryContact.LastName = vendorDto.PrimaryContact.LastName;
+                    vendor.PrimaryContact.Party.PartyType = Core.Domain.PartyTypes.Contact;
+                    
+                    if (vendorDto.PrimaryContact.Party != null)
+                    {
+                        vendor.PrimaryContact.Party.Email = vendorDto.PrimaryContact.Party.Email;
+                        vendor.PrimaryContact.Party.Phone = vendorDto.PrimaryContact.Party.Phone;
+                        vendor.PrimaryContact.Party.Website = vendorDto.PrimaryContact.Party.Website;
+                        vendor.PrimaryContact.Party.Name = vendorDto.PrimaryContact.Party.Name;
+                    }
+                }
+
+                if (isNew)
+                {
+                    _purchasingService.AddVendor(vendor);
+                }
+                else
+                {
+                    _purchasingService.UpdateVendor(vendor);
+                }
+
+                return Ok();
+            }
+            catch (Exception ex)
+            {
+                errors = new string[1] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
+                return new BadRequestObjectResult(errors);
+            }
         }
 
         [HttpGet]
@@ -534,14 +583,21 @@ namespace Api.Controllers
                     {
                         Id = vendor.Id,
                         No = vendor.No,
-                        Name = vendor.Party.Name,
-                        Email = vendor.Party.Email,
-                        Phone = vendor.Party.Phone,
-                        Fax = vendor.Party.Fax,
-                        Website = vendor.Party.Website,
+                        Name = vendor.Party?.Name,
+                        Email = vendor.Party?.Email,
+                        Phone = vendor.Party?.Phone,
+                        Website = vendor.Party?.Website,
                         Balance = vendor.GetBalance(),
                         PaymentTermId = vendor.PaymentTermId,
-                        Contact = vendor.PrimaryContact.FirstName + " " + vendor.PrimaryContact.LastName,
+                        PaymentMethod = vendor.PaymentMethod,
+                        DiscountPercentage = vendor.DiscountPercentage,
+                        Street1 = vendor.Street1,
+                        Street2 = vendor.Street2,
+                        City = vendor.City,
+                        Province = vendor.Province,
+                        PostalCode = vendor.PostalCode,
+                        Country = vendor.Country,
+                        Contact = vendor.PrimaryContact != null ? $"{vendor.PrimaryContact.FirstName} {vendor.PrimaryContact.LastName}".Trim() : string.Empty,
                         TaxGroup = vendor.TaxGroup == null ? string.Empty : vendor.TaxGroup.Description,
                     };
 
@@ -568,28 +624,64 @@ namespace Api.Controllers
                 {
                     Id = vendor.Id,
                     No = vendor.No,
-                    Name = vendor.Party.Name,
-                    Email = vendor.Party.Email,
-                    Phone = vendor.Party.Phone,
-                    Fax = vendor.Party.Fax,
-                    Website = vendor.Party.Website,
+                    Name = vendor.Party?.Name,
+                    Email = vendor.Party?.Email,
+                    Phone = vendor.Party?.Phone,
+                    Website = vendor.Party?.Website,
                     AccountsPayableAccountId = vendor.AccountsPayableAccountId.GetValueOrDefault(),
                     PurchaseAccountId = vendor.PurchaseAccountId.GetValueOrDefault(),
                     PurchaseDiscountAccountId = vendor.PurchaseDiscountAccountId.GetValueOrDefault(),
                     TaxGroupId = vendor.TaxGroupId.GetValueOrDefault(),
                     PaymentTermId = vendor.PaymentTermId.GetValueOrDefault(),
+                    PaymentMethod = vendor.PaymentMethod.GetValueOrDefault(),
+                    DiscountPercentage = vendor.DiscountPercentage,
+                    Street1 = vendor.Street1,
+                    Street2 = vendor.Street2,
+                    City = vendor.City,
+                    Province = vendor.Province,
+                    PostalCode = vendor.PostalCode,
+                    Country = vendor.Country,
                     
                 };
 
                 if (vendor.PrimaryContact != null)
                 {
-                    vendorDto.PrimaryContact.FirstName = vendor.PrimaryContact.FirstName;
-                    vendorDto.PrimaryContact.LastName = vendor.PrimaryContact.LastName;
-                    vendorDto.PrimaryContact.Party.Email = vendor.PrimaryContact.Party.Email;
-                    vendorDto.PrimaryContact.Party.Phone = vendor.PrimaryContact.Party.Phone;
-                    vendorDto.PrimaryContact.Party.Fax = vendor.PrimaryContact.Party.Fax;
-                    vendorDto.PrimaryContact.Party.Website = vendor.PrimaryContact.Party.Website;
-                    vendorDto.PrimaryContact.Party.Name = vendor.PrimaryContact.Party.Name;
+                    if (vendorDto.PrimaryContact == null)
+                    {
+                        var contactProp = vendorDto.GetType().GetProperty("PrimaryContact");
+                        if (contactProp != null)
+                        {
+                            var contactInstance = Activator.CreateInstance(contactProp.PropertyType);
+                            contactProp.SetValue(vendorDto, contactInstance);
+                        }
+                    }
+
+                    if (vendorDto.PrimaryContact != null)
+                    {
+                        vendorDto.PrimaryContact.FirstName = vendor.PrimaryContact.FirstName;
+                        vendorDto.PrimaryContact.LastName = vendor.PrimaryContact.LastName;
+                        
+                        if (vendor.PrimaryContact.Party != null)
+                        {
+                            if (vendorDto.PrimaryContact.Party == null)
+                            {
+                                var partyProp = vendorDto.PrimaryContact.GetType().GetProperty("Party");
+                                if (partyProp != null)
+                                {
+                                    var partyInstance = Activator.CreateInstance(partyProp.PropertyType);
+                                    partyProp.SetValue(vendorDto.PrimaryContact, partyInstance);
+                                }
+                            }
+                            
+                            if (vendorDto.PrimaryContact.Party != null)
+                            {
+                                vendorDto.PrimaryContact.Party.Email = vendor.PrimaryContact.Party.Email;
+                                vendorDto.PrimaryContact.Party.Phone = vendor.PrimaryContact.Party.Phone;
+                                vendorDto.PrimaryContact.Party.Website = vendor.PrimaryContact.Party.Website;
+                                vendorDto.PrimaryContact.Party.Name = vendor.PrimaryContact.Party.Name;
+                            }
+                        }
+                    }
                 }
                 
                 return new ObjectResult(vendorDto);
