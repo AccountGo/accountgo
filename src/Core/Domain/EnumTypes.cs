@@ -139,6 +139,15 @@ namespace Core.Domain
         DayInTheFollowingMonth
     }
 
+    public enum PaymentMethods
+    {
+        Check = 1,
+        ETransfer,
+        Cash,
+        CreditCard,
+        Other
+    }
+
     public enum BankTypes
     {
         CheckingAccount = 1,

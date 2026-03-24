@@ -155,6 +155,21 @@ namespace Api.Controllers
  
         }
 
+        [HttpGet]
+        [Route("PaymentMethods")] // api/Common/PaymentMethods
+        public IActionResult PaymentMethods()
+        {
+            var paymentMethods = new List<Dto.Common.Status>
+            {
+                new Dto.Common.Status { Id = 1, Description = "Check" },
+                new Dto.Common.Status { Id = 2, Description = "E-Transfer" },
+                new Dto.Common.Status { Id = 3, Description = "Cash" },
+                new Dto.Common.Status { Id = 4, Description = "Credit Card" },
+                new Dto.Common.Status { Id = 5, Description = "Other" }
+            };
+            
+            return Json(paymentMethods);
+        }
 
     }
 }
