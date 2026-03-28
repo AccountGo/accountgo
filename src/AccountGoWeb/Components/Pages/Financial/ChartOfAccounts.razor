@@ -225,6 +225,8 @@ else
             .ToDictionary(account => account.AccountCode, StringComparer.OrdinalIgnoreCase);
 
         var rootsToRehome = new List<AccountViewModel>();
+        var sectionCandidates = new Dictionary<string, List<AccountViewModel>>(StringComparer.OrdinalIgnoreCase);
+
         foreach (var account in workingRoots)
         {
             if (IsMajorSectionCode(account.AccountCode) || IsIncomeSummaryCode(account.AccountCode))
@@ -237,9 +239,32 @@ else
                 continue;
             }
 
-            if (majorSections.TryGetValue(targetSectionCode, out var section))
+            if (!majorSections.ContainsKey(targetSectionCode))
             {
-                section.ChildAccounts.Add(account);
+                continue;
+            }
+
+            if (!sectionCandidates.TryGetValue(targetSectionCode, out var candidates))
+            {
+                candidates = new List<AccountViewModel>();
+                sectionCandidates[targetSectionCode] = candidates;
+            }
+
+            candidates.Add(account);
+        }
+
+        foreach (var sectionCandidateGroup in sectionCandidates)
+        {
+            if (!majorSections.TryGetValue(sectionCandidateGroup.Key, out var section))
+            {
+                continue;
+            }
+
+            var orderedCandidates = SortAccounts(sectionCandidateGroup.Value).ToList();
+            foreach (var account in orderedCandidates)
+            {
+                var displayParent = FindBestDisplayParent(section, account.AccountCode) ?? section;
+                displayParent.ChildAccounts.Add(account);
                 rootsToRehome.Add(account);
             }
         }
@@ -251,6 +276,86 @@ else
 
         SortTree(workingRoots);
         return workingRoots;
+    }
+
+    // Find the best parent node by checking candidate parent codes derived from the account code. 
+    private AccountViewModel? FindBestDisplayParent(AccountViewModel sectionRoot, string? accountCode)
+    {
+        foreach (var candidateParentCode in GetCandidateParentCodes(accountCode))
+        {
+            var candidate = FindDeepestNodeByCode(sectionRoot, candidateParentCode, 0, out _);
+            if (candidate != null)
+            {
+                return candidate;
+            }
+        }
+
+        return null;
+    }
+
+    // Generate candidate parent codes by rolling up the account code to higher levels
+    private IEnumerable<string> GetCandidateParentCodes(string? accountCode)
+    {
+        if (!int.TryParse(accountCode, out var numericCode))
+        {
+            return Enumerable.Empty<string>();
+        }
+
+        if (!TryGetMajorSectionCode(accountCode, out var sectionCode) || !int.TryParse(sectionCode, out var sectionNumericCode))
+        {
+            return Enumerable.Empty<string>();
+        }
+
+        var candidates = new List<int>();
+        var seen = new HashSet<int>();
+
+        for (var place = 10; place <= 10000; place *= 10)
+        {
+            var rolledUpCode = (numericCode / place) * place;
+
+            if (rolledUpCode == numericCode || rolledUpCode < sectionNumericCode)
+            {
+                continue;
+            }
+
+            if (seen.Add(rolledUpCode))
+            {
+                candidates.Add(rolledUpCode);
+            }
+        }
+
+        candidates.Sort((x, y) => y.CompareTo(x));
+        return candidates.Select(code => code.ToString());
+    }
+
+    // Recursively search for the deepest node matching the target account code
+    private AccountViewModel? FindDeepestNodeByCode(AccountViewModel node, string targetCode, int depth, out int bestDepth)
+    {
+        AccountViewModel? bestMatch = null;
+        bestDepth = -1;
+
+        if (string.Equals(node.AccountCode, targetCode, StringComparison.OrdinalIgnoreCase))
+        {
+            bestMatch = node;
+            bestDepth = depth;
+        }
+
+        if (node.ChildAccounts == null || node.ChildAccounts.Count == 0)
+        {
+            return bestMatch;
+        }
+
+        foreach (var child in node.ChildAccounts)
+        {
+            var childMatch = FindDeepestNodeByCode(child, targetCode, depth + 1, out var childDepth);
+            if (childMatch != null && childDepth > bestDepth)
+            {
+                bestMatch = childMatch;
+                bestDepth = childDepth;
+            }
+        }
+
+        return bestMatch;
     }
 
     // Recursively clone accounts to avoid modifying original data when building display hierarchy
