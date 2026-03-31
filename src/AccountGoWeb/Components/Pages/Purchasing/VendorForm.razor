@@ -310,6 +310,11 @@
             vendor.No = new Random().Next(1, 99999).ToString();
             vendor.PrimaryContact = new Contact();
             vendor.PaymentMethod = 1;
+            var apAccount = accounts.FirstOrDefault(a => a.Text == "20110");
+            if (apAccount != null && int.TryParse(apAccount.Value, out var apId))
+            {
+                vendor.AccountsPayableAccountId = apId;
+            }
         }
         else
         {
