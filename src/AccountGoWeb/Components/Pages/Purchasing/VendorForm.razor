@@ -27,13 +27,13 @@
             </div>
             <div class="card-body collapse show row" id="general">
                 <div class="col-sm-6">
-                    <div class="row mb-2">
-                        <div class="col-sm-2">No</div>
-                        <div class="col-sm-10">@vendor.No</div>
+                    <div class="d-flex align-items-center mb-2">
+                        <div class="flex-shrink-0 me-2 text-nowrap" style="min-width:80px">No</div>
+                        <div class="flex-grow-1">@vendor.No</div>
                     </div>
-                    <div class="row mb-2">
-                        <div class="col-sm-2">Name</div>
-                        <div class="col-sm-10">
+                    <div class="d-flex align-items-center mb-2">
+                        <div class="flex-shrink-0 me-2 text-nowrap" style="min-width:80px">Name</div>
+                        <div class="flex-grow-1">
                             <InputText @bind-Value="vendor.Name" class="form-control" placeholder="Name ..."
                                 disabled="@(!isEditMode)" />
                             <ValidationMessage For="@(() => vendor.Name)" />
@@ -41,23 +41,23 @@
                     </div>
                 </div>
                 <div class="col-sm-6">
-                    <div class="row mb-2">
-                        <div class="col-sm-2">Phone</div>
-                        <div class="col-sm-10">
+                    <div class="d-flex align-items-center mb-2">
+                        <div class="flex-shrink-0 me-2 text-nowrap" style="min-width:80px">Phone</div>
+                        <div class="flex-grow-1">
                             <InputText @bind-Value="vendor.Phone" class="form-control" placeholder="Phone ..."
                                 disabled="@(!isEditMode)" />
                         </div>
                     </div>
-                    <div class="row mb-2">
-                        <div class="col-sm-2">Website</div>
-                        <div class="col-sm-10">
+                    <div class="d-flex align-items-center mb-2">
+                        <div class="flex-shrink-0 me-2 text-nowrap" style="min-width:80px">Website</div>
+                        <div class="flex-grow-1">
                             <InputText @bind-Value="vendor.Website" class="form-control" placeholder="Website ..."
                                 disabled="@(!isEditMode)" />
                         </div>
                     </div>
-                    <div class="row mb-2">
-                        <div class="col-sm-2">Email</div>
-                        <div class="col-sm-10">
+                    <div class="d-flex align-items-center mb-2">
+                        <div class="flex-shrink-0 me-2 text-nowrap" style="min-width:80px">Email</div>
+                        <div class="flex-grow-1">
                             <InputText @bind-Value="vendor.Email" class="form-control" placeholder="Email ..."
                                 disabled="@(!isEditMode)" />
                         </div>
@@ -77,39 +77,39 @@
             </div>
             <div class="card-body collapse show row" id="contact">
                 <div class="col-sm-6">
-                    <div class="row mb-2">
-                        <div class="col-sm-4">First Name</div>
-                        <div class="col-sm-8">
+                    <div class="d-flex align-items-center mb-2">
+                        <div class="flex-shrink-0 me-2 text-nowrap" style="min-width:100px">First Name</div>
+                        <div class="flex-grow-1">
                             <InputText @bind-Value="vendor.PrimaryContact.FirstName" class="form-control"
                                 placeholder="First Name ..." disabled="@(!isEditMode)" />
                         </div>
                     </div>
-                    <div class="row mb-2">
-                        <div class="col-sm-4">Last Name</div>
-                        <div class="col-sm-8">
+                    <div class="d-flex align-items-center mb-2">
+                        <div class="flex-shrink-0 me-2 text-nowrap" style="min-width:100px">Last Name</div>
+                        <div class="flex-grow-1">
                             <InputText @bind-Value="vendor.PrimaryContact.LastName" class="form-control"
                                 placeholder="Last Name ..." disabled="@(!isEditMode)" />
                         </div>
                     </div>
                 </div>
                 <div class="col-sm-6">
-                    <div class="row mb-2">
-                        <div class="col-sm-4">Phone</div>
-                        <div class="col-sm-8">
+                    <div class="d-flex align-items-center mb-2">
+                        <div class="flex-shrink-0 me-2 text-nowrap" style="min-width:100px">Phone</div>
+                        <div class="flex-grow-1">
                             <InputText @bind-Value="vendor.PrimaryContact.Party.Phone" class="form-control"
                                 placeholder="Phone ..." disabled="@(!isEditMode)" />
                         </div>
                     </div>
-                    <div class="row mb-2">
-                        <div class="col-sm-4">Website</div>
-                        <div class="col-sm-8">
+                    <div class="d-flex align-items-center mb-2">
+                        <div class="flex-shrink-0 me-2 text-nowrap" style="min-width:100px">Website</div>
+                        <div class="flex-grow-1">
                             <InputText @bind-Value="vendor.PrimaryContact.Party.Website" class="form-control"
                                 placeholder="Website ..." disabled="@(!isEditMode)" />
                         </div>
                     </div>
-                    <div class="row mb-2">
-                        <div class="col-sm-4">Email</div>
-                        <div class="col-sm-8">
+                    <div class="d-flex align-items-center mb-2">
+                        <div class="flex-shrink-0 me-2 text-nowrap" style="min-width:100px">Email</div>
+                        <div class="flex-grow-1">
                             <InputText @bind-Value="vendor.PrimaryContact.Party.Email" class="form-control"
                                 placeholder="Email ..." disabled="@(!isEditMode)" />
                         </div>
@@ -125,46 +125,46 @@
             </div>
             <div class="card-body collapse show row" id="address">
                 <div class="col-sm-6">
-                    <div class="row mb-2">
-                        <div class="col-sm-4">Street 1</div>
-                        <div class="col-sm-8">
+                    <div class="d-flex align-items-center mb-2">
+                        <div class="flex-shrink-0 me-2 text-nowrap" style="min-width:100px">Street 1</div>
+                        <div class="flex-grow-1">
                             <InputText @bind-Value="vendor.Street1" class="form-control" placeholder="Street 1 ..."
                                        disabled="@(!isEditMode)" />
                         </div>
                     </div>
-                    <div class="row mb-2">
-                        <div class="col-sm-4">Street 2</div>
-                        <div class="col-sm-8">
+                    <div class="d-flex align-items-center mb-2">
+                        <div class="flex-shrink-0 me-2 text-nowrap" style="min-width:100px">Street 2</div>
+                        <div class="flex-grow-1">
                             <InputText @bind-Value="vendor.Street2" class="form-control" placeholder="Street 2 ..."
                                        disabled="@(!isEditMode)" />
                         </div>
                     </div>
-                    <div class="row mb-2">
-                        <div class="col-sm-4">City</div>
-                        <div class="col-sm-8">
+                    <div class="d-flex align-items-center mb-2">
+                        <div class="flex-shrink-0 me-2 text-nowrap" style="min-width:100px">City</div>
+                        <div class="flex-grow-1">
                             <InputText @bind-Value="vendor.City" class="form-control" placeholder="City ..."
                                        disabled="@(!isEditMode)" />
                         </div>
                     </div>
                 </div>
                 <div class="col-sm-6">
-                    <div class="row mb-2">
-                        <div class="col-sm-4">Province</div>
-                        <div class="col-sm-8">
+                    <div class="d-flex align-items-center mb-2">
+                        <div class="flex-shrink-0 me-2 text-nowrap" style="min-width:100px">Province</div>
+                        <div class="flex-grow-1">
                             <InputText @bind-Value="vendor.Province" class="form-control" placeholder="Province ..."
                                        disabled="@(!isEditMode)" />
                         </div>
                     </div>
-                    <div class="row mb-2">
-                        <div class="col-sm-4">Postal Code</div>
-                        <div class="col-sm-8">
+                    <div class="d-flex align-items-center mb-2">
+                        <div class="flex-shrink-0 me-2 text-nowrap" style="min-width:100px">Postal Code</div>
+                        <div class="flex-grow-1">
                             <InputText @bind-Value="vendor.PostalCode" class="form-control" placeholder="Postal Code ..."
                                        disabled="@(!isEditMode)" />
                         </div>
                     </div>
-                    <div class="row mb-2">
-                        <div class="col-sm-4">Country</div>
-                        <div class="col-sm-8">
+                    <div class="d-flex align-items-center mb-2">
+                        <div class="flex-shrink-0 me-2 text-nowrap" style="min-width:100px">Country</div>
+                        <div class="flex-grow-1">
                             <InputText @bind-Value="vendor.Country" class="form-control" placeholder="Country ..."
                                        disabled="@(!isEditMode)" />
                         </div>
@@ -180,15 +180,15 @@
             </div>
             <div class="card-body collapse show row" id="invoicing">
                 <div class="col-sm-6">
-                    <div class="row mb-2">
-                        <div class="col-sm-6">Accounts Payable</div>
-                        <div class="col-sm-6">
+                    <div class="d-flex align-items-center mb-2">
+                        <div class="flex-shrink-0 me-2 text-nowrap" style="min-width:130px">Accounts Payable</div>
+                        <div class="flex-grow-1">
                             <input type="text" value="@GetAccountsPayableDisplay()" class="form-control" disabled readonly />
                         </div>
                     </div>
-                    <div class="row mb-2">
-                        <div class="col-sm-6">Purchase</div>
-                        <div class="col-sm-6">
+                    <div class="d-flex align-items-center mb-2">
+                        <div class="flex-shrink-0 me-2 text-nowrap" style="min-width:130px">Purchase</div>
+                        <div class="flex-grow-1">
                             <InputSelect @bind-Value="vendor.PurchaseAccountId" class="form-control"
                                 disabled="@(!isEditMode)">
                                 <option value="">Select...</option>
@@ -199,9 +199,9 @@
                             </InputSelect>
                         </div>
                     </div>
-                    <div class="row mb-2">
-                        <div class="col-sm-6">Discount</div>
-                        <div class="col-sm-6">
+                    <div class="d-flex align-items-center mb-2">
+                        <div class="flex-shrink-0 me-2 text-nowrap" style="min-width:130px">Discount</div>
+                        <div class="flex-grow-1">
                             <InputNumber @bind-Value="vendor.DiscountPercentage" class="form-control"
                                          placeholder="Discount %" min="0" max="100" step="0.01"
                                          disabled="@(!isEditMode)" />
@@ -209,9 +209,9 @@
                     </div>
                 </div>
                 <div class="col-sm-6">
-                    <div class="row mb-2">
-                        <div class="col-sm-4">Tax Group</div>
-                        <div class="col-sm-8">
+                    <div class="d-flex align-items-center mb-2">
+                        <div class="flex-shrink-0 me-2 text-nowrap" style="min-width:100px">Tax Group</div>
+                        <div class="flex-grow-1">
                             <InputSelect @bind-Value="vendor.TaxGroupId" class="form-control" disabled="@(!isEditMode)">
                                 <option value="">Select...</option>
                                 @foreach (var taxGroup in taxGroups)
@@ -232,9 +232,9 @@
             </div>
             <div class="card-body collapse show row" id="payment">
                 <div class="col-sm-6">
-                    <div class="row mb-2">
-                        <div class="col-sm-4">Payment Term</div>
-                        <div class="col-sm-8">
+                    <div class="d-flex align-items-center mb-2">
+                        <div class="flex-shrink-0 me-2 text-nowrap" style="min-width:130px">Payment Term</div>
+                        <div class="flex-grow-1">
                             <InputSelect @bind-Value="vendor.PaymentTermId" class="form-control"
                                 disabled="@(!isEditMode)">
                                 <option value="">Select...</option>
@@ -245,9 +245,9 @@
                             </InputSelect>
                         </div>
                     </div>
-                    <div class="row mb-2">
-                        <div class="col-sm-4">Payment Method</div>
-                        <div class="col-sm-8">
+                    <div class="d-flex align-items-center mb-2">
+                        <div class="flex-shrink-0 me-2 text-nowrap" style="min-width:130px">Payment Method</div>
+                        <div class="flex-grow-1">
                             <InputSelect @bind-Value="vendor.PaymentMethod" class="form-control"
                                          disabled="@(!isEditMode)">
                                 <option value="">Select...</option>
