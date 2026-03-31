@@ -6,26 +6,26 @@
 @inject IJSRuntime JSRuntime
 
 <script>
-    window.fixTableBackground = function() {
-        setTimeout(function() {
+    window.fixTableBackground = function () {
+        setTimeout(function () {
             var rows = document.querySelectorAll('.invoice-form-wrapper .table-container table tbody tr');
-            rows.forEach(function(row) {
+            rows.forEach(function (row) {
                 row.style.setProperty('background-color', 'transparent', 'important');
                 var cells = row.querySelectorAll('td');
-                cells.forEach(function(cell) {
+                cells.forEach(function (cell) {
                     cell.style.setProperty('background-color', 'transparent', 'important');
                 });
             });
         }, 100);
     };
-    
-    document.addEventListener('focusin', function(e) {
+
+    document.addEventListener('focusin', function (e) {
         if (e.target.closest('.table-container')) {
             var row = e.target.closest('tr');
             if (row) {
                 row.style.setProperty('background-color', 'transparent', 'important');
                 var cells = row.querySelectorAll('td');
-                cells.forEach(function(cell) {
+                cells.forEach(function (cell) {
                     cell.style.setProperty('background-color', 'transparent', 'important');
                 });
             }
@@ -57,149 +57,181 @@ else
             <div class="col-sm-9 mt-3">
                 <div class="card">
                     <div class="card-body">
-                    <div class="row mb-2">
-                        <div class="col-sm-3">Vendor Name</div>
-                        <div class="col-sm-8">
-                            <InputSelect class="form-control" @bind-Value="purchaseInvoice.VendorId" disabled="@isViewMode">
-                                <option value="0">-- Select Vendor --</option>
-                                @if (vendors != null)
-                                {
-                                    @foreach (var vendor in vendors)
+                        <div class="row mb-2">
+                            <div class="col-sm-3">Vendor Name</div>
+                            <div class="col-sm-8">
+                                <InputSelect class="form-control" @bind-Value="purchaseInvoice.VendorId"
+                                             disabled="@isViewMode">
+                                    <option value="0">-- Select Vendor --</option>
+                                    @if (vendors != null)
                                     {
-                                        <option value="@vendor.Value">@vendor.Text</option>
+                                        @foreach (var vendor in vendors)
+                                        {
+                                            <option value="@vendor.Value">@vendor.Text</option>
+                                        }
                                     }
-                                }
-                            </InputSelect>
+                                </InputSelect>
+                            </div>
                         </div>
-                    </div>
 
-                    <div class="row mb-2">
-                        <div class="col-sm-3">Date</div>
-                        <div class="col-sm-8">
-                            <InputDate class="form-control" @bind-Value="purchaseInvoice.InvoiceDate" disabled="@isViewMode" />
+                        <div class="row mb-2">
+                            <div class="col-sm-3">Date</div>
+                            <div class="col-sm-8">
+                                <InputDate class="form-control" @bind-Value="purchaseInvoice.InvoiceDate"
+                                           disabled="@isViewMode" />
+                            </div>
                         </div>
-                    </div>
 
-                    <div class="row mb-2">
-                        <div class="col-sm-3">Reference No</div>
-                        <div class="col-sm-8">
-                            @if (isViewMode)
-                            {
-                                <span class="form-control" style="background-color: #e9ecef; color: #000;">@(string.IsNullOrEmpty(purchaseInvoice.ReferenceNo) ? "-" : purchaseInvoice.ReferenceNo)</span>
-                            }
+                        <div class="row mb-2">
+                            <div class="col-sm-3">Reference No</div>
+                            <div class="col-sm-8">
+                                @if (isViewMode)
+                                {
+                                    <span class="form-control"
+                                          style="background-color: #e9ecef; color: #000;">@(string.IsNullOrEmpty(purchaseInvoice.ReferenceNo)
+                                                                                                                                                        ? "-" : purchaseInvoice.ReferenceNo)</span>
+                                    }
                             else
-                            {
-                                <InputText class="form-control" @bind-Value="purchaseInvoice.ReferenceNo" placeholder="e.g. 111" />
-                            }
+                                    {
+                                        <InputText class="form-control" @bind-Value="purchaseInvoice.ReferenceNo"
+                                                   placeholder="e.g. 111" />
+                                    }
+                                </div>
+                            </div>
+
+                            <div class="row mb-2">
+                                <div class="col-sm-3">Purchase Order Number</div>
+                                <div class="col-sm-8">
+                                    @if (isViewMode)
+                                    {
+                                        <span class="form-control" style="background-color: #e9ecef; color: #000;">
+                                            @(string.IsNullOrEmpty(purchaseInvoice.PurchaseOrderNumber) ? "-" :
+                                                            purchaseInvoice.PurchaseOrderNumber)
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <InputText class="form-control" @bind-Value="purchaseInvoice.PurchaseOrderNumber"
+                                                   placeholder="e.g. PO-123" />
+                                    }
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="table-container">
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>Item</th>
+                                        <th>Quantity</th>
+                                        <th>Amount</th>
+                                        <th>Discount</th>
+                                        <th>Measurement</th>
+                                        @if (!isViewMode)
+                                        {
+                                            <th>Actions</th>
+                                        }
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @for (int i = 0; i < purchaseInvoice.PurchaseInvoiceLines.Count; i++)
+                                    {
+                                        var line = purchaseInvoice.PurchaseInvoiceLines[i];
+                                        var index = i;
+                                        <tr style="background-color: transparent !important;">
+                                            <td style="background-color: transparent !important;">
+                                                <InputSelect class="form-control" @bind-Value="line.ItemId" disabled="@isViewMode">
+                                                    <option value="0">-- Select Item --</option>
+                                                    @if (items != null)
+                                                    {
+                                                        @foreach (var item in items)
+                                                        {
+                                                            <option value="@item.Value">@item.Text</option>
+                                                        }
+                                                    }
+                                                </InputSelect>
+                                            </td>
+                                            <td style="background-color: transparent !important;">
+                                                <InputNumber class="form-control" @bind-Value="line.Quantity"
+                                                             disabled="@isViewMode" />
+                                            </td>
+                                            <td style="background-color: transparent !important;">
+                                                <InputNumber class="form-control" @bind-Value="line.Amount"
+                                                             disabled="@isViewMode" />
+                                            </td>
+                                            <td style="background-color: transparent !important;">
+                                                <InputNumber class="form-control" @bind-Value="line.Discount"
+                                                             disabled="@isViewMode" />
+                                            </td>
+                                            <td style="background-color: transparent !important;">
+                                                <InputSelect class="form-control" @bind-Value="line.MeasurementId"
+                                                             disabled="@isViewMode">
+                                                    <option value="0">-- Select Measurement --</option>
+                                                    @if (measurements != null)
+                                                    {
+                                                        @foreach (var measurement in measurements)
+                                                        {
+                                                            <option value="@measurement.Value">@measurement.Text</option>
+                                                        }
+                                                    }
+                                                </InputSelect>
+                                            </td>
+                                            @if (!isViewMode)
+                                            {
+                                                <td style="background-color: transparent !important;">
+                                                    <button type="button" class="btn btn-sm btn-danger"
+                                                            @onclick="() => RemoveLine(index)"
+                                                            disabled="@(purchaseInvoice.PurchaseInvoiceLines.Count <= 1)">
+                                                        Remove
+                                                    </button>
+                                                </td>
+                                            }
+                                        </tr>
+                                    }
+                                    @if (!isViewMode)
+                                    {
+                                        <tr>
+                                            <td colspan="6">
+                                                <button type="button" class="btn btn-primary" @onclick="AddLine">Add Row</button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
                         </div>
                     </div>
-                </div>
 
-                <div class="table-container">
-                    <table class="table">
-                        <thead>
-                            <tr>
-                                <th>Item</th>
-                                <th>Quantity</th>
-                                <th>Amount</th>
-                                <th>Discount</th>
-                                <th>Measurement</th>
-                                @if (!isViewMode)
-                                {
-                                    <th>Actions</th>
-                                }
-                            </tr>
-                        </thead>
-                        <tbody>
-                        @for (int i = 0; i < purchaseInvoice.PurchaseInvoiceLines.Count; i++)
-                        {
-                            var line = purchaseInvoice.PurchaseInvoiceLines[i];
-                            var index = i;
-                            <tr style="background-color: transparent !important;">
-                                <td style="background-color: transparent !important;">
-                                    <InputSelect class="form-control" @bind-Value="line.ItemId" disabled="@isViewMode">
-                                        <option value="0">-- Select Item --</option>
-                                        @if (items != null)
-                                        {
-                                            @foreach (var item in items)
-                                            {
-                                                <option value="@item.Value">@item.Text</option>
-                                            }
-                                        }
-                                    </InputSelect>
-                                </td>
-                                <td style="background-color: transparent !important;">
-                                    <InputNumber class="form-control" @bind-Value="line.Quantity" disabled="@isViewMode" />
-                                </td>
-                                <td style="background-color: transparent !important;">
-                                    <InputNumber class="form-control" @bind-Value="line.Amount" disabled="@isViewMode" />
-                                </td>
-                                <td style="background-color: transparent !important;">
-                                    <InputNumber class="form-control" @bind-Value="line.Discount" disabled="@isViewMode" />
-                                </td>
-                                <td style="background-color: transparent !important;">
-                                    <InputSelect class="form-control" @bind-Value="line.MeasurementId" disabled="@isViewMode">
-                                        <option value="0">-- Select Measurement --</option>
-                                        @if (measurements != null)
-                                        {
-                                            @foreach (var measurement in measurements)
-                                            {
-                                                <option value="@measurement.Value">@measurement.Text</option>
-                                            }
-                                        }
-                                    </InputSelect>
-                                </td>
-                                @if (!isViewMode)
-                                {
-                                    <td style="background-color: transparent !important;">
-                                        <button type="button" class="btn btn-sm btn-danger" @onclick="() => RemoveLine(index)" disabled="@(purchaseInvoice.PurchaseInvoiceLines.Count <= 1)">
-                                            Remove
-                                        </button>
-                                    </td>
-                                }
-                            </tr>
-                        }
+                    <div class="col-md-9 mt-3">
                         @if (!isViewMode)
                         {
-                            <tr>
-                                <td colspan="6">
-                                    <button type="button" class="btn btn-primary" @onclick="AddLine">Add Row</button>
-                                </td>
-                            </tr>
+                            <button type="submit" class="btn btn-sm btn-primary btn-flat pull-left" disabled="@isSaving">
+                                @(isSaving ? "Saving..." : "Save")
+                            </button>
                         }
-                        </tbody>
-                    </table>
+                        <a href="/purchasing/purchaseinvoices" class="btn btn-sm btn-secondary btn-flat pull-left">Close</a>
+                    </div>
                 </div>
             </div>
+        </EditForm>
 
-            <div class="col-md-9 mt-3">
-                @if (!isViewMode)
+        @if (saveError)
+        {
+            <div class="alert alert-danger mt-3">
+                Error saving purchase invoice.
+                @if (!string.IsNullOrEmpty(errorMessage))
                 {
-                    <button type="submit" class="btn btn-sm btn-primary btn-flat pull-left" disabled="@isSaving">
-                        @(isSaving ? "Saving..." : "Save")
-                    </button>
-                }
-                <a href="/purchasing/purchaseinvoices" class="btn btn-sm btn-secondary btn-flat pull-left">Close</a>
-                </div>
-            </div>
-        </div>
-    </EditForm>
+                    <br />
+                    <strong>Details:</strong>
 
-    @if (saveError)
-    {
-        <div class="alert alert-danger mt-3">
-            Error saving purchase invoice.
-            @if (!string.IsNullOrEmpty(errorMessage))
-            {
-                <br/><strong>Details:</strong> @errorMessage
-            }
-        </div>
+                    @errorMessage
+                }
+            </div>
+        }
+        @if (saveSuccess)
+        {
+            <div class="alert alert-success mt-3">Purchase invoice saved successfully!</div>
+        }
     }
-    @if (saveSuccess)
-    {
-        <div class="alert alert-success mt-3">Purchase invoice saved successfully!</div>
-    }
-}
 
 @code {
     [Parameter]
@@ -247,6 +279,7 @@ else
             No = random.Next(1, 99999).ToString(),
             InvoiceDate = DateTime.Now,
             ReferenceNo = "",
+            PurchaseOrderNumber = "",
             AmountPaid = 0,
             IsPaid = false,
             Posted = false,
@@ -268,7 +301,11 @@ else
             if (vendorResponse.IsSuccessStatusCode)
             {
                 var json = await vendorResponse.Content.ReadAsStringAsync();
-                var list = JsonSerializer.Deserialize<List<VendorDto>>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                var list = JsonSerializer.Deserialize<List<VendorDto>>(json, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive =
+true
+                });
                 vendors = list?.Select(v => new SelectListItem { Value = v.Id.ToString(), Text = v.Name ?? "" }).ToList();
             }
 
@@ -276,7 +313,11 @@ else
             if (itemResponse.IsSuccessStatusCode)
             {
                 var json = await itemResponse.Content.ReadAsStringAsync();
-                var list = JsonSerializer.Deserialize<List<ItemDto>>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                var list = JsonSerializer.Deserialize<List<ItemDto>>(json, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive =
+true
+                });
                 items = list?.Select(i => new SelectListItem { Value = i.Id.ToString(), Text = i.Description ?? "" }).ToList();
             }
 
@@ -284,7 +325,10 @@ else
             if (measurementResponse.IsSuccessStatusCode)
             {
                 var json = await measurementResponse.Content.ReadAsStringAsync();
-                var list = JsonSerializer.Deserialize<List<MeasurementDto>>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                var list = JsonSerializer.Deserialize<List<MeasurementDto>>(json, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
                 measurements = list?.Select(m => new SelectListItem { Value = m.Id.ToString(), Text = m.Description ?? "" }).ToList();
             }
         }
@@ -306,13 +350,16 @@ else
             if (response.IsSuccessStatusCode)
             {
                 var json = await response.Content.ReadAsStringAsync();
-                var tempInvoice = JsonSerializer.Deserialize<PurchaseInvoiceDto>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-                
+                var tempInvoice = JsonSerializer.Deserialize<PurchaseInvoiceDto>(json, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+
                 // Workaround: Try to get ReferenceNo from localStorage if API doesn't return it
                 if (tempInvoice != null)
                 {
                     purchaseInvoice = tempInvoice;
-                    
+
                     // If API doesn't return ReferenceNo, try to get it from the list
                     if (string.IsNullOrEmpty(purchaseInvoice.ReferenceNo))
                     {
@@ -322,7 +369,10 @@ else
                             if (listResponse.IsSuccessStatusCode)
                             {
                                 var listJson = await listResponse.Content.ReadAsStringAsync();
-                                var invoicesList = JsonSerializer.Deserialize<List<PurchaseInvoiceDto>>(listJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                                var invoicesList = JsonSerializer.Deserialize<List<PurchaseInvoiceDto>>(listJson, new JsonSerializerOptions
+                                {
+                                    PropertyNameCaseInsensitive = true
+                                });
                                 var invoiceFromList = invoicesList?.FirstOrDefault(i => i.Id == id);
                                 if (invoiceFromList != null && !string.IsNullOrEmpty(invoiceFromList.ReferenceNo))
                                 {
@@ -359,7 +409,7 @@ else
                 var validLines = purchaseInvoice.PurchaseInvoiceLines
                     .Where(line => line.ItemId.HasValue && line.ItemId.Value > 0)
                     .ToList();
-                
+
                 if (validLines.Count == 0)
                 {
                     errorMessage = "Please add at least one item line with a valid item selected.";
@@ -367,7 +417,7 @@ else
                     isSaving = false;
                     return;
                 }
-                
+
                 purchaseInvoice.PurchaseInvoiceLines = validLines;
             }
 
@@ -403,7 +453,16 @@ else
     }
 
     private void ToggleEdit() { isViewMode = !isViewMode; }
-    private void AddLine() { purchaseInvoice?.PurchaseInvoiceLines?.Add(new PurchaseInvoiceLineDto { Quantity = 1, Amount = 0, Discount = 0 }); }
+    private void AddLine()
+    {
+        purchaseInvoice?.PurchaseInvoiceLines?.Add(new PurchaseInvoiceLineDto
+        {
+            Quantity = 1,
+            Amount =
+0,
+            Discount = 0
+        });
+    }
     private void RemoveLine(int index)
     {
         if (purchaseInvoice?.PurchaseInvoiceLines != null && purchaseInvoice.PurchaseInvoiceLines.Count > 1)
@@ -421,6 +480,7 @@ else
         public bool Posted { get; set; }
         public string? VendorInvoiceNo { get; set; }
         public string? ReferenceNo { get; set; }
+        public string? PurchaseOrderNumber { get; set; }
         public List<PurchaseInvoiceLineDto> PurchaseInvoiceLines { get; set; } = new();
     }
 
@@ -438,4 +498,3 @@ else
     public class ItemDto { public int Id { get; set; } public string? Description { get; set; } }
     public class MeasurementDto { public int Id { get; set; } public string? Description { get; set; } }
 }
-
