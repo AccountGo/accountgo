@@ -54,3 +54,12 @@ nav ul li ul li a:hover,
 .active {
     border-left: 4px solid #3498db;
 }
+
+.sub-menu ul {
+    display: none;
+}
+
+.sub-menu {
+    opacity: 0;
+    transition: opacity 0.2s linear;
+} 

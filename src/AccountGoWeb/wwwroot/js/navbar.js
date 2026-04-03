@@ -1,6 +1,8 @@
 function loadNavbarState() {
     loadExpandedNavbar();
     loadActiveNavLink();
+
+    $(".sub-menu").css("opacity", 1);
 }
 
 function loadExpandedNavbar() {
@@ -33,9 +35,6 @@ function saveExpandedNavbar() {
     });
     localStorage.setItem("navbarState", JSON.stringify(expandedNavbar));
 }
-
-
-$(".sub-menu ul").hide();
 
 $(".sub-menu .nav-link").click(function () {
     $(".nav-link").removeClass("active");
