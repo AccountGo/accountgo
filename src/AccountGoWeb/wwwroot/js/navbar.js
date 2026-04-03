@@ -7,6 +7,14 @@ function loadNavbarState() {
             $(".sub-menu").eq(index).find(".ml-auto").toggleClass("fa-caret-up fa-caret-down");
         })
     }
+
+    const activeNavLink = localStorage.getItem("activeNavLink");
+    if (activeNavLink) {
+        $(".nav-link").removeClass("active");
+        $(".nav-link").filter(function () {
+            return $(this).attr("href") === activeNavLink;
+        }).addClass("active");
+    }
 }
 
 function saveNavbarState() {
@@ -20,11 +28,19 @@ function saveNavbarState() {
 }
 
 $(".sub-menu ul").hide();
+
+$(".sub-menu .nav-link").click(function () {
+    $(".nav-link").removeClass("active");
+    $(this).addClass("active");
+    localStorage.setItem("activeNavLink", $(this).attr("href"));
+});
+
 $(".sub-menu a").click(function () {
     $(this).parent(".sub-menu").children("ul").slideToggle("100", function () {
         saveNavbarState();
     });
     $(this).find(".ml-auto").toggleClass("fa-caret-up fa-caret-down");
+    $(this).find(".nav-link").toggleClass("active");
 });
 
 loadNavbarState();
