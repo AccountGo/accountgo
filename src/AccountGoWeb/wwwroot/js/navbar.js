@@ -1,4 +1,9 @@
 function loadNavbarState() {
+    loadExpandedNavbar();
+    loadActiveNavLink();
+}
+
+function loadExpandedNavbar() {
     const navbarState = localStorage.getItem("navbarState");
     if (navbarState) {
         const expandedNavbar = JSON.parse(navbarState);
@@ -7,7 +12,9 @@ function loadNavbarState() {
             $(".sub-menu").eq(index).find(".ml-auto").toggleClass("fa-caret-up fa-caret-down");
         })
     }
+}
 
+function loadActiveNavLink() {
     const activeNavLink = localStorage.getItem("activeNavLink");
     if (activeNavLink) {
         $(".nav-link").removeClass("active");
@@ -17,7 +24,7 @@ function loadNavbarState() {
     }
 }
 
-function saveNavbarState() {
+function saveExpandedNavbar() {
     const expandedNavbar = [];
     $(".sub-menu").each(function (index) {
         if ($(this).children("ul").is(":visible")) {
@@ -26,6 +33,7 @@ function saveNavbarState() {
     });
     localStorage.setItem("navbarState", JSON.stringify(expandedNavbar));
 }
+
 
 $(".sub-menu ul").hide();
 
@@ -37,7 +45,7 @@ $(".sub-menu .nav-link").click(function () {
 
 $(".sub-menu a").click(function () {
     $(this).parent(".sub-menu").children("ul").slideToggle("100", function () {
-        saveNavbarState();
+        saveExpandedNavbar();
     });
     $(this).find(".ml-auto").toggleClass("fa-caret-up fa-caret-down");
     $(this).find(".nav-link").toggleClass("active");
