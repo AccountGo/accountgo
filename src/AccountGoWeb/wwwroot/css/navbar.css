@@ -27,7 +27,8 @@ nav ul li a {
     transition: 0.2s linear;
 }
 
-nav ul li a:hover {
+nav ul li a:hover,
+.active {
     background: #1d4f71;
     color: #fff;
 }
@@ -49,6 +50,7 @@ nav ul li ul li a {
     padding: 10px 20px;
 }
 
-nav ul li ul li a:hover {
+nav ul li ul li a:hover,
+.active {
     border-left: 4px solid #3498db;
 }
