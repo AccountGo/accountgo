@@ -28,7 +28,7 @@ nav ul li a {
 }
 
 nav ul li a:hover,
-.active {
+.nav-link-active {
     background: #1d4f71;
     color: #fff;
 }
@@ -51,7 +51,7 @@ nav ul li ul li a {
 }
 
 nav ul li ul li a:hover,
-.active {
+.nav-link-active {
     border-left: 4px solid #3498db;
 }
 

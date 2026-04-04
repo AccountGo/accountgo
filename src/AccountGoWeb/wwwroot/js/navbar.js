@@ -18,10 +18,10 @@ function loadExpandedNavbar() {
 }
 
 function loadActiveNavLink() {
-    $("#sidebar .nav-link").removeClass("active");
+    $("#sidebar .nav-link").removeClass("nav-link-active");
     $("#sidebar .nav-link").each(function () {
         if (window.location.href.includes($(this).attr("href"))) {
-            $(this).addClass("active");
+            $(this).addClass("nav-link-active");
         }
     });
 }
@@ -37,8 +37,8 @@ function saveExpandedNavbar() {
 }
 
 $("#sidebar .nav-link").click(function () {
-    $("#sidebar .nav-link").removeClass("active");
-    $(this).addClass("active");
+    $("#sidebar .nav-link").removeClass("nav-link-active");
+    $(this).addClass("nav-link-active");
 });
 
 $(".sub-menu a").click(function () {
