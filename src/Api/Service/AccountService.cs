@@ -47,6 +47,14 @@ public class AccountService : IAccountService
             newAccount.DrOrCrSide = Core.Domain.DrOrCrSide.Dr;
         }
 
+        // Check for duplicate account code
+        var existingAccount = await _context.Accounts
+            .AnyAsync(a => a.AccountCode == newAccount.AccountCode);
+        if (existingAccount)
+        {
+            throw new InvalidOperationException($"Account number '{newAccount.AccountCode}' already exists.");
+        }
+
         _context.Accounts.Add(newAccount);
         await _context.SaveChangesAsync();
         return newAccount;
