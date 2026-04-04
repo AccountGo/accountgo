@@ -78,7 +78,9 @@ else
     <tbody>
         @foreach (var q in quotations)
         {
-            <tr @onclick="() => OnSelectionChanged(q.id, q.statusId)" class="quotationRow">
+            <tr @onclick="() => OnSelectionChanged(q.id, q.statusId)" 
+                @ondblclick="() => NavigateToQuotation(q.id)"
+                class="quotationRow">
                 <td>@q.no</td>
                 <td>@q.customerName</td>
                 <td>@q.quotationDate.ToShortDateString()</td>
@@ -146,6 +148,12 @@ protected override async Task OnInitializedAsync()
             newOrderLink = $"/sales/salesorder?quotationId={id}";
             isNewOrderLinkActive = true;
         }
+    }
+
+    private void NavigateToQuotation(int id)
+    {
+        NavigationManager.NavigateTo($"/quotations/quotation?id={id}");
+        NavigationManager.Refresh();
     }
 
     // DTO class for deserialization
