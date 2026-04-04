@@ -81,7 +81,7 @@
                             <tr 
                                 class="@(selectedRowIndex == index ? "selected" : "")" 
                                 @onclick="@(() => OnRowSelected(index))"
-                                @ondblclick="@(() => NavigateToOrder(index))">
+                                @ondblclick="@(() => NavigateToSalesOrder(index))">
                                 <td>@GetValue(salesOrders[index], "no")</td>
                                 <td>@GetValue(salesOrders[index], "customerName")</td>
                                 <td>@GetValue(salesOrders[index], "orderDate")</td>
@@ -295,7 +295,7 @@
         StateHasChanged();
     }
 
-    private void NavigateToOrder(int index)
+    private void NavigateToSalesOrder(int index)
     {
         if (index >= 0 && index < salesOrders.Count)
         {

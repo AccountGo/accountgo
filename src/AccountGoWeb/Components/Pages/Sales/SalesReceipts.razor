@@ -82,7 +82,7 @@
                             <tr 
                                 class="@(selectedRowIndex == index ? "selected-row" : "")" 
                                 @onclick="@(() => OnRowSelected(index))"
-                                @ondblclick="@(() => NavigateToReceipt(index))">
+                                @ondblclick="@(() => NavigateToSalesReceipt(index))">
                                 <td>@GetValue(salesReceipts[index], "id")</td>
                                 <td>@GetValue(salesReceipts[index], "receiptNo")</td>
                                 <td>@GetValue(salesReceipts[index], "customerName")</td>
@@ -307,7 +307,7 @@
         }
     }
 
-    private void NavigateToReceipt(int index)
+    private void NavigateToSalesReceipt(int index)
     {
         if (index >= 0 && index < salesReceipts.Count)
         {

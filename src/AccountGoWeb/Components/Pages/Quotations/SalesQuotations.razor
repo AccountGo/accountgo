@@ -79,7 +79,7 @@ else
         @foreach (var q in quotations)
         {
             <tr @onclick="() => OnSelectionChanged(q.id, q.statusId)" 
-                @ondblclick="() => NavigateToQuotation(q.id)"
+                @ondblclick="() => NavigateToSalesQuotation(q.id)"
                 class="quotationRow">
                 <td>@q.no</td>
                 <td>@q.customerName</td>
@@ -150,7 +150,7 @@ protected override async Task OnInitializedAsync()
         }
     }
 
-    private void NavigateToQuotation(int id)
+    private void NavigateToSalesQuotation(int id)
     {
         NavigationManager.NavigateTo($"/quotations/quotation?id={id}");
         NavigationManager.Refresh();
