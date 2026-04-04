@@ -3,6 +3,8 @@
 @using System.Text.Json.Serialization
 @inject IHttpClientFactory ClientFactory
 
+@inject NavigationManager Navigation
+
 @if (getError)
 {
     <div class="alert alert-danger" role="alert">
@@ -50,6 +52,7 @@ else
                 @foreach (var invoice in purchaseInvoices)
                 {
                     <tr @onclick="() => SelectInvoice(invoice)" 
+                        @ondblclick="NavigateToPurchaseInvoice"
                         class="@(selectedInvoice?.Id == invoice.Id ? "table-active" : "")"
                         style="cursor: pointer;">
                         <td>@invoice.No</td>
@@ -134,6 +137,14 @@ else
     {
         selectedInvoice = invoice;
         StateHasChanged();
+    }
+
+    private void NavigateToPurchaseInvoice()
+    {
+        if (selectedInvoice != null)
+        {
+            Navigation.NavigateTo($"/purchasing/purchaseinvoice?id={selectedInvoice.Id}", forceLoad: true);
+        }
     }
 
     public class PurchaseInvoiceDto
