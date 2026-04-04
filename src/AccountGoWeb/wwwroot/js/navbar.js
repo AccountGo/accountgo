@@ -7,7 +7,7 @@ function loadNavbarState() {
 }
 
 function loadExpandedNavbar() {
-    const navbarState = localStorage.getItem("navbarState");
+    const navbarState = sessionStorage.getItem("navbarState");
     if (navbarState) {
         const expandedNavbar = JSON.parse(navbarState);
         expandedNavbar.forEach(index => {
@@ -33,7 +33,7 @@ function saveExpandedNavbar() {
             expandedNavbar.push(index);
         }
     });
-    localStorage.setItem("navbarState", JSON.stringify(expandedNavbar));
+    sessionStorage.setItem("navbarState", JSON.stringify(expandedNavbar));
 }
 
 $("#sidebar .nav-link").click(function () {
