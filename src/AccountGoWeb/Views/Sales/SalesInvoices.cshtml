@@ -108,6 +108,7 @@
             // PROPERTIES - simple boolean / string / number properties
             rowSelection: 'single',
             onSelectionChanged: onSelectionChanged,
+            onRowDoubleClicked: navigateToSalesInvoice,
             theme: 'legacy' // Use v32 style themes to match ag-grid.css
         };
 
@@ -125,6 +126,14 @@
                 document.getElementById('linkDeleteInvoice').setAttribute('data-bs-toggle', 'modal');
                 document.getElementById('linkDeleteInvoice').setAttribute('data-bs-target', '#deleteSalesInvoice');
                 $("#hdnselectedsalesInvoiceId").val(selectedRow.id);
+            }
+        }
+
+        function navigateToSalesInvoice(event) {
+            var selectedRow = event.data;
+            onSelectionChanged();
+            if (selectedRow) {
+                location.href = 'Sales/SalesInvoice?id=' + selectedRow.id;
             }
         }
 
