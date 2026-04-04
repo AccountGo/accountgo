@@ -300,9 +300,13 @@
         if (index >= 0 && index < salesOrders.Count)
         {
             OnRowSelected(index);
+            
+            if (selectedOrderId != null) 
+            {
+                Navigation.NavigateTo($"/Sales/SalesOrder?id={selectedOrderId}");
+                Navigation.Refresh();
+            }
 
-            Navigation.NavigateTo($"/Sales/SalesOrder?id={selectedOrderId}");
-            Navigation.Refresh();
         }
     }
     private void UpdateButtonLinks()
