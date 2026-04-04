@@ -303,8 +303,7 @@
             
             if (selectedOrderId != null) 
             {
-                Navigation.NavigateTo($"/Sales/SalesOrder?id={selectedOrderId}");
-                Navigation.Refresh();
+                Navigation.NavigateTo($"/Sales/SalesOrder?id={selectedOrderId}", forceLoad: true);
             }
 
         }

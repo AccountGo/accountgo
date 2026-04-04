@@ -337,8 +337,7 @@ else
         SelectInvoice(invoice);
         if (selectedInvoice != null)
         {
-            NavigationManager.NavigateTo($"/donations/donationinvoice?id={selectedInvoice.Id}");
-            NavigationManager.Refresh();
+            NavigationManager.NavigateTo($"/donations/donationinvoice?id={selectedInvoice.Id}", forceLoad: true);
         }
     }
 

@@ -152,8 +152,7 @@ protected override async Task OnInitializedAsync()
 
     private void NavigateToSalesQuotation(int id)
     {
-        NavigationManager.NavigateTo($"/quotations/quotation?id={id}");
-        NavigationManager.Refresh();
+        NavigationManager.NavigateTo($"/quotations/quotation?id={id}", forceLoad: true);
     }
 
     // DTO class for deserialization

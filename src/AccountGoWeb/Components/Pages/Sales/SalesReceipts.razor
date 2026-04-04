@@ -315,8 +315,7 @@
 
             if (selectedReceiptId != null)
             {
-                Navigation.NavigateTo($"/Sales/SalesReceipt?id={selectedReceiptId}");
-                Navigation.Refresh();
+                Navigation.NavigateTo($"/Sales/SalesReceipt?id={selectedReceiptId}", forceLoad: true);
             }
         }
     }
