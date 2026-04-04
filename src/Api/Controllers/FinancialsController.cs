@@ -424,7 +424,15 @@ namespace Api.Controllers
                 // CreditBalance = 0
             };
 
-            var createdAccount = await _accountService.AddAccountAsync(newAccount);
+            Core.Domain.Financials.Account createdAccount;
+            try
+            {
+                createdAccount = await _accountService.AddAccountAsync(newAccount);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(new { message = ex.Message });
+            }
 
             // Return a DTO instead of the domain object to avoid serialization issues with computed properties
             var accountDto = new Account
