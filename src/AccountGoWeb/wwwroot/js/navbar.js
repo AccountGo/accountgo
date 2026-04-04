@@ -2,6 +2,7 @@ function loadNavbarState() {
     loadExpandedNavbar();
     loadActiveNavLink();
 
+    $("#sidebar").css("opacity", 1);
     $(".sub-menu").css("opacity", 1);
 }
 
@@ -19,10 +20,14 @@ function loadExpandedNavbar() {
 function loadActiveNavLink() {
     const activeNavLink = localStorage.getItem("activeNavLink");
     if (activeNavLink) {
-        $(".nav-link").removeClass("active");
-        $(".nav-link").filter(function () {
-            return $(this).attr("href") === activeNavLink;
-        }).addClass("active");
+        if (window.location.href.includes(activeNavLink)) {
+            $("#sidebar .nav-link").removeClass("active");
+            $("#sidebar .nav-link").filter(function () {
+                return $(this).attr("href") === activeNavLink;
+            }).addClass("active");
+        } else {
+            localStorage.removeItem("activeNavLink");
+        }
     }
 }
 
@@ -36,8 +41,8 @@ function saveExpandedNavbar() {
     localStorage.setItem("navbarState", JSON.stringify(expandedNavbar));
 }
 
-$(".sub-menu .nav-link").click(function () {
-    $(".nav-link").removeClass("active");
+$("#sidebar .nav-link").click(function () {
+    $("#sidebar .nav-link").removeClass("active");
     $(this).addClass("active");
     localStorage.setItem("activeNavLink", $(this).attr("href"));
 });
@@ -47,7 +52,6 @@ $(".sub-menu a").click(function () {
         saveExpandedNavbar();
     });
     $(this).find(".ml-auto").toggleClass("fa-caret-up fa-caret-down");
-    $(this).find(".nav-link").toggleClass("active");
 });
 
 loadNavbarState();
