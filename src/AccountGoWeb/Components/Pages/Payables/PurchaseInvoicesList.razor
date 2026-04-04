@@ -62,9 +62,6 @@ else
                         <td>@("$" + invoice.AmountPaid.ToString("N2"))</td>
                         <td>@invoice.ReferenceNo</td>
                         <td>
-                            <a href="/purchasing/purchaseinvoice?id=@invoice.Id" class="btn btn-sm btn-outline-primary" @onclick:stopPropagation="true">
-                                View
-                            </a>
                             @if (!invoice.IsPaid && invoice.Posted)
                             {
                                 <a href="/purchasing/payment/@invoice.Id" class="btn btn-sm btn-outline-success" @onclick:stopPropagation="true">
