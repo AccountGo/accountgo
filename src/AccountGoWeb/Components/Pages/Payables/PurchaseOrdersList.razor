@@ -50,6 +50,7 @@ else
                 @foreach (var order in purchaseOrders)
                 {
                     <tr @onclick="() => SelectOrder(order)" 
+                        @ondblclick="NavigateToPurchaseOrder"
                         class="@(selectedPurchaseOrder?.Id == order.Id ? "table-active" : "")"
                         style="cursor: pointer;">
                         <td>@order.No</td>
@@ -127,6 +128,14 @@ else
     {
         selectedPurchaseOrder = order;
         StateHasChanged();
+    }
+
+    private void NavigateToPurchaseOrder()
+    {
+        if (selectedPurchaseOrder != null)
+        {
+            Navigation.NavigateTo($"/purchasing/purchaseorder?id={selectedPurchaseOrder.Id}", forceLoad: true);
+        }
     }
 
     public class PurchaseOrderDto
