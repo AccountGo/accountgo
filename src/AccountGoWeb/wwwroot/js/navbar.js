@@ -18,17 +18,12 @@ function loadExpandedNavbar() {
 }
 
 function loadActiveNavLink() {
-    const activeNavLink = localStorage.getItem("activeNavLink");
-    if (activeNavLink) {
-        if (window.location.href.includes(activeNavLink)) {
-            $("#sidebar .nav-link").removeClass("active");
-            $("#sidebar .nav-link").filter(function () {
-                return $(this).attr("href") === activeNavLink;
-            }).addClass("active");
-        } else {
-            localStorage.removeItem("activeNavLink");
+    $("#sidebar .nav-link").removeClass("active");
+    $("#sidebar .nav-link").each(function () {
+        if (window.location.href.includes($(this).attr("href"))) {
+            $(this).addClass("active");
         }
-    }
+    });
 }
 
 function saveExpandedNavbar() {
@@ -44,7 +39,6 @@ function saveExpandedNavbar() {
 $("#sidebar .nav-link").click(function () {
     $("#sidebar .nav-link").removeClass("active");
     $(this).addClass("active");
-    localStorage.setItem("activeNavLink", $(this).attr("href"));
 });
 
 $(".sub-menu a").click(function () {
