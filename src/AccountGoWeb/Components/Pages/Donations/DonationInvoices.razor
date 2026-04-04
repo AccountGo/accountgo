@@ -178,7 +178,8 @@ else if (donationInvoices != null && donationInvoices.Any())
                     @foreach (var invoice in donationInvoices)
                     {
                         <tr class="@(selectedInvoice?.Id == invoice.Id ? "table-active" : "")"
-                            @onclick="() => SelectInvoice(invoice)">
+                            @onclick="() => SelectInvoice(invoice)"
+                            @ondblclick="() => NavigateToDonationInvoice(invoice)">
                             <td class="text-center">
                                 <input type="radio" name="selectedInvoice" checked="@(selectedInvoice?.Id == invoice.Id)" />
                             </td>
@@ -329,6 +330,16 @@ else
     {
         selectedInvoice = invoice;
         StateHasChanged();
+    }
+
+    private void NavigateToDonationInvoice(DonationInvoice invoice) 
+    {
+        SelectInvoice(invoice);
+        if (selectedInvoice != null)
+        {
+            NavigationManager.NavigateTo($"/donations/donationinvoice?id={selectedInvoice.Id}");
+            NavigationManager.Refresh();
+        }
     }
 
     private void EditInvoice()
