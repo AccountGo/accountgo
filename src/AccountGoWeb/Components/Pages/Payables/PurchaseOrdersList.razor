@@ -43,7 +43,6 @@ else
                     <th>Order Date</th>
                     <th>Amount</th>
                     <th>Ref No</th>
-                    <th>Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -58,11 +57,6 @@ else
                         <td>@order.OrderDate.ToString("yyyy-MM-dd")</td>
                         <td>@("$" + order.Amount.ToString("N2"))</td>
                         <td>@order.ReferenceNo</td>
-                        <td>
-                            <a href="/purchasing/purchaseorder?id=@order.Id" class="btn btn-sm btn-outline-primary" @onclick:stopPropagation="true">
-                                View
-                            </a>
-                        </td>
                     </tr>
                 }
             </tbody>
