@@ -52,12 +52,11 @@
                             {
                                 @foreach (var tax in taxes)
                                 {
-                                    <tr>
+                                    <tr @ondblclick="() => EditTax(tax)" style="cursor: pointer;">
                                         <td>@tax.TaxCode</td>
                                         <td>@tax.TaxName</td>
                                         <td>@tax.Rate</td>
                                         <td>
-                                            <button class="btn btn-sm btn-info btn-flat" @onclick="() => EditTax(tax)">Edit</button>
                                             <button class="btn btn-sm btn-danger btn-flat"
                                                 @onclick="() => ConfirmDeleteTax(tax.Id)">Delete</button>
                                         </td>
