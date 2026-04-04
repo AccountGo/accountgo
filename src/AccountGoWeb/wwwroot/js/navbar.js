@@ -8,8 +8,10 @@ function loadNavbarState() {
 
 function loadExpandedNavbar() {
     const navbarState = sessionStorage.getItem("navbarState");
+
     if (navbarState) {
         const expandedNavbar = JSON.parse(navbarState);
+
         expandedNavbar.forEach(index => {
             $(".sub-menu").eq(index).children("ul").show();
             $(".sub-menu").eq(index).find(".ml-auto").toggleClass("fa-caret-up fa-caret-down");
@@ -18,9 +20,13 @@ function loadExpandedNavbar() {
 }
 
 function loadActiveNavLink() {
+    const currenthPath = window.location.pathname;
+
     $("#sidebar .nav-link").removeClass("nav-link-active");
+
     $("#sidebar .nav-link").each(function () {
-        if (window.location.href.includes($(this).attr("href"))) {
+        const path = $(this).attr("href");
+        if (currenthPath === path) {
             $(this).addClass("nav-link-active");
         }
     });
@@ -28,6 +34,7 @@ function loadActiveNavLink() {
 
 function saveExpandedNavbar() {
     const expandedNavbar = [];
+
     $(".sub-menu").each(function (index) {
         if ($(this).children("ul").is(":visible")) {
             expandedNavbar.push(index);
