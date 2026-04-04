@@ -84,6 +84,7 @@
                             @foreach (var customer in customers)
                             {
                                 <tr @onclick="() => SelectCustomer(customer)"
+                                    @ondblclick="() => NavigateToViewCustomer()"
                                     style="cursor: pointer; @(selectedCustomer?.Id == customer.Id ? "background-color: #007bff33; border-left: 3px solid #007bff;" : "")">
                                     <td>
                                         <a href="/sales/customer/@customer.Id">
