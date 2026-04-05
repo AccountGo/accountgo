@@ -199,36 +199,77 @@
 </div>
 
 @code {
+    // Route parameter used when opening an existing sales order.
     [Parameter]
     public int OrderId { get; set; }
 
+    // Query-string parameter used when creating a sales order from a quotation.
     [SupplyParameterFromQuery]
     public int QuotationId { get; set; }
 
+    // Main DTO sent to and from the API.
+    // This holds the header fields and the line item collection.
     private SalesOrderDto salesOrder = new() { SalesOrderLines = new List<SalesOrderLineDto>() };
-    private List<SalesOrderLineRow> lineRows = new();
-    private List<CustomerDto> customers = new();
-   
-    private List<PaymentTermOption> paymentTerms = new();
 
+    // UI wrapper for line items.
+    // Each row gets a stable Guid key so Blazor can track add/remove operations correctly.
+    private List<SalesOrderLineRow> lineRows = new();
+
+    // Reference data used by dropdowns in the form.
+    private List<CustomerDto> customers = new();
+    private List<PaymentTermOption> paymentTerms = new();
     private List<ItemDto> items = new();
     private List<MeasurementDto> measurements = new();
+
+    // Validation messages shown at the top of the form.
     private List<string> validationErrors = new();
+
+    // Generic page error message used for failed API calls.
     private string? errorMessage;
+
+    // Loading and saving flags used to control UI state.
     private bool isLoading = true;
     private bool isSaving;
     private bool isEditMode;
+
+    // Bound to the date input so the user can edit the order date.
     private DateTime orderDateValue = DateTime.Today;
+
+    // Base URL for backend API calls.
     private string baseApiUrl = string.Empty;
 
+    // True when the page is creating a new order rather than viewing an existing one.
     private bool IsNewOrder => OrderId == 0;
 
+    /// <summary>
+    /// Row wrapper used only by the UI.
+    /// RowKey gives each line a stable identity so removing a row removes the correct one.
+    /// </summary>
     private sealed class SalesOrderLineRow
     {
         public Guid RowKey { get; set; } = Guid.NewGuid();
         public SalesOrderLineDto Line { get; set; } = new();
     }
 
+    /// <summary>
+    /// Local payment-term shape for this page.
+    /// The common API returns description data, so this class captures the fields needed
+    /// to populate the dropdown with the same labels as MVC.
+    /// </summary>
+    private sealed class PaymentTermOption
+    {
+        public int Id { get; set; }
+        public string? Description { get; set; }
+        public int PaymentType { get; set; }
+        public int? DueAfterDays { get; set; }
+        public bool IsActive { get; set; }
+    }
+
+    /// <summary>
+    /// Runs once when the page is created.
+    /// It loads shared dropdown data first, then decides which page mode to use:
+    /// existing order, quotation-based order, or brand-new blank order.
+    /// </summary>
     protected override async Task OnInitializedAsync()
     {
         baseApiUrl = Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
@@ -263,6 +304,10 @@
         }
     }
 
+    /// <summary>
+    /// Loads all dropdown/reference data needed by the form.
+    /// This includes customers, payment terms, inventory items, and measurements.
+    /// </summary>
     private async Task LoadDropdownData()
     {
         customers = await ReadList<CustomerDto>($"{baseApiUrl}sales/customers");
@@ -271,6 +316,10 @@
         measurements = await ReadList<MeasurementDto>($"{baseApiUrl}common/measurements");
     }
 
+    /// <summary>
+    /// Generic helper for GET endpoints that return a JSON list.
+    /// If the request fails, it returns an empty list instead of throwing to the UI.
+    /// </summary>
     private async Task<List<T>> ReadList<T>(string url)
     {
         var response = await Http.GetAsync(url);
@@ -282,6 +331,11 @@
         return await response.Content.ReadFromJsonAsync<List<T>>() ?? new List<T>();
     }
 
+    /// <summary>
+    /// Loads an existing sales order from the API by id.
+    /// After reading the DTO, it copies values into the date field and rebuilds
+    /// the UI line-row collection used by the editable table.
+    /// </summary>
     private async Task LoadSalesOrder(int id)
     {
         var response = await Http.GetAsync($"{baseApiUrl}sales/salesorder?id={id}");
@@ -303,6 +357,10 @@
         RebuildLineRowsFromDto();
     }
 
+    /// <summary>
+    /// Loads a quotation and converts it into a new sales order draft.
+    /// Header fields and line items are copied from the quotation into the order model.
+    /// </summary>
     private async Task LoadQuotation(int quotationId)
     {
         var response = await Http.GetAsync($"{baseApiUrl}sales/quotation?id={quotationId}");
@@ -346,23 +404,31 @@
         RebuildLineRowsFromDto();
     }
 
-   private void InitializeNewSalesOrder()
+    /// <summary>
+    /// Creates a blank sales order for the new-order page.
+    /// Customer and payment term are explicitly set to 0 so the form starts on the
+    /// "-- Select --" options instead of preselecting the first real values.
+    /// </summary>
+    private void InitializeNewSalesOrder()
     {
-    salesOrder = new SalesOrderDto
-    {
-        CustomerId = 0,
-        PaymentTermId = 0,
-        ReferenceNo = string.Empty,
-        OrderDate = DateTime.Today,
-        StatusId = 1,
-        SalesOrderLines = new List<SalesOrderLineDto>()
-    };
+        salesOrder = new SalesOrderDto
+        {
+            CustomerId = 0,
+            PaymentTermId = 0,
+            ReferenceNo = string.Empty,
+            OrderDate = DateTime.Today,
+            StatusId = 1,
+            SalesOrderLines = new List<SalesOrderLineDto>()
+        };
 
         orderDateValue = salesOrder.OrderDate;
         RebuildLineRowsFromDto();
     }
 
-
+    /// <summary>
+    /// Rebuilds the UI row collection from the DTO line collection.
+    /// This is needed because the UI uses stable row keys to keep add/remove behavior correct.
+    /// </summary>
     private void RebuildLineRowsFromDto()
     {
         lineRows = salesOrder.SalesOrderLines
@@ -370,6 +436,10 @@
             .ToList();
     }
 
+    /// <summary>
+    /// Copies the UI rows back into the DTO before validation or save.
+    /// This keeps the API payload in sync with the currently displayed rows.
+    /// </summary>
     private void SyncDtoFromRows()
     {
         salesOrder.SalesOrderLines = lineRows
@@ -377,11 +447,19 @@
             .ToList();
     }
 
+    /// <summary>
+    /// Runs after an item dropdown changes.
+    /// It fills related fields on that row, such as item code and measurement.
+    /// </summary>
     private void OnItemChanged(SalesOrderLineDto line)
     {
         PopulateLineFromItem(line, items.FirstOrDefault(x => x.Id == line.ItemId));
     }
 
+    /// <summary>
+    /// Adds a brand-new editable line item row to the form.
+    /// New rows start blank, with quantity 1 and amount/discount 0.
+    /// </summary>
     private void AddLineItem()
     {
         validationErrors.Clear();
@@ -402,7 +480,10 @@
         SyncDtoFromRows();
     }
 
-
+    /// <summary>
+    /// Removes the row with the matching stable key.
+    /// Using RowKey instead of index avoids the wrong-row-removal issue when Blazor reuses DOM rows.
+    /// </summary>
     private void RemoveLineItem(Guid rowKey)
     {
         var row = lineRows.FirstOrDefault(x => x.RowKey == rowKey);
@@ -416,6 +497,11 @@
         SyncDtoFromRows();
     }
 
+    /// <summary>
+    /// Validates the form and, if valid, posts the sales order to the backend.
+    /// It first syncs the UI rows back into the DTO, checks header and line-item rules,
+    /// and then submits using the original sales order API endpoint.
+    /// </summary>
     private async Task SaveSalesOrder()
     {
         validationErrors.Clear();
@@ -474,6 +560,11 @@
         }
     }
 
+    /// <summary>
+    /// Applies item-based defaults to a line after an item is selected.
+    /// It copies item id/code and default measurement, keeps quantity at least 1,
+    /// and intentionally leaves amount at 0 unless the user enters a value.
+    /// </summary>
     private void PopulateLineFromItem(SalesOrderLineDto line, ItemDto? item)
     {
         if (item is null)
@@ -485,14 +576,14 @@
         line.ItemNo = item.Code;
         line.MeasurementId = item.SellMeasurementId ?? 0;
 
-        if ((line.Quantity ?? 0) <= 0)
-        {
-            line.Quantity = 1;
-        }
-
         if (line.Amount is null)
         {
             line.Amount = 0;
+        }
+
+        if ((line.Quantity ?? 0) <= 0)
+        {
+            line.Quantity = 1;
         }
 
         if (line.Discount is null)
@@ -501,7 +592,10 @@
         }
     }
 
-
+    /// <summary>
+    /// Backfills the item code text for a line that was loaded from the API.
+    /// This is useful when the API returns item ids but the UI also wants to display the item code.
+    /// </summary>
     private void PopulateItemNoFromItemId(SalesOrderLineDto line)
     {
         if ((line.ItemId ?? 0) <= 0)
@@ -516,21 +610,38 @@
         }
     }
 
+    /// <summary>
+    /// Calculates the sum of all line totals before tax.
+    /// It uses the UI line collection so the total updates immediately while editing.
+    /// </summary>
     private decimal CalculateSubtotal()
     {
         return lineRows.Sum(x => CalculateLineTotal(x.Line));
     }
 
+    /// <summary>
+    /// Placeholder tax calculation.
+    /// Tax is out of scope for this page right now, so it always returns zero.
+    /// </summary>
     private decimal CalculateTax()
     {
         return 0m;
     }
 
+    /// <summary>
+    /// Returns the full order total.
+    /// At the moment this is subtotal plus zero tax.
+    /// </summary>
     private decimal CalculateTotal()
     {
         return CalculateSubtotal() + CalculateTax();
     }
 
+    /// <summary>
+    /// Calculates one row's line total.
+    /// The formula is quantity × amount, minus discount treated as a percentage.
+    /// This matches the shared DTO/backend logic.
+    /// </summary>
     private decimal CalculateLineTotal(SalesOrderLineDto line)
     {
         var quantity = line.Quantity ?? 0m;
@@ -543,6 +654,10 @@
         return gross - discountAmount;
     }
 
+    /// <summary>
+    /// Maps a numeric status id to a user-facing label.
+    /// This keeps status rendering centralized in one place.
+    /// </summary>
     private static string GetStatusLabel(int? statusId) => statusId switch
     {
         0 => "Draft",
@@ -555,6 +670,9 @@
         _ => "Unknown"
     };
 
+    /// <summary>
+    /// Maps a numeric status id to a CSS class used for the status badge.
+    /// </summary>
     private static string GetStatusClass(int? statusId) => statusId switch
     {
         1 => "status-open",
@@ -566,29 +684,31 @@
         _ => "status-draft"
     };
 
+    /// <summary>
+    /// Returns the label shown in the measurement dropdown.
+    /// It prefers Description, then Code, and falls back to a generic label.
+    /// </summary>
     private static string GetMeasurementLabel(MeasurementDto measurement)
     {
         return measurement.Description ?? measurement.Code ?? $"Measurement {measurement.Id}";
     }
 
-
+    /// <summary>
+    /// Returns the label shown in the item dropdown.
+    /// It prefers the item description, then the code, then a fallback label.
+    /// </summary>
     private static string GetItemDisplay(ItemDto item)
     {
         return item.Description ?? item.Code ?? $"Item {item.Id}";
     }
 
+    /// <summary>
+    /// Returns the user to the sales orders list page.
+    /// Used by the Cancel button after backing out of the form.
+    /// </summary>
     private void NavigateBack()
     {
         Navigation.NavigateTo("/receivables/sales-orders");
     }
-
-    private sealed class PaymentTermOption
-    {
-    public int Id { get; set; }
-    public string? Description { get; set; }
-    public int PaymentType { get; set; }
-    public int? DueAfterDays { get; set; }
-    public bool IsActive { get; set; }
-    }   
-
 }
+

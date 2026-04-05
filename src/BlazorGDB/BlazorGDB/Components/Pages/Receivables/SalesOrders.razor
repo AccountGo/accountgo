@@ -81,20 +81,43 @@
 </div>
 
 @code {
+    // Stores the sales orders shown in the list page.
     private List<SalesOrderDto> salesOrders = new();
+
+    // Tracks the currently selected row.
+    // The View action reads from this value.
     private SalesOrderDto? selectedOrder;
+
+    // Holds a message when loading fails.
     private string? errorMessage;
+
+    // True while the page is waiting for the API response.
     private bool isLoading = true;
+
+    // Name of the property currently used for sorting.
     private string sortBy = nameof(SalesOrderDto.Id);
+
+    // True means ascending sort, false means descending sort.
     private bool sortAscending = true;
+
+    // Base API URL loaded from environment so the page can call the backend.
     private string baseApiUrl = string.Empty;
 
+    /// <summary>
+    /// Runs once when the page is first created.
+    /// It reads the API base URL and then loads the sales orders from the server.
+    /// </summary>
     protected override async Task OnInitializedAsync()
     {
         baseApiUrl = Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
         await LoadSalesOrders();
     }
 
+    /// <summary>
+    /// Calls the sales orders API and fills the table data.
+    /// If the request fails, it stores an error message for the UI.
+    /// It always turns off the loading state when finished.
+    /// </summary>
     private async Task LoadSalesOrders()
     {
         try
@@ -119,6 +142,11 @@
         }
     }
 
+    /// <summary>
+    /// Returns the sales order list in the current sort order.
+    /// The method switches on the selected column name and applies either
+    /// ascending or descending ordering to that field.
+    /// </summary>
     private IEnumerable<SalesOrderDto> GetSortedOrders() => sortBy switch
     {
         nameof(SalesOrderDto.CustomerName) => sortAscending ? salesOrders.OrderBy(x => x.CustomerName) : salesOrders.OrderByDescending(x => x.CustomerName),
@@ -128,6 +156,11 @@
         _ => sortAscending ? salesOrders.OrderBy(x => x.Id) : salesOrders.OrderByDescending(x => x.Id)
     };
 
+    /// <summary>
+    /// Updates the current sort settings when a column header is clicked.
+    /// Clicking the same column flips the sort direction.
+    /// Clicking a different column changes the sort field and resets to ascending.
+    /// </summary>
     private void SortBy(string column)
     {
         if (sortBy == column)
@@ -141,12 +174,21 @@
         }
     }
 
+    /// <summary>
+    /// Returns the small arrow shown beside the active sorted column.
+    /// Empty string means that column is not currently sorted.
+    /// </summary>
     private string GetSortIndicator(string column)
     {
         if (sortBy != column) return string.Empty;
         return sortAscending ? "↓" : "↑";
     }
 
+    /// <summary>
+    /// Marks a row as selected.
+    /// If the same row is clicked again, it clears the selection.
+    /// The selected row is used to enable the View action.
+    /// </summary>
     private void SelectOrder(SalesOrderDto order)
     {
         if (selectedOrder?.Id == order.Id)
@@ -158,6 +200,10 @@
         selectedOrder = order;
     }
 
+    /// <summary>
+    /// Navigates to the read-only sales order detail page for the selected row.
+    /// If nothing is selected, the method exits without doing anything.
+    /// </summary>
     private void ViewSelectedOrder()
     {
         if (selectedOrder is null)
@@ -166,19 +212,18 @@
         Navigation.NavigateTo($"/receivables/sales-order/{selectedOrder.Id}");
     }
 
-    private void CreateInvoiceForSelectedOrder()
-    {
-        if (selectedOrder is null)
-            return;
-
-        Navigation.NavigateTo($"/receivables/sales-invoice?orderId={selectedOrder.Id}");
-    }
-
+    /// <summary>
+    /// Opens the page for creating a brand-new sales order.
+    /// </summary>
     private void NavigateToNewOrder()
     {
         Navigation.NavigateTo("/receivables/sales-order");
     }
 
+    /// <summary>
+    /// Converts numeric backend status ids into labels shown in the table.
+    /// This keeps the UI readable without exposing raw integer status codes.
+    /// </summary>
     private static string GetStatusLabel(int? statusId) => statusId switch
     {
         0 => "Draft",
@@ -191,3 +236,4 @@
         _ => "N/A"
     };
 }
+
