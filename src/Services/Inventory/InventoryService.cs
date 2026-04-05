@@ -153,30 +153,40 @@ namespace Services.Inventory
 
         public IEnumerable<InventoryControlJournal> GetInventoryControlJournals()
 {
-    var data = _icjRepo.GetAllIncluding(m => m.Measurement, i => i.Item).ToList();
+   var data = _icjRepo.GetAllIncluding(m => m.Measurement, i => i.Item).ToList();
 
-    if (!data.Any())
+if (!data.Any())
+{
+    data.Add(new InventoryControlJournal
     {
-        data.Add(new InventoryControlJournal
-        {
-            Id = 1,
-            INQty = 10,
-            OUTQty = 0,
-            Date = DateTime.Now.AddDays(-2),
-            Item = new Item { Description = "Sample Book" },
-            Measurement = new Measurement { Code = "pcs" }
-        });
+        Id = 1,
+        INQty = 10,
+        OUTQty = 0,
+        Date = DateTime.Parse("2026-03-18"),
+        Item = new Item { Description = "Sample Book" },
+        Measurement = new Measurement { Code = "pcs" }
+    });
 
-        data.Add(new InventoryControlJournal
-        {
-            Id = 2,
-            INQty = 0,
-            OUTQty = 4,
-            Date = DateTime.Now.AddDays(-1),
-            Item = new Item { Description = "Sample Book" },
-            Measurement = new Measurement { Code = "pcs" }
-        });
-    }
+    data.Add(new InventoryControlJournal
+    {
+        Id = 2,
+        INQty = 5,
+        OUTQty = 0,
+        Date = DateTime.Parse("2026-03-19"),
+        Item = new Item { Description = "Sample Book" },
+        Measurement = new Measurement { Code = "pcs" }
+    });
+
+    data.Add(new InventoryControlJournal
+    {
+        Id = 3,
+        INQty = 0,
+        OUTQty = 8,
+        Date = DateTime.Parse("2026-03-20"),
+        Item = new Item { Description = "Sample Book" },
+        Measurement = new Measurement { Code = "pcs" }
+    });
+}
 
     return data;
 }
