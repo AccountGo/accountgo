@@ -118,7 +118,7 @@ else
     private decimal TotalIn = 0;
     private decimal TotalOut = 0;
     private decimal CurrentStock = 0;
-    private List<InventoryControlJournal> InventoryData { get; set; } = new();
+    private List<InventoryControlJournal> ProcessedData{ get; set; } = new();
     private bool isLoading = true;
     private bool hasError = false;
 
@@ -145,10 +145,7 @@ decimal runningBalance = 0;
 
 ProcessedData = sorted.Select(row =>
 {
-    // calculate totals and current stock while processing each row
-    TotalIn = ProcessedData.Sum(x => x.In);
-    TotalOut = ProcessedData.Sum(x => x.Out);
-    CurrentStock = ProcessedData.LastOrDefault()?.Balance ?? 0;
+    
 
     var inValue = row.In ?? 0;
     var outValue = row.Out ?? 0;
@@ -166,6 +163,10 @@ ProcessedData = sorted.Select(row =>
         Balance = runningBalance
     };
 }).ToList();
+
+TotalIn = ProcessedData.Sum(x => x.In);
+TotalOut = ProcessedData.Sum(x => x.Out);
+CurrentStock = ProcessedData.LastOrDefault()?.Balance ?? 0;
             }
             else
             {
