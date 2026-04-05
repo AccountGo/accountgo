@@ -217,7 +217,7 @@ class PurchaseOrderLines extends React.Component {
                                 <td>No</td>
                                 <td>Item Id</td>
                                 <td>Code</td>
-                                <td>Measurement</td>
+                                <td>Unit</td>
                                 <td>Quantity</td>
                                 <td>Amount</td>
                                 <td>Discount</td>
