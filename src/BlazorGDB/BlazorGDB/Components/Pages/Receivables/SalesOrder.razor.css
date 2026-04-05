@@ -1,0 +1,266 @@
+.sales-order-page {
+    padding: 1.75rem;
+    max-width: 1200px;
+}
+
+
+.page-title-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1.25rem;
+}
+
+.page-title-row h1 {
+    margin: 0;
+    font-size: 2rem;
+    font-weight: 650;
+    color: #1f2937
+}
+
+.panel-card {
+    background: transparent;
+    border: 1px solid #c7cbd1;
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 1.25rem;
+}
+
+.panel-body {
+    padding: 1.25rem 1.25rem 1.4rem;
+}
+
+.header-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(280px, 1fr));
+    gap: 1.25rem 1.5rem;
+    align-items: end;
+}
+
+.field label {
+    display: block;
+    margin-bottom: 0.55rem;
+    font-weight: 700;
+    font-size: 1.05rem;
+    color: #fff;
+}
+
+.amount-field {
+    grid-column: 1 / 2;
+}
+
+.form-control,
+.form-select {
+    min-height: 34px;
+    background: #585451;
+    color: #fff;
+    border: 1px solid #6a6764;
+    border-radius: 3px;
+    box-shadow: none;
+}
+
+.form-control:focus,
+.form-select:focus {
+    background: #585451;
+    color: #fff;
+    border-color: #8ea2b5;
+    box-shadow: none;
+}
+
+.form-control[readonly],
+.form-control:disabled,
+.form-select:disabled {
+    background: #585451;
+    color: #fff;
+    opacity: 1;
+}
+
+.readonly-value {
+    min-height: 34px;
+    display: flex;
+    align-items: center;
+    color: #fff;
+    font-weight: 600;
+}
+
+.line-items-section {
+    margin-top: 1.5rem;
+}
+
+.line-items-section h3 {
+    margin: 0 0 0.9rem;
+    font-size: 1.8rem;
+    font-weight: 600;
+    color: #fff;
+}
+
+.line-items-table {
+    margin-bottom: 0;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.line-items-table thead th {
+    background: #f3f4f6;
+    color: #000;
+    font-weight: 700;
+    border-bottom: 2px solid #d1d5db;
+    padding: 0.7rem 0.45rem;
+    white-space: nowrap;
+}
+
+.line-items-table tbody td {
+    background: #fff;
+    vertical-align: middle;
+    padding: 0.35rem;
+    border-top: 0;
+}
+
+.line-items-table tbody .form-control,
+.line-items-table tbody .form-select {
+    min-height: 30px;
+    padding-top: 0.25rem;
+    padding-bottom: 0.25rem;
+}
+
+.empty-line-row {
+    height: 22px;
+    background: #fff;
+}
+
+.add-line-btn {
+    margin-top: 1rem;
+    color: #fff;
+    min-width: 112px;
+    background: #2fa8d8;
+    border-color: #2fa8d8;
+}
+
+.add-line-btn:hover,
+.add-line-btn:focus {
+    color: #fff;
+    background: #2497c8;
+    border-color: #2497c8;
+    box-shadow: none;
+}
+
+.remove-btn {
+    background: #ff6b6b;
+    border-color: #ff6b6b;
+    color: #fff;
+    min-width: 62px;
+}
+
+.remove-btn:hover,
+.remove-btn:focus {
+    background: #ef5b5b;
+    border-color: #ef5b5b;
+    color: #fff;
+    box-shadow: none;
+}
+
+.action-row {
+    display: flex;
+    gap: 0.75rem;
+    margin-top: 1.25rem;
+}
+
+.action-row .btn-success {
+    background: #47c16d;
+    border-color: #47c16d;
+    color: #fff;
+}
+
+.action-row .btn-success:hover,
+.action-row .btn-success:focus {
+    background: #3db261;
+    border-color: #3db261;
+    color: #fff;
+    box-shadow: none;
+}
+
+.action-row .btn-secondary {
+    background: #d5dae0;
+    border-color: #d5dae0;
+    color: #1f2937;
+}
+
+.action-row .btn-secondary:hover,
+.action-row .btn-secondary:focus {
+    background: #c7ced6;
+    border-color: #c7ced6;
+    color: #1f2937;
+    box-shadow: none;
+}
+
+.empty-panel {
+    background: transparent;
+    border: 1px dashed #d4dbe4;
+    border-radius: 6px;
+    padding: 2rem;
+    color: #e5e7eb;
+}
+
+.view-mode-message {
+    margin-bottom: 1rem;
+}
+
+.status-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.2rem 0.65rem;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 700;
+}
+
+.status-draft {
+    background: #eef2f6;
+    color: #52606d;
+}
+
+.status-open {
+    background: #fff3cd;
+    color: #9a6700;
+}
+
+.status-overdue {
+    background: #ffe3e3;
+    color: #c92a2a;
+}
+
+.status-closed {
+    background: #d3f9d8;
+    color: #2b8a3e;
+}
+
+.status-void {
+    background: #eceff4;
+    color: #5c6773;
+}
+
+.status-partial {
+    background: #dbeafe;
+    color: #1d4ed8;
+}
+
+.status-full {
+    background: #dcfce7;
+    color: #15803d;
+}
+
+@media (max-width: 900px) {
+    .header-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .amount-field {
+        grid-column: auto;
+    }
+
+    .page-title-row {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+}

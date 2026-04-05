@@ -1,9 +1,193 @@
 ﻿@page "/receivables/sales-orders"
+@using SalesOrderDto = Dto.Sales.SalesOrder
+@inject HttpClient Http
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
 
 <PageTitle>Sales Orders</PageTitle>
 
-<h3>Sales Orders</h3>
+<div class="sales-orders-page">
+    <div class="page-header">
+        <h1>Sales Orders</h1>
+
+        <div class="toolbar-actions">
+            <button class="btn btn-primary new-order-btn" @onclick="NavigateToNewOrder">
+                New Sales Order
+            </button>
+
+
+            <button class="toolbar-link"
+                    @onclick="ViewSelectedOrder"
+                    disabled="@(selectedOrder is null)">
+                <span class="icon">✎</span> View
+            </button>
+
+            <button class="toolbar-link"
+                type="button"
+                disabled="@(true)">
+                <span>+</span> Create Invoice
+            </button>
+
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="empty-state">Loading sales orders...</div>
+    }
+    else if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <div class="alert alert-danger">@errorMessage</div>
+    }
+    else if (salesOrders.Count == 0)
+    {
+        <div class="empty-state">No sales orders found.</div>
+    }
+    else
+    {
+        <div class="table-shell">
+            <table class="table orders-table">
+                <thead>
+                    <tr>
+                        <th @onclick='() => SortBy(nameof(SalesOrderDto.Id))'>No @GetSortIndicator(nameof(SalesOrderDto.Id))</th>
+                        <th @onclick='() => SortBy(nameof(SalesOrderDto.CustomerName))'>Customer Name @GetSortIndicator(nameof(SalesOrderDto.CustomerName))</th>
+                        <th @onclick='() => SortBy(nameof(SalesOrderDto.OrderDate))'>Order Date @GetSortIndicator(nameof(SalesOrderDto.OrderDate))</th>
+                        <th @onclick='() => SortBy(nameof(SalesOrderDto.ReferenceNo))'>Ref no @GetSortIndicator(nameof(SalesOrderDto.ReferenceNo))</th>
+                        <th class="text-end">Amount</th>
+                        <th @onclick='() => SortBy(nameof(SalesOrderDto.StatusId))'>Status @GetSortIndicator(nameof(SalesOrderDto.StatusId))</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var order in GetSortedOrders())
+                    {
+                        var isSelected = selectedOrder?.Id == order.Id;
+
+                        <tr class="clickable-row @(isSelected ? "selected-row" : "")"
+                            @key="order.Id"
+                            @onclick="() => SelectOrder(order)">
+
+                            <td>@order.Id</td>
+                            <td>@order.CustomerName</td>
+                            <td>@order.OrderDate.ToString("yyyy-MM-dd")</td>
+                            <td>@order.ReferenceNo</td>
+                            <td class="text-end">@((order.Amount ?? 0m).ToString("0.00"))</td>
+                            <td>@GetStatusLabel(order.StatusId)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
 
 @code {
+    private List<SalesOrderDto> salesOrders = new();
+    private SalesOrderDto? selectedOrder;
+    private string? errorMessage;
+    private bool isLoading = true;
+    private string sortBy = nameof(SalesOrderDto.Id);
+    private bool sortAscending = true;
+    private string baseApiUrl = string.Empty;
 
+    protected override async Task OnInitializedAsync()
+    {
+        baseApiUrl = Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
+        await LoadSalesOrders();
+    }
+
+    private async Task LoadSalesOrders()
+    {
+        try
+        {
+            var response = await Http.GetAsync($"{baseApiUrl}sales/salesorders");
+            if (response.IsSuccessStatusCode)
+            {
+                salesOrders = await response.Content.ReadFromJsonAsync<List<SalesOrderDto>>() ?? new();
+            }
+            else
+            {
+                errorMessage = "Unable to load sales orders.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading sales orders: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private IEnumerable<SalesOrderDto> GetSortedOrders() => sortBy switch
+    {
+        nameof(SalesOrderDto.CustomerName) => sortAscending ? salesOrders.OrderBy(x => x.CustomerName) : salesOrders.OrderByDescending(x => x.CustomerName),
+        nameof(SalesOrderDto.OrderDate) => sortAscending ? salesOrders.OrderBy(x => x.OrderDate) : salesOrders.OrderByDescending(x => x.OrderDate),
+        nameof(SalesOrderDto.ReferenceNo) => sortAscending ? salesOrders.OrderBy(x => x.ReferenceNo) : salesOrders.OrderByDescending(x => x.ReferenceNo),
+        nameof(SalesOrderDto.StatusId) => sortAscending ? salesOrders.OrderBy(x => x.StatusId) : salesOrders.OrderByDescending(x => x.StatusId),
+        _ => sortAscending ? salesOrders.OrderBy(x => x.Id) : salesOrders.OrderByDescending(x => x.Id)
+    };
+
+    private void SortBy(string column)
+    {
+        if (sortBy == column)
+        {
+            sortAscending = !sortAscending;
+        }
+        else
+        {
+            sortBy = column;
+            sortAscending = true;
+        }
+    }
+
+    private string GetSortIndicator(string column)
+    {
+        if (sortBy != column) return string.Empty;
+        return sortAscending ? "↓" : "↑";
+    }
+
+    private void SelectOrder(SalesOrderDto order)
+    {
+        if (selectedOrder?.Id == order.Id)
+        {
+            selectedOrder = null;
+            return;
+        }
+
+        selectedOrder = order;
+    }
+
+    private void ViewSelectedOrder()
+    {
+        if (selectedOrder is null)
+            return;
+
+        Navigation.NavigateTo($"/receivables/sales-order/{selectedOrder.Id}");
+    }
+
+    private void CreateInvoiceForSelectedOrder()
+    {
+        if (selectedOrder is null)
+            return;
+
+        Navigation.NavigateTo($"/receivables/sales-invoice?orderId={selectedOrder.Id}");
+    }
+
+    private void NavigateToNewOrder()
+    {
+        Navigation.NavigateTo("/receivables/sales-order");
+    }
+
+    private static string GetStatusLabel(int? statusId) => statusId switch
+    {
+        0 => "Draft",
+        1 => "Open",
+        2 => "Overdue",
+        3 => "Closed",
+        4 => "Void",
+        5 => "Partially Invoiced",
+        6 => "Fully Invoiced",
+        _ => "N/A"
+    };
 }
