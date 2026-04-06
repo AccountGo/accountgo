@@ -181,7 +181,7 @@ private SalesQuotation model = new SalesQuotation
 
     private void Close()
     {
-        Navigation.NavigateTo("/quotations/salesquotations");
+        Navigation.NavigateTo("/quotations/salesquotations", forceLoad: true);
     }
 
 private async Task SaveQuotation()
@@ -232,7 +232,7 @@ private async Task SaveQuotation()
         if (response.IsSuccessStatusCode)
         {
             Console.WriteLine("Quotation saved successfully!");
-            Navigation.NavigateTo("/quotations/salesquotations");
+            Navigation.NavigateTo("/quotations/salesquotations", forceLoad: true);
         }
         else
         {

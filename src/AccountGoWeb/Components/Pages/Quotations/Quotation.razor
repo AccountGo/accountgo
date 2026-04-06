@@ -1,0 +1,526 @@
+@using System.Text.Json
+@using System.Text.Json.Serialization
+@using System.Globalization
+
+<style>
+    label,
+    h5 {
+        color: #fff !important;
+    }
+
+    tr th {
+        color: #fff;
+    }
+
+    tr td {
+        color: #fff;
+    }
+
+    .card,
+    .card-body {
+        color: #fff;
+    }
+</style>
+
+<PageTitle>Sales Quotation</PageTitle>
+
+<div class="container-fluid">
+    <div class="row mb-3">
+        <div class="col">
+            @if (!isEditMode && Id > 0)
+            {
+                <button type="button" class="btn" @onclick="EnableEditMode">
+                    <i class="fa fa-edit"></i> Edit
+                </button>
+            }
+        </div>
+    </div>
+
+    @if (loading)
+    {
+        <p><em>Loading quotation...</em></p>
+    }
+    else
+    {
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                <strong>Error:</strong> @errorMessage
+                <button type="button" class="btn-close" @onclick="() => errorMessage = null"></button>
+            </div>
+        }
+
+        <div class="row">
+            <div class="col-md-9">
+                <div class="card">
+                    <div class="card-body">
+                        <!-- Customer -->
+                        <div class="row mb-2">
+                            <div class="col-sm-5">Customer Name</div>
+                            <div class="col-sm-7">
+                                <select class="form-control" @bind="customerId" disabled="@(!isEditMode)">
+                                    <option value="0">-- Select Customer --</option>
+                                    @foreach (var c in customers)
+                                    {
+                                        <option value="@c.id">@c.name</option>
+                                    }
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Quotation Date -->
+                        <div class="row mb-2">
+                            <div class="col-sm-5">Quotation Date</div>
+                            <div class="col-sm-7">
+                                <input type="date" class="form-control" @bind="quotationDate" disabled="@(!isEditMode)" />
+                            </div>
+                        </div>
+
+                        <!-- Payment Term -->
+                        <div class="row mb-2">
+                            <div class="col-sm-5">Payment Term</div>
+                            <div class="col-sm-7">
+                                @if (isEditMode)
+                                {
+                                    <select class="form-control" @bind="paymentTermId">
+                                        <option value="0">-- Select Payment Term --</option>
+                                        @foreach (var pt in paymentTerms)
+                                        {
+                                            <option value="@pt.id">@pt.description</option>
+                                        }
+                                    </select>
+                                }
+                                else
+                                {
+                                    @SelectedPaymentTermName
+                                }
+                            </div>
+                        </div>
+
+                        <!-- Total Amount -->
+                        <div class="row mb-2">
+                            <div class="col-sm-5">Total Amount</div>
+                            <div class="col-sm-7">@FormattedTotalAmount</div>
+                        </div>
+                    </div>
+
+                    <!-- Line Items Table -->
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Item</th>
+                                <th>Quantity</th>
+                                <th>Amount</th>
+                                <th>Discount</th>
+                                <th>Measurement</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (lineItems != null && lineItems.Count > 0)
+                            {
+                                @for (int i = 0; i < lineItems.Count; i++)
+                                {
+                                    var line = lineItems[i];
+                                    <tr>
+                                        <td>
+                                            <select class="form-control" @bind="line.ItemId" disabled="@(!isEditMode)">
+                                                <option value="0">-- Select Item --</option>
+                                                @foreach (var item in items)
+                                                {
+                                                    <option value="@item.id">@item.description</option>
+                                                }
+                                            </select>
+                                        </td>
+                                        <td>
+                                            <input type="number" class="form-control" @bind="line.Quantity" step="0.01"
+                                                disabled="@(!isEditMode)" />
+                                        </td>
+                                        <td>
+                                            <input type="number" class="form-control" @bind="line.Amount" step="0.01"
+                                                disabled="@(!isEditMode)" />
+                                        </td>
+                                        <td>
+                                            <input type="number" class="form-control" @bind="line.Discount" step="0.01"
+                                                disabled="@(!isEditMode)" />
+                                        </td>
+                                        <td>
+                                            <select class="form-control" @bind="line.MeasurementId"
+                                                disabled="@(!isEditMode)">
+                                                <option value="0">-- Select Measurement --</option>
+                                                @foreach (var m in measurements)
+                                                {
+                                                    <option value="@m.id">@m.description</option>
+                                                }
+                                            </select>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                            @if (isEditMode)
+                            {
+                                <tr>
+                                    <td colspan="5">
+                                        <button type="button" class="btn btn-primary btn-sm" @onclick="AddLineItem">
+                                            <i class="fa fa-plus"></i> Add Row
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="mt-2">
+                    @if (isEditMode)
+                    {
+                        <button class="btn btn-sm btn-primary btn-flat" @onclick="SaveQuotation">Save</button>
+                    }
+                    <a href="/quotations/salesquotations" class="btn btn-sm btn-default btn-flat">Close</a>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private class LineItem
+    {
+        public int Id { get; set; } = 0;
+        public int? ItemId { get; set; } = 0;
+        public decimal? Quantity { get; set; } = 0;
+        public decimal? Amount { get; set; } = 0;
+        public decimal? Discount { get; set; } = 0;
+        public int? MeasurementId { get; set; } = 0;
+    }
+
+    private class CustomerDto
+    {
+        public int id { get; set; }
+        public string name { get; set; } = "";
+    }
+
+    private class ItemDto
+    {
+        public int id { get; set; }
+        public string description { get; set; } = "";
+    }
+
+    private class PaymentTermDto
+    {
+        public int id { get; set; }
+        public string description { get; set; } = "";
+    }
+
+    private class MeasurementDto
+    {
+        public int id { get; set; }
+        public string description { get; set; } = "";
+    }
+
+    [SupplyParameterFromQuery(Name = "id")]
+    public int Id { get; set; }
+
+    [Inject]
+    private IHttpClientFactory ClientFactory { get; set; } = null!;
+
+    [Inject]
+    private NavigationManager Navigation { get; set; } = null!;
+
+    private bool loading = true;
+    private bool isEditMode = false;
+    private string? errorMessage = null;
+
+    private int quotationId = 0;
+    private int customerId = 0;
+    private DateTime quotationDate = DateTime.Now;
+    private int paymentTermId = 0;
+    private decimal totalAmount = 0;
+    private List<LineItem> lineItems = new();
+
+    private string FormattedTotalAmount => "$" + totalAmount.ToString("N2", CultureInfo.InvariantCulture);
+
+    private string SelectedPaymentTermName =>
+        paymentTerms.FirstOrDefault(pt => pt.id == paymentTermId)?.description ?? "N/A";
+
+    private List<CustomerDto> customers = new();
+    private List<ItemDto> items = new();
+    private List<PaymentTermDto> paymentTerms = new();
+    private List<MeasurementDto> measurements = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCustomers();
+        await LoadItems();
+        await LoadPaymentTerms();
+        await LoadMeasurements();
+        await LoadQuotationData(Id);
+    }
+
+    private void EnableEditMode()
+    {
+        isEditMode = true;
+        StateHasChanged();
+    }
+
+    private async Task LoadCustomers()
+    {
+        try
+        {
+            string apiurl = System.Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
+            var client = ClientFactory.CreateClient();
+            var response = await client.GetAsync($"{apiurl}sales/customers");
+
+            if (response.IsSuccessStatusCode)
+            {
+                var responseString = await response.Content.ReadAsStringAsync();
+                customers = JsonSerializer.Deserialize<List<CustomerDto>>(responseString) ?? new List<CustomerDto>();
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading customers: {ex.Message}";
+        }
+    }
+
+    private async Task LoadItems()
+    {
+        try
+        {
+            string apiurl = System.Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
+            var client = ClientFactory.CreateClient();
+            var response = await client.GetAsync($"{apiurl}inventory/items");
+
+            if (response.IsSuccessStatusCode)
+            {
+                var responseString = await response.Content.ReadAsStringAsync();
+                items = JsonSerializer.Deserialize<List<ItemDto>>(responseString) ?? new List<ItemDto>();
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading items: {ex.Message}";
+        }
+    }
+
+    private async Task LoadPaymentTerms()
+    {
+        try
+        {
+            string apiurl = System.Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
+            var client = ClientFactory.CreateClient();
+            var response = await client.GetAsync($"{apiurl}common/paymentterms");
+
+            if (response.IsSuccessStatusCode)
+            {
+                var responseString = await response.Content.ReadAsStringAsync();
+                paymentTerms = JsonSerializer.Deserialize<List<PaymentTermDto>>(responseString) ?? new List<PaymentTermDto>();
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading payment terms: {ex.Message}";
+        }
+    }
+
+    private async Task LoadMeasurements()
+    {
+        try
+        {
+            string apiurl = System.Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
+            var client = ClientFactory.CreateClient();
+            var response = await client.GetAsync($"{apiurl}common/measurements");
+
+            if (response.IsSuccessStatusCode)
+            {
+                var responseString = await response.Content.ReadAsStringAsync();
+                measurements = JsonSerializer.Deserialize<List<MeasurementDto>>(responseString) ?? new List<MeasurementDto>();
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading measurements: {ex.Message}";
+        }
+    }
+
+    private async Task LoadQuotationData(int id)
+    {
+        try
+        {
+            if (id == 0)
+            {
+                // No quotation to load
+                loading = false;
+                return;
+            }
+
+            string apiurl = System.Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
+            var client = ClientFactory.CreateClient();
+            var response = await client.GetAsync($"{apiurl}Sales/Quotation?id={id}");
+
+            if (response.IsSuccessStatusCode)
+            {
+                var responseString = await response.Content.ReadAsStringAsync();
+                var data = JsonSerializer.Deserialize<JsonElement>(responseString, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+
+                if (data.ValueKind == JsonValueKind.Object)
+                {
+                    if (data.TryGetProperty("id", out var idElem))
+                        quotationId = idElem.GetInt32();
+
+                    if (data.TryGetProperty("customerId", out var custElem) && custElem.ValueKind == JsonValueKind.Number)
+                        customerId = custElem.GetInt32();
+
+                    if (data.TryGetProperty("quotationDate", out var dateElem))
+                    {
+                        if (DateTime.TryParse(dateElem.GetString(), out var date))
+                            quotationDate = date;
+                    }
+
+                    if (data.TryGetProperty("paymentTermId", out var termElem))
+                    {
+                        if (termElem.ValueKind == JsonValueKind.Number)
+                            paymentTermId = termElem.GetInt32();
+                    }
+
+                    // Parse line items
+                    if (data.TryGetProperty("salesQuotationLines", out var linesElem) && linesElem.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var lineElem in linesElem.EnumerateArray())
+                        {
+                            var line = new LineItem
+                            {
+                                Id = GetJsonInt(lineElem, "id") ?? 0,
+                                ItemId = GetJsonInt(lineElem, "itemId"),
+                                Quantity = GetJsonDecimal(lineElem, "quantity"),
+                                Amount = GetJsonDecimal(lineElem, "amount"),
+                                Discount = GetJsonDecimal(lineElem, "discount"),
+                                MeasurementId = GetJsonInt(lineElem, "measurementId")
+                            };
+                            lineItems.Add(line);
+                        }
+                    }
+
+                    CalculateTotalAmount();
+                }
+            }
+            else
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                errorMessage = $"Failed to load quotation. Status: {response.StatusCode}. Details: {errorContent}";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading quotation: {ex.Message}";
+        }
+        finally
+        {
+            loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private int? GetJsonInt(JsonElement elem, string propName)
+    {
+        if (elem.TryGetProperty(propName, out var prop))
+        {
+            if (prop.TryGetInt32(out var val))
+                return val;
+        }
+        return null;
+    }
+
+    private decimal? GetJsonDecimal(JsonElement elem, string propName)
+    {
+        if (elem.TryGetProperty(propName, out var prop))
+        {
+            if (prop.TryGetDecimal(out var val))
+                return val;
+        }
+        return null;
+    }
+
+    private void CalculateTotalAmount()
+    {
+        totalAmount = lineItems.Sum(line =>
+        {
+            var qty = line.Quantity ?? 0;
+            var amt = line.Amount ?? 0;
+            var disc = line.Discount ?? 0;
+            var total = qty * amt;
+            var discount = (disc / 100) * total;
+            return Math.Max(0, total - discount);
+        });
+    }
+
+    private void AddLineItem()
+    {
+        lineItems.Add(new LineItem { ItemId = 0, Quantity = 1, Amount = 0, Discount = 0, MeasurementId = 0 });
+        StateHasChanged();
+    }
+
+    private async Task SaveQuotation()
+    {
+        try
+        {
+            if (customerId == 0)
+            {
+                errorMessage = "Please select a customer.";
+                StateHasChanged();
+                return;
+            }
+
+            CalculateTotalAmount();
+
+            string apiurl = System.Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
+
+            var customerName = customers.FirstOrDefault(c => c.id == customerId)?.name ?? "";
+
+            var payload = new Dictionary<string, object>
+            {
+                { "Id", quotationId },
+                { "CustomerId", customerId },
+                { "CustomerName", customerName },
+                { "QuotationDate", quotationDate },
+                { "PaymentTermId", paymentTermId },
+                { "StatusId", 0 },
+                { "SalesQuotationLines", lineItems.Select(line => new
+                    {
+                        Id = line.Id,
+                        ItemId = line.ItemId,
+                        Quantity = line.Quantity,
+                        Amount = line.Amount,
+                        Discount = line.Discount,
+                        MeasurementId = line.MeasurementId
+                    }).ToList()
+                }
+            };
+
+            var client = ClientFactory.CreateClient();
+            var json = JsonSerializer.Serialize(payload);
+            var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
+
+            var response = await client.PostAsync($"{apiurl}sales/SaveQuotation", content);
+
+            if (response.IsSuccessStatusCode)
+            {
+                await Task.Delay(100);
+                Navigation.NavigateTo("/quotations/salesquotations", forceLoad: true);
+            }
+            else
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                errorMessage = $"Failed to save quotation. Status: {response.StatusCode}. Response: {errorContent}";
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error saving quotation: {ex.Message}";
+            StateHasChanged();
+        }
+    }
+}
