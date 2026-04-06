@@ -89,7 +89,7 @@
                                         <th>Quantity</th>
                                         <th>Amount</th>
                                         <th>Discount (%)</th>
-                                        <th>Measurement</th>
+                                    <th>Unit</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -121,7 +121,7 @@
                                                 </td>
                                                 <td>
                                                     <select class="form-control form-control-sm" @bind="line.MeasurementId">
-                                                        <option value="0">-- Select Measurement --</option>
+                                            <option value="0">-- Select Unit --</option>
                                                         @foreach (var measurement in measurements)
                                                         {
                                                             <option value="@measurement.id">@measurement.description</option>
@@ -305,7 +305,7 @@
         }
         catch (Exception ex)
         {
-            errorMessage = $"Error loading measurements: {ex.Message}";
+            errorMessage = $"Error loading units: {ex.Message}";
         }
     }
 
@@ -477,7 +477,7 @@
             0).ToList();
             if (invalidLines.Any())
             {
-                errorMessage = "All line items must have Item, Measurement, Quantity, and Amount selected";
+            errorMessage = "All line items must have Item, Unit, Quantity, and Amount selected";
                 StateHasChanged();
                 return;
             }
