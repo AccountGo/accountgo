@@ -1,6 +1,8 @@
 @using Dto.Inventory
 @inject HttpClient Http
 
+@inject NavigationManager Navigation
+
 <style>
     .table tbody tr.table-active {
         background-color: #0d6efd !important;
@@ -112,6 +114,7 @@
                             @foreach (var item in items)
                             {
                                 <tr @onclick="() => SelectItem(item)"
+                                    @ondblclick="NavigateToInventoryItem"
                                     class="@(selectedItem?.Id == item.Id ? "table-active" : "")" style="cursor: pointer;">
 
                                     <td>
@@ -200,6 +203,14 @@
     private void SelectItem(Item item)
     {
         selectedItem = item;
+    }
+
+    private void NavigateToInventoryItem()
+    {
+        if (selectedItem != null)
+        {
+            Navigation.NavigateTo($"/Inventory/Item/{selectedItem.Id}", forceLoad: true);
+        }
     }
 
     private void SortBy(string column)

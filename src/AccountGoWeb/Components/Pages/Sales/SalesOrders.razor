@@ -78,7 +78,10 @@
                         @for (int i = 0; i < salesOrders.Count; i++)
                         {
                             int index = i;
-                            <tr class="@(selectedRowIndex == index ? "selected" : "")" @onclick="@(() => OnRowSelected(index))">
+                            <tr 
+                                class="@(selectedRowIndex == index ? "selected" : "")" 
+                                @onclick="@(() => OnRowSelected(index))"
+                                @ondblclick="@(() => NavigateToSalesOrder(index))">
                                 <td>@GetValue(salesOrders[index], "no")</td>
                                 <td>@GetValue(salesOrders[index], "customerName")</td>
                                 <td>@GetValue(salesOrders[index], "orderDate")</td>
@@ -290,6 +293,20 @@
         }
 
         StateHasChanged();
+    }
+
+    private void NavigateToSalesOrder(int index)
+    {
+        if (index >= 0 && index < salesOrders.Count)
+        {
+            OnRowSelected(index);
+            
+            if (selectedOrderId != null) 
+            {
+                Navigation.NavigateTo($"/Sales/SalesOrder?id={selectedOrderId}", forceLoad: true);
+            }
+
+        }
     }
     private void UpdateButtonLinks()
     {

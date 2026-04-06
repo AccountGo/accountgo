@@ -23,6 +23,7 @@
 }
 .quotationRow:hover {
     background-color: rgba(255,255,255,0.1); /* optional hover effect */
+    cursor: pointer;
 }
 </style>
 
@@ -78,7 +79,9 @@ else
     <tbody>
         @foreach (var q in quotations)
         {
-            <tr @onclick="() => OnSelectionChanged(q.id, q.statusId)" class="quotationRow">
+            <tr @onclick="() => OnSelectionChanged(q.id, q.statusId)" 
+                @ondblclick="() => NavigateToSalesQuotation(q.id)"
+                class="quotationRow">
                 <td>@q.no</td>
                 <td>@q.customerName</td>
                 <td>@q.quotationDate.ToShortDateString()</td>
@@ -146,6 +149,11 @@ protected override async Task OnInitializedAsync()
             newOrderLink = $"/sales/salesorder?quotationId={id}";
             isNewOrderLinkActive = true;
         }
+    }
+
+    private void NavigateToSalesQuotation(int id)
+    {
+        NavigationManager.NavigateTo($"/quotations/quotation?id={id}", forceLoad: true);
     }
 
     // DTO class for deserialization
