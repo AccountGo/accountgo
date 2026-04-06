@@ -309,6 +309,9 @@ else if (invoice != null)
 }
 
 @code {
+    [Parameter]
+    public int? Id { get; set; }
+
     private DonationInvoice? invoice;
     private List<Customer> customers = new();
     private List<Item> items = new();
@@ -364,22 +367,26 @@ else if (invoice != null)
                 new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new();
             }
 
-            // Initialize invoice
-            invoice = new DonationInvoice
+            // Initialize or load invoice
+            if (Id.HasValue && Id.Value > 0)
             {
-                No = new Random().Next(1, 99999).ToString(),
-                DonationDate = DateTime.Now,
-                DonationInvoiceLines = new List<DonationInvoiceLine>
-{
-new DonationInvoiceLine
-{
-Amount = 0,
-Quantity = 1,
-ItemId = items.FirstOrDefault()?.Id ?? 0,
-MeasurementId = measurements.FirstOrDefault()?.Id ?? 0
-}
-}
-            };
+                var invoiceResponse = await Http.GetAsync($"{apiUrl}Donations/DonationInvoice?id={Id.Value}");
+                if (invoiceResponse.IsSuccessStatusCode)
+                {
+                    var invoiceJson = await invoiceResponse.Content.ReadAsStringAsync();
+                    invoice = JsonSerializer.Deserialize<DonationInvoice>(invoiceJson,
+                        new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                }
+                else
+                {
+                    errorMessage = $"Failed to load existing invoice (Status: {invoiceResponse.StatusCode}). Loading empty form.";
+                    ResetForm();
+                }
+            }
+            else
+            {
+                ResetForm();
+            }
         }
         catch (Exception ex)
         {
@@ -424,16 +431,20 @@ MeasurementId = measurements.FirstOrDefault()?.Id ?? 0
             var json = JsonSerializer.Serialize(invoice);
             var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
 
-            var response = await Http.PostAsync($"{apiUrl}Donations/CreateDonationInvoice", content);
+            var endpoint = Id.HasValue && Id.Value > 0 ? "Donations/UpdateDonationInvoice" : "Donations/CreateDonationInvoice";
+            var response = await Http.PostAsync($"{apiUrl}{endpoint}", content);
 
             if (response.IsSuccessStatusCode)
             {
                 successMessage = $"Donation invoice '{invoice.No}' saved successfully!";
-                ResetForm();
+                if (!Id.HasValue || Id.Value == 0)
+                {
+                    ResetForm();
+                }
 
                 // Auto-navigate after 2 seconds
                 await Task.Delay(2000);
-                NavigationManager.NavigateTo("/donations/donationinvoices");
+                NavigationManager.NavigateTo("/donations/donationinvoices", forceLoad: true);
             }
             else
             {
@@ -471,6 +482,6 @@ MeasurementId = measurements.FirstOrDefault()?.Id ?? 0
 
     private void Cancel()
     {
-        NavigationManager.NavigateTo("/donations/donationinvoices");
+        NavigationManager.NavigateTo("/donations/donationinvoices", forceLoad: true);
     }
 }
