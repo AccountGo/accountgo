@@ -186,6 +186,21 @@ if (!data.Any())
         Item = new Item { Description = "Sample Book" },
         Measurement = new Measurement { Code = "pcs" }
     });
+
+     var items = _itemRepo.GetAllIncluding(i => i.PurchaseMeasurement).ToList();
+
+    foreach (var item in items)
+    {
+        data.Add(new InventoryControlJournal
+        {
+            Id = item.Id,
+            INQty = item.ComputeQuantityOnHand(), 
+            OUTQty = 0,
+            Date = DateTime.Now,
+            Item = item,
+            Measurement = item.PurchaseMeasurement
+        });
+    }
 }
 
     return data;

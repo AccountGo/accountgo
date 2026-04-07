@@ -113,12 +113,14 @@ else
 
 @code {
 
+
+
     // summmary variables
     // all initialized to 0 to avoid null issues, but they will be calculated from the data
     private decimal TotalIn = 0;
     private decimal TotalOut = 0;
     private decimal CurrentStock = 0;
-    private List<InventoryControlJournal> ProcessedData{ get; set; } = new();
+     private List<InventoryControlJournal> InventoryData{ get; set; } = new();
     private bool isLoading = true;
     private bool hasError = false;
 
