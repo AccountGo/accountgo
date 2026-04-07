@@ -201,6 +201,22 @@ else
                         </div>
                     </div>
 
+                    @if (saveError)
+                    {
+                        <div class="alert alert-danger mt-3">
+                            Error saving purchase invoice.
+                            @if (!string.IsNullOrEmpty(errorMessage))
+                            {
+                                <br />
+                                <strong>Details:</strong> @errorMessage
+                            }
+                        </div>
+                    }
+                    @if (saveSuccess)
+                    {
+                        <div class="alert alert-success mt-3">Purchase invoice saved successfully!</div>
+                    }
+
                     <div class="col-md-9 mt-3">
                         @if (!isViewMode)
                         {
@@ -213,24 +229,6 @@ else
                 </div>
             </div>
         </EditForm>
-
-        @if (saveError)
-        {
-            <div class="alert alert-danger mt-3">
-                Error saving purchase invoice.
-                @if (!string.IsNullOrEmpty(errorMessage))
-                {
-                    <br />
-                    <strong>Details:</strong>
-
-                    @errorMessage
-                }
-            </div>
-        }
-        @if (saveSuccess)
-        {
-            <div class="alert alert-success mt-3">Purchase invoice saved successfully!</div>
-        }
     }
 
 @code {
