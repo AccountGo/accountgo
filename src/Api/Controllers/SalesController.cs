@@ -1,4 +1,4 @@
-using Api.ActionFilters;
+﻿using Api.ActionFilters;
 using Core.Domain;
 using Dto.Sales;
 using Microsoft.AspNetCore.Mvc;
@@ -78,23 +78,10 @@ namespace Api.Controllers
             customer.PrimaryContact.Party.Email = customerDto.PrimaryContact.Party.Email;
             customer.PrimaryContact.Party.Fax = customerDto.PrimaryContact.Party.Fax;
             customer.PrimaryContact.Party.Website = customerDto.PrimaryContact.Party.Website;
-            customer.AddressLine1 = customerDto.AddressLine1;
-            customer.AddressLine2 = customerDto.AddressLine2;
-            customer.City = customerDto.City;
-            customer.Province = customerDto.Province;
-            customer.PostalCode = customerDto.PostalCode;
-            customer.Country = customerDto.Country;
-            customer.ShippingAddressLine1 = customerDto.ShippingAddressLine1;
-            customer.ShippingAddressLine2 = customerDto.ShippingAddressLine2;
-            customer.ShippingCity = customerDto.ShippingCity;
-            customer.ShippingProvince = customerDto.ShippingProvince;
-            customer.ShippingPostalCode = customerDto.ShippingPostalCode;
-            customer.ShippingCountry = customerDto.ShippingCountry;
-            var accountAr = _financialService.GetAccountByAccountCode("10120");
-            customer.AccountsReceivableAccountId = accountAr?.Id;
-            var accountDiscount = _financialService.GetAccountByAccountCode("40400");
-            customer.SalesDiscountAccountId = accountDiscount?.Id;
-            customer.DiscountPercentage = customerDto.DiscountPercentage;
+            customer.AccountsReceivableAccountId = customerDto.AccountsReceivableId;
+            customer.SalesAccountId = customerDto.SalesAccountId;
+            customer.CustomerAdvancesAccountId = customerDto.PrepaymentAccountId;
+            customer.SalesDiscountAccountId = customerDto.SalesDiscountAccountId;
             customer.PaymentTermId = customerDto.PaymentTermId;
             customer.TaxGroupId = customerDto.TaxGroupId;
             customer.ModifiedBy = GetUserNameFromRequestHeader();
@@ -123,7 +110,6 @@ namespace Api.Controllers
                     SalesAccountId = customer.SalesAccountId.GetValueOrDefault(),
                     PrepaymentAccountId = customer.CustomerAdvancesAccountId.GetValueOrDefault(),
                     SalesDiscountAccountId = customer.SalesDiscountAccountId.GetValueOrDefault(),
-                    DiscountPercentage = customer.DiscountPercentage,
                     PaymentTermId = customer.PaymentTermId.GetValueOrDefault(),
                     TaxGroupId = customer.TaxGroupId.GetValueOrDefault()
                 };
@@ -132,18 +118,6 @@ namespace Api.Controllers
                 customerDto.Website = customer.Party.Website;
                 customerDto.Phone = customer.Party.Phone;
                 customerDto.Fax = customer.Party.Fax;
-                customerDto.AddressLine1 = customer.AddressLine1;
-                customerDto.AddressLine2 = customer.AddressLine2;
-                customerDto.City = customer.City;
-                customerDto.Province = customer.Province;
-                customerDto.PostalCode = customer.PostalCode;
-                customerDto.Country = customer.Country;
-                customerDto.ShippingAddressLine1 = customer.ShippingAddressLine1;
-                customerDto.ShippingAddressLine2 = customer.ShippingAddressLine2;
-                customerDto.ShippingCity = customer.ShippingCity;
-                customerDto.ShippingProvince = customer.ShippingProvince;
-                customerDto.ShippingPostalCode = customer.ShippingPostalCode;
-                customerDto.ShippingCountry = customer.ShippingCountry;
 
                 if (customer.PrimaryContact != null)
                 {
@@ -187,9 +161,7 @@ namespace Api.Controllers
                     customerDto.Fax = customer.Party.Fax;
                     customerDto.Balance = customer.Balance;
                     customerDto.PrepaymentAccountId = customer.CustomerAdvancesAccountId;
-                    customerDto.Contact = customer.PrimaryContact != null
-                        ? $"{customer.PrimaryContact.FirstName} {customer.PrimaryContact.LastName}".Trim()
-                        : string.Empty;
+                    customerDto.Contact = customer.PrimaryContact.FirstName + " " + customer.PrimaryContact.LastName;
                     customerDto.TaxGroup = customer.TaxGroup == null ? string.Empty : customer.TaxGroup.Description;
                     customersDto.Add(customerDto);
                 }

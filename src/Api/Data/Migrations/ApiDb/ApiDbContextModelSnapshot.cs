@@ -968,9 +968,6 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<int?>("PaymentTermId")
                         .HasColumnType("int");
 
-                    b.Property<string>("PurchaseOrderNumber")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<string>("ReferenceNo")
                         .HasColumnType("nvarchar(max)");
 
@@ -1332,23 +1329,8 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<int?>("AccountsReceivableAccountId")
                         .HasColumnType("int");
 
-                    b.Property<string>("AddressLine1")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("AddressLine2")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("City")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("Country")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<int?>("CustomerAdvancesAccountId")
                         .HasColumnType("int");
-
-                    b.Property<decimal?>("DiscountPercentage")
-                        .HasColumnType("decimal(18,2)");
 
                     b.Property<string>("No")
                         .HasColumnType("nvarchar(max)");
@@ -1359,41 +1341,17 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<int?>("PaymentTermId")
                         .HasColumnType("int");
 
-                    b.Property<string>("PostalCode")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<int?>("PrimaryContactId")
                         .HasColumnType("int");
 
                     b.Property<int?>("PromptPaymentDiscountAccountId")
                         .HasColumnType("int");
 
-                    b.Property<string>("Province")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<int?>("SalesAccountId")
                         .HasColumnType("int");
 
                     b.Property<int?>("SalesDiscountAccountId")
                         .HasColumnType("int");
-
-                    b.Property<string>("ShippingAddressLine1")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("ShippingAddressLine2")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("ShippingCity")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("ShippingCountry")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("ShippingPostalCode")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("ShippingProvince")
-                        .HasColumnType("nvarchar(max)");
 
                     b.Property<int?>("TaxGroupId")
                         .HasColumnType("int");
