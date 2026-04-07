@@ -7,6 +7,7 @@ using Services.Sales;
 using Services.Security;
 using System.Reflection;
 using System.Text;
+using Core.Domain.Items;
 
 namespace Api.Data
 {
@@ -94,6 +95,10 @@ namespace Api.Data
                 //11.Security Roles
                 SetupSecurityRoles();
                 Console.WriteLine("SetupSecurityRoles() - Completed!");
+
+                //12.Dashboard demo data
+                SetupDashboardDemoData();
+                Console.WriteLine("SetupDashboardDemoData() - Completed!");
 
                 return true;
             }
@@ -902,6 +907,243 @@ namespace Api.Data
                 Console.WriteLine(ex.Message + " - " + ex.StackTrace);
                 throw;
             }
+        }
+
+        private void SetupDashboardDemoData()
+        {
+            if (_salesService.GetSalesInvoices().Any()
+                || _salesService.GetSalesReceipts().Any()
+                || _purchasingService.GetPurchaseInvoices().Any())
+            {
+                return;
+            }
+
+            var today = DateTime.Today;
+            var currentYearStart = new DateTime(today.Year, 1, 1);
+
+            var bank = _financialService.GetCashAndBanks().FirstOrDefault(b => b.AccountId.HasValue);
+            var purchasedItem = _inventoryService.GetAllItems()
+                .FirstOrDefault(i => i.ItemCategory != null && i.ItemCategory.ItemType == Core.Domain.ItemTypes.Purchased);
+            var paymentTermId = _adminService.GetPaymentTerms().FirstOrDefault()?.Id;
+
+            if (bank?.AccountId == null || purchasedItem == null)
+            {
+                return;
+            }
+
+            var customers = _salesService.GetCustomers().ToList();
+            var vendors = _purchasingService.GetVendors().ToList();
+
+            var primaryCustomer = customers.FirstOrDefault() ?? CreateDemoCustomer("ABC Customer");
+            var secondaryCustomer = customers.Skip(1).FirstOrDefault() ?? CreateDemoCustomer("Northwind Books");
+            var primaryVendor = vendors.FirstOrDefault() ?? CreateDemoVendor("ABC Sample Supplier");
+            var secondaryVendor = vendors.Skip(1).FirstOrDefault() ?? CreateDemoVendor("Paper & Parcel Co.");
+
+            SeedSalesInvoice(
+                primaryCustomer,
+                purchasedItem,
+                currentYearStart.AddMonths(1).AddDays(4),
+                paymentTermId,
+                6,
+                purchasedItem.Price ?? 95m);
+
+            var unpaidSalesInvoice = SeedSalesInvoice(
+                secondaryCustomer,
+                purchasedItem,
+                currentYearStart.AddMonths(2).AddDays(9),
+                paymentTermId,
+                4,
+                (purchasedItem.Price ?? 95m) + 20m);
+
+            SeedCustomerReceipt(
+                primaryCustomer,
+                bank.AccountId.Value,
+                currentYearStart.AddMonths(1).AddDays(18),
+                300m);
+
+            SeedPurchaseInvoice(
+                primaryVendor,
+                purchasedItem,
+                currentYearStart.AddMonths(1).AddDays(2),
+                paymentTermId,
+                10,
+                purchasedItem.Cost ?? 40m);
+
+            var payableInvoice = SeedPurchaseInvoice(
+                secondaryVendor,
+                purchasedItem,
+                currentYearStart.AddMonths(3).AddDays(3),
+                paymentTermId,
+                8,
+                (purchasedItem.Cost ?? 40m) + 8m);
+
+            SeedVendorPayment(
+                payableInvoice,
+                secondaryVendor,
+                bank.AccountId.Value,
+                currentYearStart.AddMonths(3).AddDays(15),
+                150m);
+        }
+
+        private Core.Domain.Sales.Customer CreateDemoCustomer(string name)
+        {
+            var customer = new Core.Domain.Sales.Customer
+            {
+                AccountsReceivableAccountId = _financialService.GetAccountByAccountCode("10120").Id,
+                SalesAccountId = _financialService.GetAccountByAccountCode("40100").Id,
+                CustomerAdvancesAccountId = _financialService.GetAccountByAccountCode("20120").Id,
+                SalesDiscountAccountId = _financialService.GetAccountByAccountCode("40400").Id,
+                TaxGroupId = _financialService.GetTaxGroups().FirstOrDefault(tg => tg.Description == "VAT")?.Id,
+                Party = new Core.Domain.Party
+                {
+                    Name = name,
+                    PartyType = Core.Domain.PartyTypes.Customer,
+                    IsActive = true
+                },
+                PrimaryContact = new Core.Domain.Contact
+                {
+                    ContactType = Core.Domain.ContactTypes.Customer,
+                    FirstName = name.Split(' ').First(),
+                    LastName = "Contact",
+                    Party = new Core.Domain.Party
+                    {
+                        Name = $"{name} Contact",
+                        PartyType = Core.Domain.PartyTypes.Contact
+                    }
+                }
+            };
+
+            _salesService.AddCustomer(customer);
+            return customer;
+        }
+
+        private Core.Domain.Purchases.Vendor CreateDemoVendor(string name)
+        {
+            var vendor = new Core.Domain.Purchases.Vendor
+            {
+                AccountsPayableAccountId = _financialService.GetAccountByAccountCode("20110").Id,
+                PurchaseAccountId = _financialService.GetAccountByAccountCode("50200").Id,
+                PurchaseDiscountAccountId = _financialService.GetAccountByAccountCode("50400").Id,
+                Party = new Core.Domain.Party
+                {
+                    Name = name,
+                    PartyType = Core.Domain.PartyTypes.Vendor,
+                    IsActive = true
+                },
+                PrimaryContact = new Core.Domain.Contact
+                {
+                    ContactType = Core.Domain.ContactTypes.Vendor,
+                    FirstName = name.Split(' ').First(),
+                    LastName = "Contact",
+                    Party = new Core.Domain.Party
+                    {
+                        Name = $"{name} Contact",
+                        PartyType = Core.Domain.PartyTypes.Contact
+                    }
+                }
+            };
+
+            _purchasingService.AddVendor(vendor);
+            return vendor;
+        }
+
+        private Core.Domain.Sales.SalesInvoiceHeader SeedSalesInvoice(
+            Core.Domain.Sales.Customer customer,
+            Item item,
+            DateTime invoiceDate,
+            int? paymentTermId,
+            decimal quantity,
+            decimal amount)
+        {
+            var measurementId = item.SellMeasurementId ?? item.SmallestMeasurementId ?? _inventoryService.GetMeasurements().First().Id;
+
+            var invoice = new Core.Domain.Sales.SalesInvoiceHeader
+            {
+                CustomerId = customer.Id,
+                Date = invoiceDate,
+                PaymentTermId = paymentTermId,
+                ReferenceNo = $"DASH-SI-{invoiceDate:MMdd}"
+            };
+
+            invoice.SalesInvoiceLines.Add(new Core.Domain.Sales.SalesInvoiceLine
+            {
+                ItemId = item.Id,
+                MeasurementId = measurementId,
+                Quantity = quantity,
+                Discount = 0m,
+                Amount = amount
+            });
+
+            _salesService.AddSalesInvoice(invoice, null, null);
+            return invoice;
+        }
+
+        private void SeedCustomerReceipt(
+            Core.Domain.Sales.Customer customer,
+            int bankAccountId,
+            DateTime receiptDate,
+            decimal amountPaid)
+        {
+            var receipt = new Core.Domain.Sales.SalesReceiptHeader
+            {
+                CustomerId = customer.Id,
+                Date = receiptDate,
+                AccountToDebitId = bankAccountId,
+                Amount = amountPaid
+            };
+
+            receipt.SalesReceiptLines.Add(new Core.Domain.Sales.SalesReceiptLine
+            {
+                Quantity = 1,
+                Amount = amountPaid,
+                AmountPaid = amountPaid
+            });
+
+            _salesService.AddSalesReceipt(receipt);
+        }
+
+        private Core.Domain.Purchases.PurchaseInvoiceHeader SeedPurchaseInvoice(
+            Core.Domain.Purchases.Vendor vendor,
+            Item item,
+            DateTime invoiceDate,
+            int? paymentTermId,
+            decimal quantity,
+            decimal amount)
+        {
+            var measurementId = item.PurchaseMeasurementId ?? item.SmallestMeasurementId ?? _inventoryService.GetMeasurements().First().Id;
+
+            var invoice = new Core.Domain.Purchases.PurchaseInvoiceHeader
+            {
+                VendorId = vendor.Id,
+                Date = invoiceDate,
+                VendorInvoiceNo = $"V-{invoiceDate:MMdd}",
+                ReferenceNo = $"DASH-PI-{invoiceDate:MMdd}",
+                PaymentTermId = paymentTermId,
+                Description = "Dashboard demo purchase invoice"
+            };
+
+            invoice.PurchaseInvoiceLines.Add(new Core.Domain.Purchases.PurchaseInvoiceLine
+            {
+                ItemId = item.Id,
+                MeasurementId = measurementId,
+                Quantity = quantity,
+                Cost = amount,
+                Discount = 0m,
+                Amount = amount
+            });
+
+            _purchasingService.AddPurchaseInvoice(invoice, null);
+            return invoice;
+        }
+
+        private void SeedVendorPayment(
+            Core.Domain.Purchases.PurchaseInvoiceHeader invoice,
+            Core.Domain.Purchases.Vendor vendor,
+            int bankAccountId,
+            DateTime paymentDate,
+            decimal amount)
+        {
+            _purchasingService.SavePayment(invoice.Id, vendor.Id, bankAccountId, amount, paymentDate);
         }
 
         private static string[,] LoadCsv(string filename)

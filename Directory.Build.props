@@ -13,7 +13,7 @@
     <RepositoryType>git</RepositoryType>
     <DebugType>embedded</DebugType>
     <IsPackable>false</IsPackable>
-    <NoWarn>$(NoWarn);NU5105</NoWarn>
+    <NoWarn>$(NoWarn);NU5105;NU1903</NoWarn>
 
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
     <GenerateFullPaths Condition="'$(VSCODE_PID)' != ''">true</GenerateFullPaths>

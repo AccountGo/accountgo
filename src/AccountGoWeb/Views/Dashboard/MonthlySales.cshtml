@@ -1,97 +1,218 @@
-﻿
-<canvas width="500" height="250"></canvas>
+@model Dto.Dashboard.DashboardSummaryDto
+@using System.Globalization
+@using Dto.Dashboard
+@inject IConfiguration _configuration
+@{
+    var dashboard = Model ?? new DashboardSummaryDto();
+    var monthlySales = dashboard.MonthlySales ?? new List<DashboardTrendPointDto>();
+    var monthlyExpenses = dashboard.MonthlyExpenses ?? new List<DashboardTrendPointDto>();
+    var salesMax = monthlySales.Any() ? monthlySales.Max(x => x.Amount) : 0m;
+    var expensesMax = monthlyExpenses.Any() ? monthlyExpenses.Max(x => x.Amount) : 0m;
+    var receivables = dashboard.TopReceivables ?? new List<DashboardReceivableItemDto>();
+    var payables = dashboard.UpcomingPayables ?? new List<DashboardPayableItemDto>();
+    var activity = dashboard.RecentActivity ?? new List<DashboardActivityItemDto>();
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+    string Currency(decimal amount) => string.Format(CultureInfo.InvariantCulture, "${0:N2}", amount);
+}
 
-    <script>
-     var canvas = document.querySelector("canvas"),
-         context = canvas.getContext("2d");
+@section Styles {
+    <link rel="stylesheet" href="~/css/dashboard.css" asp-append-version="true" />
+}
 
-     var margin = { top: 20, right: 20, bottom: 30, left: 40 },
-         width = canvas.width - margin.left - margin.right,
-         height = canvas.height - margin.top - margin.bottom;
+<div class="dashboard-shell">
+    <div class="dashboard-topbar">
+        <div class="dashboard-heading">
+            <p>Year-to-date accounting snapshot for @_configuration["GoodDeeds:SuperOrganizationName"]</p>
+        </div>
+        <div class="dashboard-period">Year to Date</div>
+    </div>
 
-     var x = d3.scaleBand()
-         .rangeRound([0, width])
-         .padding(0.1);
+    <section class="dashboard-card">
+        <div class="dashboard-card-title">Financial Health Snapshot</div>
+        <div class="dashboard-card-subtitle">Core year-to-date totals for the most important accounting indicators.</div>
+        <div class="dashboard-kpis">
+            <div class="kpi-card">
+                <div class="kpi-label">Money in Bank</div>
+                <div class="kpi-value">@Currency(dashboard.Kpis.MoneyInBank)</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-label">Receivables</div>
+                <div class="kpi-value">@Currency(dashboard.Kpis.OutstandingReceivables)</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-label">Payables</div>
+                <div class="kpi-value">@Currency(dashboard.Kpis.TotalPayables)</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-label">Assets</div>
+                <div class="kpi-value">@Currency(dashboard.Kpis.TotalAssets)</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-label">Sales YTD</div>
+                <div class="kpi-value">@Currency(dashboard.Kpis.TotalSalesYtd)</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-label">Expenses YTD</div>
+                <div class="kpi-value">@Currency(dashboard.Kpis.TotalExpensesYtd)</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-label">Net Profit</div>
+                <div class="kpi-value">@Currency(dashboard.Kpis.NetProfitYtd)</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-label">Cash Flow YTD</div>
+                <div class="kpi-value">@Currency(dashboard.Kpis.CashFlowYtd)</div>
+            </div>
+        </div>
+    </section>
 
-     var y = d3.scaleLinear()
-         .rangeRound([height, 0]);
+    <div class="dashboard-grid">
+        <section class="dashboard-card">
+            <div class="dashboard-card-title">Monthly Performance</div>
+            <div class="dashboard-card-subtitle">Sales and expense movement over the current year.</div>
 
-     context.translate(margin.left, margin.top);
+            @if (!monthlySales.Any() && !monthlyExpenses.Any())
+            {
+                <p class="empty-state">No monthly trend data is available yet.</p>
+            }
+            else
+            {
+                <div class="trend-chart">
+                    @for (var i = 0; i < Math.Max(monthlySales.Count, monthlyExpenses.Count); i++)
+                    {
+                        var salesPoint = i < monthlySales.Count ? monthlySales[i] : new DashboardTrendPointDto();
+                        var expensePoint = i < monthlyExpenses.Count ? monthlyExpenses[i] : new DashboardTrendPointDto { Label = salesPoint.Label };
+                        var salesHeight = salesMax > 0 ? Math.Max(6, (int)Math.Round((salesPoint.Amount / salesMax) * 100m)) : 0;
+                        var expenseHeight = expensesMax > 0 ? Math.Max(6, (int)Math.Round((expensePoint.Amount / expensesMax) * 100m)) : 0;
 
-     d3.json("@ViewBag.ApiMontlySales", function (data) {
+                        <div class="trend-col">
+                            <div class="trend-bars">
+                                <div class="trend-sales" style="height:@($"{salesHeight}%")" title="Sales: @Currency(salesPoint.Amount)"></div>
+                                <div class="trend-expenses" style="height:@($"{expenseHeight}%")" title="Expenses: @Currency(expensePoint.Amount)"></div>
+                            </div>
+                            <div class="trend-label">@(salesPoint.Label ?? expensePoint.Label)</div>
+                        </div>
+                    }
+                </div>
+            }
+        </section>
 
-         data.forEach(function (d) {
-             d.month = d.month;
-             d.amount = +d.amount;
-         });
+        <section class="dashboard-card">
+            <div class="dashboard-card-title">Asset / Liability Snapshot</div>
+            <div class="dashboard-card-subtitle">Current balance sheet totals for the main account classes.</div>
 
+            @{
+                var snapshotMax = new[]
+                {
+                    dashboard.BalanceSnapshot.TotalAssets,
+                    dashboard.BalanceSnapshot.TotalLiabilities,
+                    dashboard.BalanceSnapshot.TotalEquity
+                }.Max();
+            }
 
-         x.domain(data.map(function (d) { return d.month; }));
-         y.domain([0, d3.max(data, function (d) { return d.amount; })]);
+            <div class="snapshot-list">
+                <div class="snapshot-row">
+                    <div class="snapshot-row-header">
+                        <span>Assets</span>
+                        <span>@Currency(dashboard.BalanceSnapshot.TotalAssets)</span>
+                    </div>
+                    <div class="snapshot-track">
+                        <div class="snapshot-fill fill-assets" style="width:@(snapshotMax > 0 ? (dashboard.BalanceSnapshot.TotalAssets / snapshotMax * 100m).ToString("0.##", CultureInfo.InvariantCulture) : "0")%;"></div>
+                    </div>
+                </div>
+                <div class="snapshot-row">
+                    <div class="snapshot-row-header">
+                        <span>Liabilities</span>
+                        <span>@Currency(dashboard.BalanceSnapshot.TotalLiabilities)</span>
+                    </div>
+                    <div class="snapshot-track">
+                        <div class="snapshot-fill fill-liabilities" style="width:@(snapshotMax > 0 ? (dashboard.BalanceSnapshot.TotalLiabilities / snapshotMax * 100m).ToString("0.##", CultureInfo.InvariantCulture) : "0")%;"></div>
+                    </div>
+                </div>
+                <div class="snapshot-row">
+                    <div class="snapshot-row-header">
+                        <span>Equity</span>
+                        <span>@Currency(dashboard.BalanceSnapshot.TotalEquity)</span>
+                    </div>
+                    <div class="snapshot-track">
+                        <div class="snapshot-fill fill-equity" style="width:@(snapshotMax > 0 ? (dashboard.BalanceSnapshot.TotalEquity / snapshotMax * 100m).ToString("0.##", CultureInfo.InvariantCulture) : "0")%;"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
 
-         var yTickCount = 10,
-             yTicks = y.ticks(yTickCount),
-             yTickFormat = y.tickFormat(yTickCount, "%");
-         console.log(yTickFormat);
-         context.beginPath();
-         x.domain().forEach(function (d) {
-             context.moveTo(x(d) + x.bandwidth() / 2, height);
-             context.lineTo(x(d) + x.bandwidth() / 2, height + 6);
-         });
-         context.strokeStyle = "black";
-         context.stroke();
+    <div class="dashboard-lists">
+        <section class="dashboard-card">
+            <div class="dashboard-card-title">Outstanding Receivables</div>
+            <div class="dashboard-card-subtitle">Customers with the highest outstanding balances.</div>
+            @if (!receivables.Any())
+            {
+                <p class="empty-state">No receivables are currently outstanding.</p>
+            }
+            else
+            {
+                <ul class="dashboard-list">
+                    @foreach (var item in receivables)
+                    {
+                        <li>
+                            <div>
+                                <div class="list-title">@item.CustomerName</div>
+                                <span class="list-meta">Customer ID: @item.CustomerId</span>
+                            </div>
+                            <div class="list-value">@Currency(item.Balance)</div>
+                        </li>
+                    }
+                </ul>
+            }
+        </section>
 
-         context.textAlign = "center";
-         context.textBaseline = "top";
-         x.domain().forEach(function (d) {
-             context.fillText(d, x(d) + x.bandwidth() / 2, height + 6);
-         });
+        <section class="dashboard-card">
+            <div class="dashboard-card-title">Upcoming Payables</div>
+            <div class="dashboard-card-subtitle">Open vendor invoices that still require payment.</div>
+            @if (!payables.Any())
+            {
+                <p class="empty-state">There are no unpaid purchase invoices right now.</p>
+            }
+            else
+            {
+                <ul class="dashboard-list">
+                    @foreach (var item in payables)
+                    {
+                        <li>
+                            <div>
+                                <div class="list-title">@item.VendorName</div>
+                                <span class="list-meta">@item.InvoiceNo @(item.InvoiceDate.HasValue ? $"- {item.InvoiceDate.Value:yyyy-MM-dd}" : string.Empty)</span>
+                            </div>
+                            <div class="list-value">@Currency(item.RemainingAmount)</div>
+                        </li>
+                    }
+                </ul>
+            }
+        </section>
+    </div>
 
-         context.beginPath();
-         yTicks.forEach(function (d) {
-             context.moveTo(0, y(d) + 0.5);
-             context.lineTo(-6, y(d) + 0.5);
-         });
-         context.strokeStyle = "black";
-         context.stroke();
-
-         context.textAlign = "right";
-         context.textBaseline = "middle";
-         yTicks.forEach(function (d) {
-             //context.fillText(yTickFormat(d), -9, y(d));
-             context.fillText(d, -9, y(d));
-         });
-
-         context.beginPath();
-         context.moveTo(-6.5, 0 + 0.5);
-         context.lineTo(0.5, 0 + 0.5);
-         context.lineTo(0.5, height + 0.5);
-         context.lineTo(-6.5, height + 0.5);
-         context.strokeStyle = "black";
-         context.stroke();
-
-         context.save();
-         context.rotate(-Math.PI / 2);
-         context.textAlign = "right";
-         context.textBaseline = "top";
-         context.font = "bold 10px sans-serif";
-         context.fillText("amount", -10, 10);
-         context.restore();
-         context.strokeStyle = "black";
-         context.stroke();
-         context.fillStyle = "steelblue";
-         context.strokeStyle = "black";
-         context.stroke();
-         context.font = "bold 13px sans-serif";
-         context.fillText("Monthly Sales", 250, canvas.height - 260);
-
-         data.forEach(function (d) {
-             context.fillText(d.amount, x(d.month) + 35, y(d.amount) - 10, height - y(d.amount));
-             context.fillRect(x(d.month), y(d.amount), x.bandwidth(), height - y(d.amount));
-             context.font = "bold 10px arial";
-         });
-     });
-
-    </script>
+    <section class="dashboard-card">
+        <div class="dashboard-card-title">Recent Activity</div>
+        <div class="dashboard-card-subtitle">Latest financial transactions and documents recorded in the system.</div>
+        @if (!activity.Any())
+        {
+            <p class="empty-state">No recent activity is available.</p>
+        }
+        else
+        {
+            <ul class="dashboard-activity">
+                @foreach (var item in activity)
+                {
+                    <li>
+                        <div>
+                            <span class="activity-type">@item.Type</span>
+                            <div class="list-title">@item.Description</div>
+                        </div>
+                        <div class="list-meta">@item.Date.ToString("yyyy-MM-dd")</div>
+                    </li>
+                }
+            </ul>
+        }
+    </section>
+</div>
