@@ -95,82 +95,88 @@ else
                     </div>
                 </div>
 
-                <div class="table-container">
-                    <table class="table">
-                        <thead>
-                            <tr>
-                                <th>Item</th>
-                                <th>Quantity</th>
-                                <th>Amount</th>
-                                <th>Discount</th>
-                                <th>Measurement</th>
-                                @if (!isViewMode)
-                                {
-                                    <th>Actions</th>
-                                }
-                            </tr>
-                        </thead>
-                        <tbody>
-                        @for (int i = 0; i < purchaseInvoice.PurchaseInvoiceLines.Count; i++)
-                        {
-                            var line = purchaseInvoice.PurchaseInvoiceLines[i];
-                            var index = i;
-                            <tr style="background-color: transparent !important;">
-                                <td style="background-color: transparent !important;">
-                                    <InputSelect class="form-control" @bind-Value="line.ItemId" disabled="@isViewMode">
-                                        <option value="0">-- Select Item --</option>
-                                        @if (items != null)
+                        <div class="table-container">
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>Item</th>
+                                        <th>Quantity</th>
+                                        <th>Amount</th>
+                                        <th>Discount</th>
+                                        <th>Unit</th>
+                                        @if (!isViewMode)
                                         {
-                                            @foreach (var item in items)
-                                            {
-                                                <option value="@item.Value">@item.Text</option>
-                                            }
+                                            <th>Actions</th>
                                         }
-                                    </InputSelect>
-                                </td>
-                                <td style="background-color: transparent !important;">
-                                    <InputNumber class="form-control" @bind-Value="line.Quantity" disabled="@isViewMode" />
-                                </td>
-                                <td style="background-color: transparent !important;">
-                                    <InputNumber class="form-control" @bind-Value="line.Amount" disabled="@isViewMode" />
-                                </td>
-                                <td style="background-color: transparent !important;">
-                                    <InputNumber class="form-control" @bind-Value="line.Discount" disabled="@isViewMode" />
-                                </td>
-                                <td style="background-color: transparent !important;">
-                                    <InputSelect class="form-control" @bind-Value="line.MeasurementId" disabled="@isViewMode">
-                                        <option value="0">-- Select Measurement --</option>
-                                        @if (measurements != null)
-                                        {
-                                            @foreach (var measurement in measurements)
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @for (int i = 0; i < purchaseInvoice.PurchaseInvoiceLines.Count; i++)
+                                    {
+                                        var line = purchaseInvoice.PurchaseInvoiceLines[i];
+                                        var index = i;
+                                        <tr style="background-color: transparent !important;">
+                                            <td style="background-color: transparent !important;">
+                                                <InputSelect class="form-control" @bind-Value="line.ItemId" disabled="@isViewMode">
+                                                    <option value="0">-- Select Item --</option>
+                                                    @if (items != null)
+                                                    {
+                                                        @foreach (var item in items)
+                                                        {
+                                                            <option value="@item.Value">@item.Text</option>
+                                                        }
+                                                    }
+                                                </InputSelect>
+                                            </td>
+                                            <td style="background-color: transparent !important;">
+                                                <InputNumber class="form-control" @bind-Value="line.Quantity"
+                                                             disabled="@isViewMode" />
+                                            </td>
+                                            <td style="background-color: transparent !important;">
+                                                <InputNumber class="form-control" @bind-Value="line.Amount"
+                                                             disabled="@isViewMode" />
+                                            </td>
+                                            <td style="background-color: transparent !important;">
+                                                <InputNumber class="form-control" @bind-Value="line.Discount"
+                                                             disabled="@isViewMode" />
+                                            </td>
+                                            <td style="background-color: transparent !important;">
+                                                <InputSelect class="form-control" @bind-Value="line.MeasurementId"
+                                                             disabled="@isViewMode">
+                                                    <option value="0">-- Select Measurement --</option>
+                                                    @if (measurements != null)
+                                                    {
+                                                        @foreach (var measurement in measurements)
+                                                        {
+                                                            <option value="@measurement.Value">@measurement.Text</option>
+                                                        }
+                                                    }
+                                                </InputSelect>
+                                            </td>
+                                            @if (!isViewMode)
                                             {
-                                                <option value="@measurement.Value">@measurement.Text</option>
+                                                <td style="background-color: transparent !important;">
+                                                    <button type="button" class="btn btn-sm btn-danger"
+                                                            @onclick="() => RemoveLine(index)"
+                                                            disabled="@(purchaseInvoice.PurchaseInvoiceLines.Count <= 1)">
+                                                        Remove
+                                                    </button>
+                                                </td>
                                             }
-                                        }
-                                    </InputSelect>
-                                </td>
-                                @if (!isViewMode)
-                                {
-                                    <td style="background-color: transparent !important;">
-                                        <button type="button" class="btn btn-sm btn-danger" @onclick="() => RemoveLine(index)" disabled="@(purchaseInvoice.PurchaseInvoiceLines.Count <= 1)">
-                                            Remove
-                                        </button>
-                                    </td>
-                                }
-                            </tr>
-                        }
-                        @if (!isViewMode)
-                        {
-                            <tr>
-                                <td colspan="6">
-                                    <button type="button" class="btn btn-primary" @onclick="AddLine">Add Row</button>
-                                </td>
-                            </tr>
-                        }
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+                                        </tr>
+                                    }
+                                    @if (!isViewMode)
+                                    {
+                                        <tr>
+                                            <td colspan="6">
+                                                <button type="button" class="btn btn-primary" @onclick="AddLine">Add Row</button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
 
             <div class="col-md-9 mt-3">
                 @if (!isViewMode)

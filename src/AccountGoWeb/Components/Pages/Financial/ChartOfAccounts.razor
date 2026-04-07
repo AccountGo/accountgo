@@ -13,7 +13,7 @@
 
 @if (getError || accounts is null)
 {
-   <div class="alert alert-danger">Unable to get data. Please try again later.</div>
+    <div class="alert alert-danger">Unable to get data. Please try again later.</div>
 }
 else if (isLoading)
 {
@@ -31,172 +31,80 @@ else
         .hiddenRow {
             padding: 4px !important;
         }
+
+        .coa-toggle-btn {
+            min-width: 42px;
+            min-height: 42px;
+            padding: 0.3rem 0.55rem;
+            font-size: 1.35rem;
+            line-height: 1;
+            font-weight: 700;
+        }
     </style>
     <div>
- <button class="btn btn-success mb-3" @onclick="() => OpenAddModal()">Add Account</button>
+        <button class="btn btn-success mb-3" @onclick="() => OpenAddModal()">Add Account</button>
 
         <table class="table table-condensed table-striped">
             <thead>
                 <tr>
+                    <th style="width: 42px;"></th>
                     <th>Code</th>
                     <th>Name</th>
                     <th>Balance</th>
                     <th>Debit</th>
                     <th>Credit</th>
-                    <th>Actions</th>
+                    <th class="text-end pe-4" style="width: 260px;">Actions</th>
                 </tr>
             </thead>
             <tbody>
-    @for (int accountIdx = 0; accountIdx < accounts.Count(); ++accountIdx)
+                @{ var sortedTopLevelAccounts = BuildDisplayHierarchy(accounts); }
+                @for (int accountIdx = 0; accountIdx < sortedTopLevelAccounts.Count; ++accountIdx)
                 {
-                    var account = accounts.ToList()[accountIdx];
-                    var accountTargetId = $"asset-{accountIdx}";
+                    var account = sortedTopLevelAccounts[accountIdx];
+                    var rowKey = accountIdx.ToString();
+                    var hasChildren = account.ChildAccounts != null && account.ChildAccounts.Count > 0;
 
-                    <tr data-bs-toggle="collapse" data-bs-target="#@accountTargetId" aria-expanded="false" aria-controls="@accountTargetId">
+                    <tr @key="account.Id != 0 ? account.Id.ToString() : account.AccountCode">
+                        <td class="text-center align-middle">
+                            @if (hasChildren)
+                            {
+                                <button type="button" class="btn btn-outline-secondary coa-toggle-btn" @onclick="() => ToggleRow(rowKey)"
+                                        @onclick:stopPropagation="true" title="Toggle child accounts">
+                                    <span aria-hidden="true">@(IsExpanded(rowKey) ? "▾" : "▸")</span>
+                                </button>
+                            }
+                        </td>
+
                         <td>@account.AccountCode</td>
                         <td>@account.AccountName</td>
                         <td>@account.TotalBalance</td>
                         <td>@account.TotalDebitBalance</td>
                         <td>@account.TotalCreditBalance</td>
-<td @onclick:stopPropagation="true">
-    <button class="btn btn-success" @onclick="() => OpenAddModal(account)" @onclick:stopPropagation="true">Add Account</button>
-    <button class="btn btn-primary" @onclick="() => OpenEditModal(account)" @onclick:stopPropagation="true">Edit</button>
-    <button class="btn btn-danger" @onclick="() => OpenDeleteModal(account)" @onclick:stopPropagation="true">Delete</button>
-</td>
-  </tr>
 
-                    <tr>
-                        <td colspan="12">
-                            <div class="collapse" id="@accountTargetId" aria-expanded="false" aria-controls="@accountTargetId">
+                        <td>
+                            <div class="d-flex gap-2 justify-content-end flex-nowrap">
+                                <button class="btn btn-success btn-sm" @onclick="() => OpenAddModal(account)"
+                                        @onclick:stopPropagation="true">
+                                    Add Account
+                                </button>
 
-                                <table class="table table-striped">
-                                    <thead>
-                                        <tr>
-                                            <th>Code</th>
-                                            <th>Name</th>
-                                            <th>Balance</th>
-                                            <th>Debit</th>
-                                            <th>Credit</th>
-                                            <th>Actions</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                    @for (int childAccountIdx = 0; childAccountIdx < account.ChildAccounts!.Count; ++childAccountIdx)
-                                    {
-                                        var childAccount = account.ChildAccounts.ToList()[childAccountIdx];
-                                        var childAccountTargetId = $"asset-{accountIdx}-{childAccountIdx}";
+                                <button class="btn btn-primary btn-sm" @onclick="() => OpenEditModal(account)"
+                                        @onclick:stopPropagation="true">
+                                    Edit
+                                </button>
 
-                                        <tr data-bs-toggle="collapse" data-bs-target="#@childAccountTargetId" aria-expanded="false" aria-controls="@childAccountTargetId">
-                                            <td>@childAccount.AccountCode</td>
-                                            <td>@childAccount.AccountName</td>
-                                            <td>@childAccount.TotalBalance</td>
-                                            <td>@childAccount.TotalDebitBalance</td>
-                                            <td>@childAccount.TotalCreditBalance</td>
-                                            <td @onclick:stopPropagation="true">
-    <button class="btn btn-success btn-sm" @onclick="() => OpenAddModal(childAccount)" @onclick:stopPropagation="true">Add Account</button>
-    <button class="btn btn-primary btn-sm" @onclick="() => OpenEditModal(childAccount)" @onclick:stopPropagation="true">Edit</button>
-    <button class="btn btn-danger btn-sm" @onclick="() => OpenDeleteModal(childAccount)" @onclick:stopPropagation="true">Delete</button>
-</td>
-                                        </tr>
-
-                                        <tr>
-                                            <td colspan="12">
-                                                <div class="collapse" id="@childAccountTargetId" aria-expanded="false" aria-controls="@childAccountTargetId">
-
-                                                    <table class="table table-striped">
-                                                        <thead>
-                                                            <tr>
-                                                                <th>Code</th>
-                                                                <th>Name</th>
-                                                                <th>Balance</th>
-                                                                <th>Debit</th>
-                                                                <th>Credit</th>
-                                                                <th>Actions</th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody>
-                                                        @for (int grandChildAccountIdx = 0; grandChildAccountIdx < childAccount.ChildAccounts!.Count; ++grandChildAccountIdx)
-                                                        {
-                                                            var grandChildAccount = childAccount.ChildAccounts.ToList()[grandChildAccountIdx];
-                                                            var grandChildAccountTargetId = $"asset-{accountIdx}-{childAccountIdx}-{grandChildAccountIdx}";
-
-                                                            <tr data-bs-toggle="collapse" data-bs-target="#@grandChildAccountTargetId" aria-expanded="false" aria-controls="@grandChildAccountTargetId">
-                                                                <td>@grandChildAccount.AccountCode</td>
-                                                                <td>@grandChildAccount.AccountName</td>
-                                                                <td>@grandChildAccount.TotalBalance</td>
-                                                                <td>@grandChildAccount.TotalDebitBalance</td>
-                                                                <td>@grandChildAccount.TotalCreditBalance</td>
-                                                                <td @onclick:stopPropagation="true">
-                                                                    <button class="btn btn-success btn-sm" @onclick="() => OpenAddModal(grandChildAccount)" @onclick:stopPropagation="true">Add Account</button>
-                                                                    <button class="btn btn-primary btn-sm" @onclick="() => OpenEditModal(grandChildAccount)" @onclick:stopPropagation="true">Edit</button>
-                                                                    <button class="btn btn-danger btn-sm" @onclick="() => OpenDeleteModal(grandChildAccount)" @onclick:stopPropagation="true">Delete</button>
-                                                                </td>
-                                                            </tr>
-
-                                                            <tr>
-                                                                <td colspan="12">
-                                                                    <div class="collapse" id="@grandChildAccountTargetId" aria-expanded="false" aria-controls="@grandChildAccountTargetId">
-
-                                                                        <table class="table table-striped">
-                                                                            <thead>
-                                                                                <tr>
-                                                                                    <th>Code</th>
-                                                                                    <th>Name</th>
-                                                                                    <th>Balance</th>
-                                                                                    <th>Debit</th>
-                                                                                    <th>Credit</th>
-                                                                                    <th>Actions</th>
-                                                                                </tr>
-                                                                            </thead>
-                                                                            <tbody>
-                                                                            @for (int greatGrandChildAccountIdx = 0; greatGrandChildAccountIdx < grandChildAccount.ChildAccounts!.Count; ++greatGrandChildAccountIdx)
-                                                                            {
-                                                                                var greatGrandChildAccount = grandChildAccount.ChildAccounts.ToList()[greatGrandChildAccountIdx];
-                                                                                var greatGrandChildAccountTargetId = $"asset-{accountIdx}-{childAccountIdx}-{grandChildAccountIdx}-{greatGrandChildAccountIdx}";
-
-                                                                                <tr data-bs-toggle="collapse" data-bs-target="#@greatGrandChildAccountTargetId" aria-expanded="false" aria-controls="@greatGrandChildAccountTargetId">
-                                                                                    <td>@greatGrandChildAccount.AccountCode</td>
-                                                                                    <td>@greatGrandChildAccount.AccountName</td>
-                                                                                    <td>@greatGrandChildAccount.TotalBalance</td>
-                                                                                    <td>@greatGrandChildAccount.TotalDebitBalance</td>
-                                                                                    <td>@greatGrandChildAccount.TotalCreditBalance</td>
-                                                                                    <td @onclick:stopPropagation="true">
-                                                                                        <button class="btn btn-success btn-sm" @onclick="() => OpenAddModal(greatGrandChildAccount)" @onclick:stopPropagation="true">Add Account</button>
-                                                                                        <button class="btn btn-primary btn-sm" @onclick="() => OpenEditModal(greatGrandChildAccount)" @onclick:stopPropagation="true">Edit</button>
-                                                                                    </td>
-                                                                                </tr>
-
-                                                                                @if (greatGrandChildAccount.ChildAccounts != null && greatGrandChildAccount.ChildAccounts.Count > 0)
-                                                                                {
-                                                                                    <tr>
-                                                                                        <td colspan="6">
-                                                                                            <div class="collapse" id="@greatGrandChildAccountTargetId" aria-expanded="false" aria-controls="@greatGrandChildAccountTargetId">
-                                                                                                @RenderNestedAccounts(greatGrandChildAccount.ChildAccounts, $"{accountIdx}-{childAccountIdx}-{grandChildAccountIdx}-{greatGrandChildAccountIdx}")
-                                                                                            </div>
-                                                                                        </td>
-                                                                                    </tr>
-                                                                                }
-                                                                            }
-                                                                            </tbody>
-                                                                        </table>
-
-                                                                    </div>
-                                                                </td>
-                                                            </tr>
-                                                        }
-                                                        </tbody>
-                                                    </table>
-
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    }
-                                    </tbody>
-                                </table>
-
+                                <button class="btn btn-danger btn-sm" @onclick="() => OpenDeleteModal(account)"
+                                        @onclick:stopPropagation="true">
+                                    Delete
+                                </button>
                             </div>
                         </td>
                     </tr>
+
+                    @if (hasChildren && IsExpanded(rowKey))
+                    {
+                        @RenderNestedAccounts(account.ChildAccounts!, $"{accountIdx}", 1)
+                    }
                 }
             </tbody>
         </table>
@@ -217,15 +125,13 @@ else
                 <div class="modal-body">
                     <div class="mb-3">
                         <label for="accountCode" class="form-label">Account Code</label>
-                        <input type="text" id="accountCode" class="form-control" 
-                               value="@selectedAccount?.AccountCode" 
-                               @oninput="e => selectedAccount!.AccountCode = e.Value?.ToString() ?? string.Empty" 
+                        <input type="text" id="accountCode" class="form-control" value="@selectedAccount?.AccountCode"
+                               @oninput="e => selectedAccount!.AccountCode = e.Value?.ToString() ?? string.Empty"
                                disabled="@isEditModalVisible" />
                     </div>
                     <div class="mb-3">
                         <label for="accountName" class="form-label">Account Name</label>
-                        <input type="text" id="accountName" class="form-control" 
-                               value="@selectedAccount?.AccountName" 
+                        <input type="text" id="accountName" class="form-control" value="@selectedAccount?.AccountName"
                                @oninput="e => selectedAccount!.AccountName = e.Value?.ToString() ?? string.Empty" />
                     </div>
                     @if (!string.IsNullOrEmpty(errorMessage))
@@ -253,8 +159,8 @@ else
                 </div>
                 <div class="modal-body">
                     <p>
-                        Are you sure you want to delete the account 
-                        <strong>@selectedAccount?.AccountName</strong> 
+                        Are you sure you want to delete the account
+                        <strong>@selectedAccount?.AccountName</strong>
                         with code <strong>@selectedAccount?.AccountCode</strong>?
                     </p>
                     @if (!string.IsNullOrEmpty(errorMessage))
@@ -281,106 +187,390 @@ else
     private string errorMessage = string.Empty;
     private bool isLoading = true;
     private bool getError = false;
+    private HashSet<string> expandedRows = new();
 
-    // Recursive method to render nested accounts at any depth
-    private RenderFragment RenderNestedAccounts(List<AccountViewModel> nestedAccounts, string parentPath)
+    private bool IsExpanded(string rowKey) => expandedRows.Contains(rowKey);
+
+    private void ToggleRow(string rowKey)
+    {
+        if (expandedRows.Contains(rowKey))
+        {
+            CollapseRowAndChildren(rowKey);
+        }
+        else
+        {
+            expandedRows.Add(rowKey);
+        }
+    }
+
+    private void CollapseRowAndChildren(string rowKey)
+    {
+        expandedRows.RemoveWhere(x => x == rowKey || x.StartsWith(rowKey + "-"));
+    }
+
+    private IEnumerable<AccountViewModel> SortAccounts(IEnumerable<AccountViewModel> items)
+    {
+        return items.OrderBy(account => account, AccountCodeSortComparer.Instance);
+    }
+
+    // Build a display hierarchy by re-parenting accounts under their major sections based on account codes.
+    private List<AccountViewModel> BuildDisplayHierarchy(IEnumerable<AccountViewModel> sourceAccounts)
+    {
+        var workingRoots = sourceAccounts
+            .Select(CloneAccountTree)
+            .ToList();
+
+        var majorSections = workingRoots
+            .Where(account => IsMajorSectionCode(account.AccountCode))
+            .ToDictionary(account => account.AccountCode, StringComparer.OrdinalIgnoreCase);
+
+        var rootsToRehome = new List<AccountViewModel>();
+        var sectionCandidates = new Dictionary<string, List<AccountViewModel>>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var account in workingRoots)
+        {
+            if (IsMajorSectionCode(account.AccountCode) || IsIncomeSummaryCode(account.AccountCode))
+            {
+                continue;
+            }
+
+            if (!TryGetMajorSectionCode(account.AccountCode, out var targetSectionCode))
+            {
+                continue;
+            }
+
+            if (!majorSections.ContainsKey(targetSectionCode))
+            {
+                continue;
+            }
+
+            if (!sectionCandidates.TryGetValue(targetSectionCode, out var candidates))
+            {
+                candidates = new List<AccountViewModel>();
+                sectionCandidates[targetSectionCode] = candidates;
+            }
+
+            candidates.Add(account);
+        }
+
+        foreach (var sectionCandidateGroup in sectionCandidates)
+        {
+            if (!majorSections.TryGetValue(sectionCandidateGroup.Key, out var section))
+            {
+                continue;
+            }
+
+            var orderedCandidates = SortAccounts(sectionCandidateGroup.Value).ToList();
+            foreach (var account in orderedCandidates)
+            {
+                var displayParent = FindBestDisplayParent(section, account.AccountCode) ?? section;
+                displayParent.ChildAccounts.Add(account);
+                rootsToRehome.Add(account);
+            }
+        }
+
+        if (rootsToRehome.Count > 0)
+        {
+            workingRoots.RemoveAll(account => rootsToRehome.Contains(account));
+        }
+
+        SortTree(workingRoots);
+        return workingRoots;
+    }
+
+    // Find the best parent node by checking candidate parent codes derived from the account code. 
+    private AccountViewModel? FindBestDisplayParent(AccountViewModel sectionRoot, string? accountCode)
+    {
+        foreach (var candidateParentCode in GetCandidateParentCodes(accountCode))
+        {
+            var candidate = FindDeepestNodeByCode(sectionRoot, candidateParentCode, 0, out _);
+            if (candidate != null)
+            {
+                return candidate;
+            }
+        }
+
+        return null;
+    }
+
+    // Generate candidate parent codes by rolling up the account code to higher levels
+    private IEnumerable<string> GetCandidateParentCodes(string? accountCode)
+    {
+        if (!int.TryParse(accountCode, out var numericCode))
+        {
+            return Enumerable.Empty<string>();
+        }
+
+        if (!TryGetMajorSectionCode(accountCode, out var sectionCode) || !int.TryParse(sectionCode, out var sectionNumericCode))
+        {
+            return Enumerable.Empty<string>();
+        }
+
+        var candidates = new List<int>();
+        var seen = new HashSet<int>();
+
+        for (var place = 10; place <= 10000; place *= 10)
+        {
+            var rolledUpCode = (numericCode / place) * place;
+
+            if (rolledUpCode == numericCode || rolledUpCode < sectionNumericCode)
+            {
+                continue;
+            }
+
+            if (seen.Add(rolledUpCode))
+            {
+                candidates.Add(rolledUpCode);
+            }
+        }
+
+        candidates.Sort((x, y) => y.CompareTo(x));
+        return candidates.Select(code => code.ToString());
+    }
+
+    // Recursively search for the deepest node matching the target account code
+    private AccountViewModel? FindDeepestNodeByCode(AccountViewModel node, string targetCode, int depth, out int bestDepth)
+    {
+        AccountViewModel? bestMatch = null;
+        bestDepth = -1;
+
+        if (string.Equals(node.AccountCode, targetCode, StringComparison.OrdinalIgnoreCase))
+        {
+            bestMatch = node;
+            bestDepth = depth;
+        }
+
+        if (node.ChildAccounts == null || node.ChildAccounts.Count == 0)
+        {
+            return bestMatch;
+        }
+
+        foreach (var child in node.ChildAccounts)
+        {
+            var childMatch = FindDeepestNodeByCode(child, targetCode, depth + 1, out var childDepth);
+            if (childMatch != null && childDepth > bestDepth)
+            {
+                bestMatch = childMatch;
+                bestDepth = childDepth;
+            }
+        }
+
+        return bestMatch;
+    }
+
+    // Recursively clone accounts to avoid modifying original data when building display hierarchy
+    private AccountViewModel CloneAccountTree(AccountViewModel account)
+    {
+        return new AccountViewModel
+        {
+            Id = account.Id,
+            ParentAccountId = account.ParentAccountId,
+            AccountCode = account.AccountCode,
+            AccountName = account.AccountName,
+            TotalBalance = account.TotalBalance,
+            TotalDebitBalance = account.TotalDebitBalance,
+            TotalCreditBalance = account.TotalCreditBalance,
+            ChildAccounts = account.ChildAccounts?
+                .Select(CloneAccountTree)
+                .ToList() ?? new List<AccountViewModel>()
+        };
+    }
+
+    // Recursively sort accounts and their children by account code
+    private void SortTree(List<AccountViewModel> nodes)
+    {
+        var orderedNodes = SortAccounts(nodes).ToList();
+        nodes.Clear();
+        nodes.AddRange(orderedNodes);
+
+        foreach (var node in nodes)
+        {
+            if (node.ChildAccounts != null && node.ChildAccounts.Count > 0)
+            {
+                SortTree(node.ChildAccounts);
+            }
+        }
+    }
+
+    // Determine if the account code is a major section code (10000, 20000, 30000, 40000, 50000).
+    private bool IsMajorSectionCode(string? accountCode)
+    {
+        return string.Equals(accountCode, "10000", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(accountCode, "20000", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(accountCode, "30000", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(accountCode, "40000", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(accountCode, "50000", StringComparison.OrdinalIgnoreCase);
+    }
+
+    // Determine if the account code is the special "Income Summary" code (99999).
+    private bool IsIncomeSummaryCode(string? accountCode)
+    {
+        return string.Equals(accountCode, "99999", StringComparison.OrdinalIgnoreCase);
+    }
+
+    // Determine the major section code based on the account code.
+    private bool TryGetMajorSectionCode(string? accountCode, out string sectionCode)
+    {
+        sectionCode = string.Empty;
+
+        if (!int.TryParse(accountCode, out var numericCode))
+        {
+            return false;
+        }
+
+        if (numericCode >= 10000 && numericCode <= 19999)
+        {
+            sectionCode = "10000";
+            return true;
+        }
+
+        if (numericCode >= 20000 && numericCode <= 29999)
+        {
+            sectionCode = "20000";
+            return true;
+        }
+
+        if (numericCode >= 30000 && numericCode <= 39999)
+        {
+            sectionCode = "30000";
+            return true;
+        }
+
+        if (numericCode >= 40000 && numericCode <= 49999)
+        {
+            sectionCode = "40000";
+            return true;
+        }
+
+        if (numericCode >= 50000 && numericCode <= 59999)
+        {
+            sectionCode = "50000";
+            return true;
+        }
+
+        return false;
+    }
+
+    private sealed class AccountCodeSortComparer : IComparer<AccountViewModel>
+    {
+        public static AccountCodeSortComparer Instance { get; } = new();
+
+        public int Compare(AccountViewModel? x, AccountViewModel? y)
+        {
+            var xCode = x?.AccountCode ?? string.Empty;
+            var yCode = y?.AccountCode ?? string.Empty;
+
+            var xIsNumeric = long.TryParse(xCode, out var xNumber);
+            var yIsNumeric = long.TryParse(yCode, out var yNumber);
+
+            if (xIsNumeric && yIsNumeric)
+            {
+                var numericCompare = xNumber.CompareTo(yNumber);
+                if (numericCompare != 0)
+                {
+                    return numericCompare;
+                }
+            }
+
+            return string.Compare(xCode, yCode, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    // Render nested accounts as rows in the same table body.
+    private RenderFragment RenderNestedAccounts(List<AccountViewModel> nestedAccounts, string parentPath, int level)
     {
         return builder =>
         {
             int sequence = 0;
-            builder.OpenElement(sequence++, "table");
-            builder.AddAttribute(sequence++, "class", "table table-striped");
-            
-            // Table header
-            builder.OpenElement(sequence++, "thead");
-            builder.OpenElement(sequence++, "tr");
-            builder.AddMarkupContent(sequence++, "<th>Code</th><th>Name</th><th>Balance</th><th>Debit</th><th>Credit</th><th>Actions</th>");
-            builder.CloseElement(); // tr
-            builder.CloseElement(); // thead
-            
-            // Table body
-            builder.OpenElement(sequence++, "tbody");
-            
-            for (int idx = 0; idx < nestedAccounts.Count; idx++)
+            var sortedNestedAccounts = SortAccounts(nestedAccounts).ToList();
+
+            for (int idx = 0; idx < sortedNestedAccounts.Count; idx++)
             {
-                var account = nestedAccounts[idx];
-                var targetId = $"asset-{parentPath}-{idx}";
-                
-                // Account row
+                var account = sortedNestedAccounts[idx];
+                var accountKey = account.Id != 0 ? account.Id.ToString() : account.AccountCode;
+                var accountPath = $"{parentPath}-{idx}";
+                var hasChildren = account.ChildAccounts != null && account.ChildAccounts.Count > 0;
+
                 builder.OpenElement(sequence++, "tr");
-                builder.AddAttribute(sequence++, "data-bs-toggle", "collapse");
-                builder.AddAttribute(sequence++, "data-bs-target", $"#{targetId}");
-                builder.AddAttribute(sequence++, "aria-expanded", "false");
-                builder.AddAttribute(sequence++, "aria-controls", targetId);
-                
+                builder.SetKey($"{accountPath}-{accountKey}");
+
+                builder.OpenElement(sequence++, "td");
+                builder.AddAttribute(sequence++, "class", "text-center align-middle");
+                if (hasChildren)
+                {
+                    builder.OpenElement(sequence++, "button");
+                    builder.AddAttribute(sequence++, "type", "button");
+                    builder.AddAttribute(sequence++, "class", "btn btn-outline-secondary coa-toggle-btn");
+                    builder.AddAttribute(sequence++, "onclick", EventCallback.Factory.Create(this, () => ToggleRow(accountPath)));
+                    builder.AddAttribute(sequence++, "onclick:stopPropagation", "true");
+                    builder.AddAttribute(sequence++, "title", "Toggle child accounts");
+
+                    builder.OpenElement(sequence++, "span");
+                    builder.AddAttribute(sequence++, "aria-hidden", "true");
+                    builder.AddContent(sequence++, IsExpanded(accountPath) ? "▾" : "▸");
+                    builder.CloseElement();
+
+                    builder.CloseElement();
+                }
+                builder.CloseElement();
+
                 builder.OpenElement(sequence++, "td");
                 builder.AddContent(sequence++, account.AccountCode);
                 builder.CloseElement();
-                
+
                 builder.OpenElement(sequence++, "td");
+                builder.AddAttribute(sequence++, "style", $"padding-left: {level * 1.5}rem;");
                 builder.AddContent(sequence++, account.AccountName);
                 builder.CloseElement();
-                
+
                 builder.OpenElement(sequence++, "td");
                 builder.AddContent(sequence++, account.TotalBalance);
                 builder.CloseElement();
-                
+
                 builder.OpenElement(sequence++, "td");
                 builder.AddContent(sequence++, account.TotalDebitBalance);
                 builder.CloseElement();
-                
+
                 builder.OpenElement(sequence++, "td");
                 builder.AddContent(sequence++, account.TotalCreditBalance);
                 builder.CloseElement();
-                
+
                 builder.OpenElement(sequence++, "td");
                 builder.AddAttribute(sequence++, "onclick:stopPropagation", "true");
+
+                builder.OpenElement(sequence++, "div");
+                builder.AddAttribute(sequence++, "class", "d-flex gap-2 justify-content-end flex-nowrap");
+
                 builder.OpenElement(sequence++, "button");
                 builder.AddAttribute(sequence++, "class", "btn btn-success btn-sm");
                 builder.AddAttribute(sequence++, "onclick", EventCallback.Factory.Create(this, () => OpenAddModal(account)));
                 builder.AddAttribute(sequence++, "onclick:stopPropagation", "true");
                 builder.AddContent(sequence++, "Add Account");
-                builder.CloseElement(); // button
+                builder.CloseElement();
+
                 builder.OpenElement(sequence++, "button");
                 builder.AddAttribute(sequence++, "class", "btn btn-primary btn-sm");
                 builder.AddAttribute(sequence++, "onclick", EventCallback.Factory.Create(this, () => OpenEditModal(account)));
                 builder.AddAttribute(sequence++, "onclick:stopPropagation", "true");
                 builder.AddContent(sequence++, "Edit");
-                builder.CloseElement(); // button
+                builder.CloseElement();
+
                 builder.OpenElement(sequence++, "button");
                 builder.AddAttribute(sequence++, "class", "btn btn-danger btn-sm");
                 builder.AddAttribute(sequence++, "onclick", EventCallback.Factory.Create(this, () => OpenDeleteModal(account)));
                 builder.AddAttribute(sequence++, "onclick:stopPropagation", "true");
                 builder.AddContent(sequence++, "Delete");
-                builder.CloseElement(); // button
+                builder.CloseElement();
+
+                builder.CloseElement(); // div
                 builder.CloseElement(); // td
-                
                 builder.CloseElement(); // tr
-                
-                // Collapsible row for children
-                if (account.ChildAccounts != null && account.ChildAccounts.Count > 0)
+
+                if (hasChildren && IsExpanded(accountPath))
                 {
-                    builder.OpenElement(sequence++, "tr");
-                    builder.OpenElement(sequence++, "td");
-                    builder.AddAttribute(sequence++, "colspan", "6");
-                    
-                    builder.OpenElement(sequence++, "div");
-                    builder.AddAttribute(sequence++, "class", "collapse");
-                    builder.AddAttribute(sequence++, "id", targetId);
-                    builder.AddAttribute(sequence++, "aria-expanded", "false");
-                    builder.AddAttribute(sequence++, "aria-controls", targetId);
-                    
-                    // Recursively render children
-                    builder.AddContent(sequence++, RenderNestedAccounts(account.ChildAccounts, $"{parentPath}-{idx}"));
-                    
-                    builder.CloseElement(); // div
-                    builder.CloseElement(); // td
-                    builder.CloseElement(); // tr
+                    builder.AddContent(sequence++, RenderNestedAccounts(account.ChildAccounts!, accountPath, level + 1));
                 }
             }
-            
-            builder.CloseElement(); // tbody
-            builder.CloseElement(); // table
         };
     }
 
@@ -418,13 +608,13 @@ else
         {
             getError = true;
         }
-        
+
         // Notify Blazor that the state has changed and UI needs to update
         StateHasChanged();
     }
 
 
-      // Open Add Modal
+    // Open Add Modal
     private void OpenAddModal(AccountViewModel? parent = null)
     {
         parentAccount = parent;
@@ -517,7 +707,7 @@ else
             else
             {
                 var errorContent = await response.Content.ReadAsStringAsync();
-                
+
                 // Try to parse JSON error response for better error messages
                 string detailedError = errorContent;
                 try
@@ -548,7 +738,7 @@ else
                 {
                     // If parsing fails, use the raw error content
                 }
-                
+
                 errorMessage = $"Failed to save account ({response.StatusCode}): {detailedError}";
                 StateHasChanged(); // Update UI to show error message
             }

@@ -91,7 +91,7 @@ else
                             <th>Quantity</th>
                             <th>Amount</th>
                             <th>Discount %</th>
-                            <th>Measurement</th>
+                                    <th>Unit</th>
                             @if (!isViewMode)
                             {
                                 <th>Actions</th>
@@ -138,7 +138,7 @@ else
                                         @if (measurements != null && measurements.Any())
                                         {
                                             <InputSelect class="form-control" @bind-Value="line.MeasurementId" disabled="@isViewMode">
-                                                <option value="0">-- Select Measurement --</option>
+                                                    <option value="0">-- Select Unit --</option>
                                                 @foreach (var measurement in measurements)
                                                 {
                                                     <option value="@measurement.Id">@measurement.Name</option>
