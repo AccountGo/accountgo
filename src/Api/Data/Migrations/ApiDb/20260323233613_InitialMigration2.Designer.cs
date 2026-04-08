@@ -12,8 +12,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Api.Data.Migrations.ApiDb
 {
     [DbContext(typeof(ApiDbContext))]
-    [Migration("20260316010845_AddPurchaseOrderNumberToPurchaseInvoiceHeader")]
-    partial class AddPurchaseOrderNumberToPurchaseInvoiceHeader
+    [Migration("20260323233613_InitialMigration2")]
+    partial class InitialMigration2
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -971,9 +971,6 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<int?>("PaymentTermId")
                         .HasColumnType("int");
 
-                    b.Property<string>("PurchaseOrderNumber")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<string>("ReferenceNo")
                         .HasColumnType("nvarchar(max)");
 
@@ -1223,23 +1220,47 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<int?>("AccountsPayableAccountId")
                         .HasColumnType("int");
 
+                    b.Property<string>("City")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Country")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal?>("DiscountPercentage")
+                        .HasColumnType("decimal(18, 2)");
+
                     b.Property<string>("No")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<int?>("PartyId")
                         .HasColumnType("int");
 
+                    b.Property<int?>("PaymentMethod")
+                        .HasColumnType("int");
+
                     b.Property<int?>("PaymentTermId")
                         .HasColumnType("int");
 
+                    b.Property<string>("PostalCode")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<int?>("PrimaryContactId")
                         .HasColumnType("int");
+
+                    b.Property<string>("Province")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<int?>("PurchaseAccountId")
                         .HasColumnType("int");
 
                     b.Property<int?>("PurchaseDiscountAccountId")
                         .HasColumnType("int");
+
+                    b.Property<string>("Street1")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Street2")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<int?>("TaxGroupId")
                         .HasColumnType("int");
