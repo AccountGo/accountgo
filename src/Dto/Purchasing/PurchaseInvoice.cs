@@ -17,7 +17,6 @@ namespace Dto.Purchasing
         public int? FromPurchaseOrderId { get; set; }
         public int? PaymentTermId { get; set; }
         public string? ReferenceNo { get; set; }
-        public string? PurchaseOrderNumber { get; set; }
         public bool? ReadyForPosting { get; set; }
         public System.Collections.Generic.IList<PurchaseInvoiceLine> PurchaseInvoiceLines { get; set; }
 

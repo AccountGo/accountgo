@@ -134,10 +134,18 @@ namespace Core.Domain
     public enum PaymentTypes
     {
         Prepaymnet = 1,
-        Cash = 2,
-        AfterNoOfDays = 3,
-        DayInTheFollowingMonth = 4,
-        ETransfer = 5
+        Cash,
+        AfterNoOfDays,
+        DayInTheFollowingMonth
+    }
+
+    public enum PaymentMethods
+    {
+        Check = 1,
+        ETransfer,
+        Cash,
+        CreditCard,
+        Other
     }
 
     public enum BankTypes

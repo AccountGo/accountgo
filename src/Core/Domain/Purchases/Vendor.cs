@@ -32,7 +32,15 @@ namespace Core.Domain.Purchases
         public int? PurchaseDiscountAccountId { get; set; }        
         public int? PrimaryContactId { get; set; }
         public int? PaymentTermId { get; set; }
+        public int? PaymentMethod { get; set; }
         public int? TaxGroupId { get; set; }
+        public decimal? DiscountPercentage { get; set; }
+        public string Street1 { get; set; }
+        public string Street2 { get; set; }
+        public string City { get; set; }
+        public string Province { get; set; }
+        public string PostalCode { get; set; }
+        public string Country { get; set; }
 
         public virtual Party Party { get; set; }
         public virtual Account AccountsPayableAccount { get; set; }

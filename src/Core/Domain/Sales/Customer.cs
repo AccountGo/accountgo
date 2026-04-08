@@ -31,22 +31,9 @@ namespace Core.Domain.Sales
         public int? AccountsReceivableAccountId { get; set; }
         public int? SalesAccountId { get; set; }
         public int? SalesDiscountAccountId { get; set; }
-        public decimal? DiscountPercentage { get; set; }
         public int? PromptPaymentDiscountAccountId { get; set; }
         public int? PaymentTermId { get; set; }
         public int? CustomerAdvancesAccountId { get; set; }
-        public string? AddressLine1 { get; set; }
-        public string? AddressLine2 { get; set; }
-        public string? City { get; set; }
-        public string? Province { get; set; }
-        public string? PostalCode { get; set; }
-        public string? Country { get; set; }
-        public string? ShippingAddressLine1 { get; set; }
-        public string? ShippingAddressLine2 { get; set; }
-        public string? ShippingCity { get; set; }
-        public string? ShippingProvince { get; set; }
-        public string? ShippingPostalCode { get; set; }
-        public string? ShippingCountry { get; set; }
 
         public virtual Party Party { get; set; }
         public virtual TaxGroup TaxGroup { get; set; }
