@@ -178,28 +178,34 @@ else
                         </div>
                     </div>
 
-            <div class="col-md-9 mt-3">
-                @if (!isViewMode)
-                {
-                    <button type="submit" class="btn btn-sm btn-primary btn-flat pull-left" disabled="@isSaving">
-                        @(isSaving ? "Saving..." : "Save")
-                    </button>
-                }
-                <a href="/purchasing/purchaseinvoices" class="btn btn-sm btn-secondary btn-flat pull-left">Close</a>
+                    @if (saveError)
+                    {
+                        <div class="alert alert-danger mt-3">
+                            Error saving purchase invoice.
+                            @if (!string.IsNullOrEmpty(errorMessage))
+                            {
+                                <br />
+                                <strong>Details:</strong> @errorMessage
+                            }
+                        </div>
+                    }
+                    @if (saveSuccess)
+                    {
+                        <div class="alert alert-success mt-3">Purchase invoice saved successfully!</div>
+                    }
+
+                    <div class="col-md-9 mt-3">
+                        @if (!isViewMode)
+                        {
+                            <button type="submit" class="btn btn-sm btn-primary btn-flat pull-left" disabled="@isSaving">
+                                @(isSaving ? "Saving..." : "Save")
+                            </button>
+                        }
+                        <a href="/purchasing/purchaseinvoices" class="btn btn-sm btn-secondary btn-flat pull-left">Close</a>
+                    </div>
                 </div>
             </div>
-        </div>
-    </EditForm>
-
-    @if (saveError)
-    {
-        <div class="alert alert-danger mt-3">
-            Error saving purchase invoice.
-            @if (!string.IsNullOrEmpty(errorMessage))
-            {
-                <br/><strong>Details:</strong> @errorMessage
-            }
-        </div>
+        </EditForm>
     }
     @if (saveSuccess)
     {
