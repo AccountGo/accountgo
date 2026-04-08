@@ -3,18 +3,19 @@
 @using System.Text.Json.Serialization
 
 <style>
-    .table-hover tbody tr.selected-row {
-        background-color: lightblue !important;
-        color: black;
+    .salesReceiptsTable {
+        width: 100%;
+        border-collapse: collapse;
+        background: transparent;
+        color: white; /* text visible on dark page */
     }
-
-    .table-hover tbody tr.selected-row td {
-        background-color: lightblue;
-        font-weight: bold;
-        color: black;
+    .salesReceiptsTable th, .salesReceiptsTable td {
+        padding: 8px;
+        text-align: left;
+        border: none; /* no borders */
     }
-
-    .table-hover tbody tr {
+    .salesReceiptRow:hover {
+        background-color: rgba(255,255,255,0.1); 
         cursor: pointer;
     }
 </style>
@@ -22,8 +23,6 @@
 <div class="container-fluid">
     <div class="row mb-3">
         <div class="col">
-        </div>
-        <div class="col text-end">
             <a href="/Sales/AddReceipt" class="btn">
                 <i class="fa fa-plus"></i>
                 New Receipt
@@ -45,25 +44,24 @@
 
     @if (loading)
     {
-        <p><em>Loading...</em></p>
+        <div class="loading-container">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
     }
     else if (errorMessage != null)
     {
         <div class="alert alert-danger" role="alert">
+            <i class="fa fa-exclamation-circle"></i>
             <strong>Error:</strong> @errorMessage
-        </div>
-    }
-    else if (salesReceipts.Count == 0)
-    {
-        <div class="alert alert-info" role="alert">
-            <strong>No sales receipts found.</strong>
         </div>
     }
     else
     {
-        <div class="table-responsive">
-            <table class="table table-striped table-hover">
-                <thead class="table-dark">
+        <div>
+            <table class="salesReceiptsTable">
+                <thead>
                     <tr>
                         <th>Receipt ID</th>
                         <th>Receipt No</th>
@@ -80,7 +78,7 @@
                         {
                             int index = i;
                             <tr 
-                                class="@(selectedRowIndex == index ? "selected-row" : "")" 
+                                class="salesReceiptRow @(selectedRowIndex == index ? "table-active" : "")" 
                                 @onclick="@(() => OnRowSelected(index))"
                                 @ondblclick="@(() => NavigateToSalesReceipt(index))">
                                 <td>@GetValue(salesReceipts[index], "id")</td>
