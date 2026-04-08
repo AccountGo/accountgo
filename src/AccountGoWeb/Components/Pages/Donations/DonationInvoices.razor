@@ -79,6 +79,76 @@
         </div>
     </div>
 }
+else if (donationInvoices != null && donationInvoices.Any())
+{
+    <div class="table-container">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th style="width: 50px;"></th>
+                        <th>Invoice No</th>
+                        <th>Donor Name</th>
+                        <th>Date</th>
+                        <th>Amount</th>
+                        <th>Purpose</th>
+                        <th>Reference No</th>
+                        <th>Tax Receipt No</th>
+                        <th>Tax Receipt</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var invoice in donationInvoices)
+                    {
+                        <tr class="@(selectedInvoice?.Id == invoice.Id ? "table-active" : "")"
+                            @onclick="() => SelectInvoice(invoice)"
+                            @ondblclick="() => NavigateToDonationInvoice(invoice)">
+                            <td class="text-center">
+                                <input type="radio" name="selectedInvoice" checked="@(selectedInvoice?.Id == invoice.Id)" />
+                            </td>
+                            <td><strong>@invoice.No</strong></td>
+                            <td>@invoice.DonorName</td>
+                            <td>@invoice.DonationDate.ToString("MMM dd, yyyy")</td>
+                            <td><strong class="text-success">$@invoice.Amount.ToString("F2")</strong></td>
+                            <td>@invoice.Purpose</td>
+                            <td>@invoice.ReferenceNo</td>
+                            <td>@invoice.TaxReceiptNo</td>
+                            <td class="text-center">
+                                @if (invoice.IsTaxReceiptIssued)
+                                {
+                                    <span class="badge badge-success">
+                                        <i class="fa fa-check"></i> Issued
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="badge badge-warning">
+                                        <i class="fa fa-clock"></i> Pending
+                                    </span>
+                                }
+                            </td>
+                            <td class="text-center">
+                                @if (invoice.Posted)
+                                {
+                                    <span class="badge badge-success">
+                                        <i class="fa fa-check"></i> Posted
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="badge badge-warning">
+                                        <i class="fa fa-clock"></i> Draft
+                                    </span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
 else
 {
     <div>
@@ -214,11 +284,20 @@ else
         selectedInvoice = invoice;
     }
 
+    private void NavigateToDonationInvoice(DonationInvoice invoice) 
+    {
+        SelectInvoice(invoice);
+        if (selectedInvoice != null)
+        {
+            NavigationManager.NavigateTo($"/donations/donationinvoice/{selectedInvoice.Id}", forceLoad: true);
+        }
+    }
+
     private void EditInvoice()
     {
         if (selectedInvoice != null)
         {
-            NavigationManager.NavigateTo($"/donations/donationinvoice?id={selectedInvoice.Id}", forceLoad: true);
+            NavigationManager.NavigateTo($"/donations/donationinvoice/{selectedInvoice.Id}");
         }
     }
 
@@ -239,8 +318,15 @@ else
     {
         if (selectedInvoice != null)
         {
-            NavigationManager.NavigateTo($"/donations/deletedonationinvoice?id={selectedInvoice.Id}");
-            showDeleteModal = false;
+            try
+            {
+                NavigationManager.NavigateTo($"/donations/deletedonationinvoice/{selectedInvoice.Id}");
+                showDeleteModal = false;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error deleting invoice: {ex.Message}");
+            }
         }
     }
 }

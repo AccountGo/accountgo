@@ -81,7 +81,7 @@
                                         <th>Quantity</th>
                                         <th>Amount</th>
                                         <th>Discount (%)</th>
-                                        <th>Measurement</th>
+                                    <th>Unit</th>
                                         <th>Action</th>
                                     </tr>
                                 </thead>
@@ -115,7 +115,7 @@
                                                 </td>
                                                 <td>
                                                     <select class="form-control form-control-sm bg-dark text-white" @bind="line.MeasurementId">
-                                                        <option value="0">-- Select Measurement --</option>
+                                                        <option value="0">-- Select Unit --</option>
                                                         @foreach (var measurement in measurements)
                                                         {
                                                             <option value="@measurement.id">@measurement.description</option>
@@ -319,7 +319,7 @@
         }
         catch (Exception ex)
         {
-            errorMessage = $"Error loading measurements: {ex.Message}";
+            errorMessage = $"Error loading units: {ex.Message}";
         }
     }
 

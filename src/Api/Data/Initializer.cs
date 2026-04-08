@@ -479,15 +479,30 @@ namespace Api.Data
             });
             paymentTerms.Add(new Core.Domain.PaymentTerm
             {
-                Description = "Due 15th Of the Following Month 	",
-                PaymentType = Core.Domain.PaymentTypes.DayInTheFollowingMonth,
-                DueAfterDays = 15,
+                Description = "Payment due within 20 days",
+                PaymentType = Core.Domain.PaymentTypes.AfterNoOfDays,
+                DueAfterDays = 20,
                 IsActive = true,
             });
             paymentTerms.Add(new Core.Domain.PaymentTerm
             {
-                Description = "Cash Only",
-                PaymentType = Core.Domain.PaymentTypes.Cash,
+                Description = "Payment due within 30 days",
+                PaymentType = Core.Domain.PaymentTypes.AfterNoOfDays,
+                DueAfterDays = 30,
+                IsActive = true,
+            });
+            paymentTerms.Add(new Core.Domain.PaymentTerm
+            {
+                Description = "Payment due within 45 days",
+                PaymentType = Core.Domain.PaymentTypes.AfterNoOfDays,
+                DueAfterDays = 45,
+                IsActive = true,
+            });
+            paymentTerms.Add(new Core.Domain.PaymentTerm
+            {
+                Description = "Payment due within 60 days",
+                PaymentType = Core.Domain.PaymentTypes.AfterNoOfDays,
+                DueAfterDays = 60,
                 IsActive = true,
             });
 

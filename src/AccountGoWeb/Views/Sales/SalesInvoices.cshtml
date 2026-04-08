@@ -108,8 +108,64 @@
             var rows = document.querySelectorAll('.salesInvoiceRow');
             rows.forEach(r => r.classList.remove('table-active'));
 
-            // Add to current row
-            row.classList.add('table-active');
+        var columnDefs = [
+            { headerName: "No", field: "no", width: 50 },
+            { headerName: "Customer Name", field: "customerName", width: 200 },
+            {
+                headerName: "Invoiced Date",
+                field: "invoiceDate",
+                width: 250,
+                valueFormatter: function (params) {
+                    if (!params.value) return '';
+                    var date = new Date(params.value);
+                    if (isNaN(date)) return params.value;
+                    var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+                    return date.getFullYear() + '-' + pad(date.getMonth() + 1) + '-' + pad(date.getDate());
+                }
+            },
+            {
+                headerName: "Amount",
+                field: "amount",
+                width: 120,
+                valueFormatter: function (params) {
+                    return formatCurrency(params.value);
+                }
+            },
+            { headerName: "Allocated", field: "totalAllocatedAmount", width: 100 },
+            {
+                headerName: "Remaining",
+                width: 100,
+                cellRenderer: function (val) {
+                    var remaining = (val.data.amount || 0) - (val.data.totalAllocatedAmount || 0);
+                    return formatCurrency(remaining);
+                }
+            },
+            { headerName: "Ref no", field: "referenceNo", width: 100 },
+            {
+                headerName: "Posted", width: 100, cellRenderer: function (val) {
+                    if (val.data.posted)
+                        return '<input type="checkbox" checked disabled />';
+                    return '<input type="checkbox" disabled />';
+                }
+            },
+        ];
+
+        var gridApi;
+
+        var gridOptions = {
+            columnDefs: columnDefs,
+            rowData: @Html.Raw(Model),
+            enableSorting: true,
+            // PROPERTIES - simple boolean / string / number properties
+            rowSelection: 'single',
+            onSelectionChanged: onSelectionChanged,
+            onRowDoubleClicked: navigateToSalesInvoice,
+            theme: 'legacy' // Use v32 style themes to match ag-grid.css
+        };
+
+        function onSelectionChanged() {
+            var selectedRows = gridApi.getSelectedRows();
+            var selectedRow = selectedRows[0];
 
             // Update buttons
             var linkEdit = document.getElementById('linkEditInvoice');
@@ -125,6 +181,22 @@
 
             document.getElementById('hdnselectedsalesInvoiceId').value = id;
         }
+
+        function navigateToSalesInvoice(event) {
+            var selectedRow = event.data;
+            onSelectionChanged();
+            if (selectedRow) {
+                location.href = 'Sales/SalesInvoice?id=' + selectedRow.id;
+            }
+        }
+
+        // wait for the document to be loaded, otherwise
+        // ag-Grid will not find the div in the document.
+        document.addEventListener("DOMContentLoaded", function () {
+            var eGridDiv = document.querySelector('#salesinvoices');
+            gridApi = agGrid.createGrid(eGridDiv, gridOptions);
+        });
+
 
         function deleteSalesInvoice() {
             var salesInvoiceId = document.getElementById('hdnselectedsalesInvoiceId').value;

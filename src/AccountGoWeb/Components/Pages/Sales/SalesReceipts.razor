@@ -77,7 +77,10 @@
                         @for (int i = 0; i < salesReceipts.Count; i++)
                         {
                             int index = i;
-                            <tr class="salesReceiptRow @(selectedRowIndex == index ? "table-active" : "")" @onclick="@(() => OnRowSelected(index))">
+                            <tr 
+                                class="salesReceiptRow @(selectedRowIndex == index ? "table-active" : "")" 
+                                @onclick="@(() => OnRowSelected(index))"
+                                @ondblclick="@(() => NavigateToSalesReceipt(index))">
                                 <td>@GetValue(salesReceipts[index], "id")</td>
                                 <td>@GetValue(salesReceipts[index], "receiptNo")</td>
                                 <td>@GetValue(salesReceipts[index], "customerName")</td>
@@ -299,6 +302,19 @@
         catch
         {
             selectedReceiptId = null;
+        }
+    }
+
+    private void NavigateToSalesReceipt(int index)
+    {
+        if (index >= 0 && index < salesReceipts.Count)
+        {
+            OnRowSelected(index);
+
+            if (selectedReceiptId != null)
+            {
+                Navigation.NavigateTo($"/Sales/SalesReceipt?id={selectedReceiptId}", forceLoad: true);
+            }
         }
     }
 
