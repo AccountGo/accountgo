@@ -78,7 +78,7 @@ else
     <tbody>
         @foreach (var q in quotations)
         {
-            <tr @onclick="() => OnSelectionChanged(q.id, q.statusId)" class="quotationRow">
+            <tr @onclick="() => OnSelectionChanged(q.id, q.statusId)" class="quotationRow @(q.id == selectedQuotationId ? "table-active" : "")">
                 <td>@q.no</td>
                 <td>@q.customerName</td>
                 <td>@q.quotationDate.ToShortDateString()</td>
@@ -99,6 +99,7 @@ else
     private bool isNewOrderLinkActive = false;
     private bool isLoading = true;
     private bool hasError = false;
+    private int selectedQuotationId = 0;
 protected override async Task OnInitializedAsync()
 {
     try
@@ -135,7 +136,7 @@ protected override async Task OnInitializedAsync()
     {
         viewQuotationLink = $"/quotations/quotation?id={id}";
         isViewLinkActive = true;
-
+        selectedQuotationId = id;
         if (status == 3)
         {
             isNewOrderLinkActive = false;

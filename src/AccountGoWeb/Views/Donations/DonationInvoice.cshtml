@@ -31,8 +31,8 @@
                     <div class="row">
                         <div class="col-sm-5" id="donor-name">Donor Name</div>
                         <div class="col-sm-7">
-                            <select class="form-control" asp-for="DonorId" asp-items="@ViewBag.Customers"
-                                id="optDonor"></select>
+                            <select class="form-control bg-dark text-white border-secondary" asp-for="DonorId"
+                                asp-items="@ViewBag.Customers" id="optDonor"></select>
                             <span asp-validation-for="DonorId" class="text-danger"></span>
                             @Html.HiddenFor(m => m.DonorId)
                         </div>
@@ -41,45 +41,48 @@
                     <div class="row">
                         <div class="col-sm-5">Donation Date</div>
                         <div class="col-sm-7">
-                            <input class="form-control pull-right" type="date" asp-for="DonationDate">
+                            <input class="form-control bg-dark text-white border-secondary" type="date"
+                                asp-for="DonationDate">
                         </div>
                     </div>
                     @* Purpose *@
                     <div class="row">
                         <div class="col-sm-5">Purpose</div>
                         <div class="col-sm-7">
-                            <input class="form-control" asp-for="Purpose" type="text"
-                                placeholder="Donation purpose..." />
+                            <input class="form-control bg-dark text-white border-secondary" asp-for="Purpose"
+                                type="text" placeholder="Donation purpose..." />
                         </div>
                     </div>
                     @* Reference No *@
                     <div class="row">
                         <div class="col-sm-5">Reference No</div>
                         <div class="col-sm-7">
-                            <input class="form-control" asp-for="ReferenceNo" type="text"
-                                placeholder="Reference number..." />
+                            <input class="form-control bg-dark text-white border-secondary" asp-for="ReferenceNo"
+                                type="text" placeholder="Reference number..." />
                         </div>
                     </div>
                     @* Tax Receipt *@
                     <div class="row">
                         <div class="col-sm-5">Tax Receipt No</div>
                         <div class="col-sm-7">
-                            <input class="form-control" asp-for="TaxReceiptNo" type="text"
-                                placeholder="Tax receipt number..." />
+                            <input class="form-control bg-dark text-white border-secondary" asp-for="TaxReceiptNo"
+                                type="text" placeholder="Tax receipt number..." />
                         </div>
                     </div>
                     @* Tax Receipt Issued *@
                     <div class="row">
                         <div class="col-sm-5">Tax Receipt Issued</div>
                         <div class="col-sm-7">
-                            <input class="form-check" asp-for="IsTaxReceiptIssued" type="checkbox" />
+                            <input class="form-check bg-dark text-white border-secondary" asp-for="IsTaxReceiptIssued"
+                                type="checkbox" />
                         </div>
                     </div>
                     @* Posted *@
                     <div class="row">
                         <div class="col-sm-5">Posted</div>
                         <div class="col-sm-7">
-                            <input class="form-check" asp-for="Posted" type="checkbox" />
+                            <input class="form-check bg-dark text-white border-secondary" asp-for="Posted"
+                                type="checkbox" />
                         </div>
                     </div>
                     @* Total Amount *@
@@ -91,7 +94,7 @@
             </div>
 
             @* Table *@
-            <table class="table">
+            <table class="table table-dark">
                 <thead>
                     <th>Item</th>
                     <th>Quantity</th>

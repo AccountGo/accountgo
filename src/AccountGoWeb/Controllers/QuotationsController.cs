@@ -128,7 +128,7 @@ namespace AccountGoWeb.Controllers
         [HttpGet]
         public IActionResult Quotation(int id)
         {
-            ViewBag.PageContentHeader = "Sales";
+            ViewBag.PageContentHeader = "Sales Quotation";
 
             if (id == 0)
             {

@@ -1,48 +1,101 @@
-﻿@model string
+@model string
+
+@using Newtonsoft.Json
+@{
+    var invoicesJson = Model ?? "[]";
+    var invoices = JsonConvert.DeserializeObject<List<dynamic>>(invoicesJson) ?? new List<dynamic>();
+}
 
 <style>
-    .ag-row-selected {
-        background-color: darkorange;
-        color: white;
-        border-color: aqua;
-        opacity: 0.9;
+    .salesInvoicesTable {
+        width: 100%;
+        border-collapse: collapse;
+        background: transparent;
+        color: white; /* text visible on dark page */
+    }
+    .salesInvoicesTable th, .salesInvoicesTable td {
+        padding: 8px;
+        text-align: left;
+        border: none; /* no borders */
+    }
+    .salesInvoiceRow:hover {
+        background-color: rgba(255,255,255,0.1); 
+        cursor: pointer;
     }
 </style>
 
 <div>
-    <a href="~/Sales/SalesInvoice" class="btn btn-outline-light">
+    <a href="~/Sales/SalesInvoice" class="btn">
         <i class="fa fa-plus"></i>
         New Invoice
     </a>
-    <a href="~/sales/salesinvoice" id="linkEditInvoice" class="btn inactiveLink">
+    <a href="javascript:void(0)" id="linkEditInvoice" class="btn inactiveLink">
         <i class="fa fa-edit"></i>
         Edit
     </a>
-    <a href="~/sales/deletesalesinvoice" id="linkDeleteInvoice" class="btn inactiveLink">
+    <a href="javascript:void(0)" id="linkDeleteInvoice" class="btn inactiveLink">
         <i class="fa fa-trash"></i>
         Delete
     </a>
 </div>
-<div>
-    <div id="salesinvoices" class="ag-fresh" style="height: 400px;"></div>
+
+<div class="mt-3">
+    <table class="salesInvoicesTable">
+        <thead>
+            <tr>
+                <th>No</th>
+                <th>Customer Name</th>
+                <th>Invoiced Date</th>
+                <th>Amount</th>
+                <th>Allocated</th>
+                <th>Remaining</th>
+                <th>Ref no</th>
+                <th>Posted</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var invoice in invoices)
+            {
+                var id = invoice.id;
+                var amount = (decimal?)invoice.amount ?? 0;
+                var allocated = (decimal?)invoice.totalAllocatedAmount ?? 0;
+                var remaining = amount - allocated;
+                var posted = (bool?)invoice.posted ?? false;
+                var invoiceDate = (DateTime?)invoice.invoiceDate;
+
+                <tr class="salesInvoiceRow" onclick="onRowSelected(this, '@id')">
+                    <td>@invoice.no</td>
+                    <td>@invoice.customerName</td>
+                    <td>@(invoiceDate.HasValue ? invoiceDate.Value.ToString("yyyy-MM-dd") : "")</td>
+                    <td>@amount.ToString("N2")</td>
+                    <td>@allocated.ToString("N2")</td>
+                    <td>@remaining.ToString("N2")</td>
+                    <td>@invoice.referenceNo</td>
+                    <td>
+                        <input type="checkbox" @(posted ? "checked" : "") disabled />
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
 </div>
 
-@* Delete Modal*@
+@* Delete Modal *@
 <div class="modal" id="deleteSalesInvoice" tabindex="-1">
     <div class="modal-dialog">
-        <div class="modal-content">
+        <div class="modal-content bg-dark text-white">
             <div class="modal-header">
                 <h5 class="modal-title">Delete</h5>
-                <button aria-label="Close" class="btn-close" data-bs-dismiss="modal" type="button"></button>
+                <button aria-label="Close" class="btn-close btn-close-white" data-bs-dismiss="modal" type="button"></button>
             </div>
             <div class="modal-body">
                 <p>Do you want to delete it?</p>
                 <input type="hidden" id="hdnselectedsalesInvoiceId" />
             </div>
             <div class="modal-footer">
-                <button class="btn btn-sm btn-primary btn-flat" onclick="deleteSalesInvoice()"
+                <button class="btn btn-sm btn-danger btn-flat" onclick="deleteSalesInvoice()"
                     type="button">Yes</button>
-                <button class="btn btn-sm btn-default btn-flat" data-bs-dismiss="modal" type="button">No</button>
+                <button class="btn btn-sm btn-secondary btn-flat" data-bs-dismiss="modal" type="button">No</button>
             </div>
         </div>
     </div>
@@ -50,95 +103,31 @@
 
 @section scripts {
     <script>
-        var formatCurrency = function (value) {
-            if (value === null || value === undefined || value === '') return '';
-            var number = Number(value);
-            if (isNaN(number)) return value;
-            return number.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
-        };
+        function onRowSelected(row, id) {
+            // Remove table-active from all rows
+            var rows = document.querySelectorAll('.salesInvoiceRow');
+            rows.forEach(r => r.classList.remove('table-active'));
 
-        var columnDefs = [
-            { headerName: "No", field: "no", width: 50 },
-            { headerName: "Customer Name", field: "customerName", width: 200 },
-            {
-                headerName: "Invoiced Date",
-                field: "invoiceDate",
-                width: 250,
-                valueFormatter: function (params) {
-                    if (!params.value) return '';
-                    var date = new Date(params.value);
-                    if (isNaN(date)) return params.value;
-                    var pad = function (n) { return (n < 10 ? '0' : '') + n; };
-                    return date.getFullYear() + '-' + pad(date.getMonth() + 1) + '-' + pad(date.getDate());
-                }
-            },
-            {
-                headerName: "Amount",
-                field: "amount",
-                width: 120,
-                valueFormatter: function (params) {
-                    return formatCurrency(params.value);
-                }
-            },
-            { headerName: "Allocated", field: "totalAllocatedAmount", width: 100 },
-            {
-                headerName: "Remaining",
-                width: 100,
-                cellRenderer: function (val) {
-                    var remaining = (val.data.amount || 0) - (val.data.totalAllocatedAmount || 0);
-                    return formatCurrency(remaining);
-                }
-            },
-            { headerName: "Ref no", field: "referenceNo", width: 100 },
-            {
-                headerName: "Posted", width: 100, cellRenderer: function (val) {
-                    if (val.data.posted)
-                        return '<input type="checkbox" checked disabled />';
-                    return '<input type="checkbox" disabled />';
-                }
-            },
-        ];
+            // Add to current row
+            row.classList.add('table-active');
 
-        var gridApi;
+            // Update buttons
+            var linkEdit = document.getElementById('linkEditInvoice');
+            linkEdit.setAttribute('href', '@Url.Content("~/Sales/SalesInvoice?id=")' + id);
+            linkEdit.classList.remove('inactiveLink');
+            linkEdit.classList.add('btn-outline-light');
 
-        var gridOptions = {
-            columnDefs: columnDefs,
-            rowData: @Html.Raw(Model),
-            enableSorting: true,
-            // PROPERTIES - simple boolean / string / number properties
-            rowSelection: 'single',
-            onSelectionChanged: onSelectionChanged,
-            theme: 'legacy' // Use v32 style themes to match ag-grid.css
-        };
+            var linkDelete = document.getElementById('linkDeleteInvoice');
+            linkDelete.classList.remove('inactiveLink');
+            linkDelete.classList.add('btn-outline-light');
+            linkDelete.setAttribute('data-bs-toggle', 'modal');
+            linkDelete.setAttribute('data-bs-target', '#deleteSalesInvoice');
 
-        function onSelectionChanged() {
-            var selectedRows = gridApi.getSelectedRows();
-            var selectedRow = selectedRows[0];
-
-            if (selectedRow) {
-                console.log(selectedRow);
-
-                document.getElementById('linkEditInvoice').setAttribute('href', 'Sales/SalesInvoice?id=' + selectedRow.id);
-                document.getElementById('linkEditInvoice').setAttribute('class', 'btn btn-outline-light');
-
-                document.getElementById('linkDeleteInvoice').setAttribute('class', 'btn btn-outline-light');
-                document.getElementById('linkDeleteInvoice').setAttribute('data-bs-toggle', 'modal');
-                document.getElementById('linkDeleteInvoice').setAttribute('data-bs-target', '#deleteSalesInvoice');
-                $("#hdnselectedsalesInvoiceId").val(selectedRow.id);
-            }
+            document.getElementById('hdnselectedsalesInvoiceId').value = id;
         }
 
-        // wait for the document to be loaded, otherwise
-        // ag-Grid will not find the div in the document.
-        document.addEventListener("DOMContentLoaded", function () {
-            var eGridDiv = document.querySelector('#salesinvoices');
-            gridApi = agGrid.createGrid(eGridDiv, gridOptions);
-        });
-
-
         function deleteSalesInvoice() {
-            var salesInvoiceId = $("#hdnselectedsalesInvoiceId").val();
-
+            var salesInvoiceId = document.getElementById('hdnselectedsalesInvoiceId').value;
             location.href = '@Url.Action("DeleteSalesInvoice", "Sales")?id=' + salesInvoiceId;
         }
     </script>

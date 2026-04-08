@@ -67,19 +67,19 @@
                         <div class="row mb-3">
                             <label class="col-sm-3 col-form-label">Receipt ID</label>
                             <div class="col-sm-9">
-                                <input type="text" class="form-control" value="@receiptId" readonly />
+                                <input type="text" class="form-control bg-dark text-white" value="@receiptId" readonly />
                             </div>
                         </div>
                         <div class="row mb-3">
                             <label class="col-sm-3 col-form-label">Receipt No</label>
                             <div class="col-sm-9">
-                                <input type="text" class="form-control" @bind="receiptNo" readonly />
+                                <input type="text" class="form-control bg-dark text-white" @bind="receiptNo" readonly />
                             </div>
                         </div>
                         <div class="row mb-3">
                             <label class="col-sm-3 col-form-label">Customer</label>
                             <div class="col-sm-9">
-                                <select class="form-control" @bind="customerId" disabled="@(!isEditing)">
+                                <select class="form-control bg-dark text-white" @bind="customerId" disabled="@(!isEditing)">
                                     <option value="">-- Select Customer --</option>
                                     @foreach (var customer in customers)
                                     {
@@ -92,13 +92,15 @@
                         <div class="row mb-3">
                             <label class="col-sm-3 col-form-label">Date</label>
                             <div class="col-sm-9">
-                                <input type="date" class="form-control" @bind="receiptDate" readonly="@(!isEditing)" />
+                                <input type="date" class="form-control bg-dark text-white" @bind="receiptDate"
+                                    readonly="@(!isEditing)" />
                             </div>
                         </div>
                         <div class="row mb-3">
                             <label class="col-sm-3 col-form-label">Debit</label>
                             <div class="col-sm-9">
-                                <select class="form-control" @bind="accountToDebitId" disabled="@(!isEditing)">
+                                <select class="form-control bg-dark text-white" @bind="accountToDebitId"
+                                    disabled="@(!isEditing)">
                                     <option value="">-- Select Account --</option>
                                     @foreach (var account in debitAccounts)
                                     {
@@ -112,7 +114,8 @@
                         <div class="row mb-3">
                             <label class="col-sm-3 col-form-label">Credit</label>
                             <div class="col-sm-9">
-                                <select class="form-control" @bind="accountToCreditId" disabled="@(!isEditing)">
+                                <select class="form-control bg-dark text-white" @bind="accountToCreditId"
+                                    disabled="@(!isEditing)">
                                     <option value="">-- Select Account --</option>
                                     @foreach (var account in creditAccounts)
                                     {
@@ -126,8 +129,8 @@
                         <div class="row mb-3">
                             <label class="col-sm-3 col-form-label">Amount</label>
                             <div class="col-sm-9">
-                                <input type="number" step="0.01" class="form-control" @bind="amount" placeholder="0.0"
-                                    readonly="@(!isEditing)" />
+                                <input type="number" step="0.01" class="form-control bg-dark text-white" @bind="amount"
+                                    placeholder="0.0" readonly="@(!isEditing)" />
                             </div>
                         </div>
                     </div>

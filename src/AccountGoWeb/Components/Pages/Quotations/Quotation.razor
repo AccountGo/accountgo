@@ -58,7 +58,7 @@
                         <div class="row mb-2">
                             <div class="col-sm-5">Customer Name</div>
                             <div class="col-sm-7">
-                                <select class="form-control" @bind="customerId" disabled="@(!isEditMode)">
+                                <select class="form-control bg-dark" @bind="customerId" disabled="@(!isEditMode)">
                                     <option value="0">-- Select Customer --</option>
                                     @foreach (var c in customers)
                                     {
@@ -72,7 +72,8 @@
                         <div class="row mb-2">
                             <div class="col-sm-5">Quotation Date</div>
                             <div class="col-sm-7">
-                                <input type="date" class="form-control" @bind="quotationDate" disabled="@(!isEditMode)" />
+                                <input type="date" class="form-control bg-dark" @bind="quotationDate"
+                                    disabled="@(!isEditMode)" />
                             </div>
                         </div>
 
@@ -82,11 +83,11 @@
                             <div class="col-sm-7">
                                 @if (isEditMode)
                                 {
-                                    <select class="form-control" @bind="paymentTermId">
-                                        <option value="0">-- Select Payment Term --</option>
+                                    <select class="form-control bg-dark text-white" @bind="paymentTermId">
+                                        <option value="0" class="text-white">-- Select Payment Term --</option>
                                         @foreach (var pt in paymentTerms)
                                         {
-                                            <option value="@pt.id">@pt.description</option>
+                                            <option value="@pt.id" class="text-white">@pt.description</option>
                                         }
                                     </select>
                                 }
@@ -105,7 +106,7 @@
                     </div>
 
                     <!-- Line Items Table -->
-                    <table class="table">
+                    <table class="table table-dark">
                         <thead>
                             <tr>
                                 <th>Item</th>
@@ -123,28 +124,28 @@
                                     var line = lineItems[i];
                                     <tr>
                                         <td>
-                                            <select class="form-control" @bind="line.ItemId" disabled="@(!isEditMode)">
+                                            <select class="form-control bg-dark text-white" @bind="line.ItemId" disabled="@(!isEditMode)">
                                                 <option value="0">-- Select Item --</option>
                                                 @foreach (var item in items)
                                                 {
-                                                    <option value="@item.id">@item.description</option>
+                                                    <option value="@item.id" class="text-white">@item.description</option>
                                                 }
                                             </select>
                                         </td>
                                         <td>
-                                            <input type="number" class="form-control" @bind="line.Quantity" step="0.01"
+                                            <input type="number" class="form-control bg-dark text-white" @bind="line.Quantity" step="0.01"
                                                 disabled="@(!isEditMode)" />
                                         </td>
                                         <td>
-                                            <input type="number" class="form-control" @bind="line.Amount" step="0.01"
+                                            <input type="number" class="form-control bg-dark text-white" @bind="line.Amount" step="0.01"
                                                 disabled="@(!isEditMode)" />
                                         </td>
                                         <td>
-                                            <input type="number" class="form-control" @bind="line.Discount" step="0.01"
+                                            <input type="number" class="form-control bg-dark text-white" @bind="line.Discount" step="0.01"
                                                 disabled="@(!isEditMode)" />
                                         </td>
                                         <td>
-                                            <select class="form-control" @bind="line.MeasurementId"
+                                            <select class="form-control bg-dark text-white" @bind="line.MeasurementId"
                                                 disabled="@(!isEditMode)">
                                                 <option value="0">-- Select Measurement --</option>
                                                 @foreach (var m in measurements)
