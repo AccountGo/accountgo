@@ -1,4 +1,4 @@
-﻿using AutoMapper;
+using AutoMapper;
 
 namespace Api
 {
@@ -47,7 +47,7 @@ namespace Api
                 .ForMember(dest => dest.Discount, opt => opt.MapFrom(src => src.Discount.GetValueOrDefault()))
                 .ForMember(dest => dest.Quantity, opt => opt.MapFrom(src => src.Quantity.GetValueOrDefault()))
                 .ForMember(dest => dest.ItemId, opt => opt.MapFrom(src => src.ItemId.GetValueOrDefault()))
-                .ForMember(dest => dest.MeasurementId, opt => opt.MapFrom(src => src.MeasurementId.GetValueOrDefault()));
+                .ForMember(dest => dest.TaxGroupId, opt => opt.MapFrom(src => src.TaxGroupId.GetValueOrDefault()));
 
             CreateMap<Dto.Sales.SalesInvoice, Core.Domain.Sales.SalesInvoiceHeader>()
                 .ForMember(dest => dest.Date, opt => opt.MapFrom(src => src.InvoiceDate))
@@ -58,7 +58,7 @@ namespace Api
                 .ForMember(dest => dest.Discount, opt => opt.MapFrom(src => src.Discount.GetValueOrDefault()))
                 .ForMember(dest => dest.Quantity, opt => opt.MapFrom(src => src.Quantity.GetValueOrDefault()))
                 .ForMember(dest => dest.ItemId, opt => opt.MapFrom(src => src.ItemId.GetValueOrDefault()))
-                .ForMember(dest => dest.MeasurementId, opt => opt.MapFrom(src => src.MeasurementId.GetValueOrDefault()));
+                .ForMember(dest => dest.TaxGroupId, opt => opt.MapFrom(src => src.TaxGroupId.GetValueOrDefault()));
 
             #endregion
         }

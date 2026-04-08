@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 
 namespace Dto.Purchasing
 {
@@ -44,7 +44,7 @@ namespace Dto.Purchasing
     public class PurchaseOrderLine : BaseDto
     {
         public int? ItemId { get; set; }
-        public int? MeasurementId { get; set; }
+        public int? TaxGroupId { get; set; }
         public decimal? Quantity { get; set; }
         public decimal? Amount { get; set; }
         public decimal? Discount { get; set; }

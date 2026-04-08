@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using Services.Administration;
 using Services.Financial;
 using Services.Purchasing;
@@ -22,7 +22,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("PurchaseOrders")] // api/Purchasing/PurchaseOrders
+        [Route("PurchaseOrders")]
         public IActionResult PurchaseOrders()
         {
             var purchaseOrders = _purchasingService.GetPurchaseOrders();
@@ -46,7 +46,7 @@ namespace Api.Controllers
                     var lineDto = new Dto.Purchasing.PurchaseOrderLine()
                     {
                         ItemId = line.ItemId,
-                        MeasurementId = line.MeasurementId,
+                        TaxGroupId = line.TaxGroupId,
                         Quantity = line.Quantity,
                         Amount = line.Amount,
                         Discount = line.Discount,
@@ -85,7 +85,7 @@ namespace Api.Controllers
                 {
                     Id = item.Id,
                     ItemId = item.ItemId,
-                    MeasurementId = item.MeasurementId,
+                    TaxGroupId = item.TaxGroupId,
                     Quantity = item.Quantity,
                     Amount = item.Amount,
                     Discount = item.Discount,
@@ -143,7 +143,7 @@ namespace Api.Controllers
                             existingLine.Discount = line.Discount.GetValueOrDefault();
                             existingLine.Quantity = line.Quantity.GetValueOrDefault();
                             existingLine.ItemId = line.ItemId.GetValueOrDefault();
-                            existingLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
+                            existingLine.TaxGroupId = line.TaxGroupId;
                         }
                         else
                         {
@@ -152,7 +152,7 @@ namespace Api.Controllers
                             purchaseOrderLine.Discount = line.Discount.GetValueOrDefault();
                             purchaseOrderLine.Quantity = line.Quantity.GetValueOrDefault();
                             purchaseOrderLine.ItemId = line.ItemId.GetValueOrDefault();
-                            purchaseOrderLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
+                            purchaseOrderLine.TaxGroupId = line.TaxGroupId;
 
                             purchaseOrder.PurchaseOrderLines.Add(purchaseOrderLine);
                         }
@@ -164,7 +164,7 @@ namespace Api.Controllers
                         purchaseOrderLine.Discount = line.Discount.GetValueOrDefault();
                         purchaseOrderLine.Quantity = line.Quantity.GetValueOrDefault();
                         purchaseOrderLine.ItemId = line.ItemId.GetValueOrDefault();
-                        purchaseOrderLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
+                        purchaseOrderLine.TaxGroupId = line.TaxGroupId;
 
                         purchaseOrder.PurchaseOrderLines.Add(purchaseOrderLine);
                     }
@@ -204,7 +204,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("PurchaseInvoices")] //  api/Purchasing/PurchaseInvoices
+        [Route("PurchaseInvoices")]
         public IActionResult PurchaseInvoices()
         {
             var purchaseInvoices = _purchasingService.GetPurchaseInvoices();
@@ -224,7 +224,9 @@ namespace Api.Controllers
                     Posted = purchaseInvoice.GeneralLedgerHeader != null,
                     VendorInvoiceNo = purchaseInvoice.VendorInvoiceNo,
                     ReferenceNo = purchaseInvoice.ReferenceNo,
-                    PurchaseOrderNumber = purchaseInvoice.PurchaseOrderNumber
+                    PurchaseOrderNumber = purchaseInvoice.PurchaseOrderNumber,
+                    PurchaseOrderHeaderId = purchaseInvoice.PurchaseInvoiceLines
+                        .FirstOrDefault()?.PurchaseOrderLine?.PurchaseOrderHeaderId
                 };
 
                 foreach (var line in purchaseInvoice.PurchaseInvoiceLines)
@@ -232,7 +234,7 @@ namespace Api.Controllers
                     var lineDto = new Dto.Purchasing.PurchaseInvoiceLine()
                     {
                         ItemId = line.ItemId,
-                        MeasurementId = line.MeasurementId,
+                        TaxGroupId = line.TaxGroupId,
                         Quantity = line.Quantity,
                         Amount = line.Amount,
                         Discount = line.Discount
@@ -251,6 +253,20 @@ namespace Api.Controllers
         public IActionResult PurchaseInvoice(int id)
         {
             var purchaseInvoice = _purchasingService.GetPurchaseInvoiceById(id);
+
+            // MANUALLY FETCH THE PURCHASE ORDER HEADER ID
+            int? poHeaderId = null;
+            var firstLine = purchaseInvoice.PurchaseInvoiceLines.FirstOrDefault();
+            
+            // Check if the invoice line has a link to a purchase order line
+            if (firstLine != null && firstLine.PurchaseOrderLineId.HasValue)
+            {
+                // Look up the PO Line using the service, which includes the header
+                var poLine = _purchasingService.GetPurchaseOrderLineById(firstLine.PurchaseOrderLineId.Value);
+                // Note: Using 'PurhcaseOrderHeader' spelling as defined in your domain model
+                poHeaderId = poLine?.PurhcaseOrderHeader?.Id; 
+            }
+
             var purchaseInvoiceDto = new Dto.Purchasing.PurchaseInvoice()
             {
                 Id = purchaseInvoice.Id,
@@ -261,7 +277,8 @@ namespace Api.Controllers
                 IsPaid = purchaseInvoice.IsPaid(),
                 Posted = purchaseInvoice.GeneralLedgerHeader != null,
                 ReferenceNo = purchaseInvoice.ReferenceNo,
-                PurchaseOrderNumber = purchaseInvoice.PurchaseOrderNumber
+                PurchaseOrderNumber = purchaseInvoice.PurchaseOrderNumber,
+                PurchaseOrderHeaderId = poHeaderId
             };
 
             foreach (var item in purchaseInvoice.PurchaseInvoiceLines)
@@ -270,7 +287,7 @@ namespace Api.Controllers
                 {
                     Id = item.Id,
                     ItemId = item.ItemId,
-                    MeasurementId = item.MeasurementId,
+                    TaxGroupId = item.TaxGroupId,
                     Quantity = item.Quantity,
                     Amount = item.Amount,
                     Discount = item.Discount
@@ -278,7 +295,7 @@ namespace Api.Controllers
 
                 purchaseInvoiceDto.PurchaseInvoiceLines.Add(line);
             }
-            // is this journal entry ready for posting?
+
             if (!purchaseInvoiceDto.Posted && purchaseInvoiceDto.PurchaseInvoiceLines.Count >= 1)
             {
                 purchaseInvoiceDto.ReadyForPosting = true;
@@ -337,30 +354,28 @@ namespace Api.Controllers
                 Core.Domain.Purchases.PurchaseInvoiceHeader? purchaseInvoice = null;
                 Core.Domain.Purchases.PurchaseOrderHeader? purchaseOrder = null;
 
-                // Creating a new invoice
                 if (isNew)
                 {
-                    // if fromsalesorderid has NO value, then create automatically a new sales order.
                     if (!purchaseInvoiceDto.FromPurchaseOrderId.HasValue)
                     {
                         purchaseOrder = new Core.Domain.Purchases.PurchaseOrderHeader();
                         purchaseOrder.Date = purchaseInvoiceDto.InvoiceDate;
                         purchaseOrder.VendorId = purchaseInvoiceDto.VendorId;
-                        purchaseOrder.ReferenceNo = purchaseInvoiceDto.ReferenceNo;
+                        
+                        purchaseOrder.ReferenceNo = purchaseInvoiceDto.PurchaseOrderNumber; 
+                        
                         purchaseOrder.PaymentTermId = purchaseInvoiceDto.PaymentTermId;
                         purchaseOrder.Status = Core.Domain.PurchaseOrderStatus.FullReceived;
                     }
                     else
                     {
-                        // else,  your invoice is created from existing (open) sales order.
                         purchaseOrder = _purchasingService.GetPurchaseOrderById(purchaseInvoiceDto.FromPurchaseOrderId.GetValueOrDefault());
                     }
 
-                    // populate invoice header
                     purchaseInvoice = new Core.Domain.Purchases.PurchaseInvoiceHeader();
                     purchaseInvoice.VendorId = purchaseInvoiceDto.VendorId;
                     purchaseInvoice.Date = purchaseInvoiceDto.InvoiceDate;
-                    purchaseInvoice.VendorInvoiceNo = purchaseInvoice.VendorId.GetValueOrDefault().ToString(); // TO BE REPLACE BY INVOICE NO FROM VENDOR
+                    purchaseInvoice.VendorInvoiceNo = purchaseInvoice.VendorId.GetValueOrDefault().ToString();
                     purchaseInvoice.ReferenceNo = purchaseInvoiceDto.ReferenceNo;
                     purchaseInvoice.PaymentTermId = purchaseInvoiceDto.PaymentTermId;
                     purchaseInvoice.PurchaseOrderNumber = purchaseInvoiceDto.PurchaseOrderNumber;
@@ -373,38 +388,35 @@ namespace Api.Controllers
                         purchaseInvoiceLine.Discount = line.Discount.GetValueOrDefault();
                         purchaseInvoiceLine.Quantity = line.Quantity.GetValueOrDefault();
                         purchaseInvoiceLine.ItemId = line.ItemId.GetValueOrDefault();
-                        purchaseInvoiceLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
+                        purchaseInvoiceLine.TaxGroupId = line.TaxGroupId;
 
-                        // line.Id here is referring to PurchaseOrderLineId. It is pre-populated when you create a new purchase invoice from purchase order.
                         if (line.Id != 0)
                         {
                             purchaseInvoiceLine.PurchaseOrderLineId = line.Id;
                         }
                         else
                         {
-                            // if you reach here, this line item is newly added to invoice which is not originally in sales order. create correspondin orderline and add to sales order.
                             var purchaseOrderLine = new Core.Domain.Purchases.PurchaseOrderLine();
                             purchaseOrderLine.Amount = line.Amount.GetValueOrDefault();
                             purchaseOrderLine.Discount = line.Discount.GetValueOrDefault();
                             purchaseOrderLine.Quantity = line.Quantity.GetValueOrDefault();
                             purchaseOrderLine.ItemId = line.ItemId.GetValueOrDefault();
-                            purchaseOrderLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
+                            purchaseOrderLine.TaxGroupId = line.TaxGroupId;
                             purchaseOrder.PurchaseOrderLines.Add(purchaseOrderLine);
 
-                            purchaseInvoiceLine.PurchaseOrderLine = purchaseOrderLine; // map invoice line to newly added orderline
+                            purchaseInvoiceLine.PurchaseOrderLine = purchaseOrderLine;
                         }
                     }
                 }
                 else
                 {
-                    // if you reach here, you are updating existing invoice.
                     purchaseInvoice = _purchasingService.GetPurchaseInvoiceById(purchaseInvoiceDto.Id);
 
                     if (purchaseInvoice.GeneralLedgerHeaderId.HasValue)
                         throw new Exception("Invoice is already posted. Update is not allowed.");
 
                     purchaseInvoice.Date = purchaseInvoiceDto.InvoiceDate;
-                    purchaseInvoice.VendorInvoiceNo = purchaseInvoice.VendorId.GetValueOrDefault().ToString(); // TO BE REPLACE BY INVOICE NO FROM VENDOR
+                    purchaseInvoice.VendorInvoiceNo = purchaseInvoice.VendorId.GetValueOrDefault().ToString();
                     purchaseInvoice.ReferenceNo = purchaseInvoiceDto.ReferenceNo;
                     purchaseInvoice.PaymentTermId = purchaseInvoiceDto.PaymentTermId;
                     purchaseInvoice.VendorId = purchaseInvoiceDto.VendorId;
@@ -419,17 +431,16 @@ namespace Api.Controllers
                             existingLine.Discount = line.Discount.GetValueOrDefault();
                             existingLine.Quantity = line.Quantity.GetValueOrDefault();
                             existingLine.ItemId = line.ItemId.GetValueOrDefault();
-                            existingLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
+                            existingLine.TaxGroupId = line.TaxGroupId;
                         }
                         else
                         {
-                            //if you reach here, this line item is newly added to invoice. also, it has no SalesOrderLineId.
                             var purchaseInvoiceLine = new Core.Domain.Purchases.PurchaseInvoiceLine();
                             purchaseInvoiceLine.Amount = line.Amount.GetValueOrDefault();
                             purchaseInvoiceLine.Discount = line.Discount.GetValueOrDefault();
                             purchaseInvoiceLine.Quantity = line.Quantity.GetValueOrDefault();
                             purchaseInvoiceLine.ItemId = line.ItemId.GetValueOrDefault();
-                            purchaseInvoiceLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
+                            purchaseInvoiceLine.TaxGroupId = line.TaxGroupId;
                             purchaseInvoice.PurchaseInvoiceLines.Add(purchaseInvoiceLine);
 
                             var purchaseOrderLine = new Core.Domain.Purchases.PurchaseOrderLine();
@@ -437,22 +448,15 @@ namespace Api.Controllers
                             purchaseOrderLine.Discount = line.Discount.GetValueOrDefault();
                             purchaseOrderLine.Quantity = line.Quantity.GetValueOrDefault();
                             purchaseOrderLine.ItemId = line.ItemId.GetValueOrDefault();
-                            purchaseOrderLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
+                            purchaseOrderLine.TaxGroupId = line.TaxGroupId;
 
-                            // but on what order should the new orderline be added?
-                            // note: each invoice is map to one and only one sales order. it can't be done that invoice lines came from multiple sales orders.
-                            // with this rule, we are sure that all invoice lines are contained in the same sales order.
-                            // therefore, we could just pick the first line, get the salesorderlineid, then get the salesorderheader.
-
-                            // you will retrieve purchaseorder one time.
                             if (purchaseOrder == null)
                             {
-                                // use the last value of existingLine
                                 purchaseOrder = _purchasingService.GetPurchaseOrderById(existingLine!.PurchaseOrderLine.PurchaseOrderHeaderId);
                                 purchaseOrder.PurchaseOrderLines.Add(purchaseOrderLine);
                             }
 
-                            purchaseInvoiceLine.PurchaseOrderLine = purchaseOrderLine; // map invoice line to newly added orderline
+                            purchaseInvoiceLine.PurchaseOrderLine = purchaseOrderLine;
                         }
                     }
                 }
@@ -525,7 +529,7 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("Vendors")] // api/Purchasing/Vendors
+        [Route("Vendors")]
         public IActionResult Vendors()
         {
             IList<Dto.Purchasing.Vendor> vendorsDto = new List<Dto.Purchasing.Vendor>();
@@ -582,7 +586,6 @@ namespace Api.Controllers
                     PurchaseDiscountAccountId = vendor.PurchaseDiscountAccountId.GetValueOrDefault(),
                     TaxGroupId = vendor.TaxGroupId.GetValueOrDefault(),
                     PaymentTermId = vendor.PaymentTermId.GetValueOrDefault(),
-
                 };
 
                 if (vendor.PrimaryContact != null)
