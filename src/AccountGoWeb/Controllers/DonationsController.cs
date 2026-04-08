@@ -130,6 +130,12 @@ namespace AccountGoWeb.Controllers
             else
             {
                 donationInvoiceModel = GetAsync<DonationInvoice>("Donations/DonationInvoice?id=" + id).Result;
+
+                if (donationInvoiceModel == null)
+                {   
+                    return RedirectToAction("DonationInvoices");
+                }
+
                 ViewBag.Id = donationInvoiceModel.Id;
                 ViewBag.DonorName = donationInvoiceModel.DonorName;
                 ViewBag.DonationDate = donationInvoiceModel.DonationDate;
