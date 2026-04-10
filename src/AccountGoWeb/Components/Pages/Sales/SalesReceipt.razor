@@ -18,7 +18,7 @@
 <div class="container-fluid">
     <div class="row mb-3">
         <div class="col">
-            <h2>Sales Receipt</h2>
+            <h2>Customer Payment</h2>
         </div>
         <div class="col text-end">
             @if (!isEditing)
@@ -37,7 +37,7 @@
             }
             <a href="/Sales/SalesReceipts" class="btn btn-outline-secondary">
                 <i class="fa fa-arrow-left"></i>
-                Back to Receipts
+                Back to Customer Payments
             </a>
         </div>
     </div>
@@ -65,13 +65,13 @@
                 <div class="card">
                     <div class="card-body">
                         <div class="row mb-3">
-                            <label class="col-sm-3 col-form-label">Receipt ID</label>
+                            <label class="col-sm-3 col-form-label">Payment ID</label>
                             <div class="col-sm-9">
                                 <input type="text" class="form-control bg-dark text-white" value="@receiptId" readonly />
                             </div>
                         </div>
                         <div class="row mb-3">
-                            <label class="col-sm-3 col-form-label">Receipt No</label>
+                            <label class="col-sm-3 col-form-label">Payment No</label>
                             <div class="col-sm-9">
                                 <input type="text" class="form-control bg-dark text-white" @bind="receiptNo" readonly />
                             </div>
@@ -290,7 +290,7 @@
             // Load receipt data if editing
             if (Id > 0)
             {
-                await LoadReceipt();
+                await LoadPayment();
             }
 
             loading = false;
@@ -302,7 +302,7 @@
         }
     }
 
-    private async Task LoadReceipt()
+    private async Task LoadPayment()
     {
         try
         {
@@ -443,7 +443,7 @@
             {
                 isEditing = false;
                 // Reload the receipt data
-                await LoadReceipt();
+                await LoadPayment();
             }
             else
             {

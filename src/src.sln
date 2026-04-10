@@ -1,3 +1,4 @@
+﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.5.2.0
@@ -24,13 +25,9 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "src.ServiceDefaults", "src.
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "BlazorGDB", "BlazorGDB", "{25FF5F5E-EE09-4415-1C75-62ADC5BA4270}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Modules", "Modules", "{CA253913-39DE-BFD0-C9A3-4B7EC6FBDF17}"
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BlazorGDB", "BlazorGDB\BlazorGDB\BlazorGDB.csproj", "{3033AAE3-E551-B013-5051-D7D8D033C0F5}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BlazorGDB.Client", "BlazorGDB\BlazorGDB.Client\BlazorGDB.Client.csproj", "{8D3CD3EB-FB13-88D5-BFFB-76C0EE40624B}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SampleModule", "Modules\SampleModule\SampleModule.csproj", "{01D66C68-2E45-4F4C-1D54-27685DC878D2}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -86,10 +83,6 @@ Global
 		{8D3CD3EB-FB13-88D5-BFFB-76C0EE40624B}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{8D3CD3EB-FB13-88D5-BFFB-76C0EE40624B}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{8D3CD3EB-FB13-88D5-BFFB-76C0EE40624B}.Release|Any CPU.Build.0 = Release|Any CPU
-		{01D66C68-2E45-4F4C-1D54-27685DC878D2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{01D66C68-2E45-4F4C-1D54-27685DC878D2}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{01D66C68-2E45-4F4C-1D54-27685DC878D2}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{01D66C68-2E45-4F4C-1D54-27685DC878D2}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -97,7 +90,6 @@ Global
 	GlobalSection(NestedProjects) = preSolution
 		{3033AAE3-E551-B013-5051-D7D8D033C0F5} = {25FF5F5E-EE09-4415-1C75-62ADC5BA4270}
 		{8D3CD3EB-FB13-88D5-BFFB-76C0EE40624B} = {25FF5F5E-EE09-4415-1C75-62ADC5BA4270}
-		{01D66C68-2E45-4F4C-1D54-27685DC878D2} = {CA253913-39DE-BFD0-C9A3-4B7EC6FBDF17}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {8C54C75D-107E-4C75-9F3C-3F04747713FE}

@@ -3,19 +3,19 @@
 @using System.Text.Json.Serialization
 
 <style>
-    .salesReceiptsTable {
+    .customerPaymentsTable {
         width: 100%;
         border-collapse: collapse;
         background: transparent;
         color: white; /* text visible on dark page */
     }
-    .salesReceiptsTable th, .salesReceiptsTable td {
+    .customerPaymentsTable th, .customerPaymentsTable td {
         padding: 8px;
         text-align: left;
         border: none; /* no borders */
     }
-    .salesReceiptRow:hover {
-        background-color: rgba(255,255,255,0.1); 
+    .customerPaymentRow:hover {
+        background-color: rgba(255,255,255,0.1);
         cursor: pointer;
     }
 </style>
@@ -25,7 +25,7 @@
         <div class="col">
             <a href="/Sales/AddReceipt" class="btn">
                 <i class="fa fa-plus"></i>
-                New Receipt
+                New Customer Payment
             </a>
             <a href="@GetViewReceiptLink()" id="linkViewReceipt"
                 class="btn @(selectedReceiptId == null ? "inactiveLink" : "")">
@@ -60,13 +60,13 @@
     else
     {
         <div>
-            <table class="salesReceiptsTable">
+            <table class="customerPaymentsTable">
                 <thead>
                     <tr>
-                        <th>Receipt ID</th>
-                        <th>Receipt No</th>
+                        <th>Payment ID</th>
+                        <th>Payment No</th>
                         <th>Customer Name</th>
-                        <th>Receipt Date</th>
+                        <th>Payment Date</th>
                         <th>Amount</th>
                         <th>Left to Allocate</th>
                     </tr>
@@ -77,8 +77,8 @@
                         @for (int i = 0; i < salesReceipts.Count; i++)
                         {
                             int index = i;
-                            <tr 
-                                class="salesReceiptRow @(selectedRowIndex == index ? "table-active" : "")" 
+                            <tr
+                                class="customerPaymentRow @(selectedRowIndex == index ? "table-active" : "")"
                                 @onclick="@(() => OnRowSelected(index))"
                                 @ondblclick="@(() => NavigateToSalesReceipt(index))">
                                 <td>@GetValue(salesReceipts[index], "id")</td>
@@ -167,12 +167,12 @@
             }
             else
             {
-                errorMessage = $"Failed to load sales receipts. Status: {response.StatusCode}";
+                errorMessage = $"Failed to load customer payments. Status: {response.StatusCode}";
             }
         }
         catch (Exception ex)
         {
-            errorMessage = $"Error loading sales receipts: {ex.Message}";
+            errorMessage = $"Error loading customer payments: {ex.Message}";
         }
         finally
         {

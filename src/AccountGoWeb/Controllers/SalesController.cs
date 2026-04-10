@@ -293,7 +293,7 @@ namespace AccountGoWeb.Controllers
 
         public async System.Threading.Tasks.Task<IActionResult> SalesReceipts()
         {
-            ViewBag.PageContentHeader = "Sales Receipts";
+            ViewBag.PageContentHeader = "Customer Payments";
             try
             {
                 using (var client = new HttpClient())
@@ -310,15 +310,15 @@ namespace AccountGoWeb.Controllers
                     }
                     else
                     {
-                        _logger.LogError("Failed to fetch sales receipts. API returned status code: {StatusCode}", response.StatusCode);
-                        ViewBag.ErrorMessage = "Failed to load sales receipts. Please try again later.";
+                        _logger.LogError("Failed to fetch customer payments. API returned status code: {StatusCode}", response.StatusCode);
+                        ViewBag.ErrorMessage = "Failed to load customer payments. Please try again later.";
                     }
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "An error occurred while fetching sales receipts.");
-                ViewBag.ErrorMessage = "An unexpected error occurred while loading sales receipts.";
+                _logger.LogError(ex, "An error occurred while fetching customer payments.");
+                ViewBag.ErrorMessage = "An unexpected error occurred while loading customer payments.";
             }
 
             // Return the view with an error message if the API call fails
@@ -336,7 +336,7 @@ namespace AccountGoWeb.Controllers
         {
             try
             {
-                ViewBag.PageContentHeader = "New Receipt";
+                ViewBag.PageContentHeader = "New Customer Payment";
                 ViewBag.Customers = Models.SelectListItemHelper.Customers();
                 ViewBag.DebitAccounts = Models.SelectListItemHelper.CashBanks();
                 ViewBag.CreditAccounts = Models.SelectListItemHelper.Accounts();
@@ -503,8 +503,8 @@ public IActionResult Allocate(int id)
 
     try
     {
-        //receipt allocation
-        ViewBag.PageContentHeader = "Receipt Allocation";
+        //payment allocation
+        ViewBag.PageContentHeader = "Customer Payment Allocation";
 
         //creating the allocated model
         var model = new Models.Sales.Allocate();
