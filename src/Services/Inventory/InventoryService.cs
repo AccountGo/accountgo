@@ -187,7 +187,7 @@ if (!data.Any())
         Measurement = new Measurement { Code = "pcs" }
     });
 
-     var items = _itemRepo.GetAllIncluding(i => i.PurchaseMeasurement).ToList();
+     var items = _itemRepo.GetAllIncluding(i => i.PurchaseMeasurement, i => i.InventoryControlJournals).ToList();
 
     foreach (var item in items)
     {
