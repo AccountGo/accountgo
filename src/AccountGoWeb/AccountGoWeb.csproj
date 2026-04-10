@@ -18,7 +18,7 @@
     </None>
   </ItemGroup>
   <ItemGroup>
-    <!-- <ProjectReference Include="../Dto/Dto.csproj" /> -->
+    <ProjectReference Include="../Dto/Dto.csproj" />
     <!-- <ProjectReference Include="../Infrastructure/Infrastructure.csproj" /> -->
     <ProjectReference Include="../src.ServiceDefaults/src.ServiceDefaults.csproj" />
     <ProjectReference Include="../LibraryGDB/LibraryGDB.csproj" />
