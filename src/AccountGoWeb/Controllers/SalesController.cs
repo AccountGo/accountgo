@@ -25,7 +25,7 @@ namespace AccountGoWeb.Controllers
 
         public async System.Threading.Tasks.Task<IActionResult> SalesOrders()
         {
-            ViewBag.PageContentHeader = "Sales Orders";
+            ViewBag.PageContentHeader = string.Empty;
             using (var client = new HttpClient())
             {
                 var baseUri = _configuration!["ApiUrl"];
@@ -43,7 +43,7 @@ namespace AccountGoWeb.Controllers
 
         public IActionResult AddSalesOrder()
         {
-            ViewBag.PageContentHeader = "Add Sales Order";
+            ViewBag.PageContentHeader = string.Empty;
             SalesOrder salesOrderModel = new SalesOrder();
             salesOrderModel.SalesOrderLines = new List<SalesOrderLine> { new SalesOrderLine {
                 Amount = 0,
@@ -101,11 +101,11 @@ namespace AccountGoWeb.Controllers
 
         public IActionResult SalesOrder(int id)
         {
-            ViewBag.PageContentHeader = "Sales Order";
+            ViewBag.PageContentHeader = string.Empty;
             SalesOrder? salesOrderModel = null;
             if (id == -1)
             {
-                ViewBag.PageContentHeader = "Add Sales Order";
+                ViewBag.PageContentHeader = string.Empty;
                 return View("AddSalesOrder");
 
             }

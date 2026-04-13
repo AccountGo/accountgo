@@ -246,9 +246,12 @@
             <div class="container-fluid">
                 <div class="animated fadeIn">
                     <!-- PAGE CONTENT -->
-                    <h2>
-                        @Html.Raw(ViewBag.PageContentHeader)
-                    </h2>
+                    @if (!string.IsNullOrWhiteSpace(ViewBag.PageContentHeader as string))
+                    {
+                        <h2>
+                            @Html.Raw(ViewBag.PageContentHeader)
+                        </h2>
+                    }
                     @RenderBody()
                     <!-- /PAGE CONTENT -->
                 </div>

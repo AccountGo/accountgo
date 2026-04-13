@@ -1,4 +1,11 @@
-﻿@model object
+﻿@using AccountGoWeb.Components.Pages.Sales
 
-@using AccountGoWeb.Components.Pages.Sales
-<component type="typeof(NewSalesOrder)" render-mode="ServerPrerendered" />
+@{
+    var quotationId = 0;
+    int.TryParse(Context.Request.Query["quotationId"].ToString(), out quotationId);
+}
+
+<component type="typeof(SalesOrder)"
+           render-mode="ServerPrerendered"
+           param-OrderId="0"
+           param-QuotationId="quotationId" />
