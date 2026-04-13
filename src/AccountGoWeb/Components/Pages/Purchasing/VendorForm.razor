@@ -27,13 +27,13 @@
             </div>
             <div class="card-body collapse show row" id="general">
                 <div class="col-sm-6">
-                    <div class="row mb-2">
-                        <div class="col-sm-2">No</div>
-                        <div class="col-sm-10">@vendor.No</div>
+                    <div class="d-flex align-items-center mb-2">
+                        <div class="flex-shrink-0 me-2 text-nowrap" style="min-width:80px">No</div>
+                        <div class="flex-grow-1">@vendor.No</div>
                     </div>
-                    <div class="row mb-2">
-                        <div class="col-sm-2">Name</div>
-                        <div class="col-sm-10">
+                    <div class="d-flex align-items-center mb-2">
+                        <div class="flex-shrink-0 me-2 text-nowrap" style="min-width:80px">Name</div>
+                        <div class="flex-grow-1">
                             <InputText @bind-Value="vendor.Name" class="form-control" placeholder="Name ..."
                                 disabled="@(!isEditMode)" />
                             <ValidationMessage For="@(() => vendor.Name)" />
@@ -41,30 +41,23 @@
                     </div>
                 </div>
                 <div class="col-sm-6">
-                    <div class="row mb-2">
-                        <div class="col-sm-2">Phone</div>
-                        <div class="col-sm-10">
+                    <div class="d-flex align-items-center mb-2">
+                        <div class="flex-shrink-0 me-2 text-nowrap" style="min-width:80px">Phone</div>
+                        <div class="flex-grow-1">
                             <InputText @bind-Value="vendor.Phone" class="form-control" placeholder="Phone ..."
                                 disabled="@(!isEditMode)" />
                         </div>
                     </div>
-                    <div class="row mb-2">
-                        <div class="col-sm-2">Fax</div>
-                        <div class="col-sm-10">
-                            <InputText @bind-Value="vendor.Fax" class="form-control" placeholder="Fax ..."
-                                disabled="@(!isEditMode)" />
-                        </div>
-                    </div>
-                    <div class="row mb-2">
-                        <div class="col-sm-2">Website</div>
-                        <div class="col-sm-10">
+                    <div class="d-flex align-items-center mb-2">
+                        <div class="flex-shrink-0 me-2 text-nowrap" style="min-width:80px">Website</div>
+                        <div class="flex-grow-1">
                             <InputText @bind-Value="vendor.Website" class="form-control" placeholder="Website ..."
                                 disabled="@(!isEditMode)" />
                         </div>
                     </div>
-                    <div class="row mb-2">
-                        <div class="col-sm-2">Email</div>
-                        <div class="col-sm-10">
+                    <div class="d-flex align-items-center mb-2">
+                        <div class="flex-shrink-0 me-2 text-nowrap" style="min-width:80px">Email</div>
+                        <div class="flex-grow-1">
                             <InputText @bind-Value="vendor.Email" class="form-control" placeholder="Email ..."
                                 disabled="@(!isEditMode)" />
                         </div>
@@ -84,48 +77,96 @@
             </div>
             <div class="card-body collapse show row" id="contact">
                 <div class="col-sm-6">
-                    <div class="row mb-2">
-                        <div class="col-sm-4">First Name</div>
-                        <div class="col-sm-8">
+                    <div class="d-flex align-items-center mb-2">
+                        <div class="flex-shrink-0 me-2 text-nowrap" style="min-width:100px">First Name</div>
+                        <div class="flex-grow-1">
                             <InputText @bind-Value="vendor.PrimaryContact.FirstName" class="form-control"
                                 placeholder="First Name ..." disabled="@(!isEditMode)" />
                         </div>
                     </div>
-                    <div class="row mb-2">
-                        <div class="col-sm-4">Last Name</div>
-                        <div class="col-sm-8">
+                    <div class="d-flex align-items-center mb-2">
+                        <div class="flex-shrink-0 me-2 text-nowrap" style="min-width:100px">Last Name</div>
+                        <div class="flex-grow-1">
                             <InputText @bind-Value="vendor.PrimaryContact.LastName" class="form-control"
                                 placeholder="Last Name ..." disabled="@(!isEditMode)" />
                         </div>
                     </div>
                 </div>
                 <div class="col-sm-6">
-                    <div class="row mb-2">
-                        <div class="col-sm-4">Phone</div>
-                        <div class="col-sm-8">
+                    <div class="d-flex align-items-center mb-2">
+                        <div class="flex-shrink-0 me-2 text-nowrap" style="min-width:100px">Phone</div>
+                        <div class="flex-grow-1">
                             <InputText @bind-Value="vendor.PrimaryContact.Party.Phone" class="form-control"
                                 placeholder="Phone ..." disabled="@(!isEditMode)" />
                         </div>
                     </div>
-                    <div class="row mb-2">
-                        <div class="col-sm-4">Fax</div>
-                        <div class="col-sm-8">
-                            <InputText @bind-Value="vendor.PrimaryContact.Party.Fax" class="form-control"
-                                placeholder="Fax ..." disabled="@(!isEditMode)" />
-                        </div>
-                    </div>
-                    <div class="row mb-2">
-                        <div class="col-sm-4">Website</div>
-                        <div class="col-sm-8">
+                    <div class="d-flex align-items-center mb-2">
+                        <div class="flex-shrink-0 me-2 text-nowrap" style="min-width:100px">Website</div>
+                        <div class="flex-grow-1">
                             <InputText @bind-Value="vendor.PrimaryContact.Party.Website" class="form-control"
                                 placeholder="Website ..." disabled="@(!isEditMode)" />
                         </div>
                     </div>
-                    <div class="row mb-2">
-                        <div class="col-sm-4">Email</div>
-                        <div class="col-sm-8">
+                    <div class="d-flex align-items-center mb-2">
+                        <div class="flex-shrink-0 me-2 text-nowrap" style="min-width:100px">Email</div>
+                        <div class="flex-grow-1">
                             <InputText @bind-Value="vendor.PrimaryContact.Party.Email" class="form-control"
                                 placeholder="Email ..." disabled="@(!isEditMode)" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @* Address Section *@
+        <div class="card">
+            <div class="card-header">
+                <a data-toggle="collapse" href="#address"><i class="fa fa-align-justify"></i></a> Address
+            </div>
+            <div class="card-body collapse show row" id="address">
+                <div class="col-sm-6">
+                    <div class="d-flex align-items-center mb-2">
+                        <div class="flex-shrink-0 me-2 text-nowrap" style="min-width:100px">Street 1</div>
+                        <div class="flex-grow-1">
+                            <InputText @bind-Value="vendor.Street1" class="form-control" placeholder="Street 1 ..."
+                                       disabled="@(!isEditMode)" />
+                        </div>
+                    </div>
+                    <div class="d-flex align-items-center mb-2">
+                        <div class="flex-shrink-0 me-2 text-nowrap" style="min-width:100px">Street 2</div>
+                        <div class="flex-grow-1">
+                            <InputText @bind-Value="vendor.Street2" class="form-control" placeholder="Street 2 ..."
+                                       disabled="@(!isEditMode)" />
+                        </div>
+                    </div>
+                    <div class="d-flex align-items-center mb-2">
+                        <div class="flex-shrink-0 me-2 text-nowrap" style="min-width:100px">City</div>
+                        <div class="flex-grow-1">
+                            <InputText @bind-Value="vendor.City" class="form-control" placeholder="City ..."
+                                       disabled="@(!isEditMode)" />
+                        </div>
+                    </div>
+                </div>
+                <div class="col-sm-6">
+                    <div class="d-flex align-items-center mb-2">
+                        <div class="flex-shrink-0 me-2 text-nowrap" style="min-width:100px">Province</div>
+                        <div class="flex-grow-1">
+                            <InputText @bind-Value="vendor.Province" class="form-control" placeholder="Province ..."
+                                       disabled="@(!isEditMode)" />
+                        </div>
+                    </div>
+                    <div class="d-flex align-items-center mb-2">
+                        <div class="flex-shrink-0 me-2 text-nowrap" style="min-width:100px">Postal Code</div>
+                        <div class="flex-grow-1">
+                            <InputText @bind-Value="vendor.PostalCode" class="form-control" placeholder="Postal Code ..."
+                                       disabled="@(!isEditMode)" />
+                        </div>
+                    </div>
+                    <div class="d-flex align-items-center mb-2">
+                        <div class="flex-shrink-0 me-2 text-nowrap" style="min-width:100px">Country</div>
+                        <div class="flex-grow-1">
+                            <InputText @bind-Value="vendor.Country" class="form-control" placeholder="Country ..."
+                                       disabled="@(!isEditMode)" />
                         </div>
                     </div>
                 </div>
@@ -139,22 +180,15 @@
             </div>
             <div class="card-body collapse show row" id="invoicing">
                 <div class="col-sm-6">
-                    <div class="row mb-2">
-                        <div class="col-sm-6">Accounts Payable</div>
-                        <div class="col-sm-6">
-                            <InputSelect @bind-Value="vendor.AccountsPayableAccountId" class="form-control"
-                                disabled="@(!isEditMode)">
-                                <option value="">Select...</option>
-                                @foreach (var account in accounts)
-                                {
-                                    <option value="@account.Value">@account.Text</option>
-                                }
-                            </InputSelect>
+                    <div class="d-flex align-items-center mb-2">
+                        <div class="flex-shrink-0 me-2 text-nowrap" style="min-width:130px">Accounts Payable</div>
+                        <div class="flex-grow-1">
+                            <input type="text" value="@GetAccountsPayableDisplay()" class="form-control" disabled readonly />
                         </div>
                     </div>
-                    <div class="row mb-2">
-                        <div class="col-sm-6">Purchase</div>
-                        <div class="col-sm-6">
+                    <div class="d-flex align-items-center mb-2">
+                        <div class="flex-shrink-0 me-2 text-nowrap" style="min-width:130px">Purchase</div>
+                        <div class="flex-grow-1">
                             <InputSelect @bind-Value="vendor.PurchaseAccountId" class="form-control"
                                 disabled="@(!isEditMode)">
                                 <option value="">Select...</option>
@@ -165,24 +199,19 @@
                             </InputSelect>
                         </div>
                     </div>
-                    <div class="row mb-2">
-                        <div class="col-sm-6">Discount</div>
-                        <div class="col-sm-6">
-                            <InputSelect @bind-Value="vendor.PurchaseDiscountAccountId" class="form-control"
-                                disabled="@(!isEditMode)">
-                                <option value="">Select...</option>
-                                @foreach (var account in accounts)
-                                {
-                                    <option value="@account.Value">@account.Text</option>
-                                }
-                            </InputSelect>
+                    <div class="d-flex align-items-center mb-2">
+                        <div class="flex-shrink-0 me-2 text-nowrap" style="min-width:130px">Discount</div>
+                        <div class="flex-grow-1">
+                            <InputNumber @bind-Value="vendor.DiscountPercentage" class="form-control"
+                                         placeholder="Discount %" min="0" max="100" step="0.01"
+                                         disabled="@(!isEditMode)" />
                         </div>
                     </div>
                 </div>
                 <div class="col-sm-6">
-                    <div class="row mb-2">
-                        <div class="col-sm-4">Tax Group</div>
-                        <div class="col-sm-8">
+                    <div class="d-flex align-items-center mb-2">
+                        <div class="flex-shrink-0 me-2 text-nowrap" style="min-width:100px">Tax Group</div>
+                        <div class="flex-grow-1">
                             <InputSelect @bind-Value="vendor.TaxGroupId" class="form-control" disabled="@(!isEditMode)">
                                 <option value="">Select...</option>
                                 @foreach (var taxGroup in taxGroups)
@@ -203,15 +232,28 @@
             </div>
             <div class="card-body collapse show row" id="payment">
                 <div class="col-sm-6">
-                    <div class="row mb-2">
-                        <div class="col-sm-4">Payment Term</div>
-                        <div class="col-sm-8">
+                    <div class="d-flex align-items-center mb-2">
+                        <div class="flex-shrink-0 me-2 text-nowrap" style="min-width:130px">Payment Term</div>
+                        <div class="flex-grow-1">
                             <InputSelect @bind-Value="vendor.PaymentTermId" class="form-control"
                                 disabled="@(!isEditMode)">
                                 <option value="">Select...</option>
                                 @foreach (var term in paymentTerms)
                                 {
                                     <option value="@term.Value">@term.Text</option>
+                                }
+                            </InputSelect>
+                        </div>
+                    </div>
+                    <div class="d-flex align-items-center mb-2">
+                        <div class="flex-shrink-0 me-2 text-nowrap" style="min-width:130px">Payment Method</div>
+                        <div class="flex-grow-1">
+                            <InputSelect @bind-Value="vendor.PaymentMethod" class="form-control"
+                                         disabled="@(!isEditMode)">
+                                <option value="">Select...</option>
+                                @foreach (var method in paymentMethods)
+                                {
+                                    <option value="@method.Value">@method.Text</option>
                                 }
                             </InputSelect>
                         </div>
@@ -255,6 +297,7 @@
     private List<SelectListItem> accounts = new();
     private List<SelectListItem> taxGroups = new();
     private List<SelectListItem> paymentTerms = new();
+    private List<SelectListItem> paymentMethods = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -266,6 +309,12 @@
             isEditMode = true;
             vendor.No = new Random().Next(1, 99999).ToString();
             vendor.PrimaryContact = new Contact();
+            vendor.PaymentMethod = 1;
+            var apAccount = accounts.FirstOrDefault(a => a.Text == "20110");
+            if (apAccount != null && int.TryParse(apAccount.Value, out var apId))
+            {
+                vendor.AccountsPayableAccountId = apId;
+            }
         }
         else
         {
@@ -288,6 +337,10 @@
                 if (vendor.PrimaryContact == null)
                 {
                     vendor.PrimaryContact = new Contact();
+                }
+                if (vendor.PrimaryContact.Party == null)
+                {
+                    vendor.PrimaryContact.Party = new Party();
                 }
             }
             else
@@ -312,8 +365,18 @@
             var accountsResponse = await http.GetAsync($"{apiUrl}financials/accounts");
             if (accountsResponse.IsSuccessStatusCode)
             {
-                var accountsList = await accountsResponse.Content.ReadFromJsonAsync<List<Account>>() ?? new();
-                accounts = accountsList.Select(a => new SelectListItem { Value = a.Id.ToString(), Text = a.AccountName }).ToList();
+                var accountTree = await accountsResponse.Content.ReadFromJsonAsync<List<Account>>() ?? new();
+                var accountsList = FlattenAccounts(accountTree)
+                    .Where(a => a.ChildAccounts.Count == 0)
+                    .OrderBy(a => a.AccountCode)
+                    .ThenBy(a => a.AccountName)
+                    .ToList();
+
+                accounts = accountsList.Select(a => new SelectListItem
+                {
+                    Value = a.Id.ToString(),
+                    Text = a.AccountCode
+                }).ToList();
             }
 
             // Load tax groups
@@ -325,11 +388,23 @@
             }
 
             // Load payment terms
-            var paymentTermsResponse = await http.GetAsync($"{apiUrl}financial/paymentterms");
+            var paymentTermsResponse = await http.GetAsync($"{apiUrl}common/paymentterms");
             if (paymentTermsResponse.IsSuccessStatusCode)
             {
                 var paymentTermsList = await paymentTermsResponse.Content.ReadFromJsonAsync<List<PaymentTerm>>() ?? new();
                 paymentTerms = paymentTermsList.Select(p => new SelectListItem
+                {
+                    Value = p.Id.ToString(),
+                    Text = BuildPaymentTermLabel(p)
+                }).ToList();
+            }
+
+            // Load payment methods
+            var paymentMethodsResponse = await http.GetAsync($"{apiUrl}common/paymentmethods");
+            if (paymentMethodsResponse.IsSuccessStatusCode)
+            {
+                var paymentMethodsList = await paymentMethodsResponse.Content.ReadFromJsonAsync<List<PaymentMethodItem>>() ?? new();
+                paymentMethods = paymentMethodsList.Select(p => new SelectListItem
                 {
                     Value = p.Id.ToString(),
                     Text = p.Description
@@ -386,10 +461,53 @@
         public string Text { get; set; } = "";
     }
 
+    private string GetAccountsPayableDisplay()
+    {
+        if (!vendor.AccountsPayableAccountId.HasValue)
+        {
+            return string.Empty;
+        }
+
+        return accounts.FirstOrDefault(a => a.Value == vendor.AccountsPayableAccountId.Value.ToString())?.Text ?? string.Empty;
+    }
+
+    private static IEnumerable<Account> FlattenAccounts(IEnumerable<Account> accounts)
+    {
+        foreach (var account in accounts)
+        {
+            yield return account;
+
+            if (account.ChildAccounts.Count > 0)
+            {
+                foreach (var child in FlattenAccounts(account.ChildAccounts))
+                {
+                    yield return child;
+                }
+            }
+        }
+    }
+
+    private static string BuildPaymentTermLabel(PaymentTerm paymentTerm)
+    {
+        if (paymentTerm.DueAfterDays.HasValue && paymentTerm.DueAfterDays.Value > 0)
+        {
+            return $"{paymentTerm.DueAfterDays.Value} days";
+        }
+
+        if (!string.IsNullOrWhiteSpace(paymentTerm.Description))
+        {
+            return paymentTerm.Description;
+        }
+
+        return "Term";
+    }
+
     private class Account
     {
         public int Id { get; set; }
+        public string AccountCode { get; set; } = "";
         public string AccountName { get; set; } = "";
+        public List<Account> ChildAccounts { get; set; } = new();
     }
 
     private class TaxGroup
@@ -399,6 +517,13 @@
     }
 
     private class PaymentTerm
+    {
+        public int Id { get; set; }
+        public string Description { get; set; } = "";
+        public int? DueAfterDays { get; set; }
+    }
+
+    private class PaymentMethodItem
     {
         public int Id { get; set; }
         public string Description { get; set; } = "";

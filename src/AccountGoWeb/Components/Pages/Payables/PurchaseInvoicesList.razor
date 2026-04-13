@@ -3,6 +3,8 @@
 @using System.Text.Json.Serialization
 @inject IHttpClientFactory ClientFactory
 
+@inject NavigationManager Navigation
+
 @if (getError)
 {
     <div class="alert alert-danger" role="alert">
@@ -50,6 +52,7 @@ else
                 @foreach (var invoice in purchaseInvoices)
                 {
                     <tr @onclick="() => SelectInvoice(invoice)" 
+                        @ondblclick="NavigateToPurchaseInvoice"
                         class="@(selectedInvoice?.Id == invoice.Id ? "table-active" : "")"
                         style="cursor: pointer;">
                         <td>@invoice.No</td>
@@ -59,9 +62,6 @@ else
                         <td>@("$" + invoice.AmountPaid.ToString("N2"))</td>
                         <td>@invoice.ReferenceNo</td>
                         <td>
-                            <a href="/purchasing/purchaseinvoice?id=@invoice.Id" class="btn btn-sm btn-outline-primary" @onclick:stopPropagation="true">
-                                View
-                            </a>
                             @if (!invoice.IsPaid && invoice.Posted)
                             {
                                 <a href="/purchasing/payment/@invoice.Id" class="btn btn-sm btn-outline-success" @onclick:stopPropagation="true">
@@ -134,6 +134,14 @@ else
     {
         selectedInvoice = invoice;
         StateHasChanged();
+    }
+
+    private void NavigateToPurchaseInvoice()
+    {
+        if (selectedInvoice != null)
+        {
+            Navigation.NavigateTo($"/purchasing/purchaseinvoice?id={selectedInvoice.Id}", forceLoad: true);
+        }
     }
 
     public class PurchaseInvoiceDto

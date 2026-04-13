@@ -3,12 +3,40 @@
 @inject NavigationManager Navigation
 <PageTitle>Sales Orders</PageTitle>
 
-<div class="sales-orders-page">
-    <div class="page-header">
-        <h1>Sales Orders</h1>
+<style>
+    .salesOrdersTable {
+        width: 100%;
+        border-collapse: collapse;
+        background: transparent;
+        color: white; /* text visible on dark page */
+    }
+    .salesOrdersTable th, .salesOrdersTable td {
+        padding: 8px;
+        text-align: left;
+        border: none; /* no borders */
+    }
+    .salesOrderRow:hover {
+        background-color: rgba(255,255,255,0.1); 
+        cursor: pointer;
+    }
+</style>
 
-        <div class="toolbar-actions">
-            <a class="btn new-order-btn" href="/Sales/AddSalesOrder">
+<div class="container-fluid">
+    <div class="row mb-3">
+        <div class="col">
+            <a href="/Sales/AddSalesOrder" class="btn">
+                <i class="fa fa-plus"></i>
+                New Order
+            </a>
+
+            <a href="@GetViewOrderLink()" id="linkViewOrder"
+                class="btn @(selectedOrderId == null ? "inactiveLink" : "")">
+                <i class="fa fa-edit"></i>
+                View
+            </a>
+
+            <a href="@GetInvoiceLink()" id="linkNewInvoice"
+                class="btn @(selectedOrderId == null || isInvoiceDisabled ? "inactiveLink" : "")">
                 <i class="fa fa-plus"></i>
                 New Sales Order
             </a>
@@ -29,22 +57,25 @@
         </div>
     </div>
 
-    @if (isLoading)
+    @if (loading)
     {
-        <div class="empty-state">Loading sales orders...</div>
+        <div class="loading-container">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
     }
     else if (!string.IsNullOrWhiteSpace(errorMessage))
     {
-        <div class="alert alert-danger">@errorMessage</div>
-    }
-    else if (salesOrders.Count == 0)
-    {
-        <div class="empty-state">No sales orders found.</div>
+        <div class="alert alert-danger" role="alert">
+            <i class="fa fa-exclamation-circle"></i>
+            <strong>Error:</strong> @errorMessage
+        </div>
     }
     else
     {
-        <div class="table-shell">
-            <table class="table orders-table">
+        <div>
+            <table class="salesOrdersTable">
                 <thead>
                     <tr>
                         <th @onclick='() => SortBy(nameof(SalesOrderDto.Id))'>No @GetSortIndicator(nameof(SalesOrderDto.Id))</th>
@@ -58,19 +89,21 @@
                 <tbody>
                     @foreach (var order in GetSortedOrders())
                     {
-                        var isSelected = selectedOrder?.Id == order.Id;
-
-                        <tr class="clickable-row @(isSelected ? "selected-row" : "")"
-                            @key="order.Id"
-                            @onclick="() => SelectOrder(order)">
-
-                            <td>@order.Id</td>
-                            <td>@order.CustomerName</td>
-                            <td>@order.OrderDate.ToString("yyyy-MM-dd")</td>
-                            <td>@order.ReferenceNo</td>
-                            <td class="text-end">@((order.Amount ?? 0m).ToString("0.00"))</td>
-                            <td>@GetStatusLabel(order.StatusId)</td>
-                        </tr>
+                        @for (int i = 0; i < salesOrders.Count; i++)
+                        {
+                            int index = i;
+                            <tr 
+                                class="salesOrderRow @(selectedRowIndex == index ? "table-active" : "")" 
+                                @onclick="@(() => OnRowSelected(index))"
+                                @ondblclick="@(() => NavigateToSalesOrder(index))">
+                                <td>@GetValue(salesOrders[index], "no")</td>
+                                <td>@GetValue(salesOrders[index], "customerName")</td>
+                                <td>@GetValue(salesOrders[index], "orderDate")</td>
+                                <td>@GetValue(salesOrders[index], "referenceNo")</td>
+                                <td>@GetValue(salesOrders[index], "amount")</td>
+                                <td>@GetValue(salesOrders[index], "status")</td>
+                            </tr>
+                        }
                     }
                 </tbody>
             </table>
@@ -195,7 +228,25 @@
             return;
         }
 
-        selectedOrder = order;
+        StateHasChanged();
+    }
+
+    private void NavigateToSalesOrder(int index)
+    {
+        if (index >= 0 && index < salesOrders.Count)
+        {
+            OnRowSelected(index);
+            
+            if (selectedOrderId != null) 
+            {
+                Navigation.NavigateTo($"/Sales/SalesOrder?id={selectedOrderId}", forceLoad: true);
+            }
+
+        }
+    }
+    private void UpdateButtonLinks()
+    {
+        StateHasChanged();
     }
 
     /// <summary>

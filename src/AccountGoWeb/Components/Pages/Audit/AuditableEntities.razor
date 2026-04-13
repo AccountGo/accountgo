@@ -4,6 +4,7 @@
 @using System.Text.Json
 @inject IHttpClientFactory ClientFactory
 @inject IConfiguration Configuration
+@inject NavigationManager Navigation
 
 <PageTitle>Auditable Entities</PageTitle>
 
@@ -55,7 +56,7 @@ else
                                 <tbody>
                                     @foreach (var entity in entities)
                                     {
-                                        <tr>
+                                        <tr @ondblclick="() => NavigateToAuditableEntity(entity)" style="cursor: pointer;">
                                             <td>@entity.Id</td>
                                             <td>@entity.EntityName</td>
                                             <td>
@@ -69,9 +70,6 @@ else
                                                 }
                                             </td>
                                             <td>
-                                                <a href="/Audit/GetEntity?id=@entity.Id" class="btn btn-sm btn-info" style="margin-right: 5px;">
-                                                    <i class="fa fa-edit"></i> Edit
-                                                </a>
                                                 <a href="/Audit/GetAuditableAttributes?entityId=@entity.Id" class="btn btn-sm btn-success" style="margin-right: 5px;">
                                                     <i class="fa fa-list"></i> Attributes
                                                 </a>
@@ -177,6 +175,14 @@ else
         isDeleteModalVisible = false;
         selectedEntity = null;
         errorMessage = string.Empty;
+    }
+
+    private void NavigateToAuditableEntity(AuditableEntity entity)
+    {
+        if (entity != null)
+        {
+            Navigation.NavigateTo($"/Audit/GetEntity?id={entity.Id}", forceLoad: true);
+        }
     }
 
     private async Task ConfirmDeleteEntity()

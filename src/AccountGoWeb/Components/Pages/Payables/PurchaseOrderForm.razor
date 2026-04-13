@@ -116,7 +116,7 @@ else
                                 <th>Quantity</th>
                                 <th>Amount</th>
                                 <th>Discount</th>
-                                <th>Measurement</th>
+                                    <th>Unit</th>
                                 @if (!isViewMode)
                                 {
                                     <th>Actions</th>
@@ -152,7 +152,7 @@ else
                                 </td>
                                 <td style="background-color: transparent !important;">
                                     <InputSelect class="form-control" @bind-Value="line.MeasurementId" disabled="@isViewMode">
-                                        <option value="0">-- Select Measurement --</option>
+                                            <option value="0">-- Select Unit --</option>
                                         @if (measurements != null)
                                         {
                                             @foreach (var measurement in measurements)
@@ -187,6 +187,21 @@ else
                 </div>
             </div>
 
+            @if (saveError)
+            {
+                <div class="alert alert-danger mt-3">
+                    Error saving purchase order. Please try again.
+                    @if (!string.IsNullOrEmpty(errorMessage))
+                    {
+                        <br/><strong>Details:</strong> @errorMessage
+                    }
+                </div>
+            }
+            @if (saveSuccess)
+            {
+                <div class="alert alert-success mt-3">Purchase order saved successfully!</div>
+            }
+
             <div class="col-md-9 mt-3">
                 @if (!isViewMode)
                 {
@@ -199,21 +214,6 @@ else
             </div>
         </div>
     </EditForm>
-
-    @if (saveError)
-    {
-        <div class="alert alert-danger mt-3">
-            Error saving purchase order. Please try again.
-            @if (!string.IsNullOrEmpty(errorMessage))
-            {
-                <br/><strong>Details:</strong> @errorMessage
-            }
-        </div>
-    }
-    @if (saveSuccess)
-    {
-        <div class="alert alert-success mt-3">Purchase order saved successfully!</div>
-    }
 }
 
 @code {

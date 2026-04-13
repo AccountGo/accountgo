@@ -8,134 +8,7 @@
 @inject IConfiguration Configuration
 @inject NavigationManager NavigationManager
 
-<style>
-    .page-header {
-        background: #667eea;
-        color: white;
-        padding: 2rem;
-        border-radius: 10px;
-        margin-bottom: 2rem;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    }
-
-    .form-container {
-        background: white;
-        padding: 2rem;
-        border-radius: 10px;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
-        margin-bottom: 2rem;
-    }
-
-    .form-label {
-        font-weight: 600;
-        color: #4a5568;
-        margin-bottom: 0.5rem;
-        display: block;
-    }
-
-    .form-control,
-    .form-select {
-        border: 2px solid #e2e8f0;
-        border-radius: 6px;
-        padding: 0.75rem;
-        transition: all 0.3s ease;
-    }
-
-    .form-control:focus,
-    .form-select:focus {
-        border-color: #667eea;
-        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-    }
-
-    .table-container {
-        background: white;
-        padding: 1.5rem;
-        border-radius: 10px;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
-        margin-bottom: 2rem;
-    }
-
-    .table thead th {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        border: none;
-        font-weight: 600;
-        text-transform: uppercase;
-        font-size: 0.85rem;
-        padding: 1rem;
-    }
-
-    .table tbody td {
-        vertical-align: middle;
-        padding: 1rem;
-    }
-
-    .btn-primary {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        border: none;
-    }
-
-    .btn-primary:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-    }
-
-    .btn-secondary {
-        background: #6c757d;
-        border: none;
-    }
-
-    .btn-secondary:hover {
-        background: #5a6268;
-        transform: translateY(-2px);
-    }
-
-    .btn-success {
-        background: #10b981;
-        border: none;
-    }
-
-    .btn-success:hover {
-        background: #059669;
-        transform: translateY(-2px);
-    }
-
-    .btn-danger {
-        background: #ef4444;
-        border: none;
-    }
-
-    .btn-danger:hover {
-        background: #dc2626;
-    }
-
-    .alert {
-        border-radius: 10px;
-        padding: 1rem;
-    }
-</style>
-
 <PageTitle>Add Donation Invoice</PageTitle>
-
-<div class="page-header">
-    <h3>Add Donation Invoice</h3>
-</div>
-
-@if (!string.IsNullOrEmpty(errorMessage))
-{
-    <div class="alert alert-danger alert-dismissible fade show" role="alert">
-        <i class="fa fa-exclamation-triangle me-2"></i>@errorMessage
-        <button type="button" class="btn-close" @onclick="() => errorMessage = null"></button>
-    </div>
-}
-
-@if (!string.IsNullOrEmpty(successMessage))
-{
-    <div class="alert alert-success alert-dismissible fade show" role="alert">
-        <i class="fa fa-check-circle me-2"></i>@successMessage
-        <button type="button" class="btn-close" @onclick="() => successMessage = null"></button>
-    </div>
-}
 
 @if (isLoading)
 {
@@ -147,98 +20,92 @@
 }
 else if (invoice != null)
 {
-    <EditForm Model="invoice" OnValidSubmit="SaveInvoice">
-        <DataAnnotationsValidator />
+    <div class="col-sm-8">
+        <EditForm Model="invoice" OnValidSubmit="SaveInvoice">
+            <DataAnnotationsValidator />
+            <div class="card">
+                <div class="card-body">
+                    @if (!string.IsNullOrEmpty(errorMessage))
+                    {
+                        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                            <i class="fa fa-exclamation-triangle me-2"></i>@errorMessage
+                            <button type="button" class="btn-close" @onclick="() => errorMessage = null"></button>
+                        </div>
+                    }
 
-        <div class="form-container">
-            <div class="table-responsive">
-                <table class="table table-borderless">
-                    <tbody>
-                        <tr>
-                            <td style="width: 15%; vertical-align: middle;">
-                                <label class="form-label mb-0">Donor *</label>
-                            </td>
-                            <td style="width: 35%;">
-                                <InputSelect class="form-select" @bind-Value="invoice.DonorId">
-                                    <option value="0">-- Select Donor --</option>
-                                    @foreach (var customer in customers)
-                                    {
-                                        <option value="@customer.Id">@customer.Name</option>
-                                    }
-                                </InputSelect>
-                                <ValidationMessage For="@(() => invoice.DonorId)" class="text-danger" />
-                            </td>
-                            <td style="width: 15%; vertical-align: middle;">
-                                <label class="form-label mb-0">Donation Date</label>
-                            </td>
-                            <td style="width: 35%;">
-                                <InputDate class="form-control" @bind-Value="invoice.DonationDate" />
-                            </td>
-                        </tr>
-                        <tr>
-                            <td style="vertical-align: middle;">
-                                <label class="form-label mb-0">Purpose</label>
-                            </td>
-                            <td>
-                                <InputText class="form-control" @bind-Value="invoice.Purpose"
-                                    placeholder="Donation purpose..." />
-                            </td>
-                            <td style="vertical-align: middle;">
-                                <label class="form-label mb-0">Reference No</label>
-                            </td>
-                            <td>
-                                <InputText class="form-control" @bind-Value="invoice.ReferenceNo"
-                                    placeholder="Reference number..." />
-                            </td>
-                        </tr>
-                        <tr>
-                            <td style="vertical-align: middle;">
-                                <label class="form-label mb-0">Tax Receipt</label>
-                            </td>
-                            <td>
-                                <div class="form-check">
-                                    <InputCheckbox class="form-check-input" @bind-Value="invoice.IsTaxReceiptIssued"
-                                        id="taxReceipt" />
-                                    <label class="form-check-label" for="taxReceipt">
-                                        Tax Receipt Issued
-                                    </label>
-                                </div>
-                            </td>
-                            <td style="vertical-align: middle;">
-                                <label class="form-label mb-0">Status</label>
-                            </td>
-                            <td>
-                                <div class="form-check">
-                                    <InputCheckbox class="form-check-input" @bind-Value="invoice.Posted" id="posted" />
-                                    <label class="form-check-label" for="posted">
-                                        Posted
-                                    </label>
-                                </div>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
+                    @if (!string.IsNullOrEmpty(successMessage))
+                    {
+                        <div class="alert alert-success alert-dismissible fade show" role="alert">
+                            <i class="fa fa-check-circle me-2"></i>@successMessage
+                            <button type="button" class="btn-close" @onclick="() => successMessage = null"></button>
+                        </div>
+                    }
 
-        <div class="table-container">
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <h5 class="mb-0">Invoice Lines</h5>
-                <button type="button" class="btn btn-success btn-sm" @onclick="AddLine">
-                    <i class="fa fa-plus me-1"></i>Add Line
-                </button>
-            </div>
+                    <!-- Donor Selection -->
+                    <div class="row mb-2">
+                        <div class="col-sm-2">Donor</div>
+                        <div class="col-sm-10">
+                            <InputSelect class="form-control bg-dark text-white border-secondary" @bind-Value="invoice.DonorId">
+                                <option value="0">-- Select Donor --</option>
+                                @foreach (var customer in customers)
+                                {
+                                    <option value="@customer.Id">@customer.Name</option>
+                                }
+                            </InputSelect>
+                            <ValidationMessage For="@(() => invoice.DonorId)" class="text-danger" />
+                        </div>
+                    </div>
 
-            <div class="table-responsive">
-                <table class="table">
+                    <!-- Date Selection -->
+                    <div class="row mb-2">
+                        <div class="col-sm-2">Donation Date</div>
+                        <div class="col-sm-10">
+                            <InputDate class="form-control bg-dark text-white border-secondary" @bind-Value="invoice.DonationDate" />
+                        </div>
+                    </div>
+
+                    <!-- Purpose -->
+                    <div class="row mb-2">
+                        <div class="col-sm-2">Purpose</div>
+                        <div class="col-sm-10">
+                            <InputText class="form-control bg-dark text-white border-secondary" @bind-Value="invoice.Purpose" placeholder="Donation purpose..." />
+                        </div>
+                    </div>
+
+                    <!-- Reference No -->
+                    <div class="row mb-2">
+                        <div class="col-sm-2">Reference No</div>
+                        <div class="col-sm-10">
+                            <InputText class="form-control bg-dark text-white border-secondary" @bind-Value="invoice.ReferenceNo" placeholder="Reference number..." />
+                        </div>
+                    </div>
+
+                    <!-- Flags (Tax Receipt / Posted) -->
+                    <div class="row mb-2">
+                        <div class="col-sm-2">Options</div>
+                        <div class="col-sm-10 d-flex gap-4">
+                            <div class="form-check">
+                                <InputCheckbox class="form-check-input" @bind-Value="invoice.IsTaxReceiptIssued" id="taxReceipt" />
+                                <label class="form-check-label text-white" for="taxReceipt">Tax Receipt Issued</label>
+                            </div>
+                            <div class="form-check">
+                                <InputCheckbox class="form-check-input" @bind-Value="invoice.Posted" id="posted" />
+                                <label class="form-check-label text-white" for="posted">Posted</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Invoice Lines -->
+                <table class="table table-dark mb-0">
                     <thead>
                         <tr>
                             <th>Item</th>
-                            <th>Quantity</th>
-                            <th>Amount</th>
-                            <th>Measurement</th>
-                            <th>Notes</th>
-                            <th></th>
+                            <th style="width: 15%;">Quantity</th>
+                            <th style="width: 15%;">Amount</th>
+                            <th style="width: 20%;">Unit</th>
+                            <th style="width: 20%;">Notes</th>
+                            <th style="width: 50px;"></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -248,7 +115,7 @@ else if (invoice != null)
                             var line = invoice.DonationInvoiceLines![index];
                             <tr>
                                 <td>
-                                    <InputSelect class="form-select" @bind-Value="line.ItemId">
+                                    <InputSelect class="form-select bg-dark text-white border-secondary" @bind-Value="line.ItemId">
                                         <option value="0">-- Select Item --</option>
                                         @foreach (var item in items)
                                         {
@@ -257,13 +124,13 @@ else if (invoice != null)
                                     </InputSelect>
                                 </td>
                                 <td>
-                                    <InputNumber class="form-control" @bind-Value="line.Quantity" />
+                                    <InputNumber class="form-control bg-dark text-white border-secondary" @bind-Value="line.Quantity" />
                                 </td>
                                 <td>
-                                    <InputNumber class="form-control" @bind-Value="line.Amount" />
+                                    <InputNumber class="form-control bg-dark text-white border-secondary" @bind-Value="line.Amount" />
                                 </td>
                                 <td>
-                                    <InputSelect class="form-select" @bind-Value="line.MeasurementId">
+                                    <InputSelect class="form-select bg-dark text-white border-secondary" @bind-Value="line.MeasurementId">
                                         <option value="0">-- Select --</option>
                                         @foreach (var measurement in measurements)
                                         {
@@ -272,43 +139,54 @@ else if (invoice != null)
                                     </InputSelect>
                                 </td>
                                 <td>
-                                    <InputText class="form-control" @bind-Value="line.Notes" placeholder="Notes..." />
+                                    <InputText class="form-control bg-dark text-white border-secondary" @bind-Value="line.Notes" placeholder="Notes..." />
                                 </td>
                                 <td>
                                     @if (invoice.DonationInvoiceLines.Count > 1)
                                     {
-                                        <button type="button" class="btn btn-danger btn-sm" @onclick="() => RemoveLine(index)">
-                                            <i class="fa fa-trash">Remove</i>
+                                        <button type="button" class="btn btn-link text-danger p-0" title="Remove" @onclick="() => RemoveLine(index)">
+                                            <i class="fa fa-trash"></i>
                                         </button>
                                     }
                                 </td>
                             </tr>
                         }
+                        <tr>
+                            <td colspan="6">
+                                <button type="button" class="btn btn-primary btn-sm" @onclick="AddLine">
+                                    <i class="fa fa-plus me-1"></i> Add Row
+                                </button>
+                            </td>
+                        </tr>
                     </tbody>
                 </table>
+                
+                <div class="card-footer bg-dark border-top border-secondary text-end pe-4">
+                    <span class="text-secondary small me-2">Total:</span>
+                    <strong class="text-success h5 mb-0">@invoice.Amount.ToString("C2")</strong>
+                </div>
             </div>
 
-            <div class="mt-3 text-end">
-                <strong>Total: @invoice.Amount.ToString("C2")</strong>
+            <div class="mt-3">
+                <button type="submit" class="btn btn-primary" disabled="@isSaving">
+                    @if (isSaving)
+                    {
+                        <span class="spinner-border spinner-border-sm me-2"></span>
+                    }
+                    <i class="fa fa-save me-2"></i>Save
+                </button>
+                <button type="button" class="btn btn-secondary" @onclick="Cancel">
+                    <i class="fa fa-times me-2"></i>Cancel
+                </button>
             </div>
-        </div>
-
-        <div class="d-flex gap-2">
-            <button type="submit" class="btn btn-primary" disabled="@isSaving">
-                @if (isSaving)
-                {
-                    <span class="spinner-border spinner-border-sm me-2"></span>
-                }
-                <i class="fa fa-save me-2"></i>Save
-            </button>
-            <button type="button" class="btn btn-secondary" @onclick="Cancel">
-                <i class="fa fa-times me-2"></i>Cancel
-            </button>
-        </div>
-    </EditForm>
+        </EditForm>
+    </div>
 }
 
 @code {
+    [Parameter]
+    public int? Id { get; set; }
+
     private DonationInvoice? invoice;
     private List<Customer> customers = new();
     private List<Item> items = new();
@@ -364,22 +242,26 @@ else if (invoice != null)
                 new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new();
             }
 
-            // Initialize invoice
-            invoice = new DonationInvoice
+            // Initialize or load invoice
+            if (Id.HasValue && Id.Value > 0)
             {
-                No = new Random().Next(1, 99999).ToString(),
-                DonationDate = DateTime.Now,
-                DonationInvoiceLines = new List<DonationInvoiceLine>
-{
-new DonationInvoiceLine
-{
-Amount = 0,
-Quantity = 1,
-ItemId = items.FirstOrDefault()?.Id ?? 0,
-MeasurementId = measurements.FirstOrDefault()?.Id ?? 0
-}
-}
-            };
+                var invoiceResponse = await Http.GetAsync($"{apiUrl}Donations/DonationInvoice?id={Id.Value}");
+                if (invoiceResponse.IsSuccessStatusCode)
+                {
+                    var invoiceJson = await invoiceResponse.Content.ReadAsStringAsync();
+                    invoice = JsonSerializer.Deserialize<DonationInvoice>(invoiceJson,
+                        new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                }
+                else
+                {
+                    errorMessage = $"Failed to load existing invoice (Status: {invoiceResponse.StatusCode}). Loading empty form.";
+                    ResetForm();
+                }
+            }
+            else
+            {
+                ResetForm();
+            }
         }
         catch (Exception ex)
         {
@@ -424,16 +306,20 @@ MeasurementId = measurements.FirstOrDefault()?.Id ?? 0
             var json = JsonSerializer.Serialize(invoice);
             var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
 
-            var response = await Http.PostAsync($"{apiUrl}Donations/CreateDonationInvoice", content);
+            var endpoint = Id.HasValue && Id.Value > 0 ? "Donations/UpdateDonationInvoice" : "Donations/CreateDonationInvoice";
+            var response = await Http.PostAsync($"{apiUrl}{endpoint}", content);
 
             if (response.IsSuccessStatusCode)
             {
                 successMessage = $"Donation invoice '{invoice.No}' saved successfully!";
-                ResetForm();
+                if (!Id.HasValue || Id.Value == 0)
+                {
+                    ResetForm();
+                }
 
                 // Auto-navigate after 2 seconds
                 await Task.Delay(2000);
-                NavigationManager.NavigateTo("/donations/donationinvoices");
+                NavigationManager.NavigateTo("/donations/donationinvoices", forceLoad: true);
             }
             else
             {
@@ -471,6 +357,6 @@ MeasurementId = measurements.FirstOrDefault()?.Id ?? 0
 
     private void Cancel()
     {
-        NavigationManager.NavigateTo("/donations/donationinvoices");
+        NavigationManager.NavigateTo("/donations/donationinvoices", forceLoad: true);
     }
 }

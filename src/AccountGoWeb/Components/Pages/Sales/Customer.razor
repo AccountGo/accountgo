@@ -63,7 +63,7 @@
                                     <label class="form-label">No</label>
                                 </div>
                                 <div class="col-sm-8">
-                                    <input type="text" class="form-control" value="@(Model.No ?? "Auto-generated")" disabled />
+                                    <input type="text" class="form-control bg-dark text-white" value="@(Model.No ?? "Auto-generated")" disabled />
                                 </div>
                             </div>
                             <div class="row mb-3">
@@ -71,7 +71,7 @@
                                     <label class="form-label">Name</label>
                                 </div>
                                 <div class="col-sm-8">
-                                    <InputText class="form-control" @bind-Value="Model.Name" placeholder="Name ..." disabled="@(!isEditMode)" />
+                                    <InputText class="form-control bg-dark text-white" @bind-Value="Model.Name" placeholder="Name ..." disabled="@(!isEditMode)" />
                                     <ValidationMessage For="@(() => Model.Name)" class="text-danger" />
                                 </div>
                             </div>
@@ -82,7 +82,7 @@
                                     <label class="form-label">Phone</label>
                                 </div>
                                 <div class="col-sm-8">
-                                    <InputText class="form-control" @bind-Value="Model.Phone" placeholder="Phone ..." disabled="@(!isEditMode)" />
+                                    <InputText class="form-control bg-dark text-white" @bind-Value="Model.Phone" placeholder="Phone ..." disabled="@(!isEditMode)" />
                                 </div>
                             </div>
                             <div class="row mb-3">
@@ -90,7 +90,7 @@
                                     <label class="form-label">Website</label>
                                 </div>
                                 <div class="col-sm-8">
-                                    <InputText class="form-control" @bind-Value="Model.Website" placeholder="Website ..." disabled="@(!isEditMode)" />
+                                    <InputText class="form-control bg-dark text-white" @bind-Value="Model.Website" placeholder="Website ..." disabled="@(!isEditMode)" />
                                 </div>
                             </div>
                             <div class="row mb-3">
@@ -98,7 +98,7 @@
                                     <label class="form-label">Email</label>
                                 </div>
                                 <div class="col-sm-8">
-                                    <InputText class="form-control" @bind-Value="Model.Email" placeholder="Email ..." disabled="@(!isEditMode)" />
+                                    <InputText class="form-control bg-dark text-white" @bind-Value="Model.Email" placeholder="Email ..." disabled="@(!isEditMode)" />
                                 </div>
                             </div>
                         </div>
@@ -128,7 +128,7 @@
                                     <label class="form-label">First Name</label>
                                 </div>
                                 <div class="col-sm-8">
-                                    <InputText class="form-control" @bind-Value="Model.PrimaryContact!.FirstName" placeholder="First Name ..." disabled="@(!isEditMode)" />
+                                    <InputText class="form-control bg-dark text-white" @bind-Value="Model.PrimaryContact!.FirstName" placeholder="First Name ..." disabled="@(!isEditMode)" />
                                 </div>
                             </div>
                             <div class="row mb-3">
@@ -136,7 +136,7 @@
                                     <label class="form-label">Last Name</label>
                                 </div>
                                 <div class="col-sm-8">
-                                    <InputText class="form-control" @bind-Value="Model.PrimaryContact!.LastName" placeholder="Last Name ..." disabled="@(!isEditMode)" />
+                                    <InputText class="form-control bg-dark text-white" @bind-Value="Model.PrimaryContact!.LastName" placeholder="Last Name ..." disabled="@(!isEditMode)" />
                                 </div>
                             </div>
                         </div>
@@ -146,7 +146,7 @@
                                     <label class="form-label">Phone</label>
                                 </div>
                                 <div class="col-sm-8">
-                                    <InputText class="form-control" @bind-Value="Model.PrimaryContact!.Party.Phone" placeholder="Phone ..." disabled="@(!isEditMode)" />
+                                    <InputText class="form-control bg-dark text-white" @bind-Value="Model.PrimaryContact!.Party.Phone" placeholder="Phone ..." disabled="@(!isEditMode)" />
                                 </div>
                             </div>
                             <div class="row mb-3">
@@ -154,7 +154,7 @@
                                     <label class="form-label">Website</label>
                                 </div>
                                 <div class="col-sm-8">
-                                    <InputText class="form-control" @bind-Value="Model.PrimaryContact!.Party.Website" placeholder="Website ..." disabled="@(!isEditMode)" />
+                                    <InputText class="form-control bg-dark text-white" @bind-Value="Model.PrimaryContact!.Party.Website" placeholder="Website ..." disabled="@(!isEditMode)" />
                                 </div>
                             </div>
                             <div class="row mb-3">
@@ -162,7 +162,7 @@
                                     <label class="form-label">Email</label>
                                 </div>
                                 <div class="col-sm-8">
-                                    <InputText class="form-control" @bind-Value="Model.PrimaryContact!.Party.Email" placeholder="Email ..." disabled="@(!isEditMode)" />
+                                    <InputText class="form-control bg-dark text-white" @bind-Value="Model.PrimaryContact!.Party.Email" placeholder="Email ..." disabled="@(!isEditMode)" />
                                 </div>
                             </div>
                         </div>
@@ -183,7 +183,7 @@
                                     <label class="form-label">Accounts Receivable</label>
                                 </div>
                                 <div class="col-sm-8">
-                                    <InputSelect class="form-control" @bind-Value="Model.AccountsReceivableId" disabled="@(!isEditMode)">
+                                    <InputSelect class="form-control bg-dark text-white" @bind-Value="Model.AccountsReceivableId" disabled="@(!isEditMode)">
                                         <option value="">-- Select Account --</option>
                                         @foreach (var account in Accounts)
                                         {
@@ -197,7 +197,7 @@
                                     <label class="form-label">Sales</label>
                                 </div>
                                 <div class="col-sm-8">
-                                    <InputSelect class="form-control" @bind-Value="Model.SalesAccountId" disabled="@(!isEditMode)">
+                                    <InputSelect class="form-control bg-dark text-white" @bind-Value="Model.SalesAccountId" disabled="@(!isEditMode)">
                                         <option value="">-- Select Account --</option>
                                         @foreach (var account in Accounts)
                                         {
@@ -211,7 +211,7 @@
                                     <label class="form-label">Prepayment</label>
                                 </div>
                                 <div class="col-sm-8">
-                                    <InputSelect class="form-control" @bind-Value="Model.PrepaymentAccountId" disabled="@(!isEditMode)">
+                                    <InputSelect class="form-control bg-dark text-white" @bind-Value="Model.PrepaymentAccountId" disabled="@(!isEditMode)">
                                         <option value="">-- Select Account --</option>
                                         @foreach (var account in Accounts)
                                         {
@@ -225,7 +225,7 @@
                                     <label class="form-label">Discount</label>
                                 </div>
                                 <div class="col-sm-8">
-                                    <InputSelect class="form-control" @bind-Value="Model.SalesDiscountAccountId" disabled="@(!isEditMode)">
+                                    <InputSelect class="form-control bg-dark text-white" @bind-Value="Model.SalesDiscountAccountId" disabled="@(!isEditMode)">
                                         <option value="">-- Select Account --</option>
                                         @foreach (var account in Accounts)
                                         {
@@ -241,7 +241,7 @@
                                     <label class="form-label">Tax Group</label>
                                 </div>
                                 <div class="col-sm-8">
-                                    <InputSelect class="form-control" @bind-Value="Model.TaxGroupId" disabled="@(!isEditMode)">
+                                    <InputSelect class="form-control bg-dark text-white" @bind-Value="Model.TaxGroupId" disabled="@(!isEditMode)">
                                         <option value="">-- Select Tax Group --</option>
                                         @foreach (var taxGroup in TaxGroups)
                                         {
@@ -268,7 +268,7 @@
                                     <label class="form-label">Payment Term</label>
                                 </div>
                                 <div class="col-sm-8">
-                                    <InputSelect class="form-control" @bind-Value="Model.PaymentTermId" disabled="@(!isEditMode)">
+                                    <InputSelect class="form-control bg-dark text-white" @bind-Value="Model.PaymentTermId" disabled="@(!isEditMode)">
                                         <option value="">-- Select Payment Term --</option>
                                         @foreach (var term in PaymentTerms)
                                         {

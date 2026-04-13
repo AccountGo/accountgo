@@ -1,4 +1,4 @@
-﻿using Dto.Sales;
+using Dto.Sales;
 using Microsoft.AspNetCore.Mvc;
 
 namespace AccountGoWeb.Controllers
@@ -128,36 +128,15 @@ namespace AccountGoWeb.Controllers
         [HttpGet]
         public IActionResult Quotation(int id)
         {
-            ViewBag.PageContentHeader = "Sales";
-
-            SalesQuotation? model = null;
+            ViewBag.PageContentHeader = "Sales Quotation";
 
             if (id == 0)
             {
                 ViewBag.PageContentHeader = "Add Sales Quotation";
                 return View("AddSalesQuotation");
             }
-            else
-            {
-                model = GetAsync<SalesQuotation>("Sales/Quotation?id=" + id).Result;
-                @ViewBag.Id = model.Id;
-                @ViewBag.QuotationDate = model.QuotationDate;
-                @ViewBag.CustomerName = model.CustomerName;
-                @ViewBag.PaymentTermId = model.PaymentTermId;
-                @ViewBag.SalesQuotationLines = model.SalesQuotationLines;
-                @ViewBag.TotalAmount = model.Amount;
 
-                var paymentTermsList = Models.SelectListItemHelper.PaymentTerms();
-                var selectedPaymentTerm = paymentTermsList.FirstOrDefault(pt => pt.Value == model.PaymentTermId.ToString());
-                @ViewBag.SelectedPaymentTerm = selectedPaymentTerm?.Text ?? "N/A";
-            }
-
-            @ViewBag.Customers = Models.SelectListItemHelper.Customers();
-            ViewBag.Items = Models.SelectListItemHelper.Items();
-            @ViewBag.PaymentTerms = Models.SelectListItemHelper.PaymentTerms();
-            @ViewBag.Measurements = Models.SelectListItemHelper.Measurements();
-
-            return View(model);
+            return View();
         }
 
         [HttpPost]

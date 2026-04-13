@@ -51,7 +51,7 @@
                             <label class="col-sm-3 col-form-label">Customer</label>
                             <div class="col-sm-9">
                                 <select
-                                    class="form-control @(string.IsNullOrEmpty(customerId?.ToString()) && submitAttempted ? "is-invalid" : "")"
+                                    class="form-control bg-dark text-white @(string.IsNullOrEmpty(customerId?.ToString()) && submitAttempted ? "is-invalid" : "")"
                                     @onchange="OnCustomerChanged">
                                     <option value="">-- Select Customer --</option>
                                     @foreach (var customer in customers)
@@ -68,14 +68,14 @@
                         <div class="row mb-3">
                             <label class="col-sm-3 col-form-label">Date</label>
                             <div class="col-sm-9">
-                                <input type="date" class="form-control" @bind="receiptDate" />
+                                <input type="date" class="form-control bg-dark text-white" @bind="receiptDate" />
                             </div>
                         </div>
                         <div class="row mb-3">
                             <label class="col-sm-3 col-form-label">Debit</label>
                             <div class="col-sm-9">
                                 <select
-                                    class="form-control @(string.IsNullOrEmpty(accountToDebitId?.ToString()) && submitAttempted ? "is-invalid" : "")"
+                                    class="form-control bg-dark text-white @(string.IsNullOrEmpty(accountToDebitId?.ToString()) && submitAttempted ? "is-invalid" : "")"
                                     @bind="accountToDebitId">
                                     <option value="">-- Select Account --</option>
                                     @foreach (var account in debitAccounts)
@@ -93,7 +93,7 @@
                             <label class="col-sm-3 col-form-label">Credit</label>
                             <div class="col-sm-9">
                                 <select
-                                    class="form-control @((!IsValidCreditAccount() && submitAttempted) ? "is-invalid" : "")"
+                                    class="form-control bg-dark text-white @((!IsValidCreditAccount() && submitAttempted) ? "is-invalid" : "")"
                                     @bind="accountToCreditId" id="optAccountToCreditId">
                                     <option value="">-- Select Account --</option>
                                     @foreach (var account in creditAccounts)
@@ -112,7 +112,7 @@
                             <label class="col-sm-3 col-form-label">Amount</label>
                             <div class="col-sm-9">
                                 <input type="number" step="0.01"
-                                    class="form-control @(amount <= 0 && submitAttempted ? "is-invalid" : "")"
+                                    class="form-control bg-dark text-white @(amount <= 0 && submitAttempted ? "is-invalid" : "")"
                                     @bind="amount" placeholder="0.0" />
                                 @if (amount <= 0 && submitAttempted)
                                 {
