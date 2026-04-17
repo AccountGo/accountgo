@@ -25,6 +25,7 @@
     <link href="https://cdn.jsdelivr.net/npm/pace-js@latest/pace-theme-default.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://unpkg.com/ag-grid-community/styles/ag-grid.css">
     <link rel="stylesheet" href="https://unpkg.com/ag-grid-community/styles/ag-theme-alpine.css">
+    @RenderSection("Styles", required: false)
 
 </head>
 
@@ -68,7 +69,7 @@
                         </li>
                         <li>
                             <a class="nav-link" asp-area="" asp-controller="Sales" asp-action="SalesReceipts">
-                                Sales Receipts
+                                Customer Payments
                             </a>
                         </li>
                         <li>

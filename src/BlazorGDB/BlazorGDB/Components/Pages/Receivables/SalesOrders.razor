@@ -1,9 +1,239 @@
 ﻿@page "/receivables/sales-orders"
+@using SalesOrderDto = Dto.Sales.SalesOrder
+@inject HttpClient Http
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
 
 <PageTitle>Sales Orders</PageTitle>
 
-<h3>Sales Orders</h3>
+<div class="sales-orders-page">
+    <div class="page-header">
+        <h1>Sales Orders</h1>
+
+        <div class="toolbar-actions">
+            <button class="btn btn-primary new-order-btn" @onclick="NavigateToNewOrder">
+                New Sales Order
+            </button>
+
+
+            <button class="toolbar-link"
+                    @onclick="ViewSelectedOrder"
+                    disabled="@(selectedOrder is null)">
+                <span class="icon">✎</span> View
+            </button>
+
+            <button class="toolbar-link"
+                type="button"
+                disabled="@(true)">
+                <span>+</span> Create Invoice
+            </button>
+
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="empty-state">Loading sales orders...</div>
+    }
+    else if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <div class="alert alert-danger">@errorMessage</div>
+    }
+    else if (salesOrders.Count == 0)
+    {
+        <div class="empty-state">No sales orders found.</div>
+    }
+    else
+    {
+        <div class="table-shell">
+            <table class="table orders-table">
+                <thead>
+                    <tr>
+                        <th @onclick='() => SortBy(nameof(SalesOrderDto.Id))'>No @GetSortIndicator(nameof(SalesOrderDto.Id))</th>
+                        <th @onclick='() => SortBy(nameof(SalesOrderDto.CustomerName))'>Customer Name @GetSortIndicator(nameof(SalesOrderDto.CustomerName))</th>
+                        <th @onclick='() => SortBy(nameof(SalesOrderDto.OrderDate))'>Order Date @GetSortIndicator(nameof(SalesOrderDto.OrderDate))</th>
+                        <th @onclick='() => SortBy(nameof(SalesOrderDto.ReferenceNo))'>Ref no @GetSortIndicator(nameof(SalesOrderDto.ReferenceNo))</th>
+                        <th class="text-end">Amount</th>
+                        <th @onclick='() => SortBy(nameof(SalesOrderDto.StatusId))'>Status @GetSortIndicator(nameof(SalesOrderDto.StatusId))</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var order in GetSortedOrders())
+                    {
+                        var isSelected = selectedOrder?.Id == order.Id;
+
+                        <tr class="clickable-row @(isSelected ? "selected-row" : "")"
+                            @key="order.Id"
+                            @onclick="() => SelectOrder(order)">
+
+                            <td>@order.Id</td>
+                            <td>@order.CustomerName</td>
+                            <td>@order.OrderDate.ToString("yyyy-MM-dd")</td>
+                            <td>@order.ReferenceNo</td>
+                            <td class="text-end">@((order.Amount ?? 0m).ToString("0.00"))</td>
+                            <td>@GetStatusLabel(order.StatusId)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
 
 @code {
+    // Stores the sales orders shown in the list page.
+    private List<SalesOrderDto> salesOrders = new();
 
+    // Tracks the currently selected row.
+    // The View action reads from this value.
+    private SalesOrderDto? selectedOrder;
+
+    // Holds a message when loading fails.
+    private string? errorMessage;
+
+    // True while the page is waiting for the API response.
+    private bool isLoading = true;
+
+    // Name of the property currently used for sorting.
+    private string sortBy = nameof(SalesOrderDto.Id);
+
+    // True means ascending sort, false means descending sort.
+    private bool sortAscending = true;
+
+    // Base API URL loaded from environment so the page can call the backend.
+    private string baseApiUrl = string.Empty;
+
+    /// <summary>
+    /// Runs once when the page is first created.
+    /// It reads the API base URL and then loads the sales orders from the server.
+    /// </summary>
+    protected override async Task OnInitializedAsync()
+    {
+        baseApiUrl = Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
+        await LoadSalesOrders();
+    }
+
+    /// <summary>
+    /// Calls the sales orders API and fills the table data.
+    /// If the request fails, it stores an error message for the UI.
+    /// It always turns off the loading state when finished.
+    /// </summary>
+    private async Task LoadSalesOrders()
+    {
+        try
+        {
+            var response = await Http.GetAsync($"{baseApiUrl}sales/salesorders");
+            if (response.IsSuccessStatusCode)
+            {
+                salesOrders = await response.Content.ReadFromJsonAsync<List<SalesOrderDto>>() ?? new();
+            }
+            else
+            {
+                errorMessage = "Unable to load sales orders.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading sales orders: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    /// <summary>
+    /// Returns the sales order list in the current sort order.
+    /// The method switches on the selected column name and applies either
+    /// ascending or descending ordering to that field.
+    /// </summary>
+    private IEnumerable<SalesOrderDto> GetSortedOrders() => sortBy switch
+    {
+        nameof(SalesOrderDto.CustomerName) => sortAscending ? salesOrders.OrderBy(x => x.CustomerName) : salesOrders.OrderByDescending(x => x.CustomerName),
+        nameof(SalesOrderDto.OrderDate) => sortAscending ? salesOrders.OrderBy(x => x.OrderDate) : salesOrders.OrderByDescending(x => x.OrderDate),
+        nameof(SalesOrderDto.ReferenceNo) => sortAscending ? salesOrders.OrderBy(x => x.ReferenceNo) : salesOrders.OrderByDescending(x => x.ReferenceNo),
+        nameof(SalesOrderDto.StatusId) => sortAscending ? salesOrders.OrderBy(x => x.StatusId) : salesOrders.OrderByDescending(x => x.StatusId),
+        _ => sortAscending ? salesOrders.OrderBy(x => x.Id) : salesOrders.OrderByDescending(x => x.Id)
+    };
+
+    /// <summary>
+    /// Updates the current sort settings when a column header is clicked.
+    /// Clicking the same column flips the sort direction.
+    /// Clicking a different column changes the sort field and resets to ascending.
+    /// </summary>
+    private void SortBy(string column)
+    {
+        if (sortBy == column)
+        {
+            sortAscending = !sortAscending;
+        }
+        else
+        {
+            sortBy = column;
+            sortAscending = true;
+        }
+    }
+
+    /// <summary>
+    /// Returns the small arrow shown beside the active sorted column.
+    /// Empty string means that column is not currently sorted.
+    /// </summary>
+    private string GetSortIndicator(string column)
+    {
+        if (sortBy != column) return string.Empty;
+        return sortAscending ? "↓" : "↑";
+    }
+
+    /// <summary>
+    /// Marks a row as selected.
+    /// If the same row is clicked again, it clears the selection.
+    /// The selected row is used to enable the View action.
+    /// </summary>
+    private void SelectOrder(SalesOrderDto order)
+    {
+        if (selectedOrder?.Id == order.Id)
+        {
+            selectedOrder = null;
+            return;
+        }
+
+        selectedOrder = order;
+    }
+
+    /// <summary>
+    /// Navigates to the read-only sales order detail page for the selected row.
+    /// If nothing is selected, the method exits without doing anything.
+    /// </summary>
+    private void ViewSelectedOrder()
+    {
+        if (selectedOrder is null)
+            return;
+
+        Navigation.NavigateTo($"/receivables/sales-order/{selectedOrder.Id}");
+    }
+
+    /// <summary>
+    /// Opens the page for creating a brand-new sales order.
+    /// </summary>
+    private void NavigateToNewOrder()
+    {
+        Navigation.NavigateTo("/receivables/sales-order");
+    }
+
+    /// <summary>
+    /// Converts numeric backend status ids into labels shown in the table.
+    /// This keeps the UI readable without exposing raw integer status codes.
+    /// </summary>
+    private static string GetStatusLabel(int? statusId) => statusId switch
+    {
+        0 => "Draft",
+        1 => "Open",
+        2 => "Overdue",
+        3 => "Closed",
+        4 => "Void",
+        5 => "Partially Invoiced",
+        6 => "Fully Invoiced",
+        _ => "N/A"
+    };
 }
+

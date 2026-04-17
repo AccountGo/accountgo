@@ -1,14 +1,233 @@
-﻿@page "/receivables/sales-quotations"
+@page "/receivables/sales-quotations"
+@using Dto.Sales
+@inject HttpClient Http
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
 
 <PageTitle>Sales Quotations</PageTitle>
 
-<h3>Sales Quotations</h3>
+<div class="container-fluid">
+    <div class="row mb-3">
+        <div class="col">
+            <h3>Sales Quotations</h3>
+        </div>
+    </div>
 
-<Dropdown Color="DropdownColor.Secondary">
-    <DropdownToggleButton>Dropdown button</DropdownToggleButton>
-    <DropdownMenu>
-        <DropdownItem To="#" Type="DropdownItemType.Link">Action</DropdownItem>
-        <DropdownItem To="#" Type="DropdownItemType.Link">Another action</DropdownItem>
-        <DropdownItem To="#" Type="DropdownItemType.Link">Something else here</DropdownItem>
-    </DropdownMenu>
-</Dropdown>
+    <div class="row mb-3">
+        <div class="col">
+            <button class="btn btn-primary" @onclick="NavigateToNewQuotation">
+                <i class="fa fa-plus"></i> New Quotation
+            </button>
+            @if (selectedQuotation != null)
+            {
+                <button class="btn btn-secondary ms-2" @onclick="NavigateToViewQuotation">
+                    <i class="fa fa-edit"></i> View
+                </button>
+
+                @if (selectedQuotation.StatusId == 1)
+                {
+                    <button class="btn btn-success ms-2" @onclick="NavigateToNewOrder">
+                        <i class="fa fa-plus"></i> New Order
+                    </button>
+                }
+            }
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="row">
+            <div class="col text-center">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mt-2">Loading quotations...</p>
+            </div>
+        </div>
+    }
+    else if (errorMessage != null)
+    {
+        <div class="row">
+            <div class="col">
+                <div class="alert alert-danger" role="alert">
+                    <i class="fa fa-exclamation-triangle"></i> @errorMessage
+                </div>
+            </div>
+        </div>
+    }
+    else if (quotations == null || !quotations.Any())
+    {
+        <div class="row">
+            <div class="col">
+                <div class="alert alert-info" role="alert">
+                    <i class="fa fa-info-circle"></i> No quotations found.
+                </div>
+            </div>
+        </div>
+    }
+    else
+    {
+        @*Quotation Table*@
+        <div class="row">
+            <div class="col">
+                <div class="table-responsive">
+                    <table class="table table-hover table-bordered">
+                        <thead class="thead-dark">
+                            <tr>
+                                <th @onclick="() => SortBy(nameof(SalesQuotation.No))" style="cursor: pointer;">
+                                    No @GetSortIcon(nameof(SalesQuotation.No))
+                                </th>
+                                <th @onclick="() => SortBy(nameof(SalesQuotation.CustomerName))" style="cursor: pointer;">
+                                    Customer @GetSortIcon(nameof(SalesQuotation.CustomerName))
+                                </th>
+                                <th @onclick="() => SortBy(nameof(SalesQuotation.QuotationDate))" style="cursor: pointer;">
+                                    Date @GetSortIcon(nameof(SalesQuotation.QuotationDate))
+                                </th>
+                                <th @onclick="() => SortBy(nameof(SalesQuotation.Amount))" style="cursor: pointer;">
+                                    Amount @GetSortIcon(nameof(SalesQuotation.Amount))
+                                </th>
+                                <th @onclick="() => SortBy(nameof(SalesQuotation.SalesQuoteStatus))" style="cursor: pointer;">
+                                    Status @GetSortIcon(nameof(SalesQuotation.SalesQuoteStatus))
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var q in quotations)
+                            {
+                                <tr @onclick="() => SelectQuotation(q)"
+                                    class="@(selectedQuotation?.Id == q.Id ? "table-active" : string.Empty)" style="cursor: pointer;">
+                                    <td>@q.No</td>
+                                    <td>@q.CustomerName</td>
+                                    <td>@q.QuotationDate.ToShortDateString()</td>
+                                    <td class="text-end">@q.Amount.ToString("N2")</td>
+                                    <td>@q.SalesQuoteStatus</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col">
+                <p class="text-muted">Total: @quotations.Count() quotation(s)</p>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private List<SalesQuotation>? quotations;
+    private SalesQuotation? selectedQuotation;
+    private bool isLoading = true;
+    private string? errorMessage;
+    private string? sortColumn;
+    private bool sortAscending = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadQuotations();
+    }
+
+    private async Task LoadQuotations()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            string baseApiUrl = Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
+            var apiUrl = baseApiUrl + "sales/quotations";
+            var response = await Http.GetAsync(apiUrl);
+
+            if (response.IsSuccessStatusCode)
+            {
+                quotations = await response.Content.ReadFromJsonAsync<List<SalesQuotation>>();
+            }
+            else
+            {
+                errorMessage = $"Failed to load quotations. Status: {response.StatusCode}";
+            }
+        }
+        catch (HttpRequestException ex)
+        {
+            errorMessage = $"Network error: {ex.Message}. Please ensure the API is running.";
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading quotations: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void SelectQuotation(SalesQuotation quotation)
+    {
+        selectedQuotation = quotation;
+    }
+
+    private void NavigateToNewQuotation()
+    {
+        Navigation.NavigateTo("/receivables/sales-quotation/new");
+    }
+
+    private void NavigateToViewQuotation()
+    {
+        if (selectedQuotation != null)
+        {
+            Navigation.NavigateTo($"/receivables/sales-quotation/{selectedQuotation.Id}");
+        }
+    }
+
+    private void NavigateToNewOrder()
+    {
+        if (selectedQuotation != null)
+        {
+            Navigation.NavigateTo($"/receivables/new-sales-order?quotationId={selectedQuotation.Id}");
+        }
+    }
+
+    private void SortBy(string column)
+    {
+        if (quotations == null) return;
+
+        if (sortColumn == column)
+        {
+            sortAscending = !sortAscending;
+        }
+        else
+        {
+            sortColumn = column;
+            sortAscending = true;
+        }
+
+        quotations = column switch
+        {
+            nameof(SalesQuotation.No) => sortAscending
+                ? quotations.OrderBy(q => q.No).ToList()
+                : quotations.OrderByDescending(q => q.No).ToList(),
+            nameof(SalesQuotation.CustomerName) => sortAscending
+                ? quotations.OrderBy(q => q.CustomerName).ToList()
+                : quotations.OrderByDescending(q => q.CustomerName).ToList(),
+            nameof(SalesQuotation.QuotationDate) => sortAscending
+                ? quotations.OrderBy(q => q.QuotationDate).ToList()
+                : quotations.OrderByDescending(q => q.QuotationDate).ToList(),
+            nameof(SalesQuotation.Amount) => sortAscending
+                ? quotations.OrderBy(q => q.Amount).ToList()
+                : quotations.OrderByDescending(q => q.Amount).ToList(),
+            nameof(SalesQuotation.SalesQuoteStatus) => sortAscending
+                ? quotations.OrderBy(q => q.SalesQuoteStatus).ToList()
+                : quotations.OrderByDescending(q => q.SalesQuoteStatus).ToList(),
+            _ => quotations
+        };
+    }
+
+    private string GetSortIcon(string column)
+    {
+        if (sortColumn != column) return "";
+        return sortAscending ? "▲" : "▼";
+    }
+}

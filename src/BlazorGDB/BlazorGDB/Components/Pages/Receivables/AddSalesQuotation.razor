@@ -1,0 +1,379 @@
+@page "/receivables/sales-quotation/new"
+@using Dto.Sales
+@inject HttpClient Http
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+
+<PageTitle>New Sales Quotation</PageTitle>
+
+<style>
+    .form-label {
+        color: white;
+    }
+</style>
+
+<div class="container-fluid">
+    <div class="row mb-3">
+        <div class="col">
+            <h3>New Sales Quotation</h3>
+        </div>
+        <div class="col text-end">
+            <a href="/receivables/sales-quotations" class="btn btn-outline-secondary">Back to List</a>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="row">
+            <div class="col text-center">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mt-2">Loading form data...</p>
+            </div>
+        </div>
+    }
+    else if (errorMessage != null && !isSaving)
+    {
+        <div class="row">
+            <div class="col">
+                <div class="alert alert-danger" role="alert">
+                    <i class="fa fa-exclamation-triangle"></i> @errorMessage
+                </div>
+            </div>
+        </div>
+    }
+    else
+    {
+        @if (successMessage != null)
+        {
+            <div class="row mb-3">
+                <div class="col">
+                    <div class="alert alert-success" role="alert">
+                        <i class="fa fa-check-circle"></i> @successMessage
+                    </div>
+                </div>
+            </div>
+        }
+
+        @if (errorMessage != null && isSaving)
+        {
+            <div class="row mb-3">
+                <div class="col">
+                    <div class="alert alert-danger" role="alert">
+                        <i class="fa fa-exclamation-triangle"></i> @errorMessage
+                    </div>
+                </div>
+            </div>
+        }
+
+        <EditForm Model="@model" OnValidSubmit="SaveQuotation">
+            <DataAnnotationsValidator />
+            <ValidationSummary />
+
+            @* Quotation Details *@
+            <div class="card mb-3">
+                <div class="card-header">
+                    <i class="fa fa-align-justify"></i> Quotation Details
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-sm-6">
+                            <div class="row mb-3">
+                                <div class="col-sm-4">
+                                    <label class="form-label">Customer</label>
+                                </div>
+                                <div class="col-sm-8">
+                                    <InputSelect class="form-control" @bind-Value="model.CustomerId">
+                                        <option value="">-- Select Customer --</option>
+                                        @foreach (var c in Customers)
+                                        {
+                                            <option value="@c.Id">@c.Name</option>
+                                        }
+                                    </InputSelect>
+                                    <ValidationMessage For="@(() => model.CustomerId)" />
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-sm-6">
+                            <div class="row mb-3">
+                                <div class="col-sm-4">
+                                    <label class="form-label">Payment Term</label>
+                                </div>
+                                <div class="col-sm-8">
+                                    <InputSelect class="form-control" @bind-Value="model.PaymentTermId">
+                                        <option value="">-- Select Payment Term --</option>
+                                        @foreach (var pt in PaymentTerms)
+                                        {
+                                            <option value="@pt.Id">@pt.Description</option>
+                                        }
+                                    </InputSelect>
+                                    <ValidationMessage For="@(() => model.PaymentTermId)" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-sm-6">
+                            <div class="row mb-3">
+                                <div class="col-sm-4">
+                                    <label class="form-label">Quotation Date</label>
+                                </div>
+                                <div class="col-sm-8">
+                                    <InputDate class="form-control" @bind-Value="model.QuotationDate" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            @* Quotation Lines *@
+            <div class="card mb-3">
+                <div class="card-header">
+                    <i class="fa fa-list"></i> Line Items
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover table-bordered">
+                            <thead class="thead-dark">
+                                <tr>
+                                    <th>Item</th>
+                                    <th>Quantity</th>
+                                    <th>Amount</th>
+                                    <th>Discount</th>
+                                    <th>Measurement</th>
+                                    <th style="width: 60px;"></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (model.SalesQuotationLines != null)
+                                {
+                                    @for (int i = 0; i < model.SalesQuotationLines.Count; i++)
+                                    {
+                                        var index = i;
+                                        var line = model.SalesQuotationLines[index];
+                                        <tr @key="line">
+                                            <td>
+                                                <select class="form-control" @bind="line.ItemId">
+                                                    <option value="">-- Select --</option>
+                                                    @foreach (var item in Items)
+                                                    {
+                                                        <option value="@item.Id">@item.Description</option>
+                                                    }
+                                                </select>
+                                            </td>
+                                            <td>
+                                                <InputNumber class="form-control" @bind-Value="line.Quantity" placeholder="1.00" />
+                                            </td>
+                                            <td>
+                                                <InputNumber class="form-control" @bind-Value="line.Amount" placeholder="0.00" />
+                                            </td>
+                                            <td>
+                                                <InputNumber class="form-control" @bind-Value="line.Discount" placeholder="0.00" />
+                                            </td>
+                                            <td>
+                                                <select class="form-control" @bind="line.MeasurementId">
+                                                    <option value="">-- Select --</option>
+                                                    @foreach (var m in Measurements)
+                                                    {
+                                                        <option value="@m.Id">@m.Description</option>
+                                                    }
+                                                </select>
+                                            </td>
+                                            <td>
+                                                <button type="button" class="btn btn-sm btn-danger" @onclick="() => RemoveRow(index)">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#e3e3e3"><path d="M280-120q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680-120H280Zm400-600H280v520h400v-520ZM360-280h80v-360h-80v360Zm160 0h80v-360h-80v360ZM280-720v520-520Z"/></svg>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <button type="button" class="btn btn-primary" @onclick="AddRow">
+                        <i class="fa fa-plus"></i> Add Row
+                    </button>
+                </div>
+            </div>
+
+            <div class="row mt-3">
+                <div class="col">
+                    <button type="submit" class="btn btn-primary" disabled="@isSaving">
+                        <i class="fa fa-save"></i> @(isSaving ? "Saving..." : "Save")
+                    </button>
+                    <button type="button" class="btn btn-secondary ms-2" @onclick="Close">
+                        <i class="fa fa-times"></i> Close
+                    </button>
+                </div>
+            </div>
+        </EditForm>
+    }
+</div>
+
+@code {
+    private SalesQuotation model = new SalesQuotation
+    {
+        QuotationDate = DateTime.Now,
+        SalesQuotationLines = new List<SalesQuotationLine>
+        {
+            new SalesQuotationLine
+            {
+                ItemId = 1,
+                MeasurementId = 1,
+                Quantity = 1.00m,
+                Amount = 0.00m,
+                Discount = 0.00m
+            }
+        }
+    };
+
+    private List<ItemDto> Items = new();
+    private List<PaymentTermDto> PaymentTerms = new();
+    private List<MeasurementDto> Measurements = new();
+    private List<CustomerListDto> Customers = new();
+
+    private bool isLoading = true;
+    private bool isSaving = false;
+    private string? errorMessage;
+    private string? successMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        isLoading = true;
+        try
+        {
+            string baseApiUrl = Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
+
+            Customers = await LoadData<List<CustomerListDto>>(baseApiUrl + "sales/customers") ?? new();
+            PaymentTerms = await LoadData<List<PaymentTermDto>>(baseApiUrl + "common/paymentterms") ?? new();
+            Items = await LoadData<List<ItemDto>>(baseApiUrl + "inventory/items") ?? new();
+            Measurements = await LoadData<List<MeasurementDto>>(baseApiUrl + "common/measurements") ?? new();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading form data: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task<T?> LoadData<T>(string url)
+    {
+        var response = await Http.GetAsync(url);
+        if (!response.IsSuccessStatusCode) return default;
+        var json = await response.Content.ReadAsStringAsync();
+        return System.Text.Json.JsonSerializer.Deserialize<T>(json,
+            new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+    }
+
+    private void AddRow()
+    {
+        model.SalesQuotationLines ??= new List<SalesQuotationLine>();
+        model.SalesQuotationLines.Add(new SalesQuotationLine
+        {
+            ItemId = 1,
+            MeasurementId = 1,
+            Quantity = 1.00m,
+            Amount = 0.00m,
+            Discount = 0.00m
+        });
+    }
+
+    private void RemoveRow(int index)
+    {
+        if (model.SalesQuotationLines != null && model.SalesQuotationLines.Count > 1)
+        {
+            model.SalesQuotationLines.RemoveAt(index);
+        }
+    }
+
+    private void Close()
+    {
+        Navigation.NavigateTo("/receivables/sales-quotations");
+    }
+
+    private async Task SaveQuotation()
+    {
+        try
+        {
+            isSaving = true;
+            errorMessage = null;
+            successMessage = null;
+
+            if (model.CustomerId == null || model.CustomerId == 0)
+            {
+                errorMessage = "Please select a customer.";
+                isSaving = false;
+                return;
+            }
+
+            model.CustomerName = Customers.FirstOrDefault(c => c.Id == model.CustomerId)?.Name;
+            model.QuotationDate = model.QuotationDate == default ? DateTime.Now : model.QuotationDate;
+            model.StatusId = 0;
+            model.SalesQuoteStatus = "Draft";
+
+            foreach (var line in model.SalesQuotationLines)
+            {
+                if (line.ItemId == null || line.ItemId == 0) line.ItemId = 1;
+                if (line.MeasurementId == null || line.MeasurementId == 0) line.MeasurementId = 1;
+                if (line.Quantity == null || line.Quantity == 0) line.Quantity = 1.0m;
+                line.Amount ??= 0.0m;
+                line.Discount ??= 0.0m;
+            }
+
+            var json = System.Text.Json.JsonSerializer.Serialize(model,
+                new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+            var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
+
+            string baseApiUrl = Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
+            var response = await Http.PostAsync(baseApiUrl + "sales/SaveQuotation", content);
+
+            if (response.IsSuccessStatusCode)
+            {
+                Navigation.NavigateTo("/receivables/sales-quotations");
+            }
+            else
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                errorMessage = $"Failed to save quotation. Status: {response.StatusCode}. {errorContent}";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error saving quotation: {ex.Message}";
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    public class ItemDto
+    {
+        public int Id { get; set; }
+        public string Description { get; set; } = string.Empty;
+    }
+
+    public class PaymentTermDto
+    {
+        public int Id { get; set; }
+        public string Description { get; set; } = string.Empty;
+    }
+
+    public class MeasurementDto
+    {
+        public int Id { get; set; }
+        public string Description { get; set; } = string.Empty;
+    }
+
+    public class CustomerListDto
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+    }
+}

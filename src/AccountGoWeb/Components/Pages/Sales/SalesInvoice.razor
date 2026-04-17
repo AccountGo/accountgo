@@ -42,18 +42,18 @@
                         <div class="row mb-3">
                             <div class="col-md-6">
                                 <label class="form-label"><strong>Invoice ID</strong></label>
-                                <input type="text" class="form-control" @bind="invoiceId" readonly />
+                                <input type="text" class="form-control bg-dark text-white" @bind="invoiceId" readonly />
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label"><strong>Invoice Date</strong></label>
-                                <input type="date" class="form-control" @bind="invoiceDate" />
+                                <input type="date" class="form-control bg-dark text-white" @bind="invoiceDate" />
                             </div>
                         </div>
 
                         <div class="row mb-3">
                             <div class="col-md-6">
                                 <label class="form-label"><strong>Customer</strong></label>
-                                <select class="form-control" @bind="customerId">
+                                <select class="form-control bg-dark text-white" @bind="customerId">
                                     <option value="0">-- Select Customer --</option>
                                     @foreach (var customer in customers)
                                     {
@@ -63,7 +63,7 @@
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label"><strong>Payment Term</strong></label>
-                                <select class="form-control" @bind="paymentTermId">
+                                <select class="form-control bg-dark text-white" @bind="paymentTermId">
                                     <option value="0">-- Select Payment Term --</option>
                                     @foreach (var term in paymentTerms)
                                     {
@@ -76,14 +76,14 @@
                         <div class="row mb-3">
                             <div class="col-md-6">
                                 <label class="form-label"><strong>Total Amount</strong></label>
-                                <input type="text" class="form-control" value="@FormattedTotalAmount" readonly />
+                                <input type="text" class="form-control bg-dark text-white" value="@FormattedTotalAmount" readonly />
                             </div>
                         </div>
 
                         <h5 class="mt-4 mb-3">Line Items</h5>
                         <div class="table-responsive">
-                            <table class="table table-sm table-bordered">
-                                <thead class="table-light">
+                            <table class="table table-sm table-bordered table-dark">
+                                <thead>
                                     <tr>
                                         <th>Item</th>
                                         <th>Quantity</th>
@@ -99,7 +99,7 @@
                                         {
                                             <tr>
                                                 <td>
-                                                    <select class="form-control form-control-sm" @bind="line.ItemId">
+                                                    <select class="form-control form-control-sm bg-dark text-white" @bind="line.ItemId">
                                                         <option value="0">-- Select Item --</option>
                                                         @foreach (var item in items)
                                                         {
@@ -108,20 +108,20 @@
                                                     </select>
                                                 </td>
                                                 <td>
-                                                    <input type="number" class="form-control form-control-sm" @bind="line.Quantity"
+                                                    <input type="number" class="form-control form-control-sm bg-dark text-white" @bind="line.Quantity"
                                                         step="0.01" />
                                                 </td>
                                                 <td>
-                                                    <input type="number" class="form-control form-control-sm" @bind="line.Amount"
+                                                    <input type="number" class="form-control form-control-sm bg-dark text-white" @bind="line.Amount"
                                                         step="0.01" />
                                                 </td>
                                                 <td>
-                                                    <input type="number" class="form-control form-control-sm" @bind="line.Discount"
+                                                    <input type="number" class="form-control form-control-sm bg-dark text-white" @bind="line.Discount"
                                                         step="0.01" />
                                                 </td>
                                                 <td>
-                                                    <select class="form-control form-control-sm" @bind="line.MeasurementId">
-                                            <option value="0">-- Select Unit --</option>
+                                                    <select class="form-control form-control-sm bg-dark text-white" @bind="line.MeasurementId">
+                                                        <option value="0">-- Select Unit --</option>
                                                         @foreach (var measurement in measurements)
                                                         {
                                                             <option value="@measurement.id">@measurement.description</option>

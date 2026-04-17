@@ -152,14 +152,14 @@ namespace Api.Controllers
                     Id = icj.Id,
                     In = icj.INQty,
                     Out = icj.OUTQty,
-                    Item = icj.Item.Description,
-                    Measurement = icj.Measurement.Code,
+                    Item = icj.Item?.Description ?? $"Item {icj.ItemId}",
+                    Measurement = icj.Measurement?.Code ?? $"Measurement {icj.MeasurementId}",
                     Date = icj.Date
                 });
             }
 
             _logger.LogInformation("ICJ Count: " + icjDto.Count);
-            return new ObjectResult(icjDto.AsEnumerable());
-        }    
+            return Ok(icjDto.AsEnumerable());
+        }
     }
 }

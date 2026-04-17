@@ -63,7 +63,7 @@
                                     <label class="form-label">No</label>
                                 </div>
                                 <div class="col-sm-8">
-                                    <input type="text" class="form-control" value="@(Model.No ?? "Auto-generated")" disabled />
+                                    <input type="text" class="form-control bg-dark text-white" value="@(Model.No ?? "Auto-generated")" disabled />
                                 </div>
                             </div>
                             <div class="row mb-3">
@@ -71,7 +71,7 @@
                                     <label class="form-label">Name</label>
                                 </div>
                                 <div class="col-sm-8">
-                                    <InputText class="form-control" @bind-Value="Model.Name" placeholder="Name ..." disabled="@(!isEditMode)" />
+                                    <InputText class="form-control bg-dark text-white" @bind-Value="Model.Name" placeholder="Name ..." disabled="@(!isEditMode)" />
                                     <ValidationMessage For="@(() => Model.Name)" class="text-danger" />
                                 </div>
                             </div>
@@ -82,7 +82,7 @@
                                     <label class="form-label">Phone</label>
                                 </div>
                                 <div class="col-sm-8">
-                                    <InputText class="form-control" @bind-Value="Model.Phone" placeholder="Phone ..." disabled="@(!isEditMode)" />
+                                    <InputText class="form-control bg-dark text-white" @bind-Value="Model.Phone" placeholder="Phone ..." disabled="@(!isEditMode)" />
                                 </div>
                             </div>
                             <div class="row mb-3">
@@ -90,7 +90,7 @@
                                     <label class="form-label">Website</label>
                                 </div>
                                 <div class="col-sm-8">
-                                    <InputText class="form-control" @bind-Value="Model.Website" placeholder="Website ..." disabled="@(!isEditMode)" />
+                                    <InputText class="form-control bg-dark text-white" @bind-Value="Model.Website" placeholder="Website ..." disabled="@(!isEditMode)" />
                                 </div>
                             </div>
                             <div class="row mb-3">
@@ -98,7 +98,7 @@
                                     <label class="form-label">Email</label>
                                 </div>
                                 <div class="col-sm-8">
-                                    <InputText class="form-control" @bind-Value="Model.Email" placeholder="Email ..." disabled="@(!isEditMode)" />
+                                    <InputText class="form-control bg-dark text-white" @bind-Value="Model.Email" placeholder="Email ..." disabled="@(!isEditMode)" />
                                 </div>
                             </div>
                         </div>
@@ -128,7 +128,7 @@
                                     <label class="form-label">First Name</label>
                                 </div>
                                 <div class="col-sm-8">
-                                    <InputText class="form-control" @bind-Value="Model.PrimaryContact!.FirstName" placeholder="First Name ..." disabled="@(!isEditMode)" />
+                                    <InputText class="form-control bg-dark text-white" @bind-Value="Model.PrimaryContact!.FirstName" placeholder="First Name ..." disabled="@(!isEditMode)" />
                                 </div>
                             </div>
                             <div class="row mb-3">
@@ -136,7 +136,7 @@
                                     <label class="form-label">Last Name</label>
                                 </div>
                                 <div class="col-sm-8">
-                                    <InputText class="form-control" @bind-Value="Model.PrimaryContact!.LastName" placeholder="Last Name ..." disabled="@(!isEditMode)" />
+                                    <InputText class="form-control bg-dark text-white" @bind-Value="Model.PrimaryContact!.LastName" placeholder="Last Name ..." disabled="@(!isEditMode)" />
                                 </div>
                             </div>
                         </div>
@@ -146,7 +146,7 @@
                                     <label class="form-label">Phone</label>
                                 </div>
                                 <div class="col-sm-8">
-                                    <InputText class="form-control" @bind-Value="Model.PrimaryContact!.Party.Phone" placeholder="Phone ..." disabled="@(!isEditMode)" />
+                                    <InputText class="form-control bg-dark text-white" @bind-Value="Model.PrimaryContact!.Party.Phone" placeholder="Phone ..." disabled="@(!isEditMode)" />
                                 </div>
                             </div>
                             <div class="row mb-3">
@@ -154,7 +154,7 @@
                                     <label class="form-label">Website</label>
                                 </div>
                                 <div class="col-sm-8">
-                                    <InputText class="form-control" @bind-Value="Model.PrimaryContact!.Party.Website" placeholder="Website ..." disabled="@(!isEditMode)" />
+                                    <InputText class="form-control bg-dark text-white" @bind-Value="Model.PrimaryContact!.Party.Website" placeholder="Website ..." disabled="@(!isEditMode)" />
                                 </div>
                             </div>
                             <div class="row mb-3">
@@ -162,162 +162,11 @@
                                     <label class="form-label">Email</label>
                                 </div>
                                 <div class="col-sm-8">
-                                    <InputText class="form-control" @bind-Value="Model.PrimaryContact!.Party.Email" placeholder="Email ..." disabled="@(!isEditMode)" />
+                                    <InputText class="form-control bg-dark text-white" @bind-Value="Model.PrimaryContact!.Party.Email" placeholder="Email ..." disabled="@(!isEditMode)" />
                                 </div>
                             </div>
                         </div>
                     </div>
-                </div>
-            </div>
-
-            @* Customer Address Section *@
-            <div class="card mb-3">
-                <div class="card-header" style="background-color: #3a3f44; color: white;">
-                    <i class="fa fa-map-marker"></i> Customer Address
-                </div>
-                <div class="card-body" style="background-color: #2b2f33;">
-                    <div class="row">
-                        <div class="col-sm-6">
-                            <div class="row mb-3">
-                                <div class="col-sm-4">
-                                    <label class="form-label">Street Line 1</label>
-                                </div>
-                                <div class="col-sm-8">
-                                    <InputText class="form-control" @bind-Value="Model.AddressLine1" placeholder="Street Line 1 ..." disabled="@(!isEditMode)" />
-                                </div>
-                            </div>
-                            <div class="row mb-3">
-                                <div class="col-sm-4">
-                                    <label class="form-label">Street Line 2</label>
-                                </div>
-                                <div class="col-sm-8">
-                                    <InputText class="form-control" @bind-Value="Model.AddressLine2" placeholder="Street Line 2 ..." disabled="@(!isEditMode)" />
-                                </div>
-                            </div>
-                            <div class="row mb-3">
-                                <div class="col-sm-4">
-                                    <label class="form-label">City</label>
-                                </div>
-                                <div class="col-sm-8">
-                                    <InputText class="form-control" @bind-Value="Model.City" placeholder="City ..." disabled="@(!isEditMode)" />
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-sm-6">
-                            <div class="row mb-3">
-                                <div class="col-sm-4">
-                                    <label class="form-label">Province</label>
-                                </div>
-                                <div class="col-sm-8">
-                                    <InputSelect class="form-control" @bind-Value="Model.Province" disabled="@(!isEditMode)">
-                                        @foreach (var p in CanadianProvinces)
-                                        {
-                                            <option value="@p.Value">@p.Text</option>
-                                        }
-                                    </InputSelect>
-                                </div>
-                            </div>
-                            <div class="row mb-3">
-                                <div class="col-sm-4">
-                                    <label class="form-label">Postal Code</label>
-                                </div>
-                                <div class="col-sm-8">
-                                    <InputText class="form-control" @bind-Value="Model.PostalCode" placeholder="Postal Code ..." disabled="@(!isEditMode)" />
-                                </div>
-                            </div>
-                            <div class="row mb-3">
-                                <div class="col-sm-4">
-                                    <label class="form-label">Country</label>
-                                </div>
-                                <div class="col-sm-8">
-                                    <InputText class="form-control" @bind-Value="Model.Country" placeholder="Country ..." disabled="@(!isEditMode)" />
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            @* Shipping Address Section *@
-            <div class="card mb-3">
-                <div class="card-header" style="background-color: #3a3f44; color: white;">
-                    <i class="fa fa-truck"></i> Shipping Address
-                </div>
-                <div class="card-body" style="background-color: #2b2f33;">
-                    <div class="row mb-3">
-                        <div class="col-12">
-                            <div class="form-check">
-                                <InputCheckbox class="form-check-input" id="useMailingForShipping" @bind-Value="useMailingAddressForShipping" disabled="@(!isEditMode)" @onchange="OnUseMailingForShippingChanged" />
-                                <label class="form-check-label form-label" for="useMailingForShipping">Use mailing address for shipping</label>
-                            </div>
-                        </div>
-                    </div>
-                    @if (!useMailingAddressForShipping)
-                    {
-                        <div class="row">
-                            <div class="col-sm-6">
-                                <div class="row mb-3">
-                                    <div class="col-sm-4">
-                                        <label class="form-label">Street Line 1</label>
-                                    </div>
-                                    <div class="col-sm-8">
-                                        <InputText class="form-control" @bind-Value="Model.ShippingAddressLine1" placeholder="Street Line 1 ..." disabled="@(!isEditMode)" />
-                                    </div>
-                                </div>
-                                <div class="row mb-3">
-                                    <div class="col-sm-4">
-                                        <label class="form-label">Street Line 2</label>
-                                    </div>
-                                    <div class="col-sm-8">
-                                        <InputText class="form-control" @bind-Value="Model.ShippingAddressLine2" placeholder="Street Line 2 ..." disabled="@(!isEditMode)" />
-                                    </div>
-                                </div>
-                                <div class="row mb-3">
-                                    <div class="col-sm-4">
-                                        <label class="form-label">City</label>
-                                    </div>
-                                    <div class="col-sm-8">
-                                        <InputText class="form-control" @bind-Value="Model.ShippingCity" placeholder="City ..." disabled="@(!isEditMode)" />
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-sm-6">
-                                <div class="row mb-3">
-                                    <div class="col-sm-4">
-                                        <label class="form-label">Province</label>
-                                    </div>
-                                    <div class="col-sm-8">
-                                        <InputSelect class="form-control" @bind-Value="Model.ShippingProvince" disabled="@(!isEditMode)">
-                                            @foreach (var p in CanadianProvinces)
-                                            {
-                                                <option value="@p.Value">@p.Text</option>
-                                            }
-                                        </InputSelect>
-                                    </div>
-                                </div>
-                                <div class="row mb-3">
-                                    <div class="col-sm-4">
-                                        <label class="form-label">Postal Code</label>
-                                    </div>
-                                    <div class="col-sm-8">
-                                        <InputText class="form-control" @bind-Value="Model.ShippingPostalCode" placeholder="Postal Code ..." disabled="@(!isEditMode)" />
-                                    </div>
-                                </div>
-                                <div class="row mb-3">
-                                    <div class="col-sm-4">
-                                        <label class="form-label">Country</label>
-                                    </div>
-                                    <div class="col-sm-8">
-                                        <InputText class="form-control" @bind-Value="Model.ShippingCountry" placeholder="Country ..." disabled="@(!isEditMode)" />
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    }
-                    else
-                    {
-                        <p class="text-muted mb-0">Shipping address is the same as the customer address above.</p>
-                    }
                 </div>
             </div>
 
@@ -334,15 +183,55 @@
                                     <label class="form-label">Accounts Receivable</label>
                                 </div>
                                 <div class="col-sm-8">
-                                    <input type="text" class="form-control" value="10120 - Accounts Receivable" readonly />
+                                    <InputSelect class="form-control bg-dark text-white" @bind-Value="Model.AccountsReceivableId" disabled="@(!isEditMode)">
+                                        <option value="">-- Select Account --</option>
+                                        @foreach (var account in Accounts)
+                                        {
+                                            <option value="@account.Value">@account.Text</option>
+                                        }
+                                    </InputSelect>
                                 </div>
                             </div>
                             <div class="row mb-3">
                                 <div class="col-sm-4">
-                                    <label class="form-label">Discount (%)</label>
+                                    <label class="form-label">Sales</label>
                                 </div>
                                 <div class="col-sm-8">
-                                    <InputNumber class="form-control" @bind-Value="Model.DiscountPercentage" disabled="@(!isEditMode)" step="0.01" min="0" max="100" placeholder="0" />
+                                    <InputSelect class="form-control bg-dark text-white" @bind-Value="Model.SalesAccountId" disabled="@(!isEditMode)">
+                                        <option value="">-- Select Account --</option>
+                                        @foreach (var account in Accounts)
+                                        {
+                                            <option value="@account.Value">@account.Text</option>
+                                        }
+                                    </InputSelect>
+                                </div>
+                            </div>
+                            <div class="row mb-3">
+                                <div class="col-sm-4">
+                                    <label class="form-label">Prepayment</label>
+                                </div>
+                                <div class="col-sm-8">
+                                    <InputSelect class="form-control bg-dark text-white" @bind-Value="Model.PrepaymentAccountId" disabled="@(!isEditMode)">
+                                        <option value="">-- Select Account --</option>
+                                        @foreach (var account in Accounts)
+                                        {
+                                            <option value="@account.Value">@account.Text</option>
+                                        }
+                                    </InputSelect>
+                                </div>
+                            </div>
+                            <div class="row mb-3">
+                                <div class="col-sm-4">
+                                    <label class="form-label">Discount</label>
+                                </div>
+                                <div class="col-sm-8">
+                                    <InputSelect class="form-control bg-dark text-white" @bind-Value="Model.SalesDiscountAccountId" disabled="@(!isEditMode)">
+                                        <option value="">-- Select Account --</option>
+                                        @foreach (var account in Accounts)
+                                        {
+                                            <option value="@account.Value">@account.Text</option>
+                                        }
+                                    </InputSelect>
                                 </div>
                             </div>
                         </div>
@@ -352,7 +241,7 @@
                                     <label class="form-label">Tax Group</label>
                                 </div>
                                 <div class="col-sm-8">
-                                    <InputSelect class="form-control" @bind-Value="Model.TaxGroupId" disabled="@(!isEditMode)">
+                                    <InputSelect class="form-control bg-dark text-white" @bind-Value="Model.TaxGroupId" disabled="@(!isEditMode)">
                                         <option value="">-- Select Tax Group --</option>
                                         @foreach (var taxGroup in TaxGroups)
                                         {
@@ -379,7 +268,7 @@
                                     <label class="form-label">Payment Term</label>
                                 </div>
                                 <div class="col-sm-8">
-                                    <InputSelect class="form-control" @bind-Value="Model.PaymentTermId" disabled="@(!isEditMode)">
+                                    <InputSelect class="form-control bg-dark text-white" @bind-Value="Model.PaymentTermId" disabled="@(!isEditMode)">
                                         <option value="">-- Select Payment Term --</option>
                                         @foreach (var term in PaymentTerms)
                                         {
@@ -416,28 +305,9 @@
 
     private CustomerDto Model { get; set; } = new();
     
+    private List<SelectListItem> Accounts { get; set; } = new();
     private List<SelectListItem> TaxGroups { get; set; } = new();
     private List<SelectListItem> PaymentTerms { get; set; } = new();
-    
-    private bool useMailingAddressForShipping = true;
-    
-    private static readonly List<SelectListItem> CanadianProvinces = new()
-    {
-        new() { Value = "", Text = "-- Select Province --" },
-        new() { Value = "AB", Text = "Alberta" },
-        new() { Value = "BC", Text = "British Columbia" },
-        new() { Value = "MB", Text = "Manitoba" },
-        new() { Value = "NB", Text = "New Brunswick" },
-        new() { Value = "NL", Text = "Newfoundland and Labrador" },
-        new() { Value = "NS", Text = "Nova Scotia" },
-        new() { Value = "NT", Text = "Northwest Territories" },
-        new() { Value = "NU", Text = "Nunavut" },
-        new() { Value = "ON", Text = "Ontario" },
-        new() { Value = "PE", Text = "Prince Edward Island" },
-        new() { Value = "QC", Text = "Quebec" },
-        new() { Value = "SK", Text = "Saskatchewan" },
-        new() { Value = "YT", Text = "Yukon" }
-    };
     
     private bool isLoading = true;
     private bool isEditMode = false;
@@ -506,7 +376,6 @@
             if (response.IsSuccessStatusCode)
             {
                 Model = await response.Content.ReadFromJsonAsync<CustomerDto>() ?? new();
-                useMailingAddressForShipping = ShippingEqualsMailing();
             }
             else
             {
@@ -525,6 +394,14 @@
         {
             string baseApiUrl = Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
             
+            // Load accounts
+            var accountsResponse = await Http.GetAsync(baseApiUrl + "common/postingaccounts");
+            if (accountsResponse.IsSuccessStatusCode)
+            {
+                var accounts = await accountsResponse.Content.ReadFromJsonAsync<List<Dto.Financial.Account>>();
+                Accounts = accounts?.Select(a => new SelectListItem { Value = a.Id.ToString(), Text = a.AccountName! }).ToList() ?? new();
+            }
+
             // Load tax groups
             var taxGroupsResponse = await Http.GetAsync(baseApiUrl + "tax/taxgroups");
             if (taxGroupsResponse.IsSuccessStatusCode)
@@ -551,16 +428,6 @@
     {
         try
         {
-            if (useMailingAddressForShipping)
-            {
-                Model.ShippingAddressLine1 = Model.AddressLine1;
-                Model.ShippingAddressLine2 = Model.AddressLine2;
-                Model.ShippingCity = Model.City;
-                Model.ShippingProvince = Model.Province;
-                Model.ShippingPostalCode = Model.PostalCode;
-                Model.ShippingCountry = Model.Country;
-            }
-            
             string baseApiUrl = Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
             var apiUrl = baseApiUrl + "sales/savecustomer";
             
@@ -600,30 +467,6 @@
     private void NavigateToContacts()
     {
         Navigation.NavigateTo($"/contact/contacts?partyId={Model.Id}&partyType=1", forceLoad: true);
-    }
-
-    private bool ShippingEqualsMailing()
-    {
-        return string.Equals(Model.AddressLine1 ?? "", Model.ShippingAddressLine1 ?? "", StringComparison.OrdinalIgnoreCase)
-            && string.Equals(Model.AddressLine2 ?? "", Model.ShippingAddressLine2 ?? "", StringComparison.OrdinalIgnoreCase)
-            && string.Equals(Model.City ?? "", Model.ShippingCity ?? "", StringComparison.OrdinalIgnoreCase)
-            && string.Equals(Model.Province ?? "", Model.ShippingProvince ?? "", StringComparison.OrdinalIgnoreCase)
-            && string.Equals(Model.PostalCode ?? "", Model.ShippingPostalCode ?? "", StringComparison.OrdinalIgnoreCase)
-            && string.Equals(Model.Country ?? "", Model.ShippingCountry ?? "", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private void OnUseMailingForShippingChanged(ChangeEventArgs e)
-    {
-        var useMailing = e.Value as bool? ?? false;
-        if (!useMailing)
-        {
-            Model.ShippingAddressLine1 = Model.AddressLine1;
-            Model.ShippingAddressLine2 = Model.AddressLine2;
-            Model.ShippingCity = Model.City;
-            Model.ShippingProvince = Model.Province;
-            Model.ShippingPostalCode = Model.PostalCode;
-            Model.ShippingCountry = Model.Country;
-        }
     }
 
     public class SelectListItem

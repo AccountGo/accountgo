@@ -33,6 +33,14 @@ public class InventoryController : BaseController
         return View();
     }
 
+    [HttpGet]
+    public IActionResult Item(int id)
+    {
+        ViewBag.PageContentHeader = id > 0 ? "Edit Item" : "New Item";
+        var itemModel = new Item { Id = id };
+        return View("Item", itemModel);
+    }
+
     [HttpGet]  // ← ADD THIS for initial page load
     public IActionResult AddItem()
     {
