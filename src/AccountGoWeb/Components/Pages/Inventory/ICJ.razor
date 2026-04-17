@@ -18,6 +18,18 @@ else if (hasError)
 }
 else
 {
+    <!-- All of the summary info for the page above all the columns -->
+    <div class="summary-container">
+    <div class="summary-box">
+        <strong>Total IN:</strong> @TotalIn
+    </div>
+    <div class="summary-box">
+        <strong>Total OUT:</strong> @TotalOut
+    </div>
+    <div class="summary-box">
+        <strong>Current Stock:</strong> @CurrentStock
+    </div>
+</div>
     <table class="icjTable">
         <thead>
             <tr>
@@ -26,11 +38,12 @@ else
                 <th>Unit</th>
                 <th>IN</th>
                 <th>OUT</th>
+                <th>Balance</th>
                 <th>Date</th>
             </tr>
         </thead>
         <tbody>
-            @if (InventoryData == null || InventoryData.Count == 0)
+          @if (ProcessedData == null || ProcessedData.Count == 0)
             {
                 <tr>
                     <td colspan="6" class="noRows">No Rows to Show</td>
@@ -38,7 +51,7 @@ else
             }
             else
             {
-                @foreach (var row in InventoryData)
+                @foreach (var row in ProcessedData)
                 {
                     <tr @onclick="() => OnRowClicked(row)" class="icjRow">
                         <td>@row.Id</td>
@@ -46,6 +59,7 @@ else
                         <td>@row.Measurement</td>
                         <td>@row.In</td>
                         <td>@row.Out</td>
+                        <td>@row.Balance</td>
                         <td>@row.Date.ToShortDateString()</td>
                     </tr>
                 }
@@ -81,10 +95,32 @@ else
     align-items: center;
     height: 100px;
 }
+/* Summary boxes styling */
+.summary-container {
+    display: flex;
+    gap: 20px;
+    margin-bottom: 15px;
+}
+
+.summary-box {
+    padding: 10px 15px;
+    background-color: rgba(255,255,255,0.05);
+    border-radius: 8px;
+    color: white;
+    font-size: 14px;
+}
 </style>
 
 @code {
-    private List<InventoryControlJournal> InventoryData { get; set; } = new();
+
+
+
+    // summmary variables
+    // all initialized to 0 to avoid null issues, but they will be calculated from the data
+    private decimal TotalIn = 0;
+    private decimal TotalOut = 0;
+    private decimal CurrentStock = 0;
+     private List<InventoryControlJournal> InventoryData{ get; set; } = new();
     private bool isLoading = true;
     private bool hasError = false;
 
@@ -102,6 +138,37 @@ else
             if (response.IsSuccessStatusCode)
             {
                 InventoryData = await response.Content.ReadFromJsonAsync<List<InventoryControlJournal>>() ?? new List<InventoryControlJournal>();
+                    // Processing data after the fetch to calculate running balance
+                  var sorted = InventoryData
+    .OrderBy(x => x.Date)
+    .ToList();
+
+decimal runningBalance = 0;
+
+ProcessedData = sorted.Select(row =>
+{
+    
+
+    var inValue = row.In ?? 0;
+    var outValue = row.Out ?? 0;
+
+    runningBalance += inValue - outValue;
+
+    return new ICJRowView
+    {
+        Id = row.Id,
+        Item = row.Item,
+        Measurement = row.Measurement,
+        In = inValue,
+        Out = outValue,
+        Date = row.Date,
+        Balance = runningBalance
+    };
+}).ToList();
+
+TotalIn = ProcessedData.Sum(x => x.In);
+TotalOut = ProcessedData.Sum(x => x.Out);
+CurrentStock = ProcessedData.LastOrDefault()?.Balance ?? 0;
             }
             else
             {
@@ -119,8 +186,25 @@ else
         }
     }
 
-    private void OnRowClicked(InventoryControlJournal row)
+    private void OnRowClicked(ICJRowView row)
     {
         Console.WriteLine($"Row clicked: {row.Id} - {row.Item}");
     }
+
+    // adding a view Model 
+    private class ICJRowView
+{
+    public int Id { get; set; }
+    public string? Item { get; set; }
+    public string? Measurement { get; set; }
+    public decimal In { get; set; }
+    public decimal Out { get; set; }
+    public DateTime Date { get; set; }
+    public decimal Balance { get; set; }
+}
+
+// creating a processed list
+private List<ICJRowView> ProcessedData { get; set; } = new();
+
+
 }
