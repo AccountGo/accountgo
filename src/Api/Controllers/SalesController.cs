@@ -505,7 +505,10 @@ namespace Api.Controllers
                     CustomerName = salesReceipt.Customer.Party.Name,
                     ReceiptDate = salesReceipt.Date,
                     Amount = salesReceipt.Amount,
-                    RemainingAmountToAllocate = salesReceipt.AvailableAmountToAllocate
+                    RemainingAmountToAllocate = salesReceipt.AvailableAmountToAllocate,
+                    PaymentMethod = salesReceipt.PaymentMethod,
+                    ReferenceNo = salesReceipt.ReferenceNo,
+                    Memo = salesReceipt.Memo
                 };
 
                 salesReceiptsDto.Add(salesReceiptDto);
@@ -532,7 +535,10 @@ namespace Api.Controllers
                 Amount = salesReceipt.Amount,
                 RemainingAmountToAllocate = salesReceipt.AvailableAmountToAllocate,
                 AccountToDebitId = debitCashBankId,
-                AccountToCreditId = creditAccountId
+                AccountToCreditId = creditAccountId,
+                PaymentMethod = salesReceipt.PaymentMethod,
+                ReferenceNo = salesReceipt.ReferenceNo,
+                Memo = salesReceipt.Memo
             };
 
             return new ObjectResult(salesReceiptDto);
@@ -1064,6 +1070,9 @@ namespace Api.Controllers
                 salesReceipt.CustomerId = receiptDto.CustomerId;
                 salesReceipt.AccountToDebitId = bank!.AccountId;
                 salesReceipt.Amount = receiptDto.Amount;
+                salesReceipt.PaymentMethod = receiptDto.PaymentMethod != null ? (string)receiptDto.PaymentMethod : null;
+                salesReceipt.ReferenceNo = receiptDto.ReferenceNo != null ? (string)receiptDto.ReferenceNo : null;
+                salesReceipt.Memo = receiptDto.Memo != null ? (string)receiptDto.Memo : null;
 
                 var customer = _salesService.GetCustomerById((int)receiptDto.CustomerId);
                 if (customer.CustomerAdvancesAccountId != (int)receiptDto.AccountToCreditId)
@@ -1120,6 +1129,9 @@ namespace Api.Controllers
                 existingReceipt.CustomerId = receiptDto.CustomerId;
                 existingReceipt.AccountToDebitId = bank!.AccountId;
                 existingReceipt.Amount = receiptDto.Amount;
+                existingReceipt.PaymentMethod = receiptDto.PaymentMethod != null ? (string)receiptDto.PaymentMethod : null;
+                existingReceipt.ReferenceNo = receiptDto.ReferenceNo != null ? (string)receiptDto.ReferenceNo : null;
+                existingReceipt.Memo = receiptDto.Memo != null ? (string)receiptDto.Memo : null;
 
                 var customer = _salesService.GetCustomerById((int)receiptDto.CustomerId);
                 if (customer.CustomerAdvancesAccountId != (int)receiptDto.AccountToCreditId)

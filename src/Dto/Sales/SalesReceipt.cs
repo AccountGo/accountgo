@@ -15,6 +15,8 @@ namespace Dto.Sales
         public int GeneralLedgerHederId { get; set; }
         public DateTime ReceiptDate { get; set; }
         public string? ReferenceNo { get; set; }
+        public string? PaymentMethod { get; set; }
+        public string? Memo { get; set; }
     }
 
     public class SalesReceiptLine : BaseDto
