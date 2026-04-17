@@ -21,48 +21,75 @@
     }
     else
     {
-        <div class="col-md-9">
-            <div class="card">
-                <div class="card-header bg-dark text-white">
-                    <h5 class="mb-0">Sales Order Details</h5>
-                </div>
-                <div class="card-body bg-dark">
-                    <div class="row mb-3">
-                        <div class="col-sm-6">
-                            <div class="row mb-2">
-                                <div class="col-sm-5 fw-bold" style="color: white;">Customer Name</div>
-                                <div class="col-sm-7" style="color: white;">
-                                    @GetValue("customerName")</div>
-                            </div>
-                            <div class="row mb-2">
-                                <div class="col-sm-5 fw-bold" style="color: white;">Order Date</div>
-                                <div class="col-sm-7" style="color: white;">
-                                    @GetValue("orderDate")</div>
-                            </div>
-                            <div class="row mb-2">
-                                <div class="col-sm-5 fw-bold" style="color: white;">Amount</div>
-                                <div class="col-sm-7" style="color: white;">
-                                    @GetTotalAmount().ToString("F2")</div>
-                            </div>
+        <div class="page-title-row">
+            <h1>@(IsNewOrder ? "Add Sales Order" : "Sales Order")</h1>
+            @if (!IsNewOrder)
+            {
+                <span class="status-pill @GetStatusClass(salesOrder.StatusId)">@GetStatusLabel(salesOrder.StatusId)</span>
+            }
+        </div>
+
+        @if (validationErrors.Count > 0)
+        {
+            <div class="alert alert-danger">
+                <ul class="mb-0">
+                    @foreach (var error in validationErrors)
+                    {
+                        <li>@error</li>
+                    }
+                </ul>
+            </div>
+        }
+
+        <div id="divSalesOrderForm">
+            <section class="panel-card">
+                <div class="panel-body">
+                    <div class="header-grid">
+                        <div class="field">
+                            <label>Customer</label>
+                            <select class="form-select" @bind="salesOrder.CustomerId" disabled="@(!isEditMode)">
+                                <option value="0">-- Select Customer --</option>
+                                @foreach (var customer in customers)
+                                {
+                                    <option value="@customer.Id">@customer.Name</option>
+                                }
+                            </select>
+                        </div>
+
+                        <div class="field">
+                            <label>Payment Term</label>
+                            <select class="form-select" @bind="salesOrder.PaymentTermId" disabled="@(!isEditMode)">
+                                <option value="0">-- Select Payment Term --</option>
+                                @foreach (var term in paymentTerms.Where(x => x.IsActive))
+                                {
+                                    <option value="@term.Id">@term.Description</option>
+                                }
+                            </select>
+                        </div>
+
+                        <div class="field amount-field">
+                            <label>Amount</label>
+                            <input type="text" class="form-control" value="@CalculateTotal().ToString("0.##")" readonly />
                         </div>
                     </div>
 
-                    <h6 class="mt-4 mb-3" style="color: white;">Order Items</h6>
-                    <div class="table-responsive">
-                        <table class="table table-dark table-hover">
-                            <thead>
-                                <tr>
-                                    <th>Item</th>
-                                    <th>Quantity</th>
-                                    <th>Amount</th>
-                                    <th>Discount</th>
-                                <th>Unit</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @if (salesOrderLines != null && salesOrderLines.Count > 0)
-                                {
-                                    @foreach (var line in salesOrderLines)
+                    <div class="line-items-section">
+                        <h3>Line Items</h3>
+
+                        <div class="table-responsive">
+                            <table class="table line-items-table">
+                                <thead>
+                                    <tr>
+                                        <th>Item</th>
+                                        <th>Quantity</th>
+                                        <th>Amount</th>
+                                        <th>Discount (%)</th>
+                                        <th>Unit</th>
+                                        <th>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @if (lineRows.Count == 0)
                                     {
                                         <tr>
                                             <td colspan="6" class="empty-line-row"></td>
@@ -116,7 +143,7 @@
                                                     <select class="form-select"
                                                             @bind="line.MeasurementId"
                                                             disabled="@(!isEditMode)">
-                                                            <option value="0">-- Unit --</option>
+                                                        <option value="0">-- Unit --</option>
                                                         @foreach (var measurement in measurements)
                                                         {
                                                             <option value="@measurement.Id">@GetMeasurementLabel(measurement)</option>
@@ -592,5 +619,88 @@
     private decimal CalculateTax()
     {
         return 0m;
+    }
+
+    /// <summary>
+    /// Returns the full order total.
+    /// At the moment this is subtotal plus zero tax.
+    /// </summary>
+    private decimal CalculateTotal()
+    {
+        return CalculateSubtotal() + CalculateTax();
+    }
+
+    /// <summary>
+    /// Calculates one row's line total.
+    /// The formula is quantity times amount, minus discount treated as a percentage.
+    /// This matches the shared DTO/backend logic.
+    /// </summary>
+    private decimal CalculateLineTotal(SalesOrderLineDto line)
+    {
+        var quantity = line.Quantity ?? 0m;
+        var amount = line.Amount ?? 0m;
+        var discountPercent = line.Discount ?? 0m;
+
+        var gross = quantity * amount;
+        var discountAmount = discountPercent > 0 ? gross * (discountPercent / 100m) : 0m;
+
+        return gross - discountAmount;
+    }
+
+    /// <summary>
+    /// Maps a numeric status id to a user-facing label.
+    /// This keeps status rendering centralized in one place.
+    /// </summary>
+    private static string GetStatusLabel(int? statusId) => statusId switch
+    {
+        0 => "Draft",
+        1 => "Open",
+        2 => "Overdue",
+        3 => "Closed",
+        4 => "Void",
+        5 => "Partially Invoiced",
+        6 => "Fully Invoiced",
+        _ => "Unknown"
+    };
+
+    /// <summary>
+    /// Maps a numeric status id to a CSS class used for the status badge.
+    /// </summary>
+    private static string GetStatusClass(int? statusId) => statusId switch
+    {
+        1 => "status-open",
+        2 => "status-overdue",
+        3 => "status-closed",
+        4 => "status-void",
+        5 => "status-partial",
+        6 => "status-full",
+        _ => "status-draft"
+    };
+
+    /// <summary>
+    /// Returns the label shown in the measurement dropdown.
+    /// It prefers Description, then Code, and falls back to a generic label.
+    /// </summary>
+    private static string GetMeasurementLabel(MeasurementDto measurement)
+    {
+        return measurement.Description ?? measurement.Code ?? $"Unit {measurement.Id}";
+    }
+
+    /// <summary>
+    /// Returns the label shown in the item dropdown.
+    /// It prefers the item description, then the code, then a fallback label.
+    /// </summary>
+    private static string GetItemDisplay(ItemDto item)
+    {
+        return item.Description ?? item.Code ?? $"Item {item.Id}";
+    }
+
+    /// <summary>
+    /// Returns the user to the sales orders list page.
+    /// Used by the Cancel button after backing out of the form.
+    /// </summary>
+    private void NavigateBack()
+    {
+        Navigation.NavigateTo("/Sales/SalesOrders", forceLoad: true);
     }
 }
