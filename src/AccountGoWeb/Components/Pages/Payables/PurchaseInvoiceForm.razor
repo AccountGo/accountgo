@@ -52,6 +52,23 @@ else
         }
     </div>
 
+    @if (saveError)
+    {
+        <div class="alert alert-danger">
+            Error saving purchase invoice.
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <br />
+                <strong>Details:</strong>
+                @errorMessage
+            }
+        </div>
+    }
+    @if (saveSuccess)
+    {
+        <div class="alert alert-success">Purchase invoice saved successfully!</div>
+    }
+
     @* ── Invoice Total Banner ── *@
     <div class="card mb-3 mt-2 border-0 shadow-sm">
         <div class="card-body py-2 d-flex align-items-center justify-content-between"
@@ -246,23 +263,6 @@ else
         </div>
     </EditForm>
 
-    @if (saveError)
-    {
-        <div class="alert alert-danger mt-3">
-            Error saving purchase invoice.
-            @if (!string.IsNullOrEmpty(errorMessage))
-            {
-                <br />
-                <strong>Details:</strong>
-
-                @errorMessage
-            }
-        </div>
-    }
-    @if (saveSuccess)
-    {
-        <div class="alert alert-success mt-3">Purchase invoice saved successfully!</div>
-    }
 }
 
 @code {
