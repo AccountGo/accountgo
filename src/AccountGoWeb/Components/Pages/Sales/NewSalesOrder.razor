@@ -45,21 +45,21 @@
                         <div class="row mb-3">
                             <div class="col-md-6">
                                 <label class="form-label"><strong>Customer</strong></label>
-                                <select class="form-control" @bind="customerId">
+                                <select class="form-control bg-dark text-white" @bind="customerId">
                                     <option value="0">-- Select Customer --</option>
                                     @foreach (var customer in customers)
                                     {
-                                        <option value="@customer.id">@customer.name</option>
+                                        <option value="@customer.id" class="bg-dark text-white">@customer.name</option>
                                     }
                                 </select>
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label"><strong>Payment Term</strong></label>
-                                <select class="form-control" @bind="paymentTermId">
+                                <select class="form-control bg-dark text-white" @bind="paymentTermId">
                                     <option value="0">-- Select Payment Term --</option>
                                     @foreach (var term in paymentTerms)
                                     {
-                                        <option value="@term.id">@term.description</option>
+                                        <option value="@term.id" class="bg-dark text-white">@term.description</option>
                                     }
                                 </select>
                             </div>
@@ -68,20 +68,20 @@
                         <div class="row mb-3">
                             <div class="col-md-6">
                                 <label class="form-label"><strong>Amount</strong></label>
-                                <input type="number" class="form-control" @bind="totalAmount" step="0.01" readonly />
+                                <input type="number" class="form-control bg-dark text-white" @bind="totalAmount" step="0.01" readonly />
                             </div>
                         </div>
 
                         <h5 class="mt-4 mb-3">Line Items</h5>
-                        <div class="table-responsive">
-                            <table class="table table-sm table-bordered">
-                                <thead class="table-light">
+                        <div>
+                            <table class="table table-dark table-sm table-bordered">
+                                <thead>
                                     <tr>
                                         <th>Item</th>
                                         <th>Quantity</th>
                                         <th>Amount</th>
                                         <th>Discount (%)</th>
-                                        <th>Measurement</th>
+                                    <th>Unit</th>
                                         <th>Action</th>
                                     </tr>
                                 </thead>
@@ -93,7 +93,7 @@
                                             var line = lineItems[i];
                                             <tr>
                                                 <td>
-                                                    <select class="form-control form-control-sm" @bind="line.ItemId">
+                                                    <select class="form-control form-control-sm bg-dark text-white" @bind="line.ItemId">
                                                         <option value="0">-- Select Item --</option>
                                                         @foreach (var item in items)
                                                         {
@@ -102,20 +102,20 @@
                                                     </select>
                                                 </td>
                                                 <td>
-                                                    <input type="number" class="form-control form-control-sm" @bind="line.Quantity"
+                                                    <input type="number" class="form-control form-control-sm bg-dark text-white" @bind="line.Quantity"
                                                         step="0.01" />
                                                 </td>
                                                 <td>
-                                                    <input type="number" class="form-control form-control-sm" @bind="line.Amount"
+                                                    <input type="number" class="form-control form-control-sm bg-dark text-white" @bind="line.Amount"
                                                         step="0.01" />
                                                 </td>
                                                 <td>
-                                                    <input type="number" class="form-control form-control-sm" @bind="line.Discount"
+                                                    <input type="number" class="form-control form-control-sm bg-dark text-white" @bind="line.Discount"
                                                         step="0.01" />
                                                 </td>
                                                 <td>
-                                                    <select class="form-control form-control-sm" @bind="line.MeasurementId">
-                                                        <option value="0">-- Select Measurement --</option>
+                                                    <select class="form-control form-control-sm bg-dark text-white" @bind="line.MeasurementId">
+                                                        <option value="0">-- Select Unit --</option>
                                                         @foreach (var measurement in measurements)
                                                         {
                                                             <option value="@measurement.id">@measurement.description</option>
@@ -319,7 +319,7 @@
         }
         catch (Exception ex)
         {
-            errorMessage = $"Error loading measurements: {ex.Message}";
+            errorMessage = $"Error loading units: {ex.Message}";
         }
     }
 

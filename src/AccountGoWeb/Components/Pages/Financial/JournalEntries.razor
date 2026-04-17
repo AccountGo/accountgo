@@ -5,6 +5,7 @@
 
 @inject HttpClient Http
 @inject IConfiguration Config
+@inject NavigationManager Navigation
 
 <div>
     <a href="/Financials/AddJournalEntry" class="btn btn-primary me-2">
@@ -57,7 +58,8 @@
                         var isSelected = SelectedEntry?.Id == e.Id;
 
                         <tr class="@(isSelected ? "table-primary" : "")" style="cursor: pointer;"
-                            @onclick="@(() => OnRowClick(e))">
+                            @onclick="@(() => OnRowClick(e))"
+                            @ondblclick="NavigateToFinancialJournalEntry">
 
                             <td>@e.Id</td>
                             <td>@e.VoucherType</td>
@@ -123,5 +125,13 @@
     private void OnRowClick(JournalEntryDto entry)
     {
         SelectedEntry = entry;
+    }
+
+    private void NavigateToFinancialJournalEntry()
+    {
+        if (SelectedEntry != null) 
+        {
+            Navigation.NavigateTo($"/Financials/JournalEntry?id={SelectedEntry.Id}", forceLoad: true);
+        }
     }
 }

@@ -151,6 +151,10 @@ namespace Api.Data
                 .Property(p => p.Amount)
                 .HasColumnType("decimal(18, 2)");
 
+            builder.Entity<Vendor>()
+                .Property(p => p.DiscountPercentage)
+                .HasColumnType("decimal(18, 2)");
+
             builder.Entity<CustomerAllocation>()
                 .Property(p => p.Amount)
                 .HasColumnType("decimal(18, 2)");
