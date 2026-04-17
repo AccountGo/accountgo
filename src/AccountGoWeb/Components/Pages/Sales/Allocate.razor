@@ -13,7 +13,7 @@
         <div class="col text-end">
             <a href="/Sales/SalesReceipts" class="btn btn-outline-secondary">
                 <i class="fa fa-arrow-left"></i>
-                Back to Receipts
+                Back to Customer Payments
             </a>
         </div>
     </div>
@@ -39,7 +39,7 @@
                 <div class="card-body">
                     <div class="row mb-3">
                         <div class="col-md-6">
-                            <label class="form-label"><strong>Receipt No</strong></label>
+                            <label class="form-label"><strong>Payment No</strong></label>
                             <input type="text" class="form-control" value="@receiptNo" readonly />
                         </div>
                         <div class="col-md-6">
@@ -50,7 +50,7 @@
 
                     <div class="row mb-3">
                         <div class="col-md-6">
-                            <label class="form-label"><strong>Receipt Date</strong></label>
+                            <label class="form-label"><strong>Payment Date</strong></label>
                             <input type="date" class="form-control" @bind="receiptDate" readonly />
                         </div>
                         <div class="col-md-6">
@@ -244,7 +244,7 @@
             }
             else
             {
-                errorMessage = "Failed to load receipt details.";
+                errorMessage = "Failed to load payment details.";
             }
         }
         catch (Exception ex)

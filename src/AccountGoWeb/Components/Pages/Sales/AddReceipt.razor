@@ -20,7 +20,7 @@
         <div class="col text-end">
             <a href="/Sales/SalesReceipts" class="btn btn-outline-secondary">
                 <i class="fa fa-arrow-left"></i>
-                Back to Receipts
+                Back to Customer Payments
             </a>
         </div>
     </div>
@@ -327,12 +327,12 @@
             else
             {
                 var responseContent = await response.Content.ReadAsStringAsync();
-                errorMessage = $"Failed to save receipt. Status: {response.StatusCode}. Details: {responseContent}";
+                errorMessage = $"Failed to save customer payment. Status: {response.StatusCode}. Details: {responseContent}";
             }
         }
         catch (Exception ex)
         {
-            errorMessage = $"Error saving receipt: {ex.Message}";
+            errorMessage = $"Error saving customer payment: {ex.Message}";
         }
     }
 
