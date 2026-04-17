@@ -55,6 +55,11 @@
         align-items: center;
         padding: 3rem;
     }
+
+.table-donations tbody tr.selected-row td {
+        background-color: #007bff33 !important;
+        border-left: 3px solid #007bff;
+    }
 </style>
 
 <PageTitle>Donation Invoices</PageTitle>
@@ -83,8 +88,8 @@ else if (donationInvoices != null && donationInvoices.Any())
 {
     <div class="table-container">
         <div class="table-responsive">
-            <table class="table table-hover">
-                <thead>
+            <table class="table table-striped table-bordered table-donations">
+                <thead class="thead-dark">
                     <tr>
                         <th style="width: 50px;"></th>
                         <th>Invoice No</th>
@@ -101,9 +106,10 @@ else if (donationInvoices != null && donationInvoices.Any())
                 <tbody>
                     @foreach (var invoice in donationInvoices)
                     {
-                        <tr class="@(selectedInvoice?.Id == invoice.Id ? "table-active" : "")"
+                        <tr class="@(selectedInvoice?.Id == invoice.Id ? "selected-row" : "")"
                             @onclick="() => SelectInvoice(invoice)"
-                            @ondblclick="() => NavigateToDonationInvoice(invoice)">
+                            @ondblclick="() => NavigateToDonationInvoice(invoice)"
+                            style="cursor: pointer;">
                             <td class="text-center">
                                 <input type="radio" name="selectedInvoice" checked="@(selectedInvoice?.Id == invoice.Id)" />
                             </td>
