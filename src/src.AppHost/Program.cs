@@ -1,17 +1,71 @@
-using System.Reflection;
-using Google.Protobuf.WellKnownTypes;
+using System.Net.Sockets;
+using System.Runtime.InteropServices;
+using Microsoft.Extensions.Hosting;
 
-var builder = DistributedApplication.CreateBuilder(args);
+IDistributedApplicationBuilder builder = DistributedApplication.CreateBuilder(args);
 
-var sqlServer = builder.AddSqlServer("gdb-sql-server")
-                 .AddDatabase("gdb-db");
+IResourceBuilder<SqlServerDatabaseResource>? sqlServer = null;
 
-// var sqlServer = builder.AddSqlServer("gdb-sql-server")
-//     .WithImageRegistry("mcr.microsoft.com")
-//     .WithImage("mssql/server", "2022-latest")
-//     .WithEnvironment("ACCEPT_EULA", "Y")
-//     .WithEnvironment("MSSQL_SA_PASSWORD", "YourStrong!Passw0rd")
-//     .AddDatabase("gdb-db");
+// Get the architecture of the current process
+Architecture arch = RuntimeInformation.ProcessArchitecture;
+
+// Attempt to enable Azure SQL Edge Server for Arm64 development environment
+if (builder.Environment.IsDevelopment() && arch == Architecture.Arm64)
+{
+    try
+    {
+        sqlServer = builder.AddSqlServer("gdb-sql-server")
+                    .WithImageRegistry("mcr.microsoft.com")
+                    .WithImage("azure-sql-edge")
+                    .WithImageTag("latest")
+                    .WithEnvironment("ACCEPT_EULA", "Y")
+                    .WithEnvironment("MSSQL_PID", "Premium")
+                    .WithImagePullPolicy(ImagePullPolicy.Missing)
+                    .AddDatabase("gdb-db");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Failed to create an ARM64-based SQL server container using Azure Edge Image: {ex.GetType().Name} - {ex.Message}");
+        Console.WriteLine("Retrying to obtain a basic SQL server container");
+        sqlServer = null;
+    }
+}
+
+if (sqlServer == null)
+{
+    // Using SQL Server Enterprise Development Edition for developmental (non-commercial usage)
+    if (builder.Environment.IsDevelopment())
+    {
+        sqlServer = builder.AddSqlServer("gdb-sql-server")
+                .WithImageRegistry("mcr.microsoft.com")
+                .WithImage("mssql/server") // Using Ubuntu based image
+                .WithImageTag("latest")
+                .WithEnvironment("ACCEPT_EULA", "Y")
+                .WithEnvironment("MSSQL_PID", "Premium")
+                .WithImagePullPolicy(ImagePullPolicy.Missing) // Only pull the image if Docker does not have the image locally
+                .AddDatabase("gdb-db");
+    }
+    // Using SQL Server Express Edition for production usage (Express edition can be used for commercial usage at free cost, with limitation to table size)
+    else
+    {
+        sqlServer = builder.AddSqlServer("gdb-sql-server")
+                .WithImageRegistry("mcr.microsoft.com")
+                .WithImage("mssql/server")
+                .WithImageTag("latest")
+                .WithEnvironment("ACCEPT_EULA", "Y")
+                .WithEnvironment("MSSQL_PID", "Express")
+                .WithImagePullPolicy(ImagePullPolicy.Missing)
+                .AddDatabase("gdb-db");
+    }
+}
+// Only try to create a container if sqlServer is null
+sqlServer ??= builder.AddSqlServer("gdb-sql-server")
+                .WithImageRegistry("mcr.microsoft.com")
+                .WithImage("mssql/server") // Using Ubuntu based image
+                .WithImageTag("latest")
+                .WithEnvironment("ACCEPT_EULA", "Y")
+                .WithImagePullPolicy(ImagePullPolicy.Missing) // Only pull the image if Docker does not have the image locally
+                .AddDatabase("gdb-db");
 
 // read environment variable for connection string
 var apiService = builder.AddProject<Projects.Api>("api")
