@@ -1,0 +1,130 @@
+.sales-orders-page {
+    padding: 1.5rem;
+}
+
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.page-header h1 {
+    margin: 0;
+    font-size: 2.2rem;
+    font-weight: 700;
+    color: #fff;
+}
+
+.toolbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+}
+
+.new-order-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    background: transparent;
+    border: 0;
+    color: #fff;
+    padding: 0.375rem 0.75rem;
+    font-size: 1rem;
+    font-weight: 700;
+    letter-spacing: 0;
+    text-transform: none;
+    box-shadow: none;
+}
+
+.new-order-btn:hover,
+.new-order-btn:focus {
+    background: transparent;
+    color: #20a8d8;
+    text-decoration: none;
+    box-shadow: none;
+}
+
+.toolbar-link {
+    border: 0;
+    background: transparent;
+    color: #c9ced6;
+    font-size: 1rem;
+    font-weight: 700;
+    padding: 0;
+    cursor: pointer;
+    transition: color 0.15s ease, opacity 0.15s ease;
+}
+
+.toolbar-link span {
+    margin-right: 0.25rem;
+}
+
+.toolbar-link:hover:not(:disabled) {
+    color: #fff;
+}
+
+.toolbar-link:disabled {
+    color: #5f6873;
+    opacity: 1;
+    cursor: default;
+}
+
+.toolbar-link:not(:disabled) {
+    color: #fff;
+    font-weight: 800;
+}
+
+.table-shell {
+    overflow: hidden;
+}
+
+.orders-table {
+    margin-bottom: 0;
+    border-collapse: collapse;
+}
+
+.orders-table thead th {
+    background: #23282f;
+    color: #fff;
+    font-weight: 700;
+    border: 0;
+    padding: 0.9rem 0.75rem;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.orders-table tbody td {
+    background: #fff;
+    color: #000;
+    padding: 0.85rem 0.75rem;
+    border-top: 1px solid #d7dde5;
+    vertical-align: middle;
+}
+
+.clickable-row {
+    cursor: pointer;
+}
+
+.orders-table tbody tr.clickable-row:hover td {
+    background: #f3f7fb;
+}
+
+.orders-table tbody tr.selected-row td {
+    background: #a9cfdf !important;
+    color: #000;
+    font-weight: 700;
+}
+
+.orders-table tbody tr.selected-row:hover td {
+    background: #a9cfdf !important;
+}
+
+.empty-state {
+    background: #fff;
+    border: 1px dashed #d4dbe4;
+    border-radius: 6px;
+    padding: 2rem;
+    color: #64748b;
+}
