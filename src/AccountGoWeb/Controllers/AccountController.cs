@@ -22,61 +22,85 @@ namespace AccountGoWeb.Controllers;
             return View(new LoginViewModel() { Email = "admin@accountgo.ph", Password = "P@ssword1" });
         }
 
-        [HttpPost]
-        [AllowAnonymous]
-        public async Task<IActionResult> SignIn(LoginViewModel model, string? returnUrl = null)
+         [HttpPost]
+    [AllowAnonymous]
+    public async Task<IActionResult> SignIn(LoginViewModel model, string? returnUrl = null)
+    {
+        ViewData["ReturnUrl"] = returnUrl;
+
+        _logger.LogInformation("User {Email} is attempting to sign in.", model.Email);
+
+        if (ModelState.IsValid)
         {
-            ViewData["ReturnUrl"] = returnUrl;
+            var serialize = Newtonsoft.Json.JsonConvert.SerializeObject(model);
+            var content = new StringContent(serialize);
+            content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+            HttpResponseMessage responseSignIn = Post("account/signin", content);
+            Newtonsoft.Json.Linq.JObject resultSignIn = Newtonsoft.Json.Linq.JObject.Parse(responseSignIn.Content.ReadAsStringAsync().Result);
 
-            if (ModelState.IsValid)
+            _logger.LogInformation("User {Email} attempted to sign in. Result: {Result}", model.Email, resultSignIn["result"] != null ? "Success" : "Failure");
+
+            if (resultSignIn["result"] != null)
             {
-                var serialize = Newtonsoft.Json.JsonConvert.SerializeObject(model);
-                var content = new StringContent(serialize);
-                content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
-                HttpResponseMessage responseSignIn = Post("account/signin", content);
-                Newtonsoft.Json.Linq.JObject resultSignIn = Newtonsoft.Json.Linq.JObject.Parse(responseSignIn.Content.ReadAsStringAsync().Result);
+                _logger.LogInformation("User {Email} signed in successfully.", model.Email);
 
-                if (resultSignIn["result"] != null)
+                var user = await GetAsync<Dto.Security.User>("administration/getuser?username=" + model.Email);
+
+                var claims = new List<Claim>();
+                claims.Add(new Claim(ClaimTypes.IsPersistent, model.RememberMe.ToString()));
+                claims.Add(new Claim(ClaimTypes.NameIdentifier, user.Email!));
+                claims.Add(new Claim(ClaimTypes.Email, user.Email!));
+
+                string firstName = user.FirstName != null ? user.FirstName : "";
+                string lastName = user.LastName != null ? user.LastName : "";
+
+                claims.Add(new Claim(ClaimTypes.GivenName, firstName));
+                claims.Add(new Claim(ClaimTypes.Surname, lastName));
+                claims.Add(new Claim(ClaimTypes.Name, firstName + " " + lastName));
+
+                foreach (var role in user.Roles)
+                    claims.Add(new Claim(ClaimTypes.Role, role.Name!));
+
+                claims.Add(new Claim(ClaimTypes.UserData, Newtonsoft.Json.JsonConvert.SerializeObject(user)));
+
+                var identity = new ClaimsIdentity(claims, "AuthCookie");
+
+                ClaimsPrincipal principal = new ClaimsPrincipal(new[] { identity });
+
+                HttpContext.User = principal;
+
+                await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal);
+
+                return RedirectToLocal(returnUrl!);
+            }
+            else
+            {
+                _logger.LogInformation("User {Email} failed to sign in.", model.Email);
+                ModelState.AddModelError(string.Empty, "Invalid login attempt.");
+                return View(model);
+            }
+        }
+        else
+        {
+            // Log ModelState errors
+            foreach (var modelState in ModelState.Values)
+            {
+                foreach (var error in modelState.Errors)
                 {
-                    var user = await GetAsync<Dto.Security.User>("administration/getuser?username=" + model.Email);
-
-                    var claims = new List<Claim>();
-                    claims.Add(new Claim(ClaimTypes.IsPersistent, model.RememberMe.ToString()));
-                    claims.Add(new Claim(ClaimTypes.NameIdentifier, user.Email!));
-                    claims.Add(new Claim(ClaimTypes.Email, user.Email!));
-
-                    string firstName = user.FirstName != null ? user.FirstName : "";
-                    string lastName = user.LastName != null ? user.LastName : "";
-
-                    claims.Add(new Claim(ClaimTypes.GivenName, firstName));
-                    claims.Add(new Claim(ClaimTypes.Surname, lastName));
-                    claims.Add(new Claim(ClaimTypes.Name, firstName + " " + lastName));
-
-                    foreach(var role in user.Roles)
-                        claims.Add(new Claim(ClaimTypes.Role, role.Name!));
-
-                    claims.Add(new Claim(ClaimTypes.UserData, Newtonsoft.Json.JsonConvert.SerializeObject(user)));
-
-                    var identity = new ClaimsIdentity(claims, "AuthCookie");
-
-                    ClaimsPrincipal principal = new ClaimsPrincipal(new[] { identity });
-
-                    HttpContext.User = principal;
-
-                    await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal);
-
-                    return RedirectToLocal(returnUrl!);
-                }
-                else
-                {
-                    ModelState.AddModelError(string.Empty, "Invalid login attempt.");
-                    return View(model);
+                    _logger.LogWarning("ModelState validation error: {ErrorMessage}", error.ErrorMessage);
                 }
             }
 
-            // If we got this far, something failed, redisplay form
-            return View(model);
+            // Or log all errors together:
+            var errors = ModelState.Values.SelectMany(v => v.Errors)
+                .Select(e => e.ErrorMessage)
+                .ToList();
+            _logger.LogWarning("ModelState validation failed with errors: {Errors}", string.Join(", ", errors));
         }
+
+        // If we got this far, something failed, redisplay form
+        return View(model);
+    }
 
         public async Task<IActionResult> Logout()
         {
