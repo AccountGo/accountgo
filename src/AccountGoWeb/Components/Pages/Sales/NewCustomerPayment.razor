@@ -59,6 +59,7 @@
                             <div class="col-sm-9">
                                 <select
                                     class="form-control bg-dark text-white @(string.IsNullOrEmpty(customerId?.ToString()) && submitAttempted ? "is-invalid" : "")"
+                                    value="@(customerId?.ToString() ?? string.Empty)"
                                     @onchange="OnCustomerChanged">
                                     <option value="">-- Select Customer --</option>
                                     @foreach (var customer in customers)
@@ -385,7 +386,6 @@
     private void ClearForm()
     {
         ResetFormFields();
-        submitAttempted = false;
         errorMessage = "";
         successMessage = "";
     }
@@ -401,6 +401,7 @@
         referenceNo = "";
         paymentMethod = "";
         memo = "";
+        submitAttempted = false;
     }
 
     private string GetJsonPropertyString(JsonElement element, string propertyName)
