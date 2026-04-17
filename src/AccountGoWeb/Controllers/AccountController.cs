@@ -9,9 +9,11 @@ namespace AccountGoWeb.Controllers;
 
     public class AccountController : GoodController
     {
-        public AccountController(IConfiguration config)
+        ILogger<AccountController> _logger;
+        public AccountController(IConfiguration config, ILogger<AccountController> logger)
         {
             _configuration = config;
+            _logger = logger;
         }
 
         [HttpGet]
