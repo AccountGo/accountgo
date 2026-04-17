@@ -297,7 +297,7 @@ else
     {
         if (selectedInvoice != null)
         {
-            NavigationManager.NavigateTo($"/donations/donationinvoice/{selectedInvoice.Id}");
+            NavigationManager.NavigateTo($"/donations/donationinvoice/{selectedInvoice.Id}", forceLoad: true);
         }
     }
 
