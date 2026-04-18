@@ -1745,7 +1745,16 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<int?>("GeneralLedgerHeaderId")
                         .HasColumnType("int");
 
+                    b.Property<string>("Memo")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("No")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("PaymentMethod")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ReferenceNo")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<int?>("Status")

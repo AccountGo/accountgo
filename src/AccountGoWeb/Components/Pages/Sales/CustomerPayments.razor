@@ -23,7 +23,7 @@
 <div class="container-fluid">
     <div class="row mb-3">
         <div class="col">
-            <a href="/Sales/AddReceipt" class="btn">
+            <a href="/Sales/NewCustomerPayment" class="btn">
                 <i class="fa fa-plus"></i>
                 New Customer Payment
             </a>
@@ -120,7 +120,7 @@
     private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
     {
         // Refresh data when navigating back to this page
-        if (e.Location.Contains("/sales/salesreceipts") || e.Location.Contains("/sales/SalesReceipts"))
+        if (e.Location.Contains("/sales/customerpayments", StringComparison.OrdinalIgnoreCase))
         {
             shouldRefresh = true;
             InvokeAsync(StateHasChanged);
@@ -313,14 +313,14 @@
 
             if (selectedReceiptId != null)
             {
-                Navigation.NavigateTo($"/Sales/SalesReceipt?id={selectedReceiptId}", forceLoad: true);
+                Navigation.NavigateTo($"/Sales/CustomerPayment?id={selectedReceiptId}", forceLoad: true);
             }
         }
     }
 
     private string GetViewReceiptLink()
     {
-        return selectedReceiptId != null ? $"/Sales/SalesReceipt?id={selectedReceiptId}" : "javascript:void(0)";
+        return selectedReceiptId != null ? $"/Sales/CustomerPayment?id={selectedReceiptId}" : "javascript:void(0)";
     }
 
     private string GetAllocateLink()

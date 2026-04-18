@@ -35,7 +35,7 @@
                     Cancel
                 </button>
             }
-            <a href="/Sales/SalesReceipts" class="btn btn-outline-secondary">
+            <a href="/Sales/CustomerPayments" class="btn btn-outline-secondary">
                 <i class="fa fa-arrow-left"></i>
                 Back to Customer Payments
             </a>
@@ -44,7 +44,7 @@
 
     @if (loading)
     {
-        <p><em>Loading receipt...</em></p>
+        <p><em>Loading payment...</em></p>
     }
     else if (!string.IsNullOrEmpty(errorMessage))
     {
@@ -55,13 +55,7 @@
     else
     {
         <form @onsubmit="HandleSubmit">
-            <div class="col-sm-6">
-                @if (!string.IsNullOrEmpty(errorMessage))
-                {
-                    <div class="alert alert-danger" role="alert">
-                        <strong>Error:</strong> @errorMessage
-                    </div>
-                }
+            <div class="col-sm-8">
                 <div class="card">
                     <div class="card-body">
                         <div class="row mb-3">
@@ -77,14 +71,15 @@
                             </div>
                         </div>
                         <div class="row mb-3">
-                            <label class="col-sm-3 col-form-label">Customer</label>
+                            <label class="col-sm-3 col-form-label">Received From</label>
                             <div class="col-sm-9">
-                                <select class="form-control bg-dark text-white" @bind="customerId" disabled="@(!isEditing)">
+                                <select class="form-control bg-dark text-white" @onchange="OnCustomerChanged" disabled="@(!isEditing)">
                                     <option value="">-- Select Customer --</option>
                                     @foreach (var customer in customers)
                                     {
                                         <option value="@customer.Value" selected="@(customerId.ToString() == customer.Value)">
-                                            @customer.Text</option>
+                                            @customer.Text
+                                        </option>
                                     }
                                 </select>
                             </div>
@@ -97,40 +92,53 @@
                             </div>
                         </div>
                         <div class="row mb-3">
-                            <label class="col-sm-3 col-form-label">Debit</label>
+                            <label class="col-sm-3 col-form-label">Payment Amount</label>
+                            <div class="col-sm-9">
+                                <input type="number" step="0.01" class="form-control bg-dark text-white" @bind="amount"
+                                    placeholder="0.0" readonly="@(!isEditing)" />
+                            </div>
+                        </div>
+                        <div class="row mb-3">
+                            <label class="col-sm-3 col-form-label">Reference #</label>
+                            <div class="col-sm-9">
+                                <input type="text" class="form-control bg-dark text-white" @bind="referenceNo"
+                                    readonly="@(!isEditing)" />
+                            </div>
+                        </div>
+                        <div class="row mb-3">
+                            <label class="col-sm-3 col-form-label">Payment Method</label>
+                            <div class="col-sm-9">
+                                <select class="form-control bg-dark text-white" @bind="paymentMethod"
+                                    disabled="@(!isEditing)">
+                                    <option value="">-- Select Method --</option>
+                                    @foreach (var method in paymentMethods)
+                                    {
+                                        <option value="@method">@method</option>
+                                    }
+                                </select>
+                            </div>
+                        </div>
+                        <div class="row mb-3">
+                            <label class="col-sm-3 col-form-label">Deposit To</label>
                             <div class="col-sm-9">
                                 <select class="form-control bg-dark text-white" @bind="accountToDebitId"
                                     disabled="@(!isEditing)">
-                                    <option value="">-- Select Account --</option>
+                                    <option value="">-- Select Bank --</option>
                                     @foreach (var account in debitAccounts)
                                     {
                                         <option value="@account.Value"
                                             selected="@(accountToDebitId.ToString() == account.Value)">
-                                            @account.Text</option>
+                                            @account.Text
+                                        </option>
                                     }
                                 </select>
                             </div>
                         </div>
                         <div class="row mb-3">
-                            <label class="col-sm-3 col-form-label">Credit</label>
+                            <label class="col-sm-3 col-form-label">Memo</label>
                             <div class="col-sm-9">
-                                <select class="form-control bg-dark text-white" @bind="accountToCreditId"
-                                    disabled="@(!isEditing)">
-                                    <option value="">-- Select Account --</option>
-                                    @foreach (var account in creditAccounts)
-                                    {
-                                        <option value="@account.Value"
-                                            selected="@(accountToCreditId.ToString() == account.Value)">
-                                            @account.Text</option>
-                                    }
-                                </select>
-                            </div>
-                        </div>
-                        <div class="row mb-3">
-                            <label class="col-sm-3 col-form-label">Amount</label>
-                            <div class="col-sm-9">
-                                <input type="number" step="0.01" class="form-control bg-dark text-white" @bind="amount"
-                                    placeholder="0.0" readonly="@(!isEditing)" />
+                                <textarea class="form-control bg-dark text-white" @bind="memo" rows="2"
+                                    readonly="@(!isEditing)"></textarea>
                             </div>
                         </div>
                     </div>
@@ -165,16 +173,28 @@
     private DateTime originalReceiptDate = DateTime.Now;
     private int accountToDebitId = 0;
     private int originalAccountToDebitId = 0;
-    private int accountToCreditId = 0;
-    private int originalAccountToCreditId = 0;
+    private int accountToCreditId = 0; // silently populated from customer prepayment
     private decimal amount = 0;
     private decimal originalAmount = 0;
+    private string referenceNo = "";
+    private string originalReferenceNo = "";
+    private string paymentMethod = "";
+    private string originalPaymentMethod = "";
+    private string memo = "";
+    private string originalMemo = "";
+
+    private readonly List<string> paymentMethods = new()
+    {
+        "Cash",
+        "Cheque",
+        "Credit Card",
+        "Debit Card",
+        "E-Transfer"
+    };
 
     private List<(string Text, string Value)> customers = new();
     private List<(string Text, string Value)> debitAccounts = new();
-    private List<(string Text, string Value)> creditAccounts = new();
     private Dictionary<int, int> customerAdvanceAccounts = new();
-    private Dictionary<int, string> accountNames = new();
 
     [SupplyParameterFromQuery(Name = "id")]
     public int Id { get; set; }
@@ -193,7 +213,7 @@
             var client = ClientFactory.CreateClient();
             client.Timeout = TimeSpan.FromSeconds(60);
 
-            // Load customers from API
+            // Load customers (+ their prepayment accounts)
             var customersResponse = await client.GetAsync($"{apiurl}sales/customers");
             if (customersResponse.IsSuccessStatusCode)
             {
@@ -209,16 +229,15 @@
                         var prepaymentAccountId = GetJsonPropertyString(customer, "prepaymentAccountId");
                         customers.Add((name ?? "Unknown", id));
 
-                        // Store the prepayment account ID for this customer
-                        if (int.TryParse(id, out var customerId_int) && int.TryParse(prepaymentAccountId, out var accountId_int))
+                        if (int.TryParse(id, out var cid) && int.TryParse(prepaymentAccountId, out var accId))
                         {
-                            customerAdvanceAccounts[customerId_int] = accountId_int;
+                            customerAdvanceAccounts[cid] = accId;
                         }
                     }
                 }
             }
 
-            // Load debit accounts from API (Cash & Banks)
+            // Load cash/bank accounts (Deposit To)
             var debitResponse = await client.GetAsync($"{apiurl}financials/CashBanks");
             if (debitResponse.IsSuccessStatusCode)
             {
@@ -236,58 +255,7 @@
                 }
             }
 
-            // Load credit accounts from API (posting accounts only)
-            var creditResponse = await client.GetAsync($"{apiurl}common/postingaccounts");
-            if (creditResponse.IsSuccessStatusCode)
-            {
-                var json = await creditResponse.Content.ReadAsStringAsync();
-                var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-                var accountsData = JsonSerializer.Deserialize<List<JsonElement>>(json, options);
-                if (accountsData != null)
-                {
-                    foreach (var account in accountsData)
-                    {
-                        var id = GetJsonPropertyString(account, "id");
-                        var name = GetJsonPropertyString(account, "accountName");
-                        if (!string.IsNullOrEmpty(id) && !string.IsNullOrEmpty(name))
-                        {
-                            creditAccounts.Add((name, id));
-                            // Store account name for display
-                            if (int.TryParse(id, out var accountId))
-                            {
-                                accountNames[accountId] = name;
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Load all accounts to get customer advance account names
-            var allAccountsResponse = await client.GetAsync($"{apiurl}financials/accounts");
-            if (allAccountsResponse.IsSuccessStatusCode)
-            {
-                var json = await allAccountsResponse.Content.ReadAsStringAsync();
-                var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-                var accountsData = JsonSerializer.Deserialize<List<JsonElement>>(json, options);
-                if (accountsData != null)
-                {
-                    foreach (var account in accountsData)
-                    {
-                        var id = GetJsonPropertyString(account, "id");
-                        var name = GetJsonPropertyString(account, "name");
-                        if (!string.IsNullOrEmpty(id) && !string.IsNullOrEmpty(name))
-                        {
-                            // Store account name for display
-                            if (int.TryParse(id, out var accountId))
-                            {
-                                accountNames[accountId] = name;
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Load receipt data if editing
+            // Load payment if editing
             if (Id > 0)
             {
                 await LoadPayment();
@@ -324,36 +292,137 @@
                     accountToDebitId = GetJsonInt(receiptData, "accountToDebitId") ?? 0;
                     accountToCreditId = GetJsonInt(receiptData, "accountToCreditId") ?? 0;
                     amount = GetJsonDecimal(receiptData, "amount") ?? 0;
+                    referenceNo = GetJsonPropertyString(receiptData, "referenceNo");
+                    paymentMethod = GetJsonPropertyString(receiptData, "paymentMethod");
+                    memo = GetJsonPropertyString(receiptData, "memo");
 
-                    // Store original values
-                    originalCustomerId = customerId;
-                    originalReceiptDate = receiptDate;
-                    originalAccountToDebitId = accountToDebitId;
-                    originalAccountToCreditId = accountToCreditId;
-                    originalAmount = amount;
-
-                    // If credit account is empty but customer is set, auto-populate it
-                    if (accountToCreditId == 0 && customerId > 0 && customerAdvanceAccounts.TryGetValue(customerId, out var
-                    advanceAccountId))
+                    // If credit account missing, auto-populate from customer's prepayment account
+                    if (accountToCreditId == 0 && customerId > 0 && customerAdvanceAccounts.TryGetValue(customerId, out var advanceAccountId))
                     {
                         accountToCreditId = advanceAccountId;
                     }
 
-                    if (receiptData.TryGetProperty("receiptDate", out var dateElem))
+                    if (receiptData.TryGetProperty("receiptDate", out var dateElem)
+                        && DateTime.TryParse(dateElem.GetString(), out var date))
                     {
-                        if (DateTime.TryParse(dateElem.GetString(), out var date))
-                            receiptDate = date;
+                        receiptDate = date;
                     }
+
+                    // Store originals for cancel
+                    originalCustomerId = customerId;
+                    originalReceiptDate = receiptDate;
+                    originalAccountToDebitId = accountToDebitId;
+                    originalAmount = amount;
+                    originalReferenceNo = referenceNo;
+                    originalPaymentMethod = paymentMethod;
+                    originalMemo = memo;
                 }
             }
             else
             {
-                errorMessage = $"Failed to load receipt. Status: {response.StatusCode}";
+                errorMessage = $"Failed to load payment. Status: {response.StatusCode}";
             }
         }
         catch (Exception ex)
         {
-            errorMessage = $"Error loading receipt: {ex.Message}";
+            errorMessage = $"Error loading payment: {ex.Message}";
+        }
+    }
+
+    private void OnCustomerChanged(ChangeEventArgs e)
+    {
+        if (e.Value == null || string.IsNullOrEmpty(e.Value.ToString()))
+        {
+            customerId = 0;
+            accountToCreditId = 0;
+            return;
+        }
+
+        if (int.TryParse(e.Value.ToString(), out var selectedCustomerId))
+        {
+            customerId = selectedCustomerId;
+            if (customerAdvanceAccounts.TryGetValue(selectedCustomerId, out var advanceAccountId))
+            {
+                accountToCreditId = advanceAccountId;
+            }
+        }
+    }
+
+    private void EnableEdit()
+    {
+        originalCustomerId = customerId;
+        originalReceiptDate = receiptDate;
+        originalAccountToDebitId = accountToDebitId;
+        originalAmount = amount;
+        originalReferenceNo = referenceNo;
+        originalPaymentMethod = paymentMethod;
+        originalMemo = memo;
+        isEditing = true;
+    }
+
+    private void CancelEdit()
+    {
+        customerId = originalCustomerId;
+        receiptDate = originalReceiptDate;
+        accountToDebitId = originalAccountToDebitId;
+        amount = originalAmount;
+        referenceNo = originalReferenceNo;
+        paymentMethod = originalPaymentMethod;
+        memo = originalMemo;
+        // Re-resolve credit account from customer
+        if (customerAdvanceAccounts.TryGetValue(customerId, out var advanceAccountId))
+        {
+            accountToCreditId = advanceAccountId;
+        }
+        isEditing = false;
+        errorMessage = "";
+    }
+
+    private async Task HandleSubmit()
+    {
+        try
+        {
+            string apiurl = System.Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
+
+            // Ensure credit account is set from customer prepayment (silent field — API requires it)
+            if (accountToCreditId == 0 && customerAdvanceAccounts.TryGetValue(customerId, out var advanceAccountId))
+            {
+                accountToCreditId = advanceAccountId;
+            }
+
+            var payload = new
+            {
+                Id = receiptId,
+                CustomerId = customerId,
+                ReceiptDate = receiptDate,
+                Amount = amount,
+                AccountToDebitId = accountToDebitId,
+                AccountToCreditId = accountToCreditId,
+                ReferenceNo = referenceNo,
+                PaymentMethod = paymentMethod,
+                Memo = memo
+            };
+
+            var client = ClientFactory.CreateClient();
+            var json = JsonSerializer.Serialize(payload);
+            var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
+
+            var response = await client.PostAsync($"{apiurl}sales/updatereceipt", content);
+
+            if (response.IsSuccessStatusCode)
+            {
+                isEditing = false;
+                await LoadPayment();
+            }
+            else
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                errorMessage = $"Failed to save payment. Status: {response.StatusCode}. {errorContent}";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error saving payment: {ex.Message}";
         }
     }
 
@@ -391,69 +460,5 @@
             }
         }
         return "";
-    }
-
-    private void EnableEdit()
-    {
-        // Store original values
-        originalCustomerId = customerId;
-        originalReceiptDate = receiptDate;
-        originalAccountToDebitId = accountToDebitId;
-        originalAccountToCreditId = accountToCreditId;
-        originalAmount = amount;
-        isEditing = true;
-    }
-
-    private void CancelEdit()
-    {
-        // Restore original values
-        customerId = originalCustomerId;
-        receiptDate = originalReceiptDate;
-        accountToDebitId = originalAccountToDebitId;
-        accountToCreditId = originalAccountToCreditId;
-        amount = originalAmount;
-        isEditing = false;
-        errorMessage = "";
-    }
-
-    private async Task HandleSubmit()
-    {
-        try
-        {
-            string apiurl = System.Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
-
-            var payload = new
-            {
-                Id = receiptId,
-                CustomerId = customerId,
-                ReceiptDate = receiptDate,
-                Amount = amount,
-                AccountToDebitId = accountToDebitId,
-                AccountToCreditId = accountToCreditId
-            };
-
-            var client = ClientFactory.CreateClient();
-            var json = JsonSerializer.Serialize(payload);
-            var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
-
-            // Use UpdateReceipt endpoint when editing
-            var response = await client.PostAsync($"{apiurl}sales/updatereceipt", content);
-
-            if (response.IsSuccessStatusCode)
-            {
-                isEditing = false;
-                // Reload the receipt data
-                await LoadPayment();
-            }
-            else
-            {
-                var errorContent = await response.Content.ReadAsStringAsync();
-                errorMessage = $"Failed to save receipt. Status: {response.StatusCode}";
-            }
-        }
-        catch (Exception ex)
-        {
-            errorMessage = $"Error saving receipt: {ex.Message}";
-        }
     }
 }
