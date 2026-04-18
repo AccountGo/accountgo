@@ -35,7 +35,7 @@
 
 @if (loadError)
 {
-    <div class="alert alert-danger">Unable to load purchase invoice. Please try again.</div>
+    <div class="alert alert-danger">Unable to load vendor invoice. Please try again.</div>
 }
 else if (purchaseInvoice is null)
 {
@@ -55,7 +55,7 @@ else
     @if (saveError)
     {
         <div class="alert alert-danger">
-            Error saving purchase invoice.
+            Error saving vendor invoice.
             @if (!string.IsNullOrEmpty(errorMessage))
             {
                 <br />
@@ -66,7 +66,7 @@ else
     }
     @if (saveSuccess)
     {
-        <div class="alert alert-success">Purchase invoice saved successfully!</div>
+        <div class="alert alert-success">Vendor invoice saved successfully!</div>
     }
 
     @* ── Invoice Total Banner ── *@
@@ -241,8 +241,8 @@ else
                                 }
                                 @* ── Running Total Row ── *@
                                 <tr class="table-light fw-bold border-top">
-                                    <td colspan="2" class="text-end pe-3">Running Total:</td>
-                                    <td class="text-success">$@InvoiceTotal.ToString("N2")</td>
+                                    <td colspan="2" class="text-end pe-3 " style="color: white !important;">Running Total:</td>
+                                    <td style="color: white !important;">$@InvoiceTotal.ToString("N2")</td>
                                     <td colspan="@(isViewMode ? 2 : 3)"></td>
                                 </tr>
                             </tbody>

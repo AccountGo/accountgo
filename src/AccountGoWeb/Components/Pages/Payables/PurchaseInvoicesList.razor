@@ -1,9 +1,19 @@
 @rendermode InteractiveServer
+
+<PageTitle>Vendor Invoices</PageTitle>
+
 @using System.Text.Json
 @using System.Text.Json.Serialization
 @inject IHttpClientFactory ClientFactory
 
 @inject NavigationManager Navigation
+
+<style>
+    .purchase-selected td {
+        color: white !important;
+    }
+</style>
+
 
 @if (getError)
 {
@@ -51,10 +61,9 @@ else
             <tbody>
                 @foreach (var invoice in purchaseInvoices)
                 {
-                    <tr @onclick="() => SelectInvoice(invoice)" 
-                        @ondblclick="NavigateToPurchaseInvoice"
-                        class="@(selectedInvoice?.Id == invoice.Id ? "table-active" : "")"
-                        style="cursor: pointer;">
+                    <tr @onclick="() => SelectInvoice(invoice)" @ondblclick="NavigateToPurchaseInvoice"
+                        class="@(selectedInvoice?.Id == invoice.Id ? "table-active purchase-selected" : "")"
+                        style="@(selectedInvoice?.Id == invoice.Id ? "cursor: pointer; color: white;" : "cursor: pointer;")">
                         <td>@invoice.No</td>
                         <td>@invoice.VendorName</td>
                         <td>@invoice.InvoiceDate.ToString("yyyy-MM-dd")</td>
@@ -64,7 +73,8 @@ else
                         <td>
                             @if (!invoice.IsPaid && invoice.Posted)
                             {
-                                <a href="/purchasing/payment/@invoice.Id" class="btn btn-sm btn-outline-success" @onclick:stopPropagation="true">
+                                <a href="/purchasing/payment/@invoice.Id" class="btn btn-sm btn-outline-success"
+                                       @onclick:stopPropagation="true">
                                     Pay
                                 </a>
                             }
@@ -102,7 +112,8 @@ else
             client.DefaultRequestHeaders.Accept.Clear();
             client.DefaultRequestHeaders.Clear();
             client.DefaultRequestHeaders.CacheControl = new System.Net.Http.Headers.CacheControlHeaderValue() { NoCache = true };
-            client.DefaultRequestHeaders.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
+            client.DefaultRequestHeaders.Accept.Add(new
+System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
 
             var response = await client.SendAsync(request);
 
@@ -158,4 +169,3 @@ else
         public bool IsPaid { get; set; }
     }
 }
-
