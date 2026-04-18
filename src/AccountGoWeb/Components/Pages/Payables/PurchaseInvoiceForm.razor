@@ -154,8 +154,16 @@ else
                             }
                             else
                             {
-                                <InputText class="form-control" @bind-Value="purchaseInvoice.PurchaseOrderNumber"
-                                           placeholder="e.g. PO-123" />
+                                <InputSelect class="form-control" @bind-Value="purchaseInvoice.FromPurchaseOrderId">
+                                    <option value="">-- Select Purchase Order --</option>
+                                    @if (purchaseOrders != null)
+                                    {
+                                        @foreach (var po in purchaseOrders)
+                                        {
+                                            <option value="@po.Value">@po.Text</option>
+                                        }
+                                    }
+                                </InputSelect>
                             }
                         </div>
                     </div>
@@ -270,7 +278,7 @@ else
     public int InvoiceId { get; set; } = 0;
 
     private PurchaseInvoiceDto? purchaseInvoice;
-    private List<SelectListItem>? vendors, items, taxGroups;
+    private List<SelectListItem>? vendors, items, taxGroups, purchaseOrders;
     private bool loadError, saveError, saveSuccess, isViewMode = true, isSaving = false;
     private string? errorMessage;
 
@@ -350,7 +358,7 @@ else
                 items = list?.Select(i => new SelectListItem { Value = i.Id.ToString(), Text = i.Description ?? "" }).ToList();
             }
 
-            // ── Change 3: Load tax groups instead of measurements ────────────
+            // ── Load tax groups ────────────────────────────────────────────
             var taxGroupResponse = await client.GetAsync($"{apiurl}tax/taxgroups");
             if (taxGroupResponse.IsSuccessStatusCode)
             {
@@ -361,12 +369,25 @@ else
                 });
                 taxGroups = list?.Select(t => new SelectListItem { Value = t.Id.ToString(), Text = t.Description ?? "" }).ToList();
             }
+
+            // ── Load purchase orders for dropdown ─────────────────────────
+            var poResponse = await client.GetAsync($"{apiurl}purchasing/purchaseorders");
+            if (poResponse.IsSuccessStatusCode)
+            {
+                var json = await poResponse.Content.ReadAsStringAsync();
+                var list = JsonSerializer.Deserialize<List<PurchaseOrderDto>>(json, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+                purchaseOrders = list?.Select(p => new SelectListItem { Value = p.Id.ToString(), Text = p.No ?? $"PO #{p.Id}" }).ToList();
+            }
         }
         catch (Exception)
         {
             vendors = new List<SelectListItem>();
             items = new List<SelectListItem>();
             taxGroups = new List<SelectListItem>();
+            purchaseOrders = new List<SelectListItem>();
         }
     }
 
@@ -499,8 +520,9 @@ else
         public bool Posted { get; set; }
         public string? VendorInvoiceNo { get; set; }
         public string? ReferenceNo { get; set; }
-        public string? PurchaseOrderNumber { get; set; }
-        public int? PurchaseOrderHeaderId { get; set; }
+        public string? PurchaseOrderNumber { get; set; }  // populated on load for view-mode display
+        public int? PurchaseOrderHeaderId { get; set; }   // populated on load for view-mode link
+        public int? FromPurchaseOrderId { get; set; }     // set in edit-mode dropdown, sent to API
         public List<PurchaseInvoiceLineDto> PurchaseInvoiceLines { get; set; } = new();
     }
 
@@ -518,4 +540,5 @@ else
     public class VendorDto { public int Id { get; set; } public string? Name { get; set; } }
     public class ItemDto { public int Id { get; set; } public string? Description { get; set; } }
     public class TaxGroupDto { public int Id { get; set; } public string? Description { get; set; } }
+    public class PurchaseOrderDto { public int Id { get; set; } public string? No { get; set; } }
 }
