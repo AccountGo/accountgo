@@ -90,7 +90,12 @@ else
                     <div class="row mb-2">
                         <div class="col-sm-3">Vendor Name</div>
                         <div class="col-sm-8">
-                            <InputSelect class="form-control" @bind-Value="purchaseInvoice.VendorId" disabled="@isViewMode">
+                            @* Bug 4 fix: use ValueChanged so we can clear FromPurchaseOrderId when vendor changes *@
+                            <InputSelect class="form-control"
+                                         Value="purchaseInvoice.VendorId"
+                                         ValueChanged="@((int val) => OnVendorChanged(val))"
+                                         ValueExpression="@(() => purchaseInvoice.VendorId)"
+                                         disabled="@isViewMode">
                                 <option value="0">-- Select Vendor --</option>
                                 @if (vendors != null)
                                 {
@@ -156,11 +161,11 @@ else
                             {
                                 <InputSelect class="form-control" @bind-Value="purchaseInvoice.FromPurchaseOrderId">
                                     <option value="">-- Select Purchase Order --</option>
-                                    @if (purchaseOrders != null)
+                                    @if (allPurchaseOrders != null)
                                     {
-                                        @foreach (var po in purchaseOrders)
+                                        @foreach (var po in allPurchaseOrders.Where(p => p.VendorId == purchaseInvoice.VendorId))
                                         {
-                                            <option value="@po.Value">@po.Text</option>
+                                            <option value="@po.Id">@po.No</option>
                                         }
                                     }
                                 </InputSelect>
@@ -203,16 +208,18 @@ else
                                             </InputSelect>
                                         </td>
                                         <td style="background-color: transparent !important;">
+                                            @* Bug 3 fix: added @oninput to live-update the running total *@
                                             <InputNumber class="form-control" @bind-Value="line.Quantity"
-                                                         disabled="@isViewMode" />
+                                                         disabled="@isViewMode" @oninput="() => StateHasChanged()" />
                                         </td>
                                         <td style="background-color: transparent !important;">
                                             <InputNumber class="form-control" @bind-Value="line.Amount"
                                                          disabled="@isViewMode" @oninput="() => StateHasChanged()" />
                                         </td>
                                         <td style="background-color: transparent !important;">
+                                            @* Bug 3 fix: added @oninput to live-update the running total *@
                                             <InputNumber class="form-control" @bind-Value="line.Discount"
-                                                         disabled="@isViewMode" />
+                                                         disabled="@isViewMode" @oninput="() => StateHasChanged()" />
                                         </td>
                                         <td style="background-color: transparent !important;">
                                             <InputSelect class="form-control" @bind-Value="line.TaxGroupId"
@@ -278,15 +285,19 @@ else
     public int InvoiceId { get; set; } = 0;
 
     private PurchaseInvoiceDto? purchaseInvoice;
-    private List<SelectListItem>? vendors, items, taxGroups, purchaseOrders;
+    private List<SelectListItem>? vendors, items, taxGroups;
+    private List<PurchaseOrderDto>? allPurchaseOrders;
     private bool loadError, saveError, saveSuccess, isViewMode = true, isSaving = false;
     private string? errorMessage;
 
-    // ── Computed total (Changes 4 & 5) ──────────────────────────────────────
+    // Bug 5 fix: snapshot of original data so Cancel can revert
+    private string? _originalInvoiceSnapshot;
+
+    // Running total — Quantity × Amount × (1 − Discount/100)
     private decimal InvoiceTotal =>
         purchaseInvoice?.PurchaseInvoiceLines
-            ?.Where(l => l.Amount.HasValue)
-            .Sum(l => l.Amount ?? 0) ?? 0;
+            ?.Where(l => l.Amount.HasValue && l.Quantity.HasValue)
+            .Sum(l => (l.Quantity ?? 0) * (l.Amount ?? 0) * (1 - (l.Discount ?? 0) / 100)) ?? 0;
 
     public class SelectListItem { public string Value { get; set; } = ""; public string Text { get; set; } = ""; }
 
@@ -319,10 +330,13 @@ else
 
     private void InitializeNewInvoice()
     {
-        var random = new Random();
+        // Bug 8 fix: use timestamp + random suffix to avoid No collisions
+        var rng = new Random();
+        var invoiceNo = $"{DateTime.UtcNow:yyMMddHHmmss}{rng.Next(10, 99)}";
+
         purchaseInvoice = new PurchaseInvoiceDto
         {
-            No = random.Next(1, 99999).ToString(),
+            No = invoiceNo,
             InvoiceDate = DateTime.Now,
             ReferenceNo = "",
             AmountPaid = 0,
@@ -358,28 +372,19 @@ else
                 items = list?.Select(i => new SelectListItem { Value = i.Id.ToString(), Text = i.Description ?? "" }).ToList();
             }
 
-            // ── Load tax groups ────────────────────────────────────────────
             var taxGroupResponse = await client.GetAsync($"{apiurl}tax/taxgroups");
             if (taxGroupResponse.IsSuccessStatusCode)
             {
                 var json = await taxGroupResponse.Content.ReadAsStringAsync();
-                var list = JsonSerializer.Deserialize<List<TaxGroupDto>>(json, new JsonSerializerOptions
-                {
-                    PropertyNameCaseInsensitive = true
-                });
+                var list = JsonSerializer.Deserialize<List<TaxGroupDto>>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
                 taxGroups = list?.Select(t => new SelectListItem { Value = t.Id.ToString(), Text = t.Description ?? "" }).ToList();
             }
 
-            // ── Load purchase orders for dropdown ─────────────────────────
             var poResponse = await client.GetAsync($"{apiurl}purchasing/purchaseorders");
             if (poResponse.IsSuccessStatusCode)
             {
                 var json = await poResponse.Content.ReadAsStringAsync();
-                var list = JsonSerializer.Deserialize<List<PurchaseOrderDto>>(json, new JsonSerializerOptions
-                {
-                    PropertyNameCaseInsensitive = true
-                });
-                purchaseOrders = list?.Select(p => new SelectListItem { Value = p.Id.ToString(), Text = p.No ?? $"PO #{p.Id}" }).ToList();
+                allPurchaseOrders = JsonSerializer.Deserialize<List<PurchaseOrderDto>>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
             }
         }
         catch (Exception)
@@ -387,7 +392,7 @@ else
             vendors = new List<SelectListItem>();
             items = new List<SelectListItem>();
             taxGroups = new List<SelectListItem>();
-            purchaseOrders = new List<SelectListItem>();
+            allPurchaseOrders = new List<PurchaseOrderDto>();
         }
     }
 
@@ -401,10 +406,7 @@ else
             if (response.IsSuccessStatusCode)
             {
                 var json = await response.Content.ReadAsStringAsync();
-                var tempInvoice = JsonSerializer.Deserialize<PurchaseInvoiceDto>(json, new JsonSerializerOptions
-                {
-                    PropertyNameCaseInsensitive = true
-                });
+                var tempInvoice = JsonSerializer.Deserialize<PurchaseInvoiceDto>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
                 if (tempInvoice != null)
                 {
@@ -422,13 +424,18 @@ else
                                 var invoicesList = JsonSerializer.Deserialize<List<PurchaseInvoiceDto>>(listJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
                                 var invoiceFromList = invoicesList?.FirstOrDefault(i => i.Id == id);
                                 if (invoiceFromList != null && !string.IsNullOrEmpty(invoiceFromList.ReferenceNo))
-                                {
                                     purchaseInvoice.ReferenceNo = invoiceFromList.ReferenceNo;
-                                }
                             }
                         }
                         catch { }
                     }
+
+                    // Bug 3 fix: pre-populate FromPurchaseOrderId so edit mode pre-selects the correct PO
+                    if (purchaseInvoice.PurchaseOrderHeaderId.HasValue && purchaseInvoice.PurchaseOrderHeaderId > 0)
+                        purchaseInvoice.FromPurchaseOrderId = purchaseInvoice.PurchaseOrderHeaderId;
+
+                    // Bug 5 fix: snapshot the loaded state so Cancel can revert to it
+                    _originalInvoiceSnapshot = JsonSerializer.Serialize(purchaseInvoice);
                 }
             }
             else
@@ -456,7 +463,7 @@ else
                 var validLines = purchaseInvoice.PurchaseInvoiceLines
                     .Where(line => line.ItemId.HasValue && line.ItemId.Value > 0)
                     .ToList();
-                
+
                 if (validLines.Count == 0)
                 {
                     errorMessage = "Please add at least one item line with a valid item selected.";
@@ -464,7 +471,15 @@ else
                     isSaving = false;
                     return;
                 }
-                
+
+                if (!purchaseInvoice.FromPurchaseOrderId.HasValue || purchaseInvoice.FromPurchaseOrderId == 0)
+                {
+                    errorMessage = "A Purchase Order must be selected before saving an invoice.";
+                    saveError = true;
+                    isSaving = false;
+                    return;
+                }
+
                 purchaseInvoice.PurchaseInvoiceLines = validLines;
             }
 
@@ -499,8 +514,31 @@ else
         }
     }
 
-    private void ToggleEdit() { isViewMode = !isViewMode; }
-    private void AddLine() { purchaseInvoice?.PurchaseInvoiceLines?.Add(new PurchaseInvoiceLineDto { Quantity = 1, Amount = 0, Discount = 0 }); }
+    // Bug 4 fix: clear FromPurchaseOrderId when vendor changes so a stale PO ID isn't sent
+    private void OnVendorChanged(int value)
+    {
+        if (purchaseInvoice is null) return;
+        purchaseInvoice.VendorId = value;
+        purchaseInvoice.FromPurchaseOrderId = null;
+    }
+
+    // Bug 5 fix: revert in-memory changes to the snapshot when the user clicks Cancel
+    private void ToggleEdit()
+    {
+        if (!isViewMode && _originalInvoiceSnapshot != null)
+        {
+            purchaseInvoice = JsonSerializer.Deserialize<PurchaseInvoiceDto>(
+                _originalInvoiceSnapshot,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        }
+        isViewMode = !isViewMode;
+    }
+
+    private void AddLine()
+    {
+        purchaseInvoice?.PurchaseInvoiceLines?.Add(new PurchaseInvoiceLineDto { Quantity = 1, Amount = 0, Discount = 0 });
+    }
+
     private void RemoveLine(int index)
     {
         if (purchaseInvoice?.PurchaseInvoiceLines != null && purchaseInvoice.PurchaseInvoiceLines.Count > 1)
@@ -530,7 +568,6 @@ else
     {
         public int Id { get; set; }
         public int? ItemId { get; set; }
-        /// <summary>Tax Group selected for this line (replaces the retired MeasurementId).</summary>
         public int? TaxGroupId { get; set; }
         public decimal? Quantity { get; set; }
         public decimal? Amount { get; set; }
@@ -540,5 +577,5 @@ else
     public class VendorDto { public int Id { get; set; } public string? Name { get; set; } }
     public class ItemDto { public int Id { get; set; } public string? Description { get; set; } }
     public class TaxGroupDto { public int Id { get; set; } public string? Description { get; set; } }
-    public class PurchaseOrderDto { public int Id { get; set; } public string? No { get; set; } }
+    public class PurchaseOrderDto { public int Id { get; set; } public string? No { get; set; } public int VendorId { get; set; } }
 }

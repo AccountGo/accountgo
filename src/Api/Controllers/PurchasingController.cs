@@ -38,7 +38,7 @@ namespace Api.Controllers
                     VendorName = purchaseOrder.Vendor.Party.Name,
                     OrderDate = purchaseOrder.Date,
                     ReferenceNo = purchaseOrder.ReferenceNo,
-                    StatusId = (int)purchaseOrder.Status.GetValueOrDefault()    
+                    StatusId = (int)purchaseOrder.Status.GetValueOrDefault()
                 };
 
                 foreach (var line in purchaseOrder.PurchaseOrderLines)
@@ -66,11 +66,16 @@ namespace Api.Controllers
         public IActionResult PurchaseOrder(int id)
         {
             var purchaseOrder = _purchasingService.GetPurchaseOrderById(id);
+
+            // Bug 7 fix: guard against invalid ID
+            if (purchaseOrder == null)
+                return NotFound($"Purchase order with ID {id} was not found.");
+
             Dto.Purchasing.PurchaseOrder purchaseOrderDto;
 
             purchaseOrderDto = new Dto.Purchasing.PurchaseOrder()
             {
-                Id = purchaseOrder.Id,               
+                Id = purchaseOrder.Id,
                 VendorId = purchaseOrder.VendorId!.Value,
                 VendorName = purchaseOrder.Vendor.Party.Name,
                 OrderDate = purchaseOrder.Date,
@@ -79,7 +84,7 @@ namespace Api.Controllers
                 StatusId = (int)purchaseOrder.Status.GetValueOrDefault()
             };
 
-            foreach(var item in purchaseOrder.PurchaseOrderLines)
+            foreach (var item in purchaseOrder.PurchaseOrderLines)
             {
                 var line = new Dto.Purchasing.PurchaseOrderLine()
                 {
@@ -100,16 +105,19 @@ namespace Api.Controllers
 
         [HttpPost]
         [Route("savepurchaseorder")]
-        public IActionResult SavePurchaseOrder([FromBody]Dto.Purchasing.PurchaseOrder purchaseOrderDto)
+        public IActionResult SavePurchaseOrder([FromBody] Dto.Purchasing.PurchaseOrder purchaseOrderDto)
         {
             string[]? errors = null;
 
             if (!ModelState.IsValid)
             {
+                // Bug 6 fix: use an index counter to avoid IndexOutOfRange across Values/Errors
                 errors = new string[ModelState.ErrorCount];
+                int idx = 0;
                 foreach (var val in ModelState.Values)
-                    for (int i = 0; i < ModelState.ErrorCount; i++)
-                        errors[i] = val.Errors[i].ErrorMessage;
+                    foreach (var err in val.Errors)
+                        if (idx < errors.Length)
+                            errors[idx++] = err.ErrorMessage;
 
                 return new BadRequestObjectResult(errors);
             }
@@ -137,9 +145,9 @@ namespace Api.Controllers
                     if (!isNew)
                     {
                         var existingLine = purchaseOrder.PurchaseOrderLines.Where(id => id.Id == line.Id).FirstOrDefault();
-                        if (purchaseOrder.PurchaseOrderLines.Where(id => id.Id == line.Id).FirstOrDefault() != null)
+                        if (existingLine != null)
                         {
-                            existingLine!.Amount = line.Amount.GetValueOrDefault();
+                            existingLine.Amount = line.Amount.GetValueOrDefault();
                             existingLine.Discount = line.Discount.GetValueOrDefault();
                             existingLine.Quantity = line.Quantity.GetValueOrDefault();
                             existingLine.ItemId = line.ItemId.GetValueOrDefault();
@@ -212,6 +220,18 @@ namespace Api.Controllers
 
             foreach (var purchaseInvoice in purchaseInvoices)
             {
+                // Bug 2 fix: derive PO info from the line's linked PO line instead of the
+                // unloaded PurchaseOrders navigation collection (mirrors the single-item endpoint)
+                int? poHeaderId = null;
+                string? poNumber = null;
+                var firstLine = purchaseInvoice.PurchaseInvoiceLines.FirstOrDefault();
+                if (firstLine != null && firstLine.PurchaseOrderLineId.HasValue)
+                {
+                    var poLine = _purchasingService.GetPurchaseOrderLineById(firstLine.PurchaseOrderLineId.Value);
+                    poHeaderId = poLine?.PurhcaseOrderHeader?.Id;
+                    poNumber   = poLine?.PurhcaseOrderHeader?.No;
+                }
+
                 var purchaseInvoiceDto = new Dto.Purchasing.PurchaseInvoice()
                 {
                     Id = purchaseInvoice.Id,
@@ -224,9 +244,8 @@ namespace Api.Controllers
                     Posted = purchaseInvoice.GeneralLedgerHeader != null,
                     VendorInvoiceNo = purchaseInvoice.VendorInvoiceNo,
                     ReferenceNo = purchaseInvoice.ReferenceNo,
-                    PurchaseOrderNumber = purchaseInvoice.PurchaseOrders.FirstOrDefault()?.No,
-                    PurchaseOrderHeaderId = purchaseInvoice.PurchaseInvoiceLines
-                        .FirstOrDefault()?.PurchaseOrderLine?.PurchaseOrderHeaderId
+                    PurchaseOrderNumber = poNumber,
+                    PurchaseOrderHeaderId = poHeaderId
                 };
 
                 foreach (var line in purchaseInvoice.PurchaseInvoiceLines)
@@ -254,17 +273,19 @@ namespace Api.Controllers
         {
             var purchaseInvoice = _purchasingService.GetPurchaseInvoiceById(id);
 
-            // MANUALLY FETCH THE PURCHASE ORDER HEADER ID
+            // Bug 7 fix: guard against invalid ID
+            if (purchaseInvoice == null)
+                return NotFound($"Purchase invoice with ID {id} was not found.");
+
+            // Derive PO info from the invoice line's linked PO line
             int? poHeaderId = null;
+            string? poNumber = null;
             var firstLine = purchaseInvoice.PurchaseInvoiceLines.FirstOrDefault();
-            
-            // Check if the invoice line has a link to a purchase order line
             if (firstLine != null && firstLine.PurchaseOrderLineId.HasValue)
             {
-                // Look up the PO Line using the service, which includes the header
                 var poLine = _purchasingService.GetPurchaseOrderLineById(firstLine.PurchaseOrderLineId.Value);
-                // Note: Using 'PurhcaseOrderHeader' spelling as defined in your domain model
-                poHeaderId = poLine?.PurhcaseOrderHeader?.Id; 
+                poHeaderId = poLine?.PurhcaseOrderHeader?.Id;
+                poNumber   = poLine?.PurhcaseOrderHeader?.No;
             }
 
             var purchaseInvoiceDto = new Dto.Purchasing.PurchaseInvoice()
@@ -277,8 +298,9 @@ namespace Api.Controllers
                 IsPaid = purchaseInvoice.IsPaid(),
                 Posted = purchaseInvoice.GeneralLedgerHeader != null,
                 ReferenceNo = purchaseInvoice.ReferenceNo,
-                PurchaseOrderNumber = purchaseInvoice.PurchaseOrders.FirstOrDefault()?.No,
-                PurchaseOrderHeaderId = poHeaderId
+                PurchaseOrderNumber = poNumber,
+                PurchaseOrderHeaderId = poHeaderId,
+                FromPurchaseOrderId = poHeaderId
             };
 
             foreach (var item in purchaseInvoice.PurchaseInvoiceLines)
@@ -300,12 +322,13 @@ namespace Api.Controllers
             {
                 purchaseInvoiceDto.ReadyForPosting = true;
             }
+
             return new ObjectResult(purchaseInvoiceDto);
         }
 
         [HttpPost]
         [Route("PostPurchaseInvoice")]
-        public IActionResult PostPurchaseInvoice([FromBody]Dto.Purchasing.PurchaseInvoice purchaseInvoiceDto)
+        public IActionResult PostPurchaseInvoice([FromBody] Dto.Purchasing.PurchaseInvoice purchaseInvoiceDto)
         {
             string[]? errors = null;
 
@@ -313,10 +336,13 @@ namespace Api.Controllers
             {
                 if (!ModelState.IsValid)
                 {
+                    // Bug 6 fix: use an index counter to avoid IndexOutOfRange across Values/Errors
                     errors = new string[ModelState.ErrorCount];
+                    int idx = 0;
                     foreach (var val in ModelState.Values)
-                        for (int i = 0; i < ModelState.ErrorCount; i++)
-                            errors[i] = val.Errors[i].ErrorMessage;
+                        foreach (var err in val.Errors)
+                            if (idx < errors.Length)
+                                errors[idx++] = err.ErrorMessage;
 
                     return new BadRequestObjectResult(errors);
                 }
@@ -325,7 +351,7 @@ namespace Api.Controllers
 
                 return new ObjectResult(Ok());
             }
-            catch(Exception ex)
+            catch (Exception ex)
             {
                 errors = new string[1] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
                 return new BadRequestObjectResult(errors);
@@ -334,7 +360,7 @@ namespace Api.Controllers
 
         [HttpPost]
         [Route("SavePurchaseInvoice")]
-        public IActionResult SavePurchaseInvoice([FromBody]Dto.Purchasing.PurchaseInvoice purchaseInvoiceDto)
+        public IActionResult SavePurchaseInvoice([FromBody] Dto.Purchasing.PurchaseInvoice purchaseInvoiceDto)
         {
             string[]? errors = null;
 
@@ -342,10 +368,13 @@ namespace Api.Controllers
             {
                 if (!ModelState.IsValid)
                 {
+                    // Bug 6 fix: use an index counter to avoid IndexOutOfRange across Values/Errors
                     errors = new string[ModelState.ErrorCount];
+                    int idx = 0;
                     foreach (var val in ModelState.Values)
-                        for (int i = 0; i < ModelState.ErrorCount; i++)
-                            errors[i] = val.Errors[i].ErrorMessage;
+                        foreach (var err in val.Errors)
+                            if (idx < errors.Length)
+                                errors[idx++] = err.ErrorMessage;
 
                     return new BadRequestObjectResult(errors);
                 }
@@ -357,20 +386,9 @@ namespace Api.Controllers
                 if (isNew)
                 {
                     if (!purchaseInvoiceDto.FromPurchaseOrderId.HasValue)
-                    {
-                        purchaseOrder = new Core.Domain.Purchases.PurchaseOrderHeader();
-                        purchaseOrder.Date = purchaseInvoiceDto.InvoiceDate;
-                        purchaseOrder.VendorId = purchaseInvoiceDto.VendorId;
-                        
-                        purchaseOrder.ReferenceNo = purchaseInvoiceDto.PurchaseOrderNumber; 
-                        
-                        purchaseOrder.PaymentTermId = purchaseInvoiceDto.PaymentTermId;
-                        purchaseOrder.Status = Core.Domain.PurchaseOrderStatus.FullReceived;
-                    }
-                    else
-                    {
-                        purchaseOrder = _purchasingService.GetPurchaseOrderById(purchaseInvoiceDto.FromPurchaseOrderId.GetValueOrDefault());
-                    }
+    throw new Exception("A Purchase Order must be selected before saving an invoice.");
+
+purchaseOrder = _purchasingService.GetPurchaseOrderById(purchaseInvoiceDto.FromPurchaseOrderId.GetValueOrDefault());
 
                     purchaseInvoice = new Core.Domain.Purchases.PurchaseInvoiceHeader();
                     purchaseInvoice.VendorId = purchaseInvoiceDto.VendorId;
@@ -395,7 +413,8 @@ namespace Api.Controllers
                         }
                         else
                         {
-                            // if you reach here, this line item is newly added to invoice which is not originally in sales order. create correspondin orderline and add to sales order.
+                            // Line item newly added to invoice and not in the original PO:
+                            // create a corresponding order line and attach it.
                             var purchaseOrderLine = new Core.Domain.Purchases.PurchaseOrderLine();
                             purchaseOrderLine.Amount = line.Amount.GetValueOrDefault();
                             purchaseOrderLine.Discount = line.Discount.GetValueOrDefault();
@@ -423,10 +442,12 @@ namespace Api.Controllers
 
                     foreach (var line in purchaseInvoiceDto.PurchaseInvoiceLines)
                     {
-                        var existingLine = purchaseInvoice.PurchaseInvoiceLines.Where(id => id.Id == line.Id).FirstOrDefault();
-                        if (purchaseInvoice.PurchaseInvoiceLines.Where(id => id.Id == line.Id).FirstOrDefault() != null)
+                        var existingLine = purchaseInvoice.PurchaseInvoiceLines
+                            .FirstOrDefault(l => l.Id == line.Id);
+
+                        if (existingLine != null)
                         {
-                            existingLine!.Amount = line.Amount.GetValueOrDefault();
+                            existingLine.Amount = line.Amount.GetValueOrDefault();
                             existingLine.Discount = line.Discount.GetValueOrDefault();
                             existingLine.Quantity = line.Quantity.GetValueOrDefault();
                             existingLine.ItemId = line.ItemId.GetValueOrDefault();
@@ -434,6 +455,7 @@ namespace Api.Controllers
                         }
                         else
                         {
+                            // New line added while editing an existing invoice
                             var purchaseInvoiceLine = new Core.Domain.Purchases.PurchaseInvoiceLine();
                             purchaseInvoiceLine.Amount = line.Amount.GetValueOrDefault();
                             purchaseInvoiceLine.Discount = line.Discount.GetValueOrDefault();
@@ -451,7 +473,27 @@ namespace Api.Controllers
 
                             if (purchaseOrder == null)
                             {
-                                purchaseOrder = _purchasingService.GetPurchaseOrderById(existingLine!.PurchaseOrderLine.PurchaseOrderHeaderId);
+                                // Bug 1 fix: existingLine is null here (we're in the else branch),
+                                // so derive the PO from any already-linked invoice line instead.
+                                // Fall back to FromPurchaseOrderId from the DTO if none found.
+                                var anyLinkedLine = purchaseInvoice.PurchaseInvoiceLines
+                                    .FirstOrDefault(l => l.PurchaseOrderLine != null);
+
+                                int poHeaderId;
+                                if (anyLinkedLine != null)
+                                {
+                                    poHeaderId = anyLinkedLine.PurchaseOrderLine.PurchaseOrderHeaderId;
+                                }
+                                else if (purchaseInvoiceDto.FromPurchaseOrderId.HasValue)
+                                {
+                                    poHeaderId = purchaseInvoiceDto.FromPurchaseOrderId.Value;
+                                }
+                                else
+                                {
+                                    throw new Exception("Cannot determine which Purchase Order to link the new line to.");
+                                }
+
+                                purchaseOrder = _purchasingService.GetPurchaseOrderById(poHeaderId);
                                 purchaseOrder.PurchaseOrderLines.Add(purchaseOrderLine);
                             }
 
@@ -485,10 +527,10 @@ namespace Api.Controllers
 
         [HttpPost]
         [Route("SaveVendor")]
-        public IActionResult SaveVendor([FromBody]Dto.Purchasing.Vendor vendorDto)
+        public IActionResult SaveVendor([FromBody] Dto.Purchasing.Vendor vendorDto)
         {
             string[]? errors = null;
-            
+
             try
             {
                 if (!ModelState.IsValid)
@@ -523,15 +565,14 @@ namespace Api.Controllers
                 vendor.Party.Phone = vendorDto.Phone;
                 vendor.Party.Email = vendorDto.Email;
                 vendor.Party.Website = vendorDto.Website;
-                
-                // Set IDs to null if they are 0 to prevent foreign key constraint violations
+
                 vendor.AccountsPayableAccountId = vendorDto.AccountsPayableAccountId == 0 ? (int?)null : vendorDto.AccountsPayableAccountId;
                 vendor.PurchaseAccountId = vendorDto.PurchaseAccountId == 0 ? (int?)null : vendorDto.PurchaseAccountId;
                 vendor.PurchaseDiscountAccountId = vendorDto.PurchaseDiscountAccountId == 0 ? (int?)null : vendorDto.PurchaseDiscountAccountId;
                 vendor.TaxGroupId = vendorDto.TaxGroupId == 0 ? (int?)null : vendorDto.TaxGroupId;
                 vendor.PaymentTermId = vendorDto.PaymentTermId == 0 ? (int?)null : vendorDto.PaymentTermId;
                 vendor.PaymentMethod = vendorDto.PaymentMethod == 0 ? (int?)null : vendorDto.PaymentMethod;
-                
+
                 vendor.DiscountPercentage = vendorDto.DiscountPercentage;
                 vendor.Street1 = vendorDto.Street1;
                 vendor.Street2 = vendorDto.Street2;
@@ -544,11 +585,11 @@ namespace Api.Controllers
                 {
                     if (vendor.PrimaryContact == null) vendor.PrimaryContact = new Core.Domain.Contact();
                     if (vendor.PrimaryContact.Party == null) vendor.PrimaryContact.Party = new Core.Domain.Party();
-                    
+
                     vendor.PrimaryContact.FirstName = vendorDto.PrimaryContact.FirstName;
                     vendor.PrimaryContact.LastName = vendorDto.PrimaryContact.LastName;
                     vendor.PrimaryContact.Party.PartyType = Core.Domain.PartyTypes.Contact;
-                    
+
                     if (vendorDto.PrimaryContact.Party != null)
                     {
                         vendor.PrimaryContact.Party.Email = vendorDto.PrimaryContact.Party.Email;
@@ -666,7 +707,7 @@ namespace Api.Controllers
                     {
                         vendorDto.PrimaryContact.FirstName = vendor.PrimaryContact.FirstName;
                         vendorDto.PrimaryContact.LastName = vendor.PrimaryContact.LastName;
-                        
+
                         if (vendor.PrimaryContact.Party != null)
                         {
                             if (vendorDto.PrimaryContact.Party == null)
@@ -678,7 +719,7 @@ namespace Api.Controllers
                                     partyProp.SetValue(vendorDto.PrimaryContact, partyInstance);
                                 }
                             }
-                            
+
                             if (vendorDto.PrimaryContact.Party != null)
                             {
                                 vendorDto.PrimaryContact.Party.Email = vendor.PrimaryContact.Party.Email;
@@ -689,7 +730,7 @@ namespace Api.Controllers
                         }
                     }
                 }
-                
+
                 return new ObjectResult(vendorDto);
             }
             catch (Exception ex)
@@ -700,7 +741,7 @@ namespace Api.Controllers
 
         [HttpPost]
         [Route("SavePayment")]
-        public IActionResult SavePayment([FromBody]dynamic paymentDto)
+        public IActionResult SavePayment([FromBody] dynamic paymentDto)
         {
             string[]? errors = null;
 
@@ -719,11 +760,11 @@ namespace Api.Controllers
                 var bank = _financialService.GetCashAndBanks().Where(id => id.Id == (int)paymentDto.AccountId).FirstOrDefault();
 
                 _purchasingService.SavePayment(
-                    (int) paymentDto.InvoiceId, 
-                    (int) paymentDto.VendorId, 
-                    ((int?) bank!.AccountId).GetValueOrDefault(), 
-                    (decimal) paymentDto.AmountToPay, 
-                    (DateTime) paymentDto.Date);
+                    (int)paymentDto.InvoiceId,
+                    (int)paymentDto.VendorId,
+                    ((int?)bank!.AccountId).GetValueOrDefault(),
+                    (decimal)paymentDto.AmountToPay,
+                    (DateTime)paymentDto.Date);
 
                 return new ObjectResult(Ok());
             }
