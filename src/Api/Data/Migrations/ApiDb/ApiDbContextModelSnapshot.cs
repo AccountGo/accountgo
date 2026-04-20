@@ -1013,9 +1013,6 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<int>("ItemId")
                         .HasColumnType("int");
 
-                    b.Property<int>("MeasurementId")
-                        .HasColumnType("int");
-
                     b.Property<int>("PurchaseInvoiceHeaderId")
                         .HasColumnType("int");
 
@@ -1028,13 +1025,14 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<decimal?>("ReceivedQuantity")
                         .HasColumnType("decimal(18, 2)");
 
+                    b.Property<int?>("TaxGroupId")
+                        .HasColumnType("int");
+
                     b.HasKey("Id");
 
                     b.HasIndex("InventoryControlJournalId");
 
                     b.HasIndex("ItemId");
-
-                    b.HasIndex("MeasurementId");
 
                     b.HasIndex("PurchaseInvoiceHeaderId");
 
@@ -1104,20 +1102,18 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<int>("ItemId")
                         .HasColumnType("int");
 
-                    b.Property<int>("MeasurementId")
-                        .HasColumnType("int");
-
                     b.Property<int>("PurchaseOrderHeaderId")
                         .HasColumnType("int");
 
                     b.Property<decimal>("Quantity")
                         .HasColumnType("decimal(18, 2)");
 
+                    b.Property<int?>("TaxGroupId")
+                        .HasColumnType("int");
+
                     b.HasKey("Id");
 
                     b.HasIndex("ItemId");
-
-                    b.HasIndex("MeasurementId");
 
                     b.HasIndex("PurchaseOrderHeaderId");
 
@@ -2535,12 +2531,6 @@ namespace Api.Data.Migrations.ApiDb
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("Core.Domain.Items.Measurement", "Measurement")
-                        .WithMany()
-                        .HasForeignKey("MeasurementId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
                     b.HasOne("Core.Domain.Purchases.PurchaseInvoiceHeader", "PurchaseInvoiceHeader")
                         .WithMany("PurchaseInvoiceLines")
                         .HasForeignKey("PurchaseInvoiceHeaderId")
@@ -2554,8 +2544,6 @@ namespace Api.Data.Migrations.ApiDb
                     b.Navigation("InventoryControlJournal");
 
                     b.Navigation("Item");
-
-                    b.Navigation("Measurement");
 
                     b.Navigation("PurchaseInvoiceHeader");
 
@@ -2583,12 +2571,6 @@ namespace Api.Data.Migrations.ApiDb
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("Core.Domain.Items.Measurement", "Measurement")
-                        .WithMany()
-                        .HasForeignKey("MeasurementId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
                     b.HasOne("Core.Domain.Purchases.PurchaseOrderHeader", "PurhcaseOrderHeader")
                         .WithMany("PurchaseOrderLines")
                         .HasForeignKey("PurchaseOrderHeaderId")
@@ -2596,8 +2578,6 @@ namespace Api.Data.Migrations.ApiDb
                         .IsRequired();
 
                     b.Navigation("Item");
-
-                    b.Navigation("Measurement");
 
                     b.Navigation("PurhcaseOrderHeader");
                 });

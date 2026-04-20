@@ -5,9 +5,9 @@
 @inject IHttpClientFactory ClientFactory
 @inject NavigationManager Navigation
 
-<PageTitle>Purchase Invoices</PageTitle>
+<PageTitle>Vendor Invoices</PageTitle>
 
-<h3>Purchase Invoices</h3>
+<h3>Vendor Invoices</h3>
 
 @if (getError)
 {
@@ -138,7 +138,7 @@ else
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error loading purchase invoices: {ex.Message}");
+            Console.WriteLine($"Error loading vendor invoices: {ex.Message}");
             getError = true;
         }
 

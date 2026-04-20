@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 
 namespace Dto.Purchasing
 {
@@ -17,6 +17,7 @@ namespace Dto.Purchasing
         public int? FromPurchaseOrderId { get; set; }
         public int? PaymentTermId { get; set; }
         public string? ReferenceNo { get; set; }
+        public string? PurchaseOrderNumber { get; set; }
         public bool? ReadyForPosting { get; set; }
         public System.Collections.Generic.IList<PurchaseInvoiceLine> PurchaseInvoiceLines { get; set; }
 
@@ -48,7 +49,7 @@ namespace Dto.Purchasing
     public class PurchaseInvoiceLine : BaseDto
     {
         public int? ItemId { get; set; }
-        public int? MeasurementId { get; set; }
+        public int? TaxGroupId { get; set; }
         public decimal? Quantity { get; set; }
         public decimal? Amount { get; set; }
         public decimal? Discount { get; set; }

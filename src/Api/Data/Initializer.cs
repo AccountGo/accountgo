@@ -1140,7 +1140,6 @@ namespace Api.Data
             invoice.PurchaseInvoiceLines.Add(new Core.Domain.Purchases.PurchaseInvoiceLine
             {
                 ItemId = item.Id,
-                MeasurementId = measurementId,
                 Quantity = quantity,
                 Cost = amount,
                 Discount = 0m,
