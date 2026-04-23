@@ -1,9 +1,9 @@
-﻿using Api.Data;
+﻿using System.Text;
+using Api.Data;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
-using System.Text;
 
 namespace Api.Extensions
 {
@@ -66,7 +66,7 @@ namespace Api.Extensions
             return dict;
         }
 
-        public static void ConfigureSqlContext(this IServiceCollection services, IConfiguration configuration)
+        public static void ConfigureSqlContext(this IServiceCollection services, IConfiguration configuration, IHostEnvironment environment)
         {
             string dbServer, dbUserID, dbUserPassword, dbName = string.Empty;
 
@@ -81,15 +81,33 @@ namespace Api.Extensions
                 dbName = System.Environment.GetEnvironmentVariable("DBNAME") ?? "accountgodb";
 
                 connectionString = string.Format(configuration.GetConnectionString("DefaultConnection")!, dbServer, dbUserID, dbUserPassword, dbName);
-            } 
+            }
 
             Console.WriteLine("DB Connection String: " + connectionString);
 
-            services
-                .AddDbContext<ApiDbContext>(options => options.UseSqlServer(connectionString
-                , options => options.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery)))
-                //.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery) // Add this line
-                .AddDbContext<ApplicationIdentityDbContext>(options => options.UseSqlServer(connectionString));
+            services.AddDbContext<ApiDbContext>
+            (
+                optionsAction: options =>
+                {
+                    options.UseSqlServer
+                    (
+                        connectionString: connectionString,
+                        sqlServerOptionsAction: options =>
+                        {
+                            options.UseQuerySplittingBehavior(querySplittingBehavior: QuerySplittingBehavior.SplitQuery);
+                        }
+                    );
+
+                    // Only enable sensitive logging for debugging purpose on ApiDbContext in development setting
+                    if (environment.IsDevelopment())
+                    {
+                        options.EnableSensitiveDataLogging();
+                        options.EnableDetailedErrors();
+                    }
+                }
+            );
+
+            services.AddDbContext<ApplicationIdentityDbContext>(optionsAction: options => options.UseSqlServer(connectionString: connectionString));
         }
     }
 }
