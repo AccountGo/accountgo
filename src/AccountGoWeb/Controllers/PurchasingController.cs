@@ -19,6 +19,12 @@ namespace AccountGoWeb.Controllers
             return View();
         }
 
+        public IActionResult Payments()
+        {
+            ViewBag.PageContentHeader = "Payments";
+            return View();
+        }
+
         public IActionResult PurchaseOrders()
         {
             ViewBag.PageContentHeader = "Purchase Orders";
