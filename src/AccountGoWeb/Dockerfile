@@ -30,8 +30,6 @@ RUN npm run css
 WORKDIR /app
 
 ### Add all modules here. TODO: Improve in such a way all projects under Modules folder are automatically build.
-RUN dotnet restore ./Modules/SampleModule/*.csproj
-RUN dotnet build ./Modules/SampleModule/*.csproj
 
 RUN dotnet restore ./AccountGoWeb/*.csproj
 RUN dotnet publish ./AccountGoWeb/*.csproj -c Release -o out

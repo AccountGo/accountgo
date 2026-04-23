@@ -78,11 +78,6 @@ builder.AddProject<Projects.AccountGoWeb>("mvc")
         .WithReference(apiService)
         .WaitFor(apiService);
 
-builder.AddProject<Projects.BlazorGDB>("blazor")
-        .WithHttpEndpoint(port: 8002, name: "blazor-http")
-        .WithReference(apiService)
-        .WaitFor(apiService);
-
 builder.AddProject<Projects.MigrationService>("migrations")
     .WithReference(sqlServer)
     .WaitFor(sqlServer);

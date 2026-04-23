@@ -25,7 +25,7 @@ namespace AccountGoWeb.Controllers
 
         public async System.Threading.Tasks.Task<IActionResult> SalesOrders()
         {
-            ViewBag.PageContentHeader = "Sales Orders";
+            ViewBag.PageContentHeader = string.Empty;
             using (var client = new HttpClient())
             {
                 var baseUri = _configuration!["ApiUrl"];
@@ -43,7 +43,7 @@ namespace AccountGoWeb.Controllers
 
         public IActionResult AddSalesOrder()
         {
-            ViewBag.PageContentHeader = "Add Sales Order";
+            ViewBag.PageContentHeader = string.Empty;
             SalesOrder salesOrderModel = new SalesOrder();
             salesOrderModel.SalesOrderLines = new List<SalesOrderLine> { new SalesOrderLine {
                 Amount = 0,
@@ -101,11 +101,11 @@ namespace AccountGoWeb.Controllers
 
         public IActionResult SalesOrder(int id)
         {
-            ViewBag.PageContentHeader = "Sales Order";
+            ViewBag.PageContentHeader = string.Empty;
             SalesOrder? salesOrderModel = null;
             if (id == -1)
             {
-                ViewBag.PageContentHeader = "Add Sales Order";
+                ViewBag.PageContentHeader = string.Empty;
                 return View("AddSalesOrder");
 
             }
@@ -291,7 +291,7 @@ namespace AccountGoWeb.Controllers
             return View(Dto);
         }
 
-        public async System.Threading.Tasks.Task<IActionResult> SalesReceipts()
+        public async System.Threading.Tasks.Task<IActionResult> CustomerPayments()
         {
             ViewBag.PageContentHeader = "Customer Payments";
             try
@@ -326,13 +326,13 @@ namespace AccountGoWeb.Controllers
         }
 
         [HttpGet]
-        public IActionResult SalesReceipt(int id)
+        public IActionResult CustomerPayment(int id)
         {
             return View();
         }
 
         [HttpGet]
-        public IActionResult AddReceipt()
+        public IActionResult NewCustomerPayment()
         {
             try
             {
@@ -356,7 +356,7 @@ namespace AccountGoWeb.Controllers
         }
 
         [HttpPost]
-        public IActionResult AddReceipt(Models.Sales.AddReceipt model)
+        public IActionResult NewCustomerPayment(Models.Sales.AddReceipt model)
         {
             if (ModelState.IsValid)
             {
@@ -369,23 +369,23 @@ namespace AccountGoWeb.Controllers
                     var response = Post("sales/savereceipt", content);
                     if (response.IsSuccessStatusCode)
                     {
-                        return RedirectToAction("SalesReceipts");
+                        return RedirectToAction("CustomerPayments");
                     }
                     else
                     {
-                        _logger.LogError("Failed to save receipt. API returned status code: {StatusCode}", response.StatusCode);
-                        ViewBag.ErrorMessage = "Failed to save the receipt. Please try again.";
+                        _logger.LogError("Failed to save customer payment. API returned status code: {StatusCode}", response.StatusCode);
+                        ViewBag.ErrorMessage = "Failed to save the customer payment. Please try again.";
                     }
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "An error occurred while saving the receipt.");
+                    _logger.LogError(ex, "An error occurred while saving the customer payment.");
                     ViewBag.ErrorMessage = "An unexpected error occurred. Please try again.";
                 }
             }
 
             // Reload dropdowns and return the view if validation or API call fails
-            ViewBag.PageContentHeader = "New Receipt";
+            ViewBag.PageContentHeader = "New Customer Payment";
             ViewBag.Customers = Models.SelectListItemHelper.Customers();
             ViewBag.DebitAccounts = Models.SelectListItemHelper.CashBanks();
             ViewBag.CreditAccounts = Models.SelectListItemHelper.Accounts();
@@ -586,7 +586,7 @@ public IActionResult Allocate(int id)
                     content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
                     var response = Post("sales/saveallocation", content);
                     if (response.IsSuccessStatusCode)
-                        return RedirectToAction("salesreceipts");
+                        return RedirectToAction("customerpayments");
                 }
             }
 

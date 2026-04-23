@@ -106,7 +106,7 @@ namespace Services.Purchasing
                     po.PurchaseOrderLines.Add(new PurchaseOrderLine()
                     {
                         ItemId = item.Id,
-                        MeasurementId = line.MeasurementId,
+                        TaxGroupId = line.TaxGroupId,
                         Quantity = line.Quantity,
                         Cost = item.Cost.Value,
                         Discount = line.Discount.HasValue ? line.Discount.Value : 0,
@@ -168,7 +168,7 @@ namespace Services.Purchasing
                 glHeader.GeneralLedgerLines.Add(creditGRNClearingAccount);
 
                 line.InventoryControlJournal = _inventoryService.CreateInventoryControlJournal(line.ItemId,
-                    line.MeasurementId,
+                    0,
                     DocumentTypes.PurchaseReceipt,
                     line.Quantity,
                     null,
@@ -257,7 +257,7 @@ namespace Services.Purchasing
                 glLines.Add(creditGRNClearingAccount);
 
                 lineItem.InventoryControlJournal = _inventoryService.CreateInventoryControlJournal(lineItem.ItemId,
-                    lineItem.MeasurementId,
+                    0,
                     DocumentTypes.PurchaseReceipt,
                     lineItem.ReceivedQuantity,
                     null,
@@ -488,6 +488,7 @@ namespace Services.Purchasing
             catch (Exception ex)
             {
                 _logger.LogError(ex.Message);
+                throw; // throw again
             }
         }
 
@@ -562,7 +563,7 @@ namespace Services.Purchasing
                 glHeader.GeneralLedgerLines.Add(creditGRNClearingAccount);
 
                 lineItem.InventoryControlJournal = _inventoryService.CreateInventoryControlJournal(lineItem.ItemId,
-                    lineItem.MeasurementId,
+                    0,
                     DocumentTypes.PurchaseReceipt,
                     lineItem.Quantity,
                     null,

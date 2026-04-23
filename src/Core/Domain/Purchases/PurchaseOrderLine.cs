@@ -19,14 +19,13 @@ namespace Core.Domain.Purchases
     {
         public int PurchaseOrderHeaderId { get; set; }
         public int ItemId { get; set; }
-        public int MeasurementId { get; set; }
+        public int? TaxGroupId { get; set; }
         public decimal Quantity { get; set; }
         public decimal Cost { get; set; }
         public decimal Discount { get; set; }
         public decimal Amount { get; set; }
         public virtual PurchaseOrderHeader PurhcaseOrderHeader { get; set; }
         public virtual Item Item { get; set; }
-        public virtual Measurement Measurement { get; set; }
         public virtual ICollection<PurchaseInvoiceLine> PurchaseInvoiceLines { get; set; }
 
         public PurchaseOrderLine()
