@@ -1,0 +1,59 @@
+.donationsTable {
+    width: 100%;
+    border-collapse: collapse;
+    background: transparent;
+    color: white; /* text visible on dark page */
+}
+
+.donationsTable th, .donationsTable td {
+    padding: 8px;
+    text-align: left;
+    border: none; /* no borders */
+}
+
+.donationRow:hover {
+    background-color: rgba(255,255,255,0.1);
+    cursor: pointer;
+}
+
+.inactiveLink {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+.badge {
+    padding: 0.4rem 0.8rem;
+    border-radius: 4px;
+    font-weight: 500;
+    font-size: 0.75rem;
+}
+
+.badge-success {
+    background: rgba(16, 185, 129, 0.2);
+    color: #10b981;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.badge-warning {
+    background: rgba(245, 158, 11, 0.2);
+    color: #f59e0b;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.loading-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 3rem;
+}
+
+.table-donations tbody tr.selected-row td {
+    background-color: #0d6efd !important;
+    color: #fff !important;
+    border-left: 3px solid #0d6efd;
+}
+
+.table-donations tbody tr.selected-row a {
+    color: #fff !important;
+    text-decoration: underline;
+}
