@@ -1,9 +1,9 @@
-﻿using Api.Data;
+﻿using System.Text;
+using Api.Data;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
-using System.Text;
 
 namespace Api.Extensions
 {
@@ -14,20 +14,20 @@ namespace Api.Extensions
             services.AddCors(options =>
             {
                 options.AddPolicy(name: "AllowAll",
-                                  policy =>
-                                  {
-                                      policy.AllowAnyOrigin()
-                                            .AllowAnyMethod()
-                                            .AllowAnyHeader();
-                                  });
+                    policy =>
+                    {
+                        policy.AllowAnyOrigin()
+                            .AllowAnyMethod()
+                            .AllowAnyHeader();
+                    });
             });
         }
 
         public static void ConfigureIdentity(this IServiceCollection services)
         {
             services.AddIdentity<ApplicationUser, IdentityRole>()
-                 .AddEntityFrameworkStores<ApplicationIdentityDbContext>()
-                 .AddDefaultTokenProviders();
+                .AddEntityFrameworkStores<ApplicationIdentityDbContext>()
+                .AddDefaultTokenProviders();
         }
 
         public static void ConfigureJWT(this IServiceCollection services, IConfiguration configuration)
@@ -66,7 +66,8 @@ namespace Api.Extensions
             return dict;
         }
 
-        public static void ConfigureSqlContext(this IServiceCollection services, IConfiguration configuration)
+        public static void ConfigureSqlContext(this IServiceCollection services, IConfiguration configuration,
+            IHostEnvironment environment)
         {
             string dbServer, dbUserID, dbUserPassword, dbName = string.Empty;
 
@@ -80,16 +81,39 @@ namespace Api.Extensions
                 dbUserPassword = System.Environment.GetEnvironmentVariable("DBPASSWORD") ?? "SqlPassword!";
                 dbName = System.Environment.GetEnvironmentVariable("DBNAME") ?? "accountgodb";
 
-                connectionString = string.Format(configuration.GetConnectionString("DefaultConnection")!, dbServer, dbUserID, dbUserPassword, dbName);
-            } 
+                connectionString = string.Format(configuration.GetConnectionString("DefaultConnection")!, dbServer,
+                    dbUserID, dbUserPassword, dbName);
+            }
 
             Console.WriteLine("DB Connection String: " + connectionString);
 
-            services
-                .AddDbContext<ApiDbContext>(options => options.UseSqlServer(connectionString
-                , options => options.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery)))
-                //.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery) // Add this line
-                .AddDbContext<ApplicationIdentityDbContext>(options => options.UseSqlServer(connectionString));
+            services.AddDbContext<ApiDbContext>
+            (
+                optionsAction: options =>
+                {
+                    options.UseSqlServer
+                    (
+                        connectionString: connectionString,
+                        sqlServerOptionsAction: options =>
+                        {
+                            options.UseQuerySplittingBehavior(
+                                querySplittingBehavior: QuerySplittingBehavior.SplitQuery);
+
+                            options.EnableRetryOnFailure();
+                        }
+                    );
+
+                    // Only enable sensitive logging for debugging purpose on ApiDbContext in development setting
+                    if (environment.IsDevelopment())
+                    {
+                        options.EnableSensitiveDataLogging();
+                        options.EnableDetailedErrors();
+                    }
+                }
+            );
+
+            services.AddDbContext<ApplicationIdentityDbContext>(optionsAction: options =>
+                options.UseSqlServer(connectionString: connectionString));
         }
     }
 }

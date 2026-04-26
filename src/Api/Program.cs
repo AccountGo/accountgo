@@ -8,8 +8,8 @@ using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add database context
-builder.Services.ConfigureSqlContext(builder.Configuration);
+// Add database context and provide builder environment information to the extended method for debugging purpose
+builder.Services.ConfigureSqlContext(builder.Configuration, builder.Environment);
 
 builder.AddServiceDefaults();
 

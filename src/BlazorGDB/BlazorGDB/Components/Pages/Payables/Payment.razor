@@ -1,0 +1,303 @@
+@page "/payables/payment/invoice/{InvoiceId:int}"
+@page "/payables/payment/order/{OrderId:int}"
+@rendermode InteractiveServer
+@using System.Text.Json
+@using System.Text.Json.Serialization
+@using System.Net.Http.Json
+@inject IHttpClientFactory ClientFactory
+@inject NavigationManager Navigation
+
+<PageTitle>Payment Form</PageTitle>
+
+<h3>Make Payment</h3>
+
+@if (getError)
+{
+    <div class="alert alert-danger" role="alert">
+        @errorMessage
+    </div>
+}
+
+@if (isLoading)
+{
+    <p><em>Loading data...</em></p>
+}
+else
+{
+    <div class="card">
+        <div class="card-header">
+            <strong>Payment Details</strong>
+        </div>
+        <div class="card-body">
+            @if(OrderId.HasValue && !invoices.Any())
+            {
+                <div class="alert alert-warning">
+                    No outstanding, posted invoices were found for this vendor. Please create and post an invoice for this purchase order before making a payment.
+                </div>
+            }
+            <EditForm Model="@paymentModel" OnValidSubmit="SavePayment">
+                <DataAnnotationsValidator />
+                
+                @if (OrderId.HasValue)
+                {
+                    <div class="mb-3">
+                        <label class="form-label">Select Invoice</label>
+                        <InputSelect class="form-select" @bind-Value="paymentModel.InvoiceId" @oninput="OnInvoiceSelectionChange">
+                            <option value="0">-- Select Invoice --</option>
+                            @foreach (var inv in invoices)
+                            {
+                                <option value="@inv.Id">@inv.No - @inv.VendorName (@(inv.Amount - inv.AmountPaid) due)</option>
+                            }
+                        </InputSelect>
+                        <ValidationMessage For="@(() => paymentModel.InvoiceId)" />
+                    </div>
+                }
+                else
+                {
+                    <div class="mb-3">
+                        <label class="form-label">Invoice To Pay</label>
+                        <input class="form-control" value="@(invoice?.No + " - " + invoice?.VendorName)" disabled />
+                    </div>
+                }
+
+                <div class="mb-3">
+                    <label class="form-label">Bank / Cash Account</label>
+                    <InputSelect class="form-select" @bind-Value="paymentModel.AccountId">
+                        <option value="0">-- Select Account --</option>
+                        @foreach (var bank in cashBanks)
+                        {
+                            <option value="@bank.Id">@bank.Name (@bank.AccountNo)</option>
+                        }
+                    </InputSelect>
+                    <ValidationMessage For="@(() => paymentModel.AccountId)" />
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Amount</label>
+                    <InputNumber class="form-control" @bind-Value="paymentModel.AmountToPay" />
+                    <ValidationMessage For="@(() => paymentModel.AmountToPay)" />
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Date</label>
+                    <InputDate class="form-control" @bind-Value="paymentModel.Date" />
+                    <ValidationMessage For="@(() => paymentModel.Date)" />
+                </div>
+
+                <button type="submit" class="btn btn-primary" disabled="@(paymentModel.InvoiceId == 0 && invoices.Any())">Save Payment</button>
+                <button type="button" class="btn btn-secondary ms-2" @onclick="GoBack">Cancel</button>
+            </EditForm>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public int? InvoiceId { get; set; }
+    [Parameter] public int? OrderId { get; set; }
+
+    private bool isLoading = true;
+    private bool getError = false;
+    private string errorMessage = "Unable to load data.";
+
+    private PaymentModel paymentModel = new() { Date = DateTime.Now };
+    private List<BankDto> cashBanks = new();
+    private List<PurchaseInvoiceDto> invoices = new();
+    private PurchaseInvoiceDto? invoice = null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var client = ClientFactory.CreateClient();
+            string apiurl = System.Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
+
+            // Fetch Cash/Bank Accounts
+            var responseBanks = await client.GetAsync($"{apiurl}financials/cashbanks");
+            if (responseBanks.IsSuccessStatusCode)
+            {
+                var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                var banksResponse = await responseBanks.Content.ReadAsStringAsync();
+                cashBanks = JsonSerializer.Deserialize<List<BankDto>>(banksResponse, options) ?? new List<BankDto>();
+            }
+
+            if (InvoiceId.HasValue)
+            {
+                // Fetch single invoice
+                var responseInv = await client.GetAsync($"{apiurl}purchasing/purchaseinvoice?id={InvoiceId.Value}");
+                if (responseInv.IsSuccessStatusCode)
+                {
+                    var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                    var invResponse = await responseInv.Content.ReadAsStringAsync();
+                    invoice = JsonSerializer.Deserialize<PurchaseInvoiceDto>(invResponse, options);
+                    if (invoice != null)
+                    {
+                        var paymentModelObj = new PaymentModel
+                        {
+                            InvoiceId = invoice.Id,
+                            VendorId = invoice.VendorId,
+                            AmountToPay = invoice.Amount - invoice.AmountPaid,
+                            Date = DateTime.Now
+                        };
+                        paymentModel = paymentModelObj; // Update struct correctly via assignment
+                    }
+                }
+            }
+            else if (OrderId.HasValue)
+            {
+                // Fetch Order to get VendorId
+                var responseOrd = await client.GetAsync($"{apiurl}purchasing/purchaseorder?id={OrderId.Value}");
+                int? vendorId = null;
+                if (responseOrd.IsSuccessStatusCode)
+                {
+                    var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                    var ordResponse = await responseOrd.Content.ReadAsStringAsync();
+                    var order = JsonSerializer.Deserialize<PurchaseOrderDto>(ordResponse, options);
+                    vendorId = order?.VendorId;
+                }
+
+                // Gather outstanding invoices
+                var responseInvoices = await client.GetAsync($"{apiurl}purchasing/purchaseinvoices");
+                if (responseInvoices.IsSuccessStatusCode)
+                {
+                    var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                    var allInvoicesStr = await responseInvoices.Content.ReadAsStringAsync();
+                    var allInvoices = JsonSerializer.Deserialize<List<PurchaseInvoiceDto>>(allInvoicesStr, options);
+
+                    if (allInvoices != null)
+                    {
+                        invoices = allInvoices
+                            .Where(i => i.Posted && !i.IsPaid && (!vendorId.HasValue || i.VendorId == vendorId.Value))
+                            .ToList();
+
+                        if (invoices.Count == 1)
+                        {
+                            var paymentModelObj = new PaymentModel
+                            {
+                                InvoiceId = invoices[0].Id,
+                                VendorId = invoices[0].VendorId,
+                                AmountToPay = invoices[0].Amount - invoices[0].AmountPaid,
+                                Date = DateTime.Now
+                            };
+                            paymentModel = paymentModelObj;
+                        }
+                        else if (invoices.Count > 1)
+                        {
+                            // Default fallback vendor ID
+                            paymentModel.VendorId = vendorId ?? invoices.First().VendorId; 
+                        }
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            getError = true;
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void OnInvoiceSelectionChange(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out int invId) && invId > 0)
+        {
+            var selected = invoices.FirstOrDefault(i => i.Id == invId);
+            if (selected != null)
+            {
+                paymentModel.VendorId = selected.VendorId;
+                paymentModel.AmountToPay = selected.Amount - selected.AmountPaid;
+            }
+        }
+    }
+
+    private async Task SavePayment()
+    {
+        if (paymentModel.InvoiceId <= 0)
+        {
+            getError = true;
+            errorMessage = "Please select a valid invoice.";
+            return;
+        }
+        if (paymentModel.AccountId <= 0)
+        {
+            getError = true;
+            errorMessage = "Please select a valid bank account.";
+            return;
+        }
+
+        try
+        {
+            var client = ClientFactory.CreateClient();
+            string apiurl = System.Environment.GetEnvironmentVariable("APIURL") ?? "http://localhost:8001/api/";
+            
+            var request = new HttpRequestMessage(HttpMethod.Post, $"{apiurl}purchasing/savepayment");
+            request.Content = JsonContent.Create(paymentModel);
+
+            var response = await client.SendAsync(request);
+            if (response.IsSuccessStatusCode)
+            {
+                Navigation.NavigateTo("/payables/purchase-invoices");
+            }
+            else
+            {
+                getError = true;
+                errorMessage = "Failed to save payment: " + await response.Content.ReadAsStringAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            getError = true;
+            errorMessage = ex.Message;
+        }
+    }
+
+    private void GoBack()
+    {
+        if (OrderId.HasValue)
+        {
+            Navigation.NavigateTo("/payables/purchase-orders");
+        }
+        else
+        {
+            Navigation.NavigateTo("/payables/purchase-invoices");
+        }
+    }
+
+    public class PaymentModel
+    {
+        public int InvoiceId { get; set; }
+        public int VendorId { get; set; }
+        public int AccountId { get; set; }
+        public decimal AmountToPay { get; set; }
+        public DateTime Date { get; set; }
+    }
+
+    public class BankDto
+    {
+        public int Id { get; set; }
+        public string? Name { get; set; }
+        public string? AccountNo { get; set; }
+        public string? BankName { get; set; }
+    }
+
+    public class PurchaseInvoiceDto
+    {
+        public int Id { get; set; }
+        public string? No { get; set; }
+        public int VendorId { get; set; }
+        public string? VendorName { get; set; }
+        public decimal Amount { get; set; }
+        public decimal AmountPaid { get; set; }
+        public bool Posted { get; set; }
+        public bool IsPaid { get; set; }
+    }
+
+    public class PurchaseOrderDto
+    {
+        public int Id { get; set; }
+        public int? VendorId { get; set; }
+    }
+}

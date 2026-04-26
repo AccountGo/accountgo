@@ -1,4 +1,4 @@
-﻿@page "/payables/purchase-invoices"
+@page "/payables/purchase-invoices"
 @rendermode InteractiveServer
 @using System.Text.Json
 @using System.Text.Json.Serialization
@@ -171,14 +171,14 @@ else
 
     private void MakePaymentById(int id)
     {
-        Navigation.NavigateTo($"/payables/payment/{id}");
+        Navigation.NavigateTo($"/payables/payment/invoice/{id}");
     }
 
     private void MakePayment()
     {
         if (selectedInvoice != null)
         {
-            Navigation.NavigateTo($"/payables/payment/{selectedInvoice.Id}");
+            Navigation.NavigateTo($"/payables/payment/invoice/{selectedInvoice.Id}");
         }
     }
 
