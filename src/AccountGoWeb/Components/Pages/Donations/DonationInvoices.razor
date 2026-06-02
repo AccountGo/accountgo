@@ -48,7 +48,7 @@ else if (donationInvoices != null && donationInvoices.Any())
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (var invoice in donationInvoices)
+                    @foreach (var invoice in donationInvoices ?? new List<DonationInvoice>())
                     {
                         <tr class="@(selectedInvoice?.Id == invoice.Id ? "selected-row" : "")"
                             @onclick="() => SelectInvoice(invoice)" @ondblclick="() => NavigateToDonationInvoice(invoice)"
@@ -116,7 +116,7 @@ else
                 </tr>
             </thead>
             <tbody>
-                @foreach (var invoice in donationInvoices)
+                @foreach (var invoice in donationInvoices ?? new List<DonationInvoice>())
                 {
                     <tr class="donationRow @(selectedInvoice?.Id == invoice.Id ? "table-active" : "")"
                         @onclick="() => SelectInvoice(invoice)">

@@ -12,6 +12,8 @@ using System.Linq;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations.Schema;
 
+#nullable enable
+
 namespace Core.Domain.Sales
 {
     [Table("SalesReceiptHeader")]
@@ -26,16 +28,16 @@ namespace Core.Domain.Sales
         public int CustomerId { get; set; }
         public int? GeneralLedgerHeaderId { get; set; }
         public int? AccountToDebitId { get; set; }
-        public string No { get; set; }
+        public string? No { get; set; }
         public DateTime Date { get; set; }
         public decimal Amount { get; set; }
         public int? Status { get; set; }
         public string? PaymentMethod { get; set; }
         public string? ReferenceNo { get; set; }
         public string? Memo { get; set; }
-        public virtual Customer Customer { get; set; }
-        public virtual GeneralLedgerHeader GeneralLedgerHeader { get; set; }
-        public virtual Account AccountToDebit { get; set; }
+        public virtual Customer? Customer { get; set; }
+        public virtual GeneralLedgerHeader? GeneralLedgerHeader { get; set; }
+        public virtual Account? AccountToDebit { get; set; }
         public virtual ICollection<SalesReceiptLine> SalesReceiptLines { get; set; }
         public virtual ICollection<CustomerAllocation> CustomerAllocations { get; set; }
 
