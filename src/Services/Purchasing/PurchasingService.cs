@@ -154,7 +154,7 @@ namespace Services.Purchasing
                 var totalLineAmount = lineAmount + lineTaxes.Sum(t => t.Value);
 
                 totalAmount += (decimal)totalLineAmount;
-                
+
                 foreach (var t in lineTaxes)
                     taxes.Add(t);
 
@@ -168,7 +168,7 @@ namespace Services.Purchasing
                 glHeader.GeneralLedgerLines.Add(creditGRNClearingAccount);
 
                 line.InventoryControlJournal = _inventoryService.CreateInventoryControlJournal(line.ItemId,
-                    0,
+                    item.PurchaseMeasurementId.HasValue ? item.PurchaseMeasurementId.Value : 1,
                     DocumentTypes.PurchaseReceipt,
                     line.Quantity,
                     null,
@@ -179,12 +179,12 @@ namespace Services.Purchasing
             if (taxes != null && taxes.Count > 0)
             {
                 var groupedTaxes = from t in taxes
-                           group t by t.Key into grouped
-                           select new
-                           {
-                               Key = grouped.Key,
-                               Value = grouped.Sum(t => t.Value)
-                           };
+                                   group t by t.Key into grouped
+                                   select new
+                                   {
+                                       Key = grouped.Key,
+                                       Value = grouped.Sum(t => t.Value)
+                                   };
 
                 totalTaxAmount = taxes.Sum(t => t.Value);
 
@@ -228,8 +228,8 @@ namespace Services.Purchasing
         public void AddPurchaseOrder(PurchaseOrderHeader purchaseOrder, bool toSave)
         {
             purchaseOrder.No = GetNextNumber(SequenceNumberTypes.PurchaseOrder).ToString();
-            
-            if(toSave)
+
+            if (toSave)
                 _purchaseOrderRepo.Insert(purchaseOrder);
         }
 
@@ -257,7 +257,7 @@ namespace Services.Purchasing
                 glLines.Add(creditGRNClearingAccount);
 
                 lineItem.InventoryControlJournal = _inventoryService.CreateInventoryControlJournal(lineItem.ItemId,
-                    0,
+                    item.PurchaseMeasurementId.HasValue ? item.PurchaseMeasurementId.Value : 1,
                     DocumentTypes.PurchaseReceipt,
                     lineItem.ReceivedQuantity,
                     null,
@@ -304,7 +304,7 @@ namespace Services.Purchasing
 
             var vendors = _vendorRepo.GetAllIncluding(includeProperties);
 
-            foreach(var vendor in vendors)
+            foreach (var vendor in vendors)
             {
                 foreach (var invoice in vendor.PurchaseInvoices)
                 {
@@ -320,7 +320,7 @@ namespace Services.Purchasing
             var vendor = _vendorRepo.GetAllIncluding(
                 v => v.Party,
                 v => v.PrimaryContact,
-                v => v.PrimaryContact.Party,                
+                v => v.PrimaryContact.Party,
                 v => v.PaymentTerm,
                 v => v.PurchaseAccount,
                 v => v.PurchaseDiscountAccount,
@@ -404,7 +404,7 @@ namespace Services.Purchasing
 
         public IEnumerable<PurchaseInvoiceHeader> GetPurchaseInvoices()
         {
-            var query =_purchaseInvoiceRepo.GetAllIncluding(inv => inv.Vendor,
+            var query = _purchaseInvoiceRepo.GetAllIncluding(inv => inv.Vendor,
                 inv => inv.Vendor.Party,
                 inv => inv.VendorPayments,
                 inv => inv.PurchaseInvoiceLines,
@@ -445,7 +445,7 @@ namespace Services.Purchasing
             if (_financialService.GetAccount(accountId).Balance < amount)
                 throw new Exception("Not enough balance.");
 
-            if(_financialService.ValidateGeneralLedgerEntry(glHeader))
+            if (_financialService.ValidateGeneralLedgerEntry(glHeader))
             {
                 payment.GeneralLedgerHeader = glHeader;
                 payment.No = GetNextNumber(SequenceNumberTypes.VendorPayment).ToString();
@@ -563,7 +563,7 @@ namespace Services.Purchasing
                 glHeader.GeneralLedgerLines.Add(creditGRNClearingAccount);
 
                 lineItem.InventoryControlJournal = _inventoryService.CreateInventoryControlJournal(lineItem.ItemId,
-                    0,
+                    item.PurchaseMeasurementId.HasValue ? item.PurchaseMeasurementId.Value : 1,
                     DocumentTypes.PurchaseReceipt,
                     lineItem.Quantity,
                     null,
