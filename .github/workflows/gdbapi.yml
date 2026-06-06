@@ -21,12 +21,6 @@ jobs:
         with:
           dotnet-version: '10.x'
           
-      - name: Install dotnet-ef tool
-        run: |
-          dotnet tool install --global dotnet-ef
-          echo "++++ dotnet-ef version"
-          dotnet ef --version
-
       - name: Install dotnet aspire workload
         run: |
           dotnet workload install aspire
@@ -39,29 +33,24 @@ jobs:
       - name: Run unit tests
         run: dotnet test ./test/GoodBooks.BackendTests/GoodBooks.BackendTests.csproj --configuration Release
 
-      - name: Add migrations
+      - name: Verify migrations exist
         run: |
-          echo "++++ current directory"
-          pwd
-          echo "++++ add ApplicationIdentityDbContext migration IdentityMig"
-          dotnet ef migrations add IdentityMig --project ./src/Api/ --startup-project ./src/Api/Api.csproj --msbuildprojectextensionspath .build/obj/Api/ --context ApplicationIdentityDbContext --output-dir Data/Migrations/IdentityDb
-          echo "++++ add ApiDbContext migration ApiMig"
-          dotnet ef migrations add ApiMig --project ./src/Api/ --startup-project ./src/Api/Api.csproj --msbuildprojectextensionspath .build/obj/Api/ --context ApiDbContext --output-dir Data/Migrations/ApiDb
-          echo "++++ contents of ./src/Api/Data/Migrations/IdentityDb"
-          ls ./src/Api/Data/Migrations/IdentityDb
-          echo "++++ contents of ./src/Api/Data/Migrations/ApiDb"
-          ls ./src/Api/Data/Migrations/ApiDb
+          echo "++++ Checking existing migrations..."
+          echo "++++ IdentityDb migrations:"
+          ls -la ./src/Api/Data/Migrations/IdentityDb/ || echo "IdentityDb migration directory not found"
+          echo "++++ ApiDb migrations:"
+          ls -la ./src/Api/Data/Migrations/ApiDb/ || echo "ApiDb migration directory not found"
 
-      - name: dotnet publish
+      - name: dotnet publish API
         run: |
-          echo "++++ contents of dotnet publish ./src/Api/Api.csproj"
-          dotnet publish ./src/Api/Api.csproj -f net10.0 -c Release -o "${{runner.temp}}/myapp"
+          echo "++++ Publishing API..."
+          dotnet publish ./src/Api/Api.csproj -f net10.0 -c Release -o "${{runner.temp}}/api"
 
-      - name: Upload artifact for deployment job
+      - name: Upload API artifact
         uses: actions/upload-artifact@v4
         with:
-          name: .net-app
-          path: ${{runner.temp}}/myapp
+          name: api-app
+          path: ${{runner.temp}}/api
 
   deploy:
     runs-on: windows-latest
@@ -70,13 +59,13 @@ jobs:
       name: 'Production'
       url: ${{ steps.deploy-to-webapp.outputs.webapp-url }}
     permissions:
-      id-token: write #This is required for requesting the JWT
+      id-token: write
 
     steps:
-      - name: Download artifact from build job
+      - name: Download API artifact
         uses: actions/download-artifact@v4
         with:
-          name: .net-app
+          name: api-app
       
       - name: Login to Azure
         uses: azure/login@v2
@@ -85,6 +74,13 @@ jobs:
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_258CF23452C24D9795BD94B25EF50B73 }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_9375B274C69740D39F4770D5D433E8B1 }}
 
+      - name: Stop Azure Web App before deployment
+        run: |
+          echo "++++ Stopping gdbapi app service..."
+          az webapp stop --resource-group goodbooks-RG --name gdbapi
+          echo "++++ Waiting for app to stop..."
+          Start-Sleep -Seconds 10
+
       - name: Deploy to Azure Web App
         id: deploy-to-webapp
         uses: azure/webapps-deploy@v3
@@ -92,3 +88,12 @@ jobs:
           app-name: 'gdbapi'
           slot-name: 'Production'
           package: .
+
+      - name: Start Azure Web App after deployment
+        run: |
+          echo "++++ Starting gdbapi app service..."
+          az webapp start --resource-group goodbooks-RG --name gdbapi
+          echo "++++ Waiting for app to start and migrations to run..."
+          Start-Sleep -Seconds 20
+          echo "++++ Deployment complete. Migrations will run automatically on app startup."
+
