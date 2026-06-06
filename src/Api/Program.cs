@@ -5,6 +5,8 @@ using Api.Data.Seed;
 using Api.Extensions;
 using Api.Service;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Storage;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -89,34 +91,82 @@ using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
 
-    var apiDbContext = services.GetRequiredService<ApiDbContext>();
-    
-    // Ensure database exists before running migrations with retry logic
     try
     {
-        var dbCreator = apiDbContext.GetService<Microsoft.EntityFrameworkCore.Infrastructure.IRelationalDatabaseCreator>();
-        var strategy = apiDbContext.Database.CreateExecutionStrategy();
-        strategy.Execute(() =>
+        var apiDbContext = services.GetRequiredService<ApiDbContext>();
+        
+        // Ensure database exists before running migrations with retry logic
+        try
         {
-            if (!dbCreator.Exists())
+            Console.WriteLine("====== Starting Database Initialization ======");
+            var dbCreator = apiDbContext.GetService<IRelationalDatabaseCreator>();
+            var strategy = apiDbContext.Database.CreateExecutionStrategy();
+            strategy.Execute(() =>
             {
-                dbCreator.Create();
-            }
-        });
+                if (!dbCreator.Exists())
+                {
+                    Console.WriteLine("Database does not exist. Creating...");
+                    dbCreator.Create();
+                    Console.WriteLine("✓ Database created successfully.");
+                }
+                else
+                {
+                    Console.WriteLine("✓ Database already exists.");
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"✗ ERROR: Failed to ensure database exists: {ex.Message}");
+            throw;
+        }
+        
+        try
+        {
+            Console.WriteLine("Applying ApiDb migrations...");
+            apiDbContext.Database.Migrate();
+            Console.WriteLine("✓ ApiDb migrations completed successfully.");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"✗ ERROR: ApiDb migrations failed: {ex.Message}");
+            throw;
+        }
+
+        try
+        {
+            var identityDbContext = services.GetRequiredService<ApplicationIdentityDbContext>();
+            Console.WriteLine("Applying IdentityDb migrations...");
+            identityDbContext.Database.Migrate();
+            Console.WriteLine("✓ IdentityDb migrations completed successfully.");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"✗ ERROR: IdentityDb migrations failed: {ex.Message}");
+            throw;
+        }
+
+        try
+        {
+            var seeder = services.GetRequiredService<DatabaseSeeder>();
+            Console.WriteLine("Seeding database...");
+            seeder.Seed();
+            Console.WriteLine("✓ Database seeding completed successfully.");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"✗ ERROR: Database seeding failed: {ex.Message}");
+            throw;
+        }
+
+        Console.WriteLine("====== Database Initialization Completed Successfully ======");
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"Error ensuring database exists: {ex.Message}");
+        Console.WriteLine($"✗ FATAL ERROR: Database initialization failed - Application startup aborted.");
+        Console.WriteLine($"Details: {ex}");
         throw;
     }
-    
-    apiDbContext.Database.Migrate();
-
-    var identityDbContext = services.GetRequiredService<ApplicationIdentityDbContext>();
-    identityDbContext.Database.Migrate();
-
-    var seeder = services.GetRequiredService<DatabaseSeeder>();
-    seeder.Seed();
 }
 
 app.Run();
