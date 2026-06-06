@@ -90,16 +90,10 @@ using (var scope = app.Services.CreateScope())
     var services = scope.ServiceProvider;
 
     var apiDbContext = services.GetRequiredService<ApiDbContext>();
-    if (!apiDbContext.Database.GetAppliedMigrations().Any())
-    {
-        apiDbContext.Database.Migrate();
-    }
+    apiDbContext.Database.Migrate();
 
     var identityDbContext = services.GetRequiredService<ApplicationIdentityDbContext>();
-    if (!identityDbContext.Database.GetAppliedMigrations().Any())
-    {
-        identityDbContext.Database.Migrate();
-    }
+    identityDbContext.Database.Migrate();
 
     var seeder = services.GetRequiredService<DatabaseSeeder>();
     seeder.Seed();
