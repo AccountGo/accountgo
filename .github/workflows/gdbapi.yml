@@ -37,9 +37,9 @@ jobs:
         run: |
           echo "++++ Checking existing migrations..."
           echo "++++ IdentityDb migrations:"
-          ls -la ./src/Api/Data/Migrations/IdentityDb/ || echo "IdentityDb migration directory not found"
+          dir ./src/Api/Data/Migrations/IdentityDb/ 2>$null || echo "IdentityDb migration directory not found"
           echo "++++ ApiDb migrations:"
-          ls -la ./src/Api/Data/Migrations/ApiDb/ || echo "ApiDb migration directory not found"
+          dir ./src/Api/Data/Migrations/ApiDb/ 2>$null || echo "ApiDb migration directory not found"
 
       - name: dotnet publish API
         run: |
