@@ -90,6 +90,26 @@ using (var scope = app.Services.CreateScope())
     var services = scope.ServiceProvider;
 
     var apiDbContext = services.GetRequiredService<ApiDbContext>();
+    
+    // Ensure database exists before running migrations with retry logic
+    try
+    {
+        var dbCreator = apiDbContext.GetService<Microsoft.EntityFrameworkCore.Infrastructure.IRelationalDatabaseCreator>();
+        var strategy = apiDbContext.Database.CreateExecutionStrategy();
+        strategy.Execute(() =>
+        {
+            if (!dbCreator.Exists())
+            {
+                dbCreator.Create();
+            }
+        });
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Error ensuring database exists: {ex.Message}");
+        throw;
+    }
+    
     apiDbContext.Database.Migrate();
 
     var identityDbContext = services.GetRequiredService<ApplicationIdentityDbContext>();
