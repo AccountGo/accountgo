@@ -1,5 +1,6 @@
-using Core.Domain.Items;
 using System.ComponentModel.DataAnnotations.Schema;
+using Core.Domain.Items;
+using Microsoft.EntityFrameworkCore;
 
 namespace Core.Domain.Donations
 {
@@ -9,8 +10,8 @@ namespace Core.Domain.Donations
         public int DonationInvoiceHeaderId { get; set; }
         public int ItemId { get; set; }
         public int MeasurementId { get; set; }
-        public decimal Quantity { get; set; }
-        public decimal Amount { get; set; }
+        [Precision(18, 2)] public decimal Quantity { get; set; }
+        [Precision(18, 2)] public decimal Amount { get; set; }
         public string Notes { get; set; }
 
         public virtual DonationInvoiceHeader DonationInvoiceHeader { get; set; }

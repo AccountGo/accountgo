@@ -11,7 +11,7 @@
 <div class="container-fluid">
     <div class="row mb-3">
         <div class="col text-end">
-            <a href="/Sales/SalesReceipts" class="btn btn-outline-secondary">
+            <a href="/Sales/CustomerPayments" class="btn btn-outline-secondary">
                 <i class="fa fa-arrow-left"></i>
                 Back to Customer Payments
             </a>
@@ -122,7 +122,7 @@
                         <i class="fa fa-save"></i>
                         Save Allocation
                     </button>
-                    <a href="/Sales/SalesReceipts" class="btn btn-secondary ms-2">
+                    <a href="/Sales/CustomerPayments" class="btn btn-secondary ms-2">
                         <i class="fa fa-times"></i>
                         Close
                     </a>
@@ -376,7 +376,7 @@
             if (response.IsSuccessStatusCode)
             {
                 // Redirect to SalesReceipts page with forceLoad to refresh the MVC view
-                Navigation.NavigateTo("/Sales/SalesReceipts", forceLoad: true);
+                Navigation.NavigateTo("/Sales/CustomerPayments", forceLoad: true);
             }
             else
             {

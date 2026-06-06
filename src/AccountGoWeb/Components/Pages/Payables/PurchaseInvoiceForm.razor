@@ -35,7 +35,7 @@
 
 @if (loadError)
 {
-    <div class="alert alert-danger">Unable to load purchase invoice. Please try again.</div>
+    <div class="alert alert-danger">Unable to load vendor invoice. Please try again.</div>
 }
 else if (purchaseInvoice is null)
 {
@@ -52,6 +52,36 @@ else
         }
     </div>
 
+    @if (saveError)
+    {
+        <div class="alert alert-danger">
+            Error saving vendor invoice.
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <br />
+                <strong>Details:</strong>
+                @errorMessage
+            }
+        </div>
+    }
+    @if (saveSuccess)
+    {
+        <div class="alert alert-success">Vendor invoice saved successfully!</div>
+    }
+
+    @* ── Invoice Total Banner ── *@
+    <div class="card mb-3 mt-2 border-0 shadow-sm">
+        <div class="card-body py-2 d-flex align-items-center justify-content-between"
+             style="background: linear-gradient(135deg,#667eea 0%,#764ba2 100%); border-radius:8px;">
+            <span class="text-white fw-semibold fs-6">
+                <i class="fa fa-file-text-o me-2"></i>Invoice Total
+            </span>
+            <span class="text-white fw-bold fs-5">
+                $@InvoiceTotal.ToString("N2")
+            </span>
+        </div>
+    </div>
+
     <EditForm Model="purchaseInvoice" OnValidSubmit="HandleSubmit">
         <div class="invoice-form-wrapper">
             <div class="col-sm-9 mt-3">
@@ -60,7 +90,12 @@ else
                     <div class="row mb-2">
                         <div class="col-sm-3">Vendor Name</div>
                         <div class="col-sm-8">
-                            <InputSelect class="form-control" @bind-Value="purchaseInvoice.VendorId" disabled="@isViewMode">
+                            @* Bug 4 fix: use ValueChanged so we can clear FromPurchaseOrderId when vendor changes *@
+                            <InputSelect class="form-control"
+                                         Value="purchaseInvoice.VendorId"
+                                         ValueChanged="@((int val) => OnVendorChanged(val))"
+                                         ValueExpression="@(() => purchaseInvoice.VendorId)"
+                                         disabled="@isViewMode">
                                 <option value="0">-- Select Vendor --</option>
                                 @if (vendors != null)
                                 {
@@ -93,124 +128,156 @@ else
                             }
                         </div>
                     </div>
-                </div>
 
-                        <div class="table-container">
-                            <table class="table">
-                                <thead>
-                                    <tr>
-                                        <th>Item</th>
-                                        <th>Quantity</th>
-                                        <th>Amount</th>
-                                        <th>Discount</th>
-                                        <th>Unit</th>
-                                        @if (!isViewMode)
-                                        {
-                                            <th>Actions</th>
-                                        }
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @for (int i = 0; i < purchaseInvoice.PurchaseInvoiceLines.Count; i++)
-                                    {
-                                        var line = purchaseInvoice.PurchaseInvoiceLines[i];
-                                        var index = i;
-                                        <tr style="background-color: transparent !important;">
-                                            <td style="background-color: transparent !important;">
-                                                <InputSelect class="form-control" @bind-Value="line.ItemId" disabled="@isViewMode">
-                                                    <option value="0">-- Select Item --</option>
-                                                    @if (items != null)
-                                                    {
-                                                        @foreach (var item in items)
-                                                        {
-                                                            <option value="@item.Value">@item.Text</option>
-                                                        }
-                                                    }
-                                                </InputSelect>
-                                            </td>
-                                            <td style="background-color: transparent !important;">
-                                                <InputNumber class="form-control" @bind-Value="line.Quantity"
-                                                             disabled="@isViewMode" />
-                                            </td>
-                                            <td style="background-color: transparent !important;">
-                                                <InputNumber class="form-control" @bind-Value="line.Amount"
-                                                             disabled="@isViewMode" />
-                                            </td>
-                                            <td style="background-color: transparent !important;">
-                                                <InputNumber class="form-control" @bind-Value="line.Discount"
-                                                             disabled="@isViewMode" />
-                                            </td>
-                                            <td style="background-color: transparent !important;">
-                                                <InputSelect class="form-control" @bind-Value="line.MeasurementId"
-                                                             disabled="@isViewMode">
-                                                    <option value="0">-- Select Measurement --</option>
-                                                    @if (measurements != null)
-                                                    {
-                                                        @foreach (var measurement in measurements)
-                                                        {
-                                                            <option value="@measurement.Value">@measurement.Text</option>
-                                                        }
-                                                    }
-                                                </InputSelect>
-                                            </td>
-                                            @if (!isViewMode)
-                                            {
-                                                <td style="background-color: transparent !important;">
-                                                    <button type="button" class="btn btn-sm btn-danger"
-                                                            @onclick="() => RemoveLine(index)"
-                                                            disabled="@(purchaseInvoice.PurchaseInvoiceLines.Count <= 1)">
-                                                        Remove
-                                                    </button>
-                                                </td>
-                                            }
-                                        </tr>
-                                    }
-                                    @if (!isViewMode)
-                                    {
-                                        <tr>
-                                            <td colspan="6">
-                                                <button type="button" class="btn btn-primary" @onclick="AddLine">Add Row</button>
-                                            </td>
-                                        </tr>
-                                    }
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-
-                    @if (saveError)
-                    {
-                        <div class="alert alert-danger mt-3">
-                            Error saving purchase invoice.
-                            @if (!string.IsNullOrEmpty(errorMessage))
+                    <div class="row mb-2">
+                        <div class="col-sm-3">Purchase Order Number</div>
+                        <div class="col-sm-8">
+                            @if (isViewMode)
                             {
-                                <br />
-                                <strong>Details:</strong> @errorMessage
+                                @if (!string.IsNullOrEmpty(purchaseInvoice.PurchaseOrderNumber))
+                                {
+                                    @if (purchaseInvoice.PurchaseOrderHeaderId.HasValue && purchaseInvoice.PurchaseOrderHeaderId > 0)
+                                    {
+                                        <a href="/purchasing/purchaseorder?id=@purchaseInvoice.PurchaseOrderHeaderId"
+                                        class="form-control d-inline-block text-decoration-none"
+                                        style="background-color:#e9ecef; color:#0d6efd; cursor:pointer;"
+                                        title="View Purchase Order">
+                                            <i class="fa fa-external-link me-1"></i>@purchaseInvoice.PurchaseOrderNumber
+                                        </a>
+                                    }
+                                    else
+                                    {
+                                        <span class="form-control d-inline-block" style="background-color: #e9ecef; color: #000;">
+                                            @purchaseInvoice.PurchaseOrderNumber
+                                        </span>
+                                    }
+                                }
+                                else
+                                {
+                                    <span class="form-control" style="background-color: #e9ecef; color: #000;">-</span>
+                                }
+                            }
+                            else
+                            {
+                                <InputSelect class="form-control" @bind-Value="purchaseInvoice.FromPurchaseOrderId">
+                                    <option value="">-- Select Purchase Order --</option>
+                                    @if (allPurchaseOrders != null)
+                                    {
+                                        @foreach (var po in allPurchaseOrders.Where(p => p.VendorId == purchaseInvoice.VendorId))
+                                        {
+                                            <option value="@po.Id">@po.No</option>
+                                        }
+                                    }
+                                </InputSelect>
                             }
                         </div>
-                    }
-                    @if (saveSuccess)
-                    {
-                        <div class="alert alert-success mt-3">Purchase invoice saved successfully!</div>
-                    }
-
-                    <div class="col-md-9 mt-3">
-                        @if (!isViewMode)
-                        {
-                            <button type="submit" class="btn btn-sm btn-primary btn-flat pull-left" disabled="@isSaving">
-                                @(isSaving ? "Saving..." : "Save")
-                            </button>
-                        }
-                        <a href="/purchasing/purchaseinvoices" class="btn btn-sm btn-secondary btn-flat pull-left">Close</a>
                     </div>
                 </div>
+
+                    <div class="table-container">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Item</th>
+                                    <th>Quantity</th>
+                                    <th>Amount</th>
+                                    <th>Discount</th>
+                                    <th>Tax</th>
+                                    @if (!isViewMode)
+                                    {
+                                        <th>Actions</th>
+                                    }
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @for (int i = 0; i < purchaseInvoice.PurchaseInvoiceLines.Count; i++)
+                                {
+                                    var line = purchaseInvoice.PurchaseInvoiceLines[i];
+                                    var index = i;
+                                    <tr style="background-color: transparent !important;">
+                                        <td style="background-color: transparent !important;">
+                                            <InputSelect class="form-control" @bind-Value="line.ItemId" disabled="@isViewMode">
+                                                <option value="0">-- Select Item --</option>
+                                                @if (items != null)
+                                                {
+                                                    @foreach (var item in items)
+                                                    {
+                                                        <option value="@item.Value">@item.Text</option>
+                                                    }
+                                                }
+                                            </InputSelect>
+                                        </td>
+                                        <td style="background-color: transparent !important;">
+                                            @* Bug 3 fix: added @oninput to live-update the running total *@
+                                            <InputNumber class="form-control" @bind-Value="line.Quantity"
+                                                         disabled="@isViewMode" @oninput="() => StateHasChanged()" />
+                                        </td>
+                                        <td style="background-color: transparent !important;">
+                                            <InputNumber class="form-control" @bind-Value="line.Amount"
+                                                         disabled="@isViewMode" @oninput="() => StateHasChanged()" />
+                                        </td>
+                                        <td style="background-color: transparent !important;">
+                                            @* Bug 3 fix: added @oninput to live-update the running total *@
+                                            <InputNumber class="form-control" @bind-Value="line.Discount"
+                                                         disabled="@isViewMode" @oninput="() => StateHasChanged()" />
+                                        </td>
+                                        <td style="background-color: transparent !important;">
+                                            <InputSelect class="form-control" @bind-Value="line.TaxGroupId"
+                                                         disabled="@isViewMode">
+                                                <option value="0">-- Select Tax --</option>
+                                                @if (taxGroups != null)
+                                                {
+                                                    @foreach (var tg in taxGroups)
+                                                    {
+                                                        <option value="@tg.Value">@tg.Text</option>
+                                                    }
+                                                }
+                                            </InputSelect>
+                                        </td>
+                                        @if (!isViewMode)
+                                        {
+                                            <td style="background-color: transparent !important;">
+                                                <button type="button" class="btn btn-sm btn-danger"
+                                                        @onclick="() => RemoveLine(index)"
+                                                        disabled="@(purchaseInvoice.PurchaseInvoiceLines.Count <= 1)">
+                                                    Remove
+                                                </button>
+                                            </td>
+                                        }
+                                    </tr>
+                                }
+                                @if (!isViewMode)
+                                {
+                                    <tr>
+                                        <td colspan="6">
+                                            <button type="button" class="btn btn-primary" @onclick="AddLine">Add Row</button>
+                                        </td>
+                                    </tr>
+                                }
+                                @* ── Running Total Row ── *@
+                                <tr class="table-light fw-bold border-top">
+                                    <td colspan="2" class="text-end pe-3 " style="color: white !important;">Running Total:</td>
+                                    <td style="color: white !important;">$@InvoiceTotal.ToString("N2")</td>
+                                    <td colspan="@(isViewMode ? 2 : 3)"></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="col-md-9 mt-3">
+                    @if (!isViewMode)
+                    {
+                        <button type="submit" class="btn btn-sm btn-primary btn-flat pull-left" disabled="@isSaving">
+                            @(isSaving ? "Saving..." : "Save")
+                        </button>
+                    }
+                    <a href="/purchasing/purchaseinvoices" class="btn btn-sm btn-secondary btn-flat pull-left">Close</a>
+                </div>
             </div>
-        </EditForm>
-    }
-    @if (saveSuccess)
-    {
-        <div class="alert alert-success mt-3">Purchase invoice saved successfully!</div>
-    }
+        </div>
+    </EditForm>
+
 }
 
 @code {
@@ -218,9 +285,19 @@ else
     public int InvoiceId { get; set; } = 0;
 
     private PurchaseInvoiceDto? purchaseInvoice;
-    private List<SelectListItem>? vendors, items, measurements;
+    private List<SelectListItem>? vendors, items, taxGroups;
+    private List<PurchaseOrderDto>? allPurchaseOrders;
     private bool loadError, saveError, saveSuccess, isViewMode = true, isSaving = false;
     private string? errorMessage;
+
+    // Bug 5 fix: snapshot of original data so Cancel can revert
+    private string? _originalInvoiceSnapshot;
+
+    // Running total — Quantity × Amount × (1 − Discount/100)
+    private decimal InvoiceTotal =>
+        purchaseInvoice?.PurchaseInvoiceLines
+            ?.Where(l => l.Amount.HasValue && l.Quantity.HasValue)
+            .Sum(l => (l.Quantity ?? 0) * (l.Amount ?? 0) * (1 - (l.Discount ?? 0) / 100)) ?? 0;
 
     public class SelectListItem { public string Value { get; set; } = ""; public string Text { get; set; } = ""; }
 
@@ -253,10 +330,13 @@ else
 
     private void InitializeNewInvoice()
     {
-        var random = new Random();
+        // Bug 8 fix: use timestamp + random suffix to avoid No collisions
+        var rng = new Random();
+        var invoiceNo = $"{DateTime.UtcNow:yyMMddHHmmss}{rng.Next(10, 99)}";
+
         purchaseInvoice = new PurchaseInvoiceDto
         {
-            No = random.Next(1, 99999).ToString(),
+            No = invoiceNo,
             InvoiceDate = DateTime.Now,
             ReferenceNo = "",
             AmountPaid = 0,
@@ -292,19 +372,27 @@ else
                 items = list?.Select(i => new SelectListItem { Value = i.Id.ToString(), Text = i.Description ?? "" }).ToList();
             }
 
-            var measurementResponse = await client.GetAsync($"{apiurl}common/measurements");
-            if (measurementResponse.IsSuccessStatusCode)
+            var taxGroupResponse = await client.GetAsync($"{apiurl}tax/taxgroups");
+            if (taxGroupResponse.IsSuccessStatusCode)
             {
-                var json = await measurementResponse.Content.ReadAsStringAsync();
-                var list = JsonSerializer.Deserialize<List<MeasurementDto>>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-                measurements = list?.Select(m => new SelectListItem { Value = m.Id.ToString(), Text = m.Description ?? "" }).ToList();
+                var json = await taxGroupResponse.Content.ReadAsStringAsync();
+                var list = JsonSerializer.Deserialize<List<TaxGroupDto>>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                taxGroups = list?.Select(t => new SelectListItem { Value = t.Id.ToString(), Text = t.Description ?? "" }).ToList();
+            }
+
+            var poResponse = await client.GetAsync($"{apiurl}purchasing/purchaseorders");
+            if (poResponse.IsSuccessStatusCode)
+            {
+                var json = await poResponse.Content.ReadAsStringAsync();
+                allPurchaseOrders = JsonSerializer.Deserialize<List<PurchaseOrderDto>>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
             }
         }
         catch (Exception)
         {
             vendors = new List<SelectListItem>();
             items = new List<SelectListItem>();
-            measurements = new List<SelectListItem>();
+            taxGroups = new List<SelectListItem>();
+            allPurchaseOrders = new List<PurchaseOrderDto>();
         }
     }
 
@@ -319,13 +407,12 @@ else
             {
                 var json = await response.Content.ReadAsStringAsync();
                 var tempInvoice = JsonSerializer.Deserialize<PurchaseInvoiceDto>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-                
-                // Workaround: Try to get ReferenceNo from localStorage if API doesn't return it
+
                 if (tempInvoice != null)
                 {
                     purchaseInvoice = tempInvoice;
-                    
-                    // If API doesn't return ReferenceNo, try to get it from the list
+
+                    // Workaround: if ReferenceNo is missing, try to pull it from the list endpoint
                     if (string.IsNullOrEmpty(purchaseInvoice.ReferenceNo))
                     {
                         try
@@ -337,13 +424,18 @@ else
                                 var invoicesList = JsonSerializer.Deserialize<List<PurchaseInvoiceDto>>(listJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
                                 var invoiceFromList = invoicesList?.FirstOrDefault(i => i.Id == id);
                                 if (invoiceFromList != null && !string.IsNullOrEmpty(invoiceFromList.ReferenceNo))
-                                {
                                     purchaseInvoice.ReferenceNo = invoiceFromList.ReferenceNo;
-                                }
                             }
                         }
                         catch { }
                     }
+
+                    // Bug 3 fix: pre-populate FromPurchaseOrderId so edit mode pre-selects the correct PO
+                    if (purchaseInvoice.PurchaseOrderHeaderId.HasValue && purchaseInvoice.PurchaseOrderHeaderId > 0)
+                        purchaseInvoice.FromPurchaseOrderId = purchaseInvoice.PurchaseOrderHeaderId;
+
+                    // Bug 5 fix: snapshot the loaded state so Cancel can revert to it
+                    _originalInvoiceSnapshot = JsonSerializer.Serialize(purchaseInvoice);
                 }
             }
             else
@@ -371,7 +463,7 @@ else
                 var validLines = purchaseInvoice.PurchaseInvoiceLines
                     .Where(line => line.ItemId.HasValue && line.ItemId.Value > 0)
                     .ToList();
-                
+
                 if (validLines.Count == 0)
                 {
                     errorMessage = "Please add at least one item line with a valid item selected.";
@@ -379,7 +471,15 @@ else
                     isSaving = false;
                     return;
                 }
-                
+
+                if (!purchaseInvoice.FromPurchaseOrderId.HasValue || purchaseInvoice.FromPurchaseOrderId == 0)
+                {
+                    errorMessage = "A Purchase Order must be selected before saving an invoice.";
+                    saveError = true;
+                    isSaving = false;
+                    return;
+                }
+
                 purchaseInvoice.PurchaseInvoiceLines = validLines;
             }
 
@@ -414,13 +514,38 @@ else
         }
     }
 
-    private void ToggleEdit() { isViewMode = !isViewMode; }
-    private void AddLine() { purchaseInvoice?.PurchaseInvoiceLines?.Add(new PurchaseInvoiceLineDto { Quantity = 1, Amount = 0, Discount = 0 }); }
+    // Bug 4 fix: clear FromPurchaseOrderId when vendor changes so a stale PO ID isn't sent
+    private void OnVendorChanged(int value)
+    {
+        if (purchaseInvoice is null) return;
+        purchaseInvoice.VendorId = value;
+        purchaseInvoice.FromPurchaseOrderId = null;
+    }
+
+    // Bug 5 fix: revert in-memory changes to the snapshot when the user clicks Cancel
+    private void ToggleEdit()
+    {
+        if (!isViewMode && _originalInvoiceSnapshot != null)
+        {
+            purchaseInvoice = JsonSerializer.Deserialize<PurchaseInvoiceDto>(
+                _originalInvoiceSnapshot,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        }
+        isViewMode = !isViewMode;
+    }
+
+    private void AddLine()
+    {
+        purchaseInvoice?.PurchaseInvoiceLines?.Add(new PurchaseInvoiceLineDto { Quantity = 1, Amount = 0, Discount = 0 });
+    }
+
     private void RemoveLine(int index)
     {
         if (purchaseInvoice?.PurchaseInvoiceLines != null && purchaseInvoice.PurchaseInvoiceLines.Count > 1)
             purchaseInvoice.PurchaseInvoiceLines.RemoveAt(index);
     }
+
+    // ── DTOs ─────────────────────────────────────────────────────────────────
 
     public class PurchaseInvoiceDto
     {
@@ -433,6 +558,9 @@ else
         public bool Posted { get; set; }
         public string? VendorInvoiceNo { get; set; }
         public string? ReferenceNo { get; set; }
+        public string? PurchaseOrderNumber { get; set; }  // populated on load for view-mode display
+        public int? PurchaseOrderHeaderId { get; set; }   // populated on load for view-mode link
+        public int? FromPurchaseOrderId { get; set; }     // set in edit-mode dropdown, sent to API
         public List<PurchaseInvoiceLineDto> PurchaseInvoiceLines { get; set; } = new();
     }
 
@@ -440,7 +568,7 @@ else
     {
         public int Id { get; set; }
         public int? ItemId { get; set; }
-        public int? MeasurementId { get; set; }
+        public int? TaxGroupId { get; set; }
         public decimal? Quantity { get; set; }
         public decimal? Amount { get; set; }
         public decimal? Discount { get; set; }
@@ -448,6 +576,6 @@ else
 
     public class VendorDto { public int Id { get; set; } public string? Name { get; set; } }
     public class ItemDto { public int Id { get; set; } public string? Description { get; set; } }
-    public class MeasurementDto { public int Id { get; set; } public string? Description { get; set; } }
+    public class TaxGroupDto { public int Id { get; set; } public string? Description { get; set; } }
+    public class PurchaseOrderDto { public int Id { get; set; } public string? No { get; set; } public int VendorId { get; set; } }
 }
-

@@ -1,4 +1,4 @@
-﻿using Dto.Purchasing;
+using Dto.Purchasing;
 using Microsoft.AspNetCore.Mvc;
 
 namespace AccountGoWeb.Controllers
@@ -16,6 +16,12 @@ namespace AccountGoWeb.Controllers
 
         public IActionResult Index()
         {
+            return View();
+        }
+
+        public IActionResult Payments()
+        {
+            ViewBag.PageContentHeader = "Payments";
             return View();
         }
 
@@ -137,7 +143,7 @@ namespace AccountGoWeb.Controllers
 
         public async System.Threading.Tasks.Task<IActionResult> PurchaseInvoices()
         {
-            ViewBag.PageContentHeader = "Purchase Invoices";
+            ViewBag.PageContentHeader = "Vendor Invoices";
             using (var client = new HttpClient())
             {
                 var baseUri = _baseConfig!["ApiUrl"];

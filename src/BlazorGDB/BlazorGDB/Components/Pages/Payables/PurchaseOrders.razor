@@ -1,4 +1,4 @@
-﻿@page "/payables/purchase-orders"
+@page "/payables/purchase-orders"
 @rendermode InteractiveServer
 @using System.Text.Json
 @using System.Text.Json.Serialization
@@ -67,6 +67,9 @@ else
                         <td>
                             <button class="btn btn-sm btn-outline-primary" @onclick="() => ViewOrder(order.Id)" @onclick:stopPropagation="true">
                                 View
+                            </button>
+                            <button class="btn btn-sm btn-outline-success ms-1" @onclick="() => PayOrder(order.Id)" @onclick:stopPropagation="true">
+                                Pay
                             </button>
                         </td>
                     </tr>
@@ -153,6 +156,11 @@ else
     private void NavigateToAdd()
     {
         Navigation.NavigateTo("/payables/purchase-order/add");
+    }
+
+    private void PayOrder(int id)
+    {
+        Navigation.NavigateTo($"/payables/payment/order/{id}");
     }
 
     private void CreateInvoice()

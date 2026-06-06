@@ -214,21 +214,21 @@ namespace Services.Dashboard
 
             items.AddRange(salesInvoices.Select(invoice => new DashboardActivityItemDto
             {
-                Type = "SalesInvoice",
+                Type = "Sales Invoice",
                 Description = $"Sales invoice {invoice.No} for {invoice.Customer?.Party?.Name ?? "customer"}",
                 Date = invoice.Date
             }));
 
             items.AddRange(salesReceipts.Select(receipt => new DashboardActivityItemDto
             {
-                Type = "SalesReceipt",
+                Type = "Sales Receipt",
                 Description = $"Payment received on receipt {receipt.No}",
                 Date = receipt.Date
             }));
 
             items.AddRange(purchaseInvoices.Select(invoice => new DashboardActivityItemDto
             {
-                Type = "PurchaseInvoice",
+                Type = "Purchase Invoice",
                 Description = $"Purchase invoice {invoice.No} from {invoice.Vendor?.Party?.Name ?? "vendor"}",
                 Date = invoice.Date
             }));
