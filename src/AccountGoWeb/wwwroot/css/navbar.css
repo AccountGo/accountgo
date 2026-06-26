@@ -59,8 +59,7 @@ nav ul li ul li a:hover,
     display: none;
 }
 
-#sidebar,
 .sub-menu {
     opacity: 0;
     transition: opacity 0.2s linear;
-} 
+}

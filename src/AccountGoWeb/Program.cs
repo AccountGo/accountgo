@@ -3,6 +3,24 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Set timezone for .NET 10 compatibility (WEBSITE_TIME_ZONE env var no longer auto-applies)
+var timeZoneId = Environment.GetEnvironmentVariable("WEBSITE_TIME_ZONE");
+var fallbackTimeZoneId = System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows)
+    ? "Pacific Standard Time"
+    : "America/Los_Angeles";
+try
+{
+    var timeZoneInfo = TimeZoneInfo.FindSystemTimeZoneById(
+        string.IsNullOrWhiteSpace(timeZoneId) ? fallbackTimeZoneId : timeZoneId);
+    // This forces all DateTime operations to use the specified timezone
+    AppContext.SetData("TimeZoneInfo.Local", timeZoneInfo);
+}
+catch (TimeZoneNotFoundException)
+{
+    var timeZoneInfo = TimeZoneInfo.FindSystemTimeZoneById(fallbackTimeZoneId);
+    AppContext.SetData("TimeZoneInfo.Local", timeZoneInfo);
+}
+
 builder.AddServiceDefaults();
 
 // Mapping
