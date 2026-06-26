@@ -1,0 +1,118 @@
+/* AccountGoWeb - Standardized Color Variables */
+/* This file provides consistent color variables for use throughout the application */
+/* Based on CoreUI dark theme palette */
+
+:root {
+    /* Primary Theme Colors (from dark.css) */
+    --agw-primary: var(--bs-primary, #20a8d8);
+    --agw-secondary: var(--bs-secondary, #c8ced3);
+    --agw-success: var(--bs-success, #4dbd74);
+    --agw-info: var(--bs-info, #63c2de);
+    --agw-warning: var(--bs-warning, #ffc107);
+    --agw-danger: var(--bs-danger, #f86c6b);
+    --agw-light: var(--bs-light, #f0f3f5);
+    --agw-dark: var(--bs-dark, #2f353a);
+    
+    /* Grayscale for Dark Theme */
+    --agw-white: var(--bs-white, #fff);
+    --agw-black: #000;
+    --agw-gray-100: #f0f3f5;
+    --agw-gray-200: #e4e7ea;
+    --agw-gray-300: #c8ced3;
+    --agw-gray-400: #acb4bc;
+    --agw-gray-500: #8f9ba6;
+    --agw-gray-600: #73818f;
+    --agw-gray-700: #5c6873;
+    --agw-gray-800: #3a3f44;
+    --agw-gray-900: #2b2f33;
+    
+    /* RGB values for transparency */
+    --agw-white-rgb: 255, 255, 255;
+    --agw-black-rgb: 0, 0, 0;
+    --agw-primary-rgb: 32, 168, 216;
+    
+    /* Background Colors */
+    --agw-bg-body: var(--bs-body-bg, #181b1e);
+    --agw-bg-card: var(--agw-gray-900);
+    --agw-bg-card-header: var(--agw-gray-800);
+    --agw-bg-hover: rgba(var(--agw-white-rgb), 0.1);
+    --agw-bg-selected: rgba(var(--agw-primary-rgb), 0.2);
+    --agw-bg-disabled: var(--agw-gray-200);
+    
+    /* Text Colors */
+    --agw-text-primary: var(--agw-white);
+    --agw-text-secondary: var(--agw-gray-400);
+    --agw-text-muted: var(--agw-gray-500);
+    --agw-text-dark: var(--agw-dark);
+    
+    /* Border Colors */
+    --agw-border-color: var(--agw-gray-700);
+    --agw-border-light: var(--agw-gray-600);
+    
+    /* Table Colors */
+    --agw-table-header-bg: rgba(var(--agw-white-rgb), 0.05);
+    --agw-table-header-color: var(--agw-warning);
+    --agw-table-row-color: var(--agw-white);
+    --agw-table-hover-bg: rgba(var(--agw-white-rgb), 0.1);
+    
+    /* Modal/Overlay Colors */
+    --agw-modal-backdrop: rgba(var(--agw-black-rgb), 0.5);
+    
+    /* Link Colors */
+    --agw-link-color: var(--agw-primary);
+    --agw-link-hover-color: var(--agw-info);
+}
+
+/* Utility Classes */
+.agw-text-white { color: var(--agw-text-primary); }
+.agw-text-muted { color: var(--agw-text-muted); }
+.agw-bg-hover:hover { background-color: var(--agw-bg-hover); }
+.agw-bg-selected { background-color: var(--agw-bg-selected); }
+
+/* Table Styling */
+.agw-table-dark th {
+    color: var(--agw-table-header-color);
+    background-color: var(--agw-table-header-bg);
+}
+
+.agw-table-dark td {
+    color: var(--agw-table-row-color);
+}
+
+.agw-table-dark tbody tr:hover {
+    background-color: var(--agw-table-hover-bg);
+}
+
+/* Card Styling */
+.agw-card {
+    background-color: var(--agw-bg-card);
+    border-color: var(--agw-border-color);
+}
+
+.agw-card-header {
+    background-color: var(--agw-bg-card-header);
+    color: var(--agw-text-primary);
+}
+
+/* Modal Backdrop */
+.agw-modal-backdrop {
+    background-color: var(--agw-modal-backdrop);
+}
+
+/* Disabled State */
+.agw-disabled {
+    background-color: var(--agw-bg-disabled);
+    color: var(--agw-text-dark);
+}
+
+/* Selection Highlight */
+.agw-selected-row {
+    background-color: var(--agw-bg-selected);
+    border-left: 3px solid var(--agw-primary);
+}
+
+/* Form Control Dark Theme */
+.agw-form-readonly {
+    background-color: var(--agw-gray-200);
+    color: var(--agw-text-dark);
+}

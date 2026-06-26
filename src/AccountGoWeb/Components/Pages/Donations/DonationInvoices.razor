@@ -1,4 +1,4 @@
-@rendermode InteractiveServer
+﻿@rendermode InteractiveServer
 @using AspNetCoreGeneratedDocument
 @using Dto.Donations
 @inject HttpClient Http
@@ -9,14 +9,14 @@
 <PageTitle>Donation Invoices</PageTitle>
 
 <div class="mb-3">
-    <a href="/donations/adddonationinvoice" class="btn">
-        <i class="fa fa-plus me-1"></i> New Donation Invoice
+    <a href="/donations/adddonationinvoice" class="btn btn-sm">
+        <i class="fas fa-plus me-1"></i> New Donation Invoice
     </a>
-    <button class="btn @(HasSelection ? "" : "inactiveLink")" @onclick="EditInvoice">
-        <i class="fa fa-edit me-1"></i> Edit
+    <button class="btn btn-sm @(HasSelection ?"" : "inactiveLink")" @onclick="EditInvoice">
+        <i class="fas fa-edit me-1"></i> Edit
     </button>
-    <button class="btn @(HasSelection ? "" : "inactiveLink")" @onclick="ShowDeleteModal">
-        <i class="fa fa-trash me-1"></i> Delete
+    <button class="btn btn-sm @(HasSelection ?"" : "inactiveLink")" @onclick="ShowDeleteModal">
+        <i class="fas fa-trash me-1"></i> Delete
     </button>
 </div>
 
@@ -35,7 +35,7 @@ else if (donationInvoices != null && donationInvoices.Any())
             <table class="table table-striped table-bordered table-donations">
                 <thead class="thead-dark">
                     <tr>
-                        <th style="width: 50px;"></th>
+                        <th class="w-50px"></th>
                         <th>Invoice No</th>
                         <th>Donor Name</th>
                         <th>Date</th>
@@ -50,9 +50,8 @@ else if (donationInvoices != null && donationInvoices.Any())
                 <tbody>
                     @foreach (var invoice in donationInvoices ?? new List<DonationInvoice>())
                     {
-                        <tr class="@(selectedInvoice?.Id == invoice.Id ? "selected-row" : "")"
-                            @onclick="() => SelectInvoice(invoice)" @ondblclick="() => NavigateToDonationInvoice(invoice)"
-                            style="cursor: pointer;">
+                        <tr class="cursor-pointer @(selectedInvoice?.Id == invoice.Id ?"selected-row" : "")"
+                            @onclick="() => SelectInvoice(invoice)" @ondblclick="() => NavigateToDonationInvoice(invoice)">
                             <td class="text-center">
                                 <input type="radio" name="selectedInvoice" checked="@(selectedInvoice?.Id == invoice.Id)" />
                             </td>
@@ -67,13 +66,13 @@ else if (donationInvoices != null && donationInvoices.Any())
                                 @if (invoice.IsTaxReceiptIssued)
                                 {
                                     <span class="badge badge-success">
-                                        <i class="fa fa-check"></i> Issued
+                                        <i class="fas fa-check"></i> Issued
                                     </span>
                                 }
                                 else
                                 {
                                     <span class="badge badge-warning">
-                                        <i class="fa fa-clock"></i> Pending
+                                        <i class="fas fa-clock"></i> Pending
                                     </span>
                                 }
                             </td>
@@ -81,13 +80,13 @@ else if (donationInvoices != null && donationInvoices.Any())
                                 @if (invoice.Posted)
                                 {
                                     <span class="badge badge-success">
-                                        <i class="fa fa-check"></i> Posted
+                                        <i class="fas fa-check"></i> Posted
                                     </span>
                                 }
                                 else
                                 {
                                     <span class="badge badge-warning">
-                                        <i class="fa fa-clock"></i> Draft
+                                        <i class="fas fa-clock"></i> Draft
                                     </span>
                                 }
                             </td>
@@ -118,7 +117,7 @@ else
             <tbody>
                 @foreach (var invoice in donationInvoices ?? new List<DonationInvoice>())
                 {
-                    <tr class="donationRow @(selectedInvoice?.Id == invoice.Id ? "table-active" : "")"
+                    <tr class="donationRow @(selectedInvoice?.Id == invoice.Id ?"table-active" : "")"
                         @onclick="() => SelectInvoice(invoice)">
                         <td><strong>@invoice.No</strong></td>
                         <td>@invoice.DonorName</td>
@@ -157,9 +156,9 @@ else
 @* Delete Confirmation Modal *@
 @if (showDeleteModal)
 {
-    <div class="modal fade show" style="display: block; background-color: rgba(0,0,0,0.5);" tabindex="-1">
+    <div class="modal fade show d-block modal-backdrop-themed" tabindex="-1">
         <div class="modal-dialog">
-            <div class="modal-content bg-dark text-white shadow">
+            <div class="modal-content modal-content-themed shadow">
                 <div class="modal-header border-secondary">
                     <h5 class="modal-title">Delete Donation Invoice</h5>
                     <button type="button" class="btn-close btn-close-white" @onclick="CloseDeleteModal"></button>
@@ -176,8 +175,8 @@ else
                     }
                 </div>
                 <div class="modal-footer border-secondary">
-                    <button class="btn btn-danger" @onclick="DeleteInvoice">Yes, Delete</button>
-                    <button class="btn btn-secondary" @onclick="CloseDeleteModal">Cancel</button>
+                    <button class="btn btn-danger btn-sm" @onclick="DeleteInvoice">Yes, Delete</button>
+                    <button class="btn btn-secondary btn-sm" @onclick="CloseDeleteModal">Cancel</button>
                 </div>
             </div>
         </div>

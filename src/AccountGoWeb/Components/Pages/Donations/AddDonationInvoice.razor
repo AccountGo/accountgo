@@ -1,4 +1,4 @@
-@rendermode InteractiveServer
+﻿@rendermode InteractiveServer
 @using AspNetCoreGeneratedDocument
 @using Dto.Donations
 @using Dto.Sales
@@ -13,7 +13,7 @@
 @if (isLoading)
 {
     <div class="text-center p-5">
-        <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;" role="status">
+        <div class="spinner-border text-primary spinner-lg" role="status">
             <span class="visually-hidden">Loading...</span>
         </div>
     </div>
@@ -28,7 +28,7 @@ else if (invoice != null)
                     @if (!string.IsNullOrEmpty(errorMessage))
                     {
                         <div class="alert alert-danger alert-dismissible fade show" role="alert">
-                            <i class="fa fa-exclamation-triangle me-2"></i>@errorMessage
+                            <i class="fas fa-exclamation-triangle me-2"></i>@errorMessage
                             <button type="button" class="btn-close" @onclick="() => errorMessage = null"></button>
                         </div>
                     }
@@ -36,7 +36,7 @@ else if (invoice != null)
                     @if (!string.IsNullOrEmpty(successMessage))
                     {
                         <div class="alert alert-success alert-dismissible fade show" role="alert">
-                            <i class="fa fa-check-circle me-2"></i>@successMessage
+                            <i class="fas fa-check-circle me-2"></i>@successMessage
                             <button type="button" class="btn-close" @onclick="() => successMessage = null"></button>
                         </div>
                     }
@@ -45,7 +45,7 @@ else if (invoice != null)
                     <div class="row mb-2">
                         <div class="col-sm-2">Donor</div>
                         <div class="col-sm-10">
-                            <InputSelect class="form-control bg-dark text-white border-secondary" @bind-Value="invoice.DonorId">
+                            <InputSelect class="form-control form-control-themed border-secondary-themed" @bind-Value="invoice.DonorId">
                                 <option value="0">-- Select Donor --</option>
                                 @foreach (var customer in customers)
                                 {
@@ -60,7 +60,7 @@ else if (invoice != null)
                     <div class="row mb-2">
                         <div class="col-sm-2">Donation Date</div>
                         <div class="col-sm-10">
-                            <InputDate class="form-control bg-dark text-white border-secondary" @bind-Value="invoice.DonationDate" />
+                            <InputDate class="form-control form-control-themed border-secondary-themed" @bind-Value="invoice.DonationDate" />
                         </div>
                     </div>
 
@@ -68,7 +68,7 @@ else if (invoice != null)
                     <div class="row mb-2">
                         <div class="col-sm-2">Purpose</div>
                         <div class="col-sm-10">
-                            <InputText class="form-control bg-dark text-white border-secondary" @bind-Value="invoice.Purpose" placeholder="Donation purpose..." />
+                            <InputText class="form-control form-control-themed border-secondary-themed" @bind-Value="invoice.Purpose" placeholder="Donation purpose..." />
                         </div>
                     </div>
 
@@ -76,7 +76,7 @@ else if (invoice != null)
                     <div class="row mb-2">
                         <div class="col-sm-2">Reference No</div>
                         <div class="col-sm-10">
-                            <InputText class="form-control bg-dark text-white border-secondary" @bind-Value="invoice.ReferenceNo" placeholder="Reference number..." />
+                            <InputText class="form-control form-control-themed border-secondary-themed" @bind-Value="invoice.ReferenceNo" placeholder="Reference number..." />
                         </div>
                     </div>
 
@@ -86,11 +86,11 @@ else if (invoice != null)
                         <div class="col-sm-10 d-flex gap-4">
                             <div class="form-check">
                                 <InputCheckbox class="form-check-input" @bind-Value="invoice.IsTaxReceiptIssued" id="taxReceipt" />
-                                <label class="form-check-label text-white" for="taxReceipt">Tax Receipt Issued</label>
+                                <label class="form-check-label" for="taxReceipt">Tax Receipt Issued</label>
                             </div>
                             <div class="form-check">
                                 <InputCheckbox class="form-check-input" @bind-Value="invoice.Posted" id="posted" />
-                                <label class="form-check-label text-white" for="posted">Posted</label>
+                                <label class="form-check-label" for="posted">Posted</label>
                             </div>
                         </div>
                     </div>
@@ -101,11 +101,11 @@ else if (invoice != null)
                     <thead>
                         <tr>
                             <th>Item</th>
-                            <th style="width: 15%;">Quantity</th>
-                            <th style="width: 15%;">Amount</th>
-                            <th style="width: 20%;">Unit</th>
-                            <th style="width: 20%;">Notes</th>
-                            <th style="width: 50px;"></th>
+                            <th class="w-pct-15">Quantity</th>
+                            <th class="w-pct-15">Amount</th>
+                            <th class="w-pct-20">Unit</th>
+                            <th class="w-pct-20">Notes</th>
+                            <th class="w-50px"></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -115,7 +115,7 @@ else if (invoice != null)
                             var line = invoice.DonationInvoiceLines![index];
                             <tr>
                                 <td>
-                                    <InputSelect class="form-select bg-dark text-white border-secondary" @bind-Value="line.ItemId">
+                                    <InputSelect class="form-select form-select-themed border-secondary-themed" @bind-Value="line.ItemId">
                                         <option value="0">-- Select Item --</option>
                                         @foreach (var item in items)
                                         {
@@ -124,13 +124,13 @@ else if (invoice != null)
                                     </InputSelect>
                                 </td>
                                 <td>
-                                    <InputNumber class="form-control bg-dark text-white border-secondary" @bind-Value="line.Quantity" />
+                                    <InputNumber class="form-control form-control-themed border-secondary-themed" @bind-Value="line.Quantity" />
                                 </td>
                                 <td>
-                                    <InputNumber class="form-control bg-dark text-white border-secondary" @bind-Value="line.Amount" />
+                                    <InputNumber class="form-control form-control-themed border-secondary-themed" @bind-Value="line.Amount" />
                                 </td>
                                 <td>
-                                    <InputSelect class="form-select bg-dark text-white border-secondary" @bind-Value="line.MeasurementId">
+                                    <InputSelect class="form-select form-select-themed border-secondary-themed" @bind-Value="line.MeasurementId">
                                         <option value="0">-- Select --</option>
                                         @foreach (var measurement in measurements)
                                         {
@@ -139,13 +139,13 @@ else if (invoice != null)
                                     </InputSelect>
                                 </td>
                                 <td>
-                                    <InputText class="form-control bg-dark text-white border-secondary" @bind-Value="line.Notes" placeholder="Notes..." />
+                                    <InputText class="form-control form-control-themed border-secondary-themed" @bind-Value="line.Notes" placeholder="Notes..." />
                                 </td>
                                 <td>
                                     @if (invoice.DonationInvoiceLines.Count > 1)
                                     {
                                         <button type="button" class="btn btn-link text-danger p-0" title="Remove" @onclick="() => RemoveLine(index)">
-                                            <i class="fa fa-trash"></i>
+                                            <i class="fas fa-trash"></i>
                                         </button>
                                     }
                                 </td>
@@ -153,30 +153,30 @@ else if (invoice != null)
                         }
                         <tr>
                             <td colspan="6">
-                                <button type="button" class="btn btn-primary btn-sm" @onclick="AddLine">
-                                    <i class="fa fa-plus me-1"></i> Add Row
+                                <button type="button" class="btn btn-primary btn btn-sm-sm" @onclick="AddLine">
+                                    <i class="fas fa-plus me-1"></i> Add Row
                                 </button>
                             </td>
                         </tr>
                     </tbody>
                 </table>
                 
-                <div class="card-footer bg-dark border-top border-secondary text-end pe-4">
+                <div class="card-footer card-footer-themed text-end pe-4">
                     <span class="text-secondary small me-2">Total:</span>
                     <strong class="text-success h5 mb-0">@invoice.Amount.ToString("C2")</strong>
                 </div>
             </div>
 
             <div class="mt-3">
-                <button type="submit" class="btn btn-primary" disabled="@isSaving">
+                <button type="submit" class="btn btn-primary btn-sm" disabled="@isSaving">
                     @if (isSaving)
                     {
                         <span class="spinner-border spinner-border-sm me-2"></span>
                     }
-                    <i class="fa fa-save me-2"></i>Save
+                    <i class="fas fa-save me-2"></i>Save
                 </button>
-                <button type="button" class="btn btn-secondary" @onclick="Cancel">
-                    <i class="fa fa-times me-2"></i>Cancel
+                <button type="button" class="btn btn-secondary btn-sm" @onclick="Cancel">
+                    <i class="fas fa-times me-2"></i>Cancel
                 </button>
             </div>
         </EditForm>

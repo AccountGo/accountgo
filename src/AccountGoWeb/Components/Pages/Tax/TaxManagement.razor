@@ -1,4 +1,4 @@
-@rendermode InteractiveServer
+﻿@rendermode InteractiveServer
 @inject HttpClient Http
 @inject NavigationManager Navigation
 @inject IConfiguration Configuration
@@ -9,20 +9,18 @@
 <div class="nav-tabs-custom">
     <ul class="nav nav-tabs" role="tablist">
         <li class="nav-item">
-            <a class="nav-link @(activeTab == "taxes" ? "active" : "")" @onclick='() => SetActiveTab("taxes")'
-                style="cursor: pointer;">
+            <a class="nav-link cursor-pointer @(activeTab =="taxes" ? "active" : "")" @onclick='() => SetActiveTab("taxes")'>
                 Taxes
             </a>
         </li>
         <li class="nav-item">
-            <a class="nav-link @(activeTab == "tax-groups" ? "active" : "")" @onclick='() => SetActiveTab("tax-groups")'
-                style="cursor: pointer;">
+            <a class="nav-link cursor-pointer @(activeTab =="tax-groups" ? "active" : "")" @onclick='() => SetActiveTab("tax-groups")'>
                 Tax Groups
             </a>
         </li>
         <li class="nav-item">
-            <a class="nav-link @(activeTab == "item-tax-groups" ? "active" : "")"
-                @onclick='() => SetActiveTab("item-tax-groups")' style="cursor: pointer;">
+            <a class="nav-link cursor-pointer @(activeTab =="item-tax-groups" ? "active" : "")"
+                @onclick='() => SetActiveTab("item-tax-groups")'>
                 Item Tax Groups
             </a>
         </li>
@@ -33,8 +31,8 @@
         {
             <div class="tab-pane active">
                 <div class="mb-2">
-                    <a href="/Tax/AddNewTax" class="btn btn-primary">
-                        <i class="fa fa-plus"></i> New Tax
+                    <a href="/Tax/AddNewTax" class="btn btn-primary btn-sm">
+                        <i class="fas fa-plus"></i> New Tax
                     </a>
                 </div>
                 <div class="box-body table-responsive">
@@ -52,12 +50,12 @@
                             {
                                 @foreach (var tax in taxes)
                                 {
-                                    <tr @ondblclick="() => EditTax(tax)" style="cursor: pointer;">
+                                    <tr @ondblclick="() => EditTax(tax)" class="cursor-pointer">
                                         <td>@tax.TaxCode</td>
                                         <td>@tax.TaxName</td>
                                         <td>@tax.Rate</td>
                                         <td>
-                                            <button class="btn btn-sm btn-danger btn-flat"
+                                            <button class="btn btn-danger btn-sm"
                                                 @onclick="() => ConfirmDeleteTax(tax.Id)">Delete</button>
                                         </td>
                                     </tr>
@@ -98,12 +96,12 @@
                             {
                                 @foreach (var group in taxGroups)
                                 {
-                                    <tr @onclick="() => SelectTaxGroup(group)" style="cursor: pointer;">
+                                    <tr @onclick="() => SelectTaxGroup(group)" class="cursor-pointer">
                                         <td>@group.Description</td>
                                         <td><input type="checkbox" checked="@group.TaxAppliedToShipping" disabled /></td>
                                         <td><input type="checkbox" checked="@group.IsActive" disabled /></td>
                                         <td>
-                                            <button class="btn btn-sm btn-danger btn-flat" @onclick:stopPropagation="true"
+                                            <button class="btn btn-danger btn-sm" @onclick:stopPropagation="true"
                                                 @onclick="() => ConfirmDeleteTaxGroup(group.Id)">Delete</button>
                                         </td>
                                     </tr>
@@ -171,11 +169,11 @@
                             {
                                 @foreach (var itemGroup in itemTaxGroups)
                                 {
-                                    <tr @onclick="() => SelectItemTaxGroup(itemGroup)" style="cursor: pointer;">
+                                    <tr @onclick="() => SelectItemTaxGroup(itemGroup)" class="cursor-pointer">
                                         <td>@itemGroup.Name</td>
                                         <td><input type="checkbox" checked="@itemGroup.IsFullyExempt" disabled /></td>
                                         <td>
-                                            <button class="btn btn-sm btn-danger btn-flat" @onclick:stopPropagation="true"
+                                            <button class="btn btn-danger btn-sm" @onclick:stopPropagation="true"
                                                 @onclick="() => ConfirmDeleteItemTaxGroup(itemGroup.Id)">Delete</button>
                                         </td>
                                     </tr>
@@ -413,15 +411,15 @@
 
 <style>
     tr th {
-        color: yellow;
+        color: var(--bs-warning, #ffc107);
     }
 
     tr td {
-        color: #fff;
+        color: var(--bs-white, #fff);
     }
 
     .nav-link.active {
-        background-color: #3c8dbc !important;
-        color: white !important;
+        background-color: var(--bs-primary, #20a8d8) !important;
+        color: var(--bs-white, #fff) !important;
     }
 </style>

@@ -1,4 +1,4 @@
-@using System.Text.Json
+﻿@using System.Text.Json
 @using System.Text.Json.Serialization
 @using AccountGoWeb.Models
 @using AccountGoWeb.Models.Sales
@@ -7,19 +7,19 @@
 <style>
     label,
     h5 {
-        color: #fff !important;
+        color: var(--bs-white, #fff) !important;
     }
 
     div.row {
-        color: #fff;
+        color: var(--bs-white, #fff);
     }
 </style>
 
 <div class="container-fluid">
     <div class="row mb-3">
         <div class="col text-end">
-            <a href="/Sales/CustomerPayments" class="btn btn-outline-secondary">
-                <i class="fa fa-arrow-left"></i>
+            <a href="/Sales/CustomerPayments" class="btn btn-outline-secondary btn-sm">
+                <i class="fas fa-arrow-left"></i>
                 Back to Customer Payments
             </a>
         </div>
@@ -48,7 +48,7 @@
                 @if (!string.IsNullOrEmpty(successMessage))
                 {
                     <div class="alert alert-success" role="alert">
-                        <i class="fa fa-check-circle"></i> @successMessage
+                        <i class="fas fa-check-circle"></i> @successMessage
                     </div>
                 }
                 <div class="card">
@@ -58,7 +58,7 @@
                             <label class="col-sm-3 col-form-label">Received From</label>
                             <div class="col-sm-9">
                                 <select
-                                    class="form-control bg-dark text-white @(string.IsNullOrEmpty(customerId?.ToString()) && submitAttempted ? "is-invalid" : "")"
+                                    class="form-control form-control-themed @(string.IsNullOrEmpty(customerId?.ToString()) && submitAttempted ?"is-invalid" : "")"
                                     value="@(customerId?.ToString() ?? string.Empty)"
                                     @onchange="OnCustomerChanged">
                                     <option value="">-- Select Customer --</option>
@@ -76,14 +76,14 @@
                         <div class="row mb-3">
                             <label class="col-sm-3 col-form-label">Customer Balance</label>
                             <div class="col-sm-9">
-                                <input type="text" class="form-control bg-dark text-white"
+                                <input type="text" class="form-control form-control-themed"
                                     value="@customerBalance.ToString("F2")" readonly />
                             </div>
                         </div>
                         <div class="row mb-3">
                             <label class="col-sm-3 col-form-label">Date</label>
                             <div class="col-sm-9">
-                                <input type="date" class="form-control bg-dark text-white" @bind="receiptDate" />
+                                <input type="date" class="form-control form-control-themed" @bind="receiptDate" />
                             </div>
                         </div>
 
@@ -92,7 +92,7 @@
                             <label class="col-sm-3 col-form-label">Payment Amount</label>
                             <div class="col-sm-9">
                                 <input type="number" step="0.01"
-                                    class="form-control bg-dark text-white @(amount <= 0 && submitAttempted ? "is-invalid" : "")"
+                                    class="form-control form-control-themed @(amount <= 0 && submitAttempted ?"is-invalid" : "")"
                                     @bind="amount" placeholder="0.0" />
                                 @if (amount <= 0 && submitAttempted)
                                 {
@@ -103,14 +103,14 @@
                         <div class="row mb-3">
                             <label class="col-sm-3 col-form-label">Reference #</label>
                             <div class="col-sm-9">
-                                <input type="text" class="form-control bg-dark text-white"
+                                <input type="text" class="form-control form-control-themed"
                                     @bind="referenceNo" placeholder="Payment reference..." />
                             </div>
                         </div>
                         <div class="row mb-3">
                             <label class="col-sm-3 col-form-label">Payment Method</label>
                             <div class="col-sm-9">
-                                <select class="form-control bg-dark text-white" @bind="paymentMethod">
+                                <select class="form-control form-control-themed" @bind="paymentMethod">
                                     <option value="">-- Select Method --</option>
                                     @foreach (var method in paymentMethods)
                                     {
@@ -125,7 +125,7 @@
                             <label class="col-sm-3 col-form-label">Deposit To</label>
                             <div class="col-sm-9">
                                 <select
-                                    class="form-control bg-dark text-white @(string.IsNullOrEmpty(accountToDebitId?.ToString()) && submitAttempted ? "is-invalid" : "")"
+                                    class="form-control form-control-themed @(string.IsNullOrEmpty(accountToDebitId?.ToString()) && submitAttempted ?"is-invalid" : "")"
                                     @bind="accountToDebitId">
                                     <option value="">-- Select Bank --</option>
                                     @foreach (var account in debitAccounts)
@@ -144,7 +144,7 @@
                         <div class="row mb-3">
                             <label class="col-sm-3 col-form-label">Memo</label>
                             <div class="col-sm-9">
-                                <textarea class="form-control bg-dark text-white" @bind="memo" rows="2"
+                                <textarea class="form-control form-control-themed" @bind="memo" rows="2"
                                     placeholder="Optional memo..."></textarea>
                             </div>
                         </div>
@@ -153,16 +153,16 @@
             </div>
 
             <div class="col-md-9 mt-3">
-                <button id="btnSaveClose" class="btn btn-sm btn-primary btn-flat me-2" type="submit">
-                    <i class="fa fa-save"></i> Save &amp; Close
+                <button id="btnSaveClose" class="btn btn-primary btn-sm me-2" type="submit">
+                    <i class="fas fa-save"></i> Save &amp; Close
                 </button>
-                <button id="btnSaveNew" class="btn btn-sm btn-success btn-flat me-2" type="button" @onclick="SaveAndNew">
-                    <i class="fa fa-plus"></i> Save &amp; New
+                <button id="btnSaveNew" class="btn btn-success btn-sm me-2" type="button" @onclick="SaveAndNew">
+                    <i class="fas fa-plus"></i> Save &amp; New
                 </button>
-                <button id="btnClear" class="btn btn-sm btn-outline-light btn-flat me-2" type="button" @onclick="ClearForm">
-                    <i class="fa fa-eraser"></i> Clear
+                <button id="btnClear" class="btn btn-outline-light btn-sm me-2" type="button" @onclick="ClearForm">
+                    <i class="fas fa-eraser"></i> Clear
                 </button>
-                <a href="/Sales/CustomerPayments" class="btn btn-sm btn-default btn-flat">Close</a>
+                <a href="/Sales/CustomerPayments" class="btn btn-secondary btn-sm">Close</a>
             </div>
         </form>
     }

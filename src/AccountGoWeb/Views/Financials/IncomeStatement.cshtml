@@ -2,7 +2,7 @@
 
 @{
     ViewBag.Title = "Income Statement";
-    Layout = "~/Views/Shared/_Layout_bootstrap.cshtml";
+    Layout = "~/Views/Shared/_Layout.cshtml";
 
     var netIncome = Model?.Where(a => !a.IsExpense).Sum(a => a.Amount) ?? 0 - 
                     Model?.Where(a => a.IsExpense).Sum(a => a.Amount) ?? 0;
@@ -26,19 +26,19 @@ else
             <tr>
                 <th>Account Code</th>
                 <th>Account Name</th>
-                <th style="text-align: right;">Amount</th>
+                <th class="text-right report-amount">Amount</th>
             </tr>
             @foreach (var item in Model.Where(a => !a.IsExpense))
             {
                 <tr>
                     <td>@Html.ActionLink(item.AccountCode, "Account", new { id = item.AccountId })</td>
                     <td>@item.AccountName</td>
-                    <td style="text-align: right;">@item.Amount</td>
+                    <td class="text-right report-amount">@item.Amount</td>
                 </tr>
             }
             <tr>
-                <td colspan="2" style="text-align: right; font-weight: bold;">Total Revenues</td>
-                <td style="text-align: right;">@Model.Where(a => !a.IsExpense).Sum(a => a.Amount)</td>
+                <td colspan="2" class="report-total-row text-right">Total Revenues</td>
+                <td class="text-right report-amount">@Model.Where(a => !a.IsExpense).Sum(a => a.Amount)</td>
             </tr>
         </table>
     </div>
@@ -48,23 +48,23 @@ else
             <tr>
                 <th>Account Code</th>
                 <th>Account Name</th>
-                <th style="text-align: right;">Amount</th>
+                <th class="text-right report-amount">Amount</th>
             </tr>
             @foreach (var item in Model.Where(a => a.IsExpense))
             {
                 <tr>
                     <td>@Html.ActionLink(item.AccountCode, "Account", new { id = item.AccountId })</td>
                     <td>@item.AccountName</td>
-                    <td style="text-align: right;">@item.Amount</td>
+                    <td class="text-right report-amount">@item.Amount</td>
                 </tr>
             }
             <tr>
-                <td colspan="2" style="text-align: right; font-weight: bold;">Total Expenses</td>
-                <td style="text-align: right;">@Model.Where(a => a.IsExpense).Sum(a => a.Amount)</td>
+                <td colspan="2" class="report-total-row text-right">Total Expenses</td>
+                <td class="text-right report-amount">@Model.Where(a => a.IsExpense).Sum(a => a.Amount)</td>
             </tr>
         </table>
     </div>
-    <div style="text-align: right; font-weight: bold; font-size: large;">
+    <div class="report-total-row text-right report-grand-total">
         Net Income: @netIncome
     </div>
 }

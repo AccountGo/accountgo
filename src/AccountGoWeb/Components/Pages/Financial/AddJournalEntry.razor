@@ -1,4 +1,4 @@
-@using System.Net.Http.Json
+﻿@using System.Net.Http.Json
 @using Dto.Financial
 @inject IHttpClientFactory HttpFactory
 @inject IConfiguration Config
@@ -19,8 +19,8 @@
 }
 
 <div class="mb-3">
-    <a href="/Financials/JournalEntries" class="btn btn-default">
-        <i class="fa fa-arrow-left"></i> Back to Journal Entries
+    <a href="/Financials/JournalEntries" class="btn btn-secondary btn-sm">
+        <i class="fas fa-arrow-left"></i> Back to Journal Entries
     </a>
 </div>
 
@@ -64,8 +64,8 @@
     <div class="panel panel-default">
         <div class="panel-heading">
             <strong>Lines</strong>
-            <button type="button" class="btn btn-sm btn-primary pull-right" @onclick="AddLine">
-                <i class="fa fa-plus"></i> Add Line
+            <button type="button" class="btn btn-primary btn-sm pull-right" @onclick="AddLine">
+                <i class="fas fa-plus"></i> Add Line
             </button>
         </div>
 
@@ -80,11 +80,11 @@
             <table class="table table-bordered table-striped">
                 <thead>
                     <tr>
-                        <th style="width:25%">Account</th>
-                        <th style="width:10%">Dr/Cr</th>
-                        <th style="width:15%">Amount</th>
+                        <th class="w-pct-25">Account</th>
+                        <th class="w-pct-10">Dr/Cr</th>
+                        <th class="w-pct-15">Amount</th>
                         <th>Memo</th>
-                        <th style="width:5%"></th>
+                        <th class="w-pct-5"></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -130,9 +130,9 @@
                                 </td>
 
                                 <td>
-                                    <button type="button" class="btn btn-danger btn-sm"
+                                    <button type="button" class="btn btn-danger btn btn-sm-sm"
                                         @onclick="() => RemoveLine(currentLine)">
-                                        <i class="fa fa-trash"></i>
+                                        <i class="fas fa-trash"></i>
                                     </button>
                                 </td>
                             </tr>
@@ -157,14 +157,14 @@
 
     <!-- ========== ACTIONS ========== -->
     <div class="text-right">
-        <button type="submit" class="btn btn-success" disabled="@IsSaving">
+        <button type="submit" class="btn btn-success btn-sm" disabled="@IsSaving">
             @if (IsSaving)
             {
-                <span><i class="fa fa-spinner fa-spin"></i> Saving...</span>
+                <span><i class="fas fa-spinner fa-spin"></i> Saving...</span>
             }
             else
             {
-                <span><i class="fa fa-save"></i> Save</span>
+                <span><i class="fas fa-save"></i> Save</span>
             }
         </button>
     </div>

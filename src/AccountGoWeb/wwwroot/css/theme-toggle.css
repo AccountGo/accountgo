@@ -1,0 +1,833 @@
+/**
+ * Theme Toggle Styles
+ * Additional styles for the theme toggle button and theme-specific enhancements
+ */
+
+/* Theme Toggle Button */
+#theme-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.375rem 0.75rem;
+    border-radius: 0.25rem;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    font-size: 0.875rem;
+}
+
+#theme-toggle:hover {
+    transform: scale(1.05);
+}
+
+#theme-toggle:active {
+    transform: scale(0.95);
+}
+
+#theme-icon {
+    font-size: 1rem;
+    transition: transform 0.3s ease;
+}
+
+#theme-toggle:hover #theme-icon {
+    transform: rotate(20deg);
+}
+
+/* Smooth theme transitions */
+body {
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+.sidebar,
+.app-header,
+.app-footer,
+.main {
+    transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+
+/* Light theme specific overrides */
+body.light-theme {
+    --agw-bg-primary: #f8f9fa;
+    --agw-text-primary: #212529;
+}
+
+/* Dark theme specific overrides */
+body.dark-theme {
+    --agw-bg-primary: #2f353a;
+    --agw-text-primary: #fff;
+}
+
+/* Ensure theme toggle button is visible in both themes */
+.light-theme #theme-toggle {
+    background-color: var(--bs-light, #f8f9fa);
+    border-color: var(--bs-gray-400, #ced4da);
+    color: var(--bs-dark, #212529);
+}
+
+.light-theme #theme-toggle:hover {
+    background-color: var(--bs-gray-200, #e9ecef);
+    border-color: var(--bs-gray-500, #adb5bd);
+}
+
+.dark-theme #theme-toggle {
+    background-color: var(--bs-gray-800, #3a3f44);
+    border-color: var(--bs-gray-600, #6c757d);
+    color: var(--bs-light, #f8f9fa);
+}
+
+.dark-theme #theme-toggle:hover {
+    background-color: var(--bs-gray-700, #495057);
+    border-color: var(--bs-gray-500, #adb5bd);
+}
+
+/* Prevent flash of unstyled content */
+body:not(.light-theme):not(.dark-theme) {
+    opacity: 0.98;
+}
+
+/* Animation for theme icon */
+@keyframes rotate-sun {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes pulse-moon {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.7;
+    }
+}
+
+.light-theme #theme-icon.fa-sun {
+    animation: rotate-sun 20s linear infinite;
+}
+
+.dark-theme #theme-icon.fa-moon {
+    animation: pulse-moon 3s ease-in-out infinite;
+}
+
+/* Ensure toggle is accessible */
+#theme-toggle:focus {
+    outline: 2px solid var(--bs-primary, #0d6efd);
+    outline-offset: 2px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 576px) {
+    #theme-toggle {
+        padding: 0.25rem 0.5rem;
+    }
+
+    #theme-icon {
+        font-size: 0.875rem;
+    }
+}
+
+/* Ensure header has proper spacing for toggle button */
+.app-header.navbar {
+    display: flex;
+    align-items: center;
+    padding: 0.5rem 1rem;
+}
+
+.app-header .navbar-brand {
+    margin-right: auto;
+}
+
+/* Navigation Menu Styles */
+
+/* Active menu item highlighting */
+.sidebar .nav-link.active {
+    background-color: var(--bs-primary, #20a8d8) !important;
+    color: var(--bs-white, #fff) !important;
+    font-weight: 600;
+    border-left: 3px solid var(--bs-warning, #ffc107);
+}
+
+.sidebar .nav-link.active .nav-icon {
+    color: var(--bs-white, #fff) !important;
+}
+
+/* Hover effect for non-active items */
+.sidebar .nav-link:not(.active):hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    transition: background-color 0.2s ease;
+}
+
+/* Dropdown toggle cursor */
+.nav-dropdown-toggle {
+    cursor: pointer;
+}
+
+/* Collapsed dropdown - hide items */
+.nav-dropdown:not(.open) .nav-dropdown-items {
+    display: none;
+}
+
+/* Open dropdown - show items */
+.nav-dropdown.open .nav-dropdown-items {
+    display: block;
+}
+
+/* Dropdown transition */
+.nav-dropdown-items {
+    transition: all 0.3s ease;
+}
+
+/* Dropdown toggle icon indicator (optional - add arrow) */
+.nav-dropdown-toggle::after {
+    content: '\f078';
+    /* FontAwesome chevron-down */
+    font-family: 'Font Awesome 6 Free';
+    font-weight: 900;
+    float: right;
+    transition: transform 0.3s ease;
+    font-size: 0.75rem;
+    margin-left: auto;
+}
+
+.nav-dropdown.open>.nav-dropdown-toggle::after {
+    transform: rotate(180deg);
+}
+
+/* Sidebar width adjustment for long navigation labels */
+:root {
+    --app-sidebar-width: 240px;
+}
+
+.app-body .sidebar,
+.sidebar-fixed .sidebar {
+    width: var(--app-sidebar-width) !important;
+    flex: 0 0 var(--app-sidebar-width) !important;
+}
+
+.sidebar .sidebar-nav,
+.sidebar .nav {
+    width: var(--app-sidebar-width) !important;
+}
+
+.sidebar .nav-link {
+    white-space: nowrap;
+}
+
+.sidebar .nav-dropdown-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.sidebar .nav-dropdown-toggle::after {
+    float: none;
+    flex: 0 0 auto;
+    margin-left: auto;
+}
+
+html:not([dir="rtl"]) .sidebar,
+html:not([dir="rtl"]) .sidebar-off-canvas .sidebar {
+    margin-left: calc(-1 * var(--app-sidebar-width)) !important;
+}
+
+html[dir="rtl"] .sidebar,
+html[dir="rtl"] .sidebar-off-canvas .sidebar {
+    margin-right: calc(-1 * var(--app-sidebar-width)) !important;
+}
+
+html:not([dir="rtl"]) .sidebar-show .sidebar,
+html:not([dir="rtl"]) .sidebar-sm-show .sidebar {
+    margin-left: 0 !important;
+}
+
+html[dir="rtl"] .sidebar-show .sidebar,
+html[dir="rtl"] .sidebar-sm-show .sidebar {
+    margin-right: 0 !important;
+}
+
+@media (min-width: 576px) {
+
+    html:not([dir="rtl"]) .sidebar-show.sidebar-fixed .main,
+    html:not([dir="rtl"]) .sidebar-show.sidebar-fixed .app-footer,
+    html:not([dir="rtl"]) .sidebar-sm-show.sidebar-fixed .main,
+    html:not([dir="rtl"]) .sidebar-sm-show.sidebar-fixed .app-footer {
+        margin-left: var(--app-sidebar-width) !important;
+    }
+
+    html[dir="rtl"] .sidebar-show.sidebar-fixed .main,
+    html[dir="rtl"] .sidebar-show.sidebar-fixed .app-footer,
+    html[dir="rtl"] .sidebar-sm-show.sidebar-fixed .main,
+    html[dir="rtl"] .sidebar-sm-show.sidebar-fixed .app-footer {
+        margin-right: var(--app-sidebar-width) !important;
+    }
+}
+
+@media (min-width: 768px) {
+    html:not([dir="rtl"]) .sidebar-md-show .sidebar {
+        margin-left: 0 !important;
+    }
+
+    html[dir="rtl"] .sidebar-md-show .sidebar {
+        margin-right: 0 !important;
+    }
+
+    html:not([dir="rtl"]) .sidebar-md-show.sidebar-fixed .main,
+    html:not([dir="rtl"]) .sidebar-md-show.sidebar-fixed .app-footer {
+        margin-left: var(--app-sidebar-width) !important;
+    }
+
+    html[dir="rtl"] .sidebar-md-show.sidebar-fixed .main,
+    html[dir="rtl"] .sidebar-md-show.sidebar-fixed .app-footer {
+        margin-right: var(--app-sidebar-width) !important;
+    }
+}
+
+@media (min-width: 992px) {
+    html:not([dir="rtl"]) .sidebar-lg-show .sidebar {
+        margin-left: 0 !important;
+    }
+
+    html[dir="rtl"] .sidebar-lg-show .sidebar {
+        margin-right: 0 !important;
+    }
+
+    html:not([dir="rtl"]) .sidebar-lg-show.sidebar-fixed .main,
+    html:not([dir="rtl"]) .sidebar-lg-show.sidebar-fixed .app-footer {
+        margin-left: var(--app-sidebar-width) !important;
+    }
+
+    html[dir="rtl"] .sidebar-lg-show.sidebar-fixed .main,
+    html[dir="rtl"] .sidebar-lg-show.sidebar-fixed .app-footer {
+        margin-right: var(--app-sidebar-width) !important;
+    }
+}
+
+@media (min-width: 1200px) {
+    html:not([dir="rtl"]) .sidebar-xl-show .sidebar {
+        margin-left: 0 !important;
+    }
+
+    html[dir="rtl"] .sidebar-xl-show .sidebar {
+        margin-right: 0 !important;
+    }
+
+    html:not([dir="rtl"]) .sidebar-xl-show.sidebar-fixed .main,
+    html:not([dir="rtl"]) .sidebar-xl-show.sidebar-fixed .app-footer {
+        margin-left: var(--app-sidebar-width) !important;
+    }
+
+    html[dir="rtl"] .sidebar-xl-show.sidebar-fixed .main,
+    html[dir="rtl"] .sidebar-xl-show.sidebar-fixed .app-footer {
+        margin-right: var(--app-sidebar-width) !important;
+    }
+}
+
+/* Light theme adjustments */
+.light-theme .sidebar {
+    background-color: #f8f9fa !important;
+    color: #23282c !important;
+    border-right: 1px solid #dee2e6;
+}
+
+.light-theme .sidebar .sidebar-nav,
+.light-theme .sidebar .nav,
+.light-theme .sidebar .nav-dropdown-items {
+    background-color: #f8f9fa !important;
+}
+
+.light-theme .sidebar .nav-link {
+    color: #23282c !important;
+}
+
+.light-theme .sidebar .nav-link .nav-icon,
+.light-theme .sidebar .nav-dropdown-toggle::after {
+    color: #6c757d !important;
+}
+
+.light-theme .sidebar .nav-link.active {
+    background-color: var(--bs-primary, #0d6efd) !important;
+    color: var(--bs-white, #fff) !important;
+}
+
+.light-theme .sidebar .nav-link.active .nav-icon {
+    color: var(--bs-white, #fff) !important;
+}
+
+.light-theme .sidebar .nav-link:not(.active):hover {
+    background-color: rgba(13, 110, 253, 0.08);
+    color: #0d6efd !important;
+}
+
+.light-theme .sidebar .nav-link:not(.active):hover .nav-icon,
+.light-theme .sidebar .nav-link:not(.active):hover::after {
+    color: #0d6efd !important;
+}
+
+.light-theme .sidebar-minimizer {
+    background-color: #e9ecef !important;
+    border-top: 1px solid #dee2e6;
+}
+
+/* ============================================
+   Label Visibility Fix - Light and Dark Modes
+   ============================================ */
+
+/* Ensure labels are visible in dark mode */
+.dark-theme label,
+.dark-theme .form-label,
+.dark-theme .col-form-label {
+    color: #e4e7ea !important;
+    /* Light gray text for dark background */
+}
+
+/* Ensure labels are visible in light mode */
+.light-theme label,
+.light-theme .form-label,
+.light-theme .col-form-label {
+    color: #23282c !important;
+    /* Dark text for light background */
+}
+
+/* Fix for labels inside cards in dark mode */
+.dark-theme .card label,
+.dark-theme .card .form-label {
+    color: #e4e7ea !important;
+}
+
+/* Fix for labels inside cards in light mode */
+.light-theme .card label,
+.light-theme .card .form-label {
+    color: #23282c !important;
+}
+
+/* Fix for inline labels and checkboxes in dark mode */
+.dark-theme .form-check-label,
+.dark-theme .form-check-inline label {
+    color: #e4e7ea !important;
+}
+
+/* Fix for inline labels and checkboxes in light mode */
+.light-theme .form-check-label,
+.light-theme .form-check-inline label {
+    color: #23282c !important;
+}
+
+/* Fix for required field indicators */
+.dark-theme label .text-danger,
+.dark-theme .form-label .text-danger {
+    color: #f86c6b !important;
+    /* Red for required asterisk */
+}
+
+.light-theme label .text-danger,
+.light-theme .form-label .text-danger {
+    color: #dc3545 !important;
+    /* Bootstrap red for light mode */
+}
+
+/* Fix for help text under labels */
+.dark-theme .form-text,
+.dark-theme .text-muted {
+    color: #8f9ba6 !important;
+    /* Muted gray for dark mode */
+}
+
+.light-theme .form-text,
+.light-theme .text-muted {
+    color: #6c757d !important;
+    /* Bootstrap muted for light mode */
+}
+
+/* Fix for table headers (th acts like labels) in dark mode */
+.dark-theme th,
+.dark-theme thead th {
+    color: #ffc107 !important;
+    /* Yellow/gold for table headers in dark mode */
+}
+
+/* Fix for table headers in light mode */
+.light-theme th,
+.light-theme thead th {
+    color: #23282c !important;
+    /* Dark text for light mode */
+}
+
+/* Fix for table cells in dark mode */
+.dark-theme td {
+    color: #e4e7ea !important;
+}
+
+/* Fix for table cells in light mode */
+.light-theme td {
+    color: #23282c !important;
+}
+
+/* Fix for legend elements (fieldset labels) in dark mode */
+.dark-theme legend,
+.dark-theme .card-header {
+    color: #fff !important;
+}
+
+/* Fix for legend elements in light mode */
+.light-theme legend,
+.light-theme .card-header {
+    color: #23282c !important;
+}
+
+/* Fix for input placeholder text in dark mode */
+.dark-theme input::placeholder,
+.dark-theme textarea::placeholder,
+.dark-theme select::placeholder {
+    color: #73818f !important;
+    opacity: 0.7;
+}
+
+/* Fix for input placeholder text in light mode */
+.light-theme input::placeholder,
+.light-theme textarea::placeholder,
+.light-theme select::placeholder {
+    color: #6c757d !important;
+    opacity: 0.7;
+}
+
+/* Fix for disabled labels in dark mode */
+.dark-theme label.disabled,
+.dark-theme .form-label.disabled {
+    color: #73818f !important;
+    opacity: 0.6;
+}
+
+/* Fix for disabled labels in light mode */
+.light-theme label.disabled,
+.light-theme .form-label.disabled {
+    color: #6c757d !important;
+    opacity: 0.6;
+}
+
+/* Fix for text in modals - dark mode */
+.dark-theme .modal-body label,
+.dark-theme .modal-body .form-label {
+    color: #e4e7ea !important;
+}
+
+/* Fix for text in modals - light mode */
+.light-theme .modal-body label,
+.light-theme .modal-body .form-label {
+    color: #23282c !important;
+}
+
+/* Fix for alert text - dark mode */
+.dark-theme .alert {
+    color: #e4e7ea !important;
+}
+
+/* Fix for alert text - light mode */
+.light-theme .alert {
+    color: #23282c !important;
+}
+
+/* Ensure text inside inputs/selects is visible - dark mode */
+.dark-theme input,
+.dark-theme textarea,
+.dark-theme select,
+.dark-theme .form-control {
+    color: #e4e7ea !important;
+    background-color: #2f353a !important;
+    border-color: #5c6873 !important;
+}
+
+/* Ensure text inside inputs/selects is visible - light mode */
+.light-theme input,
+.light-theme textarea,
+.light-theme select,
+.light-theme .form-control {
+    color: #23282c !important;
+    background-color: #fff !important;
+    border-color: #ced4da !important;
+}
+
+/* Fix for read-only inputs - dark mode */
+.dark-theme input[readonly],
+.dark-theme textarea[readonly],
+.dark-theme .form-control[readonly] {
+    background-color: #3a3f44 !important;
+    color: #c8ced3 !important;
+}
+
+/* Fix for read-only inputs - light mode */
+.light-theme input[readonly],
+.light-theme textarea[readonly],
+.light-theme .form-control[readonly] {
+    background-color: #e9ecef !important;
+    color: #495057 !important;
+}
+
+/* ============================================
+   Fix for Blazor Components - Column Labels
+   ============================================ */
+
+/* Blazor components often use divs as labels in row layouts */
+.dark-theme .row .col-sm-2,
+.dark-theme .row .col-md-2,
+.dark-theme .row .col-lg-2,
+.dark-theme .row div[class*="col-"]:first-child {
+    color: #e4e7ea !important;
+}
+
+.light-theme .row .col-sm-2,
+.light-theme .row .col-md-2,
+.light-theme .row .col-lg-2,
+.light-theme .row div[class*="col-"]:first-child {
+    color: #23282c !important;
+}
+
+/* Fix for EditForm labels */
+.dark-theme EditForm label,
+.dark-theme EditForm .col-sm-2,
+.dark-theme EditForm .col-md-2 {
+    color: #e4e7ea !important;
+}
+
+.light-theme EditForm label,
+.light-theme EditForm .col-sm-2,
+.light-theme EditForm .col-md-2 {
+    color: #23282c !important;
+}
+
+/* Override hardcoded bg-dark text-white in Blazor components */
+.light-theme .bg-dark {
+    background-color: #fff !important;
+}
+
+.light-theme .text-white {
+    color: #23282c !important;
+}
+
+.dark-theme .bg-dark {
+    background-color: #2f353a !important;
+}
+
+.dark-theme .text-white {
+    color: #e4e7ea !important;
+}
+
+/* Fix for select dropdowns with hardcoded classes */
+.light-theme select.bg-dark,
+.light-theme InputSelect.bg-dark {
+    background-color: #fff !important;
+    color: #23282c !important;
+}
+
+.light-theme select.bg-dark option,
+.light-theme InputSelect.bg-dark option {
+    background-color: #fff !important;
+    color: #23282c !important;
+}
+
+.dark-theme select.bg-dark,
+.dark-theme InputSelect.bg-dark {
+    background-color: #2f353a !important;
+    color: #e4e7ea !important;
+}
+
+.dark-theme select.bg-dark option,
+.dark-theme InputSelect.bg-dark option {
+    background-color: #2f353a !important;
+    color: #e4e7ea !important;
+}
+
+/* Fix for card body text in Blazor components */
+.dark-theme .card .card-body>.row>div {
+    color: #e4e7ea !important;
+}
+
+.light-theme .card .card-body>.row>div {
+    color: #23282c !important;
+}
+
+/* Specific fix for label columns in forms */
+.dark-theme .card-body .row>.col-sm-2:first-child,
+.dark-theme .card-body .row>.col-md-2:first-child,
+.dark-theme .card-body .row>.col-lg-2:first-child {
+    color: #e4e7ea !important;
+    font-weight: 500;
+}
+
+.light-theme .card-body .row>.col-sm-2:first-child,
+.light-theme .card-body .row>.col-md-2:first-child,
+.light-theme .card-body .row>.col-lg-2:first-child {
+    color: #23282c !important;
+    font-weight: 500;
+}
+
+/* ============================================
+   Navbar Brand Visibility Fix
+   ============================================ */
+
+/* Navbar brand text should be visible in both themes */
+.dark-theme .navbar-brand {
+    color: #fff !important;
+}
+
+.light-theme .navbar-brand {
+    color: #23282c !important;
+}
+
+/* Navbar brand hover state */
+.dark-theme .navbar-brand:hover {
+    color: #20a8d8 !important;
+    /* Primary blue */
+}
+
+.light-theme .navbar-brand:hover {
+    color: #0d6efd !important;
+    /* Bootstrap primary */
+}
+
+/* Fix for any links in navbar */
+.dark-theme .navbar a,
+.dark-theme .navbar .nav-link {
+    color: #e4e7ea !important;
+}
+
+.light-theme .navbar a,
+.light-theme .navbar .nav-link {
+    color: #23282c !important;
+}
+
+/* Navbar text elements */
+.dark-theme .navbar-text {
+    color: #e4e7ea !important;
+}
+
+.light-theme .navbar-text {
+    color: #23282c !important;
+}
+
+/* ============================================
+   Financial Reports (Balance Sheet, Income Statement, Trial Balance)
+   ============================================ */
+
+/* Report titles/headings */
+.dark-theme h3,
+.dark-theme h4,
+.dark-theme h5 {
+    color: #fff !important;
+}
+
+.light-theme h3,
+.light-theme h4,
+.light-theme h5 {
+    color: #23282c !important;
+}
+
+/* Table styling for financial reports */
+.dark-theme table.table {
+    --bs-table-bg: #2f353a;
+    --bs-table-color: #e4e7ea;
+    --bs-table-border-color: #5c6873;
+    color: #e4e7ea !important;
+    background-color: #2f353a !important;
+}
+
+.light-theme table.table {
+    color: #23282c !important;
+}
+
+/* Table data cells */
+.dark-theme table.table tr,
+.dark-theme table.table th,
+.dark-theme table.table td {
+    color: #e4e7ea !important;
+    background-color: #2f353a !important;
+    border-color: #5c6873 !important;
+}
+
+.light-theme table.table th,
+.light-theme table.table td {
+    color: #23282c !important;
+    border-color: #dee2e6 !important;
+}
+
+/* Bold rows (headers and totals) */
+.dark-theme table.table tr[style*="font-weight: bold"] th,
+.dark-theme table.table tr[style*="font-weight: bold"] td,
+.dark-theme table.table th[style*="font-weight: bold"],
+.dark-theme table.table td[style*="font-weight: bold"] {
+    color: #ffc107 !important;
+    /* Yellow for emphasis */
+    font-weight: bold !important;
+}
+
+.light-theme table.table tr[style*="font-weight: bold"] th,
+.light-theme table.table tr[style*="font-weight: bold"] td,
+.light-theme table.table th[style*="font-weight: bold"],
+.light-theme table.table td[style*="font-weight: bold"] {
+    color: #23282c !important;
+    font-weight: bold !important;
+}
+
+/* Links in tables (account codes) */
+.dark-theme table.table a {
+    color: #20a8d8 !important;
+    /* Primary blue */
+    text-decoration: underline;
+}
+
+.dark-theme table.table a:hover {
+    color: #63c2de !important;
+    /* Lighter blue on hover */
+}
+
+.light-theme table.table a {
+    color: #0d6efd !important;
+    /* Bootstrap blue */
+    text-decoration: underline;
+}
+
+.light-theme table.table a:hover {
+    color: #0a58ca !important;
+    /* Darker blue on hover */
+}
+
+/* Right-aligned amounts */
+.dark-theme table.table td[style*="text-align: right"] {
+    color: #e4e7ea !important;
+}
+
+.light-theme table.table td[style*="text-align: right"] {
+    color: #23282c !important;
+}
+
+/* Table borders */
+.dark-theme .table {
+    border-color: #5c6873 !important;
+}
+
+.light-theme .table {
+    border-color: #dee2e6 !important;
+}
+
+/* Error messages */
+.dark-theme p {
+    color: #e4e7ea !important;
+}
+
+.light-theme p {
+    color: #23282c !important;
+}
+
+/* Div containers with inline styles */
+.dark-theme div[style*="text-align: center"] {
+    color: #fff !important;
+}
+
+.light-theme div[style*="text-align: center"] {
+    color: #23282c !important;
+}

@@ -1,4 +1,4 @@
-@model Dto.Dashboard.DashboardSummaryDto
+﻿@model Dto.Dashboard.DashboardSummaryDto
 @using System.Globalization
 @using Dto.Dashboard
 @inject IConfiguration _configuration
@@ -87,8 +87,8 @@
 
                         <div class="trend-col">
                             <div class="trend-bars">
-                                <div class="trend-sales" style="height:@($"{salesHeight}%")" title="Sales: @Currency(salesPoint.Amount)"></div>
-                                <div class="trend-expenses" style="height:@($"{expenseHeight}%")" title="Expenses: @Currency(expensePoint.Amount)"></div>
+                                <div class="trend-sales h-pct-@salesHeight" title="Sales: @Currency(salesPoint.Amount)"></div>
+                                <div class="trend-expenses h-pct-@expenseHeight" title="Expenses: @Currency(expensePoint.Amount)"></div>
                             </div>
                             <div class="trend-label">@(salesPoint.Label ?? expensePoint.Label)</div>
                         </div>
@@ -117,7 +117,7 @@
                         <span>@Currency(dashboard.BalanceSnapshot.TotalAssets)</span>
                     </div>
                     <div class="snapshot-track">
-                        <div class="snapshot-fill fill-assets" style="width:@(snapshotMax > 0 ? (dashboard.BalanceSnapshot.TotalAssets / snapshotMax * 100m).ToString("0.##", CultureInfo.InvariantCulture) : "0")%;"></div>
+                        <div class="snapshot-fill fill-assets w-pct-@((snapshotMax > 0 ? (int)Math.Round(dashboard.BalanceSnapshot.TotalAssets / snapshotMax * 100m) : 0))"></div>
                     </div>
                 </div>
                 <div class="snapshot-row">
@@ -126,7 +126,7 @@
                         <span>@Currency(dashboard.BalanceSnapshot.TotalLiabilities)</span>
                     </div>
                     <div class="snapshot-track">
-                        <div class="snapshot-fill fill-liabilities" style="width:@(snapshotMax > 0 ? (dashboard.BalanceSnapshot.TotalLiabilities / snapshotMax * 100m).ToString("0.##", CultureInfo.InvariantCulture) : "0")%;"></div>
+                        <div class="snapshot-fill fill-liabilities w-pct-@((snapshotMax > 0 ? (int)Math.Round(dashboard.BalanceSnapshot.TotalLiabilities / snapshotMax * 100m) : 0))"></div>
                     </div>
                 </div>
                 <div class="snapshot-row">
@@ -135,7 +135,7 @@
                         <span>@Currency(dashboard.BalanceSnapshot.TotalEquity)</span>
                     </div>
                     <div class="snapshot-track">
-                        <div class="snapshot-fill fill-equity" style="width:@(snapshotMax > 0 ? (dashboard.BalanceSnapshot.TotalEquity / snapshotMax * 100m).ToString("0.##", CultureInfo.InvariantCulture) : "0")%;"></div>
+                        <div class="snapshot-fill fill-equity w-pct-@((snapshotMax > 0 ? (int)Math.Round(dashboard.BalanceSnapshot.TotalEquity / snapshotMax * 100m) : 0))"></div>
                     </div>
                 </div>
             </div>

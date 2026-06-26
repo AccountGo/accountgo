@@ -169,7 +169,7 @@
 
                         @if (isEditMode)
                         {
-                            <button type="button" class="btn btn-info add-line-btn" @onclick="AddLineItem">
+                            <button type="button" class="btn btn-info add-line-btn btn-sm" @onclick="AddLineItem">
                                 Add Line Item
                             </button>
                         }
@@ -181,11 +181,11 @@
         <div class="action-row">
             @if (isEditMode)
             {
-                <button class="btn btn-success" @onclick="SaveSalesOrder" disabled="@isSaving">
+                <button class="btn btn-success btn-sm" @onclick="SaveSalesOrder" disabled="@isSaving">
                     Save Order
                 </button>
             }
-            <button class="btn btn-secondary" @onclick="NavigateBack">Cancel</button>
+            <button class="btn btn-secondary btn-sm" @onclick="NavigateBack">Cancel</button>
         </div>
     }
 </div>

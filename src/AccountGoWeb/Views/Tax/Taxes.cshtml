@@ -2,8 +2,8 @@
 @using AccountGoWeb.Models;
 
 <style>
-    tr th { color: yellow; }
-    tr td { color: #fff;  }
+    tr th { color: var(--bs-warning, #ffc107); }
+    tr td { color: var(--bs-white, #fff);  }
 </style>
 
 <div class="nav-tabs-custom">
@@ -27,13 +27,13 @@
 
         <div class="tab-pane" id="tab_1">
             <div>
-                <a href="~/Tax/AddNewTax" class="btn btn-primary" style="margin-bottom: 2px;">
-                    <i class="fa fa-plus"></i>
+                <a href="~/Tax/AddNewTax" class="btn btn-primary btn-sm mb-2px">
+                    <i class="fas fa-plus"></i>
                     New Tax
                 </a>
             </div>
             <div id="taxes" class="box-body table-responsive">
-                <table class="table table-hover">
+                <table class="table table-hover theme-table-header theme-table-body">
                     <thead>
                         <tr>
                             <th>Code</th>
@@ -50,8 +50,8 @@
                                 <td>@tax.TaxName</td>
                                 <td>@tax.Rate</td>
                                 <td>
-                                    <button class="taxId btn btn-sm btn-info btn-flat" onclick="updateTax(@tax.Id)">Edit</button>
-                                    <button id="@tax.Id" class="taxId btn btn-sm btn-danger btn-flat" data-bs-toggle="modal" data-bs-target="#deleteTax">Delete</button>
+                                    <button class="taxId btn btn-info btn-sm" onclick="updateTax(@tax.Id)">Edit</button>
+                                    <button id="@tax.Id" class="taxId btn btn-danger btn-sm" data-bs-toggle="modal" data-bs-target="#deleteTax">Delete</button>
                                 </td>
                             </tr>
                         }
@@ -62,7 +62,7 @@
 
         <div class="tab-pane" id="tab_2">
             <div id="taxGroups" class="box-body table-responsive">
-                <table class="table table-hover">
+                <table class="table table-hover theme-table-header theme-table-body">
                     <thead>
                         <tr>
                             <th>Description</th>
@@ -83,7 +83,7 @@
                                 <input data-bind="checked:IsActive" type="checkbox" />
                             </td>
                             <td>
-                                <button class="btn btn-sm btn-danger btn-flat" data-bind="click: $root.clickTaxGroup" data-bs-toggle="modal" data-bs-target="#deleteTaxGroup">Delete</button>
+                                <button class="btn btn-danger btn-sm" data-bind="click: $root.clickTaxGroup" data-bs-toggle="modal" data-bs-target="#deleteTaxGroup">Delete</button>
                             </td>
                         </tr>
                     </tbody>
@@ -92,7 +92,7 @@
             <div data-bind="if:model.selectedTaxGroup">
                 Tax(es) included: <span data-bind="text: model.selectedTaxGroup().Taxes().length"></span>
                 <div id="taxGroupsIncludedTaxes" class="box-body table-responsive">
-                    <table class="table table-hover">
+                    <table class="table table-hover theme-table-header theme-table-body">
                         <thead>
                             <tr>
                                 <th>Code</th>
@@ -114,7 +114,7 @@
 
         <div class="tab-pane" id="tab_3">
             <div id="itemTaxGroups" class="box-body table-responsive">
-                <table class="table table-hover">
+                <table class="table table-hover theme-table-header theme-table-body">
                     <thead>
                         <tr>
                             <th>Name</th>
@@ -131,7 +131,7 @@
                                 <input data-bind="checked:IsFullyExempt" type="checkbox" />
                             </td>
                             <td>
-                                <button class="btn btn-sm btn-danger btn-flat" data-bind="click: $root.clickItemTaxGroup" data-bs-toggle="modal" data-bs-target="#deleteItemTaxGroup">Delete</button>
+                                <button class="btn btn-danger btn-sm" data-bind="click: $root.clickItemTaxGroup" data-bs-toggle="modal" data-bs-target="#deleteItemTaxGroup">Delete</button>
                             </td>
                         </tr>
                     </tbody>
@@ -140,7 +140,7 @@
             <div data-bind="if:model.selectedItemTaxGroup">
                 Tax(es) included: <span data-bind="text: model.selectedItemTaxGroup().Taxes().length"></span>
                 <div id="itemTaxGroupsIncludedTaxes" class="box-body table-responsive">
-                    <table class="table table-hover">
+                    <table class="table table-hover theme-table-header theme-table-body">
                         <thead>
                             <tr>
                                 <th>Code</th>
@@ -176,8 +176,8 @@
                 <input type="hidden" id="hdnselectedtaxId" />
             </div>
             <div class="modal-footer">
-                <button class="btn btn-sm btn-primary btn-flat" onclick="deleteTax()" type="button">Yes</button>
-                <button class="btn btn-sm btn-default btn-flat" data-bs-dismiss="modal" type="button">No</button>
+                <button class="btn btn-primary btn-sm" onclick="deleteTax()" type="button">Yes</button>
+                <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal" type="button">No</button>
             </div>
         </div>
     </div>
@@ -197,8 +197,8 @@
                 <input type="hidden" id="hdnselectedtaxgroupId" />
             </div>
             <div class="modal-footer">
-                <button class="btn btn-sm btn-primary btn-flat" data-bind="click: $root.deleteTaxGroup" type="button">Yes</button>
-                <button class="btn btn-sm btn-default btn-flat" data-bs-dismiss="modal" type="button">No</button>
+                <button class="btn btn-primary btn-sm" data-bind="click: $root.deleteTaxGroup" type="button">Yes</button>
+                <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal" type="button">No</button>
             </div>
         </div>
     </div>
@@ -218,8 +218,8 @@
                 <input type="hidden" id="hdnselectedItemTaxGroupId" />
             </div>
             <div class="modal-footer">
-                <button class="btn btn-sm btn-primary btn-flat" data-bind="click: $root.deleteItemTaxGroup" type="button">Yes</button>
-                <button class="btn btn-sm btn-default btn-flat" data-bs-dismiss="modal" type="button">No</button>
+                <button class="btn btn-primary btn-sm" data-bind="click: $root.deleteItemTaxGroup" type="button">Yes</button>
+                <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal" type="button">No</button>
             </div>
         </div>
     </div>
@@ -327,9 +327,9 @@
     @model string
     <div class="nav-tabs-custom">
         <ul class="nav nav-tabs">
-            <li class="active"><a href="#tab_1" data-toggle="tab">Taxes</a></li>
-            <li><a href="#tab_2" data-toggle="tab">Tax Groups</a></li>
-            <li><a href="#tab_3" data-toggle="tab">Item Tax Groups</a></li>
+            <li class="active"><a href="#tab_1" data-bs-toggle="tab">Taxes</a></li>
+            <li><a href="#tab_2" data-bs-toggle="tab">Tax Groups</a></li>
+            <li><a href="#tab_3" data-bs-toggle="tab">Item Tax Groups</a></li>
         </ul>
         <div class="tab-content">
             <div class="tab-pane active" id="tab_1">

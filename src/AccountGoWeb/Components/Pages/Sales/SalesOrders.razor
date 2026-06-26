@@ -8,8 +8,8 @@
         <h1>Sales Orders</h1>
 
         <div class="toolbar-actions">
-            <a class="btn new-order-btn" href="/Sales/AddSalesOrder">
-                <i class="fa fa-plus"></i>
+            <a class="btn new-order-btn btn-sm" href="/Sales/AddSalesOrder">
+                <i class="fas fa-plus"></i>
                 New Sales Order
             </a>
 
@@ -59,7 +59,7 @@
                     {
                         var isSelected = selectedOrder?.Id == order.Id;
 
-                        <tr class="clickable-row @(isSelected ? "selected-row" : "")"
+                        <tr class="clickable-row @(isSelected ?"selected-row" : "")"
                             @key="order.Id"
                             @onclick="() => SelectOrder(order)">
                             <td>@order.Id</td>

@@ -1,11 +1,12 @@
-label { color: white; }
+label,
+span,
+.payment-form-row label,
+.form-group label,
+strong,
+p {
+    color: inherit;
+}
 
-span { color: white; }
-
-.payment-form-row label { color: white; }
-
-.form-group label { color: white; }
-
-strong { color: white; }
-
-p { color: white; }
+.card-header strong {
+    font-weight: 700;
+}

@@ -1,4 +1,4 @@
-@rendermode InteractiveServer
+﻿@rendermode InteractiveServer
 @using System.Text.Json
 @using System.Text.Json.Serialization
 @inject IHttpClientFactory ClientFactory
@@ -17,18 +17,18 @@ else if (purchaseOrders is null)
 else
 {
     <div class="mb-3">
-        <a href="/purchasing/addpurchaseorder" class="btn btn-primary">
-            <i class="fa fa-plus"></i> New Order
+        <a href="/purchasing/addpurchaseorder" class="btn btn-primary btn-sm">
+            <i class="fas fa-plus"></i> New Order
         </a>
         @if (selectedPurchaseOrder != null)
         {
-            <a href="/purchasing/purchaseorder?id=@selectedPurchaseOrder.Id" class="btn btn-secondary">
-                <i class="fa fa-edit"></i> View
+            <a href="/purchasing/purchaseorder?id=@selectedPurchaseOrder.Id" class="btn btn-secondary btn-sm">
+                <i class="fas fa-edit"></i> View
             </a>
             @if (selectedPurchaseOrder.StatusId != 3)
             {
-                <a href="/purchasing/addpurchaseinvoice?purchId=@selectedPurchaseOrder.Id" class="btn btn-info">
-                    <i class="fa fa-plus"></i> Create Invoice
+                <a href="/purchasing/addpurchaseinvoice?purchId=@selectedPurchaseOrder.Id" class="btn btn-info btn-sm">
+                    <i class="fas fa-plus"></i> Create Invoice
                 </a>
             }
         }
@@ -50,8 +50,7 @@ else
                 {
                     <tr @onclick="() => SelectOrder(order)" 
                         @ondblclick="NavigateToPurchaseOrder"
-                        class="@(selectedPurchaseOrder?.Id == order.Id ? "table-active" : "")"
-                        style="cursor: pointer;">
+                        class="cursor-pointer @(selectedPurchaseOrder?.Id == order.Id ?"table-active" : "")">
                         <td>@order.No</td>
                         <td>@order.VendorName</td>
                         <td>@order.OrderDate.ToString("yyyy-MM-dd")</td>
@@ -144,4 +143,3 @@ else
         public int StatusId { get; set; }
     }
 }
-

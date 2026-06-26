@@ -1,4 +1,4 @@
-@using System.Net.Http.Json
+﻿@using System.Net.Http.Json
 @using Dto.Financial
 @inject IHttpClientFactory HttpFactory
 @inject IConfiguration Config
@@ -9,7 +9,7 @@
 
 @if (IsLoading)
 {
-    <p><i class="fa fa-spinner fa-spin"></i> Loading...</p>
+    <p><i class="fas fa-spinner fa-spin"></i> Loading...</p>
 }
 else if (!string.IsNullOrEmpty(ErrorMessage))
 {
@@ -27,41 +27,36 @@ else
     }
 
     <div class="mb-3">
-        <a href="/Financials/JournalEntries" class="btn btn-default">
-            <i class="fa fa-arrow-left"></i> Back to Journal Entries
+        <a href="/Financials/JournalEntries" class="btn btn-secondary btn-sm">
+            <i class="fas fa-arrow-left"></i> Back to Journal Entries
         </a>
     </div>
 
 
     <div class="panel panel-default">
-        <div class="panel-heading text-primary "><strong>Header</strong></div>
+        <div class="panel-heading text-primary"><strong>Header</strong></div>
         <div class="panel-body mt-2">
-            <div class="form-group d-flex align-items-center justify-content-start border-bottom pb-2 gap-3"
-                style="border-color: #ccc;">
+            <div class="form-group d-flex align-items-center justify-content-start border-bottom border-bottom-themed pb-2 gap-3">
                 <label class="mb-0 fw-bold">Date</label>
                 <p class="mb-0 text-end">@Entry.JournalDate.ToString("yyyy-MM-dd")</p>
             </div>
 
-            <div class="form-group d-flex align-items-center justify-content-start border-bottom pb-2 gap-3"
-                style="border-color: #ccc;">
+            <div class="form-group d-flex align-items-center justify-content-start border-bottom border-bottom-themed pb-2 gap-3">
                 <label class="mb-0 fw-bold">Reference No</label>
                 <p class="mb-0 text-end">@Entry.ReferenceNo</p>
             </div>
 
-            <div class="form-group d-flex align-items-center justify-content-start border-bottom pb-2 gap-3"
-                style="border-color: #ccc;">
+            <div class="form-group d-flex align-items-center justify-content-start border-bottom border-bottom-themed pb-2 gap-3">
                 <label class="mb-0 fw-bold">Voucher Type</label>
                 <p class="mb-0 text-end">@Entry.VoucherType</p>
             </div>
 
-            <div class="form-group d-flex align-items-center justify-content-start border-bottom pb-2 gap-3"
-                style="border-color: #ccc;">
+            <div class="form-group d-flex align-items-center justify-content-start border-bottom border-bottom-themed pb-2 gap-3">
                 <label class="mb-0 fw-bold">Memo</label>
                 <p class="mb-0 text-end">@Entry.Memo</p>
             </div>
 
-            <div class="form-group d-flex align-items-center justify-content-start border-bottom pb-2 gap-3"
-                style="border-color: #ccc;">
+            <div class="form-group d-flex align-items-center justify-content-start border-bottom border-bottom-themed pb-2 gap-3">
                 <label class="mb-0 fw-bold">Status</label>
                 @if (Entry.Posted.GetValueOrDefault())
                 {
@@ -85,14 +80,13 @@ else
             }
             else
             {
-                <div
-                    style="border-radius: 20px; overflow: hidden; border: 1px solid rgba(255,255,255,0.2); backdrop-filter: blur(4px);">
-                    <table class="table mb-0" style="background-color: transparent; color: inherit;">
-                        <thead style="background-color: rgba(255,255,255,0.05);">
+                <div class="glass-panel">
+                    <table class="table mb-0 table-transparent">
+                        <thead class="surface-tint">
                             <tr>
-                                <th style="width:20%">Account Id</th>
-                                <th style="width:10%">Dr/Cr</th>
-                                <th style="width:15%">Amount</th>
+                                <th class="w-pct-20">Account Id</th>
+                                <th class="w-pct-10">Dr/Cr</th>
+                                <th class="w-pct-15">Amount</th>
                                 <th>Memo</th>
                             </tr>
                         </thead>
@@ -100,7 +94,7 @@ else
                         <tbody>
                             @foreach (var line in Entry.JournalEntryLines)
                             {
-                                <tr style="background-color: transparent;">
+                                <tr class="bg-transparent-important">
                                     <!-- Account (dropdown) -->
                                     <td>
                                         <select class="form-control" @bind="line.AccountId"
@@ -139,7 +133,7 @@ else
                         </tbody>
 
 
-                        <tfoot style="background-color: rgba(255,255,255,0.05);">
+                        <tfoot class="surface-tint">
                             <tr>
                                 <th colspan="2" class="text-right">Total Debit</th>
                                 <th>@TotalDebit.ToString("0.00")</th>
@@ -163,30 +157,30 @@ else
         @if (!Entry.Posted.GetValueOrDefault())
         {
             <!-- Save button -->
-            <button class="btn btn-success me-2" disabled="@IsSaving" @onclick="SaveEntry">
+            <button class="btn btn-success btn-sm me-2" disabled="@IsSaving" @onclick="SaveEntry">
                 @if (IsSaving)
                 {
-                    <span><i class="fa fa-spinner fa-spin"></i> Saving...</span>
+                    <span><i class="fas fa-spinner fa-spin"></i> Saving...</span>
                 }
                 else
                 {
-                    <span><i class="fa fa-save"></i> Save</span>
+                    <span><i class="fas fa-save"></i> Save</span>
                 }
             </button>
 
-            <button class="btn btn-primary" disabled="@(IsPosting || !Entry.ReadyForPosting.GetValueOrDefault())"
+            <button class="btn btn-primary btn-sm" disabled="@(IsPosting || !Entry.ReadyForPosting.GetValueOrDefault())"
                 @onclick="PostEntry">
                 @if (IsPosting)
                 {
-                    <span><i class="fa fa-spinner fa-spin"></i> Posting...</span>
+                    <span><i class="fas fa-spinner fa-spin"></i> Posting...</span>
                 }
                 else if (!Entry.ReadyForPosting.GetValueOrDefault())
                 {
-                    <span><i class="fa fa-ban"></i> Not Ready for Posting</span>
+                    <span><i class="fas fa-ban"></i> Not Ready for Posting</span>
                 }
                 else
                 {
-                    <span><i class="fa fa-check"></i> Post</span>
+                    <span><i class="fas fa-check"></i> Post</span>
                 }
             </button>
         }

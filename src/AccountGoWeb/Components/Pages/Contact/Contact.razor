@@ -1,4 +1,4 @@
-@using ContactDto = Dto.Common.Contact
+﻿@using ContactDto = Dto.Common.Contact
 @inject HttpClient Http
 @inject NavigationManager Navigation
 @rendermode InteractiveServer
@@ -7,7 +7,7 @@
 
 <style>
     .form-label {
-        color: white;
+        color: var(--bs-white, #fff);
     }
 </style>
 
@@ -16,8 +16,8 @@
         <div class="col">
             @if (Id != 0 && !isEditMode)
             {
-                <button class="btn btn-primary" @onclick="EnableEditMode">
-                    <i class="fa fa-edit"></i> Edit
+                <button class="btn btn-primary btn-sm" @onclick="EnableEditMode">
+                    <i class="fas fa-edit"></i> Edit
                 </button>
             }
         </div>
@@ -39,7 +39,7 @@
         <div class="row">
             <div class="col">
                 <div class="alert alert-danger" role="alert">
-                    <i class="fa fa-exclamation-triangle"></i> @errorMessage
+                    <i class="fas fa-exclamation-triangle"></i> @errorMessage
                 </div>
             </div>
         </div>
@@ -50,10 +50,10 @@
             <DataAnnotationsValidator />
             
             <div class="card mb-3">
-                <div class="card-header" style="background-color: #3a3f44; color: white;">
-                    <i class="fa fa-align-justify"></i> @(Id == 0 ? "New Contact" : isEditMode ? "Edit Contact" : "Contact")
+                <div class="card-header card-header-themed">
+                    <i class="fas fa-align-justify"></i> @(Id == 0 ? "New Contact" : isEditMode ? "Edit Contact" : "Contact")
                 </div>
-                <div class="card-body" style="background-color: #2b2f33;">
+                <div class="card-body card-body-themed">
                     <div class="row mb-3">
                         <div class="col-sm-4">
                             <label class="form-label">First Name</label>
@@ -103,12 +103,12 @@
                 <div class="col">
                     @if (isEditMode || Id == 0)
                     {
-                        <button class="btn btn-primary" type="submit">
-                            <i class="fa fa-save"></i> Save
+                        <button class="btn btn-primary btn-sm" type="submit">
+                            <i class="fas fa-save"></i> Save
                         </button>
                     }
-                    <button class="btn btn-secondary ms-2" type="button" @onclick="NavigateBack">
-                        <i class="fa fa-times"></i> Close
+                    <button class="btn btn-secondary btn-sm ms-2" type="button" @onclick="NavigateBack">
+                        <i class="fas fa-times"></i> Close
                     </button>
                 </div>
             </div>

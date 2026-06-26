@@ -1,4 +1,4 @@
-@rendermode InteractiveServer
+﻿@rendermode InteractiveServer
 
 <PageTitle>Vendor Invoices</PageTitle>
 
@@ -7,12 +7,6 @@
 @inject IHttpClientFactory ClientFactory
 
 @inject NavigationManager Navigation
-
-<style>
-    .purchase-selected td {
-        color: white !important;
-    }
-</style>
 
 
 @if (getError)
@@ -28,18 +22,18 @@ else if (purchaseInvoices is null)
 else
 {
     <div class="mb-3">
-        <a href="/purchasing/addpurchaseinvoice" class="btn btn-primary">
-            <i class="fa fa-plus"></i> New Invoice
+        <a href="/purchasing/addpurchaseinvoice" class="btn btn-primary btn-sm">
+            <i class="fas fa-plus"></i> New Invoice
         </a>
         @if (selectedInvoice != null)
         {
-            <a href="/purchasing/purchaseinvoice?id=@selectedInvoice.Id" class="btn btn-secondary">
-                <i class="fa fa-edit"></i> View
+            <a href="/purchasing/purchaseinvoice?id=@selectedInvoice.Id" class="btn btn-secondary btn-sm">
+                <i class="fas fa-edit"></i> View
             </a>
             @if (!selectedInvoice.IsPaid && selectedInvoice.Posted)
             {
-                <a href="/purchasing/payment/@selectedInvoice.Id" class="btn btn-success">
-                    <i class="fa fa-tasks"></i> Make Payment
+                <a href="/purchasing/payment/@selectedInvoice.Id" class="btn btn-success btn-sm">
+                    <i class="fas fa-tasks"></i> Make Payment
                 </a>
             }
         }
@@ -62,8 +56,7 @@ else
                 @foreach (var invoice in purchaseInvoices)
                 {
                     <tr @onclick="() => SelectInvoice(invoice)" @ondblclick="NavigateToPurchaseInvoice"
-                        class="@(selectedInvoice?.Id == invoice.Id ? "table-active purchase-selected" : "")"
-                        style="@(selectedInvoice?.Id == invoice.Id ? "cursor: pointer; color: white;" : "cursor: pointer;")">
+                        class="cursor-pointer @(selectedInvoice?.Id == invoice.Id ? "table-active purchase-selected" : string.Empty)">
                         <td>@invoice.No</td>
                         <td>@invoice.VendorName</td>
                         <td>@invoice.InvoiceDate.ToString("yyyy-MM-dd")</td>
@@ -73,7 +66,7 @@ else
                         <td>
                             @if (!invoice.IsPaid && invoice.Posted)
                             {
-                                <a href="/purchasing/payment/@invoice.Id" class="btn btn-sm btn-outline-success"
+                                <a href="/purchasing/payment/@invoice.Id" class="btn btn-outline-success btn-sm"
                                        @onclick:stopPropagation="true">
                                     Pay
                                 </a>

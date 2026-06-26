@@ -1,4 +1,4 @@
-@rendermode InteractiveServer
+﻿@rendermode InteractiveServer
 
 <PageTitle>Payments</PageTitle>
 
@@ -43,12 +43,12 @@
                             <span>Show bills</span><br/>
                             <input type="radio" id="dueOnOrBefore" name="showBills" value="due" @onchange="@(e => ShowAllBills = false)" checked="@(!ShowAllBills)" />
                             <label for="dueOnOrBefore" class="mr-2">Due on or before</label>
-                            <input type="date" @bind="DueDateFilter" class="form-control d-inline-block" style="width: auto;"/>
+                            <input type="date" @bind="DueDateFilter" class="form-control d-inline-block w-auto"/>
                             <br/>
                             <input type="radio" id="showAll" name="showBills" value="all" @onchange="@(e => ShowAllBills = true)" checked="@ShowAllBills" />
                             <label for="showAll">Show all bills</label>
                         </div>
-                        <div style="margin-left: 20px;">
+                        <div class="ms-20px">
                             <label>Filter By</label>
                             <select class="form-control">
                                 <option>All Vendors</option>
@@ -78,7 +78,7 @@
                             <tbody>
                                 @foreach (var invoice in FilteredInvoices)
                                 {
-                                    <tr @onclick="() => SelectInvoice(invoice)" class="@(selectedInvoice?.Id == invoice.Id ? "table-active bg-primary text-white" : "")" style="cursor: pointer;">
+                                    <tr @onclick="() => SelectInvoice(invoice)" class="cursor-pointer @(selectedInvoice?.Id == invoice.Id ?"table-active bg-primary text-white" : "")">
                                         <td><input type="checkbox" @bind="invoice.Selected" @onclick:stopPropagation="true" /></td>
                                         <td>@invoice.InvoiceDate.ToString("dd-MM-yyyy")</td>
                                         <td>@invoice.VendorName</td>
@@ -109,7 +109,7 @@
                         </table>
                     </div>
 
-                    <button class="btn btn-secondary mb-4 mt-2" @onclick="ClearSelections">Clear Selections</button>
+                    <button class="btn btn-secondary btn-sm mb-4 mt-2" @onclick="ClearSelections">Clear Selections</button>
 
                     <div class="card mb-4">
                         <div class="card-header">
@@ -120,17 +120,17 @@
                                 <div class="col-md-4">
                                     <p><strong>Vendor:</strong> @(selectedInvoice?.VendorName ?? "")</p>
                                     <p><strong>Bill Ref. No.:</strong> @(selectedInvoice?.ReferenceNo ?? "")</p>
-                                    <button class="btn btn-outline-secondary btn-sm" disabled="@(selectedInvoice == null)">Go to Bill</button>
+                                    <button class="btn btn-outline-secondary btn btn-sm-sm" disabled="@(selectedInvoice == null)">Go to Bill</button>
                                 </div>
                                 <div class="col-md-4">
                                     <p><strong>Terms:</strong> </p>
                                     <p><strong>Sugg. Discount:</strong> 0.00</p>
-                                    <button class="btn btn-outline-secondary btn-sm" disabled>Set Discount</button>
+                                    <button class="btn btn-outline-secondary btn btn-sm-sm" disabled>Set Discount</button>
                                 </div>
                                 <div class="col-md-4">
                                     <p><strong>Number of Credits:</strong> 0</p>
                                     <p><strong>Total Credits Available:</strong> 0.00</p>
-                                    <button class="btn btn-outline-secondary btn-sm" disabled>Set Credits</button>
+                                    <button class="btn btn-outline-secondary btn btn-sm-sm" disabled>Set Credits</button>
                                 </div>
                             </div>
                         </div>
@@ -168,8 +168,8 @@
                                 </div>
                             </div>
                             <div class="mt-3 text-right">
-                                <button class="btn btn-primary" @onclick="PaySelectedBills">Pay Selected Bills</button>
-                                <button class="btn btn-secondary">Cancel</button>
+                                <button class="btn btn-primary btn-sm" @onclick="PaySelectedBills">Pay Selected Bills</button>
+                                <button class="btn btn-secondary btn-sm">Cancel</button>
                             </div>
                         </div>
                     </div>

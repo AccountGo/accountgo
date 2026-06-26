@@ -80,10 +80,11 @@
 }
 
 .orders-table thead th {
-    background: #23282f;
-    color: #fff;
-    font-weight: 700;
-    border: 0;
+    background-color: #fff !important;
+    color: #000 !important;
+    font-weight: 800;
+    border-top: 0;
+    border-bottom: 1px solid #d7dde5;
     padding: 0.9rem 0.75rem;
     white-space: nowrap;
     cursor: pointer;

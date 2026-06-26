@@ -42,18 +42,18 @@ else
         }
     </style>
     <div>
-        <button class="btn btn-success mb-3" @onclick="() => OpenAddModal()">Add Account</button>
+        <button class="btn btn-success btn-sm mb-3" @onclick="() => OpenAddModal()">Add Account</button>
 
         <table class="table table-condensed table-striped">
             <thead>
                 <tr>
-                    <th style="width: 42px;"></th>
+                    <th class="w-42px"></th>
                     <th>Code</th>
                     <th>Name</th>
                     <th>Balance</th>
                     <th>Debit</th>
                     <th>Credit</th>
-                    <th class="text-end pe-4" style="width: 260px;">Actions</th>
+                    <th class="text-end pe-4 w-260px">Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -68,7 +68,7 @@ else
                         <td class="text-center align-middle">
                             @if (hasChildren)
                             {
-                                <button type="button" class="btn btn-outline-secondary coa-toggle-btn" @onclick="() => ToggleRow(rowKey)"
+                                <button type="button" class="btn btn-outline-secondary coa-toggle-btn btn-sm" @onclick="() => ToggleRow(rowKey)"
                                         @onclick:stopPropagation="true" title="Toggle child accounts">
                                     <span aria-hidden="true">@(IsExpanded(rowKey) ? "▾" : "▸")</span>
                                 </button>
@@ -83,17 +83,17 @@ else
 
                         <td>
                             <div class="d-flex gap-2 justify-content-end flex-nowrap">
-                                <button class="btn btn-success btn-sm" @onclick="() => OpenAddModal(account)"
+                                <button class="btn btn-success btn btn-sm-sm" @onclick="() => OpenAddModal(account)"
                                         @onclick:stopPropagation="true">
                                     Add Account
                                 </button>
 
-                                <button class="btn btn-primary btn-sm" @onclick="() => OpenEditModal(account)"
+                                <button class="btn btn-primary btn btn-sm-sm" @onclick="() => OpenEditModal(account)"
                                         @onclick:stopPropagation="true">
                                     Edit
                                 </button>
 
-                                <button class="btn btn-danger btn-sm" @onclick="() => OpenDeleteModal(account)"
+                                <button class="btn btn-danger btn btn-sm-sm" @onclick="() => OpenDeleteModal(account)"
                                         @onclick:stopPropagation="true">
                                     Delete
                                 </button>
@@ -140,8 +140,8 @@ else
                     }
                 </div>
                 <div class="modal-footer">
-                    <button class="btn btn-secondary" @onclick="CloseModal">Cancel</button>
-                    <button class="btn btn-primary" @onclick="SaveAccount">Save</button>
+                    <button class="btn btn-secondary btn-sm" @onclick="CloseModal">Cancel</button>
+                    <button class="btn btn-primary btn-sm" @onclick="SaveAccount">Save</button>
                 </div>
             </div>
         </div>
@@ -169,8 +169,8 @@ else
                     }
                 </div>
                 <div class="modal-footer">
-                    <button class="btn btn-secondary" @onclick="CloseDeleteModal">Cancel</button>
-                    <button class="btn btn-danger" @onclick="ConfirmDeleteAccount">Delete</button>
+                    <button class="btn btn-secondary btn-sm" @onclick="CloseDeleteModal">Cancel</button>
+                    <button class="btn btn-danger btn-sm" @onclick="ConfirmDeleteAccount">Delete</button>
                 </div>
             </div>
         </div>

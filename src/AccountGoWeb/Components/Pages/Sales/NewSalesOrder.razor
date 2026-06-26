@@ -1,10 +1,10 @@
-@using System.Text.Json
+﻿@using System.Text.Json
 @using System.Text.Json.Serialization
 
 <style>
     label,
     h5 {
-        color: #fff !important;
+        color: var(--bs-white, #fff) !important;
     }
 </style>
 
@@ -15,8 +15,8 @@
         <div class="col text-end">
             @if (!isNew)
             {
-                <button class="btn btn-outline-warning" @onclick="() => editMode = !editMode">
-                    <i class="fa fa-edit"></i> @(editMode ? "Cancel" : "Edit")
+                <button class="btn btn-outline-warning btn-sm" @onclick="() => editMode = !editMode">
+                    <i class="fas fa-edit"></i> @(editMode ? "Cancel" : "Edit")
                 </button>
             }
         </div>
@@ -45,21 +45,21 @@
                         <div class="row mb-3">
                             <div class="col-md-6">
                                 <label class="form-label"><strong>Customer</strong></label>
-                                <select class="form-control bg-dark text-white" @bind="customerId">
+                                <select class="form-control form-control-themed" @bind="customerId">
                                     <option value="0">-- Select Customer --</option>
                                     @foreach (var customer in customers)
                                     {
-                                        <option value="@customer.id" class="bg-dark text-white">@customer.name</option>
+                                        <option value="@customer.id" class="form-select-themed">@customer.name</option>
                                     }
                                 </select>
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label"><strong>Payment Term</strong></label>
-                                <select class="form-control bg-dark text-white" @bind="paymentTermId">
+                                <select class="form-control form-control-themed" @bind="paymentTermId">
                                     <option value="0">-- Select Payment Term --</option>
                                     @foreach (var term in paymentTerms)
                                     {
-                                        <option value="@term.id" class="bg-dark text-white">@term.description</option>
+                                        <option value="@term.id" class="form-select-themed">@term.description</option>
                                     }
                                 </select>
                             </div>
@@ -68,7 +68,7 @@
                         <div class="row mb-3">
                             <div class="col-md-6">
                                 <label class="form-label"><strong>Amount</strong></label>
-                                <input type="number" class="form-control bg-dark text-white" @bind="totalAmount" step="0.01" readonly />
+                                <input type="number" class="form-control form-control-themed" @bind="totalAmount" step="0.01" readonly />
                             </div>
                         </div>
 
@@ -93,7 +93,7 @@
                                             var line = lineItems[i];
                                             <tr>
                                                 <td>
-                                                    <select class="form-control form-control-sm bg-dark text-white" @bind="line.ItemId">
+                                                    <select class="form-control form-control-sm form-control-themed" @bind="line.ItemId">
                                                         <option value="0">-- Select Item --</option>
                                                         @foreach (var item in items)
                                                         {
@@ -102,19 +102,19 @@
                                                     </select>
                                                 </td>
                                                 <td>
-                                                    <input type="number" class="form-control form-control-sm bg-dark text-white" @bind="line.Quantity"
+                                                    <input type="number" class="form-control form-control-sm form-control-themed" @bind="line.Quantity"
                                                         step="0.01" />
                                                 </td>
                                                 <td>
-                                                    <input type="number" class="form-control form-control-sm bg-dark text-white" @bind="line.Amount"
+                                                    <input type="number" class="form-control form-control-sm form-control-themed" @bind="line.Amount"
                                                         step="0.01" />
                                                 </td>
                                                 <td>
-                                                    <input type="number" class="form-control form-control-sm bg-dark text-white" @bind="line.Discount"
+                                                    <input type="number" class="form-control form-control-sm form-control-themed" @bind="line.Discount"
                                                         step="0.01" />
                                                 </td>
                                                 <td>
-                                                    <select class="form-control form-control-sm bg-dark text-white" @bind="line.MeasurementId">
+                                                    <select class="form-control form-control-sm form-control-themed" @bind="line.MeasurementId">
                                                         <option value="0">-- Select Unit --</option>
                                                         @foreach (var measurement in measurements)
                                                         {
@@ -126,7 +126,7 @@
                                                     @{
                                                         int itemIndex = i;
                                                     }
-                                                    <button class="btn btn-sm btn-danger"
+                                                    <button class="btn btn-danger btn-sm"
                                                         @onclick="() => RemoveLineItem(itemIndex)">Remove</button>
                                                 </td>
                                             </tr>
@@ -138,7 +138,7 @@
 
                         @if (editMode)
                         {
-                            <button class="btn btn-primary mt-3" @onclick="AddLineItem">Add Line Item</button>
+                            <button class="btn btn-primary btn-sm mt-3" @onclick="AddLineItem">Add Line Item</button>
                         }
                     </div>
                 </div>
@@ -146,8 +146,8 @@
                 <div class="mt-4">
                     @if (editMode)
                     {
-                        <button class="btn btn-success" @onclick="SaveSalesOrder">Save Order</button>
-                        <a href="/Sales/SalesOrders" class="btn btn-secondary ms-2">Cancel</a>
+                        <button class="btn btn-success btn-sm" @onclick="SaveSalesOrder">Save Order</button>
+                        <a href="/Sales/SalesOrders" class="btn btn-secondary btn-sm ms-2">Cancel</a>
                     }
                 </div>
             </div>

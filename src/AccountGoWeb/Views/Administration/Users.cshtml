@@ -1,25 +1,25 @@
 ﻿@model IEnumerable<Dto.Security.User>
 @using AccountGoWeb.Models;
 <div>
-    <a href="~/administration/user" class="btn">
-        <i class="fa fa-plus"></i>
+    <a href="~/administration/user" class="btn btn-sm">
+        <i class="fas fa-plus"></i>
         New User
     </a>
-    <a href="~/administration/user" id="linkViewUser" class="btn inactiveLink">
-        <i class="fa fa-edit"></i>
+    <a href="~/administration/user" id="linkViewUser" class="btn btn-sm inactiveLink">
+        <i class="fas fa-edit"></i>
         View
     </a>
 </div>
 <div class="col-sm-9">
-    <div id="users" class="ag-blue" style="height: 400px;"></div>
+    <div id="users" class="ag-grid-container ag-theme-blue h-400"></div>
 </div>
 <div class="col-sm-3">
     <div class="box">
         <div class="box-header with-border">
             <h3 class="box-title">Roles</h3>
             <div class="box-tools pull-right">
-                <button type="button" class="btn btn-box-tool" data-widget="collapse" data-toggle="tooltip" title="Collapse">
-                    <i class="fa fa-minus"></i>
+                <button type="button" class="btn btn-box-tool" data-widget="collapse" data-bs-toggle="tooltip" title="Collapse">
+                    <i class="fas fa-minus"></i>
                 </button>
             </div>
         </div>

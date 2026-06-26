@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 
 <head>
@@ -11,14 +11,31 @@
     <title>AccountGo</title>
     <link rel="icon" type="image/x-icon" href="~/images/favicon.ico">
     <link rel="stylesheet" href="~/GoodBooks.styles.css" asp-append-version="true" />
-    <!-- Icons-->
-    <link href="~/css/coreui/icons/css/all.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/simple-line-icons/2.5.5/css/simple-line-icons.min.css"
-        rel="stylesheet">
-    <!-- Main styles for this application-->
-    <link href="~/css/dark.css" rel="stylesheet">
+    
+    <!-- Bootstrap 5.3.x CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" 
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    
+    <!-- Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" 
+          integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA==" 
+          crossorigin="anonymous" referrerpolicy="no-referrer">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/simple-line-icons/2.5.5/css/simple-line-icons.min.css" rel="stylesheet">
+    
+    <!-- Main styles for this application (theme will be set by JavaScript) -->
+    <link id="theme-stylesheet" href="~/css/dark.css" rel="stylesheet">
+    <link href="~/css/gdbdark.css" rel="stylesheet">
+    <link href="~/css/navbar.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/pace-js@latest/pace-theme-default.min.css" rel="stylesheet">
+    <link href="~/css/agw-colors.css" rel="stylesheet">
+    <link href="~/css/utilities.css" rel="stylesheet" asp-append-version="true">
+    <link href="~/css/theme-toggle.css" rel="stylesheet" asp-append-version="true">
+    
+    <!-- Page-specific styles -->
+    @RenderSection("Styles", required: false)
+    
+    <!-- Theme Toggle Script (loaded early to prevent flash) -->
+    <script src="~/js/theme-toggle.js" asp-append-version="true"></script>
 
 </head>
 
@@ -26,22 +43,31 @@
 
     <header class="app-header navbar">
         <a class="navbar-brand" href="/">
-            GoodBooks
+            Good Deed Books
         </a>
+        <button class="navbar-toggler sidebar-toggler d-lg-none me-auto" type="button" data-bs-toggle="sidebar-show">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        
+        <!-- Theme Toggle Button -->
+        <button id="theme-toggle" class="btn btn-sm btn-outline-secondary ms-auto me-3" type="button" title="Toggle Light/Dark Mode">
+            <i id="theme-icon" class="fas fa-moon"></i>
+            <span id="theme-text" class="d-none d-sm-inline ms-1">Dark Mode</span>
+        </button>
     </header>
     <div class="app-body">
-        <div class="sidebar">
+        <div id="sidebar" class="sidebar">
             <nav class="sidebar-nav">
                 <ul class="nav">
                     <li class="nav-item">
                         <a class="nav-link" asp-area="" asp-controller="Dashboard" asp-action="MonthlySales">
-                            <i class="nav-icon fa fa-dashboard"></i> Dashboard
+                            <i class="nav-icon fas fa-dashboard"></i> Dashboard
                             <!-- <span class="badge badge-primary">NEW</span> -->
                         </a>
                     </li>
-                    <li class="nav-item nav-dropdown open">
+                    <li class="nav-item nav-dropdown">
                         <a class="nav-link nav-dropdown-toggle">
-                            <i class="nav-icon fa fa-industry"></i> Accounts Receivable
+                            <i class="nav-icon fas fa-money-bill-wave"></i> Accounts Receivable
                         </a>
                         <ul class="nav-dropdown-items">
                             <li class="nav-item">
@@ -77,9 +103,9 @@
                             </li>
                         </ul>
                     </li>
-                    <li class="nav-item nav-dropdown open">
+                    <li class="nav-item nav-dropdown">
                         <a class="nav-link nav-dropdown-toggle" href="#">
-                            <i class="nav-icon fa fa-link"></i> Accounts Payable
+                            <i class="nav-icon fas fa-file-invoice-dollar"></i> Accounts Payable
                         </a>
                         <ul class="nav-dropdown-items">
                             <li class="nav-item">
@@ -105,9 +131,9 @@
                             </li>
                         </ul>
                     </li>
-                    <li class="nav-item nav-dropdown open">
+                    <li class="nav-item nav-dropdown">
                         <a class="nav-link nav-dropdown-toggle" href="#">
-                            <i class="nav-icon fa fa-wrench"></i> Inventory Control
+                            <i class="nav-icon fas fa-boxes"></i> Inventory Control
                         </a>
                         <ul class="nav-dropdown-items">
                             <li class="nav-item">
@@ -122,9 +148,9 @@
                             </li>
                         </ul>
                     </li>
-                    <li class="nav-item nav-dropdown open">
+                    <li class="nav-item nav-dropdown">
                         <a class="nav-link nav-dropdown-toggle" href="#">
-                            <i class="nav-icon fa fa-bank"></i> Financials
+                            <i class="nav-icon fas fa-university"></i> Financials
                         </a>
                         <ul class="nav-dropdown-items">
                             <li class="nav-item">
@@ -154,9 +180,9 @@
                             </li>
                         </ul>
                     </li>
-                    <li class="nav-item nav-dropdown open">
+                    <li class="nav-item nav-dropdown">
                         <a class="nav-link nav-dropdown-toggle" href="#">
-                            <i class="nav-icon fa fa-line-chart"></i> Reports
+                            <i class="nav-icon fas fa-chart-line"></i> Reports
                         </a>
                         <ul class="nav-dropdown-items">
                             <li class="nav-item">
@@ -177,9 +203,9 @@
                             </li>
                         </ul>
                     </li>
-                    <li class="nav-item nav-dropdown open">
+                    <li class="nav-item nav-dropdown">
                         <a class="nav-link nav-dropdown-toggle" href="#">
-                            <i class="nav-icon fa fa-group"></i> Organization Settings
+                            <i class="nav-icon fas fa-building"></i> Org Settings
                         </a>
                         <ul class="nav-dropdown-items">
                             <li class="nav-item">
@@ -194,9 +220,9 @@
                             </li>
                         </ul>
                     </li>
-                    <li class="nav-item nav-dropdown open">
+                    <li class="nav-item nav-dropdown">
                         <a class="nav-link nav-dropdown-toggle" href="#">
-                            <i class="nav-icon fa fa-desktop"></i> System Administration
+                            <i class="nav-icon fas fa-cog"></i> System Administration
                         </a>
                         <ul class="nav-dropdown-items">
                             @if (User.IsInRole("SystemAdministrators"))
@@ -205,10 +231,10 @@
                                     <a href="#">
                                         Security
                                         <span class="pull-right-container">
-                                            <i class="fa fa-angle-left pull-right"></i>
+                                            <i class="fas fa-angle-left pull-right"></i>
                                         </span>
                                     </a>
-                                    <ul class="treeview-menu menu-open" style="display: block;">
+                                    <ul class="treeview-menu menu-open d-block">
                                         <li><a href="~/administration/users">Users</a></li>
                                         <li><a href="~/administration/roles">Roles</a></li>
                                         <li><a href="~/administration/groups">Groups</a></li>
@@ -234,14 +260,14 @@
     <li class="breadcrumb-item active">Dashboard</li>
     <!-- Breadcrumb Menu-->
     <li class="breadcrumb-menu d-md-down-none">
-        <div class="btn-group" role="group" aria-label="Button group">
-            <a class="btn" href="#">
+        <div class="btn btn-sm-group" role="group" aria-label="Button group">
+            <a class="btn btn-sm" href="#">
                 <i class="icon-speech"></i>
             </a>
-            <a class="btn" asp-area="" asp-controller="/" asp-action="Index" asp-route-view="">
+            <a class="btn btn-sm" asp-area="" asp-controller="/" asp-action="Index" asp-route-view="">
                 <i class="icon-graph"></i>  Dashboard
             </a>
-            <a class="btn" href="#">
+            <a class="btn btn-sm" href="#">
                 <i class="icon-settings"></i>  Settings
             </a>
         </div>
@@ -265,17 +291,17 @@
         <aside class="aside-menu">
             <ul class="nav nav-tabs" role="tablist">
                 <li class="nav-item">
-                    <a class="nav-link active" data-toggle="tab" href="#timeline" role="tab">
+                    <a class="nav-link active" data-bs-toggle="tab" href="#timeline" role="tab">
                         <i class="icon-list"></i>
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link" data-toggle="tab" href="#messages" role="tab">
+                    <a class="nav-link" data-bs-toggle="tab" href="#messages" role="tab">
                         <i class="icon-speech"></i>
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link" data-toggle="tab" href="#settings" role="tab">
+                    <a class="nav-link" data-bs-toggle="tab" href="#settings" role="tab">
                         <i class="icon-settings"></i>
                     </a>
                 </li>
@@ -288,7 +314,7 @@
                             class="list-group-item list-group-item-accent-secondary bg-light text-center font-weight-bold text-muted text-uppercase small">
                             Today</div>
                         <div class="list-group-item list-group-item-accent-warning list-group-item-divider">
-                            <div class="avatar float-right">
+                            <div class="avatar float-end">
                                 <img class="img-avatar" src="~/images/avatars/7.jpg" alt="admin@accountgo.com">
                             </div>
                             <div>
@@ -303,7 +329,7 @@
                             </small>
                         </div>
                         <div class="list-group-item list-group-item-accent-info">
-                            <div class="avatar float-right">
+                            <div class="avatar float-end">
                                 <img class="img-avatar" src="~/images/avatars/4.jpg" alt="admin@accountgo.com">
                             </div>
                             <div>
@@ -410,7 +436,7 @@
                 </div>
                 <div class="tab-pane p-3" id="messages" role="tabpanel">
                     <div class="message">
-                        <div class="py-3 pb-5 mr-3 float-left">
+                        <div class="py-3 pb-5 mr-3 float-start">
                             <div class="avatar">
                                 <img class="img-avatar" src="~/images/avatars/7.jpg" alt="admin@bootstrapmaster.com">
                                 <span class="avatar-status badge-success"></span>
@@ -418,7 +444,7 @@
                         </div>
                         <div>
                             <small class="text-muted">Lukasz Holeczek</small>
-                            <small class="text-muted float-right mt-1">1:52 PM</small>
+                            <small class="text-muted float-end mt-1">1:52 PM</small>
                         </div>
                         <div class="text-truncate font-weight-bold">Lorem ipsum dolor sit amet</div>
                         <small class="text-muted">Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do
@@ -426,7 +452,7 @@
                     </div>
                     <hr>
                     <div class="message">
-                        <div class="py-3 pb-5 mr-3 float-left">
+                        <div class="py-3 pb-5 mr-3 float-start">
                             <div class="avatar">
                                 <img class="img-avatar" src="~/images/avatars/7.jpg" alt="admin@bootstrapmaster.com">
                                 <span class="avatar-status badge-success"></span>
@@ -434,7 +460,7 @@
                         </div>
                         <div>
                             <small class="text-muted">Lukasz Holeczek</small>
-                            <small class="text-muted float-right mt-1">1:52 PM</small>
+                            <small class="text-muted float-end mt-1">1:52 PM</small>
                         </div>
                         <div class="text-truncate font-weight-bold">Lorem ipsum dolor sit amet</div>
                         <small class="text-muted">Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do
@@ -442,7 +468,7 @@
                     </div>
                     <hr>
                     <div class="message">
-                        <div class="py-3 pb-5 mr-3 float-left">
+                        <div class="py-3 pb-5 mr-3 float-start">
                             <div class="avatar">
                                 <img class="img-avatar" src="~/images/avatars/7.jpg" alt="admin@bootstrapmaster.com">
                                 <span class="avatar-status badge-success"></span>
@@ -450,7 +476,7 @@
                         </div>
                         <div>
                             <small class="text-muted">Lukasz Holeczek</small>
-                            <small class="text-muted float-right mt-1">1:52 PM</small>
+                            <small class="text-muted float-end mt-1">1:52 PM</small>
                         </div>
                         <div class="text-truncate font-weight-bold">Lorem ipsum dolor sit amet</div>
                         <small class="text-muted">Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do
@@ -458,7 +484,7 @@
                     </div>
                     <hr>
                     <div class="message">
-                        <div class="py-3 pb-5 mr-3 float-left">
+                        <div class="py-3 pb-5 mr-3 float-start">
                             <div class="avatar">
                                 <img class="img-avatar" src="~/images/avatars/7.jpg" alt="admin@bootstrapmaster.com">
                                 <span class="avatar-status badge-success"></span>
@@ -466,7 +492,7 @@
                         </div>
                         <div>
                             <small class="text-muted">Lukasz Holeczek</small>
-                            <small class="text-muted float-right mt-1">1:52 PM</small>
+                            <small class="text-muted float-end mt-1">1:52 PM</small>
                         </div>
                         <div class="text-truncate font-weight-bold">Lorem ipsum dolor sit amet</div>
                         <small class="text-muted">Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do
@@ -474,7 +500,7 @@
                     </div>
                     <hr>
                     <div class="message">
-                        <div class="py-3 pb-5 mr-3 float-left">
+                        <div class="py-3 pb-5 mr-3 float-start">
                             <div class="avatar">
                                 <img class="img-avatar" src="~/images/avatars/7.jpg" alt="admin@bootstrapmaster.com">
                                 <span class="avatar-status badge-success"></span>
@@ -482,7 +508,7 @@
                         </div>
                         <div>
                             <small class="text-muted">Lukasz Holeczek</small>
-                            <small class="text-muted float-right mt-1">1:52 PM</small>
+                            <small class="text-muted float-end mt-1">1:52 PM</small>
                         </div>
                         <div class="text-truncate font-weight-bold">Lorem ipsum dolor sit amet</div>
                         <small class="text-muted">Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do
@@ -496,7 +522,7 @@
                             <small>
                                 <b>Option 1</b>
                             </small>
-                            <label class="switch switch-label switch-pill switch-success switch-sm float-right">
+                            <label class="switch switch-label switch-pill switch-success switch-sm float-end">
                                 <input class="switch-input" type="checkbox" checked="">
                                 <span class="switch-slider" data-checked="On" data-unchecked="Off"></span>
                             </label>
@@ -511,7 +537,7 @@
                             <small>
                                 <b>Option 2</b>
                             </small>
-                            <label class="switch switch-label switch-pill switch-success switch-sm float-right">
+                            <label class="switch switch-label switch-pill switch-success switch-sm float-end">
                                 <input class="switch-input" type="checkbox">
                                 <span class="switch-slider" data-checked="On" data-unchecked="Off"></span>
                             </label>
@@ -526,7 +552,7 @@
                             <small>
                                 <b>Option 3</b>
                             </small>
-                            <label class="switch switch-label switch-pill switch-success switch-sm float-right">
+                            <label class="switch switch-label switch-pill switch-success switch-sm float-end">
                                 <input class="switch-input" type="checkbox">
                                 <span class="switch-slider" data-checked="On" data-unchecked="Off"></span>
                             </label>
@@ -537,7 +563,7 @@
                             <small>
                                 <b>Option 4</b>
                             </small>
-                            <label class="switch switch-label switch-pill switch-success switch-sm float-right">
+                            <label class="switch switch-label switch-pill switch-success switch-sm float-end">
                                 <input class="switch-input" type="checkbox" checked="">
                                 <span class="switch-slider" data-checked="On" data-unchecked="Off"></span>
                             </label>
@@ -551,7 +577,7 @@
                         </small>
                     </div>
                     <div class="progress progress-xs">
-                        <div class="progress-bar bg-info" role="progressbar" style="width: 25%" aria-valuenow="25"
+                        <div class="progress-bar bg-info w-pct-25" role="progressbar" aria-valuenow="25"
                             aria-valuemin="0" aria-valuemax="100"></div>
                     </div>
                     <small class="text-muted">348 Processes. 1/4 Cores.</small>
@@ -561,7 +587,7 @@
                         </small>
                     </div>
                     <div class="progress progress-xs">
-                        <div class="progress-bar bg-warning" role="progressbar" style="width: 70%" aria-valuenow="70"
+                        <div class="progress-bar bg-warning w-pct-70" role="progressbar" aria-valuenow="70"
                             aria-valuemin="0" aria-valuemax="100"></div>
                     </div>
                     <small class="text-muted">11444GB/16384MB</small>
@@ -571,7 +597,7 @@
                         </small>
                     </div>
                     <div class="progress progress-xs">
-                        <div class="progress-bar bg-danger" role="progressbar" style="width: 95%" aria-valuenow="95"
+                        <div class="progress-bar bg-danger w-pct-95" role="progressbar" aria-valuenow="95"
                             aria-valuemin="0" aria-valuemax="100"></div>
                     </div>
                     <small class="text-muted">243GB/256GB</small>
@@ -581,7 +607,7 @@
                         </small>
                     </div>
                     <div class="progress progress-xs">
-                        <div class="progress-bar bg-success" role="progressbar" style="width: 10%" aria-valuenow="10"
+                        <div class="progress-bar bg-success w-pct-10" role="progressbar" aria-valuenow="10"
                             aria-valuemin="0" aria-valuemax="100"></div>
                     </div>
                     <small class="text-muted">25GB/256GB</small>
@@ -600,16 +626,32 @@
         </div>
     </footer>
     <!-- Bootstrap and necessary plugins-->
-    <script src="https://code.jquery.com/jquery-3.2.1.slim.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.12.9/dist/umd/popper.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.0.0/dist/js/bootstrap.min.js"></script>
+    <!-- jQuery (Full version for compatibility) -->
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js" 
+            integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" 
+            crossorigin="anonymous"></script>
+    
+    <!-- Bootstrap 5.3.x Bundle (includes Popper.js) -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" 
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" 
+            crossorigin="anonymous"></script>
+    
+    <!-- Pace.js Loading Indicator -->
     <script src="https://cdn.jsdelivr.net/npm/pace-js@latest/pace.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.perfect-scrollbar/1.5.5/perfect-scrollbar.js"></script>
-
-    <script src="https://cdn.jsdelivr.net/npm/@@coreui/coreui@4.3.2/dist/js/coreui.bundle.min.js"></script>
-
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/ag-grid/31.0.1/ag-grid-community.min.js"></script>
-    <script src="~/scripts/vendor.chunk.js"></script>
+    
+    <!-- Perfect Scrollbar (used in layout) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.perfect-scrollbar/1.5.5/perfect-scrollbar.min.js"></script>
+    
+    <!-- CoreUI 4.3.4 for Bootstrap 5 (compatible with v2 CSS) -->
+    <script src="https://cdn.jsdelivr.net/npm/@@coreui/coreui@@4.3.4/dist/js/coreui.bundle.min.js"></script>
+    
+    <!-- AG Grid for data tables -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ag-grid/31.3.2/ag-grid-community.min.js"></script>
+    
+    <!-- Navigation Menu Controller -->
+    <script src="~/js/navigation-menu.js" asp-append-version="true"></script>
+    
+    <!-- Blazor Server -->
     @* <script src="_framework/blazor.web.js"></script> *@
     <script src="~/_framework/blazor.server.js"></script>
 
