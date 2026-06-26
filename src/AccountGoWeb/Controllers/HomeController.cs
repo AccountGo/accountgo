@@ -12,7 +12,7 @@ namespace AccountGoWeb.Controllers
         }
         public IActionResult Index()
         {
-            ViewBag.PageContentHeader = "Dashboard";
+            ViewBag.PageContentHeader = string.Empty;
             ViewBag.ApiMontlySales = _baseConfig!["ApiUrl"] + "sales/getmonthlysales";
             return View();
         }

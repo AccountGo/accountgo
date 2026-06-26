@@ -89,15 +89,19 @@ body:not(.light-theme):not(.dark-theme) {
     from {
         transform: rotate(0deg);
     }
+
     to {
         transform: rotate(360deg);
     }
 }
 
 @keyframes pulse-moon {
-    0%, 100% {
+
+    0%,
+    100% {
         opacity: 1;
     }
+
     50% {
         opacity: 0.7;
     }
@@ -122,7 +126,7 @@ body:not(.light-theme):not(.dark-theme) {
     #theme-toggle {
         padding: 0.25rem 0.5rem;
     }
-    
+
     #theme-icon {
         font-size: 0.875rem;
     }
@@ -181,7 +185,8 @@ body:not(.light-theme):not(.dark-theme) {
 
 /* Dropdown toggle icon indicator (optional - add arrow) */
 .nav-dropdown-toggle::after {
-    content: '\f078'; /* FontAwesome chevron-down */
+    content: '\f078';
+    /* FontAwesome chevron-down */
     font-family: 'Font Awesome 6 Free';
     font-weight: 900;
     float: right;
@@ -190,17 +195,183 @@ body:not(.light-theme):not(.dark-theme) {
     margin-left: auto;
 }
 
-.nav-dropdown.open > .nav-dropdown-toggle::after {
+.nav-dropdown.open>.nav-dropdown-toggle::after {
     transform: rotate(180deg);
 }
 
+/* Sidebar width adjustment for long navigation labels */
+:root {
+    --app-sidebar-width: 240px;
+}
+
+.app-body .sidebar,
+.sidebar-fixed .sidebar {
+    width: var(--app-sidebar-width) !important;
+    flex: 0 0 var(--app-sidebar-width) !important;
+}
+
+.sidebar .sidebar-nav,
+.sidebar .nav {
+    width: var(--app-sidebar-width) !important;
+}
+
+.sidebar .nav-link {
+    white-space: nowrap;
+}
+
+.sidebar .nav-dropdown-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.sidebar .nav-dropdown-toggle::after {
+    float: none;
+    flex: 0 0 auto;
+    margin-left: auto;
+}
+
+html:not([dir="rtl"]) .sidebar,
+html:not([dir="rtl"]) .sidebar-off-canvas .sidebar {
+    margin-left: calc(-1 * var(--app-sidebar-width)) !important;
+}
+
+html[dir="rtl"] .sidebar,
+html[dir="rtl"] .sidebar-off-canvas .sidebar {
+    margin-right: calc(-1 * var(--app-sidebar-width)) !important;
+}
+
+html:not([dir="rtl"]) .sidebar-show .sidebar,
+html:not([dir="rtl"]) .sidebar-sm-show .sidebar {
+    margin-left: 0 !important;
+}
+
+html[dir="rtl"] .sidebar-show .sidebar,
+html[dir="rtl"] .sidebar-sm-show .sidebar {
+    margin-right: 0 !important;
+}
+
+@media (min-width: 576px) {
+
+    html:not([dir="rtl"]) .sidebar-show.sidebar-fixed .main,
+    html:not([dir="rtl"]) .sidebar-show.sidebar-fixed .app-footer,
+    html:not([dir="rtl"]) .sidebar-sm-show.sidebar-fixed .main,
+    html:not([dir="rtl"]) .sidebar-sm-show.sidebar-fixed .app-footer {
+        margin-left: var(--app-sidebar-width) !important;
+    }
+
+    html[dir="rtl"] .sidebar-show.sidebar-fixed .main,
+    html[dir="rtl"] .sidebar-show.sidebar-fixed .app-footer,
+    html[dir="rtl"] .sidebar-sm-show.sidebar-fixed .main,
+    html[dir="rtl"] .sidebar-sm-show.sidebar-fixed .app-footer {
+        margin-right: var(--app-sidebar-width) !important;
+    }
+}
+
+@media (min-width: 768px) {
+    html:not([dir="rtl"]) .sidebar-md-show .sidebar {
+        margin-left: 0 !important;
+    }
+
+    html[dir="rtl"] .sidebar-md-show .sidebar {
+        margin-right: 0 !important;
+    }
+
+    html:not([dir="rtl"]) .sidebar-md-show.sidebar-fixed .main,
+    html:not([dir="rtl"]) .sidebar-md-show.sidebar-fixed .app-footer {
+        margin-left: var(--app-sidebar-width) !important;
+    }
+
+    html[dir="rtl"] .sidebar-md-show.sidebar-fixed .main,
+    html[dir="rtl"] .sidebar-md-show.sidebar-fixed .app-footer {
+        margin-right: var(--app-sidebar-width) !important;
+    }
+}
+
+@media (min-width: 992px) {
+    html:not([dir="rtl"]) .sidebar-lg-show .sidebar {
+        margin-left: 0 !important;
+    }
+
+    html[dir="rtl"] .sidebar-lg-show .sidebar {
+        margin-right: 0 !important;
+    }
+
+    html:not([dir="rtl"]) .sidebar-lg-show.sidebar-fixed .main,
+    html:not([dir="rtl"]) .sidebar-lg-show.sidebar-fixed .app-footer {
+        margin-left: var(--app-sidebar-width) !important;
+    }
+
+    html[dir="rtl"] .sidebar-lg-show.sidebar-fixed .main,
+    html[dir="rtl"] .sidebar-lg-show.sidebar-fixed .app-footer {
+        margin-right: var(--app-sidebar-width) !important;
+    }
+}
+
+@media (min-width: 1200px) {
+    html:not([dir="rtl"]) .sidebar-xl-show .sidebar {
+        margin-left: 0 !important;
+    }
+
+    html[dir="rtl"] .sidebar-xl-show .sidebar {
+        margin-right: 0 !important;
+    }
+
+    html:not([dir="rtl"]) .sidebar-xl-show.sidebar-fixed .main,
+    html:not([dir="rtl"]) .sidebar-xl-show.sidebar-fixed .app-footer {
+        margin-left: var(--app-sidebar-width) !important;
+    }
+
+    html[dir="rtl"] .sidebar-xl-show.sidebar-fixed .main,
+    html[dir="rtl"] .sidebar-xl-show.sidebar-fixed .app-footer {
+        margin-right: var(--app-sidebar-width) !important;
+    }
+}
+
 /* Light theme adjustments */
+.light-theme .sidebar {
+    background-color: #f8f9fa !important;
+    color: #23282c !important;
+    border-right: 1px solid #dee2e6;
+}
+
+.light-theme .sidebar .sidebar-nav,
+.light-theme .sidebar .nav,
+.light-theme .sidebar .nav-dropdown-items {
+    background-color: #f8f9fa !important;
+}
+
+.light-theme .sidebar .nav-link {
+    color: #23282c !important;
+}
+
+.light-theme .sidebar .nav-link .nav-icon,
+.light-theme .sidebar .nav-dropdown-toggle::after {
+    color: #6c757d !important;
+}
+
 .light-theme .sidebar .nav-link.active {
     background-color: var(--bs-primary, #0d6efd) !important;
+    color: var(--bs-white, #fff) !important;
+}
+
+.light-theme .sidebar .nav-link.active .nav-icon {
+    color: var(--bs-white, #fff) !important;
 }
 
 .light-theme .sidebar .nav-link:not(.active):hover {
-    background-color: rgba(0, 0, 0, 0.05);
+    background-color: rgba(13, 110, 253, 0.08);
+    color: #0d6efd !important;
+}
+
+.light-theme .sidebar .nav-link:not(.active):hover .nav-icon,
+.light-theme .sidebar .nav-link:not(.active):hover::after {
+    color: #0d6efd !important;
+}
+
+.light-theme .sidebar-minimizer {
+    background-color: #e9ecef !important;
+    border-top: 1px solid #dee2e6;
 }
 
 /* ============================================
@@ -211,14 +382,16 @@ body:not(.light-theme):not(.dark-theme) {
 .dark-theme label,
 .dark-theme .form-label,
 .dark-theme .col-form-label {
-    color: #e4e7ea !important;  /* Light gray text for dark background */
+    color: #e4e7ea !important;
+    /* Light gray text for dark background */
 }
 
 /* Ensure labels are visible in light mode */
 .light-theme label,
 .light-theme .form-label,
 .light-theme .col-form-label {
-    color: #23282c !important;  /* Dark text for light background */
+    color: #23282c !important;
+    /* Dark text for light background */
 }
 
 /* Fix for labels inside cards in dark mode */
@@ -248,35 +421,41 @@ body:not(.light-theme):not(.dark-theme) {
 /* Fix for required field indicators */
 .dark-theme label .text-danger,
 .dark-theme .form-label .text-danger {
-    color: #f86c6b !important;  /* Red for required asterisk */
+    color: #f86c6b !important;
+    /* Red for required asterisk */
 }
 
 .light-theme label .text-danger,
 .light-theme .form-label .text-danger {
-    color: #dc3545 !important;  /* Bootstrap red for light mode */
+    color: #dc3545 !important;
+    /* Bootstrap red for light mode */
 }
 
 /* Fix for help text under labels */
 .dark-theme .form-text,
 .dark-theme .text-muted {
-    color: #8f9ba6 !important;  /* Muted gray for dark mode */
+    color: #8f9ba6 !important;
+    /* Muted gray for dark mode */
 }
 
 .light-theme .form-text,
 .light-theme .text-muted {
-    color: #6c757d !important;  /* Bootstrap muted for light mode */
+    color: #6c757d !important;
+    /* Bootstrap muted for light mode */
 }
 
 /* Fix for table headers (th acts like labels) in dark mode */
 .dark-theme th,
 .dark-theme thead th {
-    color: #ffc107 !important;  /* Yellow/gold for table headers in dark mode */
+    color: #ffc107 !important;
+    /* Yellow/gold for table headers in dark mode */
 }
 
 /* Fix for table headers in light mode */
 .light-theme th,
 .light-theme thead th {
-    color: #23282c !important;  /* Dark text for light mode */
+    color: #23282c !important;
+    /* Dark text for light mode */
 }
 
 /* Fix for table cells in dark mode */
@@ -464,25 +643,25 @@ body:not(.light-theme):not(.dark-theme) {
 }
 
 /* Fix for card body text in Blazor components */
-.dark-theme .card .card-body > .row > div {
+.dark-theme .card .card-body>.row>div {
     color: #e4e7ea !important;
 }
 
-.light-theme .card .card-body > .row > div {
+.light-theme .card .card-body>.row>div {
     color: #23282c !important;
 }
 
 /* Specific fix for label columns in forms */
-.dark-theme .card-body .row > .col-sm-2:first-child,
-.dark-theme .card-body .row > .col-md-2:first-child,
-.dark-theme .card-body .row > .col-lg-2:first-child {
+.dark-theme .card-body .row>.col-sm-2:first-child,
+.dark-theme .card-body .row>.col-md-2:first-child,
+.dark-theme .card-body .row>.col-lg-2:first-child {
     color: #e4e7ea !important;
     font-weight: 500;
 }
 
-.light-theme .card-body .row > .col-sm-2:first-child,
-.light-theme .card-body .row > .col-md-2:first-child,
-.light-theme .card-body .row > .col-lg-2:first-child {
+.light-theme .card-body .row>.col-sm-2:first-child,
+.light-theme .card-body .row>.col-md-2:first-child,
+.light-theme .card-body .row>.col-lg-2:first-child {
     color: #23282c !important;
     font-weight: 500;
 }
@@ -502,11 +681,13 @@ body:not(.light-theme):not(.dark-theme) {
 
 /* Navbar brand hover state */
 .dark-theme .navbar-brand:hover {
-    color: #20a8d8 !important;  /* Primary blue */
+    color: #20a8d8 !important;
+    /* Primary blue */
 }
 
 .light-theme .navbar-brand:hover {
-    color: #0d6efd !important;  /* Bootstrap primary */
+    color: #0d6efd !important;
+    /* Bootstrap primary */
 }
 
 /* Fix for any links in navbar */
@@ -579,7 +760,8 @@ body:not(.light-theme):not(.dark-theme) {
 .dark-theme table.table tr[style*="font-weight: bold"] td,
 .dark-theme table.table th[style*="font-weight: bold"],
 .dark-theme table.table td[style*="font-weight: bold"] {
-    color: #ffc107 !important;  /* Yellow for emphasis */
+    color: #ffc107 !important;
+    /* Yellow for emphasis */
     font-weight: bold !important;
 }
 
@@ -593,21 +775,25 @@ body:not(.light-theme):not(.dark-theme) {
 
 /* Links in tables (account codes) */
 .dark-theme table.table a {
-    color: #20a8d8 !important;  /* Primary blue */
+    color: #20a8d8 !important;
+    /* Primary blue */
     text-decoration: underline;
 }
 
 .dark-theme table.table a:hover {
-    color: #63c2de !important;  /* Lighter blue on hover */
+    color: #63c2de !important;
+    /* Lighter blue on hover */
 }
 
 .light-theme table.table a {
-    color: #0d6efd !important;  /* Bootstrap blue */
+    color: #0d6efd !important;
+    /* Bootstrap blue */
     text-decoration: underline;
 }
 
 .light-theme table.table a:hover {
-    color: #0a58ca !important;  /* Darker blue on hover */
+    color: #0a58ca !important;
+    /* Darker blue on hover */
 }
 
 /* Right-aligned amounts */
