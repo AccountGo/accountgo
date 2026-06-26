@@ -1,4 +1,4 @@
-@rendermode InteractiveServer
+﻿@rendermode InteractiveServer
 @using System.Text.Json
 @using System.Text.Json.Serialization
 @inject IHttpClientFactory ClientFactory
@@ -49,8 +49,8 @@ else
     <div>
         @if (OrderId > 0)
         {
-            <button type="button" class="btn btn-primary" @onclick="ToggleEdit" disabled="@(!isViewMode && !isSaving)">
-                <i class="fa fa-edit"></i> @(isViewMode ? "Edit" : "Cancel Edit")
+            <button type="button" class="btn btn-primary btn-sm" @onclick="ToggleEdit" disabled="@(!isViewMode && !isSaving)">
+                <i class="fas fa-edit"></i> @(isViewMode ? "Edit" : "Cancel Edit")
             </button>
         }
     </div>
@@ -88,7 +88,7 @@ else
                         <div class="col-sm-8">
                             @if (isViewMode)
                             {
-                                <span class="form-control" style="background-color: #e9ecef; color: #000;">@(purchaseOrder.ReferenceNo ?? "-")</span>
+                                <span class="form-control form-control-readonly-themed">@(purchaseOrder.ReferenceNo ?? "-")</span>
                             }
                             else
                             {
@@ -128,8 +128,8 @@ else
                         {
                             var line = purchaseOrder.PurchaseOrderLines[i];
                             var index = i;
-                            <tr style="background-color: transparent !important;">
-                                <td style="background-color: transparent !important;">
+                            <tr class="bg-transparent-important">
+                                <td class="bg-transparent-important">
                                     <InputSelect class="form-control" @bind-Value="line.ItemId" disabled="@isViewMode">
                                         <option value="0">-- Select Item --</option>
                                         @if (items != null)
@@ -141,16 +141,16 @@ else
                                         }
                                     </InputSelect>
                                 </td>
-                                <td style="background-color: transparent !important;">
+                                <td class="bg-transparent-important">
                                     <InputNumber class="form-control" @bind-Value="line.Quantity" disabled="@isViewMode" />
                                 </td>
-                                <td style="background-color: transparent !important;">
+                                <td class="bg-transparent-important">
                                     <InputNumber class="form-control" @bind-Value="line.Amount" disabled="@isViewMode" />
                                 </td>
-                                <td style="background-color: transparent !important;">
+                                <td class="bg-transparent-important">
                                     <InputNumber class="form-control" @bind-Value="line.Discount" disabled="@isViewMode" />
                                 </td>
-                                <td style="background-color: transparent !important;">
+                                <td class="bg-transparent-important">
                                     <InputSelect class="form-control" @bind-Value="line.MeasurementId" disabled="@isViewMode">
                                             <option value="0">-- Select Unit --</option>
                                         @if (measurements != null)
@@ -164,8 +164,8 @@ else
                                 </td>
                                 @if (!isViewMode)
                                 {
-                                    <td style="background-color: transparent !important;">
-                                        <button type="button" class="btn btn-sm btn-danger" @onclick="() => RemoveLine(index)" disabled="@(purchaseOrder.PurchaseOrderLines.Count <= 1)">
+                                    <td class="bg-transparent-important">
+                                        <button type="button" class="btn btn-danger btn-sm" @onclick="() => RemoveLine(index)" disabled="@(purchaseOrder.PurchaseOrderLines.Count <= 1)">
                                             Remove
                                         </button>
                                     </td>
@@ -176,7 +176,7 @@ else
                         {
                             <tr>
                                 <td colspan="6">
-                                    <button type="button" class="btn btn-primary" @onclick="AddLine">
+                                    <button type="button" class="btn btn-primary btn-sm" @onclick="AddLine">
                                         Add Row
                                     </button>
                                 </td>
@@ -205,11 +205,11 @@ else
             <div class="col-md-9 mt-3">
                 @if (!isViewMode)
                 {
-                    <button type="submit" class="btn btn-sm btn-primary btn-flat pull-left" disabled="@isSaving">
+                    <button type="submit" class="btn btn-primary btn-sm pull-left" disabled="@isSaving">
                         @(isSaving ? "Saving..." : "Save")
                     </button>
                 }
-                <a href="/purchasing/purchaseorders" class="btn btn-sm btn-secondary btn-flat pull-left">Close</a>
+                <a href="/purchasing/purchaseorders" class="btn btn-secondary btn-sm pull-left">Close</a>
                 </div>
             </div>
         </div>

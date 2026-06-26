@@ -1,24 +1,24 @@
-@using System.Text.Json
+﻿@using System.Text.Json
 @using System.Text.Json.Serialization
 @using System.Globalization
 
 <style>
     label,
     h5 {
-        color: #fff !important;
+        color: var(--bs-white, #fff) !important;
     }
 
     tr th {
-        color: #fff;
+        color: var(--bs-white, #fff);
     }
 
     tr td {
-        color: #fff;
+        color: var(--bs-white, #fff);
     }
 
     .card,
     .card-body {
-        color: #fff;
+        color: var(--bs-white, #fff);
     }
 </style>
 
@@ -29,8 +29,8 @@
         <div class="col">
             @if (!isEditMode && Id > 0)
             {
-                <button type="button" class="btn" @onclick="EnableEditMode">
-                    <i class="fa fa-edit"></i> Edit
+                <button type="button" class="btn btn-sm" @onclick="EnableEditMode">
+                    <i class="fas fa-edit"></i> Edit
                 </button>
             }
         </div>
@@ -83,7 +83,7 @@
                             <div class="col-sm-7">
                                 @if (isEditMode)
                                 {
-                                    <select class="form-control bg-dark text-white" @bind="paymentTermId">
+                                    <select class="form-control form-control-themed" @bind="paymentTermId">
                                         <option value="0" class="text-white">-- Select Payment Term --</option>
                                         @foreach (var pt in paymentTerms)
                                         {
@@ -124,7 +124,7 @@
                                     var line = lineItems[i];
                                     <tr>
                                         <td>
-                                            <select class="form-control bg-dark text-white" @bind="line.ItemId" disabled="@(!isEditMode)">
+                                            <select class="form-control form-control-themed" @bind="line.ItemId" disabled="@(!isEditMode)">
                                                 <option value="0">-- Select Item --</option>
                                                 @foreach (var item in items)
                                                 {
@@ -133,19 +133,19 @@
                                             </select>
                                         </td>
                                         <td>
-                                            <input type="number" class="form-control bg-dark text-white" @bind="line.Quantity" step="0.01"
+                                            <input type="number" class="form-control form-control-themed" @bind="line.Quantity" step="0.01"
                                                 disabled="@(!isEditMode)" />
                                         </td>
                                         <td>
-                                            <input type="number" class="form-control bg-dark text-white" @bind="line.Amount" step="0.01"
+                                            <input type="number" class="form-control form-control-themed" @bind="line.Amount" step="0.01"
                                                 disabled="@(!isEditMode)" />
                                         </td>
                                         <td>
-                                            <input type="number" class="form-control bg-dark text-white" @bind="line.Discount" step="0.01"
+                                            <input type="number" class="form-control form-control-themed" @bind="line.Discount" step="0.01"
                                                 disabled="@(!isEditMode)" />
                                         </td>
                                         <td>
-                                            <select class="form-control bg-dark text-white" @bind="line.MeasurementId"
+                                            <select class="form-control form-control-themed" @bind="line.MeasurementId"
                                                 disabled="@(!isEditMode)">
                                                 <option value="0">-- Select Measurement --</option>
                                                 @foreach (var m in measurements)
@@ -161,8 +161,8 @@
                             {
                                 <tr>
                                     <td colspan="5">
-                                        <button type="button" class="btn btn-primary btn-sm" @onclick="AddLineItem">
-                                            <i class="fa fa-plus"></i> Add Row
+                                        <button type="button" class="btn btn-primary btn btn-sm-sm" @onclick="AddLineItem">
+                                            <i class="fas fa-plus"></i> Add Row
                                         </button>
                                     </td>
                                 </tr>
@@ -174,9 +174,9 @@
                 <div class="mt-2">
                     @if (isEditMode)
                     {
-                        <button class="btn btn-sm btn-primary btn-flat" @onclick="SaveQuotation">Save</button>
+                        <button class="btn btn-primary btn-sm" @onclick="SaveQuotation">Save</button>
                     }
-                    <a href="/quotations/salesquotations" class="btn btn-sm btn-default btn-flat">Close</a>
+                    <a href="/quotations/salesquotations" class="btn btn-secondary btn-sm">Close</a>
                 </div>
             </div>
         </div>

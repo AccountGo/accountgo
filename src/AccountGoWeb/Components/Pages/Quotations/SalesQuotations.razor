@@ -14,7 +14,7 @@
     width: 100%;
     border-collapse: collapse;
     background: transparent;
-    color: white; /* text visible on dark page */
+    color: var(--bs-white, #fff); /* text visible on dark page */
 }
 .quotationsTable th, .quotationsTable td {
     padding: 8px;
@@ -22,7 +22,7 @@
     border: none; /* no borders */
 }
 .quotationRow:hover {
-    background-color: rgba(255,255,255,0.1); /* optional hover effect */
+    background-color: rgba(var(--bs-white-rgb, 255,255,255), 0.1); /* optional hover effect */
     cursor: pointer;
 }
 </style>
@@ -30,20 +30,20 @@
 
 <h3>Quotations</h3>
 <div>
-    <a href="/quotations/addsalesquotation" class="btn">
-        <i class="fa fa-plus"></i>
+    <a href="/quotations/addsalesquotation" class="btn btn-sm">
+        <i class="fas fa-plus"></i>
         New Quotation
     </a>
 
     <a href="@viewQuotationLink"
-       class="btn @(isViewLinkActive ? "" : "inactiveLink")">
-        <i class="fa fa-edit"></i>
+       class="btn btn-sm @(isViewLinkActive ?"" : "inactiveLink")">
+        <i class="fas fa-edit"></i>
         View
     </a>
 
     <a href="@newOrderLink"
-       class="btn @(isNewOrderLinkActive ? "" : "inactiveLink")">
-        <i class="fa fa-plus"></i>
+       class="btn btn-sm @(isNewOrderLinkActive ?"" : "inactiveLink")">
+        <i class="fas fa-plus"></i>
         New Order
     </a>
 </div>
@@ -59,7 +59,7 @@
 else if (hasError)
 {
     <div class="alert alert-danger">
-        <i class="fa fa-exclamation-circle"></i>
+        <i class="fas fa-exclamation-circle"></i>
         <strong>Error!</strong> Unable to load quotations. Please try again.
     </div>
 }
@@ -81,7 +81,7 @@ else
         {
             <tr @onclick="() => OnSelectionChanged(q.id, q.statusId)" 
                  @ondblclick="() => NavigateToSalesQuotation(q.id)"
-                 class="quotationRow @(q.id == selectedQuotationId ? "table-active" : "")">
+                 class="quotationRow @(q.id == selectedQuotationId ?"table-active" : "")">
                 <td>@q.no</td>
                 <td>@q.customerName</td>
                 <td>@q.quotationDate.ToShortDateString()</td>

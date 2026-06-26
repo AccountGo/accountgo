@@ -1,4 +1,4 @@
-@using CustomerDto = Dto.Sales.Customer
+﻿@using CustomerDto = Dto.Sales.Customer
 @using Dto.Common
 @inject HttpClient Http
 @inject NavigationManager Navigation
@@ -8,7 +8,7 @@
 
 <style>
     .form-label {
-        color: white;
+        color: var(--bs-white, #fff);
     }
 </style>
 
@@ -17,8 +17,8 @@
         <div class="col">
             @if (Id != 0 && !isEditMode)
             {
-                <button class="btn btn-primary" @onclick="EnableEditMode">
-                    <i class="fa fa-edit"></i> Edit
+                <button class="btn btn-primary btn-sm" @onclick="EnableEditMode">
+                    <i class="fas fa-edit"></i> Edit
                 </button>
             }
         </div>
@@ -40,7 +40,7 @@
         <div class="row">
             <div class="col">
                 <div class="alert alert-danger" role="alert">
-                    <i class="fa fa-exclamation-triangle"></i> @errorMessage
+                    <i class="fas fa-exclamation-triangle"></i> @errorMessage
                 </div>
             </div>
         </div>
@@ -52,10 +52,10 @@
             
             @* General Section *@
             <div class="card mb-3">
-                <div class="card-header" style="background-color: #3a3f44; color: white;">
-                    <i class="fa fa-align-justify"></i> General
+                <div class="card-header card-header-themed">
+                    <i class="fas fa-align-justify"></i> General
                 </div>
-                <div class="card-body" style="background-color: #2b2f33;">
+                <div class="card-body card-body-themed">
                     <div class="row">
                         <div class="col-sm-6">
                             <div class="row mb-3">
@@ -63,7 +63,7 @@
                                     <label class="form-label">No</label>
                                 </div>
                                 <div class="col-sm-8">
-                                    <input type="text" class="form-control bg-dark text-white" value="@(Model.No ?? "Auto-generated")" disabled />
+                                    <input type="text" class="form-control form-control-themed" value="@(Model.No ?? "Auto-generated")" disabled />
                                 </div>
                             </div>
                             <div class="row mb-3">
@@ -71,7 +71,7 @@
                                     <label class="form-label">Name</label>
                                 </div>
                                 <div class="col-sm-8">
-                                    <InputText class="form-control bg-dark text-white" @bind-Value="Model.Name" placeholder="Name ..." disabled="@(!isEditMode)" />
+                                    <InputText class="form-control form-control-themed" @bind-Value="Model.Name" placeholder="Name ..." disabled="@(!isEditMode)" />
                                     <ValidationMessage For="@(() => Model.Name)" class="text-danger" />
                                 </div>
                             </div>
@@ -82,7 +82,7 @@
                                     <label class="form-label">Phone</label>
                                 </div>
                                 <div class="col-sm-8">
-                                    <InputText class="form-control bg-dark text-white" @bind-Value="Model.Phone" placeholder="Phone ..." disabled="@(!isEditMode)" />
+                                    <InputText class="form-control form-control-themed" @bind-Value="Model.Phone" placeholder="Phone ..." disabled="@(!isEditMode)" />
                                 </div>
                             </div>
                             <div class="row mb-3">
@@ -90,7 +90,7 @@
                                     <label class="form-label">Website</label>
                                 </div>
                                 <div class="col-sm-8">
-                                    <InputText class="form-control bg-dark text-white" @bind-Value="Model.Website" placeholder="Website ..." disabled="@(!isEditMode)" />
+                                    <InputText class="form-control form-control-themed" @bind-Value="Model.Website" placeholder="Website ..." disabled="@(!isEditMode)" />
                                 </div>
                             </div>
                             <div class="row mb-3">
@@ -98,7 +98,7 @@
                                     <label class="form-label">Email</label>
                                 </div>
                                 <div class="col-sm-8">
-                                    <InputText class="form-control bg-dark text-white" @bind-Value="Model.Email" placeholder="Email ..." disabled="@(!isEditMode)" />
+                                    <InputText class="form-control form-control-themed" @bind-Value="Model.Email" placeholder="Email ..." disabled="@(!isEditMode)" />
                                 </div>
                             </div>
                         </div>
@@ -108,19 +108,19 @@
 
             @* Contact Section *@
             <div class="card mb-3">
-                <div class="card-header" style="background-color: #3a3f44; color: white;">
-                    <i class="fa fa-align-justify"></i> Contact
-                    <button type="button" class="btn btn-sm btn-secondary float-end ms-2" @onclick="NavigateToContacts">
-                        <i class="fa fa-list"></i> View Contacts
+                <div class="card-header card-header-themed">
+                    <i class="fas fa-align-justify"></i> Contact
+                    <button type="button" class="btn btn-secondary btn-sm float-end ms-2" @onclick="NavigateToContacts">
+                        <i class="fas fa-list"></i> View Contacts
                     </button>
                     @if (Id != 0)
                     {
-                        <button type="button" class="btn btn-sm btn-primary float-end" @onclick="NavigateToAddContact">
-                            <i class="fa fa-plus"></i> Add Contact
+                        <button type="button" class="btn btn-primary btn-sm float-end" @onclick="NavigateToAddContact">
+                            <i class="fas fa-plus"></i> Add Contact
                         </button>
                     }
                 </div>
-                <div class="card-body" style="background-color: #2b2f33;">
+                <div class="card-body card-body-themed">
                     <div class="row">
                         <div class="col-sm-6">
                             <div class="row mb-3">
@@ -128,7 +128,7 @@
                                     <label class="form-label">First Name</label>
                                 </div>
                                 <div class="col-sm-8">
-                                    <InputText class="form-control bg-dark text-white" @bind-Value="Model.PrimaryContact!.FirstName" placeholder="First Name ..." disabled="@(!isEditMode)" />
+                                    <InputText class="form-control form-control-themed" @bind-Value="Model.PrimaryContact!.FirstName" placeholder="First Name ..." disabled="@(!isEditMode)" />
                                 </div>
                             </div>
                             <div class="row mb-3">
@@ -136,7 +136,7 @@
                                     <label class="form-label">Last Name</label>
                                 </div>
                                 <div class="col-sm-8">
-                                    <InputText class="form-control bg-dark text-white" @bind-Value="Model.PrimaryContact!.LastName" placeholder="Last Name ..." disabled="@(!isEditMode)" />
+                                    <InputText class="form-control form-control-themed" @bind-Value="Model.PrimaryContact!.LastName" placeholder="Last Name ..." disabled="@(!isEditMode)" />
                                 </div>
                             </div>
                         </div>
@@ -146,7 +146,7 @@
                                     <label class="form-label">Phone</label>
                                 </div>
                                 <div class="col-sm-8">
-                                    <InputText class="form-control bg-dark text-white" @bind-Value="Model.PrimaryContact!.Party.Phone" placeholder="Phone ..." disabled="@(!isEditMode)" />
+                                    <InputText class="form-control form-control-themed" @bind-Value="Model.PrimaryContact!.Party.Phone" placeholder="Phone ..." disabled="@(!isEditMode)" />
                                 </div>
                             </div>
                             <div class="row mb-3">
@@ -154,7 +154,7 @@
                                     <label class="form-label">Website</label>
                                 </div>
                                 <div class="col-sm-8">
-                                    <InputText class="form-control bg-dark text-white" @bind-Value="Model.PrimaryContact!.Party.Website" placeholder="Website ..." disabled="@(!isEditMode)" />
+                                    <InputText class="form-control form-control-themed" @bind-Value="Model.PrimaryContact!.Party.Website" placeholder="Website ..." disabled="@(!isEditMode)" />
                                 </div>
                             </div>
                             <div class="row mb-3">
@@ -162,7 +162,7 @@
                                     <label class="form-label">Email</label>
                                 </div>
                                 <div class="col-sm-8">
-                                    <InputText class="form-control bg-dark text-white" @bind-Value="Model.PrimaryContact!.Party.Email" placeholder="Email ..." disabled="@(!isEditMode)" />
+                                    <InputText class="form-control form-control-themed" @bind-Value="Model.PrimaryContact!.Party.Email" placeholder="Email ..." disabled="@(!isEditMode)" />
                                 </div>
                             </div>
                         </div>
@@ -172,10 +172,10 @@
 
             @* Invoicing Section *@
             <div class="card mb-3">
-                <div class="card-header" style="background-color: #3a3f44; color: white;">
-                    <i class="fa fa-align-justify"></i> Invoicing
+                <div class="card-header card-header-themed">
+                    <i class="fas fa-align-justify"></i> Invoicing
                 </div>
-                <div class="card-body" style="background-color: #2b2f33;">
+                <div class="card-body card-body-themed">
                     <div class="row">
                         <div class="col-sm-6">
                             <div class="row mb-3">
@@ -183,7 +183,7 @@
                                     <label class="form-label">Accounts Receivable</label>
                                 </div>
                                 <div class="col-sm-8">
-                                    <InputSelect class="form-control bg-dark text-white" @bind-Value="Model.AccountsReceivableId" disabled="@(!isEditMode)">
+                                    <InputSelect class="form-control form-control-themed" @bind-Value="Model.AccountsReceivableId" disabled="@(!isEditMode)">
                                         <option value="">-- Select Account --</option>
                                         @foreach (var account in Accounts)
                                         {
@@ -197,7 +197,7 @@
                                     <label class="form-label">Sales</label>
                                 </div>
                                 <div class="col-sm-8">
-                                    <InputSelect class="form-control bg-dark text-white" @bind-Value="Model.SalesAccountId" disabled="@(!isEditMode)">
+                                    <InputSelect class="form-control form-control-themed" @bind-Value="Model.SalesAccountId" disabled="@(!isEditMode)">
                                         <option value="">-- Select Account --</option>
                                         @foreach (var account in Accounts)
                                         {
@@ -211,7 +211,7 @@
                                     <label class="form-label">Prepayment</label>
                                 </div>
                                 <div class="col-sm-8">
-                                    <InputSelect class="form-control bg-dark text-white" @bind-Value="Model.PrepaymentAccountId" disabled="@(!isEditMode)">
+                                    <InputSelect class="form-control form-control-themed" @bind-Value="Model.PrepaymentAccountId" disabled="@(!isEditMode)">
                                         <option value="">-- Select Account --</option>
                                         @foreach (var account in Accounts)
                                         {
@@ -225,7 +225,7 @@
                                     <label class="form-label">Discount</label>
                                 </div>
                                 <div class="col-sm-8">
-                                    <InputSelect class="form-control bg-dark text-white" @bind-Value="Model.SalesDiscountAccountId" disabled="@(!isEditMode)">
+                                    <InputSelect class="form-control form-control-themed" @bind-Value="Model.SalesDiscountAccountId" disabled="@(!isEditMode)">
                                         <option value="">-- Select Account --</option>
                                         @foreach (var account in Accounts)
                                         {
@@ -241,7 +241,7 @@
                                     <label class="form-label">Tax Group</label>
                                 </div>
                                 <div class="col-sm-8">
-                                    <InputSelect class="form-control bg-dark text-white" @bind-Value="Model.TaxGroupId" disabled="@(!isEditMode)">
+                                    <InputSelect class="form-control form-control-themed" @bind-Value="Model.TaxGroupId" disabled="@(!isEditMode)">
                                         <option value="">-- Select Tax Group --</option>
                                         @foreach (var taxGroup in TaxGroups)
                                         {
@@ -257,10 +257,10 @@
 
             @* Payment Section *@
             <div class="card mb-3">
-                <div class="card-header" style="background-color: #3a3f44; color: white;">
-                    <i class="fa fa-align-justify"></i> Payment
+                <div class="card-header card-header-themed">
+                    <i class="fas fa-align-justify"></i> Payment
                 </div>
-                <div class="card-body" style="background-color: #2b2f33;">
+                <div class="card-body card-body-themed">
                     <div class="row">
                         <div class="col-sm-6">
                             <div class="row mb-3">
@@ -268,7 +268,7 @@
                                     <label class="form-label">Payment Term</label>
                                 </div>
                                 <div class="col-sm-8">
-                                    <InputSelect class="form-control bg-dark text-white" @bind-Value="Model.PaymentTermId" disabled="@(!isEditMode)">
+                                    <InputSelect class="form-control form-control-themed" @bind-Value="Model.PaymentTermId" disabled="@(!isEditMode)">
                                         <option value="">-- Select Payment Term --</option>
                                         @foreach (var term in PaymentTerms)
                                         {
@@ -286,12 +286,12 @@
                 <div class="col">
                     @if (isEditMode || Id == 0)
                     {
-                        <button class="btn btn-primary" type="submit">
-                            <i class="fa fa-save"></i> Save
+                        <button class="btn btn-primary btn-sm" type="submit">
+                            <i class="fas fa-save"></i> Save
                         </button>
                     }
-                    <button class="btn btn-secondary ms-2" type="button" @onclick="NavigateToCustomerList">
-                        <i class="fa fa-times"></i> Close
+                    <button class="btn btn-secondary btn-sm ms-2" type="button" @onclick="NavigateToCustomerList">
+                        <i class="fas fa-times"></i> Close
                     </button>
                 </div>
             </div>

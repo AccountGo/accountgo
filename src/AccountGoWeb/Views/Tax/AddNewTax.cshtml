@@ -1,11 +1,11 @@
 ﻿@model Dto.TaxSystem.TaxForCreation
 <style>
     tr th{
-        color: #fff;
+        color: var(--bs-white, #fff);
     }
 
     tr td, div.row{
-        color: #fff;
+        color: var(--bs-white, #fff);
     }
 
     button.float-end {
@@ -47,7 +47,7 @@
                     <div class="col-sm-8">
                         <select class="form-control" asp-for="TaxGroup!.Id" asp-items="@ViewBag.TaxGroups" id="optTaxGroups"></select>
                         <span asp-validation-for="TaxGroup!.Id" class="text-danger"></span>
-                        <button type="button" class="btn-primary float-end" data-bs-toggle="modal" data-bs-target="#taxGroup">
+                        <button type="button" class="btn btn-primary btn btn-sm-sm float-end" data-bs-toggle="modal" data-bs-target="#taxGroup">
                             Create New Tax Group
                         </button>
                     </div>
@@ -57,7 +57,7 @@
                     <div class="col-sm-8">
                         <select class="form-control" asp-for="ItemTaxGroup!.Id" asp-items="@ViewBag.ItemTaxGroups" id="optItemTaxGroups"></select>
                         <span asp-validation-for="ItemTaxGroup!.Id" class="text-danger"></span>
-                        <button type="button" class="btn-primary float-end" data-bs-toggle="modal" data-bs-target="#itemTaxGroup">
+                        <button type="button" class="btn btn-primary btn btn-sm-sm float-end" data-bs-toggle="modal" data-bs-target="#itemTaxGroup">
                             Create New Item Tax Group
                         </button>
                     </div>
@@ -104,8 +104,8 @@
          </div>
     </div>
     <div class="col-md-9">
-        <input id="btnSave" class="btn btn-sm btn-primary btn-flat pull-left" type="submit" value="Save" />
-        <a href="~/tax/taxes" class="btn btn-sm btn-default btn-flat pull-left">Close</a>
+        <input id="btnSave" class="btn btn-primary btn-sm pull-left" type="submit" value="Save" />
+        <a href="~/tax/taxes" class="btn btn-secondary btn-sm pull-left">Close</a>
     </div>
 
     @* Tax Group Modal *@
@@ -144,8 +144,8 @@
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button class="btn btn-sm btn-primary btn-flat" id="taxGroupButton" type="button" data-bs-dismiss="modal">Save</button>
-                    <button class="btn btn-sm btn-default btn-flat" type="button" data-bs-dismiss="modal">Close</button>
+                    <button class="btn btn-primary btn-sm" id="taxGroupButton" type="button" data-bs-dismiss="modal">Save</button>
+                    <button class="btn btn-secondary btn-sm" type="button" data-bs-dismiss="modal">Close</button>
                 </div>
             </div>
         </div>
@@ -177,8 +177,8 @@
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button class="btn btn-sm btn-primary btn-flat" id="itemTaxGroupButton" type="button" data-bs-dismiss="modal">Save</button>
-                    <button class="btn btn-sm btn-default btn-flat" type="button" data-bs-dismiss="modal">Close</button>
+                    <button class="btn btn-primary btn-sm" id="itemTaxGroupButton" type="button" data-bs-dismiss="modal">Save</button>
+                    <button class="btn btn-secondary btn-sm" type="button" data-bs-dismiss="modal">Close</button>
                 </div>
             </div>
         </div>

@@ -7,7 +7,7 @@
         width: 100%;
         border-collapse: collapse;
         background: transparent;
-        color: white; /* text visible on dark page */
+        color: var(--bs-white, #fff); /* text visible on dark page */
     }
     .customerPaymentsTable th, .customerPaymentsTable td {
         padding: 8px;
@@ -15,7 +15,7 @@
         border: none; /* no borders */
     }
     .customerPaymentRow:hover {
-        background-color: rgba(255,255,255,0.1);
+        background-color: rgba(var(--bs-white-rgb, 255,255,255), 0.1);
         cursor: pointer;
     }
 </style>
@@ -23,18 +23,18 @@
 <div class="container-fluid">
     <div class="row mb-3">
         <div class="col">
-            <a href="/Sales/NewCustomerPayment" class="btn">
-                <i class="fa fa-plus"></i>
+            <a href="/Sales/NewCustomerPayment" class="btn btn-sm">
+                <i class="fas fa-plus"></i>
                 New Customer Payment
             </a>
             <a href="@GetViewReceiptLink()" id="linkViewReceipt"
-                class="btn @(selectedReceiptId == null ? "inactiveLink" : "")">
-                <i class="fa fa-edit"></i>
+                class="btn btn-sm @(selectedReceiptId == null ?"inactiveLink" : "")">
+                <i class="fas fa-edit"></i>
                 View
             </a>
             <a href="@GetAllocateLink()" id="linkAllocate"
-                class="btn @(selectedReceiptId == null || isAllocateDisabled ? "inactiveLink" : "")">
-                <i class="fa fa-tasks"></i>
+                class="btn btn-sm @(selectedReceiptId == null || isAllocateDisabled ?"inactiveLink" : "")">
+                <i class="fas fa-tasks"></i>
                 Allocate
             </a>
         </div>
@@ -53,7 +53,7 @@
     else if (errorMessage != null)
     {
         <div class="alert alert-danger" role="alert">
-            <i class="fa fa-exclamation-circle"></i>
+            <i class="fas fa-exclamation-circle"></i>
             <strong>Error:</strong> @errorMessage
         </div>
     }
@@ -78,7 +78,7 @@
                         {
                             int index = i;
                             <tr
-                                class="customerPaymentRow @(selectedRowIndex == index ? "table-active" : "")"
+                                class="customerPaymentRow @(selectedRowIndex == index ?"table-active" : "")"
                                 @onclick="@(() => OnRowSelected(index))"
                                 @ondblclick="@(() => NavigateToSalesReceipt(index))">
                                 <td>@GetValue(salesReceipts[index], "id")</td>

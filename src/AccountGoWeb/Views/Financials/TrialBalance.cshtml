@@ -1,9 +1,9 @@
 ﻿@model ICollection<AccountGoWeb.Models.TrialBalance>
 @{
     ViewBag.Title = "TrialBalance";
-    Layout = "~/Views/Shared/_Layout_bootstrap.cshtml";
+    Layout = "~/Views/Shared/_Layout.cshtml";
 }
-<div style="text-align: center">
+<div class="text-center">
     <h3>
         <label>Trial Balance as at</label>
         <br />
@@ -12,22 +12,22 @@
 </div>
 <div>
     <table class="table">
-        <tr style="font-weight: bold;">
+        <tr class="report-header-row">
             <td>Account Code</td>
             <td>Account Name</td>
-            <td style="text-align: right;">Debit</td>
-            <td style="text-align: right;">Credit</td>
+            <td class="text-right report-amount">Debit</td>
+            <td class="text-right report-amount">Credit</td>
         </tr>
         @foreach (var account in Model)
         {
             <tr>
                 <td>@Html.ActionLink((string)string.Format("{0}", account.AccountCode), "account", new { id = account.AccountId })</td>
                 <td>@account.AccountName</td>
-                <td style="text-align: right;">@account.Debit</td>
-                <td style="text-align: right;">@account.Credit</td>
+                <td class="text-right report-amount">@account.Debit</td>
+                <td class="text-right report-amount">@account.Credit</td>
             </tr>
         }
-        <tr style="font-weight: bold; text-align: right;">
+        <tr class="report-total-row text-right">
             <td></td>
             <td>Total</td>
             <td>@Model.Sum(m => m.Debit)</td>

@@ -1,12 +1,12 @@
 ﻿@model IEnumerable<Dto.Security.Role>
 @using AccountGoWeb.Models;
 <div>
-    <a href="~/administration/role" class="btn inactiveLink">
-        <i class="fa fa-plus"></i>
+    <a href="~/administration/role" class="btn btn-sm inactiveLink">
+        <i class="fas fa-plus"></i>
         New Role
     </a>
-    <a href="~/administration/role" id="linkViewUser" class="btn inactiveLink">
-        <i class="fa fa-edit"></i>
+    <a href="~/administration/role" id="linkViewUser" class="btn btn-sm inactiveLink">
+        <i class="fas fa-edit"></i>
         View
     </a>
 </div>
@@ -15,8 +15,8 @@
         <div class="box-header with-border">
             <h3 class="box-title">Roles</h3>
             <div class="box-tools pull-right">
-                <button type="button" class="btn btn-box-tool" data-widget="collapse" data-toggle="tooltip" title="Collapse">
-                    <i class="fa fa-minus"></i>
+                <button type="button" class="btn btn-box-tool" data-widget="collapse" data-bs-toggle="tooltip" title="Collapse">
+                    <i class="fas fa-minus"></i>
                 </button>
             </div>
         </div>
@@ -35,7 +35,7 @@
     </div>
 </div>
 <div class="col-sm-9">
-    <div id="permissions" class="ag-blue" style="height: 400px;"></div>
+    <div id="permissions" class="ag-grid-container ag-theme-blue h-400"></div>
 </div>
 <script>
     function onSelectionChanged() {

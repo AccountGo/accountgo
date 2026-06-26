@@ -58,11 +58,11 @@ else
 
                     <!-- Form submission buttons -->
                     <div class="box-footer">
-                        <button type="submit" class="btn btn-primary" disabled="@isSaving">
-                            <i class="fa fa-save"></i> @(isSaving ? "Saving..." : "Save")
+                        <button type="submit" class="btn btn-primary btn-sm" disabled="@isSaving">
+                            <i class="fas fa-save"></i> @(isSaving ? "Saving..." : "Save")
                         </button>
-                        <a href="/Audit/GetAuditableEntities" class="btn btn-default">
-                            <i class="fa fa-times"></i> Cancel
+                        <a href="/Audit/GetAuditableEntities" class="btn btn-secondary btn-sm">
+                            <i class="fas fa-times"></i> Cancel
                         </a>
                     </div>
                 </EditForm>

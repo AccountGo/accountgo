@@ -20,6 +20,7 @@
          page. However, you can choose any other skin. Make sure you
          apply the skin class to the body tag so the changes take effect. -->
       <link rel="stylesheet" href="~/adminLTE/css/skins/skin-blue.min.css">
+      <link rel="stylesheet" href="~/css/utilities.css" asp-append-version="true">
       <!-- HTML5 Shim and Respond.js IE8 support of HTML5 elements and media queries -->
       <!-- WARNING: Respond.js doesn't work if you view the page via file:// -->
       <!--[if lt IE 9]>
@@ -64,7 +65,7 @@
             <!-- Header Navbar -->
             <nav class="navbar navbar-static-top" role="navigation">
                <!-- Sidebar toggle button-->
-               <a href="#" class="sidebar-toggle" data-toggle="push-menu" role="button">
+               <a href="#" class="sidebar-toggle" data-bs-toggle="push-menu" role="button">
                <span class="sr-only">Toggle navigation</span>
                </a>
                <!-- Navbar Right Menu -->
@@ -73,8 +74,8 @@
                      <!-- Messages: style can be found in dropdown.less-->
                      <li class="dropdown messages-menu">
                         <!-- Menu toggle button -->
-                        <a href="#" class="dropdown-toggle" data-toggle="dropdown">
-                        <i class="fa fa-envelope-o"></i>
+                        <a href="#" class="dropdown-toggle" data-bs-toggle="dropdown">
+                        <i class="fas fa-envelope-o"></i>
                         <span class="label label-success">4</span>
                         </a>
                         <ul class="dropdown-menu">
@@ -92,7 +93,7 @@
                                        <!-- Message title and timestamp -->
                                        <h4>
                                           Support Team
-                                          <small><i class="fa fa-clock-o"></i> 5 mins</small>
+                                          <small><i class="fas fa-clock-o"></i> 5 mins</small>
                                        </h4>
                                        <!-- The message -->
                                        <p>Why not buy a new awesome theme?</p>
@@ -109,8 +110,8 @@
                      <!-- Notifications Menu -->
                      <li class="dropdown notifications-menu">
                         <!-- Menu toggle button -->
-                        <a href="#" class="dropdown-toggle" data-toggle="dropdown">
-                        <i class="fa fa-bell-o"></i>
+                        <a href="#" class="dropdown-toggle" data-bs-toggle="dropdown">
+                        <i class="fas fa-bell-o"></i>
                         <span class="label label-warning">10</span>
                         </a>
                         <ul class="dropdown-menu">
@@ -121,7 +122,7 @@
                                  <li>
                                     <!-- start notification -->
                                     <a href="#">
-                                    <i class="fa fa-users text-aqua"></i> 5 new members joined today
+                                    <i class="fas fa-users text-aqua"></i> 5 new members joined today
                                     </a>
                                  </li>
                                  <!-- end notification -->
@@ -133,8 +134,8 @@
                      <!-- Tasks Menu -->
                      <li class="dropdown tasks-menu">
                         <!-- Menu Toggle Button -->
-                        <a href="#" class="dropdown-toggle" data-toggle="dropdown">
-                        <i class="fa fa-flag-o"></i>
+                        <a href="#" class="dropdown-toggle" data-bs-toggle="dropdown">
+                        <i class="fas fa-flag-o"></i>
                         <span class="label label-danger">9</span>
                         </a>
                         <ul class="dropdown-menu">
@@ -153,7 +154,7 @@
                                        <!-- The progress bar -->
                                        <div class="progress xs">
                                           <!-- Change the css width attribute to simulate progress -->
-                                          <div class="progress-bar progress-bar-aqua" style="width: 20%" role="progressbar"
+                                          <div class="progress-bar progress-bar-aqua w-pct-20" role="progressbar"
                                              aria-valuenow="20" aria-valuemin="0" aria-valuemax="100">
                                              <span class="sr-only">20% Complete</span>
                                           </div>
@@ -171,7 +172,7 @@
                      <!-- User Account Menu -->
                      <li class="dropdown user user-menu">
                         <!-- Menu Toggle Button -->
-                        <a href="#" class="dropdown-toggle" data-toggle="dropdown">
+                        <a href="#" class="dropdown-toggle" data-bs-toggle="dropdown">
                            <!-- The user image in the navbar-->
                            <img src="~/adminLTE/img/user2-160x160.png" class="user-image" alt="User Image">
                            <!-- hidden-xs hides the username on small devices so only the image appears. -->
@@ -204,17 +205,17 @@
                            <!-- Menu Footer-->
                            <li class="user-footer">
                               <div class="pull-left">
-                                 <a href="#" class="btn btn-default btn-flat">Profile</a>
+                                 <a href="#" class="btn btn-secondary btn-sm">Profile</a>
                               </div>
                               <div class="pull-right">
-                                 <a href="~/account/signout" class="btn btn-default btn-flat">Sign out</a>
+                                 <a href="~/account/signout" class="btn btn-secondary btn-sm">Sign out</a>
                               </div>
                            </li>
                         </ul>
                      </li>
                      <!-- Control Sidebar Toggle Button -->
                      <li>
-                        <a href="#" data-toggle="control-sidebar"><i class="fa fa-gears"></i></a>
+                        <a href="#" data-bs-toggle="control-sidebar"><i class="fas fa-gears"></i></a>
                      </li>
                   </ul>
                </div>
@@ -232,15 +233,15 @@
                   <div class="pull-left info">
                     <p>Alexander Pierce</p> -->
                <!-- Status -->
-               <!-- <a href="#"><i class="fa fa-circle text-success"></i> Online</a>
+               <!-- <a href="#"><i class="fas fa-circle text-success"></i> Online</a>
                   </div>
                   </div> -->
                <!-- search form (Optional) -->
                <!-- <form action="#" method="get" class="sidebar-form">
                   <div class="input-group">
                     <input type="text" name="q" class="form-control" placeholder="Search...">
-                    <span class="input-group-btn">
-                        <button type="submit" name="search" id="search-btn" class="btn btn-flat"><i class="fa fa-search"></i>
+                    <span class="input-group-btn btn-sm">
+                        <button type="submit" name="search" id="search-btn" class="btn btn-sm"><i class="fas fa-search"></i>
                         </button>
                       </span>
                   </div>
@@ -251,11 +252,11 @@
                   <li class="header">NAVIGATION</li>
                   <!-- Optionally, you can add icons to the links -->
                   <li class="active">
-                     <!--<a href="#"><i class="fa fa-dashboard"></i> <span>Dashboard</span></a>-->
-                     <a href="~/"><i class="fa fa-dashboard"></i><span>Dashboard</span></a>
+                     <!--<a href="#"><i class="fas fa-dashboard"></i> <span>Dashboard</span></a>-->
+                     <a href="~/"><i class="fas fa-dashboard"></i><span>Dashboard</span></a>
                   </li>
                   <li class="treeview">
-                     <a href="#"><i class="fa fa-industry"></i> <span>Accounts Receivable</span> <i class="fa fa-angle-left pull-right"></i></a>
+                     <a href="#"><i class="fas fa-industry"></i> <span>Accounts Receivable</span> <i class="fas fa-angle-left pull-right"></i></a>
                      <ul class="treeview-menu">
                         <li>
                            <a href="~/quotations/">Sales Quotations</a>
@@ -279,7 +280,7 @@
                      </ul>
                   </li>
                   <li class="treeview">
-                     <a href="#"><i class="fa fa-link"></i> <span>Accounts Payable</span> <i class="fa fa-angle-left pull-right"></i></a>
+                     <a href="#"><i class="fas fa-link"></i> <span>Accounts Payable</span> <i class="fas fa-angle-left pull-right"></i></a>
                      <ul class="treeview-menu">
                         <li>
                            <!--<a href="#">Purchase Orders</a>-->
@@ -294,7 +295,7 @@
                      </ul>
                   </li>
                   <li class="treeview">
-                     <a href="#"><i class="fa fa-wrench"></i> <span>Inventory Control</span> <i class="fa fa-angle-left pull-right"></i></a>
+                     <a href="#"><i class="fas fa-wrench"></i> <span>Inventory Control</span> <i class="fas fa-angle-left pull-right"></i></a>
                      <ul class="treeview-menu">
                         <li>
                            <a href="~/inventory/items">Items</a>
@@ -306,7 +307,7 @@
                      </ul>
                   </li>
                   <li class="treeview">
-                     <a href="#"><i class="fa fa-bank"></i> <span>Financials</span> <i class="fa fa-angle-left pull-right"></i></a>
+                     <a href="#"><i class="fas fa-bank"></i> <span>Financials</span> <i class="fas fa-angle-left pull-right"></i></a>
                      <ul class="treeview-menu">
                         <li>
                            <!--<a href="#">Journal Entries</a>-->
@@ -330,7 +331,7 @@
                      </ul>
                   </li>
                   <li class="treeview">
-                     <a href="#"><i class="fa fa-line-chart"></i> <span>Reports</span> <i class="fa fa-angle-left pull-right"></i></a>
+                     <a href="#"><i class="fas fa-line-chart"></i> <span>Reports</span> <i class="fas fa-angle-left pull-right"></i></a>
                      <ul class="treeview-menu">
                         <li>
                            <!--<a href="#">Balance Sheet</a>-->
@@ -347,7 +348,7 @@
                      </ul>
                   </li>
                   <li class="treeview">
-                     <a href="#"><i class="fa fa-group"></i> <span>Organization Settings</span> <i class="fa fa-angle-left pull-right"></i></a>
+                     <a href="#"><i class="fas fa-group"></i> <span>Organization Settings</span> <i class="fas fa-angle-left pull-right"></i></a>
                      <ul class="treeview-menu">
                         <li>
                            <!--<a href="#">Company</a>-->
@@ -360,7 +361,7 @@
                      </ul>
                   </li>
                   <li class="treeview">
-                     <a href="#"><i class="fa fa-desktop"></i> <span>System Administration</span> <i class="fa fa-angle-left pull-right"></i></a>
+                     <a href="#"><i class="fas fa-desktop"></i> <span>System Administration</span> <i class="fas fa-angle-left pull-right"></i></a>
                      <ul class="treeview-menu">
                         @if (User.IsInRole("SystemAdministrators"))
                         {
@@ -368,10 +369,10 @@
                            <a href="#">
                            Security
                            <span class="pull-right-container">
-                           <i class="fa fa-angle-left pull-right"></i>
+                           <i class="fas fa-angle-left pull-right"></i>
                            </span>
                            </a>
-                           <ul class="treeview-menu menu-open" style="display: block;">
+                           <ul class="treeview-menu menu-open d-block">
                               <li><a href="~/administration/users">Users</a></li>
                               <li><a href="~/administration/roles">Roles</a></li>
                               <li><a href="~/administration/groups">Groups</a></li>
@@ -397,7 +398,7 @@
                  <small>Optional description</small>
                </h1>
                <ol class="breadcrumb">
-                 <li><a href="#"><i class="fa fa-dashboard"></i> Level</a></li>
+                 <li><a href="#"><i class="fas fa-dashboard"></i> Level</a></li>
                  <li class="active">Here</li>
                </ol>
                </section> -->
@@ -423,8 +424,8 @@
          <aside class="control-sidebar control-sidebar-dark">
             <!-- Create the tabs -->
             <ul class="nav nav-tabs nav-justified control-sidebar-tabs">
-               <li class="active"><a href="#control-sidebar-home-tab" data-toggle="tab"><i class="fa fa-home"></i></a></li>
-               <li><a href="#control-sidebar-settings-tab" data-toggle="tab"><i class="fa fa-gears"></i></a></li>
+               <li class="active"><a href="#control-sidebar-home-tab" data-bs-toggle="tab"><i class="fas fa-home"></i></a></li>
+               <li><a href="#control-sidebar-settings-tab" data-bs-toggle="tab"><i class="fas fa-gears"></i></a></li>
             </ul>
             <!-- Tab panes -->
             <div class="tab-content">
@@ -454,7 +455,7 @@
                               </span>
                            </h4>
                            <div class="progress progress-xxs">
-                              <div class="progress-bar progress-bar-danger" style="width: 70%"></div>
+                              <div class="progress-bar progress-bar-danger w-pct-70"></div>
                            </div>
                         </a>
                      </li>

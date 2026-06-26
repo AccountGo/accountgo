@@ -1,4 +1,4 @@
-@using Dto.Sales
+﻿@using Dto.Sales
 @using Microsoft.AspNetCore.Mvc.Rendering
 @using Microsoft.EntityFrameworkCore.Metadata.Internal
 @inject HttpClient Http
@@ -19,7 +19,7 @@
                 <div class="row mb-2">
                     <div class="col-sm-2">Customer</div>
                     <div class="col-sm-10">
-                        <InputSelect class="form-control bg-dark text-white" @bind-Value="model.CustomerId">
+                        <InputSelect class="form-control form-control-themed" @bind-Value="model.CustomerId">
                             <option value="">Select Customer</option>
                             @foreach (var c in Customers)
                             {
@@ -33,7 +33,7 @@
                 <div class="row mb-2">
                     <div class="col-sm-2">Payment Term</div>
                     <div class="col-sm-10">
-                        <select class="form-control bg-dark text-white" id="optCustomer" name="PaymentTermId" @bind="model.PaymentTermId">
+                        <select class="form-control form-control-themed" id="optCustomer" name="PaymentTermId" @bind="model.PaymentTermId">
                             <option class="text-white" value="1">Payment due within 10 days</option>
                             <option class="text-white" value="2">Due 15th Of the Following Month &#x9;</option>
                             <option class="text-white" value="3">Cash Only</option>
@@ -62,7 +62,7 @@
                             var line = model.SalesQuotationLines[i];
                             <tr @key="line">
                                 <td>
-                                    <select class="form-control bg-dark text-white" id="optItem" name="SalesQuotationLines[@i].ItemId"
+                                    <select class="form-control form-control-themed" id="optItem" name="SalesQuotationLines[@i].ItemId"
                                         @bind="line.ItemId">
                                         <option selected="selected" value="1">HOA Dues</option>
                                         <option value="2">Car Sticker</option>
@@ -71,16 +71,16 @@
                                 </td>
 
                                 <td>
-                                    <InputNumber class="form-control bg-dark text-white" @bind-Value="line.Quantity" placeholder="1.00" />
+                                    <InputNumber class="form-control form-control-themed" @bind-Value="line.Quantity" placeholder="1.00" />
                                 </td>
                                 <td>
-                                    <InputNumber class="form-control bg-dark text-white" @bind-Value="line.Amount" placeholder="0.00" />
+                                    <InputNumber class="form-control form-control-themed" @bind-Value="line.Amount" placeholder="0.00" />
                                 </td>
                                 <td>
-                                    <InputNumber class="form-control bg-dark text-white" @bind-Value="line.Discount" placeholder="0.00" />
+                                    <InputNumber class="form-control form-control-themed" @bind-Value="line.Discount" placeholder="0.00" />
                                 </td>
                                 <td>
-                                    <select class="form-control bg-dark text-white" id="optMeasurement_@i"
+                                    <select class="form-control form-control-themed" id="optMeasurement_@i"
                                         name="SalesQuotationLines[@i].MeasurementId" @bind="line.MeasurementId">
                                         <option selected="selected" value="1">Each</option>
                                         <option value="4">Hour</option>
@@ -99,7 +99,7 @@
                     }
                     <tr>
                         <td colspan="5">
-                            <button type="button" class="btn btn-primary" @onclick="AddRow">Add Row</button>
+                            <button type="button" class="btn btn-primary btn-sm" @onclick="AddRow">Add Row</button>
                         </td>
                     </tr>
                 </tbody>
@@ -107,8 +107,8 @@
         </div>
 
         <div class="mt-2">
-            <button type="submit" class="btn btn-primary">Save</button>
-            <button type="button" class="btn btn-secondary" @onclick="Close">Close</button>
+            <button type="submit" class="btn btn-primary btn-sm">Save</button>
+            <button type="button" class="btn btn-secondary btn-sm" @onclick="Close">Close</button>
         </div>
     </EditForm>
 </div>

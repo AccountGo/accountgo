@@ -1,4 +1,4 @@
-@page "/audit/auditable-entities-blazor"
+﻿@page "/audit/auditable-entities-blazor"
 @namespace AccountGoWeb.Components.Pages.Audit
 @using Dto.Auditing
 @using System.Text.Json
@@ -28,8 +28,8 @@ else
             <div class="box">
                 <!-- Adding new Auditable Entity -->
                 <div class="box-header mb-3">
-                    <a href="/Audit/GetEntity" class="btn btn-primary">
-                        <i class="fa fa-plus"></i> Add New Entity
+                    <a href="/Audit/GetEntity" class="btn btn-primary btn-sm">
+                        <i class="fas fa-plus"></i> Add New Entity
                     </a>
                 </div>
 
@@ -56,25 +56,25 @@ else
                                 <tbody>
                                     @foreach (var entity in entities)
                                     {
-                                        <tr @ondblclick="() => NavigateToAuditableEntity(entity)" style="cursor: pointer;">
+                                        <tr @ondblclick="() => NavigateToAuditableEntity(entity)" class="cursor-pointer">
                                             <td>@entity.Id</td>
                                             <td>@entity.EntityName</td>
                                             <td>
                                                 @if (entity.EnableAudit)
                                                 {
-                                                    <i class="fa fa-check text-success"></i>
+                                                    <i class="fas fa-check text-success"></i>
                                                 }
                                                 else
                                                 {
-                                                    <i class="fa fa-times text-danger"></i>
+                                                    <i class="fas fa-times text-danger"></i>
                                                 }
                                             </td>
                                             <td>
-                                                <a href="/Audit/GetAuditableAttributes?entityId=@entity.Id" class="btn btn-sm btn-success" style="margin-right: 5px;">
-                                                    <i class="fa fa-list"></i> Attributes
+                                                <a href="/Audit/GetAuditableAttributes?entityId=@entity.Id" class="btn btn-success btn-sm me-5px">
+                                                    <i class="fas fa-list"></i> Attributes
                                                 </a>
-                                                <button class="btn btn-sm btn-danger" @onclick="() => OpenDeleteModal(entity)">
-                                                    <i class="fa fa-trash"></i> Delete
+                                                <button class="btn btn-danger btn-sm" @onclick="() => OpenDeleteModal(entity)">
+                                                    <i class="fas fa-trash"></i> Delete
                                                 </button>
                                             </td>
                                         </tr>
@@ -110,8 +110,8 @@ else
                     }
                 </div>
                 <div class="modal-footer">
-                    <button class="btn btn-secondary" @onclick="CloseDeleteModal">Cancel</button>
-                    <button class="btn btn-danger" @onclick="ConfirmDeleteEntity">Delete</button>
+                    <button class="btn btn-secondary btn-sm" @onclick="CloseDeleteModal">Cancel</button>
+                    <button class="btn btn-danger btn-sm" @onclick="ConfirmDeleteEntity">Delete</button>
                 </div>
             </div>
         </div>

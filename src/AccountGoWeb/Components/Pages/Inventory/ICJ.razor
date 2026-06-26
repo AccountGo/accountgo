@@ -14,7 +14,7 @@
 }
 else if (hasError)
 {
-    <div style="color: red;">Error loading inventory data.</div>
+    <div class="text-danger">Error loading inventory data.</div>
 }
 else
 {
@@ -73,7 +73,7 @@ else
     width: 100%;
     border-collapse: collapse;
     background-color: transparent;
-    color: white; /* text for dark background */
+    color: var(--bs-white, #fff); /* text for dark background */
 }
 .icjTable th, .icjTable td {
     padding: 8px;
@@ -81,13 +81,13 @@ else
     border: none;
 }
 .icjRow:hover {
-    background-color: rgba(255,255,255,0.1);
+    background-color: rgba(var(--bs-white-rgb, 255,255,255), 0.1);
     cursor: pointer;
 }
 .noRows {
     text-align: center;
     font-style: italic;
-    color: rgba(255,255,255,0.7);
+    color: rgba(var(--bs-white-rgb, 255,255,255), 0.7);
 }
 .loading-container {
     display: flex;
@@ -104,9 +104,9 @@ else
 
 .summary-box {
     padding: 10px 15px;
-    background-color: rgba(255,255,255,0.05);
+    background-color: rgba(var(--bs-white-rgb, 255,255,255), 0.05);
     border-radius: 8px;
-    color: white;
+    color: var(--bs-white, #fff);
     font-size: 14px;
 }
 </style>

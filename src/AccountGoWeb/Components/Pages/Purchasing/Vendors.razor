@@ -1,4 +1,4 @@
-@using Dto.Purchasing
+﻿@using Dto.Purchasing
 @inject HttpClient Http
 
 @inject NavigationManager Navigation
@@ -13,13 +13,13 @@
 
     <div class="row mb-3">
         <div class="col">
-            <a href="/purchasing/vendor/-1" class="btn btn-primary">
-                <i class="fa fa-plus"></i> New Vendor
+            <a href="/purchasing/vendor/-1" class="btn btn-primary btn-sm">
+                <i class="fas fa-plus"></i> New Vendor
             </a>
             @if (selectedVendor != null)
             {
-                <a href="/purchasing/vendor/@selectedVendor.Id" class="btn btn-secondary ms-2">
-                    <i class="fa fa-edit"></i> View/Edit
+                <a href="/purchasing/vendor/@selectedVendor.Id" class="btn btn-secondary btn-sm ms-2">
+                    <i class="fas fa-edit"></i> View/Edit
                 </a>
             }
         </div>
@@ -43,7 +43,7 @@
         <div class="row">
             <div class="col">
                 <div class="alert alert-danger" role="alert">
-                    <i class="fa fa-exclamation-triangle"></i> @errorMessage
+                    <i class="fas fa-exclamation-triangle"></i> @errorMessage
                 </div>
             </div>
         </div>
@@ -55,7 +55,7 @@
         <div class="row">
             <div class="col">
                 <div class="alert alert-info" role="alert">
-                    <i class="fa fa-info-circle"></i> No vendors found.
+                    <i class="fas fa-info-circle"></i> No vendors found.
                 </div>
             </div>
         </div>
@@ -69,22 +69,22 @@
 
                         <thead class="thead-dark">
                             <tr>
-                                <th @onclick="() => SortBy(nameof(Vendor.No))" style="cursor: pointer;">
+                                <th @onclick="() => SortBy(nameof(Vendor.No))" class="cursor-pointer">
                                     No @GetSortIcon(nameof(Vendor.No))
                                 </th>
-                                <th @onclick="() => SortBy(nameof(Vendor.Name))" style="cursor: pointer;">
+                                <th @onclick="() => SortBy(nameof(Vendor.Name))" class="cursor-pointer">
                                     Name @GetSortIcon(nameof(Vendor.Name))
                                 </th>
-                                <th @onclick="() => SortBy(nameof(Vendor.Phone))" style="cursor: pointer;">
+                                <th @onclick="() => SortBy(nameof(Vendor.Phone))" class="cursor-pointer">
                                     Phone @GetSortIcon(nameof(Vendor.Phone))
                                 </th>
-                                <th @onclick="() => SortBy(nameof(Vendor.Contact))" style="cursor: pointer;">
+                                <th @onclick="() => SortBy(nameof(Vendor.Contact))" class="cursor-pointer">
                                     Contact @GetSortIcon(nameof(Vendor.Contact))
                                 </th>
-                                <th @onclick="() => SortBy(nameof(Vendor.TaxGroup))" style="cursor: pointer;">
+                                <th @onclick="() => SortBy(nameof(Vendor.TaxGroup))" class="cursor-pointer">
                                     Tax Group @GetSortIcon(nameof(Vendor.TaxGroup))
                                 </th>
-                                <th @onclick="() => SortBy(nameof(Vendor.Balance))" style="cursor: pointer;">
+                                <th @onclick="() => SortBy(nameof(Vendor.Balance))" class="cursor-pointer">
                                     Balance @GetSortIcon(nameof(Vendor.Balance))
                                 </th>
                             </tr>
@@ -94,7 +94,7 @@
                             @foreach (var vendor in vendors)
                             {
                                 <tr @onclick="() => SelectVendor(vendor)" @ondblclick="NavigateToPurshaseVendor"
-                                    class="@(selectedVendor?.Id == vendor.Id ? "table-active" : "")" style="cursor: pointer;">
+                                    class="cursor-pointer @(selectedVendor?.Id == vendor.Id ?"table-active" : "")">
 
                                     <td>
                                         <a href="/purchasing/vendor/@vendor.Id">

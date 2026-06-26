@@ -4,8 +4,8 @@
 @inject NavigationManager Navigation
 
 <div>
-    <button type="button" @onclick="ToggleEdit" class="btn @(isEditMode ? "disabled" : "")">
-        <i class="fa fa-edit"></i> Edit
+    <button type="button" @onclick="ToggleEdit" class="btn btn-sm @(isEditMode ?"disabled" : "")">
+        <i class="fas fa-edit"></i> Edit
     </button>
 </div>
 
@@ -16,7 +16,7 @@
         @* General Section *@
         <div class="card">
             <div class="card-header">
-                <a data-toggle="collapse" href="#general"><i class="fa fa-align-justify"></i></a> General
+                <a data-bs-toggle="collapse" href="#general"><i class="fas fa-align-justify"></i></a> General
             </div>
             <div class="card-body collapse show row" id="general">
                 <div class="col-sm-6">
@@ -88,7 +88,7 @@
         @* Pricing Section *@
         <div class="card">
             <div class="card-header">
-                <a data-toggle="collapse" href="#pricing"><i class="fa fa-align-justify"></i></a> Pricing
+                <a data-bs-toggle="collapse" href="#pricing"><i class="fas fa-align-justify"></i></a> Pricing
             </div>
             <div class="card-body collapse show row" id="pricing">
                 <div class="col-sm-6">
@@ -155,7 +155,7 @@
         @* Invoicing Section *@
         <div class="card">
             <div class="card-header">
-                <a data-toggle="collapse" href="#invoicing"><i class="fa fa-align-justify"></i></a> Invoicing
+                <a data-bs-toggle="collapse" href="#invoicing"><i class="fas fa-align-justify"></i></a> Invoicing
             </div>
             <div class="card-body collapse show row" id="invoicing">
                 <div class="col-sm-6">
@@ -219,14 +219,14 @@
     </div>
 
     <div class="col-md-9 mt-3">
-        <button type="submit" class="btn btn-sm btn-primary btn-flat" disabled="@(!isEditMode || isSaving)">
+        <button type="submit" class="btn btn-primary btn-sm" disabled="@(!isEditMode || isSaving)">
             @if (isSaving)
             {
                 <span class="spinner-border spinner-border-sm me-1"></span>
             }
             Save
         </button>
-        <a href="/Inventory" class="btn btn-sm btn-default btn-flat">Close</a>
+        <a href="/Inventory" class="btn btn-secondary btn-sm">Close</a>
 
         @if (!string.IsNullOrEmpty(errorMessage))
         {

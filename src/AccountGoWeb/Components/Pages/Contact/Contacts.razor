@@ -1,4 +1,4 @@
-@using ContactDto = Dto.Common.Contact
+﻿@using ContactDto = Dto.Common.Contact
 @inject HttpClient Http
 @inject NavigationManager Navigation
 @rendermode InteractiveServer
@@ -10,20 +10,20 @@
 
     <div class="row mb-3">
         <div class="col">
-            <button class="btn btn-primary" @onclick="NavigateToNewContact">
-                <i class="fa fa-plus"></i> New Contact
+            <button class="btn btn-primary btn-sm" @onclick="NavigateToNewContact">
+                <i class="fas fa-plus"></i> New Contact
             </button>
             @if (selectedContact != null)
             {
-                <button class="btn btn-secondary ms-2" @onclick="NavigateToViewContact">
-                    <i class="fa fa-edit"></i> View
+                <button class="btn btn-secondary btn-sm ms-2" @onclick="NavigateToViewContact">
+                    <i class="fas fa-edit"></i> View
                 </button>
-                <button class="btn btn-success ms-2" @onclick="SetAsPrimaryContact">
-                    <i class="fa fa-check"></i> Set as Primary Contact
+                <button class="btn btn-success btn-sm ms-2" @onclick="SetAsPrimaryContact">
+                    <i class="fas fa-check"></i> Set as Primary Contact
                 </button>
             }
-            <button class="btn btn-secondary ms-2" @onclick="NavigateToCustomers">
-                <i class="fa fa-arrow-left"></i> Back to Customers
+            <button class="btn btn-secondary btn-sm ms-2" @onclick="NavigateToCustomers">
+                <i class="fas fa-arrow-left"></i> Back to Customers
             </button>
         </div>
     </div>
@@ -33,7 +33,7 @@
         <div class="row mb-3">
             <div class="col">
                 <div class="alert alert-success alert-dismissible fade show" role="alert">
-                    <i class="fa fa-check-circle"></i> @successMessage
+                    <i class="fas fa-check-circle"></i> @successMessage
                     <button type="button" class="btn-close" @onclick="() => successMessage = null"></button>
                 </div>
             </div>
@@ -56,7 +56,7 @@
         <div class="row">
             <div class="col">
                 <div class="alert alert-danger" role="alert">
-                    <i class="fa fa-exclamation-triangle"></i> @errorMessage
+                    <i class="fas fa-exclamation-triangle"></i> @errorMessage
                 </div>
             </div>
         </div>
@@ -66,7 +66,7 @@
         <div class="row">
             <div class="col">
                 <div class="alert alert-info" role="alert">
-                    <i class="fa fa-info-circle"></i> No contacts found.
+                    <i class="fas fa-info-circle"></i> No contacts found.
                 </div>
             </div>
         </div>
@@ -79,13 +79,13 @@
                     <table class="table table-striped table-hover table-bordered">
                         <thead class="thead-dark">
                             <tr>
-                                <th @onclick="() => SortBy(nameof(ContactDto.Id))" style="cursor: pointer;">
+                                <th @onclick="() => SortBy(nameof(ContactDto.Id))" class="cursor-pointer">
                                     Id @GetSortIcon(nameof(ContactDto.Id))
                                 </th>
-                                <th @onclick="() => SortBy(nameof(ContactDto.FirstName))" style="cursor: pointer;">
+                                <th @onclick="() => SortBy(nameof(ContactDto.FirstName))" class="cursor-pointer">
                                     First Name @GetSortIcon(nameof(ContactDto.FirstName))
                                 </th>
-                                <th @onclick="() => SortBy(nameof(ContactDto.LastName))" style="cursor: pointer;">
+                                <th @onclick="() => SortBy(nameof(ContactDto.LastName))" class="cursor-pointer">
                                     Last Name @GetSortIcon(nameof(ContactDto.LastName))
                                 </th>
                                 <th>Primary</th>
@@ -95,7 +95,7 @@
                             @foreach (var contact in contacts)
                             {
                                 <tr @onclick="() => SelectContact(contact)"
-                                    style="cursor: pointer; @(selectedContact?.Id == contact.Id ? "background-color: #007bff33; border-left: 3px solid #007bff;" : "")">
+                                    class="cursor-pointer @(selectedContact?.Id == contact.Id ? "selected-row-themed" : string.Empty)">
                                     <td>
                                         <a href="/contact/contact/@contact.Id?partyId=@contact.HoldingPartyId&partyType=@contact.HoldingPartyType">
                                             @contact.Id
@@ -107,7 +107,7 @@
                                         @if (IsPrimaryContact(contact))
                                         {
                                             <span class="badge bg-success">
-                                                <i class="fa fa-check"></i> Primary
+                                                <i class="fas fa-check"></i> Primary
                                             </span>
                                         }
                                     </td>

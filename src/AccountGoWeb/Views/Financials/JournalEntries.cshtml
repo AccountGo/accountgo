@@ -2,17 +2,17 @@
 @using AccountGoWeb.Components.Pages.Financial
 
 @* <div>
-    <a href="~/financials/addjournalentry" class="btn">
-        <i class="fa fa-plus"></i>
+    <a href="~/financials/addjournalentry" class="btn btn-sm">
+        <i class="fas fa-plus"></i>
         New
     </a>
-    <a href="~/financials/journalentry" id="linkViewJournalEntry" class="btn inactiveLink">
-        <i class="fa fa-edit"></i>
+    <a href="~/financials/journalentry" id="linkViewJournalEntry" class="btn btn-sm inactiveLink">
+        <i class="fas fa-edit"></i>
         View
     </a>
 </div>
 <div>
-    <div id="journalentries" class="ag-fresh" style="height: 400px;"></div>
+    <div id="journalentries" class="ag-grid-container ag-fresh h-400"></div>
 </div>
 <script>
     var columnDefs = [

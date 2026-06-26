@@ -1,18 +1,18 @@
-@using Dto.Inventory
+﻿@using Dto.Inventory
 @inject HttpClient Http
 
 @inject NavigationManager Navigation
 
 <style>
     .table tbody tr.table-active {
-        background-color: #0d6efd !important;
-        color: #fff !important;
+        background-color: var(--bs-primary, #20a8d8) !important;
+        color: var(--bs-white, #fff) !important;
     }
     .table tbody tr.table-active td {
-        color: #fff !important;
+        color: var(--bs-white, #fff) !important;
     }
     .table tbody tr.table-active a {
-        color: #fff !important;
+        color: var(--bs-white, #fff) !important;
         text-decoration: underline;
     }
 </style>
@@ -27,13 +27,13 @@
 
     <div class="row mb-3">
         <div class="col">
-            <a href="/Inventory/AddItem" class="btn btn-primary">
-                <i class="fa fa-plus"></i> New Item
+            <a href="/Inventory/AddItem" class="btn btn-primary btn-sm">
+                <i class="fas fa-plus"></i> New Item
             </a>
             @if (selectedItem != null)
             {
-                <a href="/Inventory/Item/@selectedItem.Id" class="btn btn-secondary ms-2">
-                    <i class="fa fa-edit"></i> View/Edit
+                <a href="/Inventory/Item/@selectedItem.Id" class="btn btn-secondary btn-sm ms-2">
+                    <i class="fas fa-edit"></i> View/Edit
                 </a>
             }
         </div>
@@ -57,7 +57,7 @@
         <div class="row">
             <div class="col">
                 <div class="alert alert-danger" role="alert">
-                    <i class="fa fa-exclamation-triangle"></i> @errorMessage
+                    <i class="fas fa-exclamation-triangle"></i> @errorMessage
                 </div>
             </div>
         </div>
@@ -69,7 +69,7 @@
         <div class="row">
             <div class="col">
                 <div class="alert alert-info" role="alert">
-                    <i class="fa fa-info-circle"></i> No items found.
+                    <i class="fas fa-info-circle"></i> No items found.
                 </div>
             </div>
         </div>
@@ -83,28 +83,28 @@
 
                         <thead class="thead-dark">
                             <tr>
-                                <th @onclick="() => SortBy(nameof(Item.Id))" style="cursor: pointer;">
+                                <th @onclick="() => SortBy(nameof(Item.Id))" class="cursor-pointer">
                                     Item @GetSortIcon(nameof(Item.Id))
                                 </th>
-                                <th @onclick="() => SortBy(nameof(Item.Code))" style="cursor: pointer;">
+                                <th @onclick="() => SortBy(nameof(Item.Code))" class="cursor-pointer">
                                     Code @GetSortIcon(nameof(Item.Code))
                                 </th>
-                                <th @onclick="() => SortBy(nameof(Item.Description))" style="cursor: pointer;">
+                                <th @onclick="() => SortBy(nameof(Item.Description))" class="cursor-pointer">
                                     Description @GetSortIcon(nameof(Item.Description))
                                 </th>
-                                <th @onclick="() => SortBy(nameof(Item.Measurement))" style="cursor: pointer;">
+                                <th @onclick="() => SortBy(nameof(Item.Measurement))" class="cursor-pointer">
                                     Unit @GetSortIcon(nameof(Item.Measurement))
                                 </th>
-                                <th @onclick="() => SortBy(nameof(Item.ItemTaxGroupName))" style="cursor: pointer;">
+                                <th @onclick="() => SortBy(nameof(Item.ItemTaxGroupName))" class="cursor-pointer">
                                     Item Tax Group @GetSortIcon(nameof(Item.ItemTaxGroupName))
                                 </th>
-                                <th @onclick="() => SortBy(nameof(Item.Cost))" style="cursor: pointer;">
+                                <th @onclick="() => SortBy(nameof(Item.Cost))" class="cursor-pointer">
                                     Cost @GetSortIcon(nameof(Item.Cost))
                                 </th>
-                                <th @onclick="() => SortBy(nameof(Item.Price))" style="cursor: pointer;">
+                                <th @onclick="() => SortBy(nameof(Item.Price))" class="cursor-pointer">
                                     Price @GetSortIcon(nameof(Item.Price))
                                 </th>
-                                <th @onclick="() => SortBy(nameof(Item.QuantityOnHand))" style="cursor: pointer;">
+                                <th @onclick="() => SortBy(nameof(Item.QuantityOnHand))" class="cursor-pointer">
                                     On Hand @GetSortIcon(nameof(Item.QuantityOnHand))
                                 </th>
                             </tr>
@@ -115,7 +115,7 @@
                             {
                                 <tr @onclick="() => SelectItem(item)"
                                     @ondblclick="NavigateToInventoryItem"
-                                    class="@(selectedItem?.Id == item.Id ? "table-active" : "")" style="cursor: pointer;">
+                                    class="cursor-pointer @(selectedItem?.Id == item.Id ?"table-active" : "")">
 
                                     <td>
                                         <a href="/Inventory/Item/@item.Id">

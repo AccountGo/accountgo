@@ -70,13 +70,13 @@ apply the skin class to the body tag so the changes take effect.
    
 </script>
 <a href="javascript:fromHTML()" class="button">Download</a>
-<div id="content" style="background-color: white;">
+<div id="content" class="pdf-surface">
     <section class="invoice">
         <!-- title row -->
         <div class="row">
             <div class="col-xs-12">
                 <h2 class="page-header">
-                    <i class="fa fa-globe"></i> @Model.CompanyName
+                    <i class="fas fa-globe"></i> @Model.CompanyName
                     <small class="pull-right">Date: @Model.InvoiceDate.ToShortDateString()</small>
                 </h2>
             </div>
@@ -139,7 +139,7 @@ apply the skin class to the body tag so the changes take effect.
             </div>
         </div>
 
-        <div style="text-align: right" class="row">
+        <div class="row text-right">
 
 
             <div class="col-xs-12" align="right">
@@ -149,18 +149,18 @@ apply the skin class to the body tag so the changes take effect.
                     <table class="table formatTable">
                         <tbody>
                             <tr>
-                                <th style="width: 80%" class="text-right">Subtotal:</th>
+                                <th class="text-right w-pct-80">Subtotal:</th>
                                 <td class="text-right"><label>@Model.Amount</label></td>
                             </tr>
                             <tr>
-                                <th style="width: 80%" class="text-right">Tax:</th>
+                                <th class="text-right w-pct-80">Tax:</th>
 
-                                <td style="text-align: right"><label>@Model.TotalTax</label></td>
+                                <td class="text-right"><label>@Model.TotalTax</label></td>
                             </tr>
 
                             <tr>
-                                <th style="width: 80%" class="text-right">Total:</th>
-                                <td style="text-align: right">
+                                <th class="text-right w-pct-80">Total:</th>
+                                <td class="text-right">
                                     <label>@Model.TotalAmountAfterTax</label>
                                 </td>
                             </tr>

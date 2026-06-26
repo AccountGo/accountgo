@@ -1,4 +1,4 @@
-@model string
+﻿@model string
 
 @using Newtonsoft.Json
 @{
@@ -11,7 +11,7 @@
         width: 100%;
         border-collapse: collapse;
         background: transparent;
-        color: white; /* text visible on dark page */
+        color: var(--bs-white, #fff); /* text visible on dark page */
     }
     .salesInvoicesTable th, .salesInvoicesTable td {
         padding: 8px;
@@ -19,22 +19,22 @@
         border: none; /* no borders */
     }
     .salesInvoiceRow:hover {
-        background-color: rgba(255,255,255,0.1); 
+        background-color: rgba(var(--bs-white-rgb, 255,255,255), 0.1); 
         cursor: pointer;
     }
 </style>
 
 <div>
-    <a href="~/Sales/SalesInvoice" class="btn">
-        <i class="fa fa-plus"></i>
+    <a href="~/Sales/SalesInvoice" class="btn btn-sm">
+        <i class="fas fa-plus"></i>
         New Invoice
     </a>
-    <a href="javascript:void(0)" id="linkEditInvoice" class="btn inactiveLink">
-        <i class="fa fa-edit"></i>
+    <a href="javascript:void(0)" id="linkEditInvoice" class="btn btn-sm inactiveLink">
+        <i class="fas fa-edit"></i>
         Edit
     </a>
-    <a href="javascript:void(0)" id="linkDeleteInvoice" class="btn inactiveLink">
-        <i class="fa fa-trash"></i>
+    <a href="javascript:void(0)" id="linkDeleteInvoice" class="btn btn-sm inactiveLink">
+        <i class="fas fa-trash"></i>
         Delete
     </a>
 </div>
@@ -83,7 +83,7 @@
 @* Delete Modal *@
 <div class="modal" id="deleteSalesInvoice" tabindex="-1">
     <div class="modal-dialog">
-        <div class="modal-content bg-dark text-white">
+        <div class="modal-content modal-content-themed">
             <div class="modal-header">
                 <h5 class="modal-title">Delete</h5>
                 <button aria-label="Close" class="btn-close btn-close-white" data-bs-dismiss="modal" type="button"></button>
@@ -93,9 +93,9 @@
                 <input type="hidden" id="hdnselectedsalesInvoiceId" />
             </div>
             <div class="modal-footer">
-                <button class="btn btn-sm btn-danger btn-flat" onclick="deleteSalesInvoice()"
+                <button class="btn btn-danger btn-sm" onclick="deleteSalesInvoice()"
                     type="button">Yes</button>
-                <button class="btn btn-sm btn-secondary btn-flat" data-bs-dismiss="modal" type="button">No</button>
+                <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal" type="button">No</button>
             </div>
         </div>
     </div>
