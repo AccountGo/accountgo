@@ -230,6 +230,41 @@
    Override hardcoded dark mode classes
    ============================================ */
 
+/* Table thead-dark - make theme-aware */
+.dark-theme table thead.thead-dark th {
+    background-color: #3a3f44 !important;
+    color: #ffc107 !important;
+    border-color: #5c6873 !important;
+}
+
+.light-theme table thead.thead-dark th {
+    background-color: #f8f9fa !important;
+    color: #23282c !important;
+    border-color: #dee2e6 !important;
+}
+
+/* Table table-dark - make theme-aware */
+.dark-theme table.table-dark,
+.dark-theme table.table-dark th,
+.dark-theme table.table-dark td {
+    background-color: #2f353a !important;
+    color: #e4e7ea !important;
+    border-color: #5c6873 !important;
+}
+
+.light-theme table.table-dark,
+.light-theme table.table-dark th,
+.light-theme table.table-dark td {
+    background-color: #fff !important;
+    color: #23282c !important;
+    border-color: #dee2e6 !important;
+}
+
+.light-theme table.table-dark thead th {
+    background-color: #f8f9fa !important;
+    font-weight: 600 !important;
+}
+
 /* Option elements - always readable */
 .dark-theme select option,
 .dark-theme .form-select option,
