@@ -45,7 +45,8 @@ else if (invoice != null)
                     <div class="row mb-2">
                         <div class="col-sm-2">Donor</div>
                         <div class="col-sm-10">
-                            <InputSelect class="form-control form-control-themed border-secondary-themed" @bind-Value="invoice.DonorId">
+                            <InputSelect class="form-control form-control-themed border-secondary-themed"
+                                         @bind-Value="invoice.DonorId">
                                 <option value="0">-- Select Donor --</option>
                                 @foreach (var customer in customers)
                                 {
@@ -60,7 +61,8 @@ else if (invoice != null)
                     <div class="row mb-2">
                         <div class="col-sm-2">Donation Date</div>
                         <div class="col-sm-10">
-                            <InputDate class="form-control form-control-themed border-secondary-themed" @bind-Value="invoice.DonationDate" />
+                            <InputDate class="form-control form-control-themed border-secondary-themed"
+                                       @bind-Value="invoice.DonationDate" />
                         </div>
                     </div>
 
@@ -68,7 +70,8 @@ else if (invoice != null)
                     <div class="row mb-2">
                         <div class="col-sm-2">Purpose</div>
                         <div class="col-sm-10">
-                            <InputText class="form-control form-control-themed border-secondary-themed" @bind-Value="invoice.Purpose" placeholder="Donation purpose..." />
+                            <InputText class="form-control form-control-themed border-secondary-themed"
+                                       @bind-Value="invoice.Purpose" placeholder="Donation purpose..." />
                         </div>
                     </div>
 
@@ -76,7 +79,8 @@ else if (invoice != null)
                     <div class="row mb-2">
                         <div class="col-sm-2">Reference No</div>
                         <div class="col-sm-10">
-                            <InputText class="form-control form-control-themed border-secondary-themed" @bind-Value="invoice.ReferenceNo" placeholder="Reference number..." />
+                            <InputText class="form-control form-control-themed border-secondary-themed"
+                                       @bind-Value="invoice.ReferenceNo" placeholder="Reference number..." />
                         </div>
                     </div>
 
@@ -85,7 +89,8 @@ else if (invoice != null)
                         <div class="col-sm-2">Options</div>
                         <div class="col-sm-10 d-flex gap-4">
                             <div class="form-check">
-                                <InputCheckbox class="form-check-input" @bind-Value="invoice.IsTaxReceiptIssued" id="taxReceipt" />
+                                <InputCheckbox class="form-check-input" @bind-Value="invoice.IsTaxReceiptIssued"
+                                               id="taxReceipt" />
                                 <label class="form-check-label" for="taxReceipt">Tax Receipt Issued</label>
                             </div>
                             <div class="form-check">
@@ -115,7 +120,8 @@ else if (invoice != null)
                             var line = invoice.DonationInvoiceLines![index];
                             <tr>
                                 <td>
-                                    <InputSelect class="form-select form-select-themed border-secondary-themed" @bind-Value="line.ItemId">
+                                    <InputSelect class="form-select form-select-themed border-secondary-themed"
+                                                 @bind-Value="line.ItemId">
                                         <option value="0">-- Select Item --</option>
                                         @foreach (var item in items)
                                         {
@@ -124,13 +130,16 @@ else if (invoice != null)
                                     </InputSelect>
                                 </td>
                                 <td>
-                                    <InputNumber class="form-control form-control-themed border-secondary-themed" @bind-Value="line.Quantity" />
+                                    <InputNumber class="form-control form-control-themed border-secondary-themed"
+                                                 @bind-Value="line.Quantity" placeholder="1" />
                                 </td>
                                 <td>
-                                    <InputNumber class="form-control form-control-themed border-secondary-themed" @bind-Value="line.Amount" />
+                                    <InputNumber class="form-control form-control-themed border-secondary-themed"
+                                                 @bind-Value="line.Amount" placeholder="0.00" />
                                 </td>
                                 <td>
-                                    <InputSelect class="form-select form-select-themed border-secondary-themed" @bind-Value="line.MeasurementId">
+                                    <InputSelect class="form-select form-select-themed border-secondary-themed"
+                                                 @bind-Value="line.MeasurementId">
                                         <option value="0">-- Select --</option>
                                         @foreach (var measurement in measurements)
                                         {
@@ -139,12 +148,14 @@ else if (invoice != null)
                                     </InputSelect>
                                 </td>
                                 <td>
-                                    <InputText class="form-control form-control-themed border-secondary-themed" @bind-Value="line.Notes" placeholder="Notes..." />
+                                    <InputText class="form-control form-control-themed border-secondary-themed"
+                                               @bind-Value="line.Notes" placeholder="Notes..." />
                                 </td>
                                 <td>
                                     @if (invoice.DonationInvoiceLines.Count > 1)
                                     {
-                                        <button type="button" class="btn btn-link text-danger p-0" title="Remove" @onclick="() => RemoveLine(index)">
+                                        <button type="button" class="btn btn-link text-danger p-0" title="Remove"
+                                                @onclick="() => RemoveLine(index)">
                                             <i class="fas fa-trash"></i>
                                         </button>
                                     }
@@ -277,7 +288,7 @@ else if (invoice != null)
     {
         invoice?.DonationInvoiceLines?.Add(new DonationInvoiceLine
         {
-            Amount = 0,
+            Amount = null,
             Quantity = 1,
             ItemId = items.FirstOrDefault()?.Id ?? 0,
             MeasurementId = measurements.FirstOrDefault()?.Id ?? 0
@@ -346,7 +357,7 @@ else if (invoice != null)
 {
 new DonationInvoiceLine
 {
-Amount = 0,
+Amount = null,
 Quantity = 1,
 ItemId = items.FirstOrDefault()?.Id ?? 0,
 MeasurementId = measurements.FirstOrDefault()?.Id ?? 0

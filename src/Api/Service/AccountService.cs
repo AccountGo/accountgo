@@ -29,7 +29,7 @@ public class AccountService : IAccountService
             // Use fully qualified name to avoid ambiguity with Dto.Financial.AccountClass
             var firstAccountClass = await _context.Set<Core.Domain.Financials.AccountClass>()
                 .FirstOrDefaultAsync();
-            
+
             if (firstAccountClass != null)
             {
                 newAccount.AccountClassId = firstAccountClass.Id;
@@ -67,6 +67,17 @@ public class AccountService : IAccountService
         if (account == null)
             return null;
 
+        if (!string.IsNullOrWhiteSpace(updatedAccount.AccountCode) &&
+            !string.Equals(updatedAccount.AccountCode, account.AccountCode, StringComparison.OrdinalIgnoreCase))
+        {
+            var codeInUse = await _context.Accounts
+                .AnyAsync(a => a.AccountCode == updatedAccount.AccountCode && a.Id != account.Id);
+            if (codeInUse)
+                throw new InvalidOperationException($"Account number '{updatedAccount.AccountCode}' already exists.");
+
+            account.AccountCode = updatedAccount.AccountCode;
+        }
+
         account.AccountName = updatedAccount.AccountName;
 
         _context.Accounts.Update(account);
@@ -85,12 +96,12 @@ public class AccountService : IAccountService
 
         // Check if account is referenced by ItemCategory
         var isReferencedByItemCategory = await _context.ItemCategories
-            .AnyAsync(ic => ic.AdjustmentAccountId == account.Id || 
+            .AnyAsync(ic => ic.AdjustmentAccountId == account.Id ||
                            ic.AssemblyAccountId == account.Id ||
                            ic.CostOfGoodsSoldAccountId == account.Id ||
                            ic.InventoryAccountId == account.Id ||
                            ic.SalesAccountId == account.Id);
-        
+
         if (isReferencedByItemCategory)
         {
             return (null, "Cannot delete account because it is being used by one or more item categories. Please remove the account reference from all item categories first.");
@@ -102,7 +113,7 @@ public class AccountService : IAccountService
                           i.CostOfGoodsSoldAccountId == account.Id ||
                           i.InventoryAccountId == account.Id ||
                           i.SalesAccountId == account.Id);
-        
+
         if (isReferencedByItem)
         {
             return (null, "Cannot delete account because it is being used by one or more items. Please remove the account reference from all items first.");
@@ -111,7 +122,7 @@ public class AccountService : IAccountService
         // Check if account has child accounts - THIS CHECK MUST REMAIN (user requirement)
         var hasChildAccounts = await _context.Accounts
             .AnyAsync(a => a.ParentAccountId == account.Id);
-        
+
         if (hasChildAccounts)
         {
             return (null, "Cannot delete account because it has child accounts. Please delete or reassign all child accounts first.");
@@ -120,7 +131,7 @@ public class AccountService : IAccountService
         // Check for transaction history - these cannot be deleted
         var isReferencedByGeneralLedgerLine = await _context.GeneralLedgerLines
             .AnyAsync(gll => gll.AccountId == account.Id);
-        
+
         if (isReferencedByGeneralLedgerLine)
         {
             return (null, "Cannot delete account because it has transaction history in the general ledger. Accounts with transaction history cannot be deleted.");
@@ -128,7 +139,7 @@ public class AccountService : IAccountService
 
         var isReferencedByJournalEntryLine = await _context.JournalEntryLines
             .AnyAsync(jel => jel.AccountId == account.Id);
-        
+
         if (isReferencedByJournalEntryLine)
         {
             return (null, "Cannot delete account because it has transaction history in journal entries. Accounts with transaction history cannot be deleted.");
@@ -136,7 +147,7 @@ public class AccountService : IAccountService
 
         var isReferencedBySalesReceiptHeader = await _context.SalesReceiptHeaders
             .AnyAsync(srh => srh.AccountToDebitId == account.Id);
-        
+
         if (isReferencedBySalesReceiptHeader)
         {
             return (null, "Cannot delete account because it is being used in sales receipts. This account has transaction history.");
@@ -144,7 +155,7 @@ public class AccountService : IAccountService
 
         var isReferencedBySalesReceiptLine = await _context.SalesReceiptLines
             .AnyAsync(srl => srl.AccountToCreditId == account.Id);
-        
+
         if (isReferencedBySalesReceiptLine)
         {
             return (null, "Cannot delete account because it is being used in sales receipt lines. This account has transaction history.");
@@ -163,7 +174,7 @@ public class AccountService : IAccountService
                            c.SalesAccountId == account.Id ||
                            c.SalesDiscountAccountId == account.Id)
                 .ToListAsync();
-            
+
             foreach (var customer in customersWithReference)
             {
                 if (customer.AccountsReceivableAccountId == account.Id) customer.AccountsReceivableAccountId = null;
@@ -179,7 +190,7 @@ public class AccountService : IAccountService
                            v.PurchaseAccountId == account.Id ||
                            v.PurchaseDiscountAccountId == account.Id)
                 .ToListAsync();
-            
+
             foreach (var vendor in vendorsWithReference)
             {
                 if (vendor.AccountsPayableAccountId == account.Id) vendor.AccountsPayableAccountId = null;
@@ -192,7 +203,7 @@ public class AccountService : IAccountService
                 .Where(t => t.PurchasingAccountId == account.Id ||
                            t.SalesAccountId == account.Id)
                 .ToListAsync();
-            
+
             foreach (var tax in taxesWithReference)
             {
                 if (tax.PurchasingAccountId == account.Id) tax.PurchasingAccountId = null;
@@ -203,7 +214,7 @@ public class AccountService : IAccountService
             var banksWithReference = await _context.Banks
                 .Where(b => b.AccountId == account.Id)
                 .ToListAsync();
-            
+
             foreach (var bank in banksWithReference)
             {
                 bank.AccountId = null;
@@ -217,7 +228,7 @@ public class AccountService : IAccountService
                              gls.SalesDiscountAccountId == account.Id ||
                              gls.ShippingChargeAccountId == account.Id)
                 .ToListAsync();
-            
+
             foreach (var glSetting in glSettingsWithReference)
             {
                 if (glSetting.GoodsReceiptNoteClearingAccountId == account.Id) glSetting.GoodsReceiptNoteClearingAccountId = null;
@@ -232,7 +243,7 @@ public class AccountService : IAccountService
                 .Where(mca => mca.MainAccountId == account.Id ||
                              mca.RelatedContraAccountId == account.Id)
                 .ToListAsync();
-            
+
             _context.MainContraAccounts.RemoveRange(contraAccountsWithReference);
 
             // Clear ItemCategory references (nullable fields)
@@ -243,7 +254,7 @@ public class AccountService : IAccountService
                            ic.InventoryAccountId == account.Id ||
                            ic.SalesAccountId == account.Id)
                 .ToListAsync();
-            
+
             foreach (var itemCategory in itemCategoriesWithReference)
             {
                 if (itemCategory.AdjustmentAccountId == account.Id) itemCategory.AdjustmentAccountId = null;
@@ -260,7 +271,7 @@ public class AccountService : IAccountService
                            i.InventoryAccountId == account.Id ||
                            i.SalesAccountId == account.Id)
                 .ToListAsync();
-            
+
             foreach (var item in itemsWithReference)
             {
                 if (item.InventoryAdjustmentAccountId == account.Id) item.InventoryAdjustmentAccountId = null;
@@ -284,11 +295,11 @@ public class AccountService : IAccountService
             {
                 // Try to extract the constraint name from the error message
                 var constraintMatch = System.Text.RegularExpressions.Regex.Match(
-                    sqlEx.Message, 
+                    sqlEx.Message,
                     @"constraint ""([^""]+)""");
-                
+
                 string constraintName = constraintMatch.Success ? constraintMatch.Groups[1].Value : "unknown";
-                
+
                 // Map constraint names to user-friendly messages
                 string errorMessage = constraintName switch
                 {
@@ -306,7 +317,7 @@ public class AccountService : IAccountService
                     var c when c.Contains("Account") && c.Contains("ParentAccountId") => "Cannot delete account because it has child accounts.",
                     _ => $"Cannot delete account because it is being used by other records in the system (constraint: {constraintName}). Please remove all references to this account first."
                 };
-                
+
                 return (null, errorMessage);
             }
             throw; // Re-throw if it's a different error

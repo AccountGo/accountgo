@@ -454,14 +454,22 @@ namespace Api.Controllers
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
-            var updatedAccount = await _accountService.UpdateAccountAsync(accountCode, new Core.Domain.Financials.Account
+            Core.Domain.Financials.Account? updatedAccount;
+            try
             {
-                AccountCode = updatedAccountDto.AccountCode,
-                AccountName = updatedAccountDto.AccountName,
-                // Balance = updatedAccountDto.Balance,
-                // DebitBalance = updatedAccountDto.DebitBalance,
-                // CreditBalance = updatedAccountDto.CreditBalance
-            });
+                updatedAccount = await _accountService.UpdateAccountAsync(accountCode, new Core.Domain.Financials.Account
+                {
+                    AccountCode = updatedAccountDto.AccountCode,
+                    AccountName = updatedAccountDto.AccountName,
+                    // Balance = updatedAccountDto.Balance,
+                    // DebitBalance = updatedAccountDto.DebitBalance,
+                    // CreditBalance = updatedAccountDto.CreditBalance
+                });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(new { message = ex.Message });
+            }
             if (updatedAccount == null)
                 return NotFound();
 

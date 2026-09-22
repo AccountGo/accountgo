@@ -73,7 +73,7 @@
                             <div class="col-sm-5">Quotation Date</div>
                             <div class="col-sm-7">
                                 <input type="date" class="form-control bg-dark" @bind="quotationDate"
-                                    disabled="@(!isEditMode)" />
+                                       disabled="@(!isEditMode)" />
                             </div>
                         </div>
 
@@ -124,7 +124,8 @@
                                     var line = lineItems[i];
                                     <tr>
                                         <td>
-                                            <select class="form-control form-control-themed" @bind="line.ItemId" disabled="@(!isEditMode)">
+                                            <select class="form-control form-control-themed" @bind="line.ItemId"
+                                                    disabled="@(!isEditMode)">
                                                 <option value="0">-- Select Item --</option>
                                                 @foreach (var item in items)
                                                 {
@@ -133,20 +134,20 @@
                                             </select>
                                         </td>
                                         <td>
-                                            <input type="number" class="form-control form-control-themed" @bind="line.Quantity" step="0.01"
-                                                disabled="@(!isEditMode)" />
+                                            <input type="number" class="form-control form-control-themed" @bind="line.Quantity"
+                                                   step="0.01" placeholder="1" disabled="@(!isEditMode)" />
                                         </td>
                                         <td>
-                                            <input type="number" class="form-control form-control-themed" @bind="line.Amount" step="0.01"
-                                                disabled="@(!isEditMode)" />
+                                            <input type="number" class="form-control form-control-themed" @bind="line.Amount"
+                                                   step="0.01" placeholder="0.00" disabled="@(!isEditMode)" />
                                         </td>
                                         <td>
-                                            <input type="number" class="form-control form-control-themed" @bind="line.Discount" step="0.01"
-                                                disabled="@(!isEditMode)" />
+                                            <input type="number" class="form-control form-control-themed" @bind="line.Discount"
+                                                   step="0.01" placeholder="0.00" disabled="@(!isEditMode)" />
                                         </td>
                                         <td>
                                             <select class="form-control form-control-themed" @bind="line.MeasurementId"
-                                                disabled="@(!isEditMode)">
+                                                    disabled="@(!isEditMode)">
                                                 <option value="0">-- Select Measurement --</option>
                                                 @foreach (var m in measurements)
                                                 {
@@ -188,9 +189,9 @@
     {
         public int Id { get; set; } = 0;
         public int? ItemId { get; set; } = 0;
-        public decimal? Quantity { get; set; } = 0;
-        public decimal? Amount { get; set; } = 0;
-        public decimal? Discount { get; set; } = 0;
+        public decimal? Quantity { get; set; } = 1;
+        public decimal? Amount { get; set; }
+        public decimal? Discount { get; set; }
         public int? MeasurementId { get; set; } = 0;
     }
 
@@ -459,7 +460,7 @@
 
     private void AddLineItem()
     {
-        lineItems.Add(new LineItem { ItemId = 0, Quantity = 1, Amount = 0, Discount = 0, MeasurementId = 0 });
+        lineItems.Add(new LineItem { ItemId = 0, Quantity = 1, Amount = null, Discount = null, MeasurementId = 0 });
         StateHasChanged();
     }
 

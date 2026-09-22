@@ -29,7 +29,6 @@
     <ValidationSummary />
 
     <div class="panel panel-default">
-        <div class="panel-heading"><strong>Header</strong></div>
         <div class="panel-body">
             <div class="form-group">
                 <label>Date</label>
@@ -50,6 +49,7 @@
                     <option value="3">Adjustment Entries</option>
                     <option value="4">Correction Entries</option>
                     <option value="5">Transfer Entries</option>
+                    <option value="6">Other</option>
                 </InputSelect>
             </div>
 
@@ -64,7 +64,7 @@
     <div class="panel panel-default">
         <div class="panel-heading">
             <strong>Lines</strong>
-            <button type="button" class="btn btn-primary btn-sm pull-right" @onclick="AddLine">
+            <button type="button" class="btn btn-primary btn-sm pull-right" @onclick="() => AddLine(1)">
                 <i class="fas fa-plus"></i> Add Line
             </button>
         </div>
@@ -122,7 +122,8 @@
                                 </td>
 
                                 <td>
-                                    <InputNumber class="form-control" Step="0.01" @bind-Value="currentLine.Amount" />
+                                    <InputNumber class="form-control" Step="0.01" @bind-Value="currentLine.Amount"
+                                                 placeholder="0.00" />
                                 </td>
 
                                 <td>
@@ -131,7 +132,7 @@
 
                                 <td>
                                     <button type="button" class="btn btn-danger btn btn-sm-sm"
-                                        @onclick="() => RemoveLine(currentLine)">
+                                            @onclick="() => RemoveLine(currentLine)">
                                         <i class="fas fa-trash"></i>
                                     </button>
                                 </td>
@@ -150,6 +151,13 @@
                         <th>@TotalCredit.ToString("0.00")</th>
                         <th colspan="2"></th>
                     </tr>
+                    <tr>
+                        <th colspan="2" class="text-right">Difference</th>
+                        <th class="@(TotalDebit == TotalCredit ? "text-success" : "text-danger")">
+                            @((TotalDebit - TotalCredit).ToString("0.00"))
+                        </th>
+                        <th colspan="2"></th>
+                    </tr>
                 </tfoot>
             </table>
         </div>
@@ -157,7 +165,8 @@
 
     <!-- ========== ACTIONS ========== -->
     <div class="text-right">
-        <button type="submit" class="btn btn-success btn-sm" disabled="@IsSaving">
+        <button type="submit" class="btn btn-success btn-sm"
+                disabled="@(IsSaving || TotalDebit == 0 || TotalDebit != TotalCredit)">
             @if (IsSaving)
             {
                 <span><i class="fas fa-spinner fa-spin"></i> Saving...</span>
@@ -201,7 +210,8 @@
         Entry.VoucherType ??= 1;
         Entry.JournalEntryLines ??= new List<JournalEntryLineDto>();
 
-        AddLine();
+        AddLine(1); // Debit
+        AddLine(2); // Credit
         await LoadAccountsAsync();
     }
 
@@ -257,13 +267,12 @@
         return list;
     }
 
-    private void AddLine()
+    private void AddLine(int drCr = 1)
     {
         Entry.JournalEntryLines!.Add(new JournalEntryLineDto
         {
-
-            DrCr = 1,
-            Amount = 0
+            DrCr = drCr,
+            Amount = null
         });
     }
 
@@ -278,16 +287,23 @@
         SuccessMessage = null;
         IsSaving = true;
 
-        @* if (TotalDebit != TotalCredit)
-        {
-            ErrorMessage = "Debits and credits are not equal.";
-            IsSaving = false;
-            return;
-        } *@
-
         if (Entry.JournalEntryLines == null || Entry.JournalEntryLines.Any(l => l.AccountId == null))
         {
             ErrorMessage = "All lines must have an account selected.";
+            IsSaving = false;
+            return;
+        }
+
+        if (TotalDebit == 0 || TotalCredit == 0)
+        {
+            ErrorMessage = "Enter at least one debit and one credit amount.";
+            IsSaving = false;
+            return;
+        }
+
+        if (TotalDebit != TotalCredit)
+        {
+            ErrorMessage = $"Total debit ({TotalDebit:0.00}) must equal total credit ({TotalCredit:0.00}).";
             IsSaving = false;
             return;
         }
@@ -318,7 +334,8 @@
                     Posted = false,
                     JournalEntryLines = new List<JournalEntryLineDto>()
                 };
-                AddLine();
+                AddLine(1); // Debit
+                AddLine(2); // Credit
             }
             else
             {

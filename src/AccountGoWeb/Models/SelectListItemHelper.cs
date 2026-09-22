@@ -16,6 +16,23 @@ public static class SelectListItemHelper
         return selectAccounts;
     }
 
+    // Accounts whose AccountCode falls within the given numeric range, e.g. 10000-10999
+    public static IEnumerable<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem> AccountsByCodeRange(int minCode, int maxCode)
+    {
+        var accounts = GetAsync<IEnumerable<Dto.Financial.Account>>("common/postingaccounts").Result;
+
+        // No blank option here: SalesAccountId/PurchaseAccountId are required non-nullable ints,
+        // so the first real account is selected by default instead of an empty value.
+        // Value must be the AccountCode (not the database Id): the API looks up accounts by code.
+        var selectAccounts = new HashSet<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>();
+        foreach (var account in accounts
+            .Where(a => int.TryParse(a.AccountCode, out var code) && code >= minCode && code <= maxCode)
+            .OrderBy(a => a.AccountCode))
+            selectAccounts.Add(new Microsoft.AspNetCore.Mvc.Rendering.SelectListItem() { Value = account.AccountCode, Text = $"{account.AccountCode} - {account.AccountName}" });
+
+        return selectAccounts;
+    }
+
     public static IEnumerable<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem> TaxGroups()
     {
         var taxGroups = GetAsync<IEnumerable<Dto.TaxSystem.TaxGroup>>("tax/taxgroups").Result;

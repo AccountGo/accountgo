@@ -72,6 +72,7 @@ namespace Core.Domain
         AdjustmentEntries = 3,
         CorrectionEntries = 4,
         TransferEntries = 5,
+        Other = 6,
     }
 
     public enum PurchaseOrderStatus

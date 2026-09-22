@@ -14,7 +14,14 @@
     margin: 0;
     font-size: 2.2rem;
     font-weight: 700;
+}
+
+.dark-theme .page-header h1 {
     color: #fff;
+}
+
+.light-theme .page-header h1 {
+    color: #23282c;
 }
 
 .toolbar-actions {

@@ -50,14 +50,13 @@ else
                     <th class="w-42px"></th>
                     <th>Code</th>
                     <th>Name</th>
-                    <th>Balance</th>
-                    <th>Debit</th>
-                    <th>Credit</th>
                     <th class="text-end pe-4 w-260px">Actions</th>
                 </tr>
             </thead>
             <tbody>
-                @{ var sortedTopLevelAccounts = BuildDisplayHierarchy(accounts); }
+                @{
+                    var sortedTopLevelAccounts = BuildDisplayHierarchy(accounts);
+                }
                 @for (int accountIdx = 0; accountIdx < sortedTopLevelAccounts.Count; ++accountIdx)
                 {
                     var account = sortedTopLevelAccounts[accountIdx];
@@ -68,8 +67,9 @@ else
                         <td class="text-center align-middle">
                             @if (hasChildren)
                             {
-                                <button type="button" class="btn btn-outline-secondary coa-toggle-btn btn-sm" @onclick="() => ToggleRow(rowKey)"
-                                        @onclick:stopPropagation="true" title="Toggle child accounts">
+                                <button type="button" class="btn btn-outline-secondary coa-toggle-btn btn-sm"
+                                        @onclick="() => ToggleRow(rowKey)" @onclick:stopPropagation="true"
+                                        title="Toggle child accounts">
                                     <span aria-hidden="true">@(IsExpanded(rowKey) ? "▾" : "▸")</span>
                                 </button>
                             }
@@ -77,9 +77,6 @@ else
 
                         <td>@account.AccountCode</td>
                         <td>@account.AccountName</td>
-                        <td>@account.TotalBalance</td>
-                        <td>@account.TotalDebitBalance</td>
-                        <td>@account.TotalCreditBalance</td>
 
                         <td>
                             <div class="d-flex gap-2 justify-content-end flex-nowrap">
@@ -118,7 +115,7 @@ else
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title">
-                        @((isEditModalVisible ? "Edit Account" : parentAccount != null ? $"Add Sub-Account to {parentAccount.AccountName}" : "Add Account"))
+                        @((isEditModalVisible ? "Edit Account" : parentAccount != null ? $"Add Sub-Account to                   {parentAccount.AccountName}" : "Add Account"))
                     </h5>
                     <button type="button" class="btn-close" @onclick="CloseModal"></button>
                 </div>
@@ -126,8 +123,7 @@ else
                     <div class="mb-3">
                         <label for="accountCode" class="form-label">Account Code</label>
                         <input type="text" id="accountCode" class="form-control" value="@selectedAccount?.AccountCode"
-                               @oninput="e => selectedAccount!.AccountCode = e.Value?.ToString() ?? string.Empty"
-                               disabled="@isEditModalVisible" />
+                               @oninput="e => selectedAccount!.AccountCode = e.Value?.ToString() ?? string.Empty" />
                     </div>
                     <div class="mb-3">
                         <label for="accountName" class="form-label">Account Name</label>
@@ -181,6 +177,8 @@ else
     private List<AccountViewModel> accounts = new();
     private AccountViewModel? selectedAccount = null;
     private AccountViewModel? parentAccount = null; // Track parent account when adding sub-account
+    // Code of the account being edited; used to locate it if the code is changed
+    private string? originalAccountCodeForEdit;
     private bool isAddModalVisible = false;
     private bool isEditModalVisible = false;
     private bool isDeleteModalVisible = false;
@@ -278,7 +276,7 @@ else
         return workingRoots;
     }
 
-    // Find the best parent node by checking candidate parent codes derived from the account code. 
+    // Find the best parent node by checking candidate parent codes derived from the account code.
     private AccountViewModel? FindBestDisplayParent(AccountViewModel sectionRoot, string? accountCode)
     {
         foreach (var candidateParentCode in GetCandidateParentCodes(accountCode))
@@ -524,18 +522,6 @@ else
                 builder.CloseElement();
 
                 builder.OpenElement(sequence++, "td");
-                builder.AddContent(sequence++, account.TotalBalance);
-                builder.CloseElement();
-
-                builder.OpenElement(sequence++, "td");
-                builder.AddContent(sequence++, account.TotalDebitBalance);
-                builder.CloseElement();
-
-                builder.OpenElement(sequence++, "td");
-                builder.AddContent(sequence++, account.TotalCreditBalance);
-                builder.CloseElement();
-
-                builder.OpenElement(sequence++, "td");
                 builder.AddAttribute(sequence++, "onclick:stopPropagation", "true");
 
                 builder.OpenElement(sequence++, "div");
@@ -635,6 +621,7 @@ else
             TotalCreditBalance = account.TotalCreditBalance,
             ChildAccounts = account.ChildAccounts
         };
+        originalAccountCodeForEdit = account.AccountCode;
         errorMessage = string.Empty;
         isEditModalVisible = true;
     }
@@ -646,6 +633,7 @@ else
         isEditModalVisible = false;
         selectedAccount = null;
         parentAccount = null;
+        originalAccountCodeForEdit = null;
         errorMessage = string.Empty;
     }
 
@@ -680,9 +668,9 @@ else
 
             if (isEditModalVisible)
             {
-                // Update existing account via API
+                // Update existing account via API; route uses the original code so renaming the code still targets the right account
                 response = await client.PutAsJsonAsync(
-                    $"{apiUrl}financials/UpdateAccount/{selectedAccount.AccountCode}",
+                    $"{apiUrl}financials/UpdateAccount/{originalAccountCodeForEdit}",
                     accountDto);
             }
             else

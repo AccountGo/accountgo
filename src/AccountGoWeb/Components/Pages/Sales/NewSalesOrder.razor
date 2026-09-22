@@ -68,7 +68,8 @@
                         <div class="row mb-3">
                             <div class="col-md-6">
                                 <label class="form-label"><strong>Amount</strong></label>
-                                <input type="number" class="form-control form-control-themed" @bind="totalAmount" step="0.01" readonly />
+                                <input type="number" class="form-control form-control-themed" @bind="totalAmount"
+                                       step="0.01" readonly />
                             </div>
                         </div>
 
@@ -81,7 +82,7 @@
                                         <th>Quantity</th>
                                         <th>Amount</th>
                                         <th>Discount (%)</th>
-                                    <th>Unit</th>
+                                        <th>Unit</th>
                                         <th>Action</th>
                                     </tr>
                                 </thead>
@@ -93,7 +94,8 @@
                                             var line = lineItems[i];
                                             <tr>
                                                 <td>
-                                                    <select class="form-control form-control-sm form-control-themed" @bind="line.ItemId">
+                                                    <select class="form-control form-control-sm form-control-themed"
+                                                            @bind="line.ItemId">
                                                         <option value="0">-- Select Item --</option>
                                                         @foreach (var item in items)
                                                         {
@@ -102,19 +104,20 @@
                                                     </select>
                                                 </td>
                                                 <td>
-                                                    <input type="number" class="form-control form-control-sm form-control-themed" @bind="line.Quantity"
-                                                        step="0.01" />
+                                                    <input type="number" class="form-control form-control-sm form-control-themed"
+                                                           @bind="line.Quantity" step="0.01" />
                                                 </td>
                                                 <td>
-                                                    <input type="number" class="form-control form-control-sm form-control-themed" @bind="line.Amount"
-                                                        step="0.01" />
+                                                    <input type="number" class="form-control form-control-sm form-control-themed"
+                                                           @bind="line.Amount" step="0.01" placeholder="0.00" />
                                                 </td>
                                                 <td>
-                                                    <input type="number" class="form-control form-control-sm form-control-themed" @bind="line.Discount"
-                                                        step="0.01" />
+                                                    <input type="number" class="form-control form-control-sm form-control-themed"
+                                                           @bind="line.Discount" step="0.01" placeholder="0.00" />
                                                 </td>
                                                 <td>
-                                                    <select class="form-control form-control-sm form-control-themed" @bind="line.MeasurementId">
+                                                    <select class="form-control form-control-sm form-control-themed"
+                                                            @bind="line.MeasurementId">
                                                         <option value="0">-- Select Unit --</option>
                                                         @foreach (var measurement in measurements)
                                                         {
@@ -127,7 +130,7 @@
                                                         int itemIndex = i;
                                                     }
                                                     <button class="btn btn-danger btn-sm"
-                                                        @onclick="() => RemoveLineItem(itemIndex)">Remove</button>
+                                                            @onclick="() => RemoveLineItem(itemIndex)">Remove</button>
                                                 </td>
                                             </tr>
                                         }
@@ -162,8 +165,8 @@
         public string ItemDescription { get; set; } = "";
         public int MeasurementId { get; set; } = 1;
         public decimal Quantity { get; set; } = 1;
-        public decimal Amount { get; set; } = 0;
-        public decimal Discount { get; set; } = 0;
+        public decimal? Amount { get; set; }
+        public decimal? Discount { get; set; }
     }
 
     private class Customer
@@ -396,8 +399,8 @@
         totalAmount = lineItems.Sum(line =>
         {
             var qty = line.Quantity;
-            var amt = line.Amount;
-            var disc = line.Discount;
+            var amt = line.Amount ?? 0;
+            var disc = line.Discount ?? 0;
             var total = qty * amt;
             var discount = (disc / 100) * total;
             return total - discount;

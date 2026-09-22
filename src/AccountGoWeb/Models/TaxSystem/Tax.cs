@@ -16,5 +16,8 @@ namespace AccountGoWeb.Models.TaxSystem
         public decimal Rate { get; set; }
 
         public bool IsActive { get; set; }
+
+        public string? SalesAccountCode { get; set; }
+        public string? PurchaseAccountCode { get; set; }
     }
 }

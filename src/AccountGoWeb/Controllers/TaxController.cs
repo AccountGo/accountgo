@@ -31,8 +31,8 @@ namespace AccountGoWeb.Controllers
         {
             ViewBag.PageContentHeader = "Add New Tax";
 
-            @ViewBag.TaxGroups = Models.SelectListItemHelper.TaxGroups();
-            @ViewBag.ItemTaxGroups = Models.SelectListItemHelper.ItemTaxGroups();
+            @ViewBag.DebitAccounts = Models.SelectListItemHelper.AccountsByCodeRange(10000, 10999);
+            @ViewBag.CreditAccounts = Models.SelectListItemHelper.AccountsByCodeRange(20000, 20999);
 
             return View();
         }
@@ -40,6 +40,13 @@ namespace AccountGoWeb.Controllers
         [HttpPost]
         public IActionResult AddNewTax(TaxForCreation taxForCreationDto)
         {
+            if (string.IsNullOrWhiteSpace(taxForCreationDto.TaxName))
+            {
+                taxForCreationDto.TaxName = TaxCodeName(taxForCreationDto.TaxCode);
+                ModelState.Remove(nameof(taxForCreationDto.TaxName));
+            }
+            taxForCreationDto.IsActive = true;
+
             if (ModelState.IsValid)
             {
                 var serialize = Newtonsoft.Json.JsonConvert.SerializeObject(taxForCreationDto);
@@ -49,13 +56,26 @@ namespace AccountGoWeb.Controllers
                 var response = Post("Tax/addnewtax", content);
                 if (response.IsSuccessStatusCode)
                     return RedirectToAction("Taxes");
+
+                var errorContent = response.Content.ReadAsStringAsync().Result;
+                ModelState.AddModelError(string.Empty, $"Error saving tax: {errorContent}");
             }
 
-            @ViewBag.TaxGroups = Models.SelectListItemHelper.TaxGroups();
-            @ViewBag.ItemTaxGroups = Models.SelectListItemHelper.ItemTaxGroups();
+            @ViewBag.DebitAccounts = Models.SelectListItemHelper.AccountsByCodeRange(10000, 10999);
+            @ViewBag.CreditAccounts = Models.SelectListItemHelper.AccountsByCodeRange(20000, 20999);
 
             return View();
         }
+
+        // Maps a preset tax code to a friendly display name; falls back to the code itself for custom codes.
+        private static string TaxCodeName(string? taxCode) => taxCode?.Trim().ToUpperInvariant() switch
+        {
+            "GST" => "Goods and Services Tax",
+            "HST" => "Harmonized Sales Tax",
+            "PST" => "Provincial Sales Tax",
+            "EXEMPT" => "Tax Exempt",
+            _ => taxCode ?? string.Empty
+        };
 
         [HttpGet]
         public async Task<IActionResult> EditTax(int? id)
@@ -126,12 +146,14 @@ namespace AccountGoWeb.Controllers
                                 Console.WriteLine($"Found item tax group: {itemTaxGroupDto.Name}");
                             }
 
-                            // Set account IDs (defaulting to standard accounts if not set)
-                            editTaxViewModel.SalesAccountId = 20300; // Sales Tax account
-                            editTaxViewModel.PurchaseAccountId = 50700; // Purchase Tax account
+                            // Preselect the tax's actual GL accounts (falls back to 0 if the code can't be parsed)
+                            int.TryParse(taxDto.SalesAccountCode, out var salesAccountCode);
+                            int.TryParse(taxDto.PurchaseAccountCode, out var purchaseAccountCode);
+                            editTaxViewModel.SalesAccountId = salesAccountCode;
+                            editTaxViewModel.PurchaseAccountId = purchaseAccountCode;
 
-                            @ViewBag.TaxGroups = Models.SelectListItemHelper.TaxGroups();
-                            @ViewBag.ItemTaxGroups = Models.SelectListItemHelper.ItemTaxGroups();
+                            @ViewBag.DebitAccounts = Models.SelectListItemHelper.AccountsByCodeRange(10000, 10999);
+                            @ViewBag.CreditAccounts = Models.SelectListItemHelper.AccountsByCodeRange(20000, 20999);
 
                             Console.WriteLine("Returning EditTax view");
                             return View("EditTax", editTaxViewModel);
@@ -162,6 +184,18 @@ namespace AccountGoWeb.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> EditTax(EditTaxViewModel editTaxViewModel)
         {
+            if (editTaxViewModel.Tax == null)
+            {
+                return RedirectToAction("Taxes");
+            }
+
+            if (string.IsNullOrWhiteSpace(editTaxViewModel.Tax.TaxName))
+            {
+                editTaxViewModel.Tax.TaxName = TaxCodeName(editTaxViewModel.Tax.TaxCode);
+                ModelState.Remove("Tax.TaxName");
+            }
+            editTaxViewModel.Tax.IsActive = true;
+
             if (ModelState.IsValid)
             {
                 var taxForUpdateDto = _mapper.Map<Dto.TaxSystem.TaxForUpdate>(editTaxViewModel);
@@ -190,8 +224,8 @@ namespace AccountGoWeb.Controllers
                 }
             }
 
-            @ViewBag.TaxGroups = Models.SelectListItemHelper.TaxGroups();
-            @ViewBag.ItemTaxGroups = Models.SelectListItemHelper.ItemTaxGroups();
+            @ViewBag.DebitAccounts = Models.SelectListItemHelper.AccountsByCodeRange(10000, 10999);
+            @ViewBag.CreditAccounts = Models.SelectListItemHelper.AccountsByCodeRange(20000, 20999);
 
             return View(editTaxViewModel);
         }

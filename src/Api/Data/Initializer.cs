@@ -190,7 +190,7 @@ namespace Api.Data
                 };
 
                 _adminService.SaveCompany(defaultCompany);
-//                Console.WriteLine($"Default company returned = {defaultCompany.Id}");
+                //                Console.WriteLine($"Default company returned = {defaultCompany.Id}");
                 return defaultCompany;
             }
         }
@@ -541,63 +541,53 @@ namespace Api.Data
             var salesTaxAccount = _financialService.GetAccountByAccountCode("20300");
             var purchaseTaxAccount = _financialService.GetAccountByAccountCode("50700");
 
-            var vat5 = new Core.Domain.TaxSystem.Tax()
+            var gst = new Core.Domain.TaxSystem.Tax()
             {
-                TaxCode = "VAT5%",
-                TaxName = "VAT 5%",
+                TaxCode = "GST",
+                TaxName = "Goods and Services Tax",
                 Rate = 5,
                 IsActive = true,
                 SalesAccountId = salesTaxAccount.Id,
                 PurchasingAccountId = purchaseTaxAccount.Id,
             };
 
-            var vat10 = new Core.Domain.TaxSystem.Tax()
+            var hst = new Core.Domain.TaxSystem.Tax()
             {
-                TaxCode = "VAT10%",
-                TaxName = "VAT 10%",
-                Rate = 10,
-                IsActive = true,
-                SalesAccountId = salesTaxAccount.Id,
-                PurchasingAccountId = purchaseTaxAccount.Id,
-            };
-
-            var evat12 = new Core.Domain.TaxSystem.Tax()
-            {
-                TaxCode = "VAT12%",
-                TaxName = "VAT 12%",
+                TaxCode = "HST",
+                TaxName = "Harmonized Sales Tax",
                 Rate = 12,
                 IsActive = true,
                 SalesAccountId = salesTaxAccount.Id,
                 PurchasingAccountId = purchaseTaxAccount.Id,
             };
 
-            var exportTax1 = new Core.Domain.TaxSystem.Tax()
+            var pst = new Core.Domain.TaxSystem.Tax()
             {
-                TaxCode = "exportTax1%",
-                TaxName = "Export Tax 1%",
-                Rate = 1,
+                TaxCode = "PST",
+                TaxName = "Provincial Sales Tax",
+                Rate = 7,
                 IsActive = true,
                 SalesAccountId = salesTaxAccount.Id,
                 PurchasingAccountId = purchaseTaxAccount.Id,
             };
 
-            var taxGroupVat = new Core.Domain.TaxSystem.TaxGroup()
+            var taxGroupGstHst = new Core.Domain.TaxSystem.TaxGroup()
             {
-                Description = "VAT",
+                Description = "GST/HST",
                 TaxAppliedToShipping = false,
                 IsActive = true,
             };
 
-            var taxGroupExport = new Core.Domain.TaxSystem.TaxGroup()
+            var taxGroupPst = new Core.Domain.TaxSystem.TaxGroup()
             {
-                Description = "Export",
+                Description = "PST",
                 TaxAppliedToShipping = false,
                 IsActive = true,
             };
 
             IList<Core.Domain.TaxSystem.TaxGroup> taxGroups = new List<Core.Domain.TaxSystem.TaxGroup>();
-            taxGroups.Add(taxGroupVat);
-            taxGroups.Add(taxGroupExport);
+            taxGroups.Add(taxGroupGstHst);
+            taxGroups.Add(taxGroupPst);
 
             var itemTaxGroupRegular = new Core.Domain.TaxSystem.ItemTaxGroup()
             {
@@ -615,37 +605,36 @@ namespace Api.Data
             itemtaxGroups.Add(itemTaxGroupRegular);
             itemtaxGroups.Add(itemTaxGroupRegularPreferenced);
 
-            vat5.TaxGroupTaxes.Add(new Core.Domain.TaxSystem.TaxGroupTax()
+            gst.TaxGroupTaxes.Add(new Core.Domain.TaxSystem.TaxGroupTax()
             {
-                TaxGroup = taxGroupVat,
+                TaxGroup = taxGroupGstHst,
             });
 
-            evat12.TaxGroupTaxes.Add(new Core.Domain.TaxSystem.TaxGroupTax()
+            hst.TaxGroupTaxes.Add(new Core.Domain.TaxSystem.TaxGroupTax()
             {
-                TaxGroup = taxGroupVat,
+                TaxGroup = taxGroupGstHst,
             });
 
-            exportTax1.TaxGroupTaxes.Add(new Core.Domain.TaxSystem.TaxGroupTax()
+            pst.TaxGroupTaxes.Add(new Core.Domain.TaxSystem.TaxGroupTax()
             {
-                TaxGroup = taxGroupExport,
+                TaxGroup = taxGroupPst,
             });
 
-            vat5.ItemTaxGroupTaxes.Add(new Core.Domain.TaxSystem.ItemTaxGroupTax()
+            gst.ItemTaxGroupTaxes.Add(new Core.Domain.TaxSystem.ItemTaxGroupTax()
             {
                 ItemTaxGroup = itemTaxGroupRegularPreferenced,
                 IsExempt = false,
             });
 
-            evat12.ItemTaxGroupTaxes.Add(new Core.Domain.TaxSystem.ItemTaxGroupTax()
+            hst.ItemTaxGroupTaxes.Add(new Core.Domain.TaxSystem.ItemTaxGroupTax()
             {
                 ItemTaxGroup = itemTaxGroupRegular,
                 IsExempt = false,
             });
 
-            taxes.Add(vat5);
-            taxes.Add(vat10);
-            taxes.Add(evat12);
-            taxes.Add(exportTax1);
+            taxes.Add(gst);
+            taxes.Add(hst);
+            taxes.Add(pst);
 
             foreach (var tax in taxes)
             {

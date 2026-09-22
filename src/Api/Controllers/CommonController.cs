@@ -42,12 +42,12 @@ namespace Api.Controllers
         public IActionResult Customers()
         {
             var customers = _salesService.GetCustomers();
-            
+
             ICollection<Customer> customersDto = new HashSet<Customer>();
 
             foreach (var customer in customers)
             {
-                if(customer.Party != null)
+                if (customer.Party != null)
                     customersDto.Add(new Customer() { Id = customer.Id, Name = customer.Party.Name, PaymentTermId = customer.PaymentTermId });
             }
 
@@ -70,7 +70,7 @@ namespace Api.Controllers
             ICollection<Item> itemsDto = new HashSet<Item>();
 
             foreach (var item in items)
-                itemsDto.Add(new Item() { Id = item.Id, Description = item.Description , Code = item.Code, Price = item.Price, SellMeasurementId = item.SellMeasurementId});
+                itemsDto.Add(new Item() { Id = item.Id, Description = item.Description, Code = item.Code, Price = item.Price, SellMeasurementId = item.SellMeasurementId });
 
             return new ObjectResult(itemsDto);
         }
@@ -91,13 +91,13 @@ namespace Api.Controllers
 
             foreach (var vendor in vendors)
             {
-                if(vendor.Party != null)
+                if (vendor.Party != null)
                     vendorsDto.Add(new Vendor() { Id = vendor.Id, Name = vendor.Party.Name, PaymentTermId = vendor.PaymentTermId });
             }
 
             return new ObjectResult(vendorsDto);
         }
-        
+
         [HttpGet]
         [Route("ItemCategories")] // api/Common/ItemCategories
         public IActionResult ItemCategories()
@@ -130,7 +130,7 @@ namespace Api.Controllers
             ICollection<Account> accountsDto = new HashSet<Account>();
 
             foreach (var account in accounts)
-                accountsDto.Add(new Account() { Id = account.Id, AccountName = account.AccountName });
+                accountsDto.Add(new Account() { Id = account.Id, AccountCode = account.AccountCode, AccountName = account.AccountName });
 
             return Ok(accountsDto);
         }
@@ -145,14 +145,14 @@ namespace Api.Controllers
             var salesQuotationsDto = new List<Dto.Common.Status>();
             foreach (var item in Enum.GetValues(typeof(SalesQuoteStatus)))
             {
-                if (quoteStatuses.Contains((int)item) )
+                if (quoteStatuses.Contains((int)item))
                 {
                     salesQuotationsDto.Add(new Dto.Common.Status { Id = (int)item, Description = Enum.GetName(typeof(SalesQuoteStatus), item) });
                 }
 
             }
             return Json(salesQuotationsDto);
- 
+
         }
 
         [HttpGet]
@@ -167,7 +167,7 @@ namespace Api.Controllers
                 new Dto.Common.Status { Id = 4, Description = "Credit Card" },
                 new Dto.Common.Status { Id = 5, Description = "Other" }
             };
-            
+
             return Json(paymentMethods);
         }
 

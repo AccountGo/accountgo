@@ -34,29 +34,33 @@ else
 
 
     <div class="panel panel-default">
-        <div class="panel-heading text-primary"><strong>Header</strong></div>
         <div class="panel-body mt-2">
-            <div class="form-group d-flex align-items-center justify-content-start border-bottom border-bottom-themed pb-2 gap-3">
+            <div
+                class="form-group d-flex align-items-center justify-content-start border-bottom border-bottom-themed pb-2 gap-3">
                 <label class="mb-0 fw-bold">Date</label>
                 <p class="mb-0 text-end">@Entry.JournalDate.ToString("yyyy-MM-dd")</p>
             </div>
 
-            <div class="form-group d-flex align-items-center justify-content-start border-bottom border-bottom-themed pb-2 gap-3">
+            <div
+                class="form-group d-flex align-items-center justify-content-start border-bottom border-bottom-themed pb-2 gap-3">
                 <label class="mb-0 fw-bold">Reference No</label>
                 <p class="mb-0 text-end">@Entry.ReferenceNo</p>
             </div>
 
-            <div class="form-group d-flex align-items-center justify-content-start border-bottom border-bottom-themed pb-2 gap-3">
+            <div
+                class="form-group d-flex align-items-center justify-content-start border-bottom border-bottom-themed pb-2 gap-3">
                 <label class="mb-0 fw-bold">Voucher Type</label>
                 <p class="mb-0 text-end">@Entry.VoucherType</p>
             </div>
 
-            <div class="form-group d-flex align-items-center justify-content-start border-bottom border-bottom-themed pb-2 gap-3">
+            <div
+                class="form-group d-flex align-items-center justify-content-start border-bottom border-bottom-themed pb-2 gap-3">
                 <label class="mb-0 fw-bold">Memo</label>
                 <p class="mb-0 text-end">@Entry.Memo</p>
             </div>
 
-            <div class="form-group d-flex align-items-center justify-content-start border-bottom border-bottom-themed pb-2 gap-3">
+            <div
+                class="form-group d-flex align-items-center justify-content-start border-bottom border-bottom-themed pb-2 gap-3">
                 <label class="mb-0 fw-bold">Status</label>
                 @if (Entry.Posted.GetValueOrDefault())
                 {
@@ -98,7 +102,7 @@ else
                                     <!-- Account (dropdown) -->
                                     <td>
                                         <select class="form-control" @bind="line.AccountId"
-                                            disabled="@Entry.Posted.GetValueOrDefault()">
+                                                disabled="@Entry.Posted.GetValueOrDefault()">
                                             <option value="">-- Select Account --</option>
                                             @foreach (var acc in Accounts)
                                             {
@@ -119,14 +123,14 @@ else
 
                                     <!-- Amount -->
                                     <td>
-                                        <input class="form-control" type="number" step="0.01" @bind="line.Amount"
-                                            disabled="@Entry.Posted.GetValueOrDefault()" />
+                                        <input class="form-control" type="number" step="0.01" @bind="line.Amount" placeholder="0.00"
+                                               disabled="@Entry.Posted.GetValueOrDefault()" />
                                     </td>
 
                                     <!-- Memo -->
                                     <td>
                                         <input class="form-control" type="text" @bind="line.Memo"
-                                            disabled="@Entry.Posted.GetValueOrDefault()" />
+                                               disabled="@Entry.Posted.GetValueOrDefault()" />
                                     </td>
                                 </tr>
                             }
@@ -169,7 +173,7 @@ else
             </button>
 
             <button class="btn btn-primary btn-sm" disabled="@(IsPosting || !Entry.ReadyForPosting.GetValueOrDefault())"
-                @onclick="PostEntry">
+                    @onclick="PostEntry">
                 @if (IsPosting)
                 {
                     <span><i class="fas fa-spinner fa-spin"></i> Posting...</span>

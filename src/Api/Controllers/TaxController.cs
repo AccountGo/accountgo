@@ -126,7 +126,9 @@ namespace Api.Controllers
                     TaxCode = tax.TaxCode,
                     TaxName = tax.TaxName,
                     Rate = tax.Rate,
-                    IsActive = tax.IsActive
+                    IsActive = tax.IsActive,
+                    SalesAccountCode = tax.SalesAccount?.AccountCode,
+                    PurchaseAccountCode = tax.PurchasingAccount?.AccountCode
                 });
             }
 
