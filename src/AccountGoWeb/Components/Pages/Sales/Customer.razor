@@ -50,10 +50,10 @@
         <EditForm Model="@Model" OnValidSubmit="HandleValidSubmit" FormName="customerForm">
             <DataAnnotationsValidator />
             
-            @* General Section *@
+            @* Company Section *@
             <div class="card mb-3">
                 <div class="card-header card-header-themed">
-                    <i class="fas fa-align-justify"></i> General
+                    <i class="fas fa-align-justify"></i> Company
                 </div>
                 <div class="card-body card-body-themed">
                     <div class="row">
@@ -63,15 +63,17 @@
                                     <label class="form-label">No</label>
                                 </div>
                                 <div class="col-sm-8">
-                                    <input type="text" class="form-control form-control-themed" value="@(Model.No ?? "Auto-generated")" disabled />
+                                    <input type="text" class="form-control form-control-themed"
+                                           value="@(Model.No ?? "Auto-generated")" disabled />
                                 </div>
                             </div>
                             <div class="row mb-3">
                                 <div class="col-sm-4">
-                                    <label class="form-label">Name</label>
+                                    <label class="form-label">Company Name</label>
                                 </div>
                                 <div class="col-sm-8">
-                                    <InputText class="form-control form-control-themed" @bind-Value="Model.Name" placeholder="Name ..." disabled="@(!isEditMode)" />
+                                    <InputText class="form-control form-control-themed" @bind-Value="Model.Name"
+                                               placeholder="Name ..." disabled="@(!isEditMode)" />
                                     <ValidationMessage For="@(() => Model.Name)" class="text-danger" />
                                 </div>
                             </div>
@@ -82,7 +84,8 @@
                                     <label class="form-label">Phone</label>
                                 </div>
                                 <div class="col-sm-8">
-                                    <InputText class="form-control form-control-themed" @bind-Value="Model.Phone" placeholder="Phone ..." disabled="@(!isEditMode)" />
+                                    <InputText class="form-control form-control-themed" @bind-Value="Model.Phone"
+                                               placeholder="Phone ..." disabled="@(!isEditMode)" />
                                 </div>
                             </div>
                             <div class="row mb-3">
@@ -90,7 +93,8 @@
                                     <label class="form-label">Website</label>
                                 </div>
                                 <div class="col-sm-8">
-                                    <InputText class="form-control form-control-themed" @bind-Value="Model.Website" placeholder="Website ..." disabled="@(!isEditMode)" />
+                                    <InputText class="form-control form-control-themed" @bind-Value="Model.Website"
+                                               placeholder="Website ..." disabled="@(!isEditMode)" />
                                 </div>
                             </div>
                             <div class="row mb-3">
@@ -98,7 +102,83 @@
                                     <label class="form-label">Email</label>
                                 </div>
                                 <div class="col-sm-8">
-                                    <InputText class="form-control form-control-themed" @bind-Value="Model.Email" placeholder="Email ..." disabled="@(!isEditMode)" />
+                                    <InputText class="form-control form-control-themed" @bind-Value="Model.Email"
+                                               placeholder="Email ..." disabled="@(!isEditMode)" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body card-body-themed border-top">
+                    <div class="row g-4">
+                        <div class="col-sm-6">
+                            <h5>Company Address</h5>
+                            <div class="row mb-3">
+                                <div class="col-sm-4"><label class="form-label">Street</label></div>
+                                <div class="col-sm-8">
+                                    <InputText class="form-control form-control-themed"
+                                               @bind-Value="Model.CompanyAddress.Street1" placeholder="Street ..."
+                                               disabled="@(!isEditMode)" />
+                                </div>
+                            </div>
+                            <div class="row mb-3">
+                                <div class="col-sm-4"><label class="form-label">Province</label></div>
+                                <div class="col-sm-8">
+                                    <InputSelect class="form-control form-control-themed"
+                                                 @bind-Value="Model.CompanyAddress.Province" disabled="@(!isEditMode)">
+                                        <option value="">-- Select Province/Territory --</option>
+                                        @foreach (var province in CanadianProvincesAndTerritories)
+                                        {
+                                            <option value="@province.Value">@province.Text</option>
+                                        }
+                                    </InputSelect>
+                                </div>
+                            </div>
+                            <div class="row mb-3">
+                                <div class="col-sm-4"><label class="form-label">Postal Code</label></div>
+                                <div class="col-sm-8">
+                                    <InputText class="form-control form-control-themed"
+                                               @bind-Value="Model.CompanyAddress.PostalCode" placeholder="Postal code ..."
+                                               disabled="@(!isEditMode)" />
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-sm-6">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h5 class="mb-0">Shipping Address</h5>
+                                <button type="button" class="btn btn-sm btn-outline-secondary"
+                                        @onclick="CopyCompanyAddressToShipping" disabled="@(!isEditMode)"
+                                        title="Copy company address to shipping address">
+                                    <i class="fas fa-copy"></i> Copy company address
+                                </button>
+                            </div>
+                            <div class="row mb-3">
+                                <div class="col-sm-4"><label class="form-label">Street</label></div>
+                                <div class="col-sm-8">
+                                    <InputText class="form-control form-control-themed"
+                                               @bind-Value="Model.ShippingAddress.Street1" placeholder="Street ..."
+                                               disabled="@(!isEditMode)" />
+                                </div>
+                            </div>
+                            <div class="row mb-3">
+                                <div class="col-sm-4"><label class="form-label">Province</label></div>
+                                <div class="col-sm-8">
+                                    <InputSelect class="form-control form-control-themed"
+                                                 @bind-Value="Model.ShippingAddress.Province" disabled="@(!isEditMode)">
+                                        <option value="">-- Select Province/Territory --</option>
+                                        @foreach (var province in CanadianProvincesAndTerritories)
+                                        {
+                                            <option value="@province.Value">@province.Text</option>
+                                        }
+                                    </InputSelect>
+                                </div>
+                            </div>
+                            <div class="row mb-3">
+                                <div class="col-sm-4"><label class="form-label">Postal Code</label></div>
+                                <div class="col-sm-8">
+                                    <InputText class="form-control form-control-themed"
+                                               @bind-Value="Model.ShippingAddress.PostalCode" placeholder="Postal code ..."
+                                               disabled="@(!isEditMode)" />
                                 </div>
                             </div>
                         </div>
@@ -128,7 +208,9 @@
                                     <label class="form-label">First Name</label>
                                 </div>
                                 <div class="col-sm-8">
-                                    <InputText class="form-control form-control-themed" @bind-Value="Model.PrimaryContact!.FirstName" placeholder="First Name ..." disabled="@(!isEditMode)" />
+                                    <InputText class="form-control form-control-themed"
+                                               @bind-Value="Model.PrimaryContact!.FirstName" placeholder="First Name ..."
+                                               disabled="@(!isEditMode)" />
                                 </div>
                             </div>
                             <div class="row mb-3">
@@ -136,7 +218,9 @@
                                     <label class="form-label">Last Name</label>
                                 </div>
                                 <div class="col-sm-8">
-                                    <InputText class="form-control form-control-themed" @bind-Value="Model.PrimaryContact!.LastName" placeholder="Last Name ..." disabled="@(!isEditMode)" />
+                                    <InputText class="form-control form-control-themed"
+                                               @bind-Value="Model.PrimaryContact!.LastName" placeholder="Last Name ..."
+                                               disabled="@(!isEditMode)" />
                                 </div>
                             </div>
                         </div>
@@ -146,15 +230,9 @@
                                     <label class="form-label">Phone</label>
                                 </div>
                                 <div class="col-sm-8">
-                                    <InputText class="form-control form-control-themed" @bind-Value="Model.PrimaryContact!.Party.Phone" placeholder="Phone ..." disabled="@(!isEditMode)" />
-                                </div>
-                            </div>
-                            <div class="row mb-3">
-                                <div class="col-sm-4">
-                                    <label class="form-label">Website</label>
-                                </div>
-                                <div class="col-sm-8">
-                                    <InputText class="form-control form-control-themed" @bind-Value="Model.PrimaryContact!.Party.Website" placeholder="Website ..." disabled="@(!isEditMode)" />
+                                    <InputText class="form-control form-control-themed"
+                                               @bind-Value="Model.PrimaryContact!.Party.Phone" placeholder="Phone ..."
+                                               disabled="@(!isEditMode)" />
                                 </div>
                             </div>
                             <div class="row mb-3">
@@ -162,7 +240,9 @@
                                     <label class="form-label">Email</label>
                                 </div>
                                 <div class="col-sm-8">
-                                    <InputText class="form-control form-control-themed" @bind-Value="Model.PrimaryContact!.Party.Email" placeholder="Email ..." disabled="@(!isEditMode)" />
+                                    <InputText class="form-control form-control-themed"
+                                               @bind-Value="Model.PrimaryContact!.Party.Email" placeholder="Email ..."
+                                               disabled="@(!isEditMode)" />
                                 </div>
                             </div>
                         </div>
@@ -180,40 +260,13 @@
                         <div class="col-sm-6">
                             <div class="row mb-3">
                                 <div class="col-sm-4">
-                                    <label class="form-label">Accounts Receivable</label>
-                                </div>
-                                <div class="col-sm-8">
-                                    <InputSelect class="form-control form-control-themed" @bind-Value="Model.AccountsReceivableId" disabled="@(!isEditMode)">
-                                        <option value="">-- Select Account --</option>
-                                        @foreach (var account in Accounts)
-                                        {
-                                            <option value="@account.Value">@account.Text</option>
-                                        }
-                                    </InputSelect>
-                                </div>
-                            </div>
-                            <div class="row mb-3">
-                                <div class="col-sm-4">
                                     <label class="form-label">Sales</label>
                                 </div>
                                 <div class="col-sm-8">
-                                    <InputSelect class="form-control form-control-themed" @bind-Value="Model.SalesAccountId" disabled="@(!isEditMode)">
+                                    <InputSelect class="form-control form-control-themed" @bind-Value="Model.SalesAccountId"
+                                                 disabled="@(!isEditMode)">
                                         <option value="">-- Select Account --</option>
-                                        @foreach (var account in Accounts)
-                                        {
-                                            <option value="@account.Value">@account.Text</option>
-                                        }
-                                    </InputSelect>
-                                </div>
-                            </div>
-                            <div class="row mb-3">
-                                <div class="col-sm-4">
-                                    <label class="form-label">Prepayment</label>
-                                </div>
-                                <div class="col-sm-8">
-                                    <InputSelect class="form-control form-control-themed" @bind-Value="Model.PrepaymentAccountId" disabled="@(!isEditMode)">
-                                        <option value="">-- Select Account --</option>
-                                        @foreach (var account in Accounts)
+                                        @foreach (var account in SalesAccounts)
                                         {
                                             <option value="@account.Value">@account.Text</option>
                                         }
@@ -225,7 +278,8 @@
                                     <label class="form-label">Discount</label>
                                 </div>
                                 <div class="col-sm-8">
-                                    <InputSelect class="form-control form-control-themed" @bind-Value="Model.SalesDiscountAccountId" disabled="@(!isEditMode)">
+                                    <InputSelect class="form-control form-control-themed"
+                                                 @bind-Value="Model.SalesDiscountAccountId" disabled="@(!isEditMode)">
                                         <option value="">-- Select Account --</option>
                                         @foreach (var account in Accounts)
                                         {
@@ -241,7 +295,8 @@
                                     <label class="form-label">Tax Group</label>
                                 </div>
                                 <div class="col-sm-8">
-                                    <InputSelect class="form-control form-control-themed" @bind-Value="Model.TaxGroupId" disabled="@(!isEditMode)">
+                                    <InputSelect class="form-control form-control-themed" @bind-Value="Model.TaxGroupId"
+                                                 disabled="@(!isEditMode)">
                                         <option value="">-- Select Tax Group --</option>
                                         @foreach (var taxGroup in TaxGroups)
                                         {
@@ -268,7 +323,8 @@
                                     <label class="form-label">Payment Term</label>
                                 </div>
                                 <div class="col-sm-8">
-                                    <InputSelect class="form-control form-control-themed" @bind-Value="Model.PaymentTermId" disabled="@(!isEditMode)">
+                                    <InputSelect class="form-control form-control-themed" @bind-Value="Model.PaymentTermId"
+                                                 disabled="@(!isEditMode)">
                                         <option value="">-- Select Payment Term --</option>
                                         @foreach (var term in PaymentTerms)
                                         {
@@ -306,8 +362,25 @@
     private CustomerDto Model { get; set; } = new();
     
     private List<SelectListItem> Accounts { get; set; } = new();
+    private List<SelectListItem> SalesAccounts { get; set; } = new();
     private List<SelectListItem> TaxGroups { get; set; } = new();
     private List<SelectListItem> PaymentTerms { get; set; } = new();
+    private static readonly List<SelectListItem> CanadianProvincesAndTerritories = new()
+    {
+        new() { Value = "AB", Text = "Alberta" },
+        new() { Value = "BC", Text = "British Columbia" },
+        new() { Value = "MB", Text = "Manitoba" },
+        new() { Value = "NB", Text = "New Brunswick" },
+        new() { Value = "NL", Text = "Newfoundland and Labrador" },
+        new() { Value = "NS", Text = "Nova Scotia" },
+        new() { Value = "NT", Text = "Northwest Territories" },
+        new() { Value = "NU", Text = "Nunavut" },
+        new() { Value = "ON", Text = "Ontario" },
+        new() { Value = "PE", Text = "Prince Edward Island" },
+        new() { Value = "QC", Text = "Quebec" },
+        new() { Value = "SK", Text = "Saskatchewan" },
+        new() { Value = "YT", Text = "Yukon" }
+    };
     
     private bool isLoading = true;
     private bool isEditMode = false;
@@ -399,7 +472,14 @@
             if (accountsResponse.IsSuccessStatusCode)
             {
                 var accounts = await accountsResponse.Content.ReadFromJsonAsync<List<Dto.Financial.Account>>();
-                Accounts = accounts?.Select(a => new SelectListItem { Value = a.Id.ToString(), Text = a.AccountName! }).ToList() ?? new();
+                Accounts = accounts?
+                    .Where(a => int.TryParse(a.AccountCode, out var code) && code >= 50400 && code <= 50499)
+                    .Select(a => new SelectListItem { Value = a.Id.ToString(), Text = $"{a.AccountName} ({a.AccountCode})" })
+                    .ToList() ?? new();
+                SalesAccounts = accounts?
+                    .Where(a => int.TryParse(a.AccountCode, out var code) && code >= 40000 && code <= 40999)
+                    .Select(a => new SelectListItem { Value = a.Id.ToString(), Text = $"{a.AccountName} ({a.AccountCode})" })
+                    .ToList() ?? new();
             }
 
             // Load tax groups
@@ -407,7 +487,10 @@
             if (taxGroupsResponse.IsSuccessStatusCode)
             {
                 var taxGroups = await taxGroupsResponse.Content.ReadFromJsonAsync<List<Dto.TaxSystem.TaxGroup>>();
-                TaxGroups = taxGroups?.Select(tg => new SelectListItem { Value = tg.Id.ToString(), Text = tg.Description! }).ToList() ?? new();
+                TaxGroups = taxGroups?
+                    .Where(tg => tg.IsActive && (tg.Description == "GST/HST" || tg.Description == "PST"))
+                    .Select(tg => new SelectListItem { Value = tg.Id.ToString(), Text = tg.Description! })
+                    .ToList() ?? new();
             }
 
             // Load payment terms
@@ -415,7 +498,11 @@
             if (paymentTermsResponse.IsSuccessStatusCode)
             {
                 var paymentTerms = await paymentTermsResponse.Content.ReadFromJsonAsync<List<PaymentTermResponse>>();
-                PaymentTerms = paymentTerms?.Select(pt => new SelectListItem { Value = pt.Id.ToString(), Text = pt.Description }).ToList() ?? new();
+                PaymentTerms = paymentTerms?.Select(pt => new SelectListItem
+                {
+                    Value = pt.Id.ToString(),
+                    Text = pt.Description
+                }).ToList() ?? new();
             }
         }
         catch (Exception ex)
@@ -452,6 +539,14 @@
     private void EnableEditMode()
     {
         isEditMode = true;
+    }
+
+    private void CopyCompanyAddressToShipping()
+    {
+        Model.ShippingAddress.Street1 = Model.CompanyAddress.Street1;
+        Model.ShippingAddress.Province = Model.CompanyAddress.Province;
+        Model.ShippingAddress.PostalCode = Model.CompanyAddress.PostalCode;
+        Model.ShippingAddress.Country = Model.CompanyAddress.Country;
     }
 
     private void NavigateToCustomerList()

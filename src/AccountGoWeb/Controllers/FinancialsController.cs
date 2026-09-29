@@ -209,6 +209,141 @@ namespace AccountGoWeb.Controllers
       return View(banks);
     }
 
+    public async Task<IActionResult> AddBank()
+    {
+      ViewBag.PageContentHeader = "Add Bank";
+      await PopulateBankAccounts(null);
+      return View("BankForm", new Dto.Financial.Bank());
+    }
+
+    public async Task<IActionResult> EditBank(int id)
+    {
+      ViewBag.PageContentHeader = "Edit Bank";
+      var bank = await GetAsync<Dto.Financial.Bank>($"financials/bank/{id}");
+      await PopulateBankAccounts(bank?.AccountId);
+      return View("BankForm", bank);
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> SaveBank(Dto.Financial.Bank bank)
+    {
+      if (!ModelState.IsValid)
+      {
+        ViewBag.PageContentHeader = bank.Id == 0 ? "Add Bank" : "Edit Bank";
+        await PopulateBankAccounts(bank.AccountId);
+        return View("BankForm", bank);
+      }
+
+      try
+      {
+        using (var client = new System.Net.Http.HttpClient())
+        {
+          var baseUri = _baseConfig!["ApiUrl"];
+          client.BaseAddress = new System.Uri(baseUri!);
+          client.DefaultRequestHeaders.Accept.Clear();
+          client.DefaultRequestHeaders.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
+
+          var content = new System.Net.Http.StringContent(
+            Newtonsoft.Json.JsonConvert.SerializeObject(bank),
+            System.Text.Encoding.UTF8,
+            "application/json");
+
+          System.Net.Http.HttpResponseMessage response;
+          if (bank.Id == 0)
+          {
+            response = await client.PostAsync(baseUri + "financials/bank", content);
+          }
+          else
+          {
+            response = await client.PutAsync(baseUri + $"financials/bank/{bank.Id}", content);
+          }
+
+          if (response.IsSuccessStatusCode)
+          {
+            return RedirectToAction("Banks");
+          }
+          else
+          {
+            ViewBag.Error = "Failed to save bank.";
+            ViewBag.PageContentHeader = bank.Id == 0 ? "Add Bank" : "Edit Bank";
+            await PopulateBankAccounts(bank.AccountId);
+            return View("BankForm", bank);
+          }
+        }
+      }
+      catch (Exception ex)
+      {
+        ViewBag.Error = $"Error: {ex.Message}";
+        ViewBag.PageContentHeader = bank.Id == 0 ? "Add Bank" : "Edit Bank";
+        await PopulateBankAccounts(bank.AccountId);
+        return View("BankForm", bank);
+      }
+    }
+
+    private async Task PopulateBankAccounts(int? selectedAccountId)
+    {
+      var accounts = await GetAsync<IEnumerable<Dto.Financial.Account>>("financials/accounts");
+      var options = new List<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>();
+      AddBankAccountOptions(accounts, options, selectedAccountId);
+      ViewBag.BankAccounts = options;
+    }
+
+    private static void AddBankAccountOptions(
+      IEnumerable<Dto.Financial.Account>? accounts,
+      ICollection<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem> options,
+      int? selectedAccountId)
+    {
+      if (accounts == null)
+        return;
+
+      foreach (var account in accounts)
+      {
+        int accountCode;
+        if (int.TryParse(account.AccountCode, out accountCode) && accountCode >= 10100 && accountCode <= 10999)
+        {
+          options.Add(new Microsoft.AspNetCore.Mvc.Rendering.SelectListItem
+          {
+            Value = account.Id.ToString(),
+            Text = $"{account.AccountCode} - {account.AccountName}",
+            Selected = selectedAccountId == account.Id
+          });
+        }
+
+        AddBankAccountOptions(account.ChildAccounts, options, selectedAccountId);
+      }
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> DeleteBank(int id)
+    {
+      try
+      {
+        using (var client = new System.Net.Http.HttpClient())
+        {
+          var baseUri = _baseConfig!["ApiUrl"];
+          client.BaseAddress = new System.Uri(baseUri!);
+          client.DefaultRequestHeaders.Accept.Clear();
+
+          var response = await client.DeleteAsync(baseUri + $"financials/bank/{id}");
+
+          if (response.IsSuccessStatusCode)
+          {
+            return RedirectToAction("Banks");
+          }
+          else
+          {
+            ViewBag.Error = "Failed to delete bank.";
+            return RedirectToAction("Banks");
+          }
+        }
+      }
+      catch (Exception ex)
+      {
+        ViewBag.Error = $"Error: {ex.Message}";
+        return RedirectToAction("Banks");
+      }
+    }
+
 
 
   }

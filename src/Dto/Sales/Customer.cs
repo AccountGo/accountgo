@@ -13,6 +13,8 @@ namespace Dto.Sales
         public string? Website { get; set; }
         public string? Phone { get; set; }
         public string? Fax { get; set; }
+        public Address CompanyAddress { get; set; } = new();
+        public Address ShippingAddress { get; set; } = new();
 
         public int? AccountsReceivableId { get; set; }
         public int? SalesAccountId { get; set; }
@@ -20,13 +22,14 @@ namespace Dto.Sales
         public int? SalesDiscountAccountId { get; set; }
         public int? TaxGroupId { get; set; }
         public int? PaymentTermId { get; set; }
-        public decimal Balance { get; set; }        
+        public decimal Balance { get; set; }
         public string? Contact { get; set; }
         public string? TaxGroup { get; set; }
         public Contact? PrimaryContact { get; set; }
         public IEnumerable<SalesInvoice>? Invoices { get; set; }
 
-        public Customer() {
+        public Customer()
+        {
             PrimaryContact = new Contact();
         }
     }

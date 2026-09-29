@@ -691,7 +691,7 @@ namespace Api.Data
             customer.SalesAccountId = accountSales != null ? (int?)accountSales.Id : null;
             customer.CustomerAdvancesAccountId = accountAdvances != null ? (int?)accountAdvances.Id : null;
             customer.SalesDiscountAccountId = accountSalesDiscount != null ? (int?)accountSalesDiscount.Id : null;
-            customer.TaxGroupId = _financialService.GetTaxGroups().FirstOrDefault(tg => tg.Description == "VAT")!.Id;
+            customer.TaxGroupId = _financialService.GetTaxGroups().FirstOrDefault(tg => tg.Description == "GST/HST" && tg.IsActive)?.Id;
             customer.Party = customerParty;
 
             Core.Domain.Contact primaryContact = new Core.Domain.Contact
@@ -997,7 +997,7 @@ namespace Api.Data
                 SalesAccountId = _financialService.GetAccountByAccountCode("40100").Id,
                 CustomerAdvancesAccountId = _financialService.GetAccountByAccountCode("20120").Id,
                 SalesDiscountAccountId = _financialService.GetAccountByAccountCode("40400").Id,
-                TaxGroupId = _financialService.GetTaxGroups().FirstOrDefault(tg => tg.Description == "VAT")?.Id,
+                TaxGroupId = _financialService.GetTaxGroups().FirstOrDefault(tg => tg.Description == "GST/HST" && tg.IsActive)?.Id,
                 Party = new Core.Domain.Party
                 {
                     Name = name,

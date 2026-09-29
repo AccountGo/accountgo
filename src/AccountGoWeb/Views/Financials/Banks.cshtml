@@ -5,32 +5,55 @@
 </style>
 <div class="col-md-9">
     <div class="box">
+        <div class="box-header with-border">
+            <h3 class="box-title">Banks/Cash Accounts</h3>
+            <div class="box-tools pull-right">
+                <a href="~/financials/addbank" class="btn btn-primary btn-sm">
+                    <i class="fas fa-plus"></i> Add Bank
+                </a>
+            </div>
+        </div>
         <div class="box-body table-responsive">
-            <table class="table table-hover">
-                <thead>
-                    <tr>
-                        <th>Name</th>
-                        <th>Type</th>
-                        <th>GL Account</th>
-                        <th>Bank</th>
-                        <th>Address</th>
-                        <th>Account No</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var bank in Model)
-                    {
+            @if (Model != null && Model.Any())
+            {
+                <table class="table table-hover">
+                    <thead>
                         <tr>
-                            <td>@bank.Name</td>
-                            <td></td>
-                            <td></td>
-                            <td>@bank.BankName</td>
-                            <td></td>
-                            <td>@bank.AccountNo</td>
+                            <th>Name</th>
+                            <th>Bank Name</th>
+                            <th>Account No</th>
+                            <th>Actions</th>
                         </tr>
-                    }
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                        @foreach (var bank in Model)
+                        {
+                            <tr>
+                                <td>@bank.Name</td>
+                                <td>@bank.BankName</td>
+                                <td>@bank.AccountNo</td>
+                                <td>
+                                    <a href="~/financials/editbank/@bank.Id" class="btn btn-sm btn-info">
+                                        <i class="fas fa-edit"></i> Edit
+                                    </a>
+                                    <form method="post" action="~/financials/deletebank" style="display:inline;">
+                                        <input type="hidden" name="id" value="@bank.Id" />
+                                        <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Are you sure you want to delete this bank?');">
+                                            <i class="fas fa-trash"></i> Delete
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+            else
+            {
+                <div class="alert alert-info">
+                    No banks found. <a href="~/financials/addbank">Add a new bank</a>
+                </div>
+            }
         </div>
     </div>
 </div>

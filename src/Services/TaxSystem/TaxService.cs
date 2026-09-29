@@ -19,7 +19,7 @@ namespace Services.TaxSystem
         private readonly IRepository<Tax> _taxRepo;
         private readonly IRepository<TaxGroup> _taxGroupRepo;
         private readonly IRepository<TaxGroupTax> _taxGroupTaxRepo;
-        private readonly IRepository<ItemTaxGroup> _itemTaxGroupRep;        
+        private readonly IRepository<ItemTaxGroup> _itemTaxGroupRep;
         private readonly IRepository<ItemTaxGroupTax> _itemTaxGroupTaxRepo;
 
         public TaxService(IRepository<Vendor> vendorRepo,
@@ -49,7 +49,7 @@ namespace Services.TaxSystem
                 .GetAllIncluding(s => s.SalesAccount, p => p.PurchasingAccount, tgt => tgt.TaxGroupTaxes, itgt => itgt.ItemTaxGroupTaxes)
                 .FirstOrDefault(tax => tax.Id == taxId);
 
-            if(taxEntity is null)
+            if (taxEntity is null)
                 throw new NotImplementedException("Tax not found");
 
             return taxEntity;
@@ -63,19 +63,21 @@ namespace Services.TaxSystem
 
             return taxes;
         }
-        public IEnumerable<TaxGroup> GetTaxGroups() {
+        public IEnumerable<TaxGroup> GetTaxGroups()
+        {
             var taxGroups = _taxGroupRepo.GetAllIncluding(t => t.TaxGroupTax).AsEnumerable();
             return taxGroups;
         }
-        public IEnumerable<ItemTaxGroup> GetItemTaxGroups() {
+        public IEnumerable<ItemTaxGroup> GetItemTaxGroups()
+        {
             var itemTaxGroup = _itemTaxGroupRep.GetAllIncluding(t => t.ItemTaxGroupTax).AsEnumerable();
             return itemTaxGroup;
         }
         public List<KeyValuePair<int, decimal>> GetPurchaseTaxes(int vendorId, IEnumerable<PurchaseInvoiceLine> purchaseInvoiceLines)
         {
             var taxes = new List<KeyValuePair<int, decimal>>();
-            
-            foreach(var line in purchaseInvoiceLines)
+
+            foreach (var line in purchaseInvoiceLines)
             {
                 taxes.AddRange(GetPurchaseTaxes(vendorId, line.ItemId, line.Quantity, line.Cost.Value, line.Discount.Value));
             }
@@ -137,7 +139,7 @@ namespace Services.TaxSystem
 
             var intersectionTaxes = GetIntersectionTaxes(itemId, customerId, Core.Domain.PartyTypes.Customer);
 
-            foreach(var tax in intersectionTaxes)
+            foreach (var tax in intersectionTaxes)
             {
                 taxAmount = subTotalAmount - (subTotalAmount / (1 + (tax.Rate / 100)));
                 taxes.Add(new KeyValuePair<int, decimal>(tax.Id, taxAmount));
@@ -205,6 +207,7 @@ namespace Services.TaxSystem
 
                 if (party == null
                     || ((Customer)party).TaxGroup == null
+                    || !((Customer)party).TaxGroup.IsActive
                     || ((Customer)party).TaxGroup.TaxGroupTax == null
                     || ((Customer)party).TaxGroup.TaxGroupTax.Count == 0)
                 {
@@ -223,6 +226,7 @@ namespace Services.TaxSystem
 
                 if (party == null
                     || ((Vendor)party).TaxGroup == null
+                    || !((Vendor)party).TaxGroup.IsActive
                     || ((Vendor)party).TaxGroup.TaxGroupTax == null
                     || ((Vendor)party).TaxGroup.TaxGroupTax.Count == 0)
                 {
@@ -250,7 +254,9 @@ namespace Services.TaxSystem
                 {
                     if (p.TaxId == i.TaxId)
                     {
-                        taxes.Add(allTaxes.Where(t => t.Id == p.TaxId).FirstOrDefault());
+                        var tax = allTaxes.FirstOrDefault(t => t.Id == p.TaxId && t.IsActive);
+                        if (tax != null)
+                            taxes.Add(tax);
                         break;
                     }
                 }
@@ -276,12 +282,12 @@ namespace Services.TaxSystem
                 i => i.ItemTaxGroup.ItemTaxGroupTax)
                 .Where(i => i.Id == itemId)
                 .FirstOrDefault();
-                        
+
             if (item == null
                 || item.ItemTaxGroup == null
                 || item.ItemTaxGroup.ItemTaxGroupTax == null
                 || item.ItemTaxGroup.ItemTaxGroupTax.Count == 0)
-            {            
+            {
                 return taxes; // no tax configuration
             }
 
@@ -300,6 +306,7 @@ namespace Services.TaxSystem
 
                 if (customer == null
                     || customer.TaxGroup == null
+                    || !customer.TaxGroup.IsActive
                     || customer.TaxGroup.TaxGroupTax == null
                     || customer.TaxGroup.TaxGroupTax.Count == 0)
                 {
@@ -308,15 +315,16 @@ namespace Services.TaxSystem
 
                 partyTaxes = customer.TaxGroup.TaxGroupTax;
             }
-            else if (party != null  && party.PartyType == PartyTypes.Vendor)
+            else if (party != null && party.PartyType == PartyTypes.Vendor)
             {
                 Vendor vendor = _vendorRepo.GetAllIncluding(v => v.TaxGroup,
                     v => v.TaxGroup.TaxGroupTax)
                     .Where(v => v.PartyId == partyId)
                     .FirstOrDefault();
 
-                if (party == null
+                if (vendor == null
                     || vendor.TaxGroup == null
+                    || !vendor.TaxGroup.IsActive
                     || vendor.TaxGroup.TaxGroupTax == null
                     || vendor.TaxGroup.TaxGroupTax.Count == 0)
                 {
@@ -339,13 +347,17 @@ namespace Services.TaxSystem
 
             //taxes = from t in intersectionTaxes select t.p.Tax;
 
-            var allTaxes = _taxRepo.GetAllIncluding().ToList();
+            var allTaxes = _taxRepo.GetAllIncluding().Where(t => t.IsActive).ToList();
 
-            foreach(var p in partyTaxes)
+            foreach (var p in partyTaxes)
             {
-                foreach (var i in itemTaxes) {
-                    if (p.TaxId == i.TaxId) {
-                        taxes.Add(allTaxes.Where(t => t.Id == p.TaxId).FirstOrDefault());
+                foreach (var i in itemTaxes)
+                {
+                    if (p.TaxId == i.TaxId)
+                    {
+                        var tax = allTaxes.FirstOrDefault(t => t.Id == p.TaxId);
+                        if (tax != null)
+                            taxes.Add(tax);
                         break;
                     }
                 }
@@ -358,12 +370,12 @@ namespace Services.TaxSystem
         public decimal GetSalesLineTaxAmount(decimal quantity, decimal amount, decimal discount, IEnumerable<Tax> taxes)
         {
             decimal lineTaxTotal = 0;
-            amount = (amount*quantity) - discount;
+            amount = (amount * quantity) - discount;
             foreach (var tax in taxes)
             {
                 lineTaxTotal = lineTaxTotal + (amount - (amount / (1 + (tax.Rate / 100))));
             }
-                
+
             return lineTaxTotal;
         }
     }

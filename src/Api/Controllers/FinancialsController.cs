@@ -39,7 +39,8 @@ namespace Api.Controllers
                     Id = bank.Id,
                     Name = bank.Name,
                     AccountNo = bank.Number,
-                    BankName = bank.BankName
+                    BankName = bank.BankName,
+                    AccountId = bank.AccountId
                 });
             }
 
@@ -579,6 +580,154 @@ namespace Api.Controllers
             });
 
             return childLedgers;
+        }
+        #endregion
+
+        #region Bank Management
+        [HttpGet]
+        [Route("Bank/{id}")] // api/Financials/Bank/1
+        public IActionResult GetBank(int id)
+        {
+            try
+            {
+                var bank = _financialService.GetBank(id);
+                if (bank == null)
+                    return NotFound(new { message = "Bank not found" });
+
+                var bankDto = new Dto.Financial.Bank()
+                {
+                    Id = bank.Id,
+                    Name = bank.Name,
+                    AccountNo = bank.Number,
+                    BankName = bank.BankName,
+                    AccountId = bank.AccountId
+                };
+
+                return Ok(bankDto);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpPost]
+        [Route("Bank")] // api/Financials/Bank
+        public IActionResult CreateBank([FromBody] Dto.Financial.Bank bankDto)
+        {
+            try
+            {
+                if (!ModelState.IsValid)
+                    return BadRequest(ModelState);
+
+                var account = GetEligibleBankAccount(bankDto.AccountId);
+                if (account == null)
+                    return BadRequest(new { message = "Select an account with a code between 10100 and 10999." });
+
+                var bank = new Core.Domain.Financials.Bank()
+                {
+                    Name = account.AccountName,
+                    BankName = bankDto.BankName,
+                    Number = bankDto.AccountNo,
+                    AccountId = bankDto.AccountId,
+                    Type = Core.Domain.BankTypes.CheckingAccount,
+                    IsActive = true
+                };
+
+                _financialService.SaveBank(bank);
+
+                var result = new Dto.Financial.Bank()
+                {
+                    Id = bank.Id,
+                    Name = bank.Name,
+                    AccountNo = bank.Number,
+                    BankName = bank.BankName,
+                    AccountId = bank.AccountId
+                };
+
+                return CreatedAtAction(nameof(GetBank), new { id = bank.Id }, result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpPut]
+        [Route("Bank/{id}")] // api/Financials/Bank/1
+        public IActionResult UpdateBank(int id, [FromBody] Dto.Financial.Bank bankDto)
+        {
+            try
+            {
+                if (!ModelState.IsValid)
+                    return BadRequest(ModelState);
+
+                var account = GetEligibleBankAccount(bankDto.AccountId);
+                if (account == null)
+                    return BadRequest(new { message = "Select an account with a code between 10100 and 10999." });
+
+                var bank = _financialService.GetBank(id);
+                if (bank == null)
+                    return NotFound(new { message = "Bank not found" });
+
+                bank.Name = account.AccountName;
+                bank.BankName = bankDto.BankName;
+                bank.Number = bankDto.AccountNo;
+                bank.AccountId = bankDto.AccountId;
+
+                _financialService.SaveBank(bank);
+
+                var result = new Dto.Financial.Bank()
+                {
+                    Id = bank.Id,
+                    Name = bank.Name,
+                    AccountNo = bank.Number,
+                    BankName = bank.BankName,
+                    AccountId = bank.AccountId
+                };
+
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpDelete]
+        [Route("Bank/{id}")] // api/Financials/Bank/1
+        public IActionResult DeleteBank(int id)
+        {
+            try
+            {
+                var bank = _financialService.GetBank(id);
+                if (bank == null)
+                    return NotFound(new { message = "Bank not found" });
+
+                _financialService.DeleteBank(id);
+
+                return Ok(new { message = "Bank deleted successfully" });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        private Core.Domain.Financials.Account? GetEligibleBankAccount(int? accountId)
+        {
+            if (!accountId.HasValue)
+                return null;
+
+            var account = _financialService.GetAccounts().FirstOrDefault(a => a.Id == accountId.Value);
+            int accountCode;
+            if (account == null
+                || !int.TryParse(account.AccountCode, out accountCode)
+                || accountCode < 10100
+                || accountCode > 10999)
+                return null;
+
+            return account;
         }
         #endregion
     }

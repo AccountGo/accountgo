@@ -50,5 +50,7 @@ namespace Services.Financial
         void SaveFinancialYear(FinancialYear financialYear);
         void SavePaymentTerm(PaymentTerm paymentTerm);
         void SaveBank(Bank bank);
+        Bank GetBank(int id);
+        void DeleteBank(int id);
     }
 }

@@ -896,6 +896,18 @@ namespace Api.Data.Migrations.ApiDb
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("CompanyCountry")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("CompanyPostalCode")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("CompanyProvince")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("CompanyStreet")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("Email")
                         .HasColumnType("nvarchar(max)");
 
@@ -912,6 +924,18 @@ namespace Api.Data.Migrations.ApiDb
                         .HasColumnType("int");
 
                     b.Property<string>("Phone")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ShippingCountry")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ShippingPostalCode")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ShippingProvince")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ShippingStreet")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Website")

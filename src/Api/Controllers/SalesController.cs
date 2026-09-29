@@ -71,6 +71,14 @@ namespace Api.Controllers
             customer.Party.Email = customerDto.Email;
             customer.Party.Fax = customerDto.Fax;
             customer.Party.Website = customerDto.Website;
+            customer.Party.CompanyStreet = customerDto.CompanyAddress?.Street1;
+            customer.Party.CompanyProvince = customerDto.CompanyAddress?.Province;
+            customer.Party.CompanyPostalCode = customerDto.CompanyAddress?.PostalCode;
+            customer.Party.CompanyCountry = customerDto.CompanyAddress?.Country;
+            customer.Party.ShippingStreet = customerDto.ShippingAddress?.Street1;
+            customer.Party.ShippingProvince = customerDto.ShippingAddress?.Province;
+            customer.Party.ShippingPostalCode = customerDto.ShippingAddress?.PostalCode;
+            customer.Party.ShippingCountry = customerDto.ShippingAddress?.Country;
             customer.PrimaryContact.FirstName = customerDto.PrimaryContact!.FirstName;
             customer.PrimaryContact.LastName = customerDto.PrimaryContact.LastName;
             customer.PrimaryContact.Party.Name = customerDto.PrimaryContact.Party.Name;
@@ -118,6 +126,20 @@ namespace Api.Controllers
                 customerDto.Website = customer.Party.Website;
                 customerDto.Phone = customer.Party.Phone;
                 customerDto.Fax = customer.Party.Fax;
+                customerDto.CompanyAddress = new Dto.Common.Address
+                {
+                    Street1 = customer.Party.CompanyStreet,
+                    Province = customer.Party.CompanyProvince,
+                    PostalCode = customer.Party.CompanyPostalCode,
+                    Country = customer.Party.CompanyCountry
+                };
+                customerDto.ShippingAddress = new Dto.Common.Address
+                {
+                    Street1 = customer.Party.ShippingStreet,
+                    Province = customer.Party.ShippingProvince,
+                    PostalCode = customer.Party.ShippingPostalCode,
+                    Country = customer.Party.ShippingCountry
+                };
 
                 if (customer.PrimaryContact != null)
                 {

@@ -45,7 +45,7 @@ namespace Services.Financial
         private readonly IRepository<Vendor> _vendorRepo;
         private readonly IRepository<GeneralLedgerSetting> _generalLedgerSettingRepo;
 
-        public FinancialService(IInventoryService inventoryService, 
+        public FinancialService(IInventoryService inventoryService,
             ITaxService taxService,
             IRepository<GeneralLedgerHeader> generalLedgerRepository,
             IRepository<GeneralLedgerLine> generalLedgerLineRepository,
@@ -63,10 +63,10 @@ namespace Services.Financial
             IRepository<GeneralLedgerSetting> glSettingRepo,
             IRepository<MainContraAccount> maincontraAccount = null,
             IRepository<Customer> customerRepo = null,
-            IRepository<Vendor> vendorRepo = null, 
+            IRepository<Vendor> vendorRepo = null,
             IRepository<GeneralLedgerSetting> generalLedgerSettingRepo = null
             )
-            :base(null, null, paymentTermRepo, bankRepo)
+            : base(null, null, paymentTermRepo, bankRepo)
         {
             _inventoryService = inventoryService;
             _taxService = taxService;
@@ -93,8 +93,8 @@ namespace Services.Financial
         public FinancialYear CurrentFiscalYear()
         {
             var query = (from fy in _fiscalYearRepo.Table
-                        where fy.IsActive == true
-                        select fy).FirstOrDefault();
+                         where fy.IsActive == true
+                         select fy).FirstOrDefault();
 
             return query;
         }
@@ -123,7 +123,7 @@ namespace Services.Financial
 
         public IEnumerable<Account> GetAccounts()
         {
-            var accounts = _accountRepo.GetAllIncluding(c => c.Company, 
+            var accounts = _accountRepo.GetAllIncluding(c => c.Company,
                 a => a.AccountClass,
                 c => c.ChildAccounts,
                 g => g.GeneralLedgerLines,
@@ -211,7 +211,7 @@ namespace Services.Financial
             //var duplicateAccounts = glEntry.GeneralLedgerLines.GroupBy(gl => gl.AccountId).Where(gl => gl.Count() > 1);
             //if (duplicateAccounts.Count() > 0)
             //    throw new InvalidOperationException("Duplicate account id in a collection.");
-            
+
             foreach (var line in glEntry.GeneralLedgerLines)
             {
                 var account = _accountRepo.GetAllIncluding(a => a.ChildAccounts)
@@ -251,7 +251,7 @@ namespace Services.Financial
         }
 
         public ICollection<TrialBalance> TrialBalance(DateTime? from = default(DateTime?), DateTime? to = default(DateTime?))
-        {            
+        {
             var allDr = (from dr in _generalLedgerLineRepository.GetAllIncluding(a => a.Account, h => h.GeneralLedgerHeader).AsEnumerable()
                          where dr.DrCr == DrOrCrSide.Dr
                          //&& IsDateBetweenFinancialYearStartDateAndEndDate(dr.GLHeader.Date)
@@ -315,10 +315,10 @@ namespace Services.Financial
         // TODO: This generates an error
         public ICollection<BalanceSheet> BalanceSheet(DateTime? from = default(DateTime?), DateTime? to = default(DateTime?))
         {
-            var assets = from a in _accountRepo.GetAllIncluding(a => a.AccountClass, 
-                a => a.ChildAccounts, 
-                a => a.ContraAccounts, 
-                a => a.ParentAccount, 
+            var assets = from a in _accountRepo.GetAllIncluding(a => a.AccountClass,
+                a => a.ChildAccounts,
+                a => a.ContraAccounts,
+                a => a.ParentAccount,
                 h => h.GeneralLedgerLines).AsEnumerable()
                          where a.AccountClassId == 1 && a.ParentAccountId != null && !a.IsContraAccount
                          select a;
@@ -418,9 +418,9 @@ namespace Services.Financial
             return revenues_expenses;
         }
 
-        public ICollection<MasterGeneralLedger> MasterGeneralLedger(DateTime? from = default(DateTime?), 
-            DateTime? to = default(DateTime?), 
-            string accountCode = null, 
+        public ICollection<MasterGeneralLedger> MasterGeneralLedger(DateTime? from = default(DateTime?),
+            DateTime? to = default(DateTime?),
+            string accountCode = null,
             int? transactionNo = null)
         {
             var allDr = (from dr in _generalLedgerLineRepository.GetAllIncluding(l => l.GeneralLedgerHeader, a => a.Account).AsEnumerable()
@@ -488,7 +488,7 @@ namespace Services.Financial
 
             if (!string.IsNullOrEmpty(accountCode))
                 allDrcr = allDrcr.Where(a => a.AccountCode == accountCode);
-            if(transactionNo != null)
+            if (transactionNo != null)
                 allDrcr = allDrcr.Where(a => a.TransactionNo == transactionNo);
 
             var sortedList = allDrcr.OrderBy(gl => gl.Id).ToList().Reverse<MasterGeneralLedger>();
@@ -504,7 +504,7 @@ namespace Services.Financial
         }
 
         /// <summary>
-        /// Input VAT is the value added tax added to the price when you purchase goods or services liable to VAT. If the buyer is registered in the VAT Register, the buyer can deduct the amount of VAT paid from his/her settlement with the tax authorities. 
+        /// Calculates input tax charged on purchases.
         /// </summary>
         /// <param name="itemId"></param>
         /// <param name="quantity"></param>
@@ -535,7 +535,7 @@ namespace Services.Financial
         }
 
         /// <summary>
-        /// Output VAT is the value added tax you calculate and charge on your own sales of goods and services
+        /// Calculates output tax charged on sales of goods and services.
         /// </summary>
         /// <param name="itemId"></param>
         /// <param name="quantity"></param>
@@ -549,7 +549,7 @@ namespace Services.Financial
 
             amountXquantity = amount * quantity;
 
-            if(discount > 0)
+            if (discount > 0)
                 discountAmount = (discount / 100) * amountXquantity;
 
             subTotalAmount = amountXquantity - discountAmount;
@@ -593,7 +593,7 @@ namespace Services.Financial
                 throw new Exception("Main account is same as contra account.");
             if (!contraAccount.IsContraAccount)
                 throw new Exception("Account is not a contra account.");
-            if(_maincontraAccount.Table.Any(a => a.MainAccountId == mainAccountId))
+            if (_maincontraAccount.Table.Any(a => a.MainAccountId == mainAccountId))
                 throw new Exception("Main account already has contra account set.");
 
             _maincontraAccount.Insert(new MainContraAccount() { MainAccountId = mainAccountId, RelatedContraAccountId = contraAccountId });
@@ -601,7 +601,7 @@ namespace Services.Financial
 
         public void UpdateAccount(Account account)
         {
-            if(account.IsContraAccount && account.ContraAccounts.Count > 0)
+            if (account.IsContraAccount && account.ContraAccounts.Count > 0)
                 throw new Exception("An account cannot have contra account if the account is already contra account.");
 
             if (GetAccounts().Any(a => a.AccountCode == account.AccountCode && a.Id != account.Id))
@@ -610,7 +610,7 @@ namespace Services.Financial
             if (account.ParentAccountId.HasValue && account.ParentAccountId.Value != -1)
             {
                 var parent = GetAccount(account.ParentAccountId.Value);
-                if(account.Id == parent.ParentAccountId)
+                if (account.Id == parent.ParentAccountId)
                     throw new Exception("Cyclic parent/child account.");
             }
 
@@ -734,7 +734,8 @@ namespace Services.Financial
 
             var glSetting = _generalLedgerSettingRepo.Table.FirstOrDefault();
 
-            var journalEntry = new JournalEntryHeader() {
+            var journalEntry = new JournalEntryHeader()
+            {
                 Memo = "Closing entries",
                 Date = DateTime.Now,
                 Posted = false,
@@ -746,7 +747,7 @@ namespace Services.Financial
 
         public void SaveAccountClasses(IList<AccountClass> accountClasses)
         {
-            foreach(var accountClass in accountClasses)
+            foreach (var accountClass in accountClasses)
             {
                 if (accountClass.Id == 0)
                     _accountClassRepo.Insert(accountClass);
@@ -777,6 +778,18 @@ namespace Services.Financial
                 _bankRepo.Insert(bank);
             else
                 _bankRepo.Update(bank);
+        }
+
+        public Bank GetBank(int id)
+        {
+            return _bankRepo.GetById(id);
+        }
+
+        public void DeleteBank(int id)
+        {
+            var bank = _bankRepo.GetById(id);
+            if (bank != null)
+                _bankRepo.Delete(bank);
         }
     }
 }

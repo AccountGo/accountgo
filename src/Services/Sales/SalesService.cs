@@ -521,7 +521,9 @@ namespace Services.Sales
             customer.SalesAccountId = accountSales != null ? (int?)accountSales.Id : null;
             customer.CustomerAdvancesAccountId = accountAdvances != null ? (int?)accountAdvances.Id : null;
             customer.SalesDiscountAccountId = accountSalesDiscount != null ? (int?)accountSalesDiscount.Id : null;
-            customer.TaxGroupId = _taxGroupRepo.Table.Where(tg => tg.Description == "VAT").FirstOrDefault().Id;
+            var defaultTaxGroup = _taxGroupRepo.Table.FirstOrDefault(tg => tg.Description == "GST/HST" && tg.IsActive);
+            if (!customer.TaxGroupId.HasValue && defaultTaxGroup != null)
+                customer.TaxGroupId = defaultTaxGroup.Id;
 
             customer.No = GetNextNumber(SequenceNumberTypes.Customer).ToString();
             _customerRepo.Insert(customer);

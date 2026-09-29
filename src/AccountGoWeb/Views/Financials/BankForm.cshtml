@@ -1,0 +1,73 @@
+@model Dto.Financial.Bank
+
+<style>
+    tr th { color: var(--bs-warning, #ffc107); }
+    tr td { color: var(--bs-white, #fff);  }
+</style>
+
+<form asp-action="SaveBank" method="post">
+    <div class="col-md-9">
+        <div class="box">
+            <div class="box-header with-border">
+                <h3 class="box-title">Bank Information</h3>
+                <div class="box-tools pull-right">
+                    <button type="button" class="btn btn-box-tool" data-widget="collapse" data-bs-toggle="tooltip" title="Collapse">
+                        <i class="fas fa-minus"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="box-body">
+                @Html.HiddenFor(m => m.Id)
+
+                @if (ViewBag.Error != null)
+                {
+                    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                        @ViewBag.Error
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                }
+
+                <div class="row mb-3">
+                    <div class="col-sm-2">
+                        <label asp-for="AccountId">Account Type</label>
+                    </div>
+                    <div class="col-sm-4">
+                        <select asp-for="AccountId" asp-items="ViewBag.BankAccounts" class="form-select" required>
+                            <option value="">Select an account</option>
+                        </select>
+                        <span asp-validation-for="AccountId" class="text-danger"></span>
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-sm-2">
+                        <label asp-for="BankName">Bank Name</label>
+                    </div>
+                    <div class="col-sm-4">
+                        <input asp-for="BankName" class="form-control" type="text" placeholder="e.g., XYZ Bank" />
+                        <span asp-validation-for="BankName" class="text-danger"></span>
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-sm-2">
+                        <label asp-for="AccountNo">Account Number</label>
+                    </div>
+                    <div class="col-sm-4">
+                        <input asp-for="AccountNo" class="form-control" type="text" placeholder="e.g., 123456789" />
+                        <span asp-validation-for="AccountNo" class="text-danger"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-9">
+        <button type="submit" class="btn btn-primary btn-sm pull-left">Save</button>
+        <a href="~/financials/banks" class="btn btn-secondary btn-sm pull-left ms-2">Cancel</a>
+    </div>
+</form>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}
