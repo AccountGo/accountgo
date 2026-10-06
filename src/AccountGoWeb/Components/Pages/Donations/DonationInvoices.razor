@@ -6,16 +6,16 @@
 @inject NavigationManager NavigationManager
 @inject IJSRuntime JSRuntime
 
-<PageTitle>Donation Invoices</PageTitle>
+<PageTitle>Donations</PageTitle>
 
 <div class="mb-3">
     <a href="/donations/adddonationinvoice" class="btn btn-sm">
-        <i class="fas fa-plus me-1"></i> New Donation Invoice
+        <i class="fas fa-plus me-1"></i> New Donation
     </a>
-    <button class="btn btn-sm @(HasSelection ?"" : "inactiveLink")" @onclick="EditInvoice">
+    <button class="btn btn-sm @(HasSelection ? "" : "inactiveLink")" @onclick="EditInvoice">
         <i class="fas fa-edit me-1"></i> Edit
     </button>
-    <button class="btn btn-sm @(HasSelection ?"" : "inactiveLink")" @onclick="ShowDeleteModal">
+    <button class="btn btn-sm @(HasSelection ? "" : "inactiveLink")" @onclick="ShowDeleteModal">
         <i class="fas fa-trash me-1"></i> Delete
     </button>
 </div>
@@ -36,12 +36,13 @@ else if (donationInvoices != null && donationInvoices.Any())
                 <thead class="thead-dark">
                     <tr>
                         <th class="w-50px"></th>
-                        <th>Invoice No</th>
+                        <th>Donation No</th>
                         <th>Donor Name</th>
                         <th>Date</th>
                         <th>Amount</th>
                         <th>Purpose</th>
-                        <th>Reference No</th>
+                        <th>Payment Type</th>
+                        <th>GL Code</th>
                         <th>Tax Receipt No</th>
                         <th>Tax Receipt</th>
                         <th>Status</th>
@@ -50,7 +51,7 @@ else if (donationInvoices != null && donationInvoices.Any())
                 <tbody>
                     @foreach (var invoice in donationInvoices ?? new List<DonationInvoice>())
                     {
-                        <tr class="cursor-pointer @(selectedInvoice?.Id == invoice.Id ?"selected-row" : "")"
+                        <tr class="cursor-pointer @(selectedInvoice?.Id == invoice.Id ? "selected-row" : "")"
                             @onclick="() => SelectInvoice(invoice)" @ondblclick="() => NavigateToDonationInvoice(invoice)">
                             <td class="text-center">
                                 <input type="radio" name="selectedInvoice" checked="@(selectedInvoice?.Id == invoice.Id)" />
@@ -60,7 +61,8 @@ else if (donationInvoices != null && donationInvoices.Any())
                             <td>@invoice.DonationDate.ToString("MMM dd, yyyy")</td>
                             <td><strong class="text-success">$@invoice.Amount.ToString("F2")</strong></td>
                             <td>@invoice.Purpose</td>
-                            <td>@invoice.ReferenceNo</td>
+                            <td>@invoice.PaymentType</td>
+                            <td>@invoice.GlAccountCode</td>
                             <td>@invoice.TaxReceiptNo</td>
                             <td class="text-center">
                                 @if (invoice.IsTaxReceiptIssued)
@@ -103,12 +105,13 @@ else
         <table class="donationsTable">
             <thead>
                 <tr>
-                    <th>Invoice No</th>
+                    <th>Donation No</th>
                     <th>Donor Name</th>
                     <th>Date</th>
                     <th>Amount</th>
                     <th>Purpose</th>
-                    <th>Reference No</th>
+                    <th>Payment Type</th>
+                    <th>GL Code</th>
                     <th>Tax Receipt No</th>
                     <th>Tax Receipt</th>
                     <th>Status</th>
@@ -117,14 +120,15 @@ else
             <tbody>
                 @foreach (var invoice in donationInvoices ?? new List<DonationInvoice>())
                 {
-                    <tr class="donationRow @(selectedInvoice?.Id == invoice.Id ?"table-active" : "")"
+                    <tr class="donationRow @(selectedInvoice?.Id == invoice.Id ? "table-active" : "")"
                         @onclick="() => SelectInvoice(invoice)">
                         <td><strong>@invoice.No</strong></td>
                         <td>@invoice.DonorName</td>
                         <td>@invoice.DonationDate.ToString("MMM dd, yyyy")</td>
                         <td><strong class="text-success">$@invoice.Amount.ToString("F2")</strong></td>
                         <td>@invoice.Purpose</td>
-                        <td>@invoice.ReferenceNo</td>
+                        <td>@invoice.PaymentType</td>
+                        <td>@invoice.GlAccountCode</td>
                         <td>@invoice.TaxReceiptNo</td>
                         <td>
                             @if (invoice.IsTaxReceiptIssued)
@@ -160,15 +164,15 @@ else
         <div class="modal-dialog">
             <div class="modal-content modal-content-themed shadow">
                 <div class="modal-header border-secondary">
-                    <h5 class="modal-title">Delete Donation Invoice</h5>
+                    <h5 class="modal-title">Delete Donation</h5>
                     <button type="button" class="btn-close btn-close-white" @onclick="CloseDeleteModal"></button>
                 </div>
                 <div class="modal-body">
-                    <p>Are you sure you want to delete this donation invoice?</p>
+                    <p>Are you sure you want to delete this donation?</p>
                     @if (selectedInvoice != null)
                     {
                         <div class="small text-secondary">
-                            <div><strong>Invoice No:</strong> @selectedInvoice.No</div>
+                            <div><strong>Donation No:</strong> @selectedInvoice.No</div>
                             <div><strong>Donor:</strong> @selectedInvoice.DonorName</div>
                             <div><strong>Amount:</strong> @selectedInvoice.Amount.ToString("C2")</div>
                         </div>

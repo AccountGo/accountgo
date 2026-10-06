@@ -30,6 +30,23 @@ On a high level, this solution will provide modules including but not limited to
 3. Inventory Control
 4. Financial/Accounting
 
+## Donations
+
+The Donations form uses records from the Donors module and stores a donation amount, payment type, GL account and Tax Receipt selection. Payment types are Cash, Cheque, Credit Card, Debit Card and E-Transfer. GL choices are limited to account codes 41000 through 41999. Item, quantity, unit and line-note inputs are no longer used.
+
+The `SimplifyDonations` migration carries historical line totals into the donation header, copies customer-linked donors into the Donors table, and adds any missing donation accounts to an existing chart. Historical item lines and posted state are retained. Legacy records without a payment type or GL account require those selections when edited.
+
+Back up the database before applying this migration. Automatic rollback is intentionally blocked because donor IDs cannot safely be converted back into customer IDs; restore the backup to roll back. Restart the API and web app together after applying the migration so both use the new donor relationship.
+
+On API startup, four sample donations are added when their seed donors and GL accounts exist. Existing records with the same seed numbers are left unchanged.
+
+| Donation | Donor | Payment Type | Amount | GL Code | Tax Receipt |
+| --- | --- | --- | --- | --- | --- |
+| DON-SEED-001 | Olivia Bennett | Cash | 150.00 | 41001 | Yes, TR-SEED-001 |
+| DON-SEED-002 | Olivia Bennett | Credit Card | 75.50 | 41200 | No |
+| DON-SEED-003 | Cedar Grove Community Services | E-Transfer | 5000.00 | 41250 | Yes, TR-SEED-003 |
+| DON-SEED-004 | Cedar Grove Community Services | Cheque | 1200.00 | 41001 | No |
+
 # Getting Started
 - Download and install Visual Studio Code from https://code.visualstudio.com/ based on your Operating System
 - Clone or fork the latest repository in `https://github.com/AccountGo/accountgo`

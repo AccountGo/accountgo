@@ -1,0 +1,201 @@
+@namespace GoodBooks.Donors.Components
+@using System.Net.Http.Json
+@using Microsoft.AspNetCore.Components
+@using Microsoft.Extensions.Configuration
+@using Dto.Donors
+@inject IHttpClientFactory ClientFactory
+@inject IConfiguration Configuration
+
+<PageTitle>Donors</PageTitle>
+
+<div class="container-fluid">
+    <h1 class="h3 mb-3">Donors</h1>
+    <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+        <a class="btn btn-primary" href="/donors/new"><i class="fas fa-plus" aria-hidden="true"></i> New Donor</a>
+        <input class="form-control form-control-themed w-auto mw-100" type="search" aria-label="Search donors"
+               placeholder="Search donors" @bind="search" @bind:event="oninput" />
+    </div>
+
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="alert alert-danger text-danger" role="alert">@errorMessage
+            <button class="btn btn-sm btn-outline-danger ms-2" @onclick="LoadDonorsAsync">Retry</button>
+        </div>
+    }
+    @if (pendingDelete != null)
+    {
+        <div class="alert alert-warning" role="alert">
+            Delete @pendingDelete.Name?
+            <button class="btn btn-sm btn-danger ms-2" disabled="@isDeleting" @onclick="DeleteDonorAsync">
+                <i class="fas fa-trash" aria-hidden="true"></i> Delete
+            </button>
+            <button class="btn btn-sm btn-secondary ms-2" disabled="@isDeleting" @onclick="CancelDelete">Cancel</button>
+        </div>
+    }
+    @if (isLoading)
+    {
+        <div role="status"><span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Loading donors...
+        </div>
+    }
+    else if (donors.Count == 0 && string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="alert alert-info">No donors found.</div>
+    }
+    else if (donors.Count > 0)
+    {
+        <div class="table-responsive">
+            <table class="table table-striped table-hover table-bordered align-middle">
+                <thead>
+                    <tr>
+                        <th scope="col">Name <button class="btn btn-sm btn-link" title="Sort by name"
+                                                     aria-label="Sort by name" @onclick="ToggleSort"><i class="fas fa-sort"
+                                                                               aria-hidden="true"></i></button></th>
+                            <th scope="col">Type</th>
+                            <th scope="col">Street</th>
+                            <th scope="col">Province</th>
+                            <th scope="col">Postal Code</th>
+                            <th scope="col">Telephone</th>
+                            <th scope="col">Email</th>
+                            <th scope="col">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var donor in FilteredDonors)
+                        {
+                            <tr @key="donor.Id">
+                                <td><a href="/donors/@donor.Id">@donor.Name</a></td>
+                                <td>@donor.DonorType</td>
+                                <td>@donor.Street</td>
+                                <td>@donor.Province</td>
+                                <td class="text-nowrap">@donor.PostalCode</td>
+                                <td><a href="tel:@donor.Telephone">@donor.Telephone</a></td>
+                                <td class="text-break"><a href="mailto:@donor.Email">@donor.Email</a></td>
+                                <td class="text-nowrap">
+                                    <a class="btn btn-sm btn-secondary" href="/donors/@donor.Id" title="Edit donor"
+                                       aria-label="Edit @donor.Name"><i class="fas fa-pen" aria-hidden="true"></i></a>
+                                    <button class="btn btn-sm btn-outline-danger ms-1" title="Delete donor"
+                                            aria-label="Delete @donor.Name" disabled="@isDeleting"
+                                            @onclick="() => pendingDelete = donor"><i class="fas fa-trash"
+                                                                                  aria-hidden="true"></i></button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                @if (!FilteredDonors.Any())
+                {
+                    <p class="text-muted">No matching donors.</p>
+                }
+                <p class="text-muted">Total: @FilteredDonors.Count() donor(s)</p>
+            }
+        </div>
+
+@code {
+    private List<Donor> donors = new List<Donor>();
+    private Donor? pendingDelete;
+    private string search = string.Empty;
+    private string? errorMessage;
+    private bool isLoading = true;
+    private bool isDeleting;
+    private bool sortAscending = true;
+
+    private string ApiUrl
+    {
+        get
+        {
+            return (Configuration["ApiUrl"] ?? Environment.GetEnvironmentVariable("APIURL") ??
+"http://localhost:8001/api/").TrimEnd('/') + "/donors";
+        }
+    }
+
+    private IEnumerable<Donor> FilteredDonors
+    {
+        get
+        {
+            var filtered = donors.Where(donor => string.IsNullOrWhiteSpace(search) ||
+                (donor.Name + " " + donor.DonorType + " " + donor.Street + " " + donor.Province + " " + donor.PostalCode + " " +
+donor.Telephone + " " + donor.Email)
+                    .IndexOf(search, StringComparison.OrdinalIgnoreCase) >= 0);
+            return sortAscending ? filtered.OrderBy(donor => donor.Name) : filtered.OrderByDescending(donor => donor.Name);
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDonorsAsync();
+    }
+
+    private async Task LoadDonorsAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+        try
+        {
+            using (var client = ClientFactory.CreateClient())
+            {
+                donors = await client.GetFromJsonAsync<List<Donor>>(ApiUrl) ?? new List<Donor>();
+                pendingDelete = null;
+            }
+        }
+        catch (HttpRequestException exception)
+        {
+            errorMessage = exception.StatusCode.HasValue
+                ? $"Unable to load donors (HTTP {(int)exception.StatusCode.Value} {exception.StatusCode}). Retry loading the list. Contact your administrator if the problem continues."
+                : "Unable to reach the donor API. Check that the API is running and your connection is available, then select Retry.";
+        }
+        catch (TaskCanceledException)
+        {
+            errorMessage = "Loading donors timed out. The API did not respond in time. Select Retry to load the list again.";
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            errorMessage = "The API returned an unreadable donor list. Select Retry. Contact your administrator if the problem continues.";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void ToggleSort()
+    {
+        sortAscending = !sortAscending;
+    }
+
+    private void CancelDelete()
+    {
+        pendingDelete = null;
+    }
+
+    private async Task DeleteDonorAsync()
+    {
+        if (pendingDelete == null || isDeleting) return;
+        isDeleting = true;
+        errorMessage = null;
+        try
+        {
+            using (var client = ClientFactory.CreateClient())
+            using (var response = await client.DeleteAsync(ApiUrl + "/" + pendingDelete.Id))
+            {
+                response.EnsureSuccessStatusCode();
+                donors.Remove(pendingDelete);
+                pendingDelete = null;
+            }
+        }
+        catch (HttpRequestException exception)
+        {
+            errorMessage = exception.StatusCode.HasValue
+                ? $"Unable to delete this donor (HTTP {(int)exception.StatusCode.Value} {exception.StatusCode}). Select Retry to refresh the list before attempting deletion again. Contact your administrator if the problem continues."
+                : "The connection to the donor API failed during deletion. Select Retry to refresh the list and check whether the donor was deleted before trying again.";
+        }
+        catch (TaskCanceledException)
+        {
+            errorMessage = "The delete request timed out. Select Retry to refresh the list and check whether the donor was deleted before trying again.";
+        }
+        finally
+        {
+            isDeleting = false;
+        }
+    }
+}

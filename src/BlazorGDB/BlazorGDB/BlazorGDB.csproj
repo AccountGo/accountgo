@@ -31,4 +31,7 @@
   <ItemGroup>
     <None Update="good-deed-books.db" CopyToOutputDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
   </ItemGroup>
+  <ItemGroup>
+    <RazorComponent Include="../../AccountGoWeb/Components/Pages/Donors/*.razor" Link="Components/Shared/Donors/%(Filename)%(Extension)" />
+  </ItemGroup>
 </Project>

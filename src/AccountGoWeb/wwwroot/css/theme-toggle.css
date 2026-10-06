@@ -533,7 +533,7 @@ html[dir="rtl"] .sidebar-sm-show .sidebar {
 }
 
 /* Ensure text inside inputs/selects is visible - dark mode */
-.dark-theme input,
+.dark-theme input:not([type="checkbox"]):not([type="radio"]),
 .dark-theme textarea,
 .dark-theme select,
 .dark-theme .form-control {
@@ -543,7 +543,7 @@ html[dir="rtl"] .sidebar-sm-show .sidebar {
 }
 
 /* Ensure text inside inputs/selects is visible - light mode */
-.light-theme input,
+.light-theme input:not([type="checkbox"]):not([type="radio"]),
 .light-theme textarea,
 .light-theme select,
 .light-theme .form-control {

@@ -1,0 +1,262 @@
+@namespace GoodBooks.Donors.Components
+@using System.Net.Http.Json
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.Extensions.Configuration
+@using Dto.Donors
+@inject IHttpClientFactory ClientFactory
+@inject IConfiguration Configuration
+@inject NavigationManager Navigation
+
+<PageTitle>@(Id == 0 ? "New Donor" : "Edit Donor")</PageTitle>
+
+<div class="container-fluid">
+    <h1 class="h3 mb-3">@(Id == 0 ? "New Donor" : "Edit Donor")</h1>
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="alert alert-danger text-danger" role="alert">@errorMessage</div>
+    }
+    @if (isLoading)
+    {
+        <div role="status"><span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Loading donor...
+        </div>
+    }
+    else if (isLoaded)
+    {
+        <EditForm @key="editContext" EditContext="editContext" OnValidSubmit="SaveDonorAsync">
+            <DataAnnotationsValidator />
+            <ValidationSummary class="text-danger" role="alert" />
+            <fieldset disabled="@isSaving">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label" for="donor-type">Donor Type</label>
+                        <InputSelect id="donor-type" class="form-select form-control-themed" @bind-Value="model.DonorType"
+                                     @bind-Value:after="ChangeDonorType">
+                            <option value="Individual">Individual</option>
+                            <option value="Company">Company</option>
+                        </InputSelect>
+                        <ValidationMessage class="text-danger" For="() => model.DonorType" />
+                    </div>
+                </div>
+                <div class="row g-3 mt-0">
+                    @if (model.DonorType == "Individual")
+                    {
+                        <div class="col-md-6">
+                            <label class="form-label" for="donor-first-name">First Name</label>
+                            <InputText id="donor-first-name" class="form-control form-control-themed"
+                                       @bind-Value="model.FirstName" maxlength="100" autocomplete="given-name" />
+                            <ValidationMessage class="text-danger" For="() => model.FirstName" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="donor-last-name">Last Name</label>
+                            <InputText id="donor-last-name" class="form-control form-control-themed"
+                                       @bind-Value="model.LastName" maxlength="100" autocomplete="family-name" />
+                            <ValidationMessage class="text-danger" For="() => model.LastName" />
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="col-md-6">
+                            <label class="form-label" for="donor-company-name">Company Name</label>
+                            <InputText id="donor-company-name" class="form-control form-control-themed"
+                                       @bind-Value="model.CompanyName" maxlength="200" autocomplete="organization" />
+                            <ValidationMessage class="text-danger" For="() => model.CompanyName" />
+                        </div>
+                    }
+                    <div class="col-12">
+                        <label class="form-label" for="donor-street">Street</label>
+                        <InputText id="donor-street" class="form-control form-control-themed" @bind-Value="model.Street"
+                                   maxlength="200" autocomplete="street-address" />
+                        <ValidationMessage class="text-danger" For="() => model.Street" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="donor-province">Province</label>
+                        <InputSelect id="donor-province" class="form-select form-control-themed"
+                                     @bind-Value="model.Province" autocomplete="address-level1">
+                            <option value="">-- Select Province/Territory --</option>
+                            <option value="AB">Alberta</option>
+                            <option value="BC">British Columbia</option>
+                            <option value="MB">Manitoba</option>
+                            <option value="NB">New Brunswick</option>
+                            <option value="NL">Newfoundland and Labrador</option>
+                            <option value="NS">Nova Scotia</option>
+                            <option value="NT">Northwest Territories</option>
+                            <option value="NU">Nunavut</option>
+                            <option value="ON">Ontario</option>
+                            <option value="PE">Prince Edward Island</option>
+                            <option value="QC">Quebec</option>
+                            <option value="SK">Saskatchewan</option>
+                            <option value="YT">Yukon</option>
+                        </InputSelect>
+                        <ValidationMessage class="text-danger" For="() => model.Province" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="donor-postal-code">Postal Code</label>
+                        <InputText id="donor-postal-code" class="form-control form-control-themed"
+                                   @bind-Value="model.PostalCode" maxlength="7" autocomplete="postal-code" />
+                        <ValidationMessage class="text-danger" For="() => model.PostalCode" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="donor-telephone">Telephone</label>
+                        <InputText id="donor-telephone" class="form-control form-control-themed" type="tel"
+                                   @bind-Value="model.Telephone" maxlength="30" autocomplete="tel" />
+                        <ValidationMessage class="text-danger" For="() => model.Telephone" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="donor-email">Email</label>
+                        <InputText id="donor-email" class="form-control form-control-themed" type="email"
+                                   @bind-Value="model.Email" maxlength="254" autocomplete="email" />
+                        <ValidationMessage class="text-danger" For="() => model.Email" />
+                    </div>
+                </div>
+                <div class="d-flex gap-2 mt-4">
+                    <button class="btn btn-primary" type="submit"><i class="fas fa-save" aria-hidden="true"></i> @(isSaving
+                                            ? "Saving..." : "Save")</button>
+                        <a class="btn btn-secondary" href="/donors">Cancel</a>
+                    </div>
+                </fieldset>
+            </EditForm>
+        }
+    else
+        {
+            <a class="btn btn-secondary" href="/donors">Back to Donors</a>
+        }
+    </div>
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+
+    [Parameter]
+    public bool ForceLoad { get; set; }
+
+    private Donor model = new Donor();
+    private EditContext editContext = new EditContext(new Donor());
+    private bool isLoading = true;
+    private bool isLoaded;
+    private bool isSaving;
+    private string? errorMessage;
+
+    private string ApiUrl
+    {
+        get
+        {
+            return (Configuration["ApiUrl"] ?? Environment.GetEnvironmentVariable("APIURL") ??
+"http://localhost:8001/api/").TrimEnd('/') + "/donors";
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        isLoading = true;
+        isLoaded = false;
+        errorMessage = null;
+        model = new Donor();
+        try
+        {
+            if (Id != 0)
+            {
+                using (var client = ClientFactory.CreateClient())
+                using (var response = await client.GetAsync(ApiUrl + "/" + Id))
+                {
+                    if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+                    {
+                        errorMessage = "Donor not found (HTTP 404). This record may have been deleted. Return to Donors and select an existing record.";
+                        return;
+                    }
+                    response.EnsureSuccessStatusCode();
+                    var loadedDonor = await response.Content.ReadFromJsonAsync<Donor>();
+                    if (loadedDonor == null)
+                    {
+                        errorMessage = "The API returned an empty donor record. Return to Donors, refresh the list, and try opening the record again.";
+                        return;
+                    }
+                    model = loadedDonor;
+                }
+            }
+            editContext = new EditContext(model);
+            isLoaded = true;
+        }
+        catch (HttpRequestException exception)
+        {
+            errorMessage = exception.StatusCode.HasValue
+                ? $"Unable to load this donor (HTTP {(int)exception.StatusCode.Value} {exception.StatusCode}). Return to Donors and try again. Contact your administrator if the problem continues."
+                : "Unable to reach the donor API. Check that the API is running and your connection is available, then reopen this donor.";
+        }
+        catch (TaskCanceledException)
+        {
+            errorMessage = "Loading the donor timed out. The API did not respond in time. Return to Donors and try again.";
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            errorMessage = "The API returned an unreadable donor record. Return to Donors and try again. Contact your administrator if the problem continues.";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void ChangeDonorType()
+    {
+        if (model.DonorType == "Individual")
+            model.CompanyName = string.Empty;
+        else
+        {
+            model.FirstName = string.Empty;
+            model.LastName = string.Empty;
+        }
+        editContext = new EditContext(model);
+    }
+
+    private async Task SaveDonorAsync()
+    {
+        if (isSaving) return;
+        isSaving = true;
+        errorMessage = null;
+        try
+        {
+            using (var client = ClientFactory.CreateClient())
+            using (var response = Id == 0
+                ? await client.PostAsJsonAsync(ApiUrl, model)
+                : await client.PutAsJsonAsync(ApiUrl + "/" + Id, model))
+            {
+                if (!response.IsSuccessStatusCode)
+                {
+                    if (response.StatusCode == System.Net.HttpStatusCode.BadRequest)
+                    {
+                        var problem = await response.Content.ReadFromJsonAsync<Microsoft.AspNetCore.Mvc.ValidationProblemDetails>();
+                        errorMessage = problem != null && problem.Errors.Count > 0
+                            ? string.Join(" ", problem.Errors.Values.SelectMany(messages => messages))
+                            : "The API rejected the donor details (HTTP 400). Check the required names, address, postal code, telephone and email, then save again.";
+                    }
+                    else if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+                        errorMessage = "This donor no longer exists (HTTP 404). Your changes were not saved. Return to Donors and refresh the list.";
+                    else if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized || response.StatusCode ==
+System.Net.HttpStatusCode.Forbidden)
+                        errorMessage = $"You do not have permission to save this donor (HTTP {(int)response.StatusCode}). Sign in again or ask your administrator for access.";
+                    else
+                        errorMessage = $"The API could not save the donor (HTTP {(int)response.StatusCode} {response.StatusCode}). Your entered details have been kept. Check the Donors list before retrying to avoid creating a duplicate, and contact your administrator if the problem continues.";
+                    return;
+                }
+                Navigation.NavigateTo("/donors", ForceLoad);
+            }
+        }
+        catch (HttpRequestException)
+        {
+            errorMessage = "The connection to the donor API failed while saving. Your entered details have been kept. Check the Donors list to see whether the save completed before retrying.";
+        }
+        catch (TaskCanceledException)
+        {
+            errorMessage = "The save request timed out. Your entered details have been kept. Check the Donors list to see whether the save completed before retrying.";
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            errorMessage = "The API returned an unreadable error response. Your entered details have been kept. Check the Donors list before retrying and contact your administrator if the problem continues.";
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+}

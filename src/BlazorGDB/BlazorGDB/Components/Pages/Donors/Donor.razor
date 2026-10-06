@@ -1,0 +1,10 @@
+@page "/donors/new"
+@page "/donors/{Id:int}"
+@rendermode InteractiveServer
+
+<GoodBooks.Donors.Components.DonorForm Id="Id" />
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+}

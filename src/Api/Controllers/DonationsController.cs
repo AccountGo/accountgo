@@ -2,6 +2,7 @@ using Api.ActionFilters;
 using Dto.Donations;
 using Microsoft.AspNetCore.Mvc;
 using Services.Donations;
+using Services.Financial;
 
 namespace Api.Controllers
 {
@@ -10,11 +11,28 @@ namespace Api.Controllers
     {
         private readonly IDonationsService _donationsService;
         private readonly ILogger<DonationsController> _logger;
+        private readonly IFinancialService _financialService;
 
-        public DonationsController(IDonationsService donationsService, ILogger<DonationsController> logger)
+        public DonationsController(IDonationsService donationsService, ILogger<DonationsController> logger, IFinancialService financialService)
         {
             _donationsService = donationsService;
             _logger = logger;
+            _financialService = financialService;
+        }
+
+        [HttpGet("DonationAccounts")]
+        public IActionResult DonationAccounts()
+        {
+            var accounts = _financialService.GetAccounts().AsEnumerable()
+                .Where(account => int.TryParse(account.AccountCode, out var code) && code >= 41000 && code <= 41999)
+                .OrderBy(account => account.AccountCode)
+                .Select(account => new Dto.Financial.Account
+                {
+                    Id = account.Id,
+                    AccountCode = account.AccountCode,
+                    AccountName = account.AccountName
+                }).ToList();
+            return Ok(accounts);
         }
 
         [HttpGet]
@@ -33,7 +51,12 @@ namespace Api.Controllers
                     Id = invoice.Id,
                     No = invoice.No,
                     DonorId = invoice.DonorId,
-                    DonorName = invoice.Donor?.Party?.Name,
+                    DonorName = GetDonorName(invoice.Donor),
+                    Amount = invoice.Amount,
+                    PaymentType = invoice.PaymentType,
+                    GlAccountId = invoice.GlAccountId,
+                    GlAccountCode = invoice.GlAccount?.AccountCode ?? string.Empty,
+                    GlAccountName = invoice.GlAccount?.AccountName ?? string.Empty,
                     DonationDate = invoice.Date,
                     ReferenceNo = invoice.ReferenceNo,
                     Purpose = invoice.Purpose,
@@ -78,7 +101,12 @@ namespace Api.Controllers
                 Id = invoice.Id,
                 No = invoice.No,
                 DonorId = invoice.DonorId,
-                DonorName = invoice.Donor?.Party?.Name,
+                DonorName = GetDonorName(invoice.Donor),
+                Amount = invoice.Amount,
+                PaymentType = invoice.PaymentType,
+                GlAccountId = invoice.GlAccountId,
+                GlAccountCode = invoice.GlAccount?.AccountCode ?? string.Empty,
+                GlAccountName = invoice.GlAccount?.AccountName ?? string.Empty,
                 DonationDate = invoice.Date,
                 ReferenceNo = invoice.ReferenceNo,
                 Purpose = invoice.Purpose,
@@ -137,6 +165,12 @@ namespace Api.Controllers
                 return BadRequest(result.Error.Message);
 
             return NoContent();
+        }
+
+        private static string GetDonorName(Core.Domain.Donations.Donor donor)
+        {
+            if (donor == null) return string.Empty;
+            return donor.DonorType == "Company" ? donor.CompanyName : (donor.FirstName + " " + donor.LastName).Trim();
         }
     }
 }

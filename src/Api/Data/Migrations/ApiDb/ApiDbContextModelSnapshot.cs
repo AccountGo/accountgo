@@ -238,10 +238,16 @@ namespace Api.Data.Migrations.ApiDb
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(18, 2)");
+
                     b.Property<DateTime>("Date")
                         .HasColumnType("datetime2");
 
                     b.Property<int>("DonorId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("GlAccountId")
                         .HasColumnType("int");
 
                     b.Property<bool>("IsTaxReceiptIssued")
@@ -249,6 +255,10 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.Property<string>("No")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("PaymentType")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<bool>("Posted")
                         .HasColumnType("bit");
@@ -265,6 +275,8 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasKey("Id");
 
                     b.HasIndex("DonorId");
+
+                    b.HasIndex("GlAccountId");
 
                     b.ToTable("DonationInvoiceHeader");
                 });
@@ -306,6 +318,89 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasIndex("MeasurementId");
 
                     b.ToTable("DonationInvoiceLine");
+                });
+
+            modelBuilder.Entity("Core.Domain.Donations.Donor", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("CompanyName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("DonorType")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(254)
+                        .HasColumnType("nvarchar(254)");
+
+                    b.Property<string>("FirstName")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("LastName")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("PostalCode")
+                        .IsRequired()
+                        .HasMaxLength(7)
+                        .HasColumnType("nvarchar(7)");
+
+                    b.Property<string>("Province")
+                        .IsRequired()
+                        .HasMaxLength(2)
+                        .HasColumnType("nvarchar(2)");
+
+                    b.Property<string>("Street")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Telephone")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Donors");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            CompanyName = "",
+                            DonorType = "Individual",
+                            Email = "olivia.bennett@example.com",
+                            FirstName = "Olivia",
+                            LastName = "Bennett",
+                            PostalCode = "K1A 0B1",
+                            Province = "ON",
+                            Street = "125 Maple Street",
+                            Telephone = "613-555-0101"
+                        },
+                        new
+                        {
+                            Id = 2,
+                            CompanyName = "Cedar Grove Community Services",
+                            DonorType = "Company",
+                            Email = "giving@cedargrove.example.com",
+                            FirstName = "",
+                            LastName = "",
+                            PostalCode = "V6B 1A1",
+                            Province = "BC",
+                            Street = "480 Cedar Avenue",
+                            Telephone = "604-555-0102"
+                        });
                 });
 
             modelBuilder.Entity("Core.Domain.Financials.Account", b =>
@@ -2216,13 +2311,20 @@ namespace Api.Data.Migrations.ApiDb
 
             modelBuilder.Entity("Core.Domain.Donations.DonationInvoiceHeader", b =>
                 {
-                    b.HasOne("Core.Domain.Sales.Customer", "Donor")
+                    b.HasOne("Core.Domain.Donations.Donor", "Donor")
                         .WithMany()
                         .HasForeignKey("DonorId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
 
+                    b.HasOne("Core.Domain.Financials.Account", "GlAccount")
+                        .WithMany()
+                        .HasForeignKey("GlAccountId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
                     b.Navigation("Donor");
+
+                    b.Navigation("GlAccount");
                 });
 
             modelBuilder.Entity("Core.Domain.Donations.DonationInvoiceLine", b =>

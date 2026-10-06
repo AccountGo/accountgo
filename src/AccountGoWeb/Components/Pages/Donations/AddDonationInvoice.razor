@@ -1,282 +1,169 @@
-﻿@rendermode InteractiveServer
-@using AspNetCoreGeneratedDocument
+@rendermode InteractiveServer
 @using Dto.Donations
-@using Dto.Sales
-@using Dto.Inventory
-@using System.Text.Json
+@using System.Net.Http.Json
 @inject HttpClient Http
 @inject IConfiguration Configuration
 @inject NavigationManager NavigationManager
 
-<PageTitle>Add Donation Invoice</PageTitle>
+<PageTitle>Donation</PageTitle>
 
+@if (!string.IsNullOrEmpty(errorMessage))
+{
+    <div class="alert alert-danger text-danger" role="alert">@errorMessage</div>
+}
 @if (isLoading)
 {
-    <div class="text-center p-5">
-        <div class="spinner-border text-primary spinner-lg" role="status">
-            <span class="visually-hidden">Loading...</span>
-        </div>
+    <div role="status"><span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Loading donation...
     </div>
 }
-else if (invoice != null)
+else if (isLoaded)
 {
-    <div class="col-sm-8">
-        <EditForm Model="invoice" OnValidSubmit="SaveInvoice">
+    <div class="col-lg-8">
+        <EditForm Model="invoice" OnValidSubmit="SaveDonationAsync">
             <DataAnnotationsValidator />
-            <div class="card">
-                <div class="card-body">
-                    @if (!string.IsNullOrEmpty(errorMessage))
-                    {
-                        <div class="alert alert-danger alert-dismissible fade show" role="alert">
-                            <i class="fas fa-exclamation-triangle me-2"></i>@errorMessage
-                            <button type="button" class="btn-close" @onclick="() => errorMessage = null"></button>
-                        </div>
-                    }
-
-                    @if (!string.IsNullOrEmpty(successMessage))
-                    {
-                        <div class="alert alert-success alert-dismissible fade show" role="alert">
-                            <i class="fas fa-check-circle me-2"></i>@successMessage
-                            <button type="button" class="btn-close" @onclick="() => successMessage = null"></button>
-                        </div>
-                    }
-
-                    <!-- Donor Selection -->
-                    <div class="row mb-2">
-                        <div class="col-sm-2">Donor</div>
-                        <div class="col-sm-10">
-                            <InputSelect class="form-control form-control-themed border-secondary-themed"
-                                         @bind-Value="invoice.DonorId">
-                                <option value="0">-- Select Donor --</option>
-                                @foreach (var customer in customers)
-                                {
-                                    <option value="@customer.Id">@customer.Name</option>
-                                }
-                            </InputSelect>
-                            <ValidationMessage For="@(() => invoice.DonorId)" class="text-danger" />
-                        </div>
+            <ValidationSummary class="text-danger" role="alert" />
+            <fieldset disabled="@isSaving">
+                <div class="row g-3">
+                    <div class="col-12">
+                        <label class="form-label" for="donation-donor">Donor</label>
+                        <InputSelect id="donation-donor" class="form-select form-control-themed"
+                                     @bind-Value="invoice.DonorId">
+                            <option value="0">-- Select Donor --</option>
+                            @foreach (var donor in donors)
+                            {
+                                <option value="@donor.Id">@donor.Name</option>
+                            }
+                        </InputSelect>
+                        <ValidationMessage class="text-danger" For="() => invoice.DonorId" />
                     </div>
-
-                    <!-- Date Selection -->
-                    <div class="row mb-2">
-                        <div class="col-sm-2">Donation Date</div>
-                        <div class="col-sm-10">
-                            <InputDate class="form-control form-control-themed border-secondary-themed"
-                                       @bind-Value="invoice.DonationDate" />
-                        </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="donation-date">Donation Date</label>
+                        <InputDate id="donation-date" class="form-control form-control-themed"
+                                   @bind-Value="invoice.DonationDate" />
+                        <ValidationMessage class="text-danger" For="() => invoice.DonationDate" />
                     </div>
-
-                    <!-- Purpose -->
-                    <div class="row mb-2">
-                        <div class="col-sm-2">Purpose</div>
-                        <div class="col-sm-10">
-                            <InputText class="form-control form-control-themed border-secondary-themed"
-                                       @bind-Value="invoice.Purpose" placeholder="Donation purpose..." />
-                        </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="donation-payment-type">Payment Type</label>
+                        <InputSelect id="donation-payment-type" class="form-select form-control-themed"
+                                     @bind-Value="invoice.PaymentType">
+                            <option value="">-- Select Payment Type --</option>
+                            <option value="Cash">Cash</option>
+                            <option value="Cheque">Cheque</option>
+                            <option value="Credit Card">Credit Card</option>
+                            <option value="Debit Card">Debit Card</option>
+                            <option value="E-Transfer">E-Transfer</option>
+                        </InputSelect>
+                        <ValidationMessage class="text-danger" For="() => invoice.PaymentType" />
                     </div>
-
-                    <!-- Reference No -->
-                    <div class="row mb-2">
-                        <div class="col-sm-2">Reference No</div>
-                        <div class="col-sm-10">
-                            <InputText class="form-control form-control-themed border-secondary-themed"
-                                       @bind-Value="invoice.ReferenceNo" placeholder="Reference number..." />
-                        </div>
+                    <div class="col-12">
+                        <label class="form-label" for="donation-purpose">Purpose</label>
+                        <InputText id="donation-purpose" class="form-control form-control-themed"
+                                   @bind-Value="invoice.Purpose" />
                     </div>
-
-                    <!-- Flags (Tax Receipt / Posted) -->
-                    <div class="row mb-2">
-                        <div class="col-sm-2">Options</div>
-                        <div class="col-sm-10 d-flex gap-4">
-                            <div class="form-check">
-                                <InputCheckbox class="form-check-input" @bind-Value="invoice.IsTaxReceiptIssued"
-                                               id="taxReceipt" />
-                                <label class="form-check-label" for="taxReceipt">Tax Receipt Issued</label>
-                            </div>
-                            <div class="form-check">
-                                <InputCheckbox class="form-check-input" @bind-Value="invoice.Posted" id="posted" />
-                                <label class="form-check-label" for="posted">Posted</label>
-                            </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="donation-amount">Amount</label>
+                        <InputNumber id="donation-amount" class="form-control form-control-themed"
+                                     @bind-Value="invoice.Amount" step="0.01" min="0.01" />
+                        <ValidationMessage class="text-danger" For="() => invoice.Amount" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="donation-gl-code">GL Code</label>
+                        <InputSelect id="donation-gl-code" class="form-select form-control-themed"
+                                     @bind-Value="invoice.GlAccountId">
+                            <option value="">-- Select GL Code --</option>
+                            @foreach (var account in accounts)
+                            {
+                                <option value="@account.Id">@account.AccountCode - @account.AccountName</option>
+                            }
+                        </InputSelect>
+                        <ValidationMessage class="text-danger" For="() => invoice.GlAccountId" />
+                    </div>
+                    <div class="col-12">
+                        <div class="form-check">
+                            <InputCheckbox id="donation-tax-receipt" class="form-check-input"
+                                           @bind-Value="invoice.IsTaxReceiptIssued" />
+                            <label class="form-check-label" for="donation-tax-receipt">Tax Receipt</label>
                         </div>
                     </div>
                 </div>
-
-                <!-- Invoice Lines -->
-                <table class="table table-dark mb-0">
-                    <thead>
-                        <tr>
-                            <th>Item</th>
-                            <th class="w-pct-15">Quantity</th>
-                            <th class="w-pct-15">Amount</th>
-                            <th class="w-pct-20">Unit</th>
-                            <th class="w-pct-20">Notes</th>
-                            <th class="w-50px"></th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @for (int i = 0; i < (invoice.DonationInvoiceLines?.Count ?? 0); i++)
-                        {
-                            var index = i;
-                            var line = invoice.DonationInvoiceLines![index];
-                            <tr>
-                                <td>
-                                    <InputSelect class="form-select form-select-themed border-secondary-themed"
-                                                 @bind-Value="line.ItemId">
-                                        <option value="0">-- Select Item --</option>
-                                        @foreach (var item in items)
-                                        {
-                                            <option value="@item.Id">@item.Description</option>
-                                        }
-                                    </InputSelect>
-                                </td>
-                                <td>
-                                    <InputNumber class="form-control form-control-themed border-secondary-themed"
-                                                 @bind-Value="line.Quantity" placeholder="1" />
-                                </td>
-                                <td>
-                                    <InputNumber class="form-control form-control-themed border-secondary-themed"
-                                                 @bind-Value="line.Amount" placeholder="0.00" />
-                                </td>
-                                <td>
-                                    <InputSelect class="form-select form-select-themed border-secondary-themed"
-                                                 @bind-Value="line.MeasurementId">
-                                        <option value="0">-- Select --</option>
-                                        @foreach (var measurement in measurements)
-                                        {
-                                            <option value="@measurement.Id">@measurement.Description</option>
-                                        }
-                                    </InputSelect>
-                                </td>
-                                <td>
-                                    <InputText class="form-control form-control-themed border-secondary-themed"
-                                               @bind-Value="line.Notes" placeholder="Notes..." />
-                                </td>
-                                <td>
-                                    @if (invoice.DonationInvoiceLines.Count > 1)
-                                    {
-                                        <button type="button" class="btn btn-link text-danger p-0" title="Remove"
-                                                @onclick="() => RemoveLine(index)">
-                                            <i class="fas fa-trash"></i>
-                                        </button>
-                                    }
-                                </td>
-                            </tr>
-                        }
-                        <tr>
-                            <td colspan="6">
-                                <button type="button" class="btn btn-primary btn btn-sm-sm" @onclick="AddLine">
-                                    <i class="fas fa-plus me-1"></i> Add Row
-                                </button>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-                
-                <div class="card-footer card-footer-themed text-end pe-4">
-                    <span class="text-secondary small me-2">Total:</span>
-                    <strong class="text-success h5 mb-0">@invoice.Amount.ToString("C2")</strong>
+                <div class="d-flex gap-2 mt-4">
+                    <button type="submit" class="btn btn-primary btn-sm">
+                        <i class="fas fa-save me-2" aria-hidden="true"></i>@(isSaving ? "Saving..." : "Save")
+                    </button>
+                    <button type="button" class="btn btn-secondary btn-sm" @onclick="Cancel">
+                        <i class="fas fa-times me-2" aria-hidden="true"></i>Cancel
+                    </button>
                 </div>
-            </div>
-
-            <div class="mt-3">
-                <button type="submit" class="btn btn-primary btn-sm" disabled="@isSaving">
-                    @if (isSaving)
-                    {
-                        <span class="spinner-border spinner-border-sm me-2"></span>
-                    }
-                    <i class="fas fa-save me-2"></i>Save
-                </button>
-                <button type="button" class="btn btn-secondary btn-sm" @onclick="Cancel">
-                    <i class="fas fa-times me-2"></i>Cancel
-                </button>
-            </div>
+            </fieldset>
         </EditForm>
     </div>
+}
+else
+{
+    <a class="btn btn-secondary" href="/donations/donationinvoices">Back to Donations</a>
 }
 
 @code {
     [Parameter]
     public int? Id { get; set; }
 
-    private DonationInvoice? invoice;
-    private List<Customer> customers = new();
-    private List<Item> items = new();
-    private List<Measurement> measurements = new();
+    private DonationInvoice invoice = new DonationInvoice();
+    private List<Dto.Donors.Donor> donors = new List<Dto.Donors.Donor>();
+    private List<Dto.Financial.Account> accounts = new List<Dto.Financial.Account>();
     private bool isLoading = true;
-    private bool isSaving = false;
+    private bool isLoaded;
+    private bool isSaving;
     private string? errorMessage;
-    private string? successMessage;
 
-    public class Measurement
-    {
-        public int Id { get; set; }
-        public string? Code { get; set; }
-        public string? Description { get; set; }
-    }
+    private string ApiUrl => (Configuration["ApiUrl"] ?? Environment.GetEnvironmentVariable("APIURL") ??
+"http://localhost:8001/api/").TrimEnd('/') + "/";
 
-    protected override async Task OnInitializedAsync()
-    {
-        await LoadData();
-    }
-
-    private async Task LoadData()
+    protected override async Task OnParametersSetAsync()
     {
         isLoading = true;
+        isLoaded = false;
+        errorMessage = null;
+        var loading = "donors";
         try
         {
-            var apiUrl = Configuration["ApiUrl"];
-
-            // Load customers
-            var customersResponse = await Http.GetAsync($"{apiUrl}sales/customers");
-            if (customersResponse.IsSuccessStatusCode)
+            donors = await Http.GetFromJsonAsync<List<Dto.Donors.Donor>>(ApiUrl + "donors") ?? new List<Dto.Donors.Donor>();
+            loading = "GL accounts";
+            accounts = await Http.GetFromJsonAsync<List<Dto.Financial.Account>>(ApiUrl + "donations/DonationAccounts") ?? new
+List<Dto.Financial.Account>();
+            loading = "donation";
+            if (Id.GetValueOrDefault() > 0)
             {
-                var customersJson = await customersResponse.Content.ReadAsStringAsync();
-                customers = JsonSerializer.Deserialize<List<Customer>>(customersJson,
-                new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new();
-            }
-
-            // Load items
-            var itemsResponse = await Http.GetAsync($"{apiUrl}inventory/items");
-            if (itemsResponse.IsSuccessStatusCode)
-            {
-                var itemsJson = await itemsResponse.Content.ReadAsStringAsync();
-                items = JsonSerializer.Deserialize<List<Item>>(itemsJson,
-                new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new();
-            }
-
-            // Load measurements
-            var measurementsResponse = await Http.GetAsync($"{apiUrl}common/measurements");
-            if (measurementsResponse.IsSuccessStatusCode)
-            {
-                var measurementsJson = await measurementsResponse.Content.ReadAsStringAsync();
-                measurements = JsonSerializer.Deserialize<List<Measurement>>(measurementsJson,
-                new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new();
-            }
-
-            // Initialize or load invoice
-            if (Id.HasValue && Id.Value > 0)
-            {
-                var invoiceResponse = await Http.GetAsync($"{apiUrl}Donations/DonationInvoice?id={Id.Value}");
-                if (invoiceResponse.IsSuccessStatusCode)
+                var loadedDonation = await Http.GetFromJsonAsync<DonationInvoice>(ApiUrl + "donations/DonationInvoice?id=" +
+Id.GetValueOrDefault());
+                if (loadedDonation == null)
                 {
-                    var invoiceJson = await invoiceResponse.Content.ReadAsStringAsync();
-                    invoice = JsonSerializer.Deserialize<DonationInvoice>(invoiceJson,
-                        new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                    errorMessage = "The API returned an empty donation. Return to Donations and select an existing record.";
+                    return;
                 }
-                else
-                {
-                    errorMessage = $"Failed to load existing invoice (Status: {invoiceResponse.StatusCode}). Loading empty form.";
-                    ResetForm();
-                }
+                invoice = loadedDonation;
             }
             else
-            {
-                ResetForm();
-            }
+                invoice = new DonationInvoice();
+
+            isLoaded = true;
+            if (accounts.Count == 0)
+                errorMessage = "No GL accounts with codes between 41000 and 41999 are available. Add a donation account to the chart of accounts before saving.";
+            else if (donors.Count == 0)
+                errorMessage = "No donors are available. Add a donor in the Donors module before saving a donation.";
         }
-        catch (Exception ex)
+        catch (HttpRequestException exception)
         {
-            errorMessage = $"Error loading data: {ex.Message}";
+            errorMessage = exception.StatusCode.HasValue
+                ? $"Unable to load {loading} (HTTP {(int)exception.StatusCode.Value}). Return to Donations and try again. Contact your administrator if the problem continues."
+                : $"Unable to reach the API while loading {loading}. Check the API connection and try again.";
+        }
+        catch (TaskCanceledException)
+        {
+            errorMessage = $"Loading {loading} timed out. Return to Donations and try again.";
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            errorMessage = $"The API returned unreadable {loading} data. Contact your administrator if the problem continues.";
         }
         finally
         {
@@ -284,86 +171,57 @@ else if (invoice != null)
         }
     }
 
-    private void AddLine()
+    private async Task SaveDonationAsync()
     {
-        invoice?.DonationInvoiceLines?.Add(new DonationInvoiceLine
-        {
-            Amount = null,
-            Quantity = 1,
-            ItemId = items.FirstOrDefault()?.Id ?? 0,
-            MeasurementId = measurements.FirstOrDefault()?.Id ?? 0
-        });
-    }
-
-    private void RemoveLine(int index)
-    {
-        if (invoice?.DonationInvoiceLines != null && invoice.DonationInvoiceLines.Count > 1)
-        {
-            invoice.DonationInvoiceLines.RemoveAt(index);
-        }
-    }
-
-    private async Task SaveInvoice()
-    {
-        if (invoice == null) return;
-
+        if (isSaving) return;
         isSaving = true;
         errorMessage = null;
-        successMessage = null;
-
         try
         {
-            var apiUrl = Configuration["ApiUrl"];
-            var json = JsonSerializer.Serialize(invoice);
-            var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
-
-            var endpoint = Id.HasValue && Id.Value > 0 ? "Donations/UpdateDonationInvoice" : "Donations/CreateDonationInvoice";
-            var response = await Http.PostAsync($"{apiUrl}{endpoint}", content);
-
-            if (response.IsSuccessStatusCode)
+            var endpoint = Id.GetValueOrDefault() > 0 ? "donations/UpdateDonationInvoice" : "donations/CreateDonationInvoice";
+            using (var response = await Http.PostAsJsonAsync(ApiUrl + endpoint, invoice))
             {
-                successMessage = $"Donation invoice '{invoice.No}' saved successfully!";
-                if (!Id.HasValue || Id.Value == 0)
+                if (!response.IsSuccessStatusCode)
                 {
-                    ResetForm();
+                    if (response.StatusCode == System.Net.HttpStatusCode.BadRequest || response.StatusCode ==
+System.Net.HttpStatusCode.UnprocessableEntity)
+                    {
+                        var details = await response.Content.ReadAsStringAsync();
+                        errorMessage = "The API rejected the donation details. Check the donor, amount, payment type and GL code before saving again.";
+                        if (response.Content.Headers.ContentType?.MediaType?.Contains("json") == true)
+                        {
+                            using (var document = System.Text.Json.JsonDocument.Parse(details))
+                            {
+                                if (document.RootElement.ValueKind == System.Text.Json.JsonValueKind.String)
+                                    errorMessage = document.RootElement.GetString();
+                            }
+                        }
+                        else if (!string.IsNullOrWhiteSpace(details))
+                            errorMessage = details;
+                    }
+                    else
+                        errorMessage = $"The donation could not be saved (HTTP {(int)response.StatusCode}). Your entered details have been kept. Check the Donations list before retrying.";
+                    return;
                 }
-
-                // Auto-navigate after 2 seconds
-                await Task.Delay(2000);
                 NavigationManager.NavigateTo("/donations/donationinvoices", forceLoad: true);
             }
-            else
-            {
-                var error = await response.Content.ReadAsStringAsync();
-                errorMessage = $"Failed to save: {response.StatusCode} - {error}";
-            }
         }
-        catch (Exception ex)
+        catch (HttpRequestException)
         {
-            errorMessage = $"Error saving invoice: {ex.Message}";
+            errorMessage = "The connection to the API failed while saving. Your entered details have been kept. Check the Donations list before retrying to avoid a duplicate.";
+        }
+        catch (TaskCanceledException)
+        {
+            errorMessage = "The save request timed out. Check the Donations list to see whether the save completed before retrying.";
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            errorMessage = "The API returned an unreadable error response. Check the Donations list before retrying and contact your administrator if the problem continues.";
         }
         finally
         {
             isSaving = false;
         }
-    }
-    private void ResetForm()
-    {
-        invoice = new DonationInvoice
-        {
-            No = new Random().Next(1, 99999).ToString(),
-            DonationDate = DateTime.Now,
-            DonationInvoiceLines = new List<DonationInvoiceLine>
-{
-new DonationInvoiceLine
-{
-Amount = null,
-Quantity = 1,
-ItemId = items.FirstOrDefault()?.Id ?? 0,
-MeasurementId = measurements.FirstOrDefault()?.Id ?? 0
-}
-}
-        };
     }
 
     private void Cancel()

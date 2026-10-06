@@ -7,12 +7,21 @@ namespace Dto.Donations
     public class DonationInvoice : BaseDto
     {
         public string? No { get; set; }
-        [Required(ErrorMessage = "Donor is required")]
+        [Range(1, int.MaxValue, ErrorMessage = "Select a donor from the Donors module.")]
         public int DonorId { get; set; }
         public DateTime DonationDate { get; set; }
         public string? DonorName { get; set; }
         public string? DonorEmail { get; set; }
-        public decimal Amount { get { return GetTotalAmount(); } }
+        [Range(typeof(decimal), "0.01", "9999999999999999.99", ErrorMessage = "Amount must be greater than zero.")]
+        public decimal Amount { get; set; }
+        [Required(ErrorMessage = "Select a payment type."),
+         RegularExpression("^(Cash|Cheque|Credit Card|Debit Card|E-Transfer)$", ErrorMessage = "Select Cash, Cheque, Credit Card, Debit Card or E-Transfer.")]
+        public string PaymentType { get; set; } = string.Empty;
+        [Required(ErrorMessage = "Select a GL account with a code between 41000 and 41999."),
+         Range(1, int.MaxValue, ErrorMessage = "Select a GL account with a code between 41000 and 41999.")]
+        public int? GlAccountId { get; set; }
+        public string GlAccountCode { get; set; } = string.Empty;
+        public string GlAccountName { get; set; } = string.Empty;
         public string? ReferenceNo { get; set; }
         public bool Posted { get; set; }
         public bool? ReadyForPosting { get; set; }
@@ -30,21 +39,6 @@ namespace Dto.Donations
             IsTaxReceiptIssued = false;
         }
 
-        private decimal GetTotalAmount()
-        {
-            decimal total = 0;
-            foreach (var line in DonationInvoiceLines!)
-            {
-                if (line.Amount is null || line.Quantity is null)
-                {
-                    continue;
-                }
-
-                decimal quantityXamount = (line.Amount!.Value * line.Quantity!.Value);
-                total += quantityXamount;
-            }
-            return total;
-        }
     }
 
     public class DonationInvoiceLine : BaseDto

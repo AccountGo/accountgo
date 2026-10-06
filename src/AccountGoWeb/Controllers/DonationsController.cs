@@ -23,7 +23,7 @@ namespace AccountGoWeb.Controllers
 
         public async System.Threading.Tasks.Task<IActionResult> DonationInvoices()
         {
-            ViewBag.PageContentHeader = "Donation Invoices";
+            ViewBag.PageContentHeader = "Donations";
             using (var client = new HttpClient())
             {
                 var baseUri = _configuration!["ApiUrl"];
@@ -36,9 +36,6 @@ namespace AccountGoWeb.Controllers
                     return View(model: responseJson);
                 }
 
-                @ViewBag.Customers = Models.SelectListItemHelper.Customers();
-                @ViewBag.Items = Models.SelectListItemHelper.Items();
-                @ViewBag.Measurements = Models.SelectListItemHelper.Measurements();
             }
             return View();
         }
@@ -46,45 +43,15 @@ namespace AccountGoWeb.Controllers
         [HttpGet]
         public IActionResult AddDonationInvoice()
         {
-            ViewBag.PageContentHeader = "Add Donation Invoice";
+            ViewBag.PageContentHeader = "Donation";
 
-            DonationInvoice donationInvoiceModel = new DonationInvoice();
-            donationInvoiceModel.DonationInvoiceLines = new List<DonationInvoiceLine> {
-                new DonationInvoiceLine {
-                    Amount = 0,
-                    ItemId = 1,
-                    Quantity = 1,
-                }
-            };
-            donationInvoiceModel.No = new System.Random().Next(1, 99999).ToString();
-
-            @ViewBag.Customers = Models.SelectListItemHelper.Customers();
-            @ViewBag.Items = Models.SelectListItemHelper.Items();
-            @ViewBag.Measurements = Models.SelectListItemHelper.Measurements();
-
-            return View(donationInvoiceModel);
+            return View();
         }
 
         [HttpPost]
         public async System.Threading.Tasks.Task<IActionResult> AddDonationInvoice(DonationInvoice Dto, string? addRowBtn)
         {
-            if (!string.IsNullOrEmpty(addRowBtn))
-            {
-                Dto.DonationInvoiceLines!.Add(new DonationInvoiceLine
-                {
-                    Amount = 0,
-                    Quantity = 1,
-                    ItemId = 1,
-                    MeasurementId = 1,
-                });
-
-                ViewBag.Customers = Models.SelectListItemHelper.Customers();
-                ViewBag.Items = Models.SelectListItemHelper.Items();
-                ViewBag.Measurements = Models.SelectListItemHelper.Measurements();
-
-                return View(Dto);
-            }
-            else if (ModelState.IsValid)
+            if (ModelState.IsValid)
             {
                 _logger.LogInformation("Posted value received: {Posted}", Dto.Posted);
                 var serialize = Newtonsoft.Json.JsonConvert.SerializeObject(Dto);
@@ -100,8 +67,8 @@ namespace AccountGoWeb.Controllers
                 else
                 {
                     var errorContent = await response.Content.ReadAsStringAsync();
-                    _logger.LogError("Failed to create donation invoice. Status: {Status}, Error: {Error}", response.StatusCode, errorContent);
-                    ModelState.AddModelError("", $"Failed to save donation invoice: {response.StatusCode}");
+                    _logger.LogError("Failed to create donation. Status: {Status}, Error: {Error}", response.StatusCode, errorContent);
+                    ModelState.AddModelError("", $"Failed to save donation: {response.StatusCode}");
                 }
             }
             else
@@ -110,21 +77,17 @@ namespace AccountGoWeb.Controllers
                     string.Join(", ", ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage)));
             }
 
-            ViewBag.Customers = Models.SelectListItemHelper.Customers();
-            ViewBag.Items = Models.SelectListItemHelper.Items();
-            ViewBag.Measurements = Models.SelectListItemHelper.Measurements();
-
             return View(Dto);
         }
 
         public IActionResult DonationInvoice(int id)
         {
-            ViewBag.PageContentHeader = "Donation Invoice";
+            ViewBag.PageContentHeader = "Donation";
             DonationInvoice? donationInvoiceModel = null;
 
             if (id == 0)
             {
-                ViewBag.PageContentHeader = "Add Donation Invoice";
+                ViewBag.PageContentHeader = "Donation";
                 return View("AddDonationInvoice");
             }
             else
@@ -132,7 +95,7 @@ namespace AccountGoWeb.Controllers
                 donationInvoiceModel = GetAsync<DonationInvoice>("Donations/DonationInvoice?id=" + id).Result;
 
                 if (donationInvoiceModel == null)
-                {   
+                {
                     return RedirectToAction("DonationInvoices");
                 }
 
@@ -142,10 +105,6 @@ namespace AccountGoWeb.Controllers
                 ViewBag.DonationInvoiceLines = donationInvoiceModel.DonationInvoiceLines;
                 ViewBag.TotalAmount = donationInvoiceModel.Amount;
             }
-
-            @ViewBag.Customers = Models.SelectListItemHelper.Customers();
-            @ViewBag.Items = Models.SelectListItemHelper.Items();
-            @ViewBag.Measurements = Models.SelectListItemHelper.Measurements();
 
             return View("DonationInvoice", donationInvoiceModel);
         }
@@ -169,8 +128,8 @@ namespace AccountGoWeb.Controllers
                 else
                 {
                     var errorContent = await response.Content.ReadAsStringAsync();
-                    _logger.LogError("Failed to update donation invoice. Status: {Status}, Error: {Error}", response.StatusCode, errorContent);
-                    ModelState.AddModelError("", $"Failed to update donation invoice: {response.StatusCode}");
+                    _logger.LogError("Failed to update donation. Status: {Status}, Error: {Error}", response.StatusCode, errorContent);
+                    ModelState.AddModelError("", $"Failed to update donation: {response.StatusCode}");
                 }
             }
             else
@@ -179,9 +138,6 @@ namespace AccountGoWeb.Controllers
                     string.Join(", ", ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage)));
             }
 
-            ViewBag.Customers = SelectListItemHelper.Customers();
-            ViewBag.Items = SelectListItemHelper.Items();
-            ViewBag.Measurements = SelectListItemHelper.Measurements();
             ViewBag.TotalAmount = donationInvoiceModel.Amount;
 
             return View(donationInvoiceModel);

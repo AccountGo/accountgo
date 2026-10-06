@@ -27,6 +27,18 @@ namespace Api.Data
         {
             base.OnModelCreating(builder);
 
+            builder.Entity<DonationInvoiceHeader>()
+                .HasOne(donation => donation.Donor)
+                .WithMany()
+                .HasForeignKey(donation => donation.DonorId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            builder.Entity<DonationInvoiceHeader>()
+                .HasOne(donation => donation.GlAccount)
+                .WithMany()
+                .HasForeignKey(donation => donation.GlAccountId)
+                .OnDelete(DeleteBehavior.NoAction);
+
             builder.Entity<MainContraAccount>(entity =>
                 {
                     entity.HasOne(e => e.MainAccount)
@@ -256,6 +268,7 @@ namespace Api.Data
         public virtual DbSet<Contact> Contacts { get; set; }
         public virtual DbSet<Customer> Customers { get; set; }
         public virtual DbSet<CustomerAllocation> CustomerAllocations { get; set; }
+        public virtual DbSet<Donor> Donors { get; set; }
         public virtual DbSet<FinancialYear> FinancialYears { get; set; }
         public virtual DbSet<GeneralLedgerHeader> GeneralLedgerHeaders { get; set; }
         public virtual DbSet<GeneralLedgerLine> GeneralLedgerLines { get; set; }
