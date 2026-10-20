@@ -9,7 +9,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, shrink-to-fit=no">
     <meta name="description" content="AccountGo - Open Source Accounting System">
     <title>AccountGo</title>
+    <link rel="icon" type="image/svg+xml" href="~/images/favicon.svg">
+    <link rel="icon" type="image/png" sizes="32x32" href="~/images/favicon-32.png">
     <link rel="icon" type="image/x-icon" href="~/images/favicon.ico">
+    <link rel="apple-touch-icon" sizes="192x192" href="~/images/accountgo-icon-192.png">
     <link rel="stylesheet" href="~/GoodBooks.styles.css" asp-append-version="true" />
     
     <!-- Bootstrap 5.3.x CSS -->
@@ -41,9 +44,10 @@
 
 <body class="app header-fixed sidebar-fixed aside-menu-fixed sidebar-lg-show">
 
-    <header class="app-header navbar">
-        <a class="navbar-brand" href="/">
-            AccountGo
+    <header class="app-header navbar px-3">
+        <a class="navbar-brand d-flex align-items-center py-0 me-3" href="/">
+            <img src="~/images/accountgo-logo-dark.svg" alt="AccountGo" height="34" class="logo-dark-mode" />
+            <img src="~/images/accountgo-logo-light.svg" alt="AccountGo" height="34" class="logo-light-mode" />
         </a>
         <button class="navbar-toggler sidebar-toggler d-lg-none me-auto" type="button" data-bs-toggle="sidebar-show">
             <span class="navbar-toggler-icon"></span>

@@ -367,4 +367,133 @@ The authentication system supports two distinct deployment topologies simultaneo
 - In production, reverse proxies (Cloudflare, Nginx, AWS ALB, Traefik) offload TLS and forward the client IP via `X-Forwarded-For`.
 - The API's `ForwardedHeadersOptions` enforces `ForwardLimit = 2` and retains default loopback proxy trust (`127.0.0.1`, `::1`).
 - Custom ingress proxies and Kubernetes/VPC subnet CIDRs must be explicitly configured in `ReverseProxy:KnownNetworks` or `ReverseProxy:KnownProxies` in `appsettings.Production.json` to prevent header spoofing from untrusted public callers.
+
+---
+
+## 16. Local API Testing Guide (Headless CLI / Terminal OTP Flow)
+
+Developers can verify the end-to-end authentication and authorization flow entirely from the terminal using `curl` without running a browser or frontend application.
+
+### 16.1 Start the Backend API
+
+Run the API service locally in your first terminal tab:
+
+```bash
+dotnet run --project src/Api/Api.csproj --urls "http://localhost:8001"
+```
+
+> **Note on Seed Data:** The seeded administrator account in the local SQLite database (`src/Api/accountgo.db`) is **`admin@accountgo.ph`**.
+
+### 16.2 Step 1 — Request an OTP Code
+
+In a second terminal, send a request to generate an OTP:
+
+```bash
+curl -i -X POST http://localhost:8001/api/auth/send-otp \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@accountgo.ph"}'
+```
+
+**Expected Response (`200 OK`):**
+```json
+{
+  "message": "If an account exists, a code has been sent.",
+  "expiresInSeconds": 300
+}
+```
+
+### 16.3 Step 2 — Read the Code from the API Terminal
+
+In development mode (`Email:Provider = "Console"`), `DevConsoleEmailSender` outputs the generated single-use code directly to standard output in your first terminal tab:
+
+```text
+=================================================================
+[EMAIL DISPATCH - DEV CONSOLE]
+To:      admin@accountgo.ph
+Subject: AccountGo Sign-In Code: 557841
+Time:    2026-10-20 09:02:18 UTC
+
+...
+      557841
+...
+=================================================================
+```
+
+### 16.4 Step 3 — Verify OTP & Obtain Access Token
+
+In your second terminal tab, exchange the 6-digit code for a JWT access token:
+
+```bash
+curl -s -X POST http://localhost:8001/api/auth/verify-otp \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@accountgo.ph","otp":"<YOUR_6_DIGIT_CODE>"}'
+```
+
+**Response:**
+```json
+{
+  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "expiresIn": 900,
+  "user": {
+    "id": "bf2ff9cc-2b08-431c-855d-934d0a96c1d9",
+    "email": "admin@accountgo.ph",
+    "firstName": "Admin",
+    "lastName": "User",
+    "roles": ["GeneralUsers", "SystemAdministrators"]
+  }
+}
+```
+
+Store the token in a shell variable:
+```bash
+TOKEN="<PASTE_YOUR_ACCESS_TOKEN_HERE>"
+```
+
+### 16.5 Step 4 — Query Protected Business Endpoints
+
+Validate access using the Bearer token in the `Authorization` header:
+
+#### 1. Fetch User Profile
+```bash
+curl -s -X GET "http://localhost:8001/api/Administration/GetUser?username=admin@accountgo.ph" \
+  -H "Authorization: Bearer $TOKEN" | jq .
+```
+
+#### 2. Fetch Dashboard Summary
+```bash
+curl -s -X GET "http://localhost:8001/api/dashboard/summary" \
+  -H "Authorization: Bearer $TOKEN" | jq .kpis
+```
+
+### 16.6 Interactive Terminal Test Script
+
+Save or run this interactive bash script to test the entire lifecycle in one go:
+
+```bash
+EMAIL="admin@accountgo.ph"
+echo "1. Requesting OTP for $EMAIL..."
+curl -s -X POST http://localhost:8001/api/auth/send-otp \
+  -H "Content-Type: application/json" \
+  -d "{\"email\":\"$EMAIL\"}"
+echo ""
+
+read -p "Enter the 6-digit OTP from the API terminal output: " OTP_CODE
+
+echo "2. Verifying OTP..."
+RESP=$(curl -s -X POST http://localhost:8001/api/auth/verify-otp \
+  -H "Content-Type: application/json" \
+  -d "{\"email\":\"$EMAIL\",\"otp\":\"$OTP_CODE\"}")
+
+TOKEN=$(echo $RESP | sed -E 's/.*"accessToken":"([^"]+)".*/\1/')
+
+if [ -z "$TOKEN" ] || [ "$TOKEN" = "$RESP" ]; then
+  echo "Verification failed: $RESP"
+else
+  echo -e "\n=== Authenticated Successfully! ==="
+  echo "Calling api/Administration/GetUser with Bearer Token:"
+  curl -s -X GET "http://localhost:8001/api/Administration/GetUser?username=$EMAIL" \
+    -H "Authorization: Bearer $TOKEN"
+  echo -e "\n"
+fi
+```
 ```

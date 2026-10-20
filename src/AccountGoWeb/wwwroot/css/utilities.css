@@ -184,6 +184,25 @@
     max-width: 600px;
 }
 
+.dark-theme .logo-light-mode {
+    display: none !important;
+}
+.dark-theme .logo-dark-mode {
+    display: inline-block !important;
+}
+.light-theme .logo-dark-mode {
+    display: none !important;
+}
+.light-theme .logo-light-mode {
+    display: inline-block !important;
+}
+.logo-dark-mode {
+    display: inline-block;
+}
+.logo-light-mode {
+    display: none;
+}
+
 /* ============================================
    Modal Styles
    ============================================ */

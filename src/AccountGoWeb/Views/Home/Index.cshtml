@@ -1,8 +1,9 @@
 @inject IConfiguration _configuration
-<div class="row">
-    <div class="col-md-12">
-        <img src="~/images/gbd/good-deed-books.png" alt="AccountGo Logo"
-             class="img-fluid mx-auto d-block logo-main" id="main-logo" />
+<div class="row my-4">
+    <div class="col-md-12 text-center">
+        <img src="~/images/accountgo-hero-icon.jpg" alt="AccountGo Logo"
+             class="img-fluid mx-auto d-block logo-main shadow-lg mb-3" style="max-width: 180px; border-radius: 36px; border: 1px solid rgba(255, 255, 255, 0.1);" id="main-logo" />
+        <h2 class="fw-bold mt-2 text-themed">Account<span class="text-primary">Go</span></h2>
     </div>
     <div class="col-md-12">
         <p class="text-themed text-center">@_configuration["GoodDeeds:SuperOrganizationName"]</p>
