@@ -1,4 +1,4 @@
-﻿//-----------------------------------------------------------------------
+//-----------------------------------------------------------------------
 // <copyright file="ISecurityService.cs" company="AccountGo">
 // Copyright (c) AccountGo. All rights reserved.
 // <author>Marvin Perez</author>
@@ -33,5 +33,6 @@ namespace Services.Security
         void AddRole(string roleName, int roleId = 0);
         void DeleteRole(int roleId);
         void AddUser(string username, string email, string firstname, string lastname);
+        void EnsureDefaultPermissionsAndRoles();
     }
 }

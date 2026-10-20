@@ -179,7 +179,8 @@ namespace Api.Controllers
             return Ok(new
             {
                 message = result.Message,
-                expiresInSeconds = result.ExpiresInSeconds
+                expiresInSeconds = result.ExpiresInSeconds,
+                devCode = result.DevCode
             });
         }
 
@@ -296,12 +297,15 @@ namespace Api.Controllers
                 }
             }
 
+            var permissions = _securityService.GetPermissionsForUser(user.UserName ?? user.Email ?? string.Empty);
+
             var userDto = new UserDto(
                 user.Id,
                 user.Email ?? user.UserName ?? string.Empty,
                 firstName,
                 lastName,
-                roles);
+                roles,
+                permissions);
 
             return Ok(userDto);
         }

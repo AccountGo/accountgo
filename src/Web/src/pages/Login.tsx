@@ -22,6 +22,7 @@ export const Login: React.FC = () => {
   const [step, setStep] = useState<1 | 2>(1);
   const [email, setEmail] = useState<string>('admin@accountgo.ph');
   const [otp, setOtp] = useState<string[]>(['', '', '', '', '', '']);
+  const [devCode, setDevCode] = useState<string | null>(null);
   const [isSending, setIsSending] = useState<boolean>(false);
   const [isVerifying, setIsVerifying] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -90,9 +91,15 @@ export const Login: React.FC = () => {
     try {
       const res = await sendOtp(email);
       setStep(2);
-      setOtp(['', '', '', '', '', '']);
       setResendCooldown(30);
       setExpirySeconds(res.expiresInSeconds || 300);
+      if (res.devCode) {
+        setDevCode(res.devCode);
+        setOtp(res.devCode.split(''));
+      } else {
+        setDevCode(null);
+        setOtp(['', '', '', '', '', '']);
+      }
     } catch (err: any) {
       setErrorMessage(err.message || 'Failed to send verification code.');
     } finally {
@@ -358,6 +365,19 @@ export const Login: React.FC = () => {
               </div>
             )}
 
+            {/* Dev Mode Code Auto-Fill Banner */}
+            {devCode && (
+              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-center justify-between animate-fade-in">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                  <span>
+                    Dev Code: <strong className="font-mono text-sm tracking-wider text-amber-200">{devCode}</strong>
+                  </span>
+                </div>
+                <span className="text-[11px] bg-amber-500/20 px-2 py-0.5 rounded text-amber-200 font-medium">Auto-filled</span>
+              </div>
+            )}
+
             {/* 6-Digit OTP Boxes */}
             <div className="space-y-2">
               <div className="flex items-center justify-between text-xs font-semibold text-[var(--text-secondary)]">
@@ -449,7 +469,9 @@ export const Login: React.FC = () => {
             <div className="p-2.5 rounded-xl bg-[var(--bg-subtle)] text-[11px] text-[var(--text-muted)] flex items-center justify-between gap-2">
               <div className="flex items-center gap-1.5 truncate">
                 <Terminal className="w-3.5 h-3.5 text-[var(--brand-primary)] flex-shrink-0" />
-                <span className="truncate">Local Dev: Code is logged to API terminal output</span>
+                <span className="truncate">
+                  {devCode ? 'Dev Mode: Code auto-filled from API' : 'Local Dev: Code is logged to API terminal output'}
+                </span>
               </div>
             </div>
           </div>

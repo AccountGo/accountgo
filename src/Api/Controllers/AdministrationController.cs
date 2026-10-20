@@ -1,5 +1,6 @@
 using Dto.Administration;
 using Dto.Security;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Services.Administration;
 using Services.Financial;
@@ -16,6 +17,7 @@ using System.Text;
 
 namespace Api.Controllers
 {
+    [ApiController]
     [Route("api/[controller]")]
     public class AdministrationController : BaseController
     {
@@ -65,11 +67,76 @@ namespace Api.Controllers
                 return BadRequest("{ 'message': 'Clearing database not successful! Please check the log.' }");
         }
 
-        [HttpGet]
-        [Route("company")]
+        [AllowAnonymous]
+        [HttpGet("company")]
         public IActionResult Company(string companyCode)
         {
             return new ObjectResult(_adminService.GetDefaultCompany());
+        }
+
+        [AllowAnonymous]
+        [HttpGet("companies")]
+        public IActionResult Companies()
+        {
+            var companies = _adminService.GetCompanies();
+            return Ok(companies.Select(c => new
+            {
+                id = c.Id.ToString(),
+                name = c.Name,
+                shortName = c.ShortName,
+                slug = string.IsNullOrWhiteSpace(c.Slug) ? (c.ShortName?.ToLowerInvariant() ?? $"org-{c.Id}") : c.Slug,
+                plan = c.Plan ?? "accounting",
+                subscriptionStatus = c.SubscriptionStatus ?? "active",
+                activeModules = c.GetActiveModules(),
+                companyCode = c.CompanyCode
+            }));
+        }
+
+        public class CreateCompanyRequest
+        {
+            public string Name { get; set; } = string.Empty;
+            public string? ShortName { get; set; }
+            public string? Slug { get; set; }
+            public string? Plan { get; set; } = "invoicing";
+        }
+
+        [AllowAnonymous]
+        [HttpPost("company")]
+        public IActionResult CreateCompany([FromBody] CreateCompanyRequest request)
+        {
+            if (string.IsNullOrWhiteSpace(request?.Name))
+                return BadRequest(new { message = "Company name is required." });
+
+            var slug = !string.IsNullOrWhiteSpace(request.Slug)
+                ? request.Slug.ToLowerInvariant().Trim()
+                : request.Name.ToLowerInvariant().Replace(" ", "-").Trim();
+
+            var shortName = !string.IsNullOrWhiteSpace(request.ShortName)
+                ? request.ShortName
+                : (request.Name.Length <= 5 ? request.Name.ToUpper() : request.Name.Substring(0, 4).ToUpper());
+
+            var company = new Core.Domain.Company
+            {
+                Name = request.Name,
+                ShortName = shortName,
+                Slug = slug,
+                CompanyCode = new Random().Next(100, 999).ToString(),
+                Plan = request.Plan?.ToLowerInvariant() ?? "invoicing",
+                SubscriptionStatus = "active"
+            };
+
+            _adminService.SaveCompany(company);
+
+            return Ok(new
+            {
+                id = company.Id.ToString(),
+                name = company.Name,
+                shortName = company.ShortName,
+                slug = company.Slug,
+                plan = company.Plan,
+                subscriptionStatus = company.SubscriptionStatus,
+                activeModules = company.GetActiveModules()
+            });
         }
 
         [HttpGet]

@@ -13,6 +13,7 @@ using Core.Domain.Financials;
 using Core.Domain.Security;
 using Core.Domain.Auditing;
 using Core.Domain.Error;
+using Dto.Subscription;
 using System.Threading.Tasks;
 
 namespace Services.Administration
@@ -34,6 +35,8 @@ namespace Services.Administration
         Task<Result<Dto.TaxSystem.ItemTaxGroup>> DeleteItemTaxGroupAsync(int id);
         void InitializeCompany();
         Company GetDefaultCompany();
+        ICollection<Company> GetCompanies();
+        Company? GetCompanyBySlug(string slug);
         ICollection<PaymentTerm> GetPaymentTerms();
         ICollection<FinancialYear> GetFinancialYears();
         void SaveCompany(Company company);
@@ -41,5 +44,11 @@ namespace Services.Administration
         void SaveUser(User user);
         User GetUser(string username);
         IEnumerable<AuditLog> AuditLogs();
+
+        TenantSubscriptionDto GetCurrentSubscription(string? slug = null);
+        TenantSubscriptionDto UpdateSubscription(UpdateSubscriptionDto dto);
+        bool IsModuleEnabled(string moduleKey);
+        List<PlanDefinitionDto> GetPlanDefinitions();
+        List<ModuleDefinitionDto> GetModuleDefinitions();
     }
 }

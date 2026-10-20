@@ -27,7 +27,8 @@ namespace Dto.Security
         string Email,
         string FirstName,
         string LastName,
-        IEnumerable<string> Roles
+        IEnumerable<string> Roles,
+        IEnumerable<string>? Permissions = null
     );
 
     public record AddNewUserRequest(

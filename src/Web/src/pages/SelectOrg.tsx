@@ -10,8 +10,9 @@ import {
   Sparkles,
   Layers,
   LogOut,
+  Loader2,
 } from 'lucide-react';
-import { MOCK_ORGS, setPersistedOrgSlug } from '../lib/mockData';
+import { setPersistedOrgSlug } from '../lib/mockData';
 import { OrgDetails } from '../types';
 import { useAuth } from '../auth/AuthContext';
 
@@ -23,24 +24,79 @@ export const SelectOrg: React.FC = () => {
     searchParams.get('action') === 'new'
   );
 
+  // Live database organizations
+  const [orgsList, setOrgsList] = useState<OrgDetails[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [creating, setCreating] = useState(false);
+
   // New org form state
   const [newOrgName, setNewOrgName] = useState('');
   const [newOrgSlug, setNewOrgSlug] = useState('');
-  const [newOrgCurrency, setNewOrgCurrency] = useState('USD');
+  const [newOrgCurrency, setNewOrgCurrency] = useState('PHP');
 
-  const { user: authUser, logout } = useAuth();
+  const { user: authUser, logout, authFetch } = useAuth();
   const userName = authUser
     ? [authUser.firstName, authUser.lastName].filter(Boolean).join(' ') || authUser.email.split('@')[0]
     : 'Admin User';
   const userEmail = authUser?.email || 'admin@accountgo.ph';
   const userInitial = userName.charAt(0).toUpperCase();
 
+  // Load organizations from live database
+  React.useEffect(() => {
+    let mounted = true;
+    const fetchCompanies = async () => {
+      try {
+        const res = await authFetch('/api/Administration/companies');
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data) && mounted) {
+            const live: OrgDetails[] = data.map((c: any) => ({
+              id: c.id?.toString() || c.slug,
+              name: c.name,
+              slug: c.slug,
+              role: 'Admin',
+              plan: c.plan || 'accounting',
+              currency: 'PHP',
+              fiscalYearEnd: 'Dec 31',
+              avatarBg:
+                c.plan === 'invoicing'
+                  ? 'bg-gradient-to-br from-violet-500 to-fuchsia-600'
+                  : c.plan === 'enterprise'
+                  ? 'bg-gradient-to-br from-indigo-500 to-blue-600'
+                  : 'bg-gradient-to-br from-emerald-500 to-teal-600',
+              whitelabel: {
+                themeId: c.plan === 'invoicing' ? 'tokyo-night' : c.plan === 'enterprise' ? 'sapphire' : 'accountgo',
+                brandName: c.name,
+              },
+              subscription: {
+                planId: c.plan,
+                planName: (c.plan || 'accounting').charAt(0).toUpperCase() + (c.plan || 'accounting').slice(1),
+                status: c.subscriptionStatus || 'active',
+                activeModules: c.activeModules || ['sales'],
+                validUntil: '2028-12-31',
+              },
+            }));
+            setOrgsList(live);
+          }
+        }
+      } catch {
+      } finally {
+        if (mounted) setIsLoading(false);
+      }
+    };
+
+    fetchCompanies();
+    return () => {
+      mounted = false;
+    };
+  }, [authFetch]);
+
   const handleLogout = async () => {
     await logout();
     navigate('/login');
   };
 
-  const filteredOrgs = MOCK_ORGS.filter(
+  const filteredOrgs = orgsList.filter(
     (org) =>
       org.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       org.slug.toLowerCase().includes(searchQuery.toLowerCase())
@@ -51,12 +107,27 @@ export const SelectOrg: React.FC = () => {
     navigate(`/org/${org.slug}/dashboard`);
   };
 
-  const handleCreateOrg = (e: React.FormEvent) => {
+  const handleCreateOrg = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newOrgName || !newOrgSlug) return;
     const cleanSlug = newOrgSlug.toLowerCase().replace(/[^a-z0-9-]/g, '-');
-    setPersistedOrgSlug(cleanSlug);
-    navigate(`/org/${cleanSlug}/dashboard`);
+    setCreating(true);
+
+    try {
+      await authFetch('/api/Administration/company', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newOrgName.trim(),
+          slug: cleanSlug,
+          plan: 'accounting',
+        }),
+      });
+    } catch {} finally {
+      setCreating(false);
+      setPersistedOrgSlug(cleanSlug);
+      navigate(`/org/${cleanSlug}/dashboard`);
+    }
   };
 
   return (
@@ -139,65 +210,74 @@ export const SelectOrg: React.FC = () => {
 
         {/* Organizations Grid (Border-Less Cards) */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-          {filteredOrgs.map((org) => (
-            <div
-              key={org.id}
-              onClick={() => handleSelectOrg(org)}
-              className="group cursor-pointer p-4 sm:p-5 rounded-2xl bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-hover)] backdrop-blur-md shadow-md hover:shadow-2xl transition-all duration-200 flex flex-col justify-between active:scale-[0.99]"
-            >
-              <div>
-                <div className="flex items-start justify-between gap-3 mb-3">
-                  <div
-                    className={`w-11 h-11 rounded-xl flex items-center justify-center font-bold text-base text-white shadow-md ${
-                      org.avatarBg || 'bg-gradient-to-br from-indigo-500 to-blue-600'
-                    }`}
-                  >
-                    {org.name.slice(0, 2).toUpperCase()}
+          {isLoading ? (
+            <div className="col-span-full py-16 text-center">
+              <Loader2 className="w-8 h-8 text-[var(--brand-primary)] animate-spin mx-auto mb-3" />
+              <p className="text-sm text-[var(--text-muted)]">Loading organizations from database...</p>
+            </div>
+          ) : (
+            <>
+              {filteredOrgs.map((org) => (
+                <div
+                  key={org.id}
+                  onClick={() => handleSelectOrg(org)}
+                  className="group cursor-pointer p-4 sm:p-5 rounded-2xl bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-hover)] backdrop-blur-md shadow-md hover:shadow-2xl transition-all duration-200 flex flex-col justify-between active:scale-[0.99]"
+                >
+                  <div>
+                    <div className="flex items-start justify-between gap-3 mb-3">
+                      <div
+                        className={`w-11 h-11 rounded-xl flex items-center justify-center font-bold text-base text-white shadow-md ${
+                          org.avatarBg || 'bg-gradient-to-br from-indigo-500 to-blue-600'
+                        }`}
+                      >
+                        {org.name.slice(0, 2).toUpperCase()}
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        {org.plan && (
+                          <span className="text-[10px] uppercase font-semibold px-2 py-0.5 rounded-full bg-[var(--bg-subtle)] text-[var(--text-secondary)]">
+                            {org.plan}
+                          </span>
+                        )}
+                        {org.currency && (
+                          <span className="text-[10px] font-mono font-medium px-2 py-0.5 rounded-full bg-[var(--brand-subtle)] text-[var(--brand-primary)]">
+                            {org.currency}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <h3 className="font-bold text-base text-[var(--text-main)] group-hover:text-[var(--brand-primary)] transition-colors truncate">
+                      {org.whitelabel?.brandName ? `${org.name} (${org.whitelabel.brandName})` : org.name}
+                    </h3>
+                    <p className="text-xs text-[var(--text-muted)] font-mono mt-0.5">
+                      /org/{org.slug}
+                    </p>
                   </div>
 
-                  <div className="flex items-center gap-1.5">
-                    {org.plan && (
-                      <span className="text-[10px] uppercase font-semibold px-2 py-0.5 rounded-full bg-[var(--bg-subtle)] text-[var(--text-secondary)]">
-                        {org.plan}
-                      </span>
-                    )}
-                    {org.currency && (
-                      <span className="text-[10px] font-mono font-medium px-2 py-0.5 rounded-full bg-[var(--brand-subtle)] text-[var(--brand-primary)]">
-                        {org.currency}
-                      </span>
-                    )}
+                  <div className="mt-4 pt-3 border-t border-[var(--bg-subtle)] flex items-center justify-between text-xs text-[var(--text-muted)]">
+                    <span className="flex items-center gap-1.5">
+                      <ShieldCheck className="w-3.5 h-3.5 text-indigo-400" />
+                      <span>Role: {org.role || 'Member'}</span>
+                    </span>
+                    <span className="flex items-center gap-1 text-[var(--brand-primary)] font-semibold group-hover:translate-x-1 transition-transform">
+                      <span>Enter</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </span>
                   </div>
                 </div>
+              ))}
 
-                <h3 className="font-bold text-base text-[var(--text-main)] group-hover:text-[var(--brand-primary)] transition-colors truncate">
-                  {org.whitelabel?.brandName ? `${org.name} (${org.whitelabel.brandName})` : org.name}
-                </h3>
-                <p className="text-xs text-[var(--text-muted)] font-mono mt-0.5">
-                  /org/{org.slug}
-                </p>
-              </div>
-
-              <div className="mt-4 pt-3 border-t border-[var(--bg-subtle)] flex items-center justify-between text-xs text-[var(--text-muted)]">
-                <span className="flex items-center gap-1.5">
-                  <ShieldCheck className="w-3.5 h-3.5 text-indigo-400" />
-                  <span>Role: {org.role || 'Member'}</span>
-                </span>
-                <span className="flex items-center gap-1 text-[var(--brand-primary)] font-semibold group-hover:translate-x-1 transition-transform">
-                  <span>Enter</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </span>
-              </div>
-            </div>
-          ))}
-
-          {filteredOrgs.length === 0 && (
-            <div className="col-span-full py-12 text-center bg-[var(--bg-surface)] rounded-2xl shadow-inner">
-              <Building2 className="w-8 h-8 text-[var(--text-muted)] mx-auto mb-2" />
-              <p className="text-sm font-medium text-[var(--text-main)]">No organizations found</p>
-              <p className="text-xs text-[var(--text-muted)] mt-1">
-                No organization matches "{searchQuery}". Try a different keyword or create one.
-              </p>
-            </div>
+              {filteredOrgs.length === 0 && (
+                <div className="col-span-full py-12 text-center bg-[var(--bg-surface)] rounded-2xl shadow-inner">
+                  <Building2 className="w-8 h-8 text-[var(--text-muted)] mx-auto mb-2" />
+                  <p className="text-sm font-medium text-[var(--text-main)]">No organizations found</p>
+                  <p className="text-xs text-[var(--text-muted)] mt-1">
+                    No organization matches "{searchQuery}". Try a different keyword or create one.
+                  </p>
+                </div>
+              )}
+            </>
           )}
         </div>
       </main>
@@ -295,9 +375,10 @@ export const SelectOrg: React.FC = () => {
                 </button>
                 <button
                   type="submit"
+                  disabled={creating}
                   className="btn-primary !h-11"
                 >
-                  Create & Launch
+                  {creating ? 'Creating...' : 'Create & Launch'}
                 </button>
               </div>
             </form>

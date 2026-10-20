@@ -18,21 +18,28 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   currentOrg,
   onOpenMenu,
 }) => {
-  const navItems = [
+  const activeModules = currentOrg.subscription?.activeModules || (
+    currentOrg.plan === 'invoicing' ? ['sales'] : ['sales', 'financials', 'purchases', 'reports']
+  );
+
+  const allNavItems = [
     {
       name: 'Dashboard',
       path: `/org/${currentOrg.slug}/dashboard`,
       icon: LayoutDashboard,
-    },
-    {
-      name: 'Ledger',
-      path: `/org/${currentOrg.slug}/financials`,
-      icon: BookOpen,
+      module: 'sales',
     },
     {
       name: 'Sales',
       path: `/org/${currentOrg.slug}/sales`,
       icon: Receipt,
+      module: 'sales',
+    },
+    {
+      name: 'Ledger',
+      path: `/org/${currentOrg.slug}/financials`,
+      icon: BookOpen,
+      module: 'financials',
     },
     {
       name: 'Settings',
@@ -40,6 +47,8 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
       icon: Settings,
     },
   ];
+
+  const navItems = allNavItems.filter((item) => !item.module || activeModules.includes(item.module as any));
 
   return (
     <nav

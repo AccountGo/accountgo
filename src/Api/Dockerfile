@@ -1,33 +1,45 @@
-FROM mcr.microsoft.com/dotnet/sdk:7.0-bullseye-slim-amd64 AS build-env
-
+# Multi-stage build for AccountGo API (.NET 10)
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build-env
 WORKDIR /app
 
-COPY ./src/Api Api
-COPY ./src/Core Core
-COPY ./src/Services Services
-COPY ./src/Dto Dto
+# Copy Directory props/targets
+COPY Directory.Build.props Directory.Build.targets ./
 
-RUN ls -a
+# Copy project files for caching
+COPY src/Api/Api.csproj src/Api/
+COPY src/Core/Core.csproj src/Core/
+COPY src/Dto/Dto.csproj src/Dto/
+COPY src/Services/Services.csproj src/Services/
+COPY src/Infrastructure/Infrastructure.csproj src/Infrastructure/
+COPY src/src.ServiceDefaults/src.ServiceDefaults.csproj src/src.ServiceDefaults/
 
-RUN dotnet restore ./Api/*.csproj
-RUN dotnet publish ./Api/*.csproj -c Release -o out
+# Restore dependencies
+RUN dotnet restore src/Api/Api.csproj
 
-FROM mcr.microsoft.com/dotnet/aspnet:7.0-bullseye-slim-amd64
+# Copy source code
+COPY src/Api/ src/Api/
+COPY src/Core/ src/Core/
+COPY src/Dto/ src/Dto/
+COPY src/Services/ src/Services/
+COPY src/Infrastructure/ src/Infrastructure/
+COPY src/src.ServiceDefaults/ src/src.ServiceDefaults/
 
-ARG DBSERVER localhost
-ARG DBUSERID dbuser
-ARG DBPASSWORD Str0ngPassword
-ARG DBNAME accountgodb
+# Publish release artifacts
+RUN dotnet publish src/Api/Api.csproj -c Release -o /app/out
 
-ENV DBSERVER ${DBSERVER}
-ENV DBUSERID ${DBUSERID}
-ENV DBPASSWORD ${DBPASSWORD}
-ENV DBNAME ${DBNAME}
+# Runtime stage
+FROM mcr.microsoft.com/dotnet/aspnet:10.0
 
 WORKDIR /app
-
 COPY --from=build-env /app/out ./
+
+# Pre-seeded SQLite database
+COPY src/Api/accountgo.db* ./
+
+ENV ASPNETCORE_URLS=http://+:8001
+ENV ASPNETCORE_ENVIRONMENT=Production
+ENV DatabaseProvider=Sqlite
 
 EXPOSE 8001
 
-CMD ["dotnet", "Api.dll"]
+ENTRYPOINT ["dotnet", "Api.dll"]

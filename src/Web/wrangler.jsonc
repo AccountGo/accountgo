@@ -1,0 +1,27 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "accountgo-web",
+  "main": "worker.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": true
+  },
+  "services": [
+    {
+      "binding": "API",
+      "service": "accountgo-api"
+    }
+  ],
+  "vars": {
+    "API_HOST": "accountgo-api.anter.workers.dev"
+  },
+  "observability": {
+    "enabled": true
+  }
+}

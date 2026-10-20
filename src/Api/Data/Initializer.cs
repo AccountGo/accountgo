@@ -899,12 +899,7 @@ namespace Api.Data
             Console.WriteLine("SetupSecurityRoles() - Started");
             try
             {
-                var existingSecurityRoles = _securityService.GetAllSecurityRole();
-                // Console.WriteLine(existingSecurityRoles.Count());
-                if (existingSecurityRoles.FirstOrDefault(r => r.Name == "SystemAdministrators") == null)
-                    _securityService.AddRole("SystemAdministrators");
-                if (existingSecurityRoles.FirstOrDefault(r => r.Name == "GeneralUsers") == null)
-                    _securityService.AddRole("GeneralUsers");
+                _securityService.EnsureDefaultPermissionsAndRoles();
             }
             catch (System.Exception ex)
             {

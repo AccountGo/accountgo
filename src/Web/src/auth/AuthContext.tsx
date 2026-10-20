@@ -92,6 +92,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return {
       message: data.message || 'If an account exists, a code has been sent.',
       expiresInSeconds: data.expiresInSeconds || 300,
+      devCode: data.devCode,
     };
   }, []);
 

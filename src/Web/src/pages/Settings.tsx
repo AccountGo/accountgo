@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useOutletContext, useNavigate } from 'react-router-dom';
+import { useOutletContext, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Building2,
   Users,
@@ -12,14 +12,25 @@ import {
   Sun,
   Moon,
   Laptop,
+  Sparkles,
+  Shield,
 } from 'lucide-react';
 import { TenantContextType } from '../types';
 import { THEMES, SCHEMES, ThemeId, SchemeId } from '../themes';
 import { useTheme } from '../themes/ThemeContext';
+import { SubscriptionSettingsTab } from '../components/SubscriptionSettingsTab';
+import { RolesSettingsTab } from '../components/RolesSettingsTab';
 
 export const Settings: React.FC = () => {
-  const { currentOrg, user, updateOrgWhitelabel } = useOutletContext<TenantContextType>();
+  const tenantContext = useOutletContext<TenantContextType>();
+  const { currentOrg, user, updateOrgWhitelabel } = tenantContext;
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const currentTab = (searchParams.get('tab') as 'general' | 'subscription' | 'roles') || 'general';
+
+  const handleTabChange = (tab: 'general' | 'subscription' | 'roles') => {
+    setSearchParams(tab === 'general' ? {} : { tab });
+  };
   const { setTheme, setScheme, resolvedScheme } = useTheme();
 
   const [orgName, setOrgName] = useState(currentOrg.name);
@@ -78,18 +89,92 @@ export const Settings: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6 max-w-4xl animate-in fade-in duration-200 text-[var(--text-main)]">
-      {/* Settings Page Header */}
-      <div>
-        <h1 className="text-xl sm:text-2xl font-bold text-[var(--text-main)] tracking-tight">
-          Organization Settings
-        </h1>
-        <p className="text-xs sm:text-sm text-[var(--text-muted)] mt-1">
-          Manage configuration, reporting currency, whitelabeling, and member permissions for{' '}
-          <span className="text-[var(--brand-primary)] font-semibold">{currentOrg.name}</span>.
-        </p>
+    <div className="space-y-6 w-full animate-in fade-in duration-200 text-[var(--text-main)]">
+      {/* Workspace Context Top Bar (Border-Less) */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-[var(--bg-surface)] via-[var(--bg-surface)] to-[var(--brand-subtle)] shadow-xl">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-[var(--brand-primary)] animate-pulse" />
+            <span className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-[var(--brand-primary)]">
+              Workspace Configuration
+            </span>
+          </div>
+          <h1 className="text-xl sm:text-2xl font-bold text-[var(--text-main)] tracking-tight">
+            Organization Settings
+          </h1>
+          <p className="text-xs text-[var(--text-muted)]">
+            Manage configuration, reporting currency, whitelabeling, and member permissions for{' '}
+            <span className="text-[var(--text-main)] font-semibold">{currentOrg.name}</span>.
+          </p>
+        </div>
+
+        {/* Tenant Meta Pill Badges */}
+        <div className="flex flex-wrap items-center gap-2 sm:self-center">
+          <div className="px-3 py-1.5 rounded-xl bg-[var(--bg-subtle)] shadow-sm text-xs">
+            <span className="text-[var(--text-muted)]">Org ID: </span>
+            <code className="text-[var(--text-secondary)] font-mono font-medium">{currentOrg.id}</code>
+          </div>
+          <div className="px-3 py-1.5 rounded-xl bg-[var(--bg-subtle)] shadow-sm text-xs">
+            <span className="text-[var(--text-muted)]">Slug: </span>
+            <code className="text-[var(--brand-primary)] font-mono font-medium">/org/{currentOrg.slug}</code>
+          </div>
+          <div className="px-3 py-1.5 rounded-xl bg-[var(--brand-subtle)] text-xs text-[var(--brand-primary)] font-medium">
+            Role: {currentOrg.role || 'Admin'}
+          </div>
+        </div>
       </div>
 
+      {/* Tab Navigation Controls */}
+      <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-[var(--bg-surface)] backdrop-blur-md shadow-sm w-fit overflow-x-auto">
+        <button
+          type="button"
+          onClick={() => handleTabChange('general')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+            currentTab === 'general'
+              ? 'bg-[var(--brand-primary)] text-white shadow-sm'
+              : 'text-[var(--text-secondary)] hover:text-[var(--text-main)] hover:bg-[var(--bg-surface-hover)]'
+          }`}
+        >
+          <Building2 className="w-3.5 h-3.5" />
+          <span>General &amp; Whitelabel</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => handleTabChange('subscription')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+            currentTab === 'subscription'
+              ? 'bg-[var(--brand-primary)] text-white shadow-sm'
+              : 'text-[var(--text-secondary)] hover:text-[var(--text-main)] hover:bg-[var(--bg-surface-hover)]'
+          }`}
+        >
+          <Sparkles className="w-3.5 h-3.5" />
+          <span>Subscription &amp; Modules</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => handleTabChange('roles')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+            currentTab === 'roles'
+              ? 'bg-[var(--brand-primary)] text-white shadow-sm'
+              : 'text-[var(--text-secondary)] hover:text-[var(--text-main)] hover:bg-[var(--bg-surface-hover)]'
+          }`}
+        >
+          <Shield className="w-3.5 h-3.5" />
+          <span>Roles &amp; Permissions</span>
+        </button>
+      </div>
+
+      {currentTab === 'subscription' && (
+        <SubscriptionSettingsTab tenantContext={tenantContext} />
+      )}
+
+      {currentTab === 'roles' && (
+        <RolesSettingsTab tenantContext={tenantContext} />
+      )}
+
+      {currentTab === 'general' && (
       <form onSubmit={handleSave} className="space-y-6">
         {/* Card 1: Workspace Profile (Border-Less) */}
         <div className="p-4 sm:p-6 rounded-2xl bg-[var(--bg-surface)] backdrop-blur-md shadow-md space-y-4">
@@ -404,6 +489,7 @@ export const Settings: React.FC = () => {
           </button>
         </div>
       </form>
+      )}
     </div>
   );
 };

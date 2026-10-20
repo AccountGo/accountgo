@@ -41,6 +41,8 @@ namespace Api.Data.Seed
 
             var success = initializer.Setup();
 
+            securityService.EnsureDefaultPermissionsAndRoles();
+
             if (success)
             {
                 Console.WriteLine("Database seeding completed successfully.");

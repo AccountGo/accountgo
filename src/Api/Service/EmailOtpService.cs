@@ -58,7 +58,7 @@ namespace Api.Service
             _hmacKey = Encoding.UTF8.GetBytes(secret);
         }
 
-        public async Task<(bool Success, string Message, int ExpiresInSeconds, string? Error)> SendOtpAsync(string email, string? ipAddress)
+        public async Task<(bool Success, string Message, int ExpiresInSeconds, string? Error, string? DevCode)> SendOtpAsync(string email, string? ipAddress)
         {
             var normalizedEmail = email.Trim().ToLowerInvariant();
             var user = await _userManager.FindByEmailAsync(normalizedEmail);
@@ -68,7 +68,7 @@ namespace Api.Service
             {
                 _logger.LogInformation("OTP request for non-existent email {Email} from {IP} - running dummy hash compute.", normalizedEmail, ipAddress);
                 PerformDummyWork(normalizedEmail);
-                return (true, "If an account exists, a code has been sent.", OtpExpirySeconds, null);
+                return (true, "If an account exists, a code has been sent.", OtpExpirySeconds, null, null);
             }
 
             // Inspect existing token payload if any for cooldown
@@ -84,7 +84,7 @@ namespace Api.Service
                         if (secondsSinceLastSend < ResendCooldownSeconds)
                         {
                             var waitRemaining = (int)Math.Ceiling(ResendCooldownSeconds - secondsSinceLastSend);
-                            return (false, string.Empty, 0, $"Please wait {waitRemaining} seconds before requesting a new code.");
+                            return (false, string.Empty, 0, $"Please wait {waitRemaining} seconds before requesting a new code.", null);
                         }
                     }
                 }
@@ -129,7 +129,12 @@ namespace Api.Service
 
             await _emailSender.SendAsync(user.Email ?? normalizedEmail, emailSubject, emailBody);
 
-            return (true, "If an account exists, a code has been sent.", OtpExpirySeconds, null);
+            var isConsole = string.Equals(_configuration["Email:Provider"], "Console", StringComparison.OrdinalIgnoreCase) ||
+                            string.Equals(_configuration.GetValue<string>("ASPNETCORE_ENVIRONMENT"), "Development", StringComparison.OrdinalIgnoreCase);
+
+            var devCode = isConsole ? code : null;
+
+            return (true, "If an account exists, a code has been sent.", OtpExpirySeconds, null, devCode);
         }
 
         public async Task<(bool Success, AuthResponse? Response, string? RawRefreshToken, string? Error)> VerifyOtpAsync(
@@ -354,12 +359,15 @@ namespace Api.Service
                 }
             }
 
+            var permissions = _securityService.GetPermissionsForUser(user.UserName ?? user.Email ?? string.Empty);
+
             return new UserDto(
                 user.Id,
                 user.Email ?? user.UserName ?? string.Empty,
                 firstName,
                 lastName,
-                roles);
+                roles,
+                permissions);
         }
 
         private string ComputeHmac(string input)

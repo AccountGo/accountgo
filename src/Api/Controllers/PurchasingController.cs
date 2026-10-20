@@ -1,3 +1,4 @@
+using Api.Filters;
 using Microsoft.AspNetCore.Mvc;
 using Services.Administration;
 using Services.Financial;
@@ -6,6 +7,7 @@ using Services.Purchasing;
 namespace Api.Controllers
 {
     [Route("api/[controller]")]
+    [RequireModule("purchases")]
     public class PurchasingController : BaseController
     {
         private readonly IAdministrationService _adminService;

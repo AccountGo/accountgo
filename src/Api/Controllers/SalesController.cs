@@ -1,4 +1,5 @@
-﻿using Api.ActionFilters;
+using Api.ActionFilters;
+using Api.Filters;
 using Core.Domain;
 using Dto.Sales;
 using Microsoft.AspNetCore.Mvc;
@@ -11,6 +12,7 @@ using Services.TaxSystem;
 namespace Api.Controllers
 {
     [Route("api/[controller]")]
+    [RequireModule("sales")]
     public class SalesController : BaseController
     {
         private readonly IAdministrationService _adminService;

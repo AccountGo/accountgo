@@ -332,6 +332,11 @@ using (var scope = app.Services.CreateScope())
                 Console.WriteLine("✓ SQLite database seeding completed successfully.");
             }
 
+            // Ensure security permissions and roles are initialized
+            var securityService = services.GetRequiredService<Services.Security.ISecurityService>();
+            securityService.EnsureDefaultPermissionsAndRoles();
+            Console.WriteLine("✓ Security permissions and default roles verified.");
+
             // Ensure admin user exists in Identity
             var userManager = services.GetRequiredService<Microsoft.AspNetCore.Identity.UserManager<ApplicationUser>>();
             var adminEmail = "admin@accountgo.ph";

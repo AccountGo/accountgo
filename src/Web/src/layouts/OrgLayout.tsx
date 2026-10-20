@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, Outlet, Link, useNavigate } from 'react-router-dom';
 import { Building2, AlertCircle, ArrowLeft, RefreshCw } from 'lucide-react';
-import { OrgDetails, TenantContextType, WhitelabelConfig, SidebarMode, UserProfile } from '../types';
-import { MOCK_ORGS, MOCK_USER, setPersistedOrgSlug } from '../lib/mockData';
+import { OrgDetails, TenantContextType, WhitelabelConfig, SidebarMode, UserProfile, ModuleKey, PlanKey, SubscriptionInfo } from '../types';
+import { setPersistedOrgSlug } from '../lib/mockData';
 import { Sidebar } from '../components/Sidebar';
 import { Header } from '../components/Header';
 import { MobileBottomNav } from '../components/MobileBottomNav';
@@ -13,11 +13,17 @@ export const OrgLayout: React.FC = () => {
   const { orgSlug } = useParams<{ orgSlug: string }>();
   const navigate = useNavigate();
   const { setTenantWhitelabel } = useTheme();
-  const { user: authUser } = useAuth();
+  const { user: authUser, authFetch } = useAuth();
 
   const userProfile: UserProfile = useMemo(() => {
     if (!authUser) {
-      return MOCK_USER;
+      return {
+        id: '',
+        name: '',
+        email: '',
+        role: 'Member',
+        permissions: [],
+      };
     }
     const name = [authUser.firstName, authUser.lastName].filter(Boolean).join(' ') || authUser.email.split('@')[0];
     const role = authUser.roles?.includes('SystemAdministrators')
@@ -28,10 +34,11 @@ export const OrgLayout: React.FC = () => {
       name,
       email: authUser.email,
       role,
+      permissions: authUser.permissions || [],
     };
   }, [authUser]);
 
-  const [availableOrgs, setAvailableOrgs] = useState<OrgDetails[]>(MOCK_ORGS);
+  const [availableOrgs, setAvailableOrgs] = useState<OrgDetails[]>([]);
   const [currentOrg, setCurrentOrg] = useState<OrgDetails | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [isMobileOpen, setIsMobileOpen] = useState<boolean>(false);
@@ -58,24 +65,152 @@ export const OrgLayout: React.FC = () => {
     setSidebarMode(sidebarMode === 'collapsed' ? 'expanded' : 'collapsed');
   };
 
+  // Fetch available organizations directly from live database and resolve tenant
   useEffect(() => {
+    let mounted = true;
     setLoading(true);
-    // Simulate tenant resolution/fetch
-    const timer = setTimeout(() => {
-      const match = availableOrgs.find((o) => o.slug.toLowerCase() === orgSlug?.toLowerCase());
-      if (match) {
-        setCurrentOrg(match);
-        setPersistedOrgSlug(match.slug);
-        setTenantWhitelabel(match.whitelabel || null);
-      } else {
-        setCurrentOrg(null);
-        setTenantWhitelabel(null);
-      }
-      setLoading(false);
-    }, 150);
 
-    return () => clearTimeout(timer);
-  }, [orgSlug, availableOrgs, setTenantWhitelabel]);
+    const loadAndResolve = async () => {
+      try {
+        const res = await authFetch('/api/Administration/companies');
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data) && mounted) {
+            const orgs: OrgDetails[] = data.map((c: any) => ({
+              id: c.id?.toString() || c.slug,
+              name: c.name,
+              slug: c.slug,
+              role: 'Admin',
+              plan: (c.plan || 'accounting') as PlanKey,
+              currency: 'PHP',
+              fiscalYearEnd: 'Dec 31',
+              avatarBg:
+                c.plan === 'invoicing'
+                  ? 'bg-gradient-to-br from-violet-500 to-fuchsia-600'
+                  : c.plan === 'enterprise'
+                  ? 'bg-gradient-to-br from-indigo-500 to-blue-600'
+                  : 'bg-gradient-to-br from-emerald-500 to-teal-600',
+              whitelabel: {
+                themeId: c.plan === 'invoicing' ? 'tokyo-night' : c.plan === 'enterprise' ? 'sapphire' : 'accountgo',
+                brandName: c.name,
+              },
+              subscription: {
+                planId: (c.plan || 'accounting') as PlanKey,
+                planName: (c.plan || 'accounting').charAt(0).toUpperCase() + (c.plan || 'accounting').slice(1),
+                status: c.subscriptionStatus || 'active',
+                activeModules: c.activeModules || ['sales'],
+                validUntil: '2028-12-31',
+              },
+            }));
+            setAvailableOrgs(orgs);
+
+            const match = orgs.find((o) => o.slug.toLowerCase() === orgSlug?.toLowerCase());
+            if (match) {
+              try {
+                const subRes = await authFetch(`/api/Subscription/current?slug=${match.slug}`);
+                if (subRes.ok && mounted) {
+                  const subData = await subRes.json();
+                  if (subData && subData.plan) {
+                    const liveSub: SubscriptionInfo = {
+                      planId: subData.plan,
+                      planName: subData.plan.charAt(0).toUpperCase() + subData.plan.slice(1),
+                      status: subData.subscriptionStatus || 'active',
+                      activeModules: subData.activeModules || ['sales'],
+                      validUntil: subData.subscriptionValidUntil || '2028-12-31',
+                    };
+                    match.subscription = liveSub;
+                    match.plan = subData.plan;
+                  }
+                }
+              } catch {}
+
+              if (mounted) {
+                setCurrentOrg({ ...match });
+                setPersistedOrgSlug(match.slug);
+                setTenantWhitelabel(match.whitelabel || null);
+                setLoading(false);
+              }
+            } else {
+              if (mounted) {
+                setCurrentOrg(null);
+                setTenantWhitelabel(null);
+                setLoading(false);
+              }
+            }
+            return;
+          }
+        }
+        if (mounted) {
+          setAvailableOrgs([]);
+          setCurrentOrg(null);
+          setLoading(false);
+        }
+      } catch {
+        if (mounted) {
+          setAvailableOrgs([]);
+          setCurrentOrg(null);
+          setLoading(false);
+        }
+      }
+    };
+
+    loadAndResolve();
+    return () => {
+      mounted = false;
+    };
+  }, [authFetch, orgSlug, setTenantWhitelabel]);
+
+  const subscription: SubscriptionInfo = useMemo(() => {
+    if (currentOrg?.subscription) return currentOrg.subscription;
+    const plan: PlanKey = currentOrg?.plan || 'accounting';
+    const activeModules: ModuleKey[] = plan === 'invoicing'
+      ? ['sales']
+      : plan === 'enterprise'
+      ? ['sales', 'financials', 'purchases', 'inventory', 'reports', 'donations', 'audit']
+      : ['sales', 'financials', 'purchases', 'reports'];
+    return {
+      planId: plan,
+      planName: plan.charAt(0).toUpperCase() + plan.slice(1),
+      status: 'active',
+      activeModules,
+      validUntil: '2027-12-31',
+    };
+  }, [currentOrg]);
+
+  const userPermissions = useMemo<string[]>(() => {
+    return userProfile.permissions || [];
+  }, [userProfile]);
+
+  const hasModule = useCallback(
+    (moduleKey: ModuleKey): boolean => {
+      return subscription.activeModules.includes(moduleKey);
+    },
+    [subscription]
+  );
+
+  const hasPermission = useCallback(
+    (permission: string | string[]): boolean => {
+      if (
+        authUser?.roles?.includes('SystemAdministrators') ||
+        userProfile.role === 'System Administrator' ||
+        currentOrg?.role === 'Owner'
+      ) {
+        return true;
+      }
+      const perms = Array.isArray(permission) ? permission : [permission];
+      return perms.some((p) => userPermissions.includes(p));
+    },
+    [authUser, userProfile, currentOrg, userPermissions]
+  );
+
+  const canAccess = useCallback(
+    (moduleKey: ModuleKey, permission?: string): boolean => {
+      if (!hasModule(moduleKey)) return false;
+      if (permission && !hasPermission(permission)) return false;
+      return true;
+    },
+    [hasModule, hasPermission]
+  );
 
   const switchOrg = (newSlug: string) => {
     navigate(`/org/${newSlug}/dashboard`);
@@ -92,6 +227,46 @@ export const OrgLayout: React.FC = () => {
       prev.map((o) => (o.id === updated.id ? updated : o))
     );
     setTenantWhitelabel(updated.whitelabel);
+  };
+
+  const updateSubscription = async (newPlan: PlanKey, newActiveModules?: ModuleKey[]) => {
+    if (!currentOrg) return;
+    const resolvedModules: ModuleKey[] = newActiveModules || (
+      newPlan === 'invoicing'
+        ? ['sales']
+        : newPlan === 'enterprise'
+        ? ['sales', 'financials', 'purchases', 'inventory', 'reports', 'donations', 'audit']
+        : ['sales', 'financials', 'purchases', 'reports']
+    );
+    const newSub: SubscriptionInfo = {
+      planId: newPlan,
+      planName: newPlan.charAt(0).toUpperCase() + newPlan.slice(1),
+      status: 'active',
+      activeModules: resolvedModules,
+      validUntil: '2028-12-31',
+    };
+    const updated = {
+      ...currentOrg,
+      plan: newPlan,
+      subscription: newSub,
+    };
+    setCurrentOrg(updated);
+    setAvailableOrgs((prev) =>
+      prev.map((o) => (o.id === updated.id ? updated : o))
+    );
+
+    try {
+      await authFetch('/api/Subscription/update', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          companyId: Number(currentOrg.id) || undefined,
+          slug: currentOrg.slug,
+          plan: newPlan,
+          activeModules: resolvedModules,
+        }),
+      });
+    } catch {}
   };
 
   // 1. Loading Skeleton State (Border-Less)
@@ -146,8 +321,14 @@ export const OrgLayout: React.FC = () => {
     currentOrg,
     availableOrgs,
     user: userProfile,
+    subscription,
+    userPermissions,
     switchOrg,
     updateOrgWhitelabel,
+    updateSubscription,
+    hasModule,
+    hasPermission,
+    canAccess,
     sidebarMode,
     setSidebarMode,
   };
@@ -162,6 +343,9 @@ export const OrgLayout: React.FC = () => {
         sidebarMode={sidebarMode}
         isMobileOpen={isMobileOpen}
         onMobileClose={() => setIsMobileOpen(false)}
+        subscription={subscription}
+        hasModule={hasModule}
+        hasPermission={hasPermission}
       />
 
       <div className="flex flex-1 flex-col overflow-hidden min-w-0 transition-all duration-300 ease-in-out relative z-10">
@@ -195,3 +379,4 @@ export const OrgLayout: React.FC = () => {
 };
 
 export default OrgLayout;
+

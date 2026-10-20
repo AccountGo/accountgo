@@ -8,6 +8,7 @@ import Login from './pages/Login';
 import PlaceholderView from './pages/PlaceholderView';
 import NotFound from './pages/NotFound';
 import ProtectedRoute from './components/ProtectedRoute';
+import { RequiresModule } from './components/Gating';
 import { useAuth } from './auth/AuthContext';
 import { getPersistedOrgSlug } from './lib/mockData';
 import { Loader2 } from 'lucide-react';
@@ -69,19 +70,35 @@ const router = createBrowserRouter([
           },
           {
             path: 'financials',
-            element: <PlaceholderView />,
+            element: (
+              <RequiresModule module="financials">
+                <PlaceholderView />
+              </RequiresModule>
+            ),
           },
           {
             path: 'sales',
-            element: <PlaceholderView />,
+            element: (
+              <RequiresModule module="sales">
+                <PlaceholderView />
+              </RequiresModule>
+            ),
           },
           {
             path: 'purchases',
-            element: <PlaceholderView />,
+            element: (
+              <RequiresModule module="purchases">
+                <PlaceholderView />
+              </RequiresModule>
+            ),
           },
           {
             path: 'reports',
-            element: <PlaceholderView />,
+            element: (
+              <RequiresModule module="reports">
+                <PlaceholderView />
+              </RequiresModule>
+            ),
           },
           {
             path: 'members',

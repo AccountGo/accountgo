@@ -9,8 +9,9 @@ import {
   Settings,
   Users,
   X,
+  Sparkles,
 } from 'lucide-react';
-import { OrgDetails, UserProfile, SidebarMode } from '../types';
+import { OrgDetails, UserProfile, SidebarMode, SubscriptionInfo, ModuleKey } from '../types';
 import { OrgSwitcher } from './OrgSwitcher';
 import { UserProfileSection } from './UserProfileSection';
 
@@ -21,6 +22,9 @@ interface SidebarProps {
   sidebarMode?: SidebarMode;
   isMobileOpen?: boolean;
   onMobileClose?: () => void;
+  subscription?: SubscriptionInfo;
+  hasModule?: (module: ModuleKey) => boolean;
+  hasPermission?: (permission: string | string[]) => boolean;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -30,37 +34,62 @@ export const Sidebar: React.FC<SidebarProps> = ({
   sidebarMode = 'expanded',
   isMobileOpen = false,
   onMobileClose,
+  subscription,
+  hasModule,
+  hasPermission,
 }) => {
   const isCollapsed = sidebarMode === 'collapsed';
 
-  const mainLinks = [
+  const mainLinks: Array<{
+    name: string;
+    path: string;
+    icon: React.ComponentType<{ className?: string }>;
+    module: ModuleKey;
+    permission?: string;
+    badge?: string;
+  }> = [
     {
       name: 'Dashboard',
       path: `/org/${currentOrg.slug}/dashboard`,
       icon: LayoutDashboard,
+      module: 'sales',
+    },
+    {
+      name: 'Invoices & Sales',
+      path: `/org/${currentOrg.slug}/sales`,
+      icon: Receipt,
+      module: 'sales',
+      permission: 'sales.invoices.view',
     },
     {
       name: 'Financials',
       path: `/org/${currentOrg.slug}/financials`,
       icon: BookOpen,
+      module: 'financials',
+      permission: 'financials.accounts.view',
       badge: 'Ledger',
-    },
-    {
-      name: 'Sales & Invoices',
-      path: `/org/${currentOrg.slug}/sales`,
-      icon: Receipt,
     },
     {
       name: 'Purchases & Bills',
       path: `/org/${currentOrg.slug}/purchases`,
       icon: ShoppingBag,
+      module: 'purchases',
+      permission: 'purchases.bills.view',
     },
     {
       name: 'Reports',
       path: `/org/${currentOrg.slug}/reports`,
       icon: BarChart3,
+      module: 'reports',
+      permission: 'reports.view',
     },
   ];
+
+  const visibleMainLinks = mainLinks.filter((link) => {
+    if (hasModule && !hasModule(link.module)) return false;
+    if (hasPermission && link.permission && !hasPermission(link.permission)) return false;
+    return true;
+  });
 
   const adminLinks = [
     {
@@ -147,7 +176,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
           )}
           <nav className="space-y-1">
-            {mainLinks.map((link) => {
+            {visibleMainLinks.map((link) => {
               const Icon = link.icon;
               return (
                 <NavLink
@@ -176,6 +205,26 @@ export const Sidebar: React.FC<SidebarProps> = ({
               );
             })}
           </nav>
+
+          {/* Invoicing Plan Upgrade Teaser */}
+          {(!isCollapsed || isMobile) && subscription?.planId === 'invoicing' && (
+            <div className="mt-4 p-3 rounded-2xl bg-[var(--brand-subtle)] text-[var(--text-main)] border border-transparent">
+              <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-[var(--brand-primary)] mb-1">
+                <Sparkles className="w-3.5 h-3.5" />
+                Invoicing Plan
+              </div>
+              <p className="text-xs text-[var(--text-secondary)] leading-relaxed mb-2">
+                Need general ledger, bank feeds, or bill payments?
+              </p>
+              <Link
+                to={`/org/${currentOrg.slug}/settings?tab=subscription`}
+                onClick={isMobile ? onMobileClose : undefined}
+                className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--brand-primary)] hover:underline"
+              >
+                Upgrade to Accounting &rarr;
+              </Link>
+            </div>
+          )}
         </div>
 
         {/* Administration Section */}

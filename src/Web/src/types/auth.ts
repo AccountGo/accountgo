@@ -4,6 +4,7 @@ export interface UserDto {
   firstName: string;
   lastName: string;
   roles: string[];
+  permissions?: string[];
 }
 
 export interface AuthResponse {
@@ -15,6 +16,7 @@ export interface AuthResponse {
 export interface OtpSendResponse {
   message: string;
   expiresInSeconds: number;
+  devCode?: string | null;
 }
 
 export interface AuthContextType {

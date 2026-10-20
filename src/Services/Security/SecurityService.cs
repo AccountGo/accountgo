@@ -1,4 +1,4 @@
-﻿using Core.Data;
+using Core.Data;
 using Core.Domain.Security;
 using System.Collections.Generic;
 using System.Linq;
@@ -77,20 +77,28 @@ namespace Services.Security
 
         public bool CheckPermission(string permissionName, string username)
         {
-            bool hasPermission = false;
-
+            if (string.IsNullOrEmpty(username)) return false;
             var user = GetUser(username);
+            if (user == null) return false;
 
-            foreach (var role in user.Roles)
+            if (user.IsSysAdmin()) return true;
+
+            if (user.Roles != null)
             {
-                if (role.SecurityRole.Permissions.Where(p => p.SecurityPermission != null && p.SecurityPermission.Name == permissionName).FirstOrDefault() != null)
+                foreach (var role in user.Roles)
                 {
-                    hasPermission = true;
-                    break;
+                    if (role?.SecurityRole == null) continue;
+                    if (role.SecurityRole.SysAdmin || role.SecurityRole.Name == "SystemAdministrators") return true;
+
+                    if (role.SecurityRole.Permissions != null && 
+                        role.SecurityRole.Permissions.Any(p => p.SecurityPermission != null && p.SecurityPermission.Name == permissionName))
+                    {
+                        return true;
+                    }
                 }
             }
 
-            return hasPermission;
+            return false;
         }
 
         public IEnumerable<SecurityUserRole> GetUsersInSecurityRole(string securityRoleName)
@@ -131,27 +139,149 @@ namespace Services.Security
 
         public IEnumerable<string> GetPermissionsForUser(string username)
         {
+            if (string.IsNullOrEmpty(username)) return Enumerable.Empty<string>();
             var user = GetUser(username);
 
             if (user == null)
-                return null;
+                return Enumerable.Empty<string>();
 
-            if (user.IsSysAdmin())
+            if (user.IsSysAdmin() || (user.Roles != null && user.Roles.Any(r => r?.SecurityRole?.Name == "SystemAdministrators" || r?.SecurityRole?.SysAdmin == true)))
             {
-                var permissionsSysAdmin = from p in _securityPermissionRepo.Table.ToList()
-                                  select p.Name;
+                var permissionsSysAdmin = _securityPermissionRepo.Table.Select(p => p.Name).ToList();
+                if (permissionsSysAdmin.Count == 0)
+                {
+                    return GetAllDefaultPermissionNames();
+                }
 
                 return permissionsSysAdmin;
             }
 
             var roles = GetRolesForUser(username);
+            if (roles == null) return Enumerable.Empty<string>();
 
-            var permissions = roles.SelectMany(r => r.SecurityRole.Permissions).ToList().AsQueryable();
+            var permissions = roles
+                .Where(r => r?.SecurityRole?.Permissions != null)
+                .SelectMany(r => r.SecurityRole.Permissions)
+                .Where(p => p?.SecurityPermission != null && !string.IsNullOrEmpty(p.SecurityPermission.Name))
+                .Select(p => p.SecurityPermission.Name)
+                .Distinct()
+                .ToList();
 
-            var all = from p in permissions
-                   select p.SecurityPermission.Name;
+            return permissions;
+        }
 
-            return all;
+        public void EnsureDefaultPermissionsAndRoles()
+        {
+            var groups = new Dictionary<string, string>
+            {
+                ["Sales"] = "Sales & Invoicing",
+                ["Financials"] = "General Ledger & Banking",
+                ["Purchasing"] = "Purchases & Bills",
+                ["Inventory"] = "Inventory & Items",
+                ["Reports"] = "Reports & Analytics",
+                ["Donations"] = "Donations & Non-Profit",
+                ["Audit"] = "Audit & Compliance",
+                ["Admin"] = "Administration"
+            };
+
+            var groupEntities = new Dictionary<string, SecurityGroup>();
+            foreach (var kvp in groups)
+            {
+                var group = _securityGroupRepo.Table.FirstOrDefault(g => g.Name == kvp.Key);
+                if (group == null)
+                {
+                    group = new SecurityGroup { Name = kvp.Key, DisplayName = kvp.Value };
+                    _securityGroupRepo.Insert(group);
+                }
+                groupEntities[kvp.Key] = group;
+            }
+
+            var permissions = new List<(string GroupKey, string Name, string DisplayName)>
+            {
+                ("Sales", SystemPermissions.SalesCustomersView, "View Customers"),
+                ("Sales", SystemPermissions.SalesCustomersManage, "Manage Customers"),
+                ("Sales", SystemPermissions.SalesInvoicesView, "View Invoices"),
+                ("Sales", SystemPermissions.SalesInvoicesCreate, "Create Invoices"),
+                ("Sales", SystemPermissions.SalesInvoicesPost, "Post Invoices"),
+                ("Sales", SystemPermissions.SalesReceiptsView, "View Receipts"),
+                ("Sales", SystemPermissions.SalesReceiptsCreate, "Create Receipts"),
+                ("Sales", SystemPermissions.SalesQuotationsView, "View Quotations"),
+
+                ("Financials", SystemPermissions.FinancialsAccountsView, "View Accounts"),
+                ("Financials", SystemPermissions.FinancialsAccountsManage, "Manage Accounts"),
+                ("Financials", SystemPermissions.FinancialsJournalView, "View Journal"),
+                ("Financials", SystemPermissions.FinancialsJournalCreate, "Create Journal Entries"),
+                ("Financials", SystemPermissions.FinancialsJournalPost, "Post Journal Entries"),
+                ("Financials", SystemPermissions.FinancialsCashBanksView, "View Cash & Banks"),
+                ("Financials", SystemPermissions.FinancialsCashBanksManage, "Manage Cash & Banks"),
+
+                ("Purchasing", SystemPermissions.PurchasesVendorsView, "View Vendors"),
+                ("Purchasing", SystemPermissions.PurchasesVendorsManage, "Manage Vendors"),
+                ("Purchasing", SystemPermissions.PurchasesOrdersView, "View Orders"),
+                ("Purchasing", SystemPermissions.PurchasesBillsView, "View Bills"),
+                ("Purchasing", SystemPermissions.PurchasesBillsCreate, "Create Bills"),
+                ("Purchasing", SystemPermissions.PurchasesBillsPost, "Post Bills"),
+
+                ("Inventory", SystemPermissions.InventoryItemsView, "View Items"),
+                ("Inventory", SystemPermissions.InventoryItemsManage, "Manage Items"),
+                ("Inventory", SystemPermissions.InventoryAdjustmentsView, "View Adjustments"),
+                ("Inventory", SystemPermissions.InventoryAdjustmentsPost, "Post Adjustments"),
+
+                ("Reports", SystemPermissions.ReportsView, "View Reports"),
+
+                ("Donations", SystemPermissions.DonationsView, "View Donations"),
+                ("Donations", SystemPermissions.DonationsManage, "Manage Donations"),
+
+                ("Audit", SystemPermissions.AuditLogsView, "View Audit Logs"),
+
+                ("Admin", SystemPermissions.AdminMembersManage, "Manage Members"),
+                ("Admin", SystemPermissions.AdminRolesManage, "Manage Roles"),
+                ("Admin", SystemPermissions.AdminSubscriptionManage, "Manage Subscription")
+            };
+
+            foreach (var perm in permissions)
+            {
+                var existing = _securityPermissionRepo.Table.FirstOrDefault(p => p.Name == perm.Name);
+                if (existing == null)
+                {
+                    var group = groupEntities[perm.GroupKey];
+                    _securityPermissionRepo.Insert(new SecurityPermission
+                    {
+                        Name = perm.Name,
+                        DisplayName = perm.DisplayName,
+                        SecurityGroupId = group.Id
+                    });
+                }
+            }
+
+            // Ensure roles
+            var sysAdminRole = _securityRoleRepo.Table.FirstOrDefault(r => r.Name == "SystemAdministrators");
+            if (sysAdminRole == null)
+            {
+                sysAdminRole = new SecurityRole { Name = "SystemAdministrators", DisplayName = "System Administrators", SysAdmin = true };
+                _securityRoleRepo.Insert(sysAdminRole);
+            }
+            else if (!sysAdminRole.SysAdmin)
+            {
+                sysAdminRole.SysAdmin = true;
+                _securityRoleRepo.Update(sysAdminRole);
+            }
+
+            var generalUsers = _securityRoleRepo.Table.FirstOrDefault(r => r.Name == "GeneralUsers");
+            if (generalUsers == null)
+            {
+                generalUsers = new SecurityRole { Name = "GeneralUsers", DisplayName = "General Users", SysAdmin = false };
+                _securityRoleRepo.Insert(generalUsers);
+            }
+        }
+
+        private static List<string> GetAllDefaultPermissionNames()
+        {
+            return typeof(SystemPermissions)
+                .GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.FlattenHierarchy)
+                .Where(fi => fi.IsLiteral && !fi.IsInitOnly && fi.FieldType == typeof(string))
+                .Select(fi => (string)fi.GetValue(null)!)
+                .ToList();
         }
 
         public IEnumerable<SecurityGroup> GetAllSecurityGroup()

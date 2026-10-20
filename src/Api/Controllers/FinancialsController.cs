@@ -1,4 +1,5 @@
-﻿using Dto.Financial;
+using Api.Filters;
+using Dto.Financial;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Services.Administration;
@@ -10,6 +11,7 @@ using System.Linq;
 namespace Api.Controllers
 {
     [Route("api/[controller]")]
+    [RequireModule("financials")]
     //[Authorize]
     public class FinancialsController : BaseController
     {

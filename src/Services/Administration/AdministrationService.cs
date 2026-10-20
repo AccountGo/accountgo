@@ -14,6 +14,7 @@ using Core.Domain.Error;
 using Core.Domain.Financials;
 using Core.Domain.Security;
 using Core.Domain.TaxSystem;
+using Dto.Subscription;
 using Services.Financial;
 using Services.TaxSystem;
 using System;
@@ -297,6 +298,21 @@ namespace Services.Administration
             return _company.Table.ToList().FirstOrDefault();
         }
 
+        public ICollection<Company> GetCompanies()
+        {
+            return _company.Table.ToList();
+        }
+
+        public Company? GetCompanyBySlug(string slug)
+        {
+            if (string.IsNullOrWhiteSpace(slug)) return null;
+            var list = _company.Table.ToList();
+            return list.FirstOrDefault(c =>
+                string.Equals(c.Slug, slug, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(c.ShortName, slug, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(c.CompanyCode, slug, StringComparison.OrdinalIgnoreCase));
+        }
+
         public ICollection<PaymentTerm> GetPaymentTerms()
         {
             var query = from f in _paymentTermRepo.Table
@@ -351,6 +367,175 @@ namespace Services.Administration
         public IEnumerable<AuditLog> AuditLogs()
         {
             return _auditLogRepo.Table.AsEnumerable();
+        }
+
+        public TenantSubscriptionDto GetCurrentSubscription(string? slug = null)
+        {
+            var company = !string.IsNullOrWhiteSpace(slug) ? GetCompanyBySlug(slug) : null;
+            company ??= GetDefaultCompany();
+            if (company == null)
+            {
+                return new TenantSubscriptionDto
+                {
+                    CompanyId = 0,
+                    CompanyName = "Default Organization",
+                    Slug = "default",
+                    Plan = "invoicing",
+                    SubscriptionStatus = "active",
+                    ActiveModules = new List<string> { "sales" }
+                };
+            }
+
+            return new TenantSubscriptionDto
+            {
+                CompanyId = company.Id,
+                CompanyName = company.Name ?? "AccountGo Organization",
+                Slug = company.Slug ?? company.ShortName?.ToLowerInvariant() ?? $"org-{company.Id}",
+                Plan = company.Plan ?? "accounting",
+                SubscriptionStatus = company.SubscriptionStatus ?? "active",
+                SubscriptionValidUntil = company.SubscriptionValidUntil,
+                ActiveModules = company.GetActiveModules()
+            };
+        }
+
+        public TenantSubscriptionDto UpdateSubscription(UpdateSubscriptionDto dto)
+        {
+            Company? company = null;
+            if (dto.CompanyId.HasValue && dto.CompanyId.Value > 0)
+            {
+                company = _company.GetById(dto.CompanyId.Value);
+            }
+            else if (!string.IsNullOrWhiteSpace(dto.Slug))
+            {
+                company = GetCompanyBySlug(dto.Slug);
+            }
+
+            company ??= GetDefaultCompany();
+            if (company == null)
+            {
+                company = new Company
+                {
+                    Name = "Financial Solutions Inc.",
+                    ShortName = "FSI",
+                    Slug = "ph-financials",
+                    CompanyCode = "100"
+                };
+                _company.Insert(company);
+            }
+
+            company.Plan = dto.Plan?.ToLowerInvariant() ?? "invoicing";
+            if (dto.ActiveModules != null && dto.ActiveModules.Count > 0)
+            {
+                company.ActiveModulesJson = System.Text.Json.JsonSerializer.Serialize(dto.ActiveModules);
+            }
+            else
+            {
+                company.ActiveModulesJson = null; // Revert to plan defaults
+            }
+
+            _company.Update(company);
+            return GetCurrentSubscription(company.Slug);
+        }
+
+        public bool IsModuleEnabled(string moduleKey)
+        {
+            var company = GetDefaultCompany();
+            if (company == null) return true;
+            return company.HasModule(moduleKey);
+        }
+
+        public List<PlanDefinitionDto> GetPlanDefinitions()
+        {
+            return new List<PlanDefinitionDto>
+            {
+                new PlanDefinitionDto
+                {
+                    Key = "invoicing",
+                    Name = "Invoicing",
+                    Description = "Everything you need to create quotes, bill clients, and track payments.",
+                    IncludedModules = new List<string> { "sales" },
+                    MonthlyPrice = 15m
+                },
+                new PlanDefinitionDto
+                {
+                    Key = "accounting",
+                    Name = "Accounting",
+                    Description = "Full double-entry bookkeeping, banking, purchase bills, and financial statements.",
+                    IncludedModules = new List<string> { "sales", "financials", "purchases", "reports" },
+                    MonthlyPrice = 39m
+                },
+                new PlanDefinitionDto
+                {
+                    Key = "enterprise",
+                    Name = "Enterprise",
+                    Description = "Complete ERP suite with inventory management, non-profit donations, audit trails, and whitelabeling.",
+                    IncludedModules = new List<string> { "sales", "financials", "purchases", "inventory", "reports", "donations", "audit" },
+                    MonthlyPrice = 99m
+                }
+            };
+        }
+
+        public List<ModuleDefinitionDto> GetModuleDefinitions()
+        {
+            return new List<ModuleDefinitionDto>
+            {
+                new ModuleDefinitionDto
+                {
+                    Key = "sales",
+                    Name = "Invoicing & Sales",
+                    Description = "Customers, quotations, sales orders, invoices, and payments.",
+                    Icon = "Receipt",
+                    IsCore = true
+                },
+                new ModuleDefinitionDto
+                {
+                    Key = "financials",
+                    Name = "General Ledger & Banking",
+                    Description = "Chart of accounts, cash & bank accounts, journal entries, and trial balance.",
+                    Icon = "BookOpen",
+                    IsCore = false
+                },
+                new ModuleDefinitionDto
+                {
+                    Key = "purchases",
+                    Name = "Purchases & Bills",
+                    Description = "Vendors, purchase orders, vendor invoices, and bill payments.",
+                    Icon = "ShoppingBag",
+                    IsCore = false
+                },
+                new ModuleDefinitionDto
+                {
+                    Key = "inventory",
+                    Name = "Inventory & Items",
+                    Description = "Product catalog, warehouse stock items, and inventory control journals.",
+                    Icon = "Boxes",
+                    IsCore = false
+                },
+                new ModuleDefinitionDto
+                {
+                    Key = "reports",
+                    Name = "Financial Reports",
+                    Description = "Income statements, balance sheets, customer/vendor aging, and tax summaries.",
+                    Icon = "BarChart3",
+                    IsCore = false
+                },
+                new ModuleDefinitionDto
+                {
+                    Key = "donations",
+                    Name = "Donations & Non-Profit",
+                    Description = "Donor tracking, donation invoices, pledges, and tax receipts.",
+                    Icon = "HeartHandshake",
+                    IsCore = false
+                },
+                new ModuleDefinitionDto
+                {
+                    Key = "audit",
+                    Name = "Audit Trail & Compliance",
+                    Description = "Comprehensive system audit logging and user activity monitoring.",
+                    Icon = "ShieldCheck",
+                    IsCore = false
+                }
+            };
         }
     }
 }

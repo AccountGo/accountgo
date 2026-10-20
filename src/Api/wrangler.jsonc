@@ -1,0 +1,42 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "accountgo-api",
+  "main": "worker.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "containers": [
+    {
+      "class_name": "AccountGoApiContainer",
+      "image": "./Dockerfile",
+      "image_build_context": "../..",
+      "max_instances": 5
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "CONTAINER",
+        "class_name": "AccountGoApiContainer"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": [
+        "AccountGoApiContainer"
+      ]
+    }
+  ],
+  "vars": {
+    "ENVIRONMENT": "Production",
+    "CONTAINER_NAME": "v4",
+    "SECRET__key": "1618184c2fea71c86669fa7d6611a55db32e5ac7b238f235b1bbbbdb14c2a9be",
+    "DatabaseProvider": "Sqlite"
+  },
+  "observability": {
+    "enabled": true
+  }
+}
