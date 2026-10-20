@@ -9,16 +9,37 @@ namespace Api.Extensions
 {
     public static class ServiceExtensions
     {
-        public static void ConfigureCors(this IServiceCollection services)
+        public static void ConfigureCors(this IServiceCollection services, IConfiguration configuration)
         {
+            var allowedOrigins = configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
+                ?? new[]
+                {
+                    "http://localhost:8000",
+                    "https://localhost:8000",
+                    "http://localhost:5173",
+                    "https://localhost:5173",
+                    "http://localhost:3000"
+                };
+
             services.AddCors(options =>
             {
+                options.AddPolicy(name: "Frontend",
+                    policy =>
+                    {
+                        policy.WithOrigins(allowedOrigins)
+                            .AllowAnyMethod()
+                            .AllowAnyHeader()
+                            .AllowCredentials();
+                    });
+
+                // Backwards compatibility alias
                 options.AddPolicy(name: "AllowAll",
                     policy =>
                     {
-                        policy.AllowAnyOrigin()
+                        policy.WithOrigins(allowedOrigins)
                             .AllowAnyMethod()
-                            .AllowAnyHeader();
+                            .AllowAnyHeader()
+                            .AllowCredentials();
                     });
             });
         }
@@ -36,6 +57,13 @@ namespace Api.Extensions
             var validAudience = configuration["JwtSettings:validAudience"];
             var secretKey = configuration["SECRET:key"];
 
+            if (string.IsNullOrWhiteSpace(secretKey) || Encoding.UTF8.GetByteCount(secretKey) < 32)
+            {
+                throw new InvalidOperationException(
+                    "FATAL SECURITY CONFIGURATION: 'SECRET:key' is missing or shorter than 32 bytes (256 bits). " +
+                    "Configure a secure key via user-secrets ('dotnet user-secrets set \"SECRET:key\" \"<key>\"') or environment variable SECRET__key.");
+            }
+
             services.AddAuthentication(opt =>
             {
                 opt.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -48,10 +76,11 @@ namespace Api.Extensions
                     ValidateAudience = true,
                     ValidateLifetime = true,
                     ValidateIssuerSigningKey = true,
+                    ClockSkew = TimeSpan.FromMinutes(1),
 
                     ValidIssuer = validIssuer,
                     ValidAudience = validAudience,
-                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey!))
+                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey))
                 };
             });
         }

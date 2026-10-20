@@ -9,7 +9,6 @@ namespace AccountGoWeb.Controllers
     public class SPAProxyController : BaseController
     {
         private readonly IHttpClientFactory _clientFactory;
-        private readonly IConfiguration _configuration;
 
         public SPAProxyController(IHttpClientFactory clientFactory, IConfiguration configuration)
         {

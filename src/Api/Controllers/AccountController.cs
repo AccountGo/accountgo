@@ -1,5 +1,10 @@
+using System;
+using System.Linq;
+using System.Threading.Tasks;
 using Api.Data;
-using Api.Service;
+using Dto.Security;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Services.Administration;
@@ -7,117 +12,75 @@ using Services.Security;
 
 namespace Api.Controllers
 {
+    [ApiController]
     [Route("api/[controller]")]
     public class AccountController : BaseController
     {
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly IAdministrationService _administrationService;
-        private readonly IAuthenticationService _authenticationService;
+        private readonly ISecurityService _securityService;
 
         public AccountController(
             UserManager<ApplicationUser> userManager,
-            SignInManager<ApplicationUser> signInManager,
             IAdministrationService administrationService,
-            ISecurityService securityService,
-            IAuthenticationService authenticationService
-            )
+            ISecurityService securityService)
         {
             _userManager = userManager;
             _administrationService = administrationService;
-            _authenticationService = authenticationService;
+            _securityService = securityService;
         }
 
-        [HttpPost]
-        [Route("SignIn")]
-        public async System.Threading.Tasks.Task<IActionResult> SignIn([FromBody]dynamic loginViewModel)
+        [Authorize(Roles = "Administrator,SystemAdministrators")]
+        [HttpPost("AddNewUser")]
+        public async Task<IActionResult> AddNewUser([FromBody] AddNewUserRequest request)
         {
-            if (loginViewModel == null)
-            {
-                throw new System.ArgumentNullException(nameof(loginViewModel));
-            }
-            //var error = await _signInManager.PreSignInCheck(user);
-            //if (error != null)
-            //{
-            //    return error;
-            //}
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
 
-            //if (await IsLockedOut(user))
-            //{
-            //    return await LockedOut(user);
-            //}
-            
             try
             {
-                if(!await _authenticationService.ValidateUser(loginViewModel))
+                var username = request.Email.Trim();
+                var user = new ApplicationUser
                 {
-                    return Unauthorized();
-                }
+                    UserName = username,
+                    Email = username,
+                    EmailConfirmed = true
+                };
 
-                var tokenDto = await _authenticationService.CreateToken(populateExp: true);
+                var result = string.IsNullOrEmpty(request.Password)
+                    ? await _userManager.CreateAsync(user)
+                    : await _userManager.CreateAsync(user, request.Password);
 
-                return Ok(tokenDto);
-            }
-            catch(System.Exception ex)
-            {
-                System.Console.WriteLine(ex.StackTrace);
-            }
-
-
-            //Logger.LogWarning(2, "User {userId} failed to provide the correct password.", await UserManager.GetUserIdAsync(user));
-
-            //if (_userManager.SupportsUserLockout && lockoutOnFailure)
-            //{
-            //    // If lockout is requested, increment access failed count which might lock out the user
-            //    await _userManager.AccessFailedAsync(user);
-            //    if (await _userManager.IsLockedOutAsync(user))
-            //    {
-            //        return await LockedOut(user);
-            //    }
-            //}
-            //return SignInResult.Failed;
-            // If we got this far, something failed, redisplay form
-            return new BadRequestObjectResult(Microsoft.AspNetCore.Identity.SignInResult.Failed);
-        }
-
-        [HttpPost]
-        [Route("AddNewUser")]
-        public async System.Threading.Tasks.Task<IActionResult> AddNewUser([FromBody]dynamic registerViewModel)
-        {
-            try
-            {
-                if (registerViewModel == null)
-                {
-                    throw new System.ArgumentNullException(nameof(registerViewModel));
-                }
-
-                string password = registerViewModel.Password;
-                string username = registerViewModel.Email;
-                string firstName = registerViewModel.FirstName;
-                string lastName = registerViewModel.LastName;
-
-                var user = new ApplicationUser { UserName = username, Email = username };
-                var result = await _userManager.CreateAsync(user, password);
                 if (result.Succeeded)
                 {
-                    Core.Domain.Security.User newUser =
-                        new Core.Domain.Security.User
-                        {
-                            EmailAddress = username,
-                            UserName = username,
-                            Firstname = firstName,
-                            Lastname = lastName
-                        };
+                    var newUser = new Core.Domain.Security.User
+                    {
+                        EmailAddress = username,
+                        UserName = username,
+                        Firstname = request.FirstName.Trim(),
+                        Lastname = request.LastName.Trim()
+                    };
 
                     _administrationService.SaveUser(newUser);
 
-                    return new ObjectResult(result);
+                    return Ok(new { success = true, email = username });
                 }
-                return new BadRequestObjectResult(result);
+
+                return BadRequest(new ProblemDetails
+                {
+                    Title = "Failed to Create User",
+                    Detail = string.Join("; ", result.Errors.Select(e => e.Description)),
+                    Status = StatusCodes.Status400BadRequest
+                });
             }
-            catch(System.Exception ex)
+            catch (Exception ex)
             {
-                var errors = new[] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
-                return new BadRequestObjectResult(errors);
+                return BadRequest(new ProblemDetails
+                {
+                    Title = "Error Creating User",
+                    Detail = ex.Message,
+                    Status = StatusCodes.Status400BadRequest
+                });
             }
         }
     }

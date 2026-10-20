@@ -38,6 +38,7 @@ namespace AccountGoWeb.Controllers
                 var baseUri = _configuration!["ApiUrl"];
                 client.BaseAddress = new System.Uri(baseUri!);
                 client.DefaultRequestHeaders.Accept.Clear();
+                AttachAuth(client);
                 var response = await client.GetAsync(baseUri + "sales/quotations");
                 if (response.IsSuccessStatusCode)
                 {
@@ -104,6 +105,7 @@ namespace AccountGoWeb.Controllers
                 {
                     var baseUri = _configuration!["ApiUrl"];
                     client.BaseAddress = new Uri(baseUri!);
+                    AttachAuth(client);
                     var response = await client.PostAsync("sales/savequotation", content);
 
                     if (response.IsSuccessStatusCode)
@@ -155,6 +157,7 @@ namespace AccountGoWeb.Controllers
             {
                 var baseUri = _configuration!["ApiUrl"];
                 client.BaseAddress = new Uri(baseUri!);
+                AttachAuth(client);
                 var response = client.PostAsync("sales/savequotation", content).Result;
 
                 if (response.IsSuccessStatusCode)

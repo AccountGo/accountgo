@@ -1,9 +1,16 @@
+using System.Net;
+using System.Text;
+using System.Text.Json;
+using System.Threading.RateLimiting;
 using Api.ActionFilters;
 using Api.Data;
 using Api.Data.Repositories;
 using Api.Data.Seed;
 using Api.Extensions;
 using Api.Service;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage;
@@ -15,17 +22,30 @@ builder.Services.ConfigureSqlContext(builder.Configuration, builder.Environment)
 
 builder.AddServiceDefaults();
 
-// Validation
+// Validation & Problem Details
 builder.Services.AddScoped<ValidationFilterAttribute>();
+builder.Services.AddProblemDetails();
 
 // Mapping
 builder.Services.AddAutoMapper(typeof(Program));
 
-// authentication
+// authentication & authorization
 builder.Services.AddScoped<IAuthenticationService, AuthenticationService>();
+builder.Services.AddScoped<IEmailSender, DevConsoleEmailSender>();
+builder.Services.AddScoped<IEmailOtpService, EmailOtpService>();
 builder.Services.AddAuthentication();
 builder.Services.ConfigureIdentity();
 builder.Services.ConfigureJWT(builder.Configuration);
+
+builder.Services.AddAuthorization(options =>
+{
+    // Gate 1: Enforce global authentication fallback across all controllers and endpoints.
+    // Endpoints that need to be public must explicitly declare [AllowAnonymous].
+    options.FallbackPolicy = new AuthorizationPolicyBuilder()
+        .RequireAuthenticatedUser()
+        .Build();
+});
+
 builder.Services.AddScoped<IFinancialService, FinancialService>();
 builder.Services.AddScoped<IAccountService, AccountService>();
 
@@ -43,7 +63,7 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 // cors
-builder.Services.ConfigureCors();
+builder.Services.ConfigureCors(builder.Configuration);
 
 // generic repository
 builder.Services.AddScoped(typeof(Core.Data.IRepository<>), typeof(EfRepository<>));
@@ -69,7 +89,97 @@ builder.Services.AddScoped(typeof(Services.Auditing.IAuditableAttributeService),
 //seed the database
 builder.Services.AddScoped<DatabaseSeeder>();
 
+// Configure reverse proxy / forwarded headers support
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.ForwardLimit = 2;
+
+    // Do NOT clear KnownProxies or KnownIPNetworks — keep default loopback trust (127.0.0.1, ::1).
+    // Allow explicitly trusting reverse proxy addresses or CIDR ranges from configuration:
+    var configuredNetworks = builder.Configuration.GetSection("ReverseProxy:KnownNetworks").Get<string[]>();
+    if (configuredNetworks != null)
+    {
+        foreach (var net in configuredNetworks)
+        {
+            if (System.Net.IPNetwork.TryParse(net, out var ipNet))
+            {
+                options.KnownIPNetworks.Add(ipNet);
+            }
+        }
+    }
+
+    var configuredProxies = builder.Configuration.GetSection("ReverseProxy:KnownProxies").Get<string[]>();
+    if (configuredProxies != null)
+    {
+        foreach (var proxy in configuredProxies)
+        {
+            if (IPAddress.TryParse(proxy, out var ip))
+            {
+                options.KnownProxies.Add(ip);
+            }
+        }
+    }
+});
+
+// Rate limiting: multi-tier protection (IP guard + per-email account guard)
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    // Chained Limiter Level 1: Global IP limiter for auth endpoints (loosened to 30 req/15 min)
+    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(ctx =>
+    {
+        var path = ctx.Request.Path.Value ?? string.Empty;
+        if (path.StartsWith("/api/auth", StringComparison.OrdinalIgnoreCase))
+        {
+            var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+            return RateLimitPartition.GetSlidingWindowLimiter($"auth_ip_{ip}", _ => new SlidingWindowRateLimiterOptions
+            {
+                PermitLimit = 30,
+                Window = TimeSpan.FromMinutes(15),
+                SegmentsPerWindow = 3,
+                QueueLimit = 0
+            });
+        }
+
+        return RateLimitPartition.GetNoLimiter("unlimited");
+    });
+
+    // Chained Limiter Level 2: Strict per-email account limits
+    options.AddPolicy("otp-send", httpContext =>
+    {
+        var email = httpContext.Items["rate_limit_email"] as string;
+        var key = !string.IsNullOrEmpty(email) ? $"send_email_{email}" : $"send_ip_{httpContext.Connection.RemoteIpAddress}";
+
+        return RateLimitPartition.GetSlidingWindowLimiter(key, _ => new SlidingWindowRateLimiterOptions
+        {
+            PermitLimit = 3,
+            Window = TimeSpan.FromMinutes(15),
+            SegmentsPerWindow = 3,
+            QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+            QueueLimit = 0
+        });
+    });
+
+    options.AddPolicy("otp-verify", httpContext =>
+    {
+        var email = httpContext.Items["rate_limit_email"] as string;
+        var key = !string.IsNullOrEmpty(email) ? $"verify_email_{email}" : $"verify_ip_{httpContext.Connection.RemoteIpAddress}";
+
+        return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 10,
+            Window = TimeSpan.FromMinutes(15),
+            QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+            QueueLimit = 0
+        });
+    });
+});
+
 var app = builder.Build();
+
+app.UseForwardedHeaders();
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
@@ -80,7 +190,57 @@ if (app.Environment.IsDevelopment())
 
 //app.UseHttpsRedirection();
 app.UseRouting();
-app.UseCors("AllowAll");
+app.UseCors("Frontend");
+
+// Pre-rate-limiting middleware: protect against large-body DoS and extract normalized email asynchronously
+app.Use(async (context, next) =>
+{
+    if (context.Request.Path.StartsWithSegments("/api/auth") &&
+        context.Request.ContentType != null &&
+        context.Request.ContentType.Contains("application/json", StringComparison.OrdinalIgnoreCase))
+    {
+        // Low Finding 5: Max-body guard to prevent unbounded buffering into memory before rate limiting
+        if (context.Request.ContentLength is > 32 * 1024)
+        {
+            context.Response.StatusCode = StatusCodes.Status413PayloadTooLarge;
+            await context.Response.WriteAsJsonAsync(new
+            {
+                title = "Payload Too Large",
+                status = 413,
+                detail = "Request body exceeds maximum allowed size of 32 KB."
+            });
+            return;
+        }
+
+        context.Request.EnableBuffering();
+        using var reader = new StreamReader(context.Request.Body, Encoding.UTF8, leaveOpen: true);
+        var body = await reader.ReadToEndAsync();
+        context.Request.Body.Position = 0;
+
+        if (!string.IsNullOrWhiteSpace(body) && body.Length <= 32 * 1024)
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(body);
+                if (doc.RootElement.TryGetProperty("email", out var emailProp))
+                {
+                    var email = emailProp.GetString();
+                    if (!string.IsNullOrWhiteSpace(email) && email.Length <= 256 && email.Contains('@'))
+                    {
+                        context.Items["rate_limit_email"] = email.Trim().ToLowerInvariant();
+                    }
+                }
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    await next();
+});
+
+app.UseRateLimiter();
 
 app.UseAuthentication();
 app.UseAuthorization();
@@ -117,11 +277,51 @@ using (var scope = app.Services.CreateScope())
                 Console.WriteLine("✓ ApiDbContext tables created.");
             }
 
-            if (!identityCreator.HasTables())
+            var connection = identityDbContext.Database.GetDbConnection();
+            bool identityTablesExist = false;
+            if (connection.State != System.Data.ConnectionState.Open)
+                connection.Open();
+            using (var cmd = connection.CreateCommand())
+            {
+                cmd.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='AspNetUsers';";
+                var count = Convert.ToInt32(cmd.ExecuteScalar());
+                identityTablesExist = (count > 0);
+            }
+
+            if (!identityTablesExist)
             {
                 Console.WriteLine("Creating SQLite tables for ApplicationIdentityDbContext...");
                 identityCreator.CreateTables();
                 Console.WriteLine("✓ ApplicationIdentityDbContext tables created.");
+            }
+
+            // Ensure RefreshTokens table exists
+            bool refreshTokensTableExists = false;
+            using (var cmd = connection.CreateCommand())
+            {
+                cmd.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='RefreshTokens';";
+                var count = Convert.ToInt32(cmd.ExecuteScalar());
+                refreshTokensTableExists = (count > 0);
+            }
+            if (!refreshTokensTableExists)
+            {
+                Console.WriteLine("Creating RefreshTokens table in SQLite...");
+                identityDbContext.Database.ExecuteSqlRaw(@"
+                    CREATE TABLE IF NOT EXISTS ""RefreshTokens"" (
+                        ""Id"" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                        ""UserId"" TEXT NOT NULL,
+                        ""TokenHash"" TEXT NOT NULL,
+                        ""ExpiresAt"" TEXT NOT NULL,
+                        ""CreatedAt"" TEXT NOT NULL,
+                        ""CreatedByIp"" TEXT NULL,
+                        ""RevokedAt"" TEXT NULL,
+                        ""ReplacedByTokenHash"" TEXT NULL,
+                        ""UserAgent"" TEXT NULL
+                    );
+                    CREATE INDEX IF NOT EXISTS ""IX_RefreshTokens_TokenHash"" ON ""RefreshTokens"" (""TokenHash"");
+                    CREATE INDEX IF NOT EXISTS ""IX_RefreshTokens_UserId"" ON ""RefreshTokens"" (""UserId"");
+                ");
+                Console.WriteLine("✓ RefreshTokens table created.");
             }
 
             if (isNewDatabase)
@@ -130,6 +330,51 @@ using (var scope = app.Services.CreateScope())
                 Console.WriteLine("Seeding SQLite database...");
                 seeder.Seed();
                 Console.WriteLine("✓ SQLite database seeding completed successfully.");
+            }
+
+            // Ensure admin user exists in Identity
+            var userManager = services.GetRequiredService<Microsoft.AspNetCore.Identity.UserManager<ApplicationUser>>();
+            var adminEmail = "admin@accountgo.ph";
+            var adminUser = userManager.FindByEmailAsync(adminEmail).GetAwaiter().GetResult();
+            if (adminUser == null)
+            {
+                adminUser = new ApplicationUser
+                {
+                    UserName = adminEmail,
+                    Email = adminEmail,
+                    EmailConfirmed = true
+                };
+                var createResult = userManager.CreateAsync(adminUser).GetAwaiter().GetResult();
+                if (createResult.Succeeded)
+                {
+                    Console.WriteLine($"✓ Default admin user '{adminEmail}' initialized in Identity.");
+
+                    // Also ensure domain user exists
+                    var adminService = services.GetRequiredService<Services.Administration.IAdministrationService>();
+                    var secService = services.GetRequiredService<Services.Security.ISecurityService>();
+                    var domainUser = secService.GetUser(adminEmail);
+                    if (domainUser == null)
+                    {
+                        var newDomainUser = new Core.Domain.Security.User
+                        {
+                            EmailAddress = adminEmail,
+                            UserName = adminEmail,
+                            Firstname = "Admin",
+                            Lastname = "User"
+                        };
+                        adminService.SaveUser(newDomainUser);
+                        var adminRole = secService.GetRole("SystemAdministrators") ?? secService.GetRole("Administrator");
+                        if (adminRole != null)
+                        {
+                            var freshUser = secService.GetUser(adminEmail);
+                            if (freshUser != null)
+                            {
+                                secService.AddUserInRole(freshUser.Id, adminRole.Id);
+                            }
+                        }
+                        Console.WriteLine($"✓ Default domain user '{adminEmail}' initialized with Administrator role.");
+                    }
+                }
             }
         }
         else

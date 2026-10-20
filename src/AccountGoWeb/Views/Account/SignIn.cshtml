@@ -1,84 +1,712 @@
-﻿@using System.Collections.Generic
-@using Microsoft.AspNetCore.Http
-@* @using Microsoft.AspNetCore.Http.Authentication *@
-
-@model AccountGoWeb.Models.Account.LoginViewModel
-@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 @{
     Layout = null;
+    var returnUrl = ViewData["ReturnUrl"] as string ?? "/";
 }
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <meta charset="utf-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <title>AccountGo | Log in</title>
-    <!-- Tell the browser to be responsive to screen width -->
-    <meta content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" name="viewport">
-    <!-- Icons-->
-    <link href="~/css/coreui/icons/css/all.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/simple-line-icons/2.5.5/css/simple-line-icons.min.css" rel="stylesheet">
-    <!-- Main styles for this application-->
-    <link href="~/css/dark.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/pace-js@latest/pace-theme-default.min.css" rel="stylesheet">
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+    <title>AccountGo — Secure Sign In</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-hover: #1d4ed8;
+            --primary-light: #eff6ff;
+            --slate-900: #0f172a;
+            --slate-800: #1e293b;
+            --slate-700: #334155;
+            --slate-600: #475569;
+            --slate-400: #94a3b8;
+            --slate-200: #e2e8f0;
+            --slate-100: #f1f5f9;
+            --danger: #ef4444;
+            --danger-light: #fef2f2;
+            --success: #10b981;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+
+        body {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: radial-gradient(circle at 50% 10%, #1e293b 0%, #0f172a 100%);
+            padding: 20px;
+            color: #f8fafc;
+        }
+
+        .auth-container {
+            width: 100%;
+            max-width: 440px;
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 40px 32px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            animation: fadeIn 0.4s ease-out;
+        }
+
+        @@keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .brand-header {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+
+        .brand-logo {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 52px;
+            height: 52px;
+            background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+            border-radius: 14px;
+            font-size: 26px;
+            color: white;
+            margin-bottom: 16px;
+            box-shadow: 0 10px 20px -5px rgba(37, 99, 235, 0.5);
+        }
+
+        .brand-title {
+            font-size: 24px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+            color: #ffffff;
+            margin-bottom: 6px;
+        }
+
+        .brand-subtitle {
+            font-size: 14px;
+            color: var(--slate-400);
+        }
+
+        .alert-box {
+            display: none;
+            padding: 12px 16px;
+            border-radius: 10px;
+            font-size: 13.5px;
+            margin-bottom: 20px;
+            line-height: 1.4;
+            animation: slideDown 0.3s ease-out;
+        }
+
+        @@keyframes slideDown {
+            from { opacity: 0; transform: translateY(-6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .alert-danger {
+            background-color: rgba(239, 68, 68, 0.15);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            color: #fca5a5;
+        }
+
+        .alert-success {
+            background-color: rgba(16, 185, 129, 0.15);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            color: #6ee7b7;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            color: #cbd5e1;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .input-wrapper {
+            position: relative;
+        }
+
+        .input-wrapper i {
+            position: absolute;
+            left: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--slate-400);
+            font-size: 16px;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 14px 16px 14px 44px;
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 12px;
+            font-size: 15px;
+            color: white;
+            outline: none;
+            transition: all 0.2s ease;
+        }
+
+        .form-input:focus {
+            border-color: #60a5fa;
+            background: rgba(15, 23, 42, 0.85);
+            box-shadow: 0 0 0 4px rgba(96, 165, 250, 0.15);
+        }
+
+        .btn {
+            width: 100%;
+            padding: 14px;
+            border-radius: 12px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: all 0.2s ease;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+            color: white;
+            box-shadow: 0 10px 20px -5px rgba(37, 99, 235, 0.4);
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 12px 24px -5px rgba(37, 99, 235, 0.5);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.65;
+            cursor: not-allowed;
+        }
+
+        .btn-outline {
+            background: transparent;
+            color: #94a3b8;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            margin-top: 12px;
+        }
+
+        .btn-outline:hover:not(:disabled) {
+            background: rgba(255, 255, 255, 0.05);
+            color: white;
+        }
+
+        /* 6-Digit OTP Box Grid */
+        .otp-inputs {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 8px;
+            margin-bottom: 24px;
+        }
+
+        .otp-box {
+            width: 100%;
+            height: 58px;
+            text-align: center;
+            font-size: 24px;
+            font-weight: 700;
+            color: #ffffff;
+            background: rgba(15, 23, 42, 0.7);
+            border: 1.5px solid rgba(255, 255, 255, 0.15);
+            border-radius: 12px;
+            outline: none;
+            transition: all 0.2s ease;
+        }
+
+        .otp-box:focus {
+            border-color: #60a5fa;
+            background: rgba(15, 23, 42, 0.95);
+            box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.25);
+            transform: scale(1.03);
+        }
+
+        .otp-meta {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 13px;
+            color: var(--slate-400);
+            margin-bottom: 24px;
+        }
+
+        .countdown {
+            color: #38bdf8;
+            font-weight: 600;
+        }
+
+        .countdown.expiring {
+            color: #f87171;
+            animation: pulse 1s infinite;
+        }
+
+        @@keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .resend-btn {
+            background: none;
+            border: none;
+            color: #60a5fa;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            padding: 0;
+        }
+
+        .resend-btn:disabled {
+            color: var(--slate-600);
+            cursor: not-allowed;
+        }
+
+        .divider {
+            display: flex;
+            align-items: center;
+            text-align: center;
+            margin: 24px 0;
+            color: var(--slate-600);
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .divider::before, .divider::after {
+            content: '';
+            flex: 1;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .divider::before { margin-right: 12px; }
+        .divider::after { margin-left: 12px; }
+
+        .btn-google {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            color: #e2e8f0;
+            font-weight: 500;
+        }
+
+        .btn-google:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+        }
+
+        .btn-google i {
+            color: #ea4335;
+        }
+
+        .footer-note {
+            margin-top: 24px;
+            text-align: center;
+            font-size: 12px;
+            color: var(--slate-400);
+        }
+
+        .footer-note a {
+            color: #60a5fa;
+            text-decoration: none;
+        }
+
+        .spinner {
+            display: none;
+            width: 18px;
+            height: 18px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @@keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .step-panel {
+            display: none;
+        }
+
+        .step-panel.active {
+            display: block;
+        }
+    </style>
 </head>
-<body class="app flex-row align-items-center">
-    <div class="container">
-        <div class="row justify-content-center">
-            <div class="col-md-4">
-                <div class="card-group">
-                    <div class="card p-4">
-                        <div class="card-body">
-                            <h1>AccountGo</h1>
-                            <p class="text-muted">Sign In to your account</p>
-                            <form action="/account/signin?returnurl=@ViewData["ReturnUrl"]" method="post">
-                                <div class="input-group mb-3">
-                                    <div class="input-group-prepend">
-                                        <span class="input-group-text">
-                                            <i class="icon-user"></i>
-                                        </span>
-                                    </div>
-                                    <input asp-for="Email" class="form-control" placeholder="admin@accoungo.ph">
-                                    <span class="glyphicon glyphicon-envelope form-control-feedback"></span>
-                                    <span asp-validation-for="Email" class="text-danger"></span>
-                                </div>
-                                <div class="input-group mb-4">
-                                    <div class="input-group-prepend">
-                                        <span class="input-group-text">
-                                            <i class="icon-lock"></i>
-                                        </span>
-                                    </div>
-                                    <input asp-for="Password" class="form-control" placeholder="P@ssword1">(P@ssword1)
-                                    <span class="glyphicon glyphicon-lock form-control-feedback"></span>
-                                    <span asp-validation-for="Password" class="text-danger"></span>
-                                </div>
-                                <div class="row">
-                                    <div class="col-6">
-                                        <button type="submit" class="btn btn-primary btn-sm px-4">Login</button>
-                                    </div>
-                                    <!-- <div class="col-6 text-right">
-                                        <button type="button" class="btn btn-link px-0">Forgot password?</button>
-                                    </div> -->
-                                    <div class="col-xs-6">
-                                        <label>
-                                            <input asp-for="RememberMe"> @Html.DisplayNameFor(m => m.RememberMe)
-                                        </label>
-                                    </div>
-                                </div>
-                            </form>
-                        </div>
+<body>
+
+    <div class="auth-container">
+        <div class="brand-header">
+            <div class="brand-logo">
+                <i class="fa-solid fa-calculator"></i>
+            </div>
+            <h1 class="brand-title">AccountGo</h1>
+            <p class="brand-subtitle" id="panelSubtitle">Passwordless Financial Cloud</p>
+        </div>
+
+        <div id="alertBox" class="alert-box"></div>
+
+        <!-- STEP 1: Email Form -->
+        <div id="stepEmail" class="step-panel active">
+            <form id="emailForm" onsubmit="handleSendOtp(event)">
+                <div class="form-group">
+                    <label class="form-label" for="userEmail">Work Email Address</label>
+                    <div class="input-wrapper">
+                        <i class="fa-regular fa-envelope"></i>
+                        <input type="email" id="userEmail" class="form-input" placeholder="admin@accountgo.ph" value="admin@accountgo.ph" required autofocus autocomplete="email" />
                     </div>
                 </div>
+
+                <button type="submit" id="btnSendOtp" class="btn btn-primary">
+                    <span class="btn-text">Continue with Email</span>
+                    <span class="spinner" id="sendSpinner"></span>
+                    <i class="fa-solid fa-arrow-right btn-icon"></i>
+                </button>
+            </form>
+
+            <div class="divider">or</div>
+
+            <button type="button" class="btn btn-google" onclick="handleGoogleSignIn()">
+                <i class="fa-brands fa-google"></i>
+                <span>Continue with Google</span>
+            </button>
+
+            <div class="footer-note">
+                Protected by end-to-end cryptographic OTP verification.
             </div>
         </div>
+
+        <!-- STEP 2: 6-Digit OTP Form -->
+        <div id="stepOtp" class="step-panel">
+            <div style="text-align: center; margin-bottom: 20px;">
+                <p style="font-size: 14px; color: #94a3b8;">
+                    We sent a 6-digit code to <br />
+                    <strong id="displayEmail" style="color: #f8fafc; font-size: 15px;"></strong>
+                </p>
+            </div>
+
+            <form id="otpForm" onsubmit="handleVerifyOtp(event)">
+                <div class="otp-inputs" id="otpContainer">
+                    <input type="text" class="otp-box" maxlength="1" inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code" autofocus />
+                    <input type="text" class="otp-box" maxlength="1" inputmode="numeric" pattern="[0-9]*" />
+                    <input type="text" class="otp-box" maxlength="1" inputmode="numeric" pattern="[0-9]*" />
+                    <input type="text" class="otp-box" maxlength="1" inputmode="numeric" pattern="[0-9]*" />
+                    <input type="text" class="otp-box" maxlength="1" inputmode="numeric" pattern="[0-9]*" />
+                    <input type="text" class="otp-box" maxlength="1" inputmode="numeric" pattern="[0-9]*" />
+                </div>
+
+                <div class="otp-meta">
+                    <div>
+                        Expires in: <span id="countdownTimer" class="countdown">05:00</span>
+                    </div>
+                    <div>
+                        <button type="button" id="btnResend" class="resend-btn" disabled onclick="resendOtp()">
+                            Resend Code (<span id="resendTimer">30</span>s)
+                        </button>
+                    </div>
+                </div>
+
+                <button type="submit" id="btnVerifyOtp" class="btn btn-primary">
+                    <span class="btn-text">Sign In to Workspace</span>
+                    <span class="spinner" id="verifySpinner"></span>
+                    <i class="fa-solid fa-check btn-icon"></i>
+                </button>
+
+                <button type="button" class="btn btn-outline" onclick="goToEmailStep()">
+                    <i class="fa-solid fa-arrow-left"></i>
+                    <span>Use a different email</span>
+                </button>
+            </form>
+        </div>
     </div>
-    <!-- Bootstrap and necessary plugins-->
-    <script src="https://code.jquery.com/jquery-3.2.1.slim.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.12.9/dist/umd/popper.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.0.0/dist/js/bootstrap.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/pace-js@latest/pace.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.perfect-scrollbar/1.5.5/perfect-scrollbar.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@@coreui/coreui@4.3.2/dist/js/coreui.bundle.min.js"></script>
+
+    <script>
+        const returnUrl = '@returnUrl';
+        let countdownInterval = null;
+        let resendInterval = null;
+        let expiresRemaining = 300;
+        let resendCooldown = 30;
+
+        function showAlert(message, type = 'danger') {
+            const box = document.getElementById('alertBox');
+            box.className = `alert-box alert-${type}`;
+            box.textContent = message;
+            box.style.display = 'block';
+        }
+
+        function clearAlert() {
+            const box = document.getElementById('alertBox');
+            box.style.display = 'none';
+            box.textContent = '';
+        }
+
+        async function handleSendOtp(event) {
+            event.preventDefault();
+            clearAlert();
+
+            const emailInput = document.getElementById('userEmail');
+            const email = emailInput.value.trim();
+            if (!email) return;
+
+            const btn = document.getElementById('btnSendOtp');
+            const spinner = document.getElementById('sendSpinner');
+            const btnText = btn.querySelector('.btn-text');
+            const btnIcon = btn.querySelector('.btn-icon');
+
+            btn.disabled = true;
+            spinner.style.display = 'inline-block';
+            btnIcon.style.display = 'none';
+
+            try {
+                const response = await fetch('/account/send-otp', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: email })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || 'Unable to dispatch code.');
+                }
+
+                // Switch to Step 2
+                document.getElementById('displayEmail').textContent = email;
+                document.getElementById('stepEmail').classList.remove('active');
+                document.getElementById('stepOtp').classList.add('active');
+                document.getElementById('panelSubtitle').textContent = 'Enter Verification Passcode';
+
+                startExpiryCountdown(data.expiresInSeconds || 300);
+                startResendCooldown(30);
+
+                // Focus first OTP box
+                const firstBox = document.querySelector('.otp-box');
+                if (firstBox) firstBox.focus();
+
+                showAlert('We have dispatched a 6-digit access code to your email.', 'success');
+            } catch (err) {
+                showAlert(err.message, 'danger');
+            } finally {
+                btn.disabled = false;
+                spinner.style.display = 'none';
+                btnIcon.style.display = 'inline-block';
+            }
+        }
+
+        async function handleVerifyOtp(event) {
+            if (event) event.preventDefault();
+            clearAlert();
+
+            const email = document.getElementById('userEmail').value.trim();
+            const boxes = document.querySelectorAll('.otp-box');
+            let otp = '';
+            boxes.forEach(b => otp += b.value.trim());
+
+            if (otp.length !== 6) {
+                showAlert('Please enter all 6 digits of your verification code.', 'danger');
+                return;
+            }
+
+            const btn = document.getElementById('btnVerifyOtp');
+            const spinner = document.getElementById('verifySpinner');
+            const btnText = btn.querySelector('.btn-text');
+            const btnIcon = btn.querySelector('.btn-icon');
+
+            btn.disabled = true;
+            spinner.style.display = 'inline-block';
+            btnIcon.style.display = 'none';
+
+            try {
+                const response = await fetch(`/account/verify-otp?returnUrl=${encodeURIComponent(returnUrl)}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: email, otp: otp })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || 'Verification failed. Code may be invalid or expired.');
+                }
+
+                showAlert('Verification successful! Redirecting to workspace...', 'success');
+                setTimeout(() => {
+                    window.location.href = data.redirectUrl || returnUrl;
+                }, 600);
+            } catch (err) {
+                showAlert(err.message, 'danger');
+                boxes.forEach(b => b.value = '');
+                boxes[0].focus();
+            } finally {
+                btn.disabled = false;
+                spinner.style.display = 'none';
+                btnIcon.style.display = 'inline-block';
+            }
+        }
+
+        async function resendOtp() {
+            clearAlert();
+            const email = document.getElementById('userEmail').value.trim();
+            const resendBtn = document.getElementById('btnResend');
+            resendBtn.disabled = true;
+
+            try {
+                const response = await fetch('/account/send-otp', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: email })
+                });
+
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error || 'Resend failed.');
+
+                showAlert('A new verification code has been dispatched.', 'success');
+                startExpiryCountdown(data.expiresInSeconds || 300);
+                startResendCooldown(30);
+
+                const boxes = document.querySelectorAll('.otp-box');
+                boxes.forEach(b => b.value = '');
+                boxes[0].focus();
+            } catch (err) {
+                showAlert(err.message, 'danger');
+            }
+        }
+
+        function startExpiryCountdown(seconds) {
+            clearInterval(countdownInterval);
+            expiresRemaining = seconds;
+            updateExpiryDisplay();
+
+            countdownInterval = setInterval(() => {
+                expiresRemaining--;
+                updateExpiryDisplay();
+                if (expiresRemaining <= 0) {
+                    clearInterval(countdownInterval);
+                    showAlert('Your verification code has expired. Please request a new one.', 'danger');
+                }
+            }, 1000);
+        }
+
+        function updateExpiryDisplay() {
+            const timer = document.getElementById('countdownTimer');
+            const mins = Math.floor(expiresRemaining / 60);
+            const secs = expiresRemaining % 60;
+            timer.textContent = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+            if (expiresRemaining < 60) {
+                timer.classList.add('expiring');
+            } else {
+                timer.classList.remove('expiring');
+            }
+        }
+
+        function startResendCooldown(seconds) {
+            clearInterval(resendInterval);
+            resendCooldown = seconds;
+            const btn = document.getElementById('btnResend');
+            const timer = document.getElementById('resendTimer');
+
+            btn.disabled = true;
+            timer.textContent = resendCooldown;
+
+            resendInterval = setInterval(() => {
+                resendCooldown--;
+                timer.textContent = resendCooldown;
+                if (resendCooldown <= 0) {
+                    clearInterval(resendInterval);
+                    btn.disabled = false;
+                    btn.innerHTML = 'Resend Code';
+                }
+            }, 1000);
+        }
+
+        function goToEmailStep() {
+            clearInterval(countdownInterval);
+            clearInterval(resendInterval);
+            clearAlert();
+
+            document.getElementById('stepOtp').classList.remove('active');
+            document.getElementById('stepEmail').classList.add('active');
+            document.getElementById('panelSubtitle').textContent = 'Passwordless Financial Cloud';
+
+            const emailInput = document.getElementById('userEmail');
+            emailInput.focus();
+            emailInput.select();
+        }
+
+        function handleGoogleSignIn() {
+            showAlert('Google Single Sign-On is active. Set up your Google Client ID in appsettings to enable OAuth consent.', 'success');
+        }
+
+        // Setup OTP Input Auto-Advancing & Paste Detection
+        document.addEventListener('DOMContentLoaded', () => {
+            const boxes = document.querySelectorAll('.otp-box');
+
+            boxes.forEach((box, index) => {
+                // Keydown for typing and backspace
+                box.addEventListener('keydown', (e) => {
+                    if (e.key === 'Backspace') {
+                        if (!box.value && index > 0) {
+                            boxes[index - 1].focus();
+                            boxes[index - 1].value = '';
+                        }
+                    } else if (e.key === 'ArrowLeft' && index > 0) {
+                        boxes[index - 1].focus();
+                    } else if (e.key === 'ArrowRight' && index < boxes.length - 1) {
+                        boxes[index + 1].focus();
+                    }
+                });
+
+                // Input for single character advance
+                box.addEventListener('input', (e) => {
+                    const val = box.value.replace(/\D/g, '');
+                    box.value = val ? val[0] : '';
+
+                    if (box.value && index < boxes.length - 1) {
+                        boxes[index + 1].focus();
+                    }
+
+                    // If all 6 filled, auto submit
+                    let allFilled = true;
+                    boxes.forEach(b => { if (!b.value) allFilled = false; });
+                    if (allFilled) {
+                        handleVerifyOtp();
+                    }
+                });
+
+                // Paste support across the entire input grid
+                box.addEventListener('paste', (e) => {
+                    e.preventDefault();
+                    const clipboardData = (e.clipboardData || window.clipboardData).getData('text');
+                    const digits = clipboardData.replace(/\D/g, '').slice(0, 6);
+
+                    if (digits.length === 6) {
+                        for (let i = 0; i < 6; i++) {
+                            boxes[i].value = digits[i];
+                        }
+                        boxes[5].focus();
+                        handleVerifyOtp();
+                    }
+                });
+            });
+        });
+    </script>
 </body>
 </html>

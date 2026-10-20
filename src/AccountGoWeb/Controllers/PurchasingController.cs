@@ -149,6 +149,7 @@ namespace AccountGoWeb.Controllers
                 var baseUri = _baseConfig!["ApiUrl"];
                 client.BaseAddress = new System.Uri(baseUri!);
                 client.DefaultRequestHeaders.Accept.Clear();
+                AttachAuth(client);
                 var response = await client.GetAsync(baseUri + "purchasing/purchaseinvoices");
                 if (response.IsSuccessStatusCode)
                 {
@@ -231,6 +232,7 @@ namespace AccountGoWeb.Controllers
                 var baseUri = _baseConfig!["ApiUrl"];
                 client.BaseAddress = new System.Uri(baseUri!);
                 client.DefaultRequestHeaders.Accept.Clear();
+                AttachAuth(client);
                 var response = await client.GetAsync(baseUri + "purchasing/vendors");
                 if (response.IsSuccessStatusCode)
                 {

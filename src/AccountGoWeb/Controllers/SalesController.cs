@@ -1,4 +1,4 @@
-﻿using AccountGoWeb.Models;
+using AccountGoWeb.Models;
 using Dto.Sales;
 using Microsoft.AspNetCore.Mvc;
 using Newtonsoft.Json;
@@ -31,6 +31,7 @@ namespace AccountGoWeb.Controllers
                 var baseUri = _configuration!["ApiUrl"];
                 client.BaseAddress = new System.Uri(baseUri!);
                 client.DefaultRequestHeaders.Accept.Clear();
+                AttachAuth(client);
                 var response = await client.GetAsync(baseUri + "sales/salesorders");
                 if (response.IsSuccessStatusCode)
                 {
@@ -183,6 +184,7 @@ namespace AccountGoWeb.Controllers
                 var baseUri = _configuration!["ApiUrl"];
                 client.BaseAddress = new System.Uri(baseUri!);
                 client.DefaultRequestHeaders.Accept.Clear();
+                AttachAuth(client);
                 var response = await client.GetAsync(baseUri + "sales/salesinvoices");
                 if (response.IsSuccessStatusCode)
                 {
@@ -301,6 +303,7 @@ namespace AccountGoWeb.Controllers
                     var baseUri = _configuration!["ApiUrl"];
                     client.BaseAddress = new Uri(baseUri!);
                     client.DefaultRequestHeaders.Accept.Clear();
+                    AttachAuth(client);
 
                     var response = await client.GetAsync("sales/salesreceipts");
                     if (response.IsSuccessStatusCode)
@@ -404,6 +407,7 @@ namespace AccountGoWeb.Controllers
                 var baseUri = _configuration!["ApiUrl"];
                 client.BaseAddress = new System.Uri(baseUri!);
                 client.DefaultRequestHeaders.Accept.Clear();
+                AttachAuth(client);
                 var response = await client.GetAsync(baseUri + "sales/customers");
                 if (response.IsSuccessStatusCode)
                 {
@@ -620,6 +624,7 @@ public IActionResult Allocate(int id)
                 var baseUri = _configuration!["ApiUrl"];
                 client.BaseAddress = new System.Uri(baseUri!);
                 client.DefaultRequestHeaders.Accept.Clear();
+                AttachAuth(client);
                 var response = await client.DeleteAsync(baseUri + "Sales/DeleteSalesInvoice?id=" + id);
 
                 if (response.IsSuccessStatusCode)

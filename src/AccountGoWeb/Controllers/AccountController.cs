@@ -1,4 +1,4 @@
-﻿using AccountGoWeb.Models.Account;
+using AccountGoWeb.Models.Account;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
@@ -21,91 +21,162 @@ namespace AccountGoWeb.Controllers;
         public IActionResult SignIn(string? returnUrl = null)
         {
             ViewData["ReturnUrl"] = returnUrl;
-            return View(new LoginViewModel() { Email = "admin@accountgo.ph", Password = "P@ssword1" });
+            return View();
         }
 
-         [HttpPost]
-    [AllowAnonymous]
-    public async Task<IActionResult> SignIn(LoginViewModel model, string? returnUrl = null)
-    {
-        ViewData["ReturnUrl"] = returnUrl;
-
-        _logger.LogInformation("User {Email} is attempting to sign in.", model.Email);
-
-        if (ModelState.IsValid)
+        [HttpPost]
+        [AllowAnonymous]
+        [Route("account/send-otp")]
+        [Route("account/SendOtp")]
+        public async Task<IActionResult> SendOtp([FromBody] SendOtpViewModel model)
         {
-            var serialize = Newtonsoft.Json.JsonConvert.SerializeObject(model);
-            var content = new StringContent(serialize);
-            content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
-            HttpResponseMessage responseSignIn = Post("account/signin", content);
-            Newtonsoft.Json.Linq.JObject resultSignIn = Newtonsoft.Json.Linq.JObject.Parse(responseSignIn.Content.ReadAsStringAsync().Result);
-
-            _logger.LogInformation("User {Email} attempted to sign in. Result: {Result}", model.Email, resultSignIn["result"] != null ? "Success" : "Failure");
-
-            if (resultSignIn["result"] != null)
+            if (model == null || string.IsNullOrWhiteSpace(model.Email))
             {
-                _logger.LogInformation("User {Email} signed in successfully.", model.Email);
+                return BadRequest(new { error = "Please provide a valid work email address." });
+            }
 
-                var user = await GetAsync<Dto.Security.User>("administration/getuser?username=" + model.Email);
+            try
+            {
+                var serialize = Newtonsoft.Json.JsonConvert.SerializeObject(new { email = model.Email.Trim() });
+                var content = new StringContent(serialize, System.Text.Encoding.UTF8, "application/json");
 
-                var claims = new List<Claim>();
-                claims.Add(new Claim(ClaimTypes.IsPersistent, model.RememberMe.ToString()));
-                claims.Add(new Claim(ClaimTypes.NameIdentifier, user.Email!));
-                claims.Add(new Claim(ClaimTypes.Email, user.Email!));
+                using var client = new HttpClient();
+                string baseUri = _configuration!["ApiUrl"] ?? "http://localhost:8001/api/";
+                var response = await client.PostAsync(baseUri + "auth/send-otp", content);
+                var responseBody = await response.Content.ReadAsStringAsync();
 
-                string firstName = user.FirstName != null ? user.FirstName : "";
-                string lastName = user.LastName != null ? user.LastName : "";
+                if (!response.IsSuccessStatusCode)
+                {
+                    if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
+                    {
+                        return StatusCode(StatusCodes.Status429TooManyRequests, new { error = "Too many verification code requests. Please wait a few minutes before trying again." });
+                    }
 
-                claims.Add(new Claim(ClaimTypes.GivenName, firstName));
-                claims.Add(new Claim(ClaimTypes.Surname, lastName));
-                claims.Add(new Claim(ClaimTypes.Name, firstName + " " + lastName));
+                    try
+                    {
+                        var problem = Newtonsoft.Json.Linq.JObject.Parse(responseBody);
+                        var detail = problem["detail"]?.ToString() ?? "Unable to send verification code.";
+                        return BadRequest(new { error = detail });
+                    }
+                    catch
+                    {
+                        return BadRequest(new { error = !string.IsNullOrWhiteSpace(responseBody) ? responseBody : "Unable to send verification code." });
+                    }
+                }
 
-                foreach (var role in user.Roles)
-                    claims.Add(new Claim(ClaimTypes.Role, role.Name!));
+                return Content(responseBody, "application/json");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error dispatching OTP to {Email}", model.Email);
+                return BadRequest(new { error = "Unable to connect to authentication service. Please ensure API is running." });
+            }
+        }
 
-                claims.Add(new Claim(ClaimTypes.UserData, Newtonsoft.Json.JsonConvert.SerializeObject(user)));
+        [HttpPost]
+        [AllowAnonymous]
+        [Route("account/verify-otp")]
+        [Route("account/VerifyOtp")]
+        public async Task<IActionResult> VerifyOtp([FromBody] VerifyOtpViewModel model, string? returnUrl = null)
+        {
+            if (model == null || string.IsNullOrWhiteSpace(model.Email) || string.IsNullOrWhiteSpace(model.Otp))
+            {
+                return BadRequest(new { error = "Both email and 6-digit verification code are required." });
+            }
 
-                var identity = new ClaimsIdentity(claims, "AuthCookie");
+            try
+            {
+                var serialize = Newtonsoft.Json.JsonConvert.SerializeObject(new { email = model.Email.Trim(), otp = model.Otp.Trim() });
+                var content = new StringContent(serialize, System.Text.Encoding.UTF8, "application/json");
 
-                ClaimsPrincipal principal = new ClaimsPrincipal(new[] { identity });
+                using var client = new HttpClient();
+                string baseUri = _configuration!["ApiUrl"] ?? "http://localhost:8001/api/";
+                var response = await client.PostAsync(baseUri + "auth/verify-otp", content);
+                var responseBody = await response.Content.ReadAsStringAsync();
 
-                HttpContext.User = principal;
+                if (!response.IsSuccessStatusCode)
+                {
+                    if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
+                    {
+                        return StatusCode(StatusCodes.Status429TooManyRequests, new { error = "Too many verification attempts. Please wait a few minutes before trying again." });
+                    }
+
+                    try
+                    {
+                        var problem = Newtonsoft.Json.Linq.JObject.Parse(responseBody);
+                        var detail = problem["detail"]?.ToString() ?? "Invalid or expired verification code.";
+                        return BadRequest(new { error = detail });
+                    }
+                    catch
+                    {
+                        return BadRequest(new { error = "Invalid or expired code." });
+                    }
+                }
+
+                var authObj = Newtonsoft.Json.Linq.JObject.Parse(responseBody);
+                var accessToken = authObj["accessToken"]?.ToString();
+                var userObj = authObj["user"];
+
+                if (string.IsNullOrEmpty(accessToken) || userObj == null)
+                {
+                    return BadRequest(new { error = "Failed to parse authentication response." });
+                }
+
+                var email = userObj["email"]?.ToString() ?? model.Email;
+                var firstName = userObj["firstName"]?.ToString() ?? string.Empty;
+                var lastName = userObj["lastName"]?.ToString() ?? string.Empty;
+                var fullName = $"{firstName} {lastName}".Trim();
+                if (string.IsNullOrEmpty(fullName)) fullName = email;
+
+                if (TryExtractCookieValue(response, "accountgo_refresh_token", out var rawRefreshToken))
+                {
+                    Response.Cookies.Append("accountgo_refresh_token", rawRefreshToken, new CookieOptions
+                    {
+                        HttpOnly = true,
+                        Secure = Request.IsHttps,
+                        SameSite = SameSiteMode.Lax,
+                        Expires = DateTime.UtcNow.AddDays(7),
+                        Path = "/"
+                    });
+                }
+
+                var claims = new List<Claim>
+                {
+                    new Claim("access_token", accessToken),
+                    new Claim(ClaimTypes.NameIdentifier, userObj["id"]?.ToString() ?? email),
+                    new Claim(ClaimTypes.Email, email),
+                    new Claim(ClaimTypes.GivenName, firstName),
+                    new Claim(ClaimTypes.Surname, lastName),
+                    new Claim(ClaimTypes.Name, fullName)
+                };
+
+                var roles = userObj["roles"] as Newtonsoft.Json.Linq.JArray;
+                if (roles != null)
+                {
+                    foreach (var role in roles)
+                    {
+                        claims.Add(new Claim(ClaimTypes.Role, role.ToString()));
+                    }
+                }
+
+                var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
+                var principal = new ClaimsPrincipal(new[] { identity });
 
                 await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal);
 
-                return RedirectToLocal(returnUrl!);
+                var targetUrl = !string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl) ? returnUrl : "/";
+                return Ok(new { success = true, redirectUrl = targetUrl });
             }
-            else
+            catch (Exception ex)
             {
-                _logger.LogInformation("User {Email} failed to sign in.", model.Email);
-                ModelState.AddModelError(string.Empty, "Invalid login attempt.");
-                return View(model);
+                _logger.LogError(ex, "Error verifying OTP for {Email}", model.Email);
+                return BadRequest(new { error = "Authentication service error. Please try again." });
             }
         }
-        else
-        {
-            // Log ModelState errors
-            foreach (var modelState in ModelState.Values)
-            {
-                foreach (var error in modelState.Errors)
-                {
-                    _logger.LogWarning("ModelState validation error: {ErrorMessage}", error.ErrorMessage);
-                }
-            }
-
-            // Or log all errors together:
-            var errors = ModelState.Values.SelectMany(v => v.Errors)
-                .Select(e => e.ErrorMessage)
-                .ToList();
-            _logger.LogWarning("ModelState validation failed with errors: {Errors}", string.Join(", ", errors));
-        }
-
-        // If we got this far, something failed, redisplay form
-        return View(model);
-    }
 
         public async Task<IActionResult> Logout()
         {
+            Response.Cookies.Delete("accountgo_refresh_token");
             await HttpContext.SignOutAsync();
 
             return SignedOut();

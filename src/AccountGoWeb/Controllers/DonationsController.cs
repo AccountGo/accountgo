@@ -29,6 +29,7 @@ namespace AccountGoWeb.Controllers
                 var baseUri = _configuration!["ApiUrl"];
                 client.BaseAddress = new System.Uri(baseUri!);
                 client.DefaultRequestHeaders.Accept.Clear();
+                AttachAuth(client);
                 var response = await client.GetAsync(baseUri + "donations/donationinvoices");
                 if (response.IsSuccessStatusCode)
                 {
@@ -150,6 +151,7 @@ namespace AccountGoWeb.Controllers
                 var baseUri = _configuration!["ApiUrl"];
                 client.BaseAddress = new System.Uri(baseUri!);
                 client.DefaultRequestHeaders.Accept.Clear();
+                AttachAuth(client);
                 var response = await client.DeleteAsync(baseUri + "donations/deletedonationinvoice?id=" + id);
 
                 if (response.IsSuccessStatusCode)
