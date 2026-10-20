@@ -198,18 +198,11 @@ FakesAssemblies/
 **/src/[Ww]eb[Aa]pp/wwwroot/app/compiledscripts/*
 **/src/[Ww]eb[Aa]pp/wwwroot/app/typescripts/compiledscripts/*
 **/src/[Ww]eb[Aa]pp/wwwroot/[Ll]ibs/*
-**/src/[Aa]ccount[Gg]o[Ww]eb/wwwroot/plugins/*
-**/src/[Aa]ccount[Gg]o[Ww]eb/wwwroot/[Ll]ibs/*
-**/src/[Aa]ccount[Gg]o[Ww]eb/wwwroot/[Ss]cripts/*
-**/src/[Aa]ccount[Gg]o[Ww]eb/wwwroot/[Ll]ib/*
-**/src/[Aa]ccount[Gg]o[Ww]eb/wwwroot/tsxbuild/*
 # node modules
 **/src/[Ww]eb[Aa]ngular/node_modules
 **/src/[Ww]eb[Aa]pp/wwwroot/node_modules/*
 /src/Api/project.fragment.lock.json
 /src/Api/project.lock.json
-/src/AccountGoWeb/project.lock.json
-/src/AccountGoWeb/project.fragment.lock.json
 /wrap/Dto/project.json
 /global.json
 .DS_Store
@@ -221,8 +214,6 @@ FakesAssemblies/
 /src/test/Module.Tests/Modules/*
 /src/Api/Modules/*
 /src/Api/Plugins/*
-/src/AccountGoWeb/Modules/*
-/src/AccountGoWeb/Plugins/*
 # /src/Api/Data/Migrations
 
 .vscode
