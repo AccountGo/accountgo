@@ -225,3 +225,7 @@ exclude
 *.db-shm
 *.db-wal
 accountgo.db*
+
+# Web & Build artifacts
+dist/
+*.tsbuildinfo
