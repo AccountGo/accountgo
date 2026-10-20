@@ -1,0 +1,407 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: 'Plus Jakarta Sans', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  /* Semantic Theme Tokens mapped to CSS variables for instant whitelabeling */
+  --color-canvas: var(--bg-canvas);
+  --color-surface: var(--bg-surface);
+  --color-surface-hover: var(--bg-surface-hover);
+  --color-subtle: var(--bg-subtle);
+  --color-sidebar: var(--bg-sidebar);
+  --color-header: var(--bg-header);
+
+  --color-text-main: var(--text-main);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+
+  --color-brand-primary: var(--brand-primary);
+  --color-brand-hover: var(--brand-hover);
+  --color-brand-text: var(--brand-text);
+  --color-brand-subtle: var(--brand-subtle);
+  --color-brand-ring: var(--brand-ring);
+  --color-accent: var(--accent);
+}
+
+/* ── 1. Default & AccountGo Emerald Theme ─────────────────────── */
+:root,
+[data-theme="accountgo"][data-scheme="dark"] {
+  --bg-canvas: #080b12;
+  --bg-surface: #0f172a;
+  --bg-surface-hover: #1e293b;
+  --bg-subtle: #05070e;
+  --bg-sidebar: rgba(2, 6, 23, 0.75);
+  --bg-header: rgba(2, 6, 23, 0.50);
+  --text-main: #f8fafc;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --brand-primary: #10b981;
+  --brand-hover: #059669;
+  --brand-text: #022c22;
+  --brand-subtle: rgba(16, 185, 129, 0.14);
+  --brand-ring: rgba(16, 185, 129, 0.35);
+  --accent: #38bdf8;
+  --shadow-ambient: rgba(0, 0, 0, 0.45);
+  color-scheme: dark;
+}
+
+[data-theme="accountgo"][data-scheme="light"] {
+  --bg-canvas: #f8fafc;
+  --bg-surface: #ffffff;
+  --bg-surface-hover: #f1f5f9;
+  --bg-subtle: #e2e8f0;
+  --bg-sidebar: rgba(255, 255, 255, 0.88);
+  --bg-header: rgba(255, 255, 255, 0.78);
+  --text-main: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #64748b;
+  --brand-primary: #059669;
+  --brand-hover: #047857;
+  --brand-text: #ffffff;
+  --brand-subtle: rgba(5, 150, 105, 0.12);
+  --brand-ring: rgba(5, 150, 105, 0.25);
+  --accent: #0284c7;
+  --shadow-ambient: rgba(15, 23, 42, 0.08);
+  color-scheme: light;
+}
+
+/* ── 2. Tokyo Night Theme (Modeled after marvinperez.com) ──────── */
+[data-theme="tokyo-night"][data-scheme="dark"] {
+  --bg-canvas: #13141c;
+  --bg-surface: #1a1b26;
+  --bg-surface-hover: #24283b;
+  --bg-subtle: #0e0f15;
+  --bg-sidebar: rgba(20, 21, 31, 0.82);
+  --bg-header: rgba(20, 21, 31, 0.60);
+  --text-main: #c0caf5;
+  --text-secondary: #a9b1d6;
+  --text-muted: #565f89;
+  --brand-primary: #7aa2f7;
+  --brand-hover: #89b4fa;
+  --brand-text: #13141c;
+  --brand-subtle: rgba(122, 162, 247, 0.16);
+  --brand-ring: rgba(122, 162, 247, 0.35);
+  --accent: #7dcfff;
+  --shadow-ambient: rgba(0, 0, 0, 0.50);
+  color-scheme: dark;
+}
+
+[data-theme="tokyo-night"][data-scheme="light"] {
+  --bg-canvas: #d0d5e3;
+  --bg-surface: #e1e2e7;
+  --bg-surface-hover: #d5d6db;
+  --bg-subtle: #c5c8d6;
+  --bg-sidebar: rgba(225, 226, 231, 0.90);
+  --bg-header: rgba(225, 226, 231, 0.80);
+  --text-main: #1a2b5c;
+  --text-secondary: #3760bf;
+  --text-muted: #6172b0;
+  --brand-primary: #2e7de9;
+  --brand-hover: #2069c9;
+  --brand-text: #ffffff;
+  --brand-subtle: rgba(46, 125, 233, 0.12);
+  --brand-ring: rgba(46, 125, 233, 0.25);
+  --accent: #007197;
+  --shadow-ambient: rgba(46, 125, 233, 0.08);
+  color-scheme: light;
+}
+
+/* ── 3. Sapphire Slate Theme (Corporate Enterprise) ───────────── */
+[data-theme="sapphire"][data-scheme="dark"] {
+  --bg-canvas: #090d16;
+  --bg-surface: #0f172a;
+  --bg-surface-hover: #1e293b;
+  --bg-subtle: #060910;
+  --bg-sidebar: rgba(11, 17, 32, 0.82);
+  --bg-header: rgba(11, 17, 32, 0.60);
+  --text-main: #f8fafc;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --brand-primary: #3b82f6;
+  --brand-hover: #2563eb;
+  --brand-text: #ffffff;
+  --brand-subtle: rgba(59, 130, 246, 0.16);
+  --brand-ring: rgba(59, 130, 246, 0.35);
+  --accent: #60a5fa;
+  --shadow-ambient: rgba(0, 0, 0, 0.45);
+  color-scheme: dark;
+}
+
+[data-theme="sapphire"][data-scheme="light"] {
+  --bg-canvas: #f8fafc;
+  --bg-surface: #ffffff;
+  --bg-surface-hover: #f1f5f9;
+  --bg-subtle: #e2e8f0;
+  --bg-sidebar: rgba(255, 255, 255, 0.88);
+  --bg-header: rgba(255, 255, 255, 0.78);
+  --text-main: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #64748b;
+  --brand-primary: #2563eb;
+  --brand-hover: #1d4ed8;
+  --brand-text: #ffffff;
+  --brand-subtle: rgba(37, 99, 235, 0.12);
+  --brand-ring: rgba(37, 99, 235, 0.25);
+  --accent: #1e40af;
+  --shadow-ambient: rgba(15, 23, 42, 0.08);
+  color-scheme: light;
+}
+
+/* ── 4. Amber Bronze Theme (Warm Executive) ───────────────────── */
+[data-theme="amber"][data-scheme="dark"] {
+  --bg-canvas: #110d08;
+  --bg-surface: #1c160f;
+  --bg-surface-hover: #292015;
+  --bg-subtle: #0a0805;
+  --bg-sidebar: rgba(20, 15, 10, 0.84);
+  --bg-header: rgba(20, 15, 10, 0.60);
+  --text-main: #fef3c7;
+  --text-secondary: #d6c7b2;
+  --text-muted: #78716c;
+  --brand-primary: #f59e0b;
+  --brand-hover: #d97706;
+  --brand-text: #451a03;
+  --brand-subtle: rgba(245, 158, 11, 0.16);
+  --brand-ring: rgba(245, 158, 11, 0.35);
+  --accent: #fbbf24;
+  --shadow-ambient: rgba(0, 0, 0, 0.50);
+  color-scheme: dark;
+}
+
+[data-theme="amber"][data-scheme="light"] {
+  --bg-canvas: #faf8f5;
+  --bg-surface: #ffffff;
+  --bg-surface-hover: #f5f0e9;
+  --bg-subtle: #eee7de;
+  --bg-sidebar: rgba(255, 255, 255, 0.88);
+  --bg-header: rgba(255, 255, 255, 0.78);
+  --text-main: #292524;
+  --text-secondary: #57534e;
+  --text-muted: #78716c;
+  --brand-primary: #d97706;
+  --brand-hover: #b45309;
+  --brand-text: #ffffff;
+  --brand-subtle: rgba(217, 119, 6, 0.12);
+  --brand-ring: rgba(217, 119, 6, 0.25);
+  --accent: #92400e;
+  --shadow-ambient: rgba(217, 119, 6, 0.08);
+  color-scheme: light;
+}
+
+/* ── 5. Phosphor Green Theme (Terminal Matrix) ───────────────── */
+[data-theme="phosphor"][data-scheme="dark"] {
+  --bg-canvas: #000000;
+  --bg-surface: #0a0a0a;
+  --bg-surface-hover: #171717;
+  --bg-subtle: #040404;
+  --bg-sidebar: rgba(8, 8, 8, 0.88);
+  --bg-header: rgba(8, 8, 8, 0.65);
+  --text-main: #e0e0e0;
+  --text-secondary: #a3a3a3;
+  --text-muted: #525252;
+  --brand-primary: #4ade80;
+  --brand-hover: #22c55e;
+  --brand-text: #052e16;
+  --brand-subtle: rgba(74, 222, 128, 0.16);
+  --brand-ring: rgba(74, 222, 128, 0.35);
+  --accent: #00e5ff;
+  --shadow-ambient: rgba(0, 0, 0, 0.65);
+  color-scheme: dark;
+}
+
+[data-theme="phosphor"][data-scheme="light"] {
+  --bg-canvas: #ffffff;
+  --bg-surface: #f5f5f5;
+  --bg-surface-hover: #e5e5e5;
+  --bg-subtle: #d4d4d4;
+  --bg-sidebar: rgba(245, 245, 245, 0.90);
+  --bg-header: rgba(245, 245, 245, 0.82);
+  --text-main: #171717;
+  --text-secondary: #404040;
+  --text-muted: #737373;
+  --brand-primary: #16a34a;
+  --brand-hover: #15803d;
+  --brand-text: #ffffff;
+  --brand-subtle: rgba(22, 163, 74, 0.12);
+  --brand-ring: rgba(22, 163, 74, 0.25);
+  --accent: #0284c7;
+  --shadow-ambient: rgba(0, 0, 0, 0.08);
+  color-scheme: light;
+}
+
+/* ── Base Page & PWA Safe Area ───────────────────────────────── */
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  width: 100%;
+  background-color: var(--bg-canvas);
+  color: var(--text-main);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+  transition: background-color 200ms ease, color 200ms ease;
+}
+
+/* iOS Safe Area Padding variables */
+:root {
+  --sat: env(safe-area-inset-top, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+}
+
+.safe-top {
+  padding-top: var(--sat);
+}
+
+.safe-bottom {
+  padding-bottom: var(--sab);
+}
+
+.safe-area-all {
+  padding-top: var(--sat);
+  padding-bottom: var(--sab);
+  padding-left: var(--sal);
+  padding-right: var(--sar);
+}
+
+/* Smooth Touch Scrolling */
+.smooth-scroll {
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+}
+
+/* ── Border-Less Component System (Theme & Scheme Adaptive) ──── */
+@layer components {
+  /* Border-Less Form Input: Soft recessed surface with ambient focus ring */
+  .input-base {
+    width: 100%;
+    height: 2.75rem; /* 44px touch target */
+    padding-left: 1rem;
+    padding-right: 1rem;
+    border-radius: 0.75rem;
+    background-color: var(--bg-subtle);
+    border: none;
+    font-size: 0.875rem;
+    color: var(--text-main);
+    box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.15);
+    transition: all 150ms ease;
+  }
+  .input-base::placeholder {
+    color: var(--text-muted);
+  }
+  .input-base:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--brand-ring);
+  }
+
+  /* Border-Less Primary Button */
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    height: 2.75rem;
+    padding-left: 1.25rem;
+    padding-right: 1.25rem;
+    border-radius: 0.75rem;
+    border: none;
+    font-size: 0.875rem;
+    font-weight: 700;
+    background-color: var(--brand-primary);
+    color: var(--brand-text);
+    box-shadow: 0 8px 20px -4px var(--brand-subtle);
+    transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+    cursor: pointer;
+    user-select: none;
+  }
+  .btn-primary:hover {
+    background-color: var(--brand-hover);
+    box-shadow: 0 10px 25px -4px var(--brand-subtle);
+  }
+  .btn-primary:active {
+    transform: scale(0.98);
+  }
+
+  /* Border-Less Secondary Button */
+  .btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    height: 2.75rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    border-radius: 0.75rem;
+    border: none;
+    font-size: 0.875rem;
+    font-weight: 600;
+    background-color: var(--bg-surface-hover);
+    color: var(--text-main);
+    transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+    cursor: pointer;
+    user-select: none;
+  }
+  .btn-secondary:hover {
+    filter: brightness(1.1);
+  }
+  .btn-secondary:active {
+    transform: scale(0.98);
+  }
+
+  /* Border-Less Card Surface: Pure tonal depth, no dividing stroke */
+  .card-surface {
+    background-color: var(--bg-surface);
+    backdrop-filter: blur(16px);
+    border: none;
+    border-radius: 1rem;
+    padding: 1rem;
+    box-shadow: 0 4px 20px -2px var(--shadow-ambient);
+  }
+  @media (min-width: 640px) {
+    .card-surface {
+      padding: 1.5rem;
+    }
+  }
+}
+
+/* ── Application-Wide Auto-Hiding Scrollbars ─────────────────── */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  transition: scrollbar-color 0.4s ease;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  border-radius: 9999px;
+  transition: background-color 0.4s ease;
+}
+
+body.is-scrolling ::-webkit-scrollbar-thumb,
+.is-scrolling::-webkit-scrollbar-thumb,
+*:hover::-webkit-scrollbar-thumb {
+  background-color: rgba(148, 163, 184, 0.32);
+}
+
+body.is-scrolling *,
+.is-scrolling,
+*:hover {
+  scrollbar-color: rgba(148, 163, 184, 0.32) transparent;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(148, 163, 184, 0.55) !important;
+}

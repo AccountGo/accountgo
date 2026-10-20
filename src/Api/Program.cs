@@ -154,7 +154,7 @@ builder.Services.AddRateLimiter(options =>
 
         return RateLimitPartition.GetSlidingWindowLimiter(key, _ => new SlidingWindowRateLimiterOptions
         {
-            PermitLimit = 3,
+            PermitLimit = builder.Environment.IsDevelopment() ? 100 : 3,
             Window = TimeSpan.FromMinutes(15),
             SegmentsPerWindow = 3,
             QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
@@ -169,7 +169,7 @@ builder.Services.AddRateLimiter(options =>
 
         return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
         {
-            PermitLimit = 10,
+            PermitLimit = builder.Environment.IsDevelopment() ? 100 : 10,
             Window = TimeSpan.FromMinutes(15),
             QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
             QueueLimit = 0
