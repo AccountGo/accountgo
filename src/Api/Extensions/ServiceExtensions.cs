@@ -1,4 +1,4 @@
-﻿using System.Text;
+using System.Text;
 using Api.Data;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
@@ -69,6 +69,33 @@ namespace Api.Extensions
         public static void ConfigureSqlContext(this IServiceCollection services, IConfiguration configuration,
             IHostEnvironment environment)
         {
+            var provider = System.Environment.GetEnvironmentVariable("DBPROVIDER")
+                ?? configuration["DatabaseProvider"]
+                ?? "Sqlite";
+
+            if (provider.Equals("Sqlite", StringComparison.OrdinalIgnoreCase))
+            {
+                var sqliteConnection = configuration.GetConnectionString("SqliteConnection")
+                    ?? "Data Source=accountgo.db";
+
+                Console.WriteLine($"[Database Provider] Using SQLite: {sqliteConnection}");
+
+                services.AddDbContext<ApiDbContext>(options =>
+                {
+                    options.UseSqlite(sqliteConnection);
+                    if (environment.IsDevelopment())
+                    {
+                        options.EnableSensitiveDataLogging();
+                        options.EnableDetailedErrors();
+                    }
+                });
+
+                services.AddDbContext<ApplicationIdentityDbContext>(options =>
+                    options.UseSqlite(sqliteConnection));
+
+                return;
+            }
+
             string dbServer, dbUserID, dbUserPassword, dbName = string.Empty;
 
             var connectionString = configuration.GetConnectionString("gdb-db") ?? null;

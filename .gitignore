@@ -230,3 +230,7 @@ exclude
 /src/Api/appsettings.Development.json
 
 .env
+*.db
+*.db-shm
+*.db-wal
+accountgo.db*

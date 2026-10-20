@@ -94,69 +94,107 @@ using (var scope = app.Services.CreateScope())
     try
     {
         var apiDbContext = services.GetRequiredService<ApiDbContext>();
+        var identityDbContext = services.GetRequiredService<ApplicationIdentityDbContext>();
         
-        // Ensure database exists before running migrations with retry logic
-        try
+        Console.WriteLine("====== Starting Database Initialization ======");
+
+        if (apiDbContext.Database.IsSqlite())
         {
-            Console.WriteLine("====== Starting Database Initialization ======");
-            var dbCreator = apiDbContext.GetService<IRelationalDatabaseCreator>();
-            var strategy = apiDbContext.Database.CreateExecutionStrategy();
-            strategy.Execute(() =>
+            var apiCreator = (RelationalDatabaseCreator)apiDbContext.GetService<IRelationalDatabaseCreator>();
+            var identityCreator = (RelationalDatabaseCreator)identityDbContext.GetService<IRelationalDatabaseCreator>();
+
+            bool isNewDatabase = !apiCreator.Exists() || !apiCreator.HasTables();
+            if (!apiCreator.Exists())
             {
-                if (!dbCreator.Exists())
-                {
-                    Console.WriteLine("Database does not exist. Creating...");
-                    dbCreator.Create();
-                    Console.WriteLine("✓ Database created successfully.");
-                }
-                else
-                {
-                    Console.WriteLine("✓ Database already exists.");
-                }
-            });
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"✗ ERROR: Failed to ensure database exists: {ex.Message}");
-            throw;
-        }
-        
-        try
-        {
-            Console.WriteLine("Applying ApiDb migrations...");
-            apiDbContext.Database.Migrate();
-            Console.WriteLine("✓ ApiDb migrations completed successfully.");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"✗ ERROR: ApiDb migrations failed: {ex.Message}");
-            throw;
-        }
+                apiCreator.Create();
+                Console.WriteLine("✓ SQLite database file created.");
+            }
 
-        try
-        {
-            var identityDbContext = services.GetRequiredService<ApplicationIdentityDbContext>();
-            Console.WriteLine("Applying IdentityDb migrations...");
-            identityDbContext.Database.Migrate();
-            Console.WriteLine("✓ IdentityDb migrations completed successfully.");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"✗ ERROR: IdentityDb migrations failed: {ex.Message}");
-            throw;
-        }
+            if (!apiCreator.HasTables())
+            {
+                Console.WriteLine("Creating SQLite tables for ApiDbContext...");
+                apiCreator.CreateTables();
+                Console.WriteLine("✓ ApiDbContext tables created.");
+            }
 
-        try
-        {
-            var seeder = services.GetRequiredService<DatabaseSeeder>();
-            Console.WriteLine("Seeding database...");
-            seeder.Seed();
-            Console.WriteLine("✓ Database seeding completed successfully.");
+            if (!identityCreator.HasTables())
+            {
+                Console.WriteLine("Creating SQLite tables for ApplicationIdentityDbContext...");
+                identityCreator.CreateTables();
+                Console.WriteLine("✓ ApplicationIdentityDbContext tables created.");
+            }
+
+            if (isNewDatabase)
+            {
+                var seeder = services.GetRequiredService<DatabaseSeeder>();
+                Console.WriteLine("Seeding SQLite database...");
+                seeder.Seed();
+                Console.WriteLine("✓ SQLite database seeding completed successfully.");
+            }
         }
-        catch (Exception ex)
+        else
         {
-            Console.WriteLine($"✗ ERROR: Database seeding failed: {ex.Message}");
-            throw;
+            // Ensure database exists before running migrations with retry logic
+            try
+            {
+                var dbCreator = apiDbContext.GetService<IRelationalDatabaseCreator>();
+                var strategy = apiDbContext.Database.CreateExecutionStrategy();
+                strategy.Execute(() =>
+                {
+                    if (!dbCreator.Exists())
+                    {
+                        Console.WriteLine("Database does not exist. Creating...");
+                        dbCreator.Create();
+                        Console.WriteLine("✓ Database created successfully.");
+                    }
+                    else
+                    {
+                        Console.WriteLine("✓ Database already exists.");
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"✗ ERROR: Failed to ensure database exists: {ex.Message}");
+                throw;
+            }
+            
+            try
+            {
+                Console.WriteLine("Applying ApiDb migrations...");
+                apiDbContext.Database.Migrate();
+                Console.WriteLine("✓ ApiDb migrations completed successfully.");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"✗ ERROR: ApiDb migrations failed: {ex.Message}");
+                throw;
+            }
+
+            try
+            {
+                Console.WriteLine("Applying IdentityDb migrations...");
+                identityDbContext.Database.Migrate();
+                Console.WriteLine("✓ IdentityDb migrations completed successfully.");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"✗ ERROR: IdentityDb migrations failed: {ex.Message}");
+                throw;
+            }
+
+            try
+            {
+                var seeder = services.GetRequiredService<DatabaseSeeder>();
+                Console.WriteLine("Seeding database...");
+                seeder.Seed();
+                Console.WriteLine("✓ Database seeding completed successfully.");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"✗ ERROR: Database seeding failed: {ex.Message}");
+                throw;
+            }
         }
 
         Console.WriteLine("====== Database Initialization Completed Successfully ======");
