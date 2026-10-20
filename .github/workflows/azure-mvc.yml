@@ -2,9 +2,6 @@
 # More GitHub Actions for Azure: https://github.com/Azure/actions
 name: Build and deploy AccountGo MVC project to Azure
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
 jobs:
   build:

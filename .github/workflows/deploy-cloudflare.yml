@@ -18,6 +18,7 @@ jobs:
   deploy-api:
     name: Deploy API (.NET 10 Container)
     runs-on: ubuntu-latest
+    environment: production
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -52,6 +53,7 @@ jobs:
     name: Deploy Web (React 19 SPA)
     needs: deploy-api
     runs-on: ubuntu-latest
+    environment: production
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
