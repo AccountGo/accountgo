@@ -136,7 +136,7 @@ builder.Services.AddRateLimiter(options =>
             var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
             return RateLimitPartition.GetSlidingWindowLimiter($"auth_ip_{ip}", _ => new SlidingWindowRateLimiterOptions
             {
-                PermitLimit = 30,
+                PermitLimit = builder.Environment.IsDevelopment() ? 1000 : 30,
                 Window = TimeSpan.FromMinutes(15),
                 SegmentsPerWindow = 3,
                 QueueLimit = 0

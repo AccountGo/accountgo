@@ -2,6 +2,8 @@ using Dto.Administration;
 using Dto.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Identity;
 using Services.Administration;
 using Services.Financial;
 using Services.Inventory;
@@ -13,7 +15,10 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Security.Claims;
 using System.Text;
+using System.Threading.Tasks;
+using Api.Data;
 
 namespace Api.Controllers
 {
@@ -27,13 +32,15 @@ namespace Api.Controllers
         private readonly IPurchasingService _purchasingService;
         private readonly IInventoryService _inventoryService;
         private readonly ISecurityService _securityService;
+        private readonly UserManager<ApplicationUser> _userManager;
 
         public AdministrationController(IAdministrationService adminService,
             IFinancialService financialService,
             ISalesService salesService,
             IPurchasingService purchasingService,
             IInventoryService inventoryService,
-            ISecurityService securityService)
+            ISecurityService securityService,
+            UserManager<ApplicationUser> userManager)
         {
             _adminService = adminService;
             _financialService = financialService;
@@ -41,6 +48,7 @@ namespace Api.Controllers
             _purchasingService = purchasingService;
             _inventoryService = inventoryService;
             _securityService = securityService;
+            _userManager = userManager;
         }
 
         [HttpGet]
@@ -69,9 +77,72 @@ namespace Api.Controllers
 
         [AllowAnonymous]
         [HttpGet("company")]
-        public IActionResult Company(string companyCode)
+        public IActionResult Company([FromQuery] string? slug = null, [FromQuery] string? companyCode = null, [FromQuery] int? id = null)
         {
-            return new ObjectResult(_adminService.GetDefaultCompany());
+            Core.Domain.Company? company = null;
+
+            if (id.HasValue && id.Value > 0)
+            {
+                company = _adminService.GetCompanies().FirstOrDefault(c => c.Id == id.Value);
+            }
+            else if (!string.IsNullOrWhiteSpace(slug))
+            {
+                company = _adminService.GetCompanyBySlug(slug);
+            }
+            else if (!string.IsNullOrWhiteSpace(companyCode))
+            {
+                company = _adminService.GetCompanies().FirstOrDefault(c => string.Equals(c.CompanyCode, companyCode, StringComparison.OrdinalIgnoreCase));
+            }
+
+            company ??= _adminService.GetDefaultCompany();
+
+            if (company == null)
+            {
+                return NotFound(new { message = "Company not found." });
+            }
+
+            return Ok(new
+            {
+                id = company.Id,
+                name = company.Name,
+                shortName = company.ShortName,
+                slug = string.IsNullOrWhiteSpace(company.Slug) ? (company.ShortName?.ToLowerInvariant() ?? $"org-{company.Id}") : company.Slug,
+                companyCode = company.CompanyCode,
+                cra = company.CRA,
+                plan = company.Plan ?? "accounting",
+                subscriptionStatus = company.SubscriptionStatus ?? "active",
+                subscriptionValidUntil = company.SubscriptionValidUntil,
+                activeModules = company.GetActiveModules()
+            });
+        }
+
+        [HttpGet("financialyears")]
+        public IActionResult FinancialYears()
+        {
+            var years = _adminService.GetFinancialYears();
+            return Ok(years.Select(f => new
+            {
+                id = f.Id,
+                fiscalYearCode = f.FiscalYearCode,
+                fiscalYearName = f.FiscalYearName,
+                startDate = f.StartDate,
+                endDate = f.EndDate,
+                isActive = f.IsActive
+            }));
+        }
+
+        [HttpGet("paymentterms")]
+        public IActionResult PaymentTerms()
+        {
+            var terms = _adminService.GetPaymentTerms();
+            return Ok(terms.Select(p => new
+            {
+                id = p.Id,
+                description = p.Description,
+                paymentType = p.PaymentType.ToString(),
+                dueAfterDays = p.DueAfterDays,
+                isActive = p.IsActive
+            }));
         }
 
         [AllowAnonymous]
@@ -88,7 +159,8 @@ namespace Api.Controllers
                 plan = c.Plan ?? "accounting",
                 subscriptionStatus = c.SubscriptionStatus ?? "active",
                 activeModules = c.GetActiveModules(),
-                companyCode = c.CompanyCode
+                companyCode = c.CompanyCode,
+                cra = c.CRA
             }));
         }
 
@@ -169,31 +241,182 @@ namespace Api.Controllers
 
             foreach (var user in users)
             {
-                var userDto = new User
-                {
-                    Id = user.Id,
-                    FirstName = user.Firstname,
-                    LastName = user.Lastname,
-                    Email = user.EmailAddress,
-                    UserName = user.UserName
-                };
-
-                foreach (var role in user.Roles)
-                {
-                    var roleDto = new Role
-                    {
-                        Id = role.Id,
-                        Name = role.SecurityRole.Name,
-                        DisplayName = role.SecurityRole.DisplayName
-                    };
-
-                    userDto.Roles.Add(roleDto);
-                }
-
-                usersDto.Add(userDto);
+                usersDto.Add(MapToUserDto(user));
             }
 
-            return new ObjectResult(usersDto);
+            return Ok(usersDto);
+        }
+
+        public class CreateMemberRequest
+        {
+            public string Email { get; set; } = string.Empty;
+            public string? FirstName { get; set; }
+            public string? LastName { get; set; }
+            public List<int>? RoleIds { get; set; }
+        }
+
+        [HttpPost("users")]
+        public async Task<IActionResult> CreateUser([FromBody] CreateMemberRequest request)
+        {
+            if (string.IsNullOrWhiteSpace(request?.Email))
+                return BadRequest(new ProblemDetails
+                {
+                    Title = "Invalid Email",
+                    Detail = "Email address is required.",
+                    Status = StatusCodes.Status400BadRequest
+                });
+
+            var email = request.Email.Trim().ToLowerInvariant();
+
+            // Check if user already exists in domain model
+            var existingDomain = _securityService.GetUser(email);
+            if (existingDomain != null)
+                return BadRequest(new ProblemDetails
+                {
+                    Title = "User Already Exists",
+                    Detail = $"A member with email '{email}' already exists in this organization.",
+                    Status = StatusCodes.Status400BadRequest
+                });
+
+            // Ensure ApplicationUser in Identity
+            var identityUser = await _userManager.FindByEmailAsync(email);
+            if (identityUser == null)
+            {
+                identityUser = new ApplicationUser
+                {
+                    UserName = email,
+                    Email = email,
+                    EmailConfirmed = true
+                };
+                var createResult = await _userManager.CreateAsync(identityUser);
+                if (!createResult.Succeeded)
+                {
+                    return BadRequest(new ProblemDetails
+                    {
+                        Title = "Failed to Create User",
+                        Detail = string.Join("; ", createResult.Errors.Select(e => e.Description)),
+                        Status = StatusCodes.Status400BadRequest
+                    });
+                }
+            }
+
+            var roleIds = request.RoleIds ?? new List<int>();
+            _securityService.AddUser(email, email, request.FirstName?.Trim() ?? string.Empty, request.LastName?.Trim() ?? string.Empty, roleIds);
+
+            var createdUser = _securityService.GetUser(email);
+            return Ok(createdUser != null ? MapToUserDto(createdUser) : null);
+        }
+
+        public class UpdateMemberRequest
+        {
+            public string? FirstName { get; set; }
+            public string? LastName { get; set; }
+            public string? Email { get; set; }
+            public List<int>? RoleIds { get; set; }
+        }
+
+        [HttpPut("users/{id:int}")]
+        public async Task<IActionResult> UpdateUser(int id, [FromBody] UpdateMemberRequest request)
+        {
+            var user = _securityService.GetUserById(id);
+            if (user == null)
+                return NotFound(new ProblemDetails
+                {
+                    Title = "User Not Found",
+                    Detail = $"Member with ID {id} was not found.",
+                    Status = StatusCodes.Status404NotFound
+                });
+
+            if (request.FirstName != null)
+                user.Firstname = request.FirstName.Trim();
+
+            if (request.LastName != null)
+                user.Lastname = request.LastName.Trim();
+
+            if (!string.IsNullOrWhiteSpace(request.Email))
+            {
+                var newEmail = request.Email.Trim().ToLowerInvariant();
+                if (!string.Equals(user.EmailAddress, newEmail, StringComparison.OrdinalIgnoreCase))
+                {
+                    var existing = _securityService.GetUser(newEmail);
+                    if (existing != null && existing.Id != id)
+                        return BadRequest(new ProblemDetails
+                        {
+                            Title = "Email In Use",
+                            Detail = $"Email '{newEmail}' is already assigned to another user.",
+                            Status = StatusCodes.Status400BadRequest
+                        });
+
+                    var oldEmail = user.EmailAddress;
+                    user.EmailAddress = newEmail;
+                    user.UserName = newEmail;
+
+                    var identityUser = await _userManager.FindByEmailAsync(oldEmail);
+                    if (identityUser != null)
+                    {
+                        identityUser.Email = newEmail;
+                        identityUser.UserName = newEmail;
+                        await _userManager.UpdateAsync(identityUser);
+                    }
+                }
+            }
+
+            _securityService.UpdateUser(user, request.RoleIds);
+
+            var updatedUser = _securityService.GetUserById(id);
+            return Ok(MapToUserDto(updatedUser));
+        }
+
+        [HttpDelete("users/{id:int}")]
+        public async Task<IActionResult> DeleteUser(int id)
+        {
+            var user = _securityService.GetUserById(id);
+            if (user == null)
+                return NotFound(new ProblemDetails
+                {
+                    Title = "User Not Found",
+                    Detail = $"Member with ID {id} was not found.",
+                    Status = StatusCodes.Status404NotFound
+                });
+
+            // Prevent deleting own account
+            var currentCallerEmail = User.FindFirst(ClaimTypes.Email)?.Value ?? User.FindFirst(ClaimTypes.Name)?.Value;
+            if (!string.IsNullOrEmpty(currentCallerEmail) && string.Equals(user.EmailAddress, currentCallerEmail, StringComparison.OrdinalIgnoreCase))
+            {
+                return BadRequest(new ProblemDetails
+                {
+                    Title = "Action Denied",
+                    Detail = "You cannot delete your own account.",
+                    Status = StatusCodes.Status400BadRequest
+                });
+            }
+
+            // Prevent deleting last sysadmin
+            if (user.IsSysAdmin())
+            {
+                var allUsers = _securityService.GetAllUser();
+                var adminCount = allUsers.Count(u => u.IsSysAdmin());
+                if (adminCount <= 1)
+                {
+                    return BadRequest(new ProblemDetails
+                    {
+                        Title = "Action Denied",
+                        Detail = "Cannot delete the last System Administrator in the organization.",
+                        Status = StatusCodes.Status400BadRequest
+                    });
+                }
+            }
+
+            var email = user.EmailAddress;
+            _securityService.DeleteUser(id);
+
+            var identityUser = await _userManager.FindByEmailAsync(email);
+            if (identityUser != null)
+            {
+                await _userManager.DeleteAsync(identityUser);
+            }
+
+            return Ok(new { success = true, message = $"User '{email}' was removed successfully." });
         }
 
         [HttpGet]
@@ -209,25 +432,100 @@ namespace Api.Controllers
                 {
                     Id = role.Id,
                     Name = role.Name,
-                    DisplayName = role.DisplayName
+                    DisplayName = role.DisplayName,
+                    SysAdmin = role.SysAdmin
                 };
 
-                foreach (var permission in role.Permissions)
+                if (role.Permissions != null)
                 {
-                    var permissionDto = new Permission
+                    foreach (var permission in role.Permissions)
                     {
-                        Id = permission.Id,
-                        Name = permission.SecurityPermission.Name,
-                        DisplayName = permission.SecurityPermission.DisplayName
-                    };
+                        if (permission?.SecurityPermission == null) continue;
+                        var permissionDto = new Permission
+                        {
+                            Id = permission.SecurityPermissionId,
+                            Name = permission.SecurityPermission.Name,
+                            DisplayName = permission.SecurityPermission.DisplayName
+                        };
 
-                    roleDto.Permissions.Add(permissionDto);
+                        roleDto.Permissions.Add(permissionDto);
+                    }
                 }
 
                 rolesDto.Add(roleDto);
             }
 
-            return new ObjectResult(rolesDto);
+            return Ok(rolesDto);
+        }
+
+        public class SaveRoleRequest
+        {
+            public int Id { get; set; }
+            public string Name { get; set; } = string.Empty;
+            public string? DisplayName { get; set; }
+            public List<int>? PermissionIds { get; set; }
+        }
+
+        [HttpPost("roles")]
+        public IActionResult SaveRole([FromBody] SaveRoleRequest request)
+        {
+            if (string.IsNullOrWhiteSpace(request?.Name))
+                return BadRequest(new ProblemDetails { Title = "Invalid Role", Detail = "Role name is required.", Status = StatusCodes.Status400BadRequest });
+
+            var displayName = !string.IsNullOrWhiteSpace(request.DisplayName) ? request.DisplayName.Trim() : request.Name.Trim();
+            _securityService.SaveRoleWithPermissions(request.Id, request.Name.Trim(), displayName, request.PermissionIds ?? new List<int>());
+
+            return Ok(new { success = true });
+        }
+
+        [HttpDelete("roles/{id:int}")]
+        public IActionResult DeleteRole(int id)
+        {
+            var role = _securityService.GetSecurityRole(id);
+            if (role == null)
+                return NotFound(new ProblemDetails { Title = "Role Not Found", Detail = $"Role with ID {id} was not found.", Status = StatusCodes.Status404NotFound });
+
+            if (role.SysAdmin || role.Name == "SystemAdministrators" || role.Name == "GeneralUsers")
+            {
+                return BadRequest(new ProblemDetails
+                {
+                    Title = "Action Denied",
+                    Detail = "System-critical roles cannot be deleted.",
+                    Status = StatusCodes.Status400BadRequest
+                });
+            }
+
+            _securityService.DeleteRole(id);
+            return Ok(new { success = true, message = "Role deleted successfully." });
+        }
+
+        private static User MapToUserDto(Core.Domain.Security.User user)
+        {
+            var dto = new User
+            {
+                Id = user.Id,
+                FirstName = user.Firstname,
+                LastName = user.Lastname,
+                Email = user.EmailAddress,
+                UserName = user.UserName
+            };
+
+            if (user.Roles != null)
+            {
+                foreach (var r in user.Roles)
+                {
+                    if (r?.SecurityRole == null) continue;
+                    dto.Roles.Add(new Role
+                    {
+                        Id = r.SecurityRoleId,
+                        Name = r.SecurityRole.Name,
+                        DisplayName = r.SecurityRole.DisplayName,
+                        SysAdmin = r.SecurityRole.SysAdmin
+                    });
+                }
+            }
+
+            return dto;
         }
 
         [HttpGet]
@@ -308,40 +606,68 @@ namespace Api.Controllers
             return new ObjectResult(userDto);
         }
 
-        [HttpPost]
-        [Route("SaveCompany")]
-        public IActionResult SaveCompany([FromBody]Company companyDto)
+        public class UpdateCompanyRequest
         {
-            string[] errors;
-            try
+            public int? Id { get; set; }
+            public string? Name { get; set; }
+            public string? ShortName { get; set; }
+            public string? Slug { get; set; }
+            public string? CompanyCode { get; set; }
+            public string? CRA { get; set; }
+        }
+
+        [HttpPost("SaveCompany")]
+        [HttpPut("company")]
+        public IActionResult SaveCompany([FromBody] UpdateCompanyRequest request)
+        {
+            if (request == null)
+                return BadRequest(new { message = "Invalid company update request." });
+
+            Core.Domain.Company? company = null;
+            if (request.Id.HasValue && request.Id.Value > 0)
             {
-                if (!ModelState.IsValid)
-                {
-                    errors = new string[ModelState.ErrorCount];
-                    foreach (var val in ModelState.Values)
-                        for (var i = 0; i < ModelState.ErrorCount; i++)
-                            errors[i] = val.Errors[i].ErrorMessage;
-                    return new BadRequestObjectResult(errors);
-                }
-
-                Core.Domain.Company company = companyDto.Id == 0
-                    ? new Core.Domain.Company()
-                    : _adminService.GetDefaultCompany();
-
-                company.CompanyCode = companyDto.CompanyCode;
-                company.Name = companyDto.Name;
-                company.ShortName = companyDto.ShortName;
-                company.CRA = companyDto.CRA;
-
-                _adminService.SaveCompany(company);
-
-                return new ObjectResult(Ok());
+                company = _adminService.GetCompanies().FirstOrDefault(c => c.Id == request.Id.Value);
             }
-            catch (Exception ex)
+            else if (!string.IsNullOrWhiteSpace(request.Slug))
             {
-                errors = new[] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
-                return new BadRequestObjectResult(errors);
+                company = _adminService.GetCompanyBySlug(request.Slug);
             }
+
+            company ??= _adminService.GetDefaultCompany();
+            if (company == null)
+            {
+                company = new Core.Domain.Company();
+            }
+
+            if (!string.IsNullOrWhiteSpace(request.Name))
+                company.Name = request.Name.Trim();
+
+            if (!string.IsNullOrWhiteSpace(request.ShortName))
+                company.ShortName = request.ShortName.Trim();
+
+            if (!string.IsNullOrWhiteSpace(request.Slug))
+                company.Slug = request.Slug.Trim().ToLowerInvariant();
+
+            if (request.CompanyCode != null)
+                company.CompanyCode = request.CompanyCode.Trim();
+
+            if (request.CRA != null)
+                company.CRA = request.CRA.Trim();
+
+            _adminService.SaveCompany(company);
+
+            return Ok(new
+            {
+                id = company.Id,
+                name = company.Name,
+                shortName = company.ShortName,
+                slug = company.Slug,
+                companyCode = company.CompanyCode,
+                cra = company.CRA,
+                plan = company.Plan,
+                subscriptionStatus = company.SubscriptionStatus,
+                activeModules = company.GetActiveModules()
+            });
         }
     }
 }

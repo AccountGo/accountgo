@@ -367,7 +367,9 @@ namespace Api.Service
                 firstName,
                 lastName,
                 roles,
-                permissions);
+                permissions,
+                user.PhoneNumber,
+                !string.IsNullOrEmpty(user.PasswordHash));
         }
 
         private string ComputeHmac(string input)

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
-import { getPersistedOrgSlug } from '../lib/mockData';
+import { getPersistedOrgSlug } from '../lib/storage';
 import {
   Mail,
   ArrowRight,

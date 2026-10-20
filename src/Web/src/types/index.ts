@@ -47,6 +47,9 @@ export interface OrgDetails {
   id: string;
   name: string;
   slug: string;
+  shortName?: string;
+  companyCode?: string;
+  cra?: string;
   role?: string;
   plan?: PlanKey;
   currency?: string;
@@ -66,6 +69,30 @@ export interface UserProfile {
 }
 
 export type SidebarMode = 'expanded' | 'collapsed' | 'closed';
+
+export interface RolePermissionItem {
+  id: number;
+  name: string;
+  displayName?: string;
+}
+
+export interface RoleItem {
+  id: number;
+  name: string;
+  displayName: string;
+  sysAdmin?: boolean;
+  permissions?: RolePermissionItem[];
+}
+
+export interface TeamMember {
+  id: number;
+  firstName?: string;
+  lastName?: string;
+  userName: string;
+  email: string;
+  sysAdmin?: boolean;
+  roles: RoleItem[];
+}
 
 export interface TenantContextType {
   currentOrg: OrgDetails;

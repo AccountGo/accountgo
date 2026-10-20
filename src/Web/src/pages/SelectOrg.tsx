@@ -12,7 +12,7 @@ import {
   LogOut,
   Loader2,
 } from 'lucide-react';
-import { setPersistedOrgSlug } from '../lib/mockData';
+import { setPersistedOrgSlug } from '../lib/storage';
 import { OrgDetails } from '../types';
 import { useAuth } from '../auth/AuthContext';
 

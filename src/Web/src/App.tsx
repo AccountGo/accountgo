@@ -3,6 +3,8 @@ import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom'
 import OrgLayout from './layouts/OrgLayout';
 import Dashboard from './pages/Dashboard';
 import Settings from './pages/Settings';
+import Members from './pages/Members';
+import Profile from './pages/Profile';
 import SelectOrg from './pages/SelectOrg';
 import Login from './pages/Login';
 import PlaceholderView from './pages/PlaceholderView';
@@ -10,7 +12,7 @@ import NotFound from './pages/NotFound';
 import ProtectedRoute from './components/ProtectedRoute';
 import { RequiresModule } from './components/Gating';
 import { useAuth } from './auth/AuthContext';
-import { getPersistedOrgSlug } from './lib/mockData';
+import { getPersistedOrgSlug } from './lib/storage';
 import { Loader2 } from 'lucide-react';
 
 // Root redirector: redirects to the last visited organization if authenticated, or to /login
@@ -102,7 +104,11 @@ const router = createBrowserRouter([
           },
           {
             path: 'members',
-            element: <Settings />,
+            element: <Members />,
+          },
+          {
+            path: 'profile',
+            element: <Profile />,
           },
         ],
       },

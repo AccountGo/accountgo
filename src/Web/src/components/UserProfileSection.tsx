@@ -184,7 +184,7 @@ export const UserProfileSection: React.FC<UserProfileSectionProps> = ({
               onClick={() =>
                 handleAction(() => {
                   if (currentOrgSlug) {
-                    navigate(`/org/${currentOrgSlug}/settings#profile`);
+                    navigate(`/org/${currentOrgSlug}/profile`);
                   }
                 })
               }

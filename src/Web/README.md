@@ -38,7 +38,7 @@ src/Web/
 │   │   ├── PlaceholderView.tsx # General skeleton for Financials, Sales, Purchases, Donors, Reports
 │   │   └── NotFound.tsx        # Polished 404 handler with return links
 │   ├── lib/
-│   │   └── mockData.ts         # Tenant resolution, localStorage persistence, seeded mock tenants
+│   │   └── storage.ts          # Tenant resolution and localStorage persistence
 │   ├── types/
 │   │   └── index.ts            # OrgDetails, UserProfile, TenantContextType
 │   ├── App.tsx                 # createBrowserRouter with nested :orgSlug routing

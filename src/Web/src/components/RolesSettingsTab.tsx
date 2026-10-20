@@ -5,6 +5,7 @@ import {
   Lock,
   Users,
   Search,
+  RefreshCw,
 } from 'lucide-react';
 import { TenantContextType } from '../types';
 import { useAuth } from '../auth/AuthContext';
@@ -21,112 +22,6 @@ interface RoleDefinition {
   permissions: string[];
   isSystem?: boolean;
 }
-
-const PREDEFINED_ROLES: RoleDefinition[] = [
-  {
-    id: 'sysadmin',
-    name: 'Owner / Administrator',
-    description: 'Full administrative and operational privileges across all subscribed modules.',
-    userCount: 1,
-    isSystem: true,
-    permissions: [
-      'sales.customers.view',
-      'sales.customers.manage',
-      'sales.invoices.view',
-      'sales.invoices.create',
-      'sales.invoices.post',
-      'sales.receipts.view',
-      'sales.receipts.create',
-      'sales.quotations.view',
-      'financials.accounts.view',
-      'financials.accounts.manage',
-      'financials.journal.view',
-      'financials.journal.create',
-      'financials.journal.post',
-      'financials.cashbanks.view',
-      'financials.cashbanks.manage',
-      'purchases.vendors.view',
-      'purchases.vendors.manage',
-      'purchases.orders.view',
-      'purchases.bills.view',
-      'purchases.bills.create',
-      'purchases.bills.post',
-      'inventory.items.view',
-      'inventory.items.manage',
-      'reports.view',
-      'audit.logs.view',
-      'admin.members.manage',
-      'admin.roles.manage',
-      'admin.subscription.manage',
-    ],
-  },
-  {
-    id: 'accountant',
-    name: 'Accountant',
-    description: 'Full write access to General Ledger, Banking, Invoices, Bills, and Financial Reports.',
-    userCount: 1,
-    permissions: [
-      'sales.customers.view',
-      'sales.invoices.view',
-      'sales.invoices.create',
-      'sales.invoices.post',
-      'sales.receipts.view',
-      'sales.receipts.create',
-      'financials.accounts.view',
-      'financials.journal.view',
-      'financials.journal.create',
-      'financials.journal.post',
-      'financials.cashbanks.view',
-      'purchases.vendors.view',
-      'purchases.bills.view',
-      'purchases.bills.create',
-      'purchases.bills.post',
-      'reports.view',
-    ],
-  },
-  {
-    id: 'sales_rep',
-    name: 'Sales Representative',
-    description: 'Create and manage quotations, customer accounts, and draft sales invoices.',
-    userCount: 2,
-    permissions: [
-      'sales.customers.view',
-      'sales.customers.manage',
-      'sales.invoices.view',
-      'sales.invoices.create',
-      'sales.quotations.view',
-    ],
-  },
-  {
-    id: 'purchasing_agent',
-    name: 'Purchasing Agent',
-    description: 'Manage vendor catalog, draft purchase orders, and record received bills.',
-    userCount: 1,
-    permissions: [
-      'purchases.vendors.view',
-      'purchases.vendors.manage',
-      'purchases.orders.view',
-      'purchases.bills.view',
-      'purchases.bills.create',
-    ],
-  },
-  {
-    id: 'viewer',
-    name: 'Auditor / Viewer',
-    description: 'Strictly read-only access to records and financial summaries for reporting/compliance.',
-    userCount: 1,
-    permissions: [
-      'sales.customers.view',
-      'sales.invoices.view',
-      'financials.accounts.view',
-      'financials.journal.view',
-      'purchases.vendors.view',
-      'purchases.bills.view',
-      'reports.view',
-      'audit.logs.view',
-    ],
-  },
-];
 
 const PERMISSION_GROUPS = [
   {
@@ -177,8 +72,8 @@ const PERMISSION_GROUPS = [
 
 export const RolesSettingsTab: React.FC<RolesSettingsTabProps> = () => {
   const { authFetch } = useAuth();
-  const [roles, setRoles] = useState<RoleDefinition[]>(PREDEFINED_ROLES);
-  const [selectedRoleId, setSelectedRoleId] = useState<string>('sysadmin');
+  const [roles, setRoles] = useState<RoleDefinition[]>([]);
+  const [selectedRoleId, setSelectedRoleId] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
@@ -197,18 +92,25 @@ export const RolesSettingsTab: React.FC<RolesSettingsTabProps> = () => {
                 name: r.displayName || r.name,
                 description: r.name === 'SystemAdministrators'
                   ? 'Full administrative and operational privileges across all subscribed modules.'
-                  : 'Standard operational permissions across subscribed modules.',
+                  : `Standard operational privileges for ${r.displayName || r.name}.`,
                 userCount: r.users?.length || 1,
-                isSystem: true,
-                permissions: perms.length > 0 ? perms : PREDEFINED_ROLES[0].permissions,
+                isSystem: r.sysAdmin || r.name === 'SystemAdministrators',
+                permissions: perms,
               };
             });
 
-            // Merge with standard definitions
-            setRoles([...liveRoles, ...PREDEFINED_ROLES.slice(1)]);
+            setRoles(liveRoles);
+            setSelectedRoleId((prev) => {
+              if (!prev || !liveRoles.some((lr) => lr.id === prev)) {
+                return liveRoles[0].id;
+              }
+              return prev;
+            });
           }
         }
-      } catch {}
+      } catch (err) {
+        console.error('Failed to load roles from API:', err);
+      }
     };
 
     fetchRoles();
@@ -218,6 +120,15 @@ export const RolesSettingsTab: React.FC<RolesSettingsTabProps> = () => {
   }, [authFetch]);
 
   const selectedRole = roles.find((r) => r.id === selectedRoleId) || roles[0];
+
+  if (roles.length === 0 || !selectedRole) {
+    return (
+      <div className="p-12 text-center text-xs text-[var(--text-muted)] rounded-2xl bg-[var(--bg-surface)] backdrop-blur-md shadow-md flex items-center justify-center gap-2">
+        <RefreshCw className="w-4 h-4 animate-spin text-[var(--brand-primary)]" />
+        <span>Loading role security definitions from live database...</span>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

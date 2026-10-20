@@ -5,6 +5,17 @@ export interface UserDto {
   lastName: string;
   roles: string[];
   permissions?: string[];
+  phoneNumber?: string;
+  hasPassword?: boolean;
+}
+
+export interface UserSession {
+  id: number;
+  createdAt: string;
+  expiresAt: string;
+  ipAddress?: string;
+  userAgent?: string;
+  isCurrent: boolean;
 }
 
 export interface AuthResponse {
@@ -28,4 +39,5 @@ export interface AuthContextType {
   verifyOtp: (email: string, otp: string) => Promise<void>;
   logout: () => Promise<void>;
   authFetch: (url: string, init?: RequestInit) => Promise<Response>;
+  refreshUser: () => Promise<void>;
 }

@@ -28,7 +28,29 @@ namespace Dto.Security
         string FirstName,
         string LastName,
         IEnumerable<string> Roles,
-        IEnumerable<string>? Permissions = null
+        IEnumerable<string>? Permissions = null,
+        string? PhoneNumber = null,
+        bool HasPassword = false
+    );
+
+    public record UpdateProfileRequest(
+        string? FirstName,
+        string? LastName,
+        string? PhoneNumber
+    );
+
+    public record ChangePasswordRequest(
+        string? CurrentPassword,
+        [Required, MinLength(6, ErrorMessage = "New password must be at least 6 characters.")] string NewPassword
+    );
+
+    public record UserSessionDto(
+        int Id,
+        System.DateTime CreatedAt,
+        System.DateTime ExpiresAt,
+        string? IpAddress,
+        string? UserAgent,
+        bool IsCurrent
     );
 
     public record AddNewUserRequest(

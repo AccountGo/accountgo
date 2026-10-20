@@ -307,6 +307,107 @@ export const PlaceholderView: React.FC = () => {
             }));
             setRows(tableRows);
           }
+        } else if (currentSection === 'inventory') {
+          const [itemsRes, icjRes] = await Promise.all([
+            authFetch('/api/Inventory/items'),
+            authFetch('/api/Inventory/ICJ'),
+          ]);
+
+          const items = itemsRes.ok ? await itemsRes.json() : [];
+          const icjs = icjRes.ok ? await icjRes.json() : [];
+
+          if (mounted) {
+            const totalStockValuation = Array.isArray(items)
+              ? items.reduce(
+                  (acc: number, item: any) => acc + (item.price || 0) * (item.quantityOnHand || 0),
+                  0
+                )
+              : 0;
+            setMetrics([
+              {
+                label: 'Total Catalog Items',
+                value: `${Array.isArray(items) ? items.length : 0} Products`,
+                change: 'Inventory SKU master',
+              },
+              {
+                label: 'Stock Movements (ICJ)',
+                value: `${Array.isArray(icjs) ? icjs.length : 0} Transactions`,
+                change: 'In/Out ledger journals',
+              },
+              {
+                label: 'Inventory Valuation',
+                value: `${currencySymbol}${formatAmount(totalStockValuation)}`,
+                change: 'Real-time stock valuation',
+              },
+              {
+                label: 'Warehouse Status',
+                value: 'Operational',
+                change: 'Stock control active',
+              },
+            ]);
+
+            const tableRows: LiveRow[] = Array.isArray(items)
+              ? items.map((item: any) => ({
+                  col1: item.code || `SKU-${item.id}`,
+                  col2: item.description,
+                  col3: item.itemTaxGroupName || 'Regular',
+                  col4: `${item.quantityOnHand || 0} ${item.measurement || 'Units'}`,
+                  col5: `${currencySymbol}${formatAmount(item.price)}`,
+                  status: (item.quantityOnHand || 0) > 0 ? 'In Stock' : 'Available',
+                  raw: item,
+                }))
+              : [];
+            setRows(tableRows);
+          }
+        } else if (currentSection === 'donations') {
+          const [donationsRes, donorsRes] = await Promise.all([
+            authFetch('/api/Donations/DonationInvoices'),
+            authFetch('/api/Donors'),
+          ]);
+
+          const donations = donationsRes.ok ? await donationsRes.json() : [];
+          const donors = donorsRes.ok ? await donorsRes.json() : [];
+
+          if (mounted) {
+            const totalRaised = Array.isArray(donations)
+              ? donations.reduce((acc: number, d: any) => acc + (d.amount || 0), 0)
+              : 0;
+            setMetrics([
+              {
+                label: 'Total Donations Raised',
+                value: `${currencySymbol}${formatAmount(totalRaised)}`,
+                change: `${Array.isArray(donations) ? donations.length : 0} receipts in database`,
+              },
+              {
+                label: 'Registered Donors',
+                value: `${Array.isArray(donors) ? donors.length : 0} Donors`,
+                change: 'Individual & corporate',
+              },
+              {
+                label: 'Tax Receipts Issued',
+                value: `${Array.isArray(donations) ? donations.filter((d: any) => d.isTaxReceiptIssued).length : 0} Receipts`,
+                change: 'Official donation receipts',
+              },
+              {
+                label: 'Campaign Status',
+                value: 'Active',
+                change: 'Non-profit ledger live',
+              },
+            ]);
+
+            const tableRows: LiveRow[] = Array.isArray(donations)
+              ? donations.map((d: any) => ({
+                  col1: d.no || `DON-${d.id}`,
+                  col2: d.donorName || `Donor #${d.donorId}`,
+                  col3: formatDate(d.donationDate),
+                  col4: d.purpose || d.paymentType || 'General Contribution',
+                  col5: `${currencySymbol}${formatAmount(d.amount)}`,
+                  status: d.isTaxReceiptIssued ? 'Receipted' : 'Recorded',
+                  raw: d,
+                }))
+              : [];
+            setRows(tableRows);
+          }
         } else {
           // Fallback module state
           if (mounted) {

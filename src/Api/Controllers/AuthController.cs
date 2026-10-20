@@ -27,19 +27,22 @@ namespace Api.Controllers
         private readonly ISecurityService _securityService;
         private readonly IConfiguration _configuration;
         private readonly ILogger<AuthController> _logger;
+        private readonly ApplicationIdentityDbContext _identityContext;
 
         public AuthController(
             IEmailOtpService otpService,
             UserManager<ApplicationUser> userManager,
             ISecurityService securityService,
             IConfiguration configuration,
-            ILogger<AuthController> logger)
+            ILogger<AuthController> logger,
+            ApplicationIdentityDbContext identityContext)
         {
             _otpService = otpService;
             _userManager = userManager;
             _securityService = securityService;
             _configuration = configuration;
             _logger = logger;
+            _identityContext = identityContext;
         }
 
         [AllowAnonymous]
@@ -305,9 +308,255 @@ namespace Api.Controllers
                 firstName,
                 lastName,
                 roles,
-                permissions);
+                permissions,
+                user.PhoneNumber,
+                !string.IsNullOrEmpty(user.PasswordHash));
 
             return Ok(userDto);
+        }
+
+        [Authorize]
+        [HttpPut("profile")]
+        public async Task<IActionResult> UpdateProfile([FromBody] UpdateProfileRequest request)
+        {
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var email = User.FindFirst(ClaimTypes.Email)?.Value;
+
+            ApplicationUser? user = null;
+            if (!string.IsNullOrEmpty(userId))
+                user = await _userManager.FindByIdAsync(userId);
+            if (user == null && !string.IsNullOrEmpty(email))
+                user = await _userManager.FindByEmailAsync(email);
+
+            if (user == null)
+            {
+                return NotFound(new ProblemDetails
+                {
+                    Title = "User Not Found",
+                    Detail = "Authenticated user identity could not be located.",
+                    Status = StatusCodes.Status404NotFound
+                });
+            }
+
+            // Update domain User entity
+            var domainUser = _securityService.GetUser(user.UserName ?? user.Email ?? string.Empty);
+            if (domainUser != null)
+            {
+                if (request.FirstName != null)
+                    domainUser.Firstname = request.FirstName.Trim();
+                if (request.LastName != null)
+                    domainUser.Lastname = request.LastName.Trim();
+
+                _securityService.UpdateUser(domainUser, null);
+            }
+
+            // Update ApplicationUser entity
+            if (request.PhoneNumber != null)
+            {
+                user.PhoneNumber = request.PhoneNumber.Trim();
+            }
+
+            var identityResult = await _userManager.UpdateAsync(user);
+            if (!identityResult.Succeeded)
+            {
+                return BadRequest(new ProblemDetails
+                {
+                    Title = "Update Failed",
+                    Detail = string.Join("; ", System.Linq.Enumerable.Select(identityResult.Errors, e => e.Description)),
+                    Status = StatusCodes.Status400BadRequest
+                });
+            }
+
+            // Return fresh UserDto
+            var roles = new System.Collections.Generic.HashSet<string>(await _userManager.GetRolesAsync(user));
+            if (domainUser?.Roles != null)
+            {
+                foreach (var r in domainUser.Roles)
+                {
+                    if (r?.SecurityRole?.Name != null)
+                        roles.Add(r.SecurityRole.Name);
+                }
+            }
+
+            var permissions = _securityService.GetPermissionsForUser(user.UserName ?? user.Email ?? string.Empty);
+
+            var updatedDto = new UserDto(
+                user.Id,
+                user.Email ?? user.UserName ?? string.Empty,
+                domainUser?.Firstname ?? string.Empty,
+                domainUser?.Lastname ?? string.Empty,
+                roles,
+                permissions,
+                user.PhoneNumber,
+                !string.IsNullOrEmpty(user.PasswordHash));
+
+            return Ok(updatedDto);
+        }
+
+        [Authorize]
+        [HttpPost("change-password")]
+        public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
+        {
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var email = User.FindFirst(ClaimTypes.Email)?.Value;
+
+            ApplicationUser? user = null;
+            if (!string.IsNullOrEmpty(userId))
+                user = await _userManager.FindByIdAsync(userId);
+            if (user == null && !string.IsNullOrEmpty(email))
+                user = await _userManager.FindByEmailAsync(email);
+
+            if (user == null)
+            {
+                return NotFound(new ProblemDetails
+                {
+                    Title = "User Not Found",
+                    Detail = "Authenticated user identity could not be located.",
+                    Status = StatusCodes.Status404NotFound
+                });
+            }
+
+            IdentityResult result;
+            if (!string.IsNullOrEmpty(user.PasswordHash))
+            {
+                if (string.IsNullOrWhiteSpace(request.CurrentPassword))
+                {
+                    return BadRequest(new ProblemDetails
+                    {
+                        Title = "Password Required",
+                        Detail = "Your current password is required to set a new password.",
+                        Status = StatusCodes.Status400BadRequest
+                    });
+                }
+                result = await _userManager.ChangePasswordAsync(user, request.CurrentPassword, request.NewPassword);
+            }
+            else
+            {
+                result = await _userManager.AddPasswordAsync(user, request.NewPassword);
+            }
+
+            if (!result.Succeeded)
+            {
+                return BadRequest(new ProblemDetails
+                {
+                    Title = "Password Update Failed",
+                    Detail = string.Join("; ", System.Linq.Enumerable.Select(result.Errors, e => e.Description)),
+                    Status = StatusCodes.Status400BadRequest
+                });
+            }
+
+            return Ok(new { success = true, message = "Password updated successfully." });
+        }
+
+        [Authorize]
+        [HttpGet("sessions")]
+        public async Task<IActionResult> GetActiveSessions()
+        {
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var email = User.FindFirst(ClaimTypes.Email)?.Value;
+
+            ApplicationUser? user = null;
+            if (!string.IsNullOrEmpty(userId))
+                user = await _userManager.FindByIdAsync(userId);
+            if (user == null && !string.IsNullOrEmpty(email))
+                user = await _userManager.FindByEmailAsync(email);
+
+            if (user == null)
+                return NotFound();
+
+            var currentRawToken = Request.Cookies[RefreshCookieName];
+            string? currentHash = null;
+            if (!string.IsNullOrEmpty(currentRawToken))
+            {
+                using var sha256 = System.Security.Cryptography.SHA256.Create();
+                var hashBytes = sha256.ComputeHash(System.Text.Encoding.UTF8.GetBytes(currentRawToken));
+                currentHash = Convert.ToBase64String(hashBytes);
+            }
+
+            var now = DateTime.UtcNow;
+            var sessions = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions
+                .ToListAsync(System.Linq.Queryable.OrderByDescending(
+                    System.Linq.Queryable.Where(_identityContext.RefreshTokens, t => t.UserId == user.Id && t.RevokedAt == null && t.ExpiresAt > now),
+                    t => t.CreatedAt));
+
+            var sessionDtos = System.Linq.Enumerable.Select(sessions, s => new UserSessionDto(
+                s.Id,
+                s.CreatedAt,
+                s.ExpiresAt,
+                s.CreatedByIp,
+                s.UserAgent,
+                s.TokenHash == currentHash
+            )).ToList();
+
+            return Ok(sessionDtos);
+        }
+
+        [Authorize]
+        [HttpDelete("sessions/{id:int}")]
+        public async Task<IActionResult> RevokeSession(int id)
+        {
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var email = User.FindFirst(ClaimTypes.Email)?.Value;
+
+            ApplicationUser? user = null;
+            if (!string.IsNullOrEmpty(userId))
+                user = await _userManager.FindByIdAsync(userId);
+            if (user == null && !string.IsNullOrEmpty(email))
+                user = await _userManager.FindByEmailAsync(email);
+
+            if (user == null)
+                return NotFound();
+
+            var session = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions
+                .FirstOrDefaultAsync(_identityContext.RefreshTokens, s => s.Id == id && s.UserId == user.Id);
+
+            if (session == null)
+                return NotFound(new ProblemDetails { Title = "Session Not Found", Detail = "The requested session does not exist.", Status = StatusCodes.Status404NotFound });
+
+            session.RevokedAt = DateTime.UtcNow;
+            await _identityContext.SaveChangesAsync();
+
+            return Ok(new { success = true, message = "Session revoked successfully." });
+        }
+
+        [Authorize]
+        [HttpPost("sessions/revoke-others")]
+        public async Task<IActionResult> RevokeOtherSessions()
+        {
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var email = User.FindFirst(ClaimTypes.Email)?.Value;
+
+            ApplicationUser? user = null;
+            if (!string.IsNullOrEmpty(userId))
+                user = await _userManager.FindByIdAsync(userId);
+            if (user == null && !string.IsNullOrEmpty(email))
+                user = await _userManager.FindByEmailAsync(email);
+
+            if (user == null)
+                return NotFound();
+
+            var currentRawToken = Request.Cookies[RefreshCookieName];
+            string? currentHash = null;
+            if (!string.IsNullOrEmpty(currentRawToken))
+            {
+                using var sha256 = System.Security.Cryptography.SHA256.Create();
+                var hashBytes = sha256.ComputeHash(System.Text.Encoding.UTF8.GetBytes(currentRawToken));
+                currentHash = Convert.ToBase64String(hashBytes);
+            }
+
+            var otherSessions = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions
+                .ToListAsync(System.Linq.Queryable.Where(_identityContext.RefreshTokens, t => t.UserId == user.Id && t.RevokedAt == null && (currentHash == null || t.TokenHash != currentHash)));
+
+            foreach (var s in otherSessions)
+            {
+                s.RevokedAt = DateTime.UtcNow;
+            }
+
+            await _identityContext.SaveChangesAsync();
+            return Ok(new { success = true, revokedCount = otherSessions.Count });
         }
 
         [Authorize]

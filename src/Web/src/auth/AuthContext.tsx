@@ -172,6 +172,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     [performRefresh]
   );
 
+  const refreshUser = useCallback(async () => {
+    try {
+      const res = await authFetch('/api/auth/me');
+      if (res.ok) {
+        const data: UserDto = await res.json();
+        setUser(data);
+      }
+    } catch {}
+  }, [authFetch]);
+
   const value: AuthContextType = {
     user,
     accessToken,
@@ -181,6 +191,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     verifyOtp,
     logout,
     authFetch,
+    refreshUser,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

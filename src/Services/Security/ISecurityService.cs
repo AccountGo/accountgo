@@ -17,6 +17,7 @@ namespace Services.Security
         IEnumerable<SecurityRolePermission> GetPermissionsForRole(string rolename);
         IEnumerable<string> GetPermissionsForUser(string username);
         User GetUser(string username);
+        User GetUserById(int id);
         SecurityRole GetRole(string rolename);
         SecurityRole GetSecurityRole(int securityRoleId);
         SecurityPermission GetSecurityPermission(int securityPermissionId);
@@ -32,7 +33,11 @@ namespace Services.Security
         IEnumerable<User> GetAllUser();
         void AddRole(string roleName, int roleId = 0);
         void DeleteRole(int roleId);
+        void SaveRoleWithPermissions(int roleId, string name, string displayName, IEnumerable<int> permissionIds);
         void AddUser(string username, string email, string firstname, string lastname);
+        void AddUser(string username, string email, string firstname, string lastname, IEnumerable<int> roleIds);
+        void UpdateUser(User user, IEnumerable<int> roleIds);
+        void DeleteUser(int id);
         void EnsureDefaultPermissionsAndRoles();
     }
 }

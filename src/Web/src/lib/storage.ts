@@ -1,15 +1,3 @@
-import { OrgDetails, UserProfile } from '../types';
-
-export const MOCK_USER: UserProfile = {
-  id: '',
-  name: '',
-  email: '',
-  role: 'Member',
-  permissions: [],
-};
-
-export const MOCK_ORGS: OrgDetails[] = [];
-
 const STORAGE_KEY = 'accountgo:lastOrgSlug';
 
 export function getPersistedOrgSlug(): string | null {
@@ -27,4 +15,3 @@ export function setPersistedOrgSlug(slug: string): void {
     // Ignore storage errors in restricted contexts
   }
 }
-

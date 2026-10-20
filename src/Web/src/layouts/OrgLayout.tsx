@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, Outlet, Link, useNavigate } from 'react-router-dom';
 import { Building2, AlertCircle, ArrowLeft, RefreshCw } from 'lucide-react';
 import { OrgDetails, TenantContextType, WhitelabelConfig, SidebarMode, UserProfile, ModuleKey, PlanKey, SubscriptionInfo } from '../types';
-import { setPersistedOrgSlug } from '../lib/mockData';
+import { setPersistedOrgSlug } from '../lib/storage';
 import { Sidebar } from '../components/Sidebar';
 import { Header } from '../components/Header';
 import { MobileBottomNav } from '../components/MobileBottomNav';
@@ -80,6 +80,9 @@ export const OrgLayout: React.FC = () => {
               id: c.id?.toString() || c.slug,
               name: c.name,
               slug: c.slug,
+              shortName: c.shortName,
+              companyCode: c.companyCode,
+              cra: c.cra,
               role: 'Admin',
               plan: (c.plan || 'accounting') as PlanKey,
               currency: 'PHP',

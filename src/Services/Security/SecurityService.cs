@@ -254,24 +254,240 @@ namespace Services.Security
                 }
             }
 
-            // Ensure roles
-            var sysAdminRole = _securityRoleRepo.Table.FirstOrDefault(r => r.Name == "SystemAdministrators");
-            if (sysAdminRole == null)
+            // Ensure standard business roles with permissions
+            var standardRoles = new List<(string Name, string DisplayName, bool SysAdmin, string[] Perms)>
             {
-                sysAdminRole = new SecurityRole { Name = "SystemAdministrators", DisplayName = "System Administrators", SysAdmin = true };
-                _securityRoleRepo.Insert(sysAdminRole);
+                ("SystemAdministrators", "System Administrators", true, System.Array.Empty<string>()),
+                ("Accountant", "Accountant", false, new[]
+                {
+                    SystemPermissions.SalesCustomersView,
+                    SystemPermissions.SalesCustomersManage,
+                    SystemPermissions.SalesInvoicesView,
+                    SystemPermissions.SalesInvoicesCreate,
+                    SystemPermissions.SalesInvoicesPost,
+                    SystemPermissions.SalesReceiptsView,
+                    SystemPermissions.SalesReceiptsCreate,
+                    SystemPermissions.FinancialsAccountsView,
+                    SystemPermissions.FinancialsAccountsManage,
+                    SystemPermissions.FinancialsJournalView,
+                    SystemPermissions.FinancialsJournalCreate,
+                    SystemPermissions.FinancialsJournalPost,
+                    SystemPermissions.FinancialsCashBanksView,
+                    SystemPermissions.FinancialsCashBanksManage,
+                    SystemPermissions.PurchasesVendorsView,
+                    SystemPermissions.PurchasesVendorsManage,
+                    SystemPermissions.PurchasesBillsView,
+                    SystemPermissions.PurchasesBillsCreate,
+                    SystemPermissions.PurchasesBillsPost,
+                    SystemPermissions.ReportsView
+                }),
+                ("Sales Representative", "Sales Representative", false, new[]
+                {
+                    SystemPermissions.SalesCustomersView,
+                    SystemPermissions.SalesCustomersManage,
+                    SystemPermissions.SalesQuotationsView,
+                    SystemPermissions.SalesInvoicesView,
+                    SystemPermissions.SalesInvoicesCreate,
+                    SystemPermissions.SalesReceiptsCreate
+                }),
+                ("Purchasing Agent", "Purchasing Agent", false, new[]
+                {
+                    SystemPermissions.PurchasesVendorsView,
+                    SystemPermissions.PurchasesVendorsManage,
+                    SystemPermissions.PurchasesOrdersView,
+                    SystemPermissions.PurchasesBillsView,
+                    SystemPermissions.PurchasesBillsCreate
+                }),
+                ("Auditor / Viewer", "Auditor / Viewer", false, new[]
+                {
+                    SystemPermissions.SalesCustomersView,
+                    SystemPermissions.SalesInvoicesView,
+                    SystemPermissions.FinancialsAccountsView,
+                    SystemPermissions.FinancialsJournalView,
+                    SystemPermissions.FinancialsCashBanksView,
+                    SystemPermissions.PurchasesVendorsView,
+                    SystemPermissions.PurchasesBillsView,
+                    SystemPermissions.ReportsView,
+                    SystemPermissions.AuditLogsView
+                }),
+                ("GeneralUsers", "General Users", false, new[]
+                {
+                    SystemPermissions.ReportsView
+                })
+            };
+
+            var allDbPermissions = _securityPermissionRepo.Table.ToList();
+
+            foreach (var rDef in standardRoles)
+            {
+                var role = _securityRoleRepo.Table.FirstOrDefault(r => r.Name == rDef.Name);
+                if (role == null)
+                {
+                    role = new SecurityRole
+                    {
+                        Name = rDef.Name,
+                        DisplayName = rDef.DisplayName,
+                        SysAdmin = rDef.SysAdmin,
+                        System = true
+                    };
+                    _securityRoleRepo.Insert(role);
+                }
+                else
+                {
+                    bool changed = false;
+                    if (role.DisplayName != rDef.DisplayName) { role.DisplayName = rDef.DisplayName; changed = true; }
+                    if (role.SysAdmin != rDef.SysAdmin) { role.SysAdmin = rDef.SysAdmin; changed = true; }
+                    if (changed) _securityRoleRepo.Update(role);
+                }
+
+                if (rDef.Perms.Length > 0)
+                {
+                    var existingRolePerms = _securityRolePermissionRepo.Table.Where(rp => rp.SecurityRoleId == role.Id).ToList();
+                    foreach (var pName in rDef.Perms)
+                    {
+                        var permEntity = allDbPermissions.FirstOrDefault(p => p.Name == pName);
+                        if (permEntity != null && !existingRolePerms.Any(rp => rp.SecurityPermissionId == permEntity.Id))
+                        {
+                            _securityRolePermissionRepo.Insert(new SecurityRolePermission
+                            {
+                                SecurityRoleId = role.Id,
+                                SecurityPermissionId = permEntity.Id
+                            });
+                        }
+                    }
+                }
             }
-            else if (!sysAdminRole.SysAdmin)
+        }
+
+        public User GetUserById(int id)
+        {
+            return _securityRepository.GetUserById(id);
+        }
+
+        public void DeleteUser(int id)
+        {
+            _securityRepository.DeleteUser(id);
+        }
+
+        public void UpdateUser(User user, IEnumerable<int> roleIds)
+        {
+            _securityRepository.AddUser(user);
+
+            if (roleIds != null)
             {
-                sysAdminRole.SysAdmin = true;
-                _securityRoleRepo.Update(sysAdminRole);
+                var existingRoles = _securityUserRoleRepo.Table.Where(ur => ur.UserId == user.Id).ToList();
+                var desiredRoleIds = roleIds.Distinct().ToList();
+
+                foreach (var existing in existingRoles)
+                {
+                    if (!desiredRoleIds.Contains(existing.SecurityRoleId))
+                    {
+                        _securityUserRoleRepo.Delete(existing);
+                    }
+                }
+
+                foreach (var roleId in desiredRoleIds)
+                {
+                    if (!existingRoles.Any(r => r.SecurityRoleId == roleId))
+                    {
+                        _securityUserRoleRepo.Insert(new SecurityUserRole
+                        {
+                            UserId = user.Id,
+                            SecurityRoleId = roleId
+                        });
+                    }
+                }
+            }
+        }
+
+        public void SaveRoleWithPermissions(int roleId, string name, string displayName, IEnumerable<int> permissionIds)
+        {
+            SecurityRole role;
+            if (roleId > 0)
+            {
+                role = _securityRoleRepo.GetById(roleId);
+                if (role != null)
+                {
+                    role.Name = name;
+                    role.DisplayName = displayName;
+                    _securityRoleRepo.Update(role);
+                }
+            }
+            else
+            {
+                role = new SecurityRole
+                {
+                    Name = name,
+                    DisplayName = displayName,
+                    SysAdmin = false,
+                    System = false
+                };
+                _securityRoleRepo.Insert(role);
             }
 
-            var generalUsers = _securityRoleRepo.Table.FirstOrDefault(r => r.Name == "GeneralUsers");
-            if (generalUsers == null)
+            if (role != null && permissionIds != null)
             {
-                generalUsers = new SecurityRole { Name = "GeneralUsers", DisplayName = "General Users", SysAdmin = false };
-                _securityRoleRepo.Insert(generalUsers);
+                var existingPerms = _securityRolePermissionRepo.Table.Where(rp => rp.SecurityRoleId == role.Id).ToList();
+                var desiredPermIds = permissionIds.Distinct().ToList();
+
+                foreach (var existing in existingPerms)
+                {
+                    if (!desiredPermIds.Contains(existing.SecurityPermissionId))
+                    {
+                        _securityRolePermissionRepo.Delete(existing);
+                    }
+                }
+
+                foreach (var permId in desiredPermIds)
+                {
+                    if (!existingPerms.Any(p => p.SecurityPermissionId == permId))
+                    {
+                        _securityRolePermissionRepo.Insert(new SecurityRolePermission
+                        {
+                            SecurityRoleId = role.Id,
+                            SecurityPermissionId = permId
+                        });
+                    }
+                }
+            }
+        }
+
+        public void AddUser(string username, string email, string firstname, string lastname, IEnumerable<int> roleIds)
+        {
+            var user = new User()
+            {
+                UserName = username,
+                EmailAddress = email,
+                Firstname = firstname,
+                Lastname = lastname
+            };
+
+            _securityRepository.AddUser(user);
+
+            var created = _securityRepository.GetUser(username);
+            if (created != null)
+            {
+                var roleIdList = roleIds != null && roleIds.Any()
+                    ? roleIds.Distinct().ToList()
+                    : new List<int>();
+
+                if (roleIdList.Count == 0)
+                {
+                    var defaultRole = _securityRoleRepo.Table.FirstOrDefault(r => r.Name == "GeneralUsers");
+                    if (defaultRole != null)
+                    {
+                        roleIdList.Add(defaultRole.Id);
+                    }
+                }
+
+                foreach (var roleId in roleIdList)
+                {
+                    _securityUserRoleRepo.Insert(new SecurityUserRole
+                    {
+                        UserId = created.Id,
+                        SecurityRoleId = roleId
+                    });
+                }
             }
         }
 
