@@ -459,15 +459,47 @@ namespace Api.Data
         private void SetupFinancialYear()
         {
             if (_adminService.GetFinancialYears().Count >= 1) return;
-            var financialYear = new Core.Domain.Financials.FinancialYear
+
+            var years = new List<Core.Domain.Financials.FinancialYear>
             {
-                FiscalYearCode = "FY1819",
-                FiscalYearName = "FY 2018/2019",
-                StartDate = new DateTime(2018, 01, 01),
-                EndDate = new DateTime(2018, 12, 31),
-                IsActive = true
+                new()
+                {
+                    FiscalYearCode = "FY2024",
+                    FiscalYearName = "FY 2024",
+                    StartDate = new DateTime(2024, 01, 01),
+                    EndDate = new DateTime(2024, 12, 31, 23, 59, 59),
+                    IsActive = false
+                },
+                new()
+                {
+                    FiscalYearCode = "FY2025",
+                    FiscalYearName = "FY 2025",
+                    StartDate = new DateTime(2025, 01, 01),
+                    EndDate = new DateTime(2025, 12, 31, 23, 59, 59),
+                    IsActive = false
+                },
+                new()
+                {
+                    FiscalYearCode = "FY2026",
+                    FiscalYearName = "FY 2026",
+                    StartDate = new DateTime(2026, 01, 01),
+                    EndDate = new DateTime(2026, 12, 31, 23, 59, 59),
+                    IsActive = true
+                },
+                new()
+                {
+                    FiscalYearCode = "FY2027",
+                    FiscalYearName = "FY 2027",
+                    StartDate = new DateTime(2027, 01, 01),
+                    EndDate = new DateTime(2027, 12, 31, 23, 59, 59),
+                    IsActive = true
+                }
             };
-            _financialService.SaveFinancialYear(financialYear);
+
+            foreach (var fy in years)
+            {
+                _financialService.SaveFinancialYear(fy);
+            }
         }
 
         private void SetupPaymentTerms()
