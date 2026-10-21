@@ -273,13 +273,21 @@ export class AccountGoApiContainer extends DurableObject {
         const containerRes = await portObj.fetch(containerReq);
 
         // Check if .NET emitted real-time D1 mutation SQL in response header
+        // Header is base64(UTF-8 JSON array of statements). Run them with batch() rather than exec():
+        // exec() splits on newlines, which breaks values containing line breaks, and batch() is atomic.
         const syncSqlBase64 = containerRes.headers.get("x-d1-sync-sql");
         if (syncSqlBase64 && (this.env as any).DB) {
           try {
-            const sql = atob(syncSqlBase64);
-            this.ctx.waitUntil((this.env as any).DB.exec(sql));
+            const bytes = Uint8Array.from(atob(syncSqlBase64), (c) => c.charCodeAt(0));
+            const statements: string[] = JSON.parse(new TextDecoder().decode(bytes));
+            const db = (this.env as any).DB;
+            this.ctx.waitUntil(
+              db.batch(statements.map((s) => db.prepare(s))).catch((syncErr: any) => {
+                console.error("Failed executing real-time D1 mutation:", syncErr?.message ?? syncErr);
+              })
+            );
           } catch (syncErr: any) {
-            console.error("Failed executing real-time D1 mutation:", syncErr);
+            console.error("Failed decoding real-time D1 mutation:", syncErr?.message ?? syncErr);
           }
         }
 

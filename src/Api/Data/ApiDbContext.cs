@@ -26,57 +26,28 @@ namespace Api.Data
             _d1SyncContext = d1SyncContext;
         }
 
-        public override int SaveChanges()
+        // Every SaveChanges/SaveChangesAsync overload funnels into these two.
+        public override int SaveChanges(bool acceptAllChangesOnSuccess)
         {
             if (_d1SyncContext == null)
-                return base.SaveChanges();
+                return base.SaveChanges(acceptAllChangesOnSuccess);
 
-            var pendingEntries = ChangeTracker.Entries()
-                .Where(e => e.State == EntityState.Added || e.State == EntityState.Modified || e.State == EntityState.Deleted)
-                .ToList();
-
-            var result = base.SaveChanges();
-
-            foreach (var entry in pendingEntries)
-            {
-                try
-                {
-                    var sql = D1SqlGenerator.GenerateSql(entry);
-                    if (!string.IsNullOrEmpty(sql))
-                    {
-                        _d1SyncContext.AddStatement(sql);
-                    }
-                }
-                catch { }
-            }
-
+            // Capture states before saving: EF resets them to Unchanged/Detached afterwards.
+            var pending = D1SqlGenerator.Capture(ChangeTracker);
+            var result = base.SaveChanges(acceptAllChangesOnSuccess);
+            pending.FlushTo(_d1SyncContext);
             return result;
         }
 
-        public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+        public override async Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
         {
             if (_d1SyncContext == null)
-                return await base.SaveChangesAsync(cancellationToken);
+                return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
 
-            var pendingEntries = ChangeTracker.Entries()
-                .Where(e => e.State == EntityState.Added || e.State == EntityState.Modified || e.State == EntityState.Deleted)
-                .ToList();
-
-            var result = await base.SaveChangesAsync(cancellationToken);
-
-            foreach (var entry in pendingEntries)
-            {
-                try
-                {
-                    var sql = D1SqlGenerator.GenerateSql(entry);
-                    if (!string.IsNullOrEmpty(sql))
-                    {
-                        _d1SyncContext.AddStatement(sql);
-                    }
-                }
-                catch { }
-            }
-
+            // Capture states before saving: EF resets them to Unchanged/Detached afterwards.
+            var pending = D1SqlGenerator.Capture(ChangeTracker);
+            var result = await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+            pending.FlushTo(_d1SyncContext);
             return result;
         }
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)

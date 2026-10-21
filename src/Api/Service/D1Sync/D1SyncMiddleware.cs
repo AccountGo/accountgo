@@ -1,5 +1,6 @@
 using System;
 using System.Text;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 
@@ -23,8 +24,9 @@ namespace Api.Service.D1Sync
                     var statements = syncContext.GetStatements();
                     if (statements.Count > 0)
                     {
-                        var combinedSql = string.Join("\n", statements);
-                        var bytes = Encoding.UTF8.GetBytes(combinedSql);
+                        // JSON array (not newline-joined): values may contain line breaks.
+                        var json = JsonSerializer.Serialize(statements);
+                        var bytes = Encoding.UTF8.GetBytes(json);
                         context.Response.Headers["x-d1-sync-sql"] = Convert.ToBase64String(bytes);
                     }
                 }
