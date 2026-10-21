@@ -3,10 +3,12 @@
   <PropertyGroup>
     <Authors>Marvin Perez</Authors>
     <Product>AccountGo</Product>
+    <Description>Modern, Cloud-Native, Multi-Tenant Accounting &amp; ERP Platform</Description>
     <Copyright>Copyright © AccountGo</Copyright>
     <NeutralLanguage>en-US</NeutralLanguage>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
     <RepoRoot>$(MSBuildThisFileDirectory)</RepoRoot>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageLicenseUrl>https://opensource.org/licenses/MIT</PackageLicenseUrl>
     <PackageProjectUrl>https://github.com/AccountGo/accountgo</PackageProjectUrl>
     <RepositoryUrl>https://github.com/AccountGo/accountgo.git</RepositoryUrl>
