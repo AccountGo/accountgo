@@ -166,4 +166,112 @@ public class SecurityHotfixesTests
         Assert.True(result.Success);
         Assert.Null(result.DevCode);
     }
+
+    [Fact]
+    public async Task EmailOtpService_SendWelcomeOtpAsync_DoesNotReturnDevCode_InProduction()
+    {
+        // Arrange
+        var store = new Mock<IUserStore<ApplicationUser>>();
+        var userManager = new Mock<UserManager<ApplicationUser>>(store.Object, null!, null!, null!, null!, null!, null!, null!, null!);
+        var user = new ApplicationUser { Email = "newuser@accountgo.ph", UserName = "newuser@accountgo.ph" };
+        userManager.Setup(m => m.GetAuthenticationTokenAsync(user, "EmailOtp", "Default")).ReturnsAsync((string?)null);
+        userManager.Setup(m => m.SetAuthenticationTokenAsync(user, "EmailOtp", "Default", It.IsAny<string>())).ReturnsAsync(IdentityResult.Success);
+
+        var idOptions = new DbContextOptionsBuilder<ApplicationIdentityDbContext>()
+            .UseSqlite("DataSource=:memory:")
+            .Options;
+        using var idContext = new ApplicationIdentityDbContext(idOptions);
+
+        var emailSender = new DevConsoleEmailSender(new Mock<ILogger<DevConsoleEmailSender>>().Object);
+        var authService = new Mock<IAuthenticationService>();
+        var secService = new Mock<ISecurityService>();
+
+        var secret = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["SECRET_KEY"] = secret,
+            ["Email:Provider"] = "Console"
+        }).Build();
+
+        var env = new Mock<IHostEnvironment>();
+        env.Setup(e => e.EnvironmentName).Returns(Environments.Production);
+
+        var logger = new Mock<ILogger<EmailOtpService>>();
+
+        var service = new EmailOtpService(
+            userManager.Object,
+            idContext,
+            emailSender,
+            authService.Object,
+            secService.Object,
+            config,
+            env.Object,
+            logger.Object);
+
+        // Act
+        var result = await service.SendWelcomeOtpAsync(user, "New", "Acme Corp", "127.0.0.1");
+
+        // Assert
+        Assert.True(result.Success);
+        Assert.Null(result.DevCode);
+    }
+
+    [Fact]
+    public async Task EmailOtpService_ReturnsDevCode_InDevelopment_WithDevConsoleEmailSender()
+    {
+        // Arrange
+        var store = new Mock<IUserStore<ApplicationUser>>();
+        var userManager = new Mock<UserManager<ApplicationUser>>(store.Object, null!, null!, null!, null!, null!, null!, null!, null!);
+        var user = new ApplicationUser { Email = "dev@accountgo.ph", UserName = "dev@accountgo.ph" };
+        userManager.Setup(m => m.FindByEmailAsync("dev@accountgo.ph")).ReturnsAsync(user);
+        userManager.Setup(m => m.GetAuthenticationTokenAsync(user, "EmailOtp", "Default")).ReturnsAsync((string?)null);
+        userManager.Setup(m => m.SetAuthenticationTokenAsync(user, "EmailOtp", "Default", It.IsAny<string>())).ReturnsAsync(IdentityResult.Success);
+
+        var idOptions = new DbContextOptionsBuilder<ApplicationIdentityDbContext>()
+            .UseSqlite("DataSource=:memory:")
+            .Options;
+        using var idContext = new ApplicationIdentityDbContext(idOptions);
+
+        var emailSender = new DevConsoleEmailSender(new Mock<ILogger<DevConsoleEmailSender>>().Object);
+        var authService = new Mock<IAuthenticationService>();
+        var secService = new Mock<ISecurityService>();
+
+        var secret = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["SECRET_KEY"] = secret,
+            ["Email:Provider"] = "Console"
+        }).Build();
+
+        var env = new Mock<IHostEnvironment>();
+        env.Setup(e => e.EnvironmentName).Returns(Environments.Development);
+
+        var logger = new Mock<ILogger<EmailOtpService>>();
+
+        var service = new EmailOtpService(
+            userManager.Object,
+            idContext,
+            emailSender,
+            authService.Object,
+            secService.Object,
+            config,
+            env.Object,
+            logger.Object);
+
+        // Act: SendOtpAsync
+        var otpResult = await service.SendOtpAsync("dev@accountgo.ph", "127.0.0.1");
+
+        // Assert: SendOtpAsync in Dev provides 6-digit devCode
+        Assert.True(otpResult.Success);
+        Assert.NotNull(otpResult.DevCode);
+        Assert.Equal(6, otpResult.DevCode!.Length);
+
+        // Act: SendWelcomeOtpAsync
+        var welcomeResult = await service.SendWelcomeOtpAsync(user, "Dev", "Dev Workspace", "127.0.0.1");
+
+        // Assert: SendWelcomeOtpAsync in Dev provides 6-digit devCode
+        Assert.True(welcomeResult.Success);
+        Assert.NotNull(welcomeResult.DevCode);
+        Assert.Equal(6, welcomeResult.DevCode!.Length);
+    }
 }
