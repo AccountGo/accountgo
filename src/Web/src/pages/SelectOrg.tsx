@@ -11,6 +11,7 @@ import {
   Layers,
   LogOut,
   Loader2,
+  AlertCircle,
 } from 'lucide-react';
 import { setPersistedOrgSlug } from '../lib/storage';
 import { OrgDetails } from '../types';
@@ -28,6 +29,7 @@ export const SelectOrg: React.FC = () => {
   const [orgsList, setOrgsList] = useState<OrgDetails[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
 
   // New org form state
   const [newOrgName, setNewOrgName] = useState('');
@@ -121,24 +123,75 @@ export const SelectOrg: React.FC = () => {
 
   const handleCreateOrg = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newOrgName || !newOrgSlug) return;
-    const cleanSlug = newOrgSlug.toLowerCase().replace(/[^a-z0-9-]/g, '-');
+    if (!newOrgName.trim()) {
+      setCreateError('Workspace name is required.');
+      return;
+    }
+    const cleanSlug = (newOrgSlug || newOrgName)
+      .toLowerCase()
+      .replace(/[^a-z0-9-]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+
+    if (!cleanSlug) {
+      setCreateError('Please enter a valid URL slug.');
+      return;
+    }
+
     setCreating(true);
+    setCreateError(null);
 
     try {
-      await authFetch('/api/Administration/company', {
+      const res = await authFetch('/api/Administration/company', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: newOrgName.trim(),
           slug: cleanSlug,
           plan: 'accounting',
+          currency: newOrgCurrency,
         }),
       });
-    } catch {} finally {
+
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        const errorMsg = data?.detail || data?.title || data?.message || 'Failed to create workspace.';
+        setCreateError(errorMsg);
+        setCreating(false);
+        return;
+      }
+
+      const createdCompany = data;
+      const createdOrg: OrgDetails = {
+        id: createdCompany.id?.toString() || cleanSlug,
+        name: createdCompany.name,
+        slug: createdCompany.slug || cleanSlug,
+        role: 'Admin',
+        plan: createdCompany.plan || 'accounting',
+        currency: newOrgCurrency,
+        fiscalYearEnd: 'Dec 31',
+        avatarBg: 'bg-gradient-to-br from-emerald-500 to-teal-600',
+        whitelabel: {
+          themeId: 'accountgo',
+          brandName: createdCompany.name,
+        },
+        subscription: {
+          planId: createdCompany.plan || 'accounting',
+          planName: 'Accounting',
+          status: 'active',
+          activeModules: createdCompany.activeModules || ['sales', 'financials', 'purchases', 'reports'],
+          validUntil: '2028-12-31',
+        },
+      };
+
+      setOrgsList((prev) => [createdOrg, ...prev]);
+      setPersistedOrgSlug(createdOrg.slug);
+      setShowCreateModal(false);
+      navigate(`/org/${createdOrg.slug}/dashboard`);
+    } catch (err: any) {
+      setCreateError(err.message || 'An unexpected error occurred.');
+    } finally {
       setCreating(false);
-      setPersistedOrgSlug(cleanSlug);
-      navigate(`/org/${cleanSlug}/dashboard`);
     }
   };
 
@@ -327,6 +380,13 @@ export const SelectOrg: React.FC = () => {
             </div>
 
             <form onSubmit={handleCreateOrg} className="space-y-4">
+              {createError && (
+                <div className="flex items-start gap-2 p-3 rounded-xl bg-rose-500/10 text-rose-400 text-xs font-medium ring-1 ring-rose-500/20">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                  <span className="flex-1">{createError}</span>
+                </div>
+              )}
+
               <div>
                 <label htmlFor="new-org-name" className="block text-xs font-semibold text-[var(--text-secondary)] mb-1.5">
                   Organization Name
@@ -338,12 +398,15 @@ export const SelectOrg: React.FC = () => {
                   placeholder="e.g., Global Freight Inc."
                   value={newOrgName}
                   onChange={(e) => {
-                    setNewOrgName(e.target.value);
-                    if (!newOrgSlug) {
-                      setNewOrgSlug(
-                        e.target.value.toLowerCase().replace(/[^a-z0-9]/g, '-')
-                      );
-                    }
+                    const val = e.target.value;
+                    setNewOrgName(val);
+                    setCreateError(null);
+                    setNewOrgSlug(
+                      val
+                        .toLowerCase()
+                        .replace(/[^a-z0-9]+/g, '-')
+                        .replace(/^-+|-+$/g, '')
+                    );
                   }}
                   className="w-full h-11 px-3.5 rounded-xl bg-[var(--bg-subtle)] shadow-inner text-sm text-[var(--text-main)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--brand-ring)]"
                 />

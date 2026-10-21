@@ -127,7 +127,15 @@ namespace Api.Service
   <p style=""color: #64748b; font-size: 13px; line-height: 1.4;"">This code will expire in <strong>5 minutes</strong>. If you did not request this login code, you can safely ignore this email.</p>
 </div>";
 
-            await _emailSender.SendAsync(user.Email ?? normalizedEmail, emailSubject, emailBody);
+            try
+            {
+                await _emailSender.SendAsync(user.Email ?? normalizedEmail, emailSubject, emailBody);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to deliver OTP email to {Email}", normalizedEmail);
+                return (false, string.Empty, 0, "Failed to deliver verification email. Please check your email address or try again.", null);
+            }
 
             var isConsole = string.Equals(_configuration["Email:Provider"], "Console", StringComparison.OrdinalIgnoreCase) ||
                             string.Equals(_configuration.GetValue<string>("ASPNETCORE_ENVIRONMENT"), "Development", StringComparison.OrdinalIgnoreCase);
@@ -135,6 +143,67 @@ namespace Api.Service
             var devCode = isConsole ? code : null;
 
             return (true, "If an account exists, a code has been sent.", OtpExpirySeconds, null, devCode);
+        }
+
+        public async Task<(bool Success, string Message, int ExpiresInSeconds, string? Error, string? DevCode)> SendWelcomeOtpAsync(
+            ApplicationUser user, string firstName, string? organizationName, string? ipAddress)
+        {
+            var normalizedEmail = user.Email ?? user.UserName ?? string.Empty;
+
+            // Generate secure 6-digit numeric OTP code
+            var code = RandomNumberGenerator.GetInt32(100000, 1000000).ToString("D6");
+            var codeHash = ComputeHmac(code);
+
+            var payload = new OtpPayload
+            {
+                CodeHash = codeHash,
+                ExpiresAt = DateTime.UtcNow.AddSeconds(OtpExpirySeconds),
+                FailedAttempts = 0,
+                LastSentAt = DateTime.UtcNow
+            };
+
+            var payloadJson = JsonSerializer.Serialize(payload);
+            await _userManager.SetAuthenticationTokenAsync(user, TokenProvider, TokenPurpose, payloadJson);
+
+            // Send Welcome Email Dispatch
+            var emailSubject = $"Welcome to AccountGo! Your verification code is {code}";
+            var orgText = !string.IsNullOrWhiteSpace(organizationName)
+                ? $"<p style=\"color: #334155; font-size: 15px; line-height: 1.5;\">Your workspace <strong>{System.Net.WebUtility.HtmlEncode(organizationName)}</strong> has been created and is ready for you.</p>"
+                : string.Empty;
+
+            var emailBody = $@"
+<div style=""font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; padding: 28px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;"">
+  <div style=""text-align: center; margin-bottom: 24px;"">
+    <h2 style=""color: #0f172a; margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.5px;"">AccountGo</h2>
+    <p style=""color: #64748b; font-size: 14px; margin-top: 4px;"">Welcome to your financial accounting workspace</p>
+  </div>
+  <p style=""color: #334155; font-size: 15px; line-height: 1.5;"">Hello {System.Net.WebUtility.HtmlEncode(firstName)},</p>
+  <p style=""color: #334155; font-size: 15px; line-height: 1.5;"">Thank you for joining AccountGo. Please enter this 6-digit verification code to confirm your email and activate your account:</p>
+  {orgText}
+  <div style=""text-align: center; margin: 32px 0;"">
+    <div style=""display: inline-block; font-size: 34px; font-weight: 800; letter-spacing: 8px; color: #1e3a8a; background-color: #f1f5f9; padding: 16px 28px; border-radius: 8px; border: 1px dashed #cbd5e1;"">
+      {code}
+    </div>
+  </div>
+  <p style=""color: #64748b; font-size: 13px; line-height: 1.4;"">This single-use code will expire in <strong>5 minutes</strong>. If you did not create an account on AccountGo, please disregard this email.</p>
+</div>";
+
+            try
+            {
+                await _emailSender.SendAsync(normalizedEmail, emailSubject, emailBody);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to deliver welcome OTP email to {Email}", normalizedEmail);
+                return (false, string.Empty, 0, "Failed to deliver verification email. Please check your email address or try again.", null);
+            }
+
+            var isConsole = string.Equals(_configuration["Email:Provider"], "Console", StringComparison.OrdinalIgnoreCase) ||
+                            string.Equals(_configuration.GetValue<string>("ASPNETCORE_ENVIRONMENT"), "Development", StringComparison.OrdinalIgnoreCase);
+
+            var devCode = isConsole ? code : null;
+
+            return (true, "Welcome! A 6-digit verification code has been sent to your email.", OtpExpirySeconds, null, devCode);
         }
 
         public async Task<(bool Success, AuthResponse? Response, string? RawRefreshToken, string? Error)> VerifyOtpAsync(
@@ -209,6 +278,12 @@ namespace Api.Service
 
             // Successful match - Invalidate single-use code immediately
             await _userManager.RemoveAuthenticationTokenAsync(user, TokenProvider, TokenPurpose);
+
+            if (!user.EmailConfirmed)
+            {
+                user.EmailConfirmed = true;
+                await _userManager.UpdateAsync(user);
+            }
 
             // Mint JWT & Session
             return await CreateSessionAndAuthResponseAsync(user, ipAddress, userAgent);

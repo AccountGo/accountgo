@@ -59,4 +59,22 @@ namespace Dto.Security
         [Required] string LastName,
         string? Password
     );
+
+    public record SignUpRequest(
+        [Required, EmailAddress] string Email,
+        [Required, MinLength(1, ErrorMessage = "First name is required.")] string FirstName,
+        [Required, MinLength(1, ErrorMessage = "Last name is required.")] string LastName,
+        string? OrganizationName = null,
+        string? OrganizationSlug = null,
+        string? Currency = null
+    );
+
+    public record SignUpResponse(
+        bool Success,
+        string Message,
+        string Email,
+        string? OrgSlug,
+        int ExpiresInSeconds,
+        string? DevCode
+    );
 }

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
-import { UserDto, AuthResponse, OtpSendResponse, AuthContextType } from '../types/auth';
+import { UserDto, AuthResponse, OtpSendResponse, SignUpPayload, SignUpResponse, AuthContextType } from '../types/auth';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -91,6 +91,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     return {
       message: data.message || 'If an account exists, a code has been sent.',
+      expiresInSeconds: data.expiresInSeconds || 300,
+      devCode: data.devCode,
+    };
+  }, []);
+
+  // Register a new user & request activation code
+  const signUp = useCallback(async (payload: SignUpPayload): Promise<SignUpResponse> => {
+    const res = await fetch('/api/auth/signup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: payload.email.trim(),
+        firstName: payload.firstName.trim(),
+        lastName: payload.lastName.trim(),
+        organizationName: payload.organizationName?.trim() || undefined,
+        organizationSlug: payload.organizationSlug?.trim() || undefined,
+        currency: payload.currency || 'PHP',
+      }),
+    });
+
+    const data = await res.json().catch(() => null);
+
+    if (!res.ok) {
+      if (res.status === 429) {
+        throw new Error('Too many requests. Please wait a few minutes before trying again.');
+      }
+      const errorMsg = data?.detail || data?.title || 'Unable to complete registration. Please try again.';
+      throw new Error(errorMsg);
+    }
+
+    return {
+      success: true,
+      message: data.message || 'Verification code sent to your email.',
+      email: data.email || payload.email,
+      orgSlug: data.orgSlug,
       expiresInSeconds: data.expiresInSeconds || 300,
       devCode: data.devCode,
     };
@@ -188,6 +223,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     isAuthenticated: !!user && !!accessToken,
     isLoading,
     sendOtp,
+    signUp,
     verifyOtp,
     logout,
     authFetch,
