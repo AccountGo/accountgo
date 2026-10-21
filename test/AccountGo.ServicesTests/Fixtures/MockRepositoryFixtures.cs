@@ -3,7 +3,7 @@ using Core.Domain;
 using Core.Domain.Financials;
 using Moq;
 
-namespace GoodBooks.ServicesTests.Fixtures;
+namespace AccountGo.ServicesTests.Fixtures;
 
 /// <summary>
 /// Mock fixtures for common repository instances used in tests.

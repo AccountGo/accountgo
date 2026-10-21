@@ -1,7 +1,7 @@
 global using Dto;
 using Xunit;
 
-namespace GoodBooks.ServicesTests.Dto;
+namespace AccountGo.ServicesTests.Dto;
 
 /// <summary>
 /// Unit tests for the BaseDto class.

@@ -3,7 +3,7 @@ using Dto.Administration;
 using System.ComponentModel.DataAnnotations;
 using Xunit;
 
-namespace GoodBooks.ServicesTests.Dto.Administration;
+namespace AccountGo.ServicesTests.Dto.Administration;
 
 /// <summary>
 /// Unit tests for the Company DTO class.

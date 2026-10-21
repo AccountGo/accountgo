@@ -1,6 +1,6 @@
-# GoodBooks.ServicesTests
+# AccountGo.ServicesTests
 
-Unit tests for GoodBooks backend services using **xUnit** framework and **Moq** for mocking.
+Unit tests for AccountGo backend services using **xUnit** framework and **Moq** for mocking.
 
 **Current Test Coverage:**
 - BaseServiceTests: 8 tests (repository operations)
@@ -12,28 +12,28 @@ Unit tests for GoodBooks backend services using **xUnit** framework and **Moq** 
 
 ### Run All Tests
 ```bash
-dotnet test test/GoodBooks.ServicesTests/
+dotnet test test/AccountGo.ServicesTests/
 ```
 
 ### Run Tests with Watch Mode (auto-run on file changes)
 ```bash
-cd test/GoodBooks.ServicesTests && dotnet watch test
+cd test/AccountGo.ServicesTests && dotnet watch test
 ```
 
 ### Run Specific Test Class
 ```bash
-dotnet test test/GoodBooks.ServicesTests/ --filter "ClassName=BaseServiceTests"
+dotnet test test/AccountGo.ServicesTests/ --filter "ClassName=BaseServiceTests"
 ```
 
 ### Run with Verbose Output
 ```bash
-dotnet test test/GoodBooks.ServicesTests/ --verbosity normal
+dotnet test test/AccountGo.ServicesTests/ --verbosity normal
 ```
 
 ## Project Structure
 
 ```
-GoodBooks.ServicesTests/
+AccountGo.ServicesTests/
 ├── BaseServiceTests.cs              # 8 tests for repository operations
 ├── Dto/
 │   ├── BaseDtoTests.cs             # 7 tests for BaseDto
@@ -41,7 +41,7 @@ GoodBooks.ServicesTests/
 │       └── CompanyDtoTests.cs      # 10 tests for Company DTO
 ├── Fixtures/
 │   └── MockRepositoryFixtures.cs   # Reusable mock factories
-└── GoodBooks.ServicesTests.csproj
+└── AccountGo.ServicesTests.csproj
 ```
 
 ## Test Patterns
@@ -69,9 +69,9 @@ Create test files following the same pattern as existing tests. Use `MockReposit
 
 ```csharp
 using Xunit;
-using GoodBooks.ServicesTests.Fixtures;
+using AccountGo.ServicesTests.Fixtures;
 
-namespace GoodBooks.ServicesTests.Services;
+namespace AccountGo.ServicesTests.Services;
 
 public class NewServiceTests
 {
@@ -118,7 +118,7 @@ When adding new tests:
 
 ### Tests Not Discovered
 ```bash
-dotnet test test/GoodBooks.ServicesTests/ --verbosity diagnostic
+dotnet test test/AccountGo.ServicesTests/ --verbosity diagnostic
 ```
 
 ### Mock Issues

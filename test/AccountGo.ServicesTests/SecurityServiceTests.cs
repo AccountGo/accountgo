@@ -6,7 +6,7 @@ using Moq;
 using Services.Security;
 using Xunit;
 
-namespace GoodBooks.ServicesTests;
+namespace AccountGo.ServicesTests;
 
 public class SecurityServiceTests
 {

@@ -1,7 +1,7 @@
 using Dto.Financial;
 using Xunit;
 
-namespace GoodBooks.BackendTests.Financial;
+namespace AccountGo.BackendTests.Financial;
 
 public class JournalEntryTests
 {

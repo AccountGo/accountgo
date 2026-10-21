@@ -23,7 +23,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "test", "test", "{0EAC5155-A
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Module.Tests", "test\Module.Tests\Module.Tests.csproj", "{54631590-2A41-45F4-B057-92C840ED08C1}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "GoodBooks.BackendTests", "test\GoodBooks.BackendTests\GoodBooks.BackendTests.csproj", "{C59F300E-4BAC-4329-9A41-8F1D75A7E197}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "AccountGo.BackendTests", "test\AccountGo.BackendTests\AccountGo.BackendTests.csproj", "{C59F300E-4BAC-4329-9A41-8F1D75A7E197}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Aspire", "Aspire", "{64880D93-BAB4-FF83-898C-B934B68C31A9}"
 EndProject
@@ -33,7 +33,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "src.AppHost", "src\src.AppH
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MigrationService", "src\MigrationService\MigrationService.csproj", "{DF084D96-707B-47C2-9493-85FA84631ACE}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GoodBooks.ServicesTests", "test\GoodBooks.ServicesTests\GoodBooks.ServicesTests.csproj", "{1764E3C7-CAAF-4FE9-9104-CF26D8121FC9}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AccountGo.ServicesTests", "test\AccountGo.ServicesTests\AccountGo.ServicesTests.csproj", "{1764E3C7-CAAF-4FE9-9104-CF26D8121FC9}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

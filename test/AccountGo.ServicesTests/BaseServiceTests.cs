@@ -4,7 +4,7 @@ using Core.Domain.Financials;
 using Moq;
 using Services;
 
-namespace GoodBooks.ServicesTests;
+namespace AccountGo.ServicesTests;
 
 /// <summary>
 /// Unit tests for the BaseService class.

@@ -4,7 +4,7 @@ using System.Linq;
 using Dto.Donors;
 using Xunit;
 
-namespace GoodBooks.BackendTests.Donors
+namespace AccountGo.BackendTests.Donors
 {
     public class DonorTests
     {

@@ -12,7 +12,7 @@ using Moq;
 using Services.Donations;
 using DonationDto = Dto.Donations.DonationInvoice;
 
-namespace GoodBooks.ServicesTests
+namespace AccountGo.ServicesTests
 {
     public class DonationsServiceTests
     {
