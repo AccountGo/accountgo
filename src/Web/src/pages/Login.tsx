@@ -37,7 +37,7 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
   const [step, setStep] = useState<1 | 2>(1);
 
   // Form fields
-  const [email, setEmail] = useState<string>('admin@accountgo.ph');
+  const [email, setEmail] = useState<string>(() => (import.meta.env.DEV ? 'admin@accountgo.ph' : ''));
   const [firstName, setFirstName] = useState<string>('');
   const [lastName, setLastName] = useState<string>('');
   const [orgName, setOrgName] = useState<string>('');
@@ -380,16 +380,18 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
                 </div>
 
                 {/* Dev Quick Test Credential Chip */}
-                <div className="flex items-center justify-between text-xs text-[var(--text-muted)] pt-1">
-                  <span>Default Admin:</span>
-                  <button
-                    type="button"
-                    onClick={() => setEmail('admin@accountgo.ph')}
-                    className="font-mono text-[11px] text-[var(--brand-primary)] hover:underline cursor-pointer"
-                  >
-                    admin@accountgo.ph
-                  </button>
-                </div>
+                {import.meta.env.DEV && (
+                  <div className="flex items-center justify-between text-xs text-[var(--text-muted)] pt-1">
+                    <span>Default Admin:</span>
+                    <button
+                      type="button"
+                      onClick={() => setEmail('admin@accountgo.ph')}
+                      className="font-mono text-[11px] text-[var(--brand-primary)] hover:underline cursor-pointer"
+                    >
+                      admin@accountgo.ph
+                    </button>
+                  </div>
+                )}
 
                 {/* Submit Button */}
                 <button

@@ -224,6 +224,8 @@ builder.Services.AddRateLimiter(options =>
 var app = builder.Build();
 
 app.UseForwardedHeaders();
+app.UseExceptionHandler();
+app.UseStatusCodePages();
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())

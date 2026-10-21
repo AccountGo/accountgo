@@ -11,6 +11,7 @@ using Dto.Security;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Services.Security;
 
@@ -30,6 +31,7 @@ namespace Api.Service
         private readonly IAuthenticationService _authService;
         private readonly ISecurityService _securityService;
         private readonly IConfiguration _configuration;
+        private readonly IHostEnvironment _environment;
         private readonly ILogger<EmailOtpService> _logger;
         private readonly byte[] _hmacKey;
 
@@ -40,6 +42,7 @@ namespace Api.Service
             IAuthenticationService authService,
             ISecurityService securityService,
             IConfiguration configuration,
+            IHostEnvironment environment,
             ILogger<EmailOtpService> logger)
         {
             _userManager = userManager;
@@ -48,6 +51,7 @@ namespace Api.Service
             _authService = authService;
             _securityService = securityService;
             _configuration = configuration;
+            _environment = environment;
             _logger = logger;
 
             var secret = _configuration["SECRET_KEY"] ?? _configuration["SECRET:key"] ?? _configuration["SECRET__key"] ?? Environment.GetEnvironmentVariable("SECRET_KEY");
@@ -137,10 +141,8 @@ namespace Api.Service
                 return (false, string.Empty, 0, "Failed to deliver verification email. Please check your email address or try again.", null);
             }
 
-            var isConsole = string.Equals(_configuration["Email:Provider"], "Console", StringComparison.OrdinalIgnoreCase) ||
-                            string.Equals(_configuration.GetValue<string>("ASPNETCORE_ENVIRONMENT"), "Development", StringComparison.OrdinalIgnoreCase);
-
-            var devCode = isConsole ? code : null;
+            var isConsoleDev = _emailSender is DevConsoleEmailSender && _environment.IsDevelopment();
+            var devCode = isConsoleDev ? code : null;
 
             return (true, "If an account exists, a code has been sent.", OtpExpirySeconds, null, devCode);
         }
@@ -198,10 +200,8 @@ namespace Api.Service
                 return (false, string.Empty, 0, "Failed to deliver verification email. Please check your email address or try again.", null);
             }
 
-            var isConsole = string.Equals(_configuration["Email:Provider"], "Console", StringComparison.OrdinalIgnoreCase) ||
-                            string.Equals(_configuration.GetValue<string>("ASPNETCORE_ENVIRONMENT"), "Development", StringComparison.OrdinalIgnoreCase);
-
-            var devCode = isConsole ? code : null;
+            var isConsoleDev = _emailSender is DevConsoleEmailSender && _environment.IsDevelopment();
+            var devCode = isConsoleDev ? code : null;
 
             return (true, "Welcome! A 6-digit verification code has been sent to your email.", OtpExpirySeconds, null, devCode);
         }
