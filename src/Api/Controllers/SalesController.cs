@@ -411,7 +411,7 @@ namespace Api.Controllers
                         MeasurementDescription = line.Measurement?.Description ?? "EA"
                     };
 
-                    decimal lineAmount = (line.Quantity * line.Amount) - ((line.Discount / 100m) * (line.Quantity * line.Amount));
+                    decimal lineAmount = Math.Round((line.Quantity * line.Amount) - ((line.Discount / 100m) * (line.Quantity * line.Amount)), 2, MidpointRounding.AwayFromZero);
                     lineDto.LineTotal = lineAmount;
 
                     if (_taxService != null && line.ItemId > 0 && salesInvoice.Customer?.Party != null)
@@ -419,7 +419,7 @@ namespace Api.Controllers
                         try
                         {
                             var taxes = _taxService.GetIntersectionTaxes(line.ItemId, salesInvoice.CustomerId, salesInvoice.Customer.Party.PartyType);
-                            var taxAmount = _taxService.GetSalesLineTaxAmount(line.Quantity, line.Amount, line.Discount, taxes);
+                            var taxAmount = Math.Round(_taxService.GetSalesLineTaxAmount(line.Quantity, line.Amount, line.Discount, taxes), 2, MidpointRounding.AwayFromZero);
                             lineDto.TaxAmount = taxAmount;
                             totalTax += taxAmount;
                         }
@@ -429,14 +429,14 @@ namespace Api.Controllers
                     salesInvoiceDto.SalesInvoiceLines.Add(lineDto);
                 }
 
-                salesInvoiceDto.TotalTax = totalTax;
-                decimal grandTotal = salesInvoiceDto.Amount + totalTax + salesInvoice.ShippingHandlingCharge;
+                salesInvoiceDto.TotalTax = Math.Round(totalTax, 2, MidpointRounding.AwayFromZero);
+                decimal grandTotal = Math.Round(salesInvoiceDto.Amount + totalTax + salesInvoice.ShippingHandlingCharge, 2, MidpointRounding.AwayFromZero);
                 salesInvoiceDto.TotalAmountAfterTax = grandTotal;
 
-                decimal allocated = salesInvoice.CustomerAllocations != null ? salesInvoice.CustomerAllocations.Sum(a => a.Amount) : 0;
+                decimal allocated = salesInvoice.CustomerAllocations != null ? Math.Round(salesInvoice.CustomerAllocations.Sum(a => a.Amount), 2, MidpointRounding.AwayFromZero) : 0;
                 salesInvoiceDto.TotalAllocatedAmount = allocated;
                 salesInvoiceDto.PaidAmount = allocated;
-                salesInvoiceDto.BalanceDue = Math.Max(0, grandTotal - allocated);
+                salesInvoiceDto.BalanceDue = Math.Round(Math.Max(0, grandTotal - allocated), 2, MidpointRounding.AwayFromZero);
 
                 // Compute calculated status following lifecycle rules:
                 if (salesInvoice.Status == Core.Domain.SalesInvoiceStatus.Void)
@@ -653,7 +653,7 @@ namespace Api.Controllers
                         MeasurementDescription = line.Measurement?.Description ?? "EA"
                     };
 
-                    decimal lineAmount = (line.Quantity * line.Amount) - ((line.Discount / 100m) * (line.Quantity * line.Amount));
+                    decimal lineAmount = Math.Round((line.Quantity * line.Amount) - ((line.Discount / 100m) * (line.Quantity * line.Amount)), 2, MidpointRounding.AwayFromZero);
                     lineDto.LineTotal = lineAmount;
 
                     if (_taxService != null && line.ItemId > 0 && salesInvoice.Customer?.Party != null)
@@ -661,7 +661,7 @@ namespace Api.Controllers
                         try
                         {
                             var taxes = _taxService.GetIntersectionTaxes(line.ItemId, salesInvoice.CustomerId, salesInvoice.Customer.Party.PartyType);
-                            var taxAmount = _taxService.GetSalesLineTaxAmount(line.Quantity, line.Amount, line.Discount, taxes);
+                            var taxAmount = Math.Round(_taxService.GetSalesLineTaxAmount(line.Quantity, line.Amount, line.Discount, taxes), 2, MidpointRounding.AwayFromZero);
                             lineDto.TaxAmount = taxAmount;
                             totalTax += taxAmount;
                         }
@@ -671,10 +671,10 @@ namespace Api.Controllers
                     salesInvoiceDto.SalesInvoiceLines!.Add(lineDto);
                 }
 
-                salesInvoiceDto.TotalTax = totalTax;
-                decimal grandTotal = salesInvoiceDto.Amount + totalTax + salesInvoice.ShippingHandlingCharge;
+                salesInvoiceDto.TotalTax = Math.Round(totalTax, 2, MidpointRounding.AwayFromZero);
+                decimal grandTotal = Math.Round(salesInvoiceDto.Amount + totalTax + salesInvoice.ShippingHandlingCharge, 2, MidpointRounding.AwayFromZero);
                 salesInvoiceDto.TotalAmountAfterTax = grandTotal;
-                salesInvoiceDto.BalanceDue = Math.Max(0, grandTotal - allocatedAmount);
+                salesInvoiceDto.BalanceDue = Math.Round(Math.Max(0, grandTotal - allocatedAmount), 2, MidpointRounding.AwayFromZero);
 
                 // Compute calculated status following lifecycle rules:
                 if (salesInvoice.Status == Core.Domain.SalesInvoiceStatus.Void)
@@ -1328,10 +1328,23 @@ namespace Api.Controllers
                 };
                 invoice.CustomerAllocations.Add(allocation);
 
-                // Update invoice status based on total allocations
-                decimal totalAllocated = invoice.CustomerAllocations != null ? invoice.CustomerAllocations.Sum(a => a.Amount) : 0;
-                decimal totalAmount = invoice.ComputeTotalAmount();
-                if (totalAllocated >= totalAmount - 0.005m || invoice.IsFullPaid())
+                // Update invoice status based on total allocations including taxes and shipping
+                decimal totalAllocated = invoice.CustomerAllocations != null ? Math.Round(invoice.CustomerAllocations.Sum(a => a.Amount), 2, MidpointRounding.AwayFromZero) : 0;
+                decimal invoiceTax = 0;
+                if (_taxService != null && invoice.Customer?.Party != null)
+                {
+                    try
+                    {
+                        foreach (var line in invoice.SalesInvoiceLines)
+                        {
+                            var taxes = _taxService.GetIntersectionTaxes(line.ItemId, invoice.CustomerId, invoice.Customer.Party.PartyType);
+                            invoiceTax += _taxService.GetSalesLineTaxAmount(line.Quantity, line.Amount, line.Discount, taxes);
+                        }
+                    }
+                    catch { }
+                }
+                decimal grandTotal = Math.Round(invoice.ComputeTotalAmount() + invoiceTax + invoice.ShippingHandlingCharge, 2, MidpointRounding.AwayFromZero);
+                if (totalAllocated >= grandTotal - 0.005m || invoice.IsFullPaid())
                 {
                     invoice.Status = Core.Domain.SalesInvoiceStatus.Closed;
                 }

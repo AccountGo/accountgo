@@ -266,20 +266,23 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
     lines.forEach((l) => {
       const qty = Number(l.quantity) || 0;
       const rate = Number(l.amount) || 0;
-      const gross = qty * rate;
+      const gross = Math.round(qty * rate * 100) / 100;
       const discPercent = Number(l.discount) || 0;
-      const discAmount = (gross * discPercent) / 100;
-      const net = Math.max(0, gross - discAmount);
+      const discAmount = Math.round(((gross * discPercent) / 100) * 100) / 100;
+      const net = Math.max(0, Math.round((gross - discAmount) * 100) / 100);
 
       const taxPercent = Number(l.taxRate) || 0;
-      const taxAmount = (net * taxPercent) / 100;
+      const taxAmount = Math.round(((net * taxPercent) / 100) * 100) / 100;
 
       subtotal += net;
       totalDiscount += discAmount;
       totalTax += taxAmount;
     });
 
-    const grandTotal = subtotal + totalTax;
+    subtotal = Math.round(subtotal * 100) / 100;
+    totalDiscount = Math.round(totalDiscount * 100) / 100;
+    totalTax = Math.round(totalTax * 100) / 100;
+    const grandTotal = Math.round((subtotal + totalTax) * 100) / 100;
 
     return {
       subtotal,
