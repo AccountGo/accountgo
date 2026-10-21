@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Threading.RateLimiting;
@@ -17,6 +18,29 @@ using Microsoft.EntityFrameworkCore.Storage;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Load .env configuration from ContentRootPath or working directory
+var envFilePath = Path.Combine(builder.Environment.ContentRootPath, ".env");
+if (!File.Exists(envFilePath))
+{
+    envFilePath = Path.Combine(Directory.GetCurrentDirectory(), ".env");
+}
+if (File.Exists(envFilePath))
+{
+    foreach (var line in File.ReadAllLines(envFilePath))
+    {
+        var trimmed = line.Trim();
+        if (string.IsNullOrEmpty(trimmed) || trimmed.StartsWith("#")) continue;
+        var parts = trimmed.Split('=', 2);
+        if (parts.Length == 2)
+        {
+            var key = parts[0].Trim();
+            var val = parts[1].Trim().Trim('"', '\'');
+            Environment.SetEnvironmentVariable(key, val);
+            builder.Configuration[key] = val;
+        }
+    }
+}
+
 // Add database context and provide builder environment information to the extended method for debugging purpose
 builder.Services.ConfigureSqlContext(builder.Configuration, builder.Environment);
 
@@ -31,7 +55,26 @@ builder.Services.AddAutoMapper(typeof(Program));
 
 // authentication & authorization
 builder.Services.AddScoped<IAuthenticationService, AuthenticationService>();
-builder.Services.AddScoped<IEmailSender, DevConsoleEmailSender>();
+
+// Configure Email Sender (Resend vs Dev Console)
+var resendApiKey = builder.Configuration["RESEND_API_KEY"] ?? Environment.GetEnvironmentVariable("RESEND_API_KEY");
+var emailProvider = builder.Configuration["Email:Provider"] ?? builder.Configuration["EMAIL__PROVIDER"];
+
+if (!string.IsNullOrWhiteSpace(resendApiKey) || string.Equals(emailProvider, "Resend", StringComparison.OrdinalIgnoreCase))
+{
+    builder.Services.AddHttpClient<IEmailSender, ResendEmailSender>(client =>
+    {
+        client.BaseAddress = new Uri("https://api.resend.com/");
+        client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+    });
+    Console.WriteLine("✓ ResendEmailSender registered as IEmailSender.");
+}
+else
+{
+    builder.Services.AddScoped<IEmailSender, DevConsoleEmailSender>();
+    Console.WriteLine("ℹ DevConsoleEmailSender registered (configure RESEND_API_KEY in .env to enable Resend).");
+}
+
 builder.Services.AddScoped<IEmailOtpService, EmailOtpService>();
 builder.Services.AddAuthentication();
 builder.Services.ConfigureIdentity();
@@ -337,48 +380,57 @@ using (var scope = app.Services.CreateScope())
             securityService.EnsureDefaultPermissionsAndRoles();
             Console.WriteLine("✓ Security permissions and default roles verified.");
 
-            // Ensure admin user exists in Identity
+            // Ensure admin users exist in Identity and Domain
             var userManager = services.GetRequiredService<Microsoft.AspNetCore.Identity.UserManager<ApplicationUser>>();
-            var adminEmail = "admin@accountgo.ph";
-            var adminUser = userManager.FindByEmailAsync(adminEmail).GetAwaiter().GetResult();
-            if (adminUser == null)
-            {
-                adminUser = new ApplicationUser
-                {
-                    UserName = adminEmail,
-                    Email = adminEmail,
-                    EmailConfirmed = true
-                };
-                var createResult = userManager.CreateAsync(adminUser).GetAwaiter().GetResult();
-                if (createResult.Succeeded)
-                {
-                    Console.WriteLine($"✓ Default admin user '{adminEmail}' initialized in Identity.");
+            var adminService = services.GetRequiredService<Services.Administration.IAdministrationService>();
+            var secService = services.GetRequiredService<Services.Security.ISecurityService>();
+            var adminRole = secService.GetRole("SystemAdministrators") ?? secService.GetRole("Administrator");
 
-                    // Also ensure domain user exists
-                    var adminService = services.GetRequiredService<Services.Administration.IAdministrationService>();
-                    var secService = services.GetRequiredService<Services.Security.ISecurityService>();
-                    var domainUser = secService.GetUser(adminEmail);
-                    if (domainUser == null)
+            var adminEmails = new[]
+            {
+                (Email: "admin@accountgo.ph", First: "Admin", Last: "User"),
+                (Email: "marvinperez@gmail.com", First: "Marvin", Last: "Perez"),
+                (Email: "hello@marvinperez.com", First: "Marvin", Last: "Perez")
+            };
+
+            foreach (var (email, first, last) in adminEmails)
+            {
+                var existingUser = userManager.FindByEmailAsync(email).GetAwaiter().GetResult();
+                if (existingUser == null)
+                {
+                    var newUser = new ApplicationUser
                     {
-                        var newDomainUser = new Core.Domain.Security.User
-                        {
-                            EmailAddress = adminEmail,
-                            UserName = adminEmail,
-                            Firstname = "Admin",
-                            Lastname = "User"
-                        };
-                        adminService.SaveUser(newDomainUser);
-                        var adminRole = secService.GetRole("SystemAdministrators") ?? secService.GetRole("Administrator");
-                        if (adminRole != null)
-                        {
-                            var freshUser = secService.GetUser(adminEmail);
-                            if (freshUser != null)
-                            {
-                                secService.AddUserInRole(freshUser.Id, adminRole.Id);
-                            }
-                        }
-                        Console.WriteLine($"✓ Default domain user '{adminEmail}' initialized with Administrator role.");
+                        UserName = email,
+                        Email = email,
+                        EmailConfirmed = true
+                    };
+                    var createResult = userManager.CreateAsync(newUser).GetAwaiter().GetResult();
+                    if (createResult.Succeeded)
+                    {
+                        Console.WriteLine($"✓ Admin user '{email}' initialized in Identity.");
                     }
+                }
+
+                var domainUser = secService.GetUser(email);
+                if (domainUser == null)
+                {
+                    var newDomainUser = new Core.Domain.Security.User
+                    {
+                        EmailAddress = email,
+                        UserName = email,
+                        Firstname = first,
+                        Lastname = last
+                    };
+                    adminService.SaveUser(newDomainUser);
+                    if (adminRole != null)
+                    {
+                        var freshUser = secService.GetUser(email);
+                        if (freshUser != null)
+                        {
+                            secService.AddUserInRole(freshUser.Id, adminRole.Id);
+                        }
+                    }
+                    Console.WriteLine($"✓ Domain user '{email}' initialized with Administrator role.");
                 }
             }
         }
