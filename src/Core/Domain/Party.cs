@@ -13,12 +13,14 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Core.Domain
 {
     [Table("Party")]
-    public partial class Party : BaseEntity
+    public partial class Party : BaseEntity, ICompanyOwned
     {
         public Party()
         {
             Contacts = new HashSet<Contact>();
         }
+
+        public int CompanyId { get; set; }
 
         public PartyTypes PartyType { get; set; }
         public string Name { get; set; }

@@ -726,14 +726,16 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
             </div>
 
             {/* Dev Mode Notification */}
-            <div className="p-2.5 rounded-xl bg-[var(--bg-subtle)] text-[11px] text-[var(--text-muted)] flex items-center justify-between gap-2">
-              <div className="flex items-center gap-1.5 truncate">
-                <Terminal className="w-3.5 h-3.5 text-[var(--brand-primary)] flex-shrink-0" />
-                <span className="truncate">
-                  {devCode ? 'Dev Mode: Code auto-filled from API' : 'Local Dev: Code is logged to API terminal output'}
-                </span>
+            {import.meta.env.DEV && (
+              <div className="p-2.5 rounded-xl bg-[var(--bg-subtle)] text-[11px] text-[var(--text-muted)] flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 truncate">
+                  <Terminal className="w-3.5 h-3.5 text-[var(--brand-primary)] flex-shrink-0" />
+                  <span className="truncate">
+                    {devCode ? 'Dev Mode: Code auto-filled from API' : 'Local Dev: Code is logged to API terminal output'}
+                  </span>
+                </div>
               </div>
-            </div>
+            )}
           </div>
         )}
       </div>

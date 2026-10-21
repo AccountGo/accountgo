@@ -15,13 +15,15 @@ using System.Linq;
 namespace Core.Domain.Financials
 {
     [Table("GeneralLedgerHeader")]
-    public partial class GeneralLedgerHeader : BaseEntity
+    public partial class GeneralLedgerHeader : BaseEntity, ICompanyOwned
     {
         public GeneralLedgerHeader()
         {
             GeneralLedgerLines = new HashSet<GeneralLedgerLine>();
             PurchaseOrderReceipts = new HashSet<PurchaseReceiptHeader>();
         }
+
+        public int CompanyId { get; set; }
 
         public DateTime Date { get; set; }
         public DocumentTypes DocumentType { get; set; }

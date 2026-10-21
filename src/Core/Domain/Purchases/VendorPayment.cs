@@ -14,10 +14,12 @@ namespace Core.Domain.Purchases
 {
 
     [Table("VendorPayment")]
-    public partial class VendorPayment : BaseEntity
+    public partial class VendorPayment : BaseEntity, ICompanyOwned
     {        
         public VendorPayment()
         { }
+
+        public int CompanyId { get; set; }
 
         public int VendorId { get; set; }
         public int? PurchaseInvoiceHeaderId { get; set; }

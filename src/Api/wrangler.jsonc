@@ -26,7 +26,8 @@
     {
       "binding": "DB",
       "database_name": "accountgo-db",
-      "database_id": "15c6ce9e-a459-49c5-9a03-d8ba9a63233b"
+      "database_id": "15c6ce9e-a459-49c5-9a03-d8ba9a63233b",
+      "migrations_dir": "d1/migrations"
     }
   ],
   "migrations": [

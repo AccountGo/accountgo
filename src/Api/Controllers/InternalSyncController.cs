@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Data;
+using System.Data.Common;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
@@ -7,6 +9,7 @@ using Api.Data;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
@@ -35,6 +38,7 @@ namespace Api.Controllers
         {
             public List<string>? Statements { get; set; }
             public string? RawSql { get; set; }
+            public List<string>? TablesToClear { get; set; }
         }
 
         [HttpPost("d1-restore")]
@@ -87,35 +91,99 @@ namespace Api.Controllers
                 }
             }
 
-            if (statements.Count == 0)
+            bool hasTablesToClear = request.TablesToClear != null && request.TablesToClear.Count > 0;
+            if (statements.Count == 0 && !hasTablesToClear)
             {
-                return Ok(new { restored = 0, message = "No statements to execute." });
+                return Ok(new { restored = 0, total = 0, message = "No operations to execute." });
+            }
+
+            var connection = _context.Database.GetDbConnection();
+            bool wasClosed = connection.State == ConnectionState.Closed;
+            if (wasClosed)
+            {
+                await connection.OpenAsync();
             }
 
             try
             {
-                using var transaction = await _context.Database.BeginTransactionAsync();
-                foreach (var stmt in statements)
+                using (var pragmaOffCmd = connection.CreateCommand())
                 {
+                    pragmaOffCmd.CommandText = "PRAGMA foreign_keys=OFF;";
+                    await pragmaOffCmd.ExecuteNonQueryAsync();
+                }
+
+                try
+                {
+                    using var transaction = await _context.Database.BeginTransactionAsync();
+                    var dbTx = transaction.GetDbTransaction();
                     try
                     {
-                        await _context.Database.ExecuteSqlRawAsync(stmt);
-                        executedCount++;
+                        if (hasTablesToClear)
+                        {
+                            foreach (var table in request.TablesToClear!)
+                            {
+                                if (!string.IsNullOrWhiteSpace(table) && System.Text.RegularExpressions.Regex.IsMatch(table, @"^[a-zA-Z0-9_]+$"))
+                                {
+                                    using var delCmd = connection.CreateCommand();
+                                    delCmd.Transaction = dbTx;
+                                    delCmd.CommandText = $"DELETE FROM \"{table}\";";
+                                    await delCmd.ExecuteNonQueryAsync();
+                                }
+                            }
+                        }
+
+                        foreach (var stmt in statements)
+                        {
+                            using var cmd = connection.CreateCommand();
+                            cmd.Transaction = dbTx;
+                            cmd.CommandText = stmt;
+                            await cmd.ExecuteNonQueryAsync();
+                            executedCount++;
+                        }
+
+                        await transaction.CommitAsync();
+
+                        _logger.LogInformation("Restored {Count} statements from Cloudflare D1 into local SQLite.", executedCount);
+                        return Ok(new { restored = executedCount, total = statements.Count });
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogWarning(ex, "Failed to execute restore statement: {Sql}", stmt);
+                        await transaction.RollbackAsync();
+                        _logger.LogError(ex, "Failed executing restore statement. Transaction rolled back.");
+                        return StatusCode(500, new
+                        {
+                            error = "Restore failed: statement execution threw an exception.",
+                            details = ex.Message,
+                            executedBeforeFailure = executedCount,
+                            total = statements.Count
+                        });
                     }
                 }
-                await transaction.CommitAsync();
-
-                _logger.LogInformation("Restored {Count} statements from Cloudflare D1 into local SQLite.", executedCount);
-                return Ok(new { restored = executedCount, total = statements.Count });
+                finally
+                {
+                    try
+                    {
+                        using var pragmaOnCmd = connection.CreateCommand();
+                        pragmaOnCmd.CommandText = "PRAGMA foreign_keys=ON;";
+                        await pragmaOnCmd.ExecuteNonQueryAsync();
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to re-enable foreign keys after restore.");
+                    }
+                }
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed restoring data from Cloudflare D1.");
                 return StatusCode(500, new { error = ex.Message });
+            }
+            finally
+            {
+                if (wasClosed)
+                {
+                    await connection.CloseAsync();
+                }
             }
         }
     }

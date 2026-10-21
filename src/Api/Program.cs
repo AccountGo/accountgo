@@ -324,6 +324,9 @@ using (var scope = app.Services.CreateScope())
                 Console.WriteLine("✓ ApiDbContext tables created.");
             }
 
+            // Apply SQLite schema upgrader (multi-tenancy columns, tables, indexes)
+            Api.Data.Schema.SqliteSchemaUpgrader.Upgrade(apiDbContext.Database.GetDbConnection());
+
             var connection = identityDbContext.Database.GetDbConnection();
             bool identityTablesExist = false;
             if (connection.State != System.Data.ConnectionState.Open)
@@ -426,7 +429,7 @@ using (var scope = app.Services.CreateScope())
                         Lastname = last
                     };
                     adminService.SaveUser(newDomainUser);
-                    if (adminRole != null)
+                    if (adminRole != null && email.Equals("marvinperez@gmail.com", StringComparison.OrdinalIgnoreCase))
                     {
                         var freshUser = secService.GetUser(email);
                         if (freshUser != null)
@@ -434,9 +437,12 @@ using (var scope = app.Services.CreateScope())
                             secService.AddUserInRole(freshUser.Id, adminRole.Id);
                         }
                     }
-                    Console.WriteLine($"✓ Domain user '{email}' initialized with Administrator role.");
+                    Console.WriteLine($"✓ Domain user '{email}' initialized.");
                 }
             }
+
+            // Run one-time post-seed membership and role backfill -> Version 2
+            Api.Data.Schema.SqliteSchemaUpgrader.UpgradePostSeed(apiDbContext.Database.GetDbConnection());
         }
         else
         {
@@ -514,3 +520,5 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.Run();
+
+public partial class Program { }

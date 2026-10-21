@@ -11,8 +11,9 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Core.Domain
 {
     [Table("Address")]
-    public partial class Address : BaseEntity
+    public partial class Address : BaseEntity, ICompanyOwned
     {
+        public int CompanyId { get; set; }
         public string No { get; set; }
         public string Street { get; set; }
         public string City { get; set; }

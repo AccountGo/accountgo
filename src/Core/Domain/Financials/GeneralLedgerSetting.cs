@@ -12,12 +12,12 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Core.Domain.Financials
 {
     [Table("GeneralLedgerSetting")]
-    public partial class GeneralLedgerSetting : BaseEntity
+    public partial class GeneralLedgerSetting : BaseEntity, ICompanyOwned
     {
         public GeneralLedgerSetting()
         {
         }
-        public int? CompanyId { get; set; }
+        public int CompanyId { get; set; }
         public virtual Company Company { get; set; }
 
         public int? PayableAccountId { get; set; }

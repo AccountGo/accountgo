@@ -13,8 +13,9 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Core.Domain.Sales
 {
     [Table("SalesDeliveryLine")]
-    public partial class SalesDeliveryLine : BaseEntity
+    public partial class SalesDeliveryLine : BaseEntity, ICompanyOwned
     {
+        public int CompanyId { get; set; }
         public int SalesDeliveryHeaderId { get; set; }
         public int? SalesInvoiceLineId { get; set; }
         public int? ItemId { get; set; }

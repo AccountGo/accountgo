@@ -14,13 +14,14 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Core.Domain.Items
 {
     [Table("ItemCategory")]
-    public partial class ItemCategory : BaseEntity
+    public partial class ItemCategory : BaseEntity, ICompanyOwned
     {
         public ItemCategory()
         {
             Items = new HashSet<Item>();
         }        
         
+        public int CompanyId { get; set; }
         public ItemTypes ItemType { get; set; }
         public int? MeasurementId { get; set; }        
         public int? SalesAccountId { get; set; }

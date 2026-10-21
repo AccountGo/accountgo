@@ -45,26 +45,17 @@ export class AccountGoApiContainer extends DurableObject {
     }
   }
 
-  async restoreD1ToContainer(portObj: any) {
+  async restoreD1ToContainer(portObj: any): Promise<boolean> {
     const db = (this.env as any).DB;
-    if (!db) return;
+    if (!db) return true;
     try {
-      const syncTables = [
-        "AspNetUsers",
-        "RefreshTokens",
-        "Party",
-        "Customer",
-        "Vendor",
-        "Item",
-        "FinancialYear",
-        "SalesInvoiceHeader",
-        "SalesInvoiceLine",
-        "CustomerAllocation",
-        "SalesReceiptHeader",
-        "SalesReceiptLine",
-        "GeneralLedgerHeader",
-        "GeneralLedgerLine",
-      ];
+      const tableRes = await db
+        .prepare(
+          "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' AND name != 'd1_migrations' AND name != '__SchemaVersion'"
+        )
+        .all();
+
+      const syncTables = (tableRes.results || []).map((r: any) => r.name);
 
       const statements: string[] = [];
 
@@ -92,25 +83,61 @@ export class AccountGoApiContainer extends DurableObject {
         }
       }
 
-      if (statements.length > 0) {
-        const secret = this.env.SECRET_KEY || (this.env as any).SECRET__key;
-        if (!secret) {
-          console.error("Cold start D1 restore skipped: SECRET_KEY is not configured.");
-          return;
-        }
-        await portObj.fetch(
-          new Request("http://127.0.0.1:8001/api/internal/d1-restore", {
-            method: "POST",
-            headers: {
-              "content-type": "application/json",
-              "x-internal-key": secret,
-            },
-            body: JSON.stringify({ statements }),
-          })
-        );
+      const secret = this.env.SECRET_KEY || (this.env as any).SECRET__key;
+      if (!secret) {
+        console.error("Cold start D1 restore skipped: SECRET_KEY is not configured.");
+        return false;
       }
+
+      const batchSize = 500;
+      if (statements.length === 0) {
+        if (syncTables.length > 0) {
+          const res = await portObj.fetch(
+            new Request("http://127.0.0.1:8001/api/internal/d1-restore", {
+              method: "POST",
+              headers: {
+                "content-type": "application/json",
+                "x-internal-key": secret,
+              },
+              body: JSON.stringify({ tablesToClear: syncTables, statements: [] }),
+            })
+          );
+          if (!res.ok) {
+            const errText = await res.text();
+            throw new Error(`Clear tables failed (${res.status}): ${errText}`);
+          }
+        }
+      } else {
+        for (let i = 0; i < statements.length; i += batchSize) {
+          const batch = statements.slice(i, i + batchSize);
+          const isFirstBatch = i === 0;
+          const res = await portObj.fetch(
+            new Request("http://127.0.0.1:8001/api/internal/d1-restore", {
+              method: "POST",
+              headers: {
+                "content-type": "application/json",
+                "x-internal-key": secret,
+              },
+              body: JSON.stringify({
+                tablesToClear: isFirstBatch ? syncTables : undefined,
+                statements: batch,
+              }),
+            })
+          );
+          if (!res.ok) {
+            const errText = await res.text();
+            throw new Error(`Restore batch ${i / batchSize} failed (${res.status}): ${errText}`);
+          }
+          const result = (await res.json()) as any;
+          if (result.restored !== batch.length) {
+            throw new Error(`Batch count mismatch: restored ${result.restored} of ${batch.length}`);
+          }
+        }
+      }
+      return true;
     } catch (err) {
       console.error("Cold start D1 restore failed:", err);
+      return false;
     }
   }
 
@@ -212,8 +239,25 @@ export class AccountGoApiContainer extends DurableObject {
             }
           );
         }
+        const restoredOk = await this.restoreD1ToContainer(portObj);
+        if (!restoredOk) {
+          this.containerReady = false;
+          return new Response(
+            JSON.stringify({
+              title: "Service Unavailable",
+              status: 503,
+              detail: "Database restore from Cloudflare D1 failed, please retry in a few seconds",
+            }),
+            {
+              status: 503,
+              headers: {
+                "content-type": "application/problem+json",
+                "Retry-After": "5",
+              },
+            }
+          );
+        }
         this.containerReady = true;
-        this.ctx.waitUntil(this.restoreD1ToContainer(portObj));
       }
 
       // Forward incoming request

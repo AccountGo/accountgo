@@ -17,7 +17,7 @@ namespace Api.Data.Migrations.ApiDb
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.7")
+                .HasAnnotation("ProductVersion", "10.0.13")
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
@@ -32,6 +32,9 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.Property<string>("City")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
 
                     b.Property<string>("No")
                         .HasColumnType("nvarchar(max)");
@@ -56,6 +59,9 @@ namespace Api.Data.Migrations.ApiDb
                         .HasColumnType("datetime2");
 
                     b.Property<int>("AuditEventType")
+                        .HasColumnType("int");
+
+                    b.Property<int>("CompanyId")
                         .HasColumnType("int");
 
                     b.Property<string>("FieldName")
@@ -132,17 +138,40 @@ namespace Api.Data.Migrations.ApiDb
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("ActiveModulesJson")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("CRA")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("CompanyCode")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedByUserId")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Plan")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ShortName")
+                        .IsRequired()
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Slug")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("SubscriptionStatus")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("SubscriptionValidUntil")
+                        .HasColumnType("datetime2");
 
                     b.HasKey("Id");
 
@@ -154,9 +183,128 @@ namespace Api.Data.Migrations.ApiDb
                             Id = 1,
                             CRA = "012345678",
                             CompanyCode = "100",
+                            CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Name = "Financial Solutions Inc.",
-                            ShortName = "FSI"
+                            Plan = "accounting",
+                            ShortName = "FSI",
+                            SubscriptionStatus = "active"
                         });
+                });
+
+            modelBuilder.Entity("Core.Domain.CompanyInvitation", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime?>("AcceptedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("AcceptedByUserId")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("InvitedByUserId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("RevokedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Role")
+                        .HasColumnType("int");
+
+                    b.Property<string>("SecurityRoleIdsJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.HasIndex("CompanyId", "Email");
+
+                    b.ToTable("CompanyInvitation");
+                });
+
+            modelBuilder.Entity("Core.Domain.CompanyMember", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("InvitedByUserId")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("JoinedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Role")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("CompanyId", "UserId")
+                        .IsUnique();
+
+                    b.ToTable("CompanyMember");
+                });
+
+            modelBuilder.Entity("Core.Domain.CompanyMemberSecurityRole", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CompanyMemberId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SecurityRoleId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SecurityRoleId");
+
+                    b.HasIndex("CompanyMemberId", "SecurityRoleId")
+                        .IsUnique();
+
+                    b.ToTable("CompanyMemberSecurityRole");
                 });
 
             modelBuilder.Entity("Core.Domain.CompanySetting", b =>
@@ -184,6 +332,9 @@ namespace Api.Data.Migrations.ApiDb
                         .HasColumnType("int");
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
 
                     b.Property<int>("ContactType")
                         .HasColumnType("int");
@@ -215,6 +366,9 @@ namespace Api.Data.Migrations.ApiDb
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
                     b.Property<int>("ContactId")
                         .HasColumnType("int");
 
@@ -240,6 +394,9 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.Property<decimal>("Amount")
                         .HasColumnType("decimal(18, 2)");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
 
                     b.Property<DateTime>("Date")
                         .HasColumnType("datetime2");
@@ -293,6 +450,9 @@ namespace Api.Data.Migrations.ApiDb
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
                     b.Property<int>("DonationInvoiceHeaderId")
                         .HasColumnType("int");
 
@@ -327,6 +487,9 @@ namespace Api.Data.Migrations.ApiDb
                         .HasColumnType("int");
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
 
                     b.Property<string>("CompanyName")
                         .HasMaxLength(200)
@@ -378,6 +541,7 @@ namespace Api.Data.Migrations.ApiDb
                         new
                         {
                             Id = 1,
+                            CompanyId = 1,
                             CompanyName = "",
                             DonorType = "Individual",
                             Email = "olivia.bennett@example.com",
@@ -391,6 +555,7 @@ namespace Api.Data.Migrations.ApiDb
                         new
                         {
                             Id = 2,
+                            CompanyId = 1,
                             CompanyName = "Cedar Grove Community Services",
                             DonorType = "Company",
                             Email = "giving@cedargrove.example.com",
@@ -452,9 +617,10 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasIndex("AccountClassId");
 
-                    b.HasIndex("CompanyId");
-
                     b.HasIndex("ParentAccountId");
+
+                    b.HasIndex("CompanyId", "AccountCode")
+                        .IsUnique();
 
                     b.ToTable("Account");
                 });
@@ -495,6 +661,9 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<string>("BankName")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
@@ -524,6 +693,9 @@ namespace Api.Data.Migrations.ApiDb
                         .HasColumnType("int");
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
 
                     b.Property<DateTime>("EndDate")
                         .HasColumnType("datetime2");
@@ -557,6 +729,9 @@ namespace Api.Data.Migrations.ApiDb
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
                     b.Property<DateTime>("Date")
                         .HasColumnType("datetime2");
 
@@ -585,6 +760,9 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<decimal>("Amount")
                         .HasColumnType("decimal(18, 2)");
 
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
                     b.Property<int>("DrCr")
                         .HasColumnType("int");
 
@@ -608,7 +786,7 @@ namespace Api.Data.Migrations.ApiDb
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<int?>("CompanyId")
+                    b.Property<int>("CompanyId")
                         .HasColumnType("int");
 
                     b.Property<int?>("GoodsReceiptNoteClearingAccountId")
@@ -661,6 +839,9 @@ namespace Api.Data.Migrations.ApiDb
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
                     b.Property<DateTime>("Date")
                         .HasColumnType("datetime2");
 
@@ -705,6 +886,9 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<decimal>("Amount")
                         .HasColumnType("decimal(18, 2)");
 
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
                     b.Property<int>("DrCr")
                         .HasColumnType("int");
 
@@ -731,6 +915,9 @@ namespace Api.Data.Migrations.ApiDb
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
                     b.Property<int>("MainAccountId")
                         .HasColumnType("int");
 
@@ -754,6 +941,9 @@ namespace Api.Data.Migrations.ApiDb
                         .HasColumnType("int");
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
 
                     b.Property<DateTime>("Date")
                         .HasColumnType("datetime2");
@@ -802,6 +992,9 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<string>("Code")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
                     b.Property<decimal?>("Cost")
                         .HasColumnType("decimal(18, 2)");
 
@@ -824,7 +1017,7 @@ namespace Api.Data.Migrations.ApiDb
                         .HasColumnType("int");
 
                     b.Property<string>("No")
-                        .HasColumnType("nvarchar(max)");
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<int?>("PreferredVendorId")
                         .HasColumnType("int");
@@ -872,6 +1065,10 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasIndex("SmallestMeasurementId");
 
+                    b.HasIndex("CompanyId", "No")
+                        .IsUnique()
+                        .HasFilter("[No] IS NOT NULL");
+
                     b.ToTable("Item");
                 });
 
@@ -887,6 +1084,9 @@ namespace Api.Data.Migrations.ApiDb
                         .HasColumnType("int");
 
                     b.Property<int?>("AssemblyAccountId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("CompanyId")
                         .HasColumnType("int");
 
                     b.Property<int?>("CostOfGoodsSoldAccountId")
@@ -935,6 +1135,9 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<string>("Code")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
                     b.Property<string>("Description")
                         .HasColumnType("nvarchar(max)");
 
@@ -953,6 +1156,9 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.Property<string>("CallSite")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
 
                     b.Property<string>("Exception")
                         .HasColumnType("nvarchar(max)");
@@ -993,6 +1199,9 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.Property<string>("CompanyCountry")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
 
                     b.Property<string>("CompanyPostalCode")
                         .HasColumnType("nvarchar(max)");
@@ -1049,6 +1258,9 @@ namespace Api.Data.Migrations.ApiDb
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
                     b.Property<string>("Description")
                         .HasColumnType("nvarchar(max)");
 
@@ -1073,6 +1285,9 @@ namespace Api.Data.Migrations.ApiDb
                         .HasColumnType("int");
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
 
                     b.Property<DateTime>("Date")
                         .HasColumnType("datetime2");
@@ -1122,6 +1337,9 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<decimal>("Amount")
                         .HasColumnType("decimal(18, 2)");
 
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
                     b.Property<decimal?>("Cost")
                         .HasColumnType("decimal(18, 2)");
 
@@ -1170,6 +1388,9 @@ namespace Api.Data.Migrations.ApiDb
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
                     b.Property<DateTime>("Date")
                         .HasColumnType("datetime2");
 
@@ -1214,6 +1435,9 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<decimal>("Amount")
                         .HasColumnType("decimal(18, 2)");
 
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
                     b.Property<decimal>("Cost")
                         .HasColumnType("decimal(18, 2)");
 
@@ -1249,6 +1473,9 @@ namespace Api.Data.Migrations.ApiDb
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
                     b.Property<DateTime>("Date")
                         .HasColumnType("datetime2");
 
@@ -1280,6 +1507,9 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.Property<decimal>("Amount")
                         .HasColumnType("decimal(18, 2)");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
 
                     b.Property<decimal>("Cost")
                         .HasColumnType("decimal(18, 2)");
@@ -1337,6 +1567,9 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<string>("City")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
                     b.Property<string>("Country")
                         .HasColumnType("nvarchar(max)");
 
@@ -1344,7 +1577,7 @@ namespace Api.Data.Migrations.ApiDb
                         .HasColumnType("decimal(18, 2)");
 
                     b.Property<string>("No")
-                        .HasColumnType("nvarchar(max)");
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<int?>("PartyId")
                         .HasColumnType("int");
@@ -1395,6 +1628,10 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasIndex("TaxGroupId");
 
+                    b.HasIndex("CompanyId", "No")
+                        .IsUnique()
+                        .HasFilter("[No] IS NOT NULL");
+
                     b.ToTable("Vendor");
                 });
 
@@ -1408,6 +1645,9 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.Property<decimal>("Amount")
                         .HasColumnType("decimal(18, 2)");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
 
                     b.Property<DateTime>("Date")
                         .HasColumnType("datetime2");
@@ -1446,11 +1686,14 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<int?>("AccountsReceivableAccountId")
                         .HasColumnType("int");
 
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
                     b.Property<int?>("CustomerAdvancesAccountId")
                         .HasColumnType("int");
 
                     b.Property<string>("No")
-                        .HasColumnType("nvarchar(max)");
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<int?>("PartyId")
                         .HasColumnType("int");
@@ -1493,6 +1736,10 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasIndex("TaxGroupId");
 
+                    b.HasIndex("CompanyId", "No")
+                        .IsUnique()
+                        .HasFilter("[No] IS NOT NULL");
+
                     b.ToTable("Customer");
                 });
 
@@ -1506,6 +1753,9 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.Property<decimal>("Amount")
                         .HasColumnType("decimal(18, 2)");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
 
                     b.Property<int>("CustomerId")
                         .HasColumnType("int");
@@ -1537,6 +1787,9 @@ namespace Api.Data.Migrations.ApiDb
                         .HasColumnType("int");
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
 
                     b.Property<int?>("CustomerId")
                         .HasColumnType("int");
@@ -1574,6 +1827,9 @@ namespace Api.Data.Migrations.ApiDb
                         .HasColumnType("int");
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
 
                     b.Property<decimal>("Discount")
                         .HasColumnType("decimal(18, 2)");
@@ -1616,6 +1872,9 @@ namespace Api.Data.Migrations.ApiDb
                         .HasColumnType("int");
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
 
                     b.Property<int>("CustomerId")
                         .HasColumnType("int");
@@ -1661,6 +1920,9 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<decimal>("Amount")
                         .HasColumnType("decimal(18, 2)");
 
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
                     b.Property<decimal>("Discount")
                         .HasColumnType("decimal(18, 2)");
 
@@ -1705,6 +1967,9 @@ namespace Api.Data.Migrations.ApiDb
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
                     b.Property<int?>("CustomerId")
                         .HasColumnType("int");
 
@@ -1743,6 +2008,9 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<decimal>("Amount")
                         .HasColumnType("decimal(18, 2)");
 
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
                     b.Property<decimal>("Discount")
                         .HasColumnType("decimal(18, 2)");
 
@@ -1776,6 +2044,9 @@ namespace Api.Data.Migrations.ApiDb
                         .HasColumnType("int");
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
 
                     b.Property<int>("CustomerId")
                         .HasColumnType("int");
@@ -1812,6 +2083,9 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.Property<decimal>("Amount")
                         .HasColumnType("decimal(18, 2)");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
 
                     b.Property<decimal>("Discount")
                         .HasColumnType("decimal(18, 2)");
@@ -1852,6 +2126,9 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.Property<decimal>("Amount")
                         .HasColumnType("decimal(18, 2)");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
 
                     b.Property<int>("CustomerId")
                         .HasColumnType("int");
@@ -1904,6 +2181,9 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.Property<decimal>("AmountPaid")
                         .HasColumnType("decimal(18, 2)");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
 
                     b.Property<decimal?>("Discount")
                         .HasColumnType("decimal(18, 2)");
@@ -2085,6 +2365,9 @@ namespace Api.Data.Migrations.ApiDb
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
                     b.Property<string>("Description")
                         .HasColumnType("nvarchar(max)");
 
@@ -2102,6 +2385,9 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CompanyId", "SequenceNumberType")
+                        .IsUnique();
+
                     b.ToTable("SequenceNumber");
                 });
 
@@ -2112,6 +2398,9 @@ namespace Api.Data.Migrations.ApiDb
                         .HasColumnType("int");
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
 
                     b.Property<bool>("IsFullyExempt")
                         .HasColumnType("bit");
@@ -2131,6 +2420,9 @@ namespace Api.Data.Migrations.ApiDb
                         .HasColumnType("int");
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
 
                     b.Property<bool>("IsExempt")
                         .HasColumnType("bit");
@@ -2157,6 +2449,9 @@ namespace Api.Data.Migrations.ApiDb
                         .HasColumnType("int");
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
@@ -2197,6 +2492,9 @@ namespace Api.Data.Migrations.ApiDb
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
                     b.Property<string>("Description")
                         .HasColumnType("nvarchar(max)");
 
@@ -2218,6 +2516,9 @@ namespace Api.Data.Migrations.ApiDb
                         .HasColumnType("int");
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
 
                     b.Property<int>("TaxGroupId")
                         .HasColumnType("int");
@@ -2241,6 +2542,9 @@ namespace Api.Data.Migrations.ApiDb
                         .HasColumnType("int");
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
 
                     b.Property<int>("ContactId")
                         .HasColumnType("int");
@@ -2266,6 +2570,47 @@ namespace Api.Data.Migrations.ApiDb
                         .IsRequired();
 
                     b.Navigation("AuditableEntity");
+                });
+
+            modelBuilder.Entity("Core.Domain.CompanyInvitation", b =>
+                {
+                    b.HasOne("Core.Domain.Company", "Company")
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Company");
+                });
+
+            modelBuilder.Entity("Core.Domain.CompanyMember", b =>
+                {
+                    b.HasOne("Core.Domain.Company", "Company")
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Company");
+                });
+
+            modelBuilder.Entity("Core.Domain.CompanyMemberSecurityRole", b =>
+                {
+                    b.HasOne("Core.Domain.CompanyMember", "CompanyMember")
+                        .WithMany("SecurityRoles")
+                        .HasForeignKey("CompanyMemberId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Core.Domain.Security.SecurityRole", "SecurityRole")
+                        .WithMany()
+                        .HasForeignKey("SecurityRoleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("CompanyMember");
+
+                    b.Navigation("SecurityRole");
                 });
 
             modelBuilder.Entity("Core.Domain.CompanySetting", b =>
@@ -2411,7 +2756,9 @@ namespace Api.Data.Migrations.ApiDb
                 {
                     b.HasOne("Core.Domain.Company", "Company")
                         .WithMany()
-                        .HasForeignKey("CompanyId");
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.HasOne("Core.Domain.Financials.Account", "GoodsReceiptNoteClearingAccount")
                         .WithMany()
@@ -3286,6 +3633,11 @@ namespace Api.Data.Migrations.ApiDb
             modelBuilder.Entity("Core.Domain.Auditing.AuditableEntity", b =>
                 {
                     b.Navigation("AuditableAttributes");
+                });
+
+            modelBuilder.Entity("Core.Domain.CompanyMember", b =>
+                {
+                    b.Navigation("SecurityRoles");
                 });
 
             modelBuilder.Entity("Core.Domain.Donations.DonationInvoiceHeader", b =>

@@ -15,7 +15,7 @@ using System.Linq;
 namespace Core.Domain.Purchases
 {
     [Table("Vendor")]
-    public partial class Vendor : BaseEntity
+    public partial class Vendor : BaseEntity, ICompanyOwned
     {
         public Vendor()
         {
@@ -25,6 +25,7 @@ namespace Core.Domain.Purchases
             VendorPayments = new HashSet<VendorPayment>();
         }
 
+        public int CompanyId { get; set; }
         public string No { get; set; }
         public int? PartyId { get; set; }
         public int? AccountsPayableAccountId { get; set; }

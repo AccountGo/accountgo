@@ -13,11 +13,13 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Core.Domain.Financials
 {
     [Table("GeneralLedgerLine")]
-    public partial class GeneralLedgerLine : BaseEntity
+    public partial class GeneralLedgerLine : BaseEntity, ICompanyOwned
     {
         public GeneralLedgerLine()
         {
         }
+
+        public int CompanyId { get; set; }
 
         public int GeneralLedgerHeaderId { get; set; }
         public int AccountId { get; set; }

@@ -17,7 +17,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Core.Domain.Items
 {
     [Table("Item")]
-    public partial class Item : BaseEntity
+    public partial class Item : BaseEntity, ICompanyOwned
     {
         public Item()
         {
@@ -27,6 +27,8 @@ namespace Core.Domain.Items
             PurchaseInvoiceLines = new HashSet<PurchaseInvoiceLine>();
             InventoryControlJournals = new HashSet<InventoryControlJournal>();
         }
+
+        public int CompanyId { get; set; }
 
         public int? ItemCategoryId { get; set; }
         public int? SmallestMeasurementId { get; set; }

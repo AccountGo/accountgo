@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using System.Collections.Generic;
 using System.Numerics;
 using Core.Domain;
@@ -19,6 +19,7 @@ namespace Api.Data.Seed
                 new Core.Domain.Donations.Donor
                 {
                     Id = 1,
+                    CompanyId = 1,
                     DonorType = "Individual",
                     FirstName = "Olivia",
                     LastName = "Bennett",
@@ -32,6 +33,7 @@ namespace Api.Data.Seed
                 new Core.Domain.Donations.Donor
                 {
                     Id = 2,
+                    CompanyId = 1,
                     DonorType = "Company",
                     FirstName = string.Empty,
                     LastName = string.Empty,
@@ -53,7 +55,8 @@ namespace Api.Data.Seed
                     Name = "Financial Solutions Inc.",
                     CompanyCode = "100",
                     ShortName = "FSI",
-                    CRA = "012345678"
+                    CRA = "012345678",
+                    CreatedAt = new System.DateTime(2025, 1, 1, 0, 0, 0, System.DateTimeKind.Utc)
                 }
             };
             return companiees;

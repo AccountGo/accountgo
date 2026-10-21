@@ -14,13 +14,15 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Core.Domain.TaxSystem
 {
     [Table("Tax")]
-    public partial class Tax : BaseEntity
+    public partial class Tax : BaseEntity, ICompanyOwned
     {
         public Tax()
         {
             TaxGroupTaxes = new HashSet<TaxGroupTax>();
             ItemTaxGroupTaxes = new HashSet<ItemTaxGroupTax>();
         }
+
+        public int CompanyId { get; set; }
 
         public int? SalesAccountId { get; set; }
         public int? PurchasingAccountId { get; set; }

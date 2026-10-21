@@ -12,11 +12,13 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Core.Domain
 {
     [Table("Contact")]
-    public partial class Contact : BaseEntity
+    public partial class Contact : BaseEntity, ICompanyOwned
     {
         public Contact()
         {
         }
+
+        public int CompanyId { get; set; }
         /// <summary>
         /// Check ContactyType to determine whether CompanyNo is Customer No or Vendor No
         /// </summary>

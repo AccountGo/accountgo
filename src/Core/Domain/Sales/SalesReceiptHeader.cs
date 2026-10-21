@@ -17,13 +17,15 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Core.Domain.Sales
 {
     [Table("SalesReceiptHeader")]
-    public partial class SalesReceiptHeader : BaseEntity
+    public partial class SalesReceiptHeader : BaseEntity, ICompanyOwned
     {
         public SalesReceiptHeader()
         {
             SalesReceiptLines = new HashSet<SalesReceiptLine>();
             CustomerAllocations = new HashSet<CustomerAllocation>();
         }
+
+        public int CompanyId { get; set; }
 
         public int CustomerId { get; set; }
         public int? GeneralLedgerHeaderId { get; set; }

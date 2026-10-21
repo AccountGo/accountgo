@@ -12,8 +12,9 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Core.Domain.Sales
 {
     [Table("SalesQuoteLine")]
-    public partial class SalesQuoteLine : BaseEntity
+    public partial class SalesQuoteLine : BaseEntity, ICompanyOwned
     {
+        public int CompanyId { get; set; }
         public int SalesQuoteHeaderId { get; set; }
         public int ItemId { get; set; }
         public int MeasurementId { get; set; }
