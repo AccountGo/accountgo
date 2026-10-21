@@ -212,11 +212,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         headers.set('Authorization', `Bearer ${token}`);
       }
 
-      let res = await fetchWith503Retry(url, {
-        ...init,
-        headers,
-        credentials: 'include',
-      });
+      const method = (init?.method || 'GET').toUpperCase();
+      const shouldRetry503 = method === 'GET';
+
+      let res = shouldRetry503
+        ? await fetchWith503Retry(url, { ...init, headers, credentials: 'include' })
+        : await fetch(url, { ...init, headers, credentials: 'include' });
 
       // Handle 401 with silent refresh & request retry
       if (res.status === 401) {
@@ -224,11 +225,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (newToken) {
           const retryHeaders = new Headers(init?.headers || {});
           retryHeaders.set('Authorization', `Bearer ${newToken}`);
-          res = await fetchWith503Retry(url, {
-            ...init,
-            headers: retryHeaders,
-            credentials: 'include',
-          });
+          res = shouldRetry503
+            ? await fetchWith503Retry(url, { ...init, headers: retryHeaders, credentials: 'include' })
+            : await fetch(url, { ...init, headers: retryHeaders, credentials: 'include' });
         }
       }
 

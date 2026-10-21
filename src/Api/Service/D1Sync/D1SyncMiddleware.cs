@@ -51,6 +51,9 @@ namespace Api.Service.D1Sync
             await _next(context);
         }
 
+        // Note: Splits statements on statement boundaries. If a single statement's serialized base64
+        // payload exceeds maxChunkBase64Length (32 KB), it will produce one oversized chunk (acceptable for now;
+        // accounting transaction rows are well below 32 KB).
         public static List<string> SplitStatementsIntoChunks(IReadOnlyList<string> statements, int maxChunkBase64Length = MaxHeaderPayloadLength)
         {
             var chunks = new List<string>();

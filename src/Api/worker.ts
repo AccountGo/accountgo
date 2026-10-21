@@ -5,11 +5,27 @@ export { constantTimeEqual, parseSyncSqlHeaders };
 
 const CONTAINER_PORT = 8001;
 
+class BuildMismatchError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "BuildMismatchError";
+  }
+}
+
+class RestoreError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "RestoreError";
+  }
+}
+
 export class AccountGoApiContainer extends Container<Env> {
   restored = false;
+  private initPromise: Promise<void> | null = null;
+  private loggedMismatch = false;
 
-  constructor(ctx: DurableObject["ctx"], env: Env) {
-    super(ctx, env);
+  constructor(ctx: DurableObjectState, env: Env) {
+    super(ctx as any, env);
     this.defaultPort = CONTAINER_PORT;
     this.sleepAfter = "10m";
     this.enableInternet = true;
@@ -29,6 +45,8 @@ export class AccountGoApiContainer extends Container<Env> {
 
   override onStop(params: StopParams) {
     this.restored = false;
+    this.initPromise = null;
+    this.loggedMismatch = false;
   }
 
   async restoreD1ToContainer(): Promise<boolean> {
@@ -123,6 +141,50 @@ export class AccountGoApiContainer extends Container<Env> {
     }
   }
 
+  private async initialize(): Promise<void> {
+    const secret = this.env.SECRET_KEY || (this.env as any).SECRET__key;
+
+    // Build check (1.2.4)
+    if (this.env.BUILD_SHA) {
+      if (!secret) {
+        console.error("Cold start check failed: SECRET_KEY is not configured.");
+        throw new Error("SECRET_KEY is not configured.");
+      }
+
+      const buildRes = await this.containerFetch("http://127.0.0.1:8001/api/internal/build", {
+        method: "GET",
+        headers: { "x-internal-key": secret },
+      });
+
+      if (!buildRes.ok) {
+        throw new Error(`Build check failed with status ${buildRes.status}`);
+      }
+
+      const buildData = (await buildRes.json()) as { sha?: string };
+      const containerSha = buildData?.sha?.trim();
+      const expectedSha = this.env.BUILD_SHA.trim();
+
+      if (containerSha && expectedSha && containerSha !== expectedSha) {
+        if (!this.loggedMismatch) {
+          this.loggedMismatch = true;
+          console.warn(
+            `[worker] BUILD_SHA mismatch: container=${containerSha}, expected=${expectedSha}. Destroying container.`
+          );
+        }
+        await this.destroy();
+        throw new BuildMismatchError("Container build version mismatch, reloading...");
+      }
+    }
+
+    // D1 restore
+    const restoredOk = await this.restoreD1ToContainer();
+    if (!restoredOk) {
+      throw new RestoreError("Database restore from Cloudflare D1 failed, please retry in a few seconds");
+    }
+
+    this.restored = true;
+  }
+
   override async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
 
@@ -143,8 +205,20 @@ export class AccountGoApiContainer extends Container<Env> {
 
       try {
         await this.destroy();
-      } catch (e) {}
+      } catch (err: any) {
+        console.error("[worker] Failed to destroy container on restart:", err);
+        return new Response(
+          JSON.stringify({
+            title: "Internal Server Error",
+            status: 500,
+            detail: "Failed to restart container",
+          }),
+          { status: 500, headers: { "content-type": "application/problem+json" } }
+        );
+      }
       this.restored = false;
+      this.initPromise = null;
+      this.loggedMismatch = false;
       return new Response(JSON.stringify({ status: "container restarted" }), {
         status: 200,
         headers: { "content-type": "application/json" },
@@ -175,70 +249,24 @@ export class AccountGoApiContainer extends Container<Env> {
       );
     }
 
-    // 2. Build check and D1 restore (if not yet restored in this container's lifetime)
+    // 2. Build check and D1 restore (single-flight across concurrent requests)
     if (!this.restored) {
+      if (!this.initPromise) {
+        this.initPromise = this.initialize();
+      }
+
       try {
-        const secret = this.env.SECRET_KEY || (this.env as any).SECRET__key;
+        await this.initPromise;
+      } catch (prepErr: any) {
+        this.initPromise = null;
+        this.restored = false;
 
-        // Build check (1.2.4)
-        if (this.env.BUILD_SHA) {
-          if (!secret) {
-            console.error("Cold start check failed: SECRET_KEY is not configured.");
-            return new Response(
-              JSON.stringify({
-                title: "Service Unavailable",
-                status: 503,
-                detail: "Service is starting up, please retry in a few seconds",
-              }),
-              { status: 503, headers: { "content-type": "application/problem+json", "Retry-After": "5" } }
-            );
-          }
-
-          const buildRes = await this.containerFetch("http://127.0.0.1:8001/api/internal/build", {
-            method: "GET",
-            headers: { "x-internal-key": secret },
-          });
-
-          if (!buildRes.ok) {
-            throw new Error(`Build check failed with status ${buildRes.status}`);
-          }
-
-          const buildData = (await buildRes.json()) as { sha?: string };
-          const containerSha = buildData?.sha?.trim();
-          const expectedSha = this.env.BUILD_SHA.trim();
-
-          if (containerSha && expectedSha && containerSha !== expectedSha) {
-            console.warn(
-              `[worker] BUILD_SHA mismatch: container=${containerSha}, expected=${expectedSha}. Destroying container.`
-            );
-            await this.destroy();
-            this.restored = false;
-            return new Response(
-              JSON.stringify({
-                title: "Service Unavailable",
-                status: 503,
-                detail: "Container build version mismatch, reloading...",
-              }),
-              {
-                status: 503,
-                headers: {
-                  "content-type": "application/problem+json",
-                  "Retry-After": "5",
-                },
-              }
-            );
-          }
-        }
-
-        // D1 restore
-        const restoredOk = await this.restoreD1ToContainer();
-        if (!restoredOk) {
-          this.restored = false;
+        if (prepErr instanceof BuildMismatchError) {
           return new Response(
             JSON.stringify({
               title: "Service Unavailable",
               status: 503,
-              detail: "Database restore from Cloudflare D1 failed, please retry in a few seconds",
+              detail: prepErr.message,
             }),
             {
               status: 503,
@@ -249,10 +277,25 @@ export class AccountGoApiContainer extends Container<Env> {
             }
           );
         }
-        this.restored = true;
-      } catch (prepErr) {
+
+        if (prepErr instanceof RestoreError) {
+          return new Response(
+            JSON.stringify({
+              title: "Service Unavailable",
+              status: 503,
+              detail: prepErr.message,
+            }),
+            {
+              status: 503,
+              headers: {
+                "content-type": "application/problem+json",
+                "Retry-After": "5",
+              },
+            }
+          );
+        }
+
         console.error("[worker] Container initialization failed:", prepErr);
-        this.restored = false;
         return new Response(
           JSON.stringify({
             title: "Service Unavailable",
@@ -289,7 +332,36 @@ export class AccountGoApiContainer extends Container<Env> {
       const containerRes = await this.containerFetch(containerReq);
 
       // Handle mutation SQL sync
-      const syncStatements = parseSyncSqlHeaders(containerRes.headers);
+      let syncStatements: string[] = [];
+      try {
+        syncStatements = parseSyncSqlHeaders(containerRes.headers);
+      } catch (headerErr: any) {
+        console.error(
+          `[worker] Failed to parse D1 sync headers: method=${request.method} path=${url.pathname} error=${headerErr?.message ?? headerErr}`
+        );
+        try {
+          await this.destroy();
+        } catch (destroyErr) {
+          console.error("[worker] Failed to destroy container after D1 header error:", destroyErr);
+        }
+        this.restored = false;
+        this.initPromise = null;
+        return new Response(
+          JSON.stringify({
+            title: "Change not saved",
+            status: 503,
+            detail: "Your change could not be saved. Please retry.",
+          }),
+          {
+            status: 503,
+            headers: {
+              "content-type": "application/problem+json",
+              "Retry-After": "5",
+            },
+          }
+        );
+      }
+
       if (syncStatements.length > 0 && (this.env as any).DB) {
         const db = (this.env as any).DB;
         try {
@@ -308,6 +380,7 @@ export class AccountGoApiContainer extends Container<Env> {
             console.error("[worker] Failed to destroy container after D1 sync failure:", destroyErr);
           }
           this.restored = false;
+          this.initPromise = null;
           return new Response(
             JSON.stringify({
               title: "Change not saved",
@@ -340,6 +413,7 @@ export class AccountGoApiContainer extends Container<Env> {
       });
     } catch (err) {
       this.restored = false;
+      this.initPromise = null;
       throw err;
     }
   }
