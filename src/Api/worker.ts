@@ -35,71 +35,6 @@ export class AccountGoApiContainer extends DurableObject {
     }
   }
 
-  async restoreD1ToContainer(portObj: any) {
-    const db = (this.env as any).DB;
-    if (!db) return;
-    try {
-      const syncTables = [
-        "AspNetUsers",
-        "RefreshTokens",
-        "Party",
-        "Customer",
-        "Vendor",
-        "Item",
-        "FinancialYear",
-        "SalesInvoiceHeader",
-        "SalesInvoiceLine",
-        "CustomerAllocation",
-        "SalesReceiptHeader",
-        "SalesReceiptLine",
-        "GeneralLedgerHeader",
-        "GeneralLedgerLine",
-      ];
-
-      const statements: string[] = [];
-
-      for (const table of syncTables) {
-        try {
-          const res = await db.prepare(`SELECT * FROM "${table}"`).all();
-          if (res.results && res.results.length > 0) {
-            for (const row of res.results) {
-              const keys = Object.keys(row);
-              const cols = keys.map((k) => `"${k}"`).join(", ");
-              const vals = keys
-                .map((k) => {
-                  const v = row[k];
-                  if (v === null || v === undefined) return "NULL";
-                  if (typeof v === "number") return String(v);
-                  if (typeof v === "boolean") return v ? "1" : "0";
-                  return `'${String(v).replace(/'/g, "''")}'`;
-                })
-                .join(", ");
-              statements.push(`INSERT OR REPLACE INTO "${table}" (${cols}) VALUES (${vals});`);
-            }
-          }
-        } catch (tableErr) {
-          // Table might not exist or empty
-        }
-      }
-
-      if (statements.length > 0) {
-        const secret = (this.env as any).SECRET__key || "1618184c2fea71c86669fa7d6611a55db32e5ac7b238f235b1bbbbdb14c2a9be";
-        await portObj.fetch(
-          new Request("http://127.0.0.1:8001/api/internal/d1-restore", {
-            method: "POST",
-            headers: {
-              "content-type": "application/json",
-              "x-internal-key": secret,
-            },
-            body: JSON.stringify({ statements }),
-          })
-        );
-      }
-    } catch (err) {
-      console.error("Cold start D1 restore failed:", err);
-    }
-  }
-
   async fetch(request: Request): Promise<Response> {
     this.ctx.waitUntil(this.touchActivity(Date.now()));
     try {
@@ -172,7 +107,6 @@ export class AccountGoApiContainer extends DurableObject {
           );
         }
         this.containerReady = true;
-        this.ctx.waitUntil(this.restoreD1ToContainer(portObj));
       }
 
       // Forward incoming request
@@ -185,28 +119,7 @@ export class AccountGoApiContainer extends DurableObject {
       } as any);
 
       try {
-        const containerRes = await portObj.fetch(containerReq);
-
-        // Check if .NET emitted real-time D1 mutation SQL in response header
-        const syncSqlBase64 = containerRes.headers.get("x-d1-sync-sql");
-        if (syncSqlBase64 && (this.env as any).DB) {
-          try {
-            const sql = atob(syncSqlBase64);
-            this.ctx.waitUntil((this.env as any).DB.exec(sql));
-          } catch (syncErr: any) {
-            console.error("Failed executing real-time D1 mutation:", syncErr);
-          }
-        }
-
-        // Strip internal header before returning to client
-        const headers = new Headers(containerRes.headers);
-        headers.delete("x-d1-sync-sql");
-
-        return new Response(containerRes.body, {
-          status: containerRes.status,
-          statusText: containerRes.statusText,
-          headers,
-        });
+        return await portObj.fetch(containerReq);
       } catch (err) {
         this.containerReady = false;
         throw err;
@@ -221,7 +134,6 @@ export class AccountGoApiContainer extends DurableObject {
 }
 
 export interface Env {
-  DB: D1Database;
   CONTAINER: DurableObjectNamespace<AccountGoApiContainer>;
   ENVIRONMENT?: string;
   CONTAINER_NAME?: string;

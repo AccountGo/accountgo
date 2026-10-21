@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "deploy": "wrangler deploy",
-    "dev": "wrangler dev"
+    "dev": "wrangler dev",
+    "db:sync-d1": "python3 scripts/sync-d1.py"
   },
   "dependencies": {
     "@cloudflare/containers": "^0.3.7"
