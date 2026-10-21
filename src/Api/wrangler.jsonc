@@ -40,7 +40,7 @@
   ],
   "vars": {
     "ENVIRONMENT": "Production",
-    "CONTAINER_NAME": "v6",
+    "CONTAINER_NAME": "v7",
     "DatabaseProvider": "Sqlite",
     "EMAIL_PROVIDER": "Resend",
     "RESEND_EMAIL_FROM": "noreply@marvinperez.com",
