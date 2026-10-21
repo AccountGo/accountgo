@@ -6,6 +6,7 @@
   "scripts": {
     "deploy": "wrangler deploy",
     "dev": "wrangler dev",
+    "test": "node --test test/**/*.test.mjs",
     "db:sync-d1": "python3 scripts/sync-d1.py"
   },
   "dependencies": {

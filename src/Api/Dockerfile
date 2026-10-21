@@ -27,11 +27,15 @@ COPY src/src.ServiceDefaults/ src/src.ServiceDefaults/
 # Publish release artifacts
 RUN dotnet publish src/Api/Api.csproj -c Release -o /app/out
 
+# Determine BUILD_SHA (fallback to 'dev' if missing)
+RUN if [ -f src/Api/BUILD_SHA ]; then cp src/Api/BUILD_SHA /app/BUILD_SHA; else echo "dev" > /app/BUILD_SHA; fi
+
 # Runtime stage
 FROM mcr.microsoft.com/dotnet/aspnet:10.0
 
 WORKDIR /app
 COPY --from=build-env /app/out ./
+COPY --from=build-env /app/BUILD_SHA /app/BUILD_SHA
 
 # Pre-seeded SQLite database
 COPY src/Api/accountgo.db* ./

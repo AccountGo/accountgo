@@ -230,5 +230,6 @@ accountgo.db*
 dist/
 *.tsbuildinfo
 .wrangler/
+src/Api/BUILD_SHA
 
 scratch/

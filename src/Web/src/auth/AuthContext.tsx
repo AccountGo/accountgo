@@ -3,6 +3,27 @@ import { UserDto, AuthResponse, OtpSendResponse, SignUpPayload, SignUpResponse, 
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+async function fetchWith503Retry(
+  input: RequestInfo | URL,
+  init?: RequestInit,
+  maxRetries = 3
+): Promise<Response> {
+  let attempt = 0;
+  while (true) {
+    const res = await fetch(input, init);
+    if (res.status === 503 && attempt < maxRetries) {
+      attempt++;
+      const retryAfterHeader = res.headers.get('Retry-After');
+      let delaySec = retryAfterHeader ? parseInt(retryAfterHeader, 10) : 5;
+      if (isNaN(delaySec) || delaySec <= 0) delaySec = 5;
+      delaySec = Math.min(delaySec, 10);
+      await new Promise((resolve) => setTimeout(resolve, delaySec * 1000));
+      continue;
+    }
+    return res;
+  }
+}
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<UserDto | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
@@ -73,7 +94,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Request 6-digit OTP code
   const sendOtp = useCallback(async (email: string): Promise<OtpSendResponse> => {
-    const res = await fetch('/api/auth/send-otp', {
+    const res = await fetchWith503Retry('/api/auth/send-otp', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: email.trim() }),
@@ -139,7 +160,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Verify OTP code & establish session
   const verifyOtp = useCallback(async (email: string, otp: string): Promise<void> => {
-    const res = await fetch('/api/auth/verify-otp', {
+    const res = await fetchWith503Retry('/api/auth/verify-otp', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -191,7 +212,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         headers.set('Authorization', `Bearer ${token}`);
       }
 
-      let res = await fetch(url, {
+      let res = await fetchWith503Retry(url, {
         ...init,
         headers,
         credentials: 'include',
@@ -203,7 +224,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (newToken) {
           const retryHeaders = new Headers(init?.headers || {});
           retryHeaders.set('Authorization', `Bearer ${newToken}`);
-          res = await fetch(url, {
+          res = await fetchWith503Retry(url, {
             ...init,
             headers: retryHeaders,
             credentials: 'include',

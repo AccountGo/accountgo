@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
+using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
@@ -41,34 +42,55 @@ namespace Api.Controllers
             public List<string>? TablesToClear { get; set; }
         }
 
+        [HttpGet("build")]
+        public IActionResult GetBuildInfo()
+        {
+            if (!InternalAuthHelper.ValidateInternalKey(_configuration, Request.Headers, out var status, out var message))
+            {
+                if (status == 503)
+                {
+                    _logger.LogError("Internal build endpoint called but SECRET_KEY is not configured.");
+                    return StatusCode(503, new { error = message });
+                }
+                return Unauthorized(new { error = message });
+            }
+
+            string sha = "dev";
+            var possiblePaths = new[]
+            {
+                "/app/BUILD_SHA",
+                Path.Combine(AppContext.BaseDirectory, "BUILD_SHA"),
+                Path.Combine(Directory.GetCurrentDirectory(), "BUILD_SHA"),
+                Path.Combine(Directory.GetCurrentDirectory(), "src", "Api", "BUILD_SHA")
+            };
+
+            foreach (var path in possiblePaths)
+            {
+                if (System.IO.File.Exists(path))
+                {
+                    var content = System.IO.File.ReadAllText(path).Trim();
+                    if (!string.IsNullOrEmpty(content))
+                    {
+                        sha = content;
+                        break;
+                    }
+                }
+            }
+
+            return Ok(new { sha });
+        }
+
         [HttpPost("d1-restore")]
         public async Task<IActionResult> RestoreFromD1([FromBody] RestoreRequest request)
         {
-            var expectedKey = _configuration["SECRET_KEY"]
-                ?? _configuration["SECRET:key"]
-                ?? _configuration["SECRET__key"]
-                ?? Environment.GetEnvironmentVariable("SECRET_KEY")
-                ?? Environment.GetEnvironmentVariable("SECRET__key");
-
-            if (string.IsNullOrWhiteSpace(expectedKey))
+            if (!InternalAuthHelper.ValidateInternalKey(_configuration, Request.Headers, out var status, out var message))
             {
-                _logger.LogError("Internal sync endpoint called but SECRET_KEY is not configured.");
-                return StatusCode(503, new { error = "Internal sync is unavailable: SECRET_KEY is not configured." });
-            }
-
-            var providedKey = Request.Headers["x-internal-key"].ToString();
-            if (string.IsNullOrEmpty(providedKey))
-            {
-                return Unauthorized(new { error = "Invalid internal sync key" });
-            }
-
-            var expectedBytes = Encoding.UTF8.GetBytes(expectedKey);
-            var providedBytes = Encoding.UTF8.GetBytes(providedKey);
-
-            if (expectedBytes.Length != providedBytes.Length ||
-                !CryptographicOperations.FixedTimeEquals(expectedBytes, providedBytes))
-            {
-                return Unauthorized(new { error = "Invalid internal sync key" });
+                if (status == 503)
+                {
+                    _logger.LogError("Internal sync endpoint called but SECRET_KEY is not configured.");
+                    return StatusCode(503, new { error = message });
+                }
+                return Unauthorized(new { error = message });
             }
 
             int executedCount = 0;
