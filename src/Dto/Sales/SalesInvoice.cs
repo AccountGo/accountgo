@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
@@ -11,7 +11,6 @@ namespace Dto.Sales
         [Required(ErrorMessage = "Customer is required")]
         public int CustomerId { get; set; }        
         public DateTime InvoiceDate { get; set; }
-        [Required(ErrorMessage = "Payment Term is required")]
         public int? PaymentTermId { get; set; }
         public int? FromSalesOrderId { get; set; }
         public int? FromSalesDeliveryId { get; set; }
@@ -27,6 +26,16 @@ namespace Dto.Sales
         public decimal? TotalAmountAfterTax { get; set; }
         public IList<SalesInvoiceLine>? SalesInvoiceLines { get; set; }
         public decimal? TotalTax { get; set; }
+
+        // Standard Invoicing attributes
+        public DateTime? DueDate { get; set; }
+        public string? Status { get; set; }
+        public int? StatusId { get; set; }
+        public decimal PaidAmount { get; set; }
+        public decimal BalanceDue { get; set; }
+        public string? Notes { get; set; }
+        public string? PaymentInstructions { get; set; }
+
         public SalesInvoice()
         {
             SalesInvoiceLines = new List<SalesInvoiceLine>();
@@ -41,9 +50,10 @@ namespace Dto.Sales
         private decimal GetTotalAmountWithoutTax()
         {
             decimal total = 0;
-            foreach (var line in SalesInvoiceLines!)
+            if (SalesInvoiceLines == null) return total;
+            foreach (var line in SalesInvoiceLines)
             {
-                if(line.Amount is null  || line.Quantity is null)
+                if (line.Amount is null || line.Quantity is null)
                 {
                     continue;
                 }
@@ -60,21 +70,19 @@ namespace Dto.Sales
 
     public class SalesInvoiceLine : BaseDto
     {
-        [Required(ErrorMessage = "Item is required")]
         public int? ItemId { get; set; }
-        [Required(ErrorMessage = "Quantity is required")]
         [Range(0, 1000000, ErrorMessage = "Quantity must be between 0 and 1000000")]
-        public decimal? Quantity { get; set; }
-        [Required(ErrorMessage = "Amount is required")]
+        public decimal? Quantity { get; set; } = 1;
         [Range(0, 1000000, ErrorMessage = "Amount must be between 0 and 1000000")]
         public decimal? Amount { get; set; }
-        [Required(ErrorMessage = "Discount is required")]
         [Range(0, 100, ErrorMessage = "Discount must be between 0 and 100")]
-        public decimal? Discount { get; set; }
-        [Required(ErrorMessage = "Measurement is required")]
+        public decimal? Discount { get; set; } = 0;
         public int? MeasurementId { get; set; }
         public string? MeasurementDescription { get; set; }
         public string? ItemNo { get; set; }
         public string? ItemDescription { get; set; }
+        public decimal? LineTotal { get; set; }
+        public decimal? TaxRate { get; set; }
+        public decimal? TaxAmount { get; set; }
     }
 }
