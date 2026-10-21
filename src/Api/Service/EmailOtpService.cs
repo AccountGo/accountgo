@@ -50,10 +50,10 @@ namespace Api.Service
             _configuration = configuration;
             _logger = logger;
 
-            var secret = _configuration["SECRET:key"];
+            var secret = _configuration["SECRET_KEY"] ?? _configuration["SECRET:key"] ?? _configuration["SECRET__key"] ?? Environment.GetEnvironmentVariable("SECRET_KEY");
             if (string.IsNullOrWhiteSpace(secret) || Encoding.UTF8.GetByteCount(secret) < 32)
             {
-                throw new InvalidOperationException("SECRET:key configuration is missing or fewer than 32 bytes (256 bits).");
+                throw new InvalidOperationException("SECRET_KEY (or SECRET:key) configuration is missing or fewer than 32 bytes (256 bits).");
             }
             _hmacKey = Encoding.UTF8.GetBytes(secret);
         }

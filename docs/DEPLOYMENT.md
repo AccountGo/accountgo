@@ -95,12 +95,12 @@ Configure the following environment variables in production:
 | -------- | ----------- | ----------------- |
 | `ASPNETCORE_ENVIRONMENT` | Application environment | `Production` |
 | `ASPNETCORE_URLS` | Binding URLs and ports | `http://+:8001` |
-| `ConnectionStrings__DefaultConnection` | Database connection string | `Data Source=accountgo.db` or MSSQL connection string |
-| `Jwt__SecretKey` | Cryptographic secret for JWT signing | 256-bit secure secret key |
-| `Jwt__Issuer` | Token issuer domain | `https://api.accountgo.org` |
-| `Jwt__Audience` | Token audience domain | `https://app.accountgo.org` |
-| `Email__SmtpHost` | SMTP host for production OTP delivery | `smtp.sendgrid.net` |
-| `Email__ApiKey` | API key or credentials for email provider | Secure secret token |
+| `SECRET_KEY` | 256-bit cryptographic secret for JWT signing & OTP verification | 256-bit secure secret key |
+| `RESEND_API_KEY` | API key for Resend email service | `re_123456789...` |
+| `EMAIL_PROVIDER` | Email provider selection (`Resend` or dev fallback) | `Resend` |
+| `ConnectionStrings__DefaultConnection` | Database connection string (ASP.NET hierarchy) | `Data Source=accountgo.db` or MSSQL connection string |
+| `JwtSettings__validIssuer` | Token issuer domain (ASP.NET hierarchy) | `AccountGo API` |
+| `JwtSettings__validAudience` | Token audience domain (ASP.NET hierarchy) | `https://accountgo-api.anter.workers.dev` |
 
 > [!CAUTION]
 > Never commit actual secret keys or credentials to the git repository. Store all credentials in Cloudflare Secrets (`wrangler secret put <KEY>`) or GitHub Repository Secrets.

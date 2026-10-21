@@ -58,7 +58,7 @@ builder.Services.AddScoped<IAuthenticationService, AuthenticationService>();
 
 // Configure Email Sender (Resend vs Dev Console)
 var resendApiKey = builder.Configuration["RESEND_API_KEY"] ?? Environment.GetEnvironmentVariable("RESEND_API_KEY");
-var emailProvider = builder.Configuration["Email:Provider"] ?? builder.Configuration["EMAIL__PROVIDER"];
+var emailProvider = builder.Configuration["EMAIL_PROVIDER"] ?? builder.Configuration["Email:Provider"] ?? builder.Configuration["EMAIL__PROVIDER"];
 
 if (!string.IsNullOrWhiteSpace(resendApiKey) || string.Equals(emailProvider, "Resend", StringComparison.OrdinalIgnoreCase))
 {

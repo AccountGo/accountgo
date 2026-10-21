@@ -45,10 +45,10 @@ namespace Api.Service
 
         private SigningCredentials GetSigningCredentials()
         {
-            var secretKey = _configuration["SECRET:key"];
+            var secretKey = _configuration["SECRET_KEY"] ?? _configuration["SECRET:key"] ?? _configuration["SECRET__key"] ?? Environment.GetEnvironmentVariable("SECRET_KEY");
             if (string.IsNullOrWhiteSpace(secretKey) || Encoding.UTF8.GetByteCount(secretKey) < 32)
             {
-                throw new InvalidOperationException("FATAL: SECRET:key is missing or shorter than 32 bytes.");
+                throw new InvalidOperationException("FATAL: SECRET_KEY (or SECRET:key) is missing or shorter than 32 bytes.");
             }
 
             var key = Encoding.UTF8.GetBytes(secretKey);

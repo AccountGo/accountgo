@@ -55,13 +55,13 @@ namespace Api.Extensions
         {
             var validIssuer = configuration["JwtSettings:validIssuer"];
             var validAudience = configuration["JwtSettings:validAudience"];
-            var secretKey = configuration["SECRET:key"];
+            var secretKey = configuration["SECRET_KEY"] ?? configuration["SECRET:key"] ?? configuration["SECRET__key"] ?? Environment.GetEnvironmentVariable("SECRET_KEY");
 
             if (string.IsNullOrWhiteSpace(secretKey) || Encoding.UTF8.GetByteCount(secretKey) < 32)
             {
                 throw new InvalidOperationException(
-                    "FATAL SECURITY CONFIGURATION: 'SECRET:key' is missing or shorter than 32 bytes (256 bits). " +
-                    "Configure a secure key via user-secrets ('dotnet user-secrets set \"SECRET:key\" \"<key>\"') or environment variable SECRET__key.");
+                    "FATAL SECURITY CONFIGURATION: 'SECRET_KEY' (or 'SECRET:key') is missing or shorter than 32 bytes (256 bits). " +
+                    "Configure a secure key via environment variable 'SECRET_KEY' or user-secrets ('dotnet user-secrets set \"SECRET_KEY\" \"<key>\"').");
             }
 
             services.AddAuthentication(opt =>

@@ -83,7 +83,7 @@ export class AccountGoApiContainer extends DurableObject {
       }
 
       if (statements.length > 0) {
-        const secret = (this.env as any).SECRET__key || "1618184c2fea71c86669fa7d6611a55db32e5ac7b238f235b1bbbbdb14c2a9be";
+        const secret = this.env.SECRET_KEY || (this.env as any).SECRET__key || "1618184c2fea71c86669fa7d6611a55db32e5ac7b238f235b1bbbbdb14c2a9be";
         await portObj.fetch(
           new Request("http://127.0.0.1:8001/api/internal/d1-restore", {
             method: "POST",
@@ -225,6 +225,7 @@ export interface Env {
   CONTAINER: DurableObjectNamespace<AccountGoApiContainer>;
   ENVIRONMENT?: string;
   CONTAINER_NAME?: string;
+  SECRET_KEY?: string;
   SECRET__key?: string;
 }
 

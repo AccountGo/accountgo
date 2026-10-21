@@ -41,7 +41,7 @@
     "ENVIRONMENT": "Production",
     "CONTAINER_NAME": "v5",
     "DatabaseProvider": "Sqlite",
-    "EMAIL__PROVIDER": "Resend",
+    "EMAIL_PROVIDER": "Resend",
     "RESEND_EMAIL_FROM": "noreply@marvinperez.com",
     "RESEND_FROM_NAME": "AccountGo",
     "JwtSettings__validIssuer": "AccountGo API",

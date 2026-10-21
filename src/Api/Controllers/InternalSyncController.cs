@@ -38,7 +38,7 @@ namespace Api.Controllers
         [HttpPost("d1-restore")]
         public async Task<IActionResult> RestoreFromD1([FromBody] RestoreRequest request)
         {
-            var expectedKey = _configuration["SECRET__key"] ?? Environment.GetEnvironmentVariable("SECRET__key") ?? "1618184c2fea71c86669fa7d6611a55db32e5ac7b238f235b1bbbbdb14c2a9be";
+            var expectedKey = _configuration["SECRET_KEY"] ?? _configuration["SECRET:key"] ?? _configuration["SECRET__key"] ?? Environment.GetEnvironmentVariable("SECRET_KEY") ?? Environment.GetEnvironmentVariable("SECRET__key") ?? "1618184c2fea71c86669fa7d6611a55db32e5ac7b238f235b1bbbbdb14c2a9be";
             var providedKey = Request.Headers["x-internal-key"].ToString();
 
             if (string.IsNullOrEmpty(providedKey) || providedKey != expectedKey)
