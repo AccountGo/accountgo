@@ -12,6 +12,7 @@ using Services.Security;
 
 namespace Api.Controllers
 {
+    [Core.Tenancy.TenantScoped]
     [ApiController]
     [Route("api/[controller]")]
     public class AccountController : BaseController

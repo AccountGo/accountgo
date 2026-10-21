@@ -1,73 +1,65 @@
 using System;
-using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
+using System.Security.Claims;
 using Api.Controllers;
-using Core.Data;
+using Api.Data;
 using Core.Domain;
-using Core.Domain.Security;
-using Dto.Security;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
 using Moq;
 using Services.Administration;
-using Services.Financial;
-using Services.Inventory;
-using Services.Purchasing;
-using Services.Sales;
-using Services.Security;
 using Xunit;
 
 namespace AccountGo.ServicesTests;
 
-public class SignUpAndOrganizationTests
+/// <summary>
+/// POST /api/organizations: creating a workspace saves the company and makes the caller its Owner.
+/// </summary>
+public class SignUpAndOrganizationTests : IDisposable
 {
-    private readonly Mock<IAdministrationService> _mockAdminService;
-    private readonly Mock<IFinancialService> _mockFinancialService;
-    private readonly Mock<ISalesService> _mockSalesService;
-    private readonly Mock<IPurchasingService> _mockPurchasingService;
-    private readonly Mock<IInventoryService> _mockInventoryService;
-    private readonly Mock<ISecurityService> _mockSecurityService;
+    private const string CallerId = "caller-user-id";
 
-    private readonly List<Company> _companies = new();
+    private readonly SqliteConnection _connection;
+    private readonly ApiDbContext _db;
+    private readonly Mock<IAdministrationService> _mockAdminService = new();
+    private readonly Mock<Core.Tenancy.ITenantContext> _mockTenantContext = new();
 
     public SignUpAndOrganizationTests()
     {
-        _mockAdminService = new Mock<IAdministrationService>();
-        _mockFinancialService = new Mock<IFinancialService>();
-        _mockSalesService = new Mock<ISalesService>();
-        _mockPurchasingService = new Mock<IPurchasingService>();
-        _mockInventoryService = new Mock<IInventoryService>();
-        _mockSecurityService = new Mock<ISecurityService>();
+        _connection = new SqliteConnection("DataSource=:memory:");
+        _connection.Open();
+        _db = new ApiDbContext(new DbContextOptionsBuilder<ApiDbContext>().UseSqlite(_connection).Options);
+        _db.Database.EnsureCreated();
 
-        _mockAdminService.Setup(s => s.GetCompanies()).Returns(() => _companies);
         _mockAdminService.Setup(s => s.GetCompanyBySlug(It.IsAny<string>()))
-            .Returns<string>(slug => _companies.FirstOrDefault(c => string.Equals(c.Slug, slug, StringComparison.OrdinalIgnoreCase)));
+            .Returns<string>(slug => _db.Companies.FirstOrDefault(c => c.Slug == slug));
+    }
 
-        _mockAdminService.Setup(s => s.SaveCompany(It.IsAny<Company>()))
-            .Callback<Company>(c =>
+    public void Dispose()
+    {
+        _db.Dispose();
+        _connection.Dispose();
+    }
+
+    private OrganizationsController NewController()
+    {
+        var controller = new OrganizationsController(_mockTenantContext.Object, _mockAdminService.Object, _db);
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext
             {
-                if (c.Id == 0)
-                {
-                    c.Id = _companies.Count + 1;
-                    _companies.Add(c);
-                }
-            });
+                User = new ClaimsPrincipal(new ClaimsIdentity(new[] { new Claim(ClaimTypes.NameIdentifier, CallerId) }, "test"))
+            }
+        };
+        return controller;
     }
 
     [Fact]
     public void CreateCompany_WhenNameIsEmpty_ReturnsBadRequest()
     {
-        var controller = new AdministrationController(
-            _mockAdminService.Object,
-            _mockFinancialService.Object,
-            _mockSalesService.Object,
-            _mockPurchasingService.Object,
-            _mockInventoryService.Object,
-            _mockSecurityService.Object,
-            null!);
-
-        var result = controller.CreateCompany(new AdministrationController.CreateCompanyRequest { Name = "" });
+        var result = NewController().Create(new OrganizationsController.CreateOrganizationRequest { Name = "" });
 
         var badRequest = Assert.IsType<BadRequestObjectResult>(result);
         var problem = Assert.IsType<ProblemDetails>(badRequest.Value);
@@ -75,89 +67,58 @@ public class SignUpAndOrganizationTests
     }
 
     [Fact]
-    public void CreateCompany_WithValidData_ReturnsCreatedAndUniqueSlug()
+    public void CreateCompany_WithValidData_ReturnsCreated_And_Caller_Is_Owner()
     {
-        var controller = new AdministrationController(
-            _mockAdminService.Object,
-            _mockFinancialService.Object,
-            _mockSalesService.Object,
-            _mockPurchasingService.Object,
-            _mockInventoryService.Object,
-            _mockSecurityService.Object,
-            null!);
-
-        var request = new AdministrationController.CreateCompanyRequest
+        var result = NewController().Create(new OrganizationsController.CreateOrganizationRequest
         {
             Name = "Pacific Rim Trading Inc.",
             Slug = "pacific-rim-trading",
             Plan = "accounting",
             Currency = "PHP"
-        };
-
-        var result = controller.CreateCompany(request);
+        });
 
         var createdResult = Assert.IsType<ObjectResult>(result);
         Assert.Equal(StatusCodes.Status201Created, createdResult.StatusCode);
-        Assert.Single(_companies);
-        Assert.Equal("pacific-rim-trading", _companies[0].Slug);
-        Assert.Equal("accounting", _companies[0].Plan);
+
+        var company = _db.Companies.Single(c => c.Slug == "pacific-rim-trading");
+        Assert.Equal("accounting", company.Plan);
+
+        var member = _db.CompanyMembers.Single(m => m.CompanyId == company.Id);
+        Assert.Equal(CallerId, member.UserId);
+        Assert.Equal(CompanyMemberRole.Owner, member.Role);
+        Assert.Equal(CompanyMemberStatus.Active, member.Status);
     }
 
     [Fact]
     public void CreateCompany_WhenSlugAlreadyExists_ReturnsBadRequest()
     {
-        _companies.Add(new Company
-        {
-            Id = 1,
-            Name = "Existing Workspace",
-            Slug = "existing-workspace"
-        });
+        _db.Companies.Add(new Company { Name = "Existing Workspace", Slug = "existing-workspace" });
+        _db.SaveChanges();
+        var before = _db.Companies.Count();
 
-        var controller = new AdministrationController(
-            _mockAdminService.Object,
-            _mockFinancialService.Object,
-            _mockSalesService.Object,
-            _mockPurchasingService.Object,
-            _mockInventoryService.Object,
-            _mockSecurityService.Object,
-            null!);
-
-        var request = new AdministrationController.CreateCompanyRequest
+        var result = NewController().Create(new OrganizationsController.CreateOrganizationRequest
         {
             Name = "Another Workspace",
             Slug = "existing-workspace"
-        };
-
-        var result = controller.CreateCompany(request);
+        });
 
         var badRequest = Assert.IsType<BadRequestObjectResult>(result);
         var problem = Assert.IsType<ProblemDetails>(badRequest.Value);
         Assert.Equal("Workspace Slug Already Taken", problem.Title);
+        Assert.Equal(before, _db.Companies.Count());
     }
 
     [Fact]
     public void CreateCompany_WithSpecialCharactersInSlug_SanitizesCorrectly()
     {
-        var controller = new AdministrationController(
-            _mockAdminService.Object,
-            _mockFinancialService.Object,
-            _mockSalesService.Object,
-            _mockPurchasingService.Object,
-            _mockInventoryService.Object,
-            _mockSecurityService.Object,
-            null!);
-
-        var request = new AdministrationController.CreateCompanyRequest
+        var result = NewController().Create(new OrganizationsController.CreateOrganizationRequest
         {
             Name = "Apex & Co. / Logistics!",
             Slug = "apex & co. / logistics!"
-        };
-
-        var result = controller.CreateCompany(request);
+        });
 
         var createdResult = Assert.IsType<ObjectResult>(result);
         Assert.Equal(StatusCodes.Status201Created, createdResult.StatusCode);
-        Assert.Single(_companies);
-        Assert.Equal("apex-co-logistics", _companies[0].Slug);
+        Assert.NotNull(_db.Companies.SingleOrDefault(c => c.Slug == "apex-co-logistics"));
     }
 }

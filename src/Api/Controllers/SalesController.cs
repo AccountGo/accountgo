@@ -11,6 +11,7 @@ using Services.TaxSystem;
 
 namespace Api.Controllers
 {
+    [Core.Tenancy.TenantScoped]
     [Route("api/[controller]")]
     [RequireModule("sales")]
     public class SalesController : BaseController
@@ -21,13 +22,17 @@ namespace Api.Controllers
         private readonly IInventoryService _inventoryService;
         private readonly ITaxService _taxService;
         private readonly ILogger<SalesController> _logger;
+        private readonly Core.Tenancy.ITenantContext _tenantContext;
+        private readonly Core.Tenancy.ITenantGuard _tenantGuard;
 
         public SalesController(IAdministrationService adminService,
             ISalesService salesService,
             IFinancialService financialService,
             IInventoryService inventoryService,
             ITaxService taxService,
-            ILogger<SalesController> logger)
+            ILogger<SalesController> logger,
+            Core.Tenancy.ITenantContext tenantContext,
+            Core.Tenancy.ITenantGuard tenantGuard)
         {
             _adminService = adminService;
             _salesService = salesService;
@@ -35,6 +40,8 @@ namespace Api.Controllers
             _inventoryService = inventoryService;
             _taxService = taxService;
             _logger = logger;
+            _tenantContext = tenantContext;
+            _tenantGuard = tenantGuard;
         }
 
         [HttpPost]
@@ -64,8 +71,21 @@ namespace Api.Controllers
             }
             else
             {
-                customer = _salesService.GetCustomerById(customerDto.Id);
+                customer = _tenantGuard.EnsureOwned<Core.Domain.Sales.Customer>(customerDto.Id, nameof(customerDto.Id));
             }
+
+            if (customerDto.AccountsReceivableId.HasValue && customerDto.AccountsReceivableId.Value > 0)
+                _tenantGuard.EnsureOwned<Core.Domain.Financials.Account>(customerDto.AccountsReceivableId.Value, nameof(customerDto.AccountsReceivableId));
+            if (customerDto.SalesAccountId.HasValue && customerDto.SalesAccountId.Value > 0)
+                _tenantGuard.EnsureOwned<Core.Domain.Financials.Account>(customerDto.SalesAccountId.Value, nameof(customerDto.SalesAccountId));
+            if (customerDto.PrepaymentAccountId.HasValue && customerDto.PrepaymentAccountId.Value > 0)
+                _tenantGuard.EnsureOwned<Core.Domain.Financials.Account>(customerDto.PrepaymentAccountId.Value, nameof(customerDto.PrepaymentAccountId));
+            if (customerDto.SalesDiscountAccountId.HasValue && customerDto.SalesDiscountAccountId.Value > 0)
+                _tenantGuard.EnsureOwned<Core.Domain.Financials.Account>(customerDto.SalesDiscountAccountId.Value, nameof(customerDto.SalesDiscountAccountId));
+            if (customerDto.PaymentTermId.HasValue && customerDto.PaymentTermId.Value > 0)
+                _tenantGuard.EnsureOwned<Core.Domain.PaymentTerm>(customerDto.PaymentTermId.Value, nameof(customerDto.PaymentTermId));
+            if (customerDto.TaxGroupId.HasValue && customerDto.TaxGroupId.Value > 0)
+                _tenantGuard.EnsureOwned<Core.Domain.TaxSystem.TaxGroup>(customerDto.TaxGroupId.Value, nameof(customerDto.TaxGroupId));
 
             customer.No = customerDto.No;
             customer.Party.Name = customerDto.Name;
@@ -147,6 +167,8 @@ namespace Api.Controllers
             try
             {
                 var customer = _salesService.GetCustomerById(id);
+                if (customer == null)
+                    return NotFound(new { message = $"Customer #{id} not found." });
 
                 var customerDto = new Dto.Sales.Customer()
                 {
@@ -352,7 +374,8 @@ namespace Api.Controllers
                 var dueDays = paymentTerm?.DueAfterDays ?? 30;
                 var dueDate = salesInvoice.Date.AddDays(dueDays);
 
-                var defaultCompany = _adminService.GetDefaultCompany();
+                var defaultCompany = (!string.IsNullOrWhiteSpace(_tenantContext.CompanySlug) ? _adminService.GetCompanyBySlug(_tenantContext.CompanySlug) : null)
+                    ?? _adminService.GetCompanies().FirstOrDefault(c => c.Id == _tenantContext.CompanyId);
 
                 var party = salesInvoice.Customer?.Party;
                 var addressParts = new List<string>();
@@ -490,6 +513,10 @@ namespace Api.Controllers
         {
             try
             {
+                _tenantGuard.EnsureOwned<Core.Domain.Sales.Customer>(salesorderDto.CustomerId, nameof(salesorderDto.CustomerId));
+                if (salesorderDto.PaymentTermId > 0)
+                    _tenantGuard.EnsureOwned<Core.Domain.PaymentTerm>(salesorderDto.PaymentTermId, nameof(salesorderDto.PaymentTermId));
+
                 var salesOrder = new Core.Domain.Sales.SalesOrderHeader()
                 {
                     CustomerId = salesorderDto.CustomerId,
@@ -500,6 +527,11 @@ namespace Api.Controllers
 
                 foreach (var line in salesorderDto.SalesOrderLines)
                 {
+                    if (line.ItemId.HasValue && line.ItemId.Value > 0)
+                        _tenantGuard.EnsureOwned<Core.Domain.Items.Item>(line.ItemId.Value, nameof(line.ItemId));
+                    if (line.MeasurementId.HasValue && line.MeasurementId.Value > 0)
+                        _tenantGuard.EnsureOwned<Core.Domain.Items.Measurement>(line.MeasurementId.Value, nameof(line.MeasurementId));
+
                     var salesOrderLine = new Core.Domain.Sales.SalesOrderLine();
                     salesOrderLine.Amount = line.Amount.GetValueOrDefault();
                     salesOrderLine.Discount = line.Discount.GetValueOrDefault();
@@ -569,6 +601,8 @@ namespace Api.Controllers
         public IActionResult Quotation(int id)
         {
             var quote = _salesService.GetSalesQuotationById(id);
+            if (quote == null)
+                return NotFound(new { message = $"Quotation #{id} not found." });
 
             var quoteDto = new Dto.Sales.SalesQuotation()
             {
@@ -748,6 +782,9 @@ namespace Api.Controllers
         public IActionResult SalesReceipt(int id)
         {
             var salesReceipt = _salesService.GetSalesReceiptById(id);
+            if (salesReceipt == null)
+                return NotFound(new { message = $"Sales receipt #{id} not found." });
+
             var creditAccountId = salesReceipt.SalesReceiptLines.FirstOrDefault()?.AccountToCreditId ?? 0;
             var debitCashBankId = _financialService.GetCashAndBanks().Where(cb => cb.AccountId == salesReceipt.AccountToDebitId).FirstOrDefault()?.Id ?? 0;
 
@@ -835,6 +872,10 @@ namespace Api.Controllers
                 bool isNew = salesOrderDto.Id == 0;
                 Core.Domain.Sales.SalesOrderHeader? salesOrder = null;
 
+                _tenantGuard.EnsureOwned<Core.Domain.Sales.Customer>(salesOrderDto.CustomerId, nameof(salesOrderDto.CustomerId));
+                if (salesOrderDto.PaymentTermId > 0)
+                    _tenantGuard.EnsureOwned<Core.Domain.PaymentTerm>(salesOrderDto.PaymentTermId, nameof(salesOrderDto.PaymentTermId));
+
                 if (isNew)
                 {
                     salesOrder = new Core.Domain.Sales.SalesOrderHeader();
@@ -842,7 +883,7 @@ namespace Api.Controllers
 
                     if (salesOrderDto.QuotationId != null)
                     {
-                        var quotation = _salesService.GetSalesQuotationById(salesOrderDto.QuotationId.Value);
+                        var quotation = _tenantGuard.EnsureOwned<Core.Domain.Sales.SalesQuoteHeader>(salesOrderDto.QuotationId.Value, nameof(salesOrderDto.QuotationId));
                         quotation.Status = SalesQuoteStatus.ClosedOrderCreated;
                         _salesService.UpdateSalesQuote(quotation);
                     }
@@ -850,7 +891,7 @@ namespace Api.Controllers
                 }
                 else
                 {
-                    salesOrder = _salesService.GetSalesOrderById(salesOrderDto.Id);
+                    salesOrder = _tenantGuard.EnsureOwned<Core.Domain.Sales.SalesOrderHeader>(salesOrderDto.Id, nameof(salesOrderDto.Id));
                 }
 
                 salesOrder.CustomerId = salesOrderDto.CustomerId;
@@ -860,6 +901,11 @@ namespace Api.Controllers
 
                 foreach (var line in salesOrderDto.SalesOrderLines)
                 {
+                    if (line.ItemId.HasValue && line.ItemId.Value > 0)
+                        _tenantGuard.EnsureOwned<Core.Domain.Items.Item>(line.ItemId.Value, nameof(line.ItemId));
+                    if (line.MeasurementId.HasValue && line.MeasurementId.Value > 0)
+                        _tenantGuard.EnsureOwned<Core.Domain.Items.Measurement>(line.MeasurementId.Value, nameof(line.MeasurementId));
+
                     if (!isNew)
                     {
                         var existingLine = salesOrder.SalesOrderLines.Where(id => id.Id == line.Id).FirstOrDefault();
@@ -956,6 +1002,7 @@ namespace Api.Controllers
             }
             catch (Exception ex)
             {
+                if (ex is Core.Tenancy.TenantException) throw;
                 errors = new string[1] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
                 return new BadRequestObjectResult(errors);
             }
@@ -983,6 +1030,10 @@ namespace Api.Controllers
                 Core.Domain.Sales.SalesInvoiceHeader? salesInvoice = null;
                 Core.Domain.Sales.SalesOrderHeader? salesOrder = null;
 
+                _tenantGuard.EnsureOwned<Core.Domain.Sales.Customer>(salesInvoiceDto.CustomerId, nameof(salesInvoiceDto.CustomerId));
+                if (salesInvoiceDto.PaymentTermId.HasValue && salesInvoiceDto.PaymentTermId.Value > 0)
+                    _tenantGuard.EnsureOwned<Core.Domain.PaymentTerm>(salesInvoiceDto.PaymentTermId.Value, nameof(salesInvoiceDto.PaymentTermId));
+
                 // Creating a new invoice
                 if (isNew)
                 {
@@ -1003,7 +1054,7 @@ namespace Api.Controllers
                     else
                     {
                         // else,  your invoice is created from existing (open) sales order.
-                        salesOrder = _salesService.GetSalesOrderById(salesInvoiceDto.FromSalesOrderId.GetValueOrDefault());
+                        salesOrder = _tenantGuard.EnsureOwned<Core.Domain.Sales.SalesOrderHeader>(salesInvoiceDto.FromSalesOrderId.GetValueOrDefault(), nameof(salesInvoiceDto.FromSalesOrderId));
                     }
 
                     // populate invoice header
@@ -1027,6 +1078,11 @@ namespace Api.Controllers
 
                     foreach (var line in salesInvoiceDto.SalesInvoiceLines!)
                     {
+                        if (line.ItemId.HasValue && line.ItemId.Value > 0)
+                            _tenantGuard.EnsureOwned<Core.Domain.Items.Item>(line.ItemId.Value, nameof(line.ItemId));
+                        if (line.MeasurementId.HasValue && line.MeasurementId.Value > 0)
+                            _tenantGuard.EnsureOwned<Core.Domain.Items.Measurement>(line.MeasurementId.Value, nameof(line.MeasurementId));
+
                         var salesInvoiceLine = new Core.Domain.Sales.SalesInvoiceLine();
 
                         salesInvoiceLine.Amount = line.Amount.GetValueOrDefault();
@@ -1084,7 +1140,7 @@ namespace Api.Controllers
                 else
                 {
                     // if you reach here, you are updating existing invoice.
-                    salesInvoice = _salesService.GetSalesInvoiceById(salesInvoiceDto.Id);
+                    salesInvoice = _tenantGuard.EnsureOwned<Core.Domain.Sales.SalesInvoiceHeader>(salesInvoiceDto.Id, nameof(salesInvoiceDto.Id));
 
                     if (salesInvoice.GeneralLedgerHeaderId.HasValue)
                         throw new Exception("Invoice is already posted. Update is not allowed.");
@@ -1113,6 +1169,11 @@ namespace Api.Controllers
 
                     foreach (var line in salesInvoiceDto.SalesInvoiceLines!)
                     {
+                        if (line.ItemId.HasValue && line.ItemId.Value > 0)
+                            _tenantGuard.EnsureOwned<Core.Domain.Items.Item>(line.ItemId.Value, nameof(line.ItemId));
+                        if (line.MeasurementId.HasValue && line.MeasurementId.Value > 0)
+                            _tenantGuard.EnsureOwned<Core.Domain.Items.Measurement>(line.MeasurementId.Value, nameof(line.MeasurementId));
+
                         var existingLine = salesInvoice.SalesInvoiceLines.Where(id => id.Id == line.Id).FirstOrDefault();
 
                         int lineItemId = line.ItemId.GetValueOrDefault();
@@ -1212,6 +1273,7 @@ namespace Api.Controllers
             }
             catch (Exception ex)
             {
+                if (ex is Core.Tenancy.TenantException) throw;
                 errors = new string[1] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
                 return new BadRequestObjectResult(errors);
             }
@@ -1221,6 +1283,7 @@ namespace Api.Controllers
         [ServiceFilter(typeof(ValidationFilterAttribute))]
         public IActionResult CreateSalesInvoice([FromBody] Dto.Sales.SalesInvoice salesInvoiceDto)
         {
+            EnsureSalesInvoiceReferencesOwned(salesInvoiceDto);
             var result = _salesService.CreateSalesInvoice(salesInvoiceDto);
 
             if (result.IsFailure)
@@ -1235,6 +1298,7 @@ namespace Api.Controllers
         [ServiceFilter(typeof(ValidationFilterAttribute))]
         public IActionResult UpdateSalesInvoice([FromBody] Dto.Sales.SalesInvoice salesInvoiceDto)
         {
+            EnsureSalesInvoiceReferencesOwned(salesInvoiceDto);
             var result = _salesService.UpdateSalesInvoice(salesInvoiceDto);
 
             if (result.IsFailure)
@@ -1243,6 +1307,25 @@ namespace Api.Controllers
             var salesInvoiceToReturn = result.Value;
 
             return Ok(salesInvoiceToReturn);
+        }
+
+        // SalesService maps these ids straight onto entities, so each must belong to the current workspace first.
+        private void EnsureSalesInvoiceReferencesOwned(Dto.Sales.SalesInvoice dto)
+        {
+            if (dto.Id > 0)
+                _tenantGuard.EnsureOwned<Core.Domain.Sales.SalesInvoiceHeader>(dto.Id, nameof(dto.Id));
+            _tenantGuard.EnsureOwned<Core.Domain.Sales.Customer>(dto.CustomerId, nameof(dto.CustomerId));
+            _tenantGuard.EnsureOwned<Core.Domain.PaymentTerm>(dto.PaymentTermId, nameof(dto.PaymentTermId));
+            _tenantGuard.EnsureOwned<Core.Domain.Sales.SalesOrderHeader>(dto.FromSalesOrderId, nameof(dto.FromSalesOrderId));
+            _tenantGuard.EnsureOwned<Core.Domain.Sales.SalesDeliveryHeader>(dto.FromSalesDeliveryId, nameof(dto.FromSalesDeliveryId));
+
+            foreach (var line in dto.SalesInvoiceLines ?? new List<Dto.Sales.SalesInvoiceLine>())
+            {
+                if (line.Id > 0)
+                    _tenantGuard.EnsureOwned<Core.Domain.Sales.SalesInvoiceLine>(line.Id, nameof(line.Id));
+                _tenantGuard.EnsureOwned<Core.Domain.Items.Item>(line.ItemId, nameof(line.ItemId));
+                _tenantGuard.EnsureOwned<Core.Domain.Items.Measurement>(line.MeasurementId, nameof(line.MeasurementId));
+            }
         }
 
         [HttpDelete("DeleteSalesInvoice")]
@@ -1265,9 +1348,7 @@ namespace Api.Controllers
                 if (!ModelState.IsValid)
                     return BadRequest(ModelState);
 
-                var invoice = _salesService.GetSalesInvoiceById(paymentDto.InvoiceId);
-                if (invoice == null)
-                    return NotFound(new { message = $"Invoice #{paymentDto.InvoiceId} not found." });
+                var invoice = _tenantGuard.EnsureOwned<Core.Domain.Sales.SalesInvoiceHeader>(paymentDto.InvoiceId, nameof(paymentDto.InvoiceId));
 
                 var cashBanks = _financialService.GetCashAndBanks();
                 var primaryBank = cashBanks.FirstOrDefault();
@@ -1459,6 +1540,10 @@ namespace Api.Controllers
                 bool isNew = quotationDto.Id == 0;
                 Core.Domain.Sales.SalesQuoteHeader? salesQuote = null;
 
+                _tenantGuard.EnsureOwned<Core.Domain.Sales.Customer>(quotationDto.CustomerId.GetValueOrDefault(), nameof(quotationDto.CustomerId));
+                if (quotationDto.PaymentTermId > 0)
+                    _tenantGuard.EnsureOwned<Core.Domain.PaymentTerm>(quotationDto.PaymentTermId, nameof(quotationDto.PaymentTermId));
+
                 if (isNew)
                 {
                     salesQuote = new Core.Domain.Sales.SalesQuoteHeader();
@@ -1466,7 +1551,7 @@ namespace Api.Controllers
                 }
                 else
                 {
-                    salesQuote = _salesService.GetSalesQuotationById(quotationDto.Id);
+                    salesQuote = _tenantGuard.EnsureOwned<Core.Domain.Sales.SalesQuoteHeader>(quotationDto.Id, nameof(quotationDto.Id));
                     salesQuote.Status = (SalesQuoteStatus)quotationDto.StatusId;
                 }
 
@@ -1478,6 +1563,11 @@ namespace Api.Controllers
 
                 foreach (var line in quotationDto.SalesQuotationLines)
                 {
+                    if (line.ItemId.HasValue && line.ItemId.Value > 0)
+                        _tenantGuard.EnsureOwned<Core.Domain.Items.Item>(line.ItemId.Value, nameof(line.ItemId));
+                    if (line.MeasurementId.HasValue && line.MeasurementId.Value > 0)
+                        _tenantGuard.EnsureOwned<Core.Domain.Items.Measurement>(line.MeasurementId.Value, nameof(line.MeasurementId));
+
                     if (!isNew)
                     {
                         var existingLine = salesQuote.SalesQuoteLines.Where(id => id.Id == line.Id).FirstOrDefault();
@@ -1537,6 +1627,7 @@ namespace Api.Controllers
             }
             catch (Exception ex)
             {
+                if (ex is Core.Tenancy.TenantException) throw;
                 errors = new string[1] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
                 return new BadRequestObjectResult(errors);
             }
@@ -1560,18 +1651,19 @@ namespace Api.Controllers
                     return new BadRequestObjectResult(errors);
                 }
 
-                var bank = _financialService.GetCashAndBanks().Where(id => id.Id == (int)receiptDto.AccountToDebitId).FirstOrDefault();
+                var bank = _tenantGuard.EnsureOwned<Core.Domain.Financials.Bank>((int)receiptDto.AccountToDebitId, "AccountToDebitId");
+                var customer = _tenantGuard.EnsureOwned<Core.Domain.Sales.Customer>((int)receiptDto.CustomerId, "CustomerId");
+                _tenantGuard.EnsureOwned<Core.Domain.Financials.Account>((int)receiptDto.AccountToCreditId, "AccountToCreditId");
 
                 var salesReceipt = new Core.Domain.Sales.SalesReceiptHeader();
                 salesReceipt.Date = receiptDto.ReceiptDate;
                 salesReceipt.CustomerId = receiptDto.CustomerId;
-                salesReceipt.AccountToDebitId = bank!.AccountId;
+                salesReceipt.AccountToDebitId = bank.AccountId;
                 salesReceipt.Amount = receiptDto.Amount;
                 salesReceipt.PaymentMethod = receiptDto.PaymentMethod != null ? (string)receiptDto.PaymentMethod : null;
                 salesReceipt.ReferenceNo = receiptDto.ReferenceNo != null ? (string)receiptDto.ReferenceNo : null;
                 salesReceipt.Memo = receiptDto.Memo != null ? (string)receiptDto.Memo : null;
 
-                var customer = _salesService.GetCustomerById((int)receiptDto.CustomerId);
                 if (customer.CustomerAdvancesAccountId != (int)receiptDto.AccountToCreditId)
                     throw new Exception("Invalid account.");
 
@@ -1589,6 +1681,7 @@ namespace Api.Controllers
             }
             catch (Exception ex)
             {
+                if (ex is Core.Tenancy.TenantException) throw;
                 errors = new string[1] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
                 return new BadRequestObjectResult(errors);
             }
@@ -1649,6 +1742,7 @@ namespace Api.Controllers
             }
             catch (Exception ex)
             {
+                if (ex is Core.Tenancy.TenantException) throw;
                 errors = new string[1] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
                 return new BadRequestObjectResult(errors);
             }
@@ -1671,8 +1765,12 @@ namespace Api.Controllers
                     return new BadRequestObjectResult(errors);
                 }
 
+                _tenantGuard.EnsureOwned<Core.Domain.Sales.Customer>((int)allocationDto.CustomerId, "CustomerId");
+                _tenantGuard.EnsureOwned<Core.Domain.Sales.SalesReceiptHeader>((int)allocationDto.ReceiptId, "ReceiptId");
+
                 foreach (var line in allocationDto.AllocationLines)
                 {
+                    _tenantGuard.EnsureOwned<Core.Domain.Sales.SalesInvoiceHeader>((int)line.InvoiceId, "InvoiceId");
                     decimal? amount = (decimal?)line.AmountToAllocate;
                     if (amount.HasValue)
                     {
@@ -1691,6 +1789,7 @@ namespace Api.Controllers
             }
             catch (Exception ex)
             {
+                if (ex is Core.Tenancy.TenantException) throw;
                 errors = new string[1] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
                 return new BadRequestObjectResult(errors);
             }
@@ -1743,6 +1842,8 @@ namespace Api.Controllers
             try
             {
                 var salesInvoice = _salesService.GetSalesInvoiceById(id);
+                if (salesInvoice == null)
+                    return NotFound(new { message = $"Invoice #{id} not found." });
 
                 //var items = _salesService.Ge
                 var salesInvoiceDto = new Dto.Sales.SalesInvoice()
@@ -1756,7 +1857,8 @@ namespace Api.Controllers
                     PaymentTermId = salesInvoice.PaymentTermId,
                     ReferenceNo = salesInvoice.ReferenceNo,
                     Posted = salesInvoice.GeneralLedgerHeaderId != null,
-                    CompanyName = _adminService.GetDefaultCompany().Name
+                    CompanyName = ((!string.IsNullOrWhiteSpace(_tenantContext.CompanySlug) ? _adminService.GetCompanyBySlug(_tenantContext.CompanySlug) : null)
+                        ?? _adminService.GetCompanies().FirstOrDefault(c => c.Id == _tenantContext.CompanyId))?.Name ?? "AccountGo"
 
                 };
 

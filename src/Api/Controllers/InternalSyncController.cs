@@ -16,6 +16,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Api.Controllers
 {
+    [Core.Tenancy.TenantFree]
     [ApiController]
     [Route("api/internal")]
     [AllowAnonymous]

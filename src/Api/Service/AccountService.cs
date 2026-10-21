@@ -18,11 +18,6 @@ public class AccountService : IAccountService
     public async Task<Core.Domain.Financials.Account> AddAccountAsync(Core.Domain.Financials.Account newAccount)
     {
         // Set default values for required fields if not already set
-        if (newAccount.CompanyId == 0)
-        {
-            newAccount.CompanyId = 1; // Default company ID
-        }
-
         if (newAccount.AccountClassId == 0)
         {
             // Get the first AccountClass (usually "Assets" with ID 1)

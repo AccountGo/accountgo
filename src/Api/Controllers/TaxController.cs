@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using Dto.TaxSystem;
 using Services.TaxSystem;
 using System.Collections.Generic;
@@ -9,6 +9,7 @@ using Api.ActionFilters;
 
 namespace Api.Controllers
 {
+    [Core.Tenancy.TenantScoped]
     [Route("api/[controller]")]
     public class TaxController : BaseController
     {

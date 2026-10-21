@@ -171,7 +171,7 @@ namespace Api.Data
             // return defaultCompany;
 
             Console.WriteLine("Checking if there is already a default company.");
-            var defaultCompany = _adminService.GetDefaultCompany();
+            var defaultCompany = _adminService.GetCompanyBySlug("ph-financials") ?? _adminService.GetCompanies().FirstOrDefault();
             if (defaultCompany != null)
             {
                 Console.WriteLine("Default company found. Returning it.");
@@ -204,7 +204,7 @@ namespace Api.Data
                 // If no accounts found just return.
                 //if (_financialService.GetAccounts().Any()) return accountClasses;
                 string[,] values;
-                var assembly = Assembly.GetEntryAssembly();
+                var assembly = typeof(Initializer).Assembly;
                 var resourceStream = assembly!.GetManifestResourceStream("Api.Data.coa.csv");
                 using (var reader = new StreamReader(resourceStream!, Encoding.UTF8))
                 {
@@ -239,7 +239,6 @@ namespace Api.Data
                             break;
                     }
 
-                    account.CompanyId = 1;
                     accounts.Add(account);
                 }
 
@@ -334,7 +333,7 @@ namespace Api.Data
                 // If no accounts found just return.
                 if (_financialService.GetAccounts().Any()) return;
                 string[,] values;
-                var assembly = Assembly.GetEntryAssembly();
+                var assembly = typeof(Initializer).Assembly;
                 var resourceStream = assembly!.GetManifestResourceStream("Api.Data.coa.csv");
                 using (var reader = new StreamReader(resourceStream!, Encoding.UTF8))
                 {
@@ -369,7 +368,6 @@ namespace Api.Data
                             break;
                     }
 
-                    account.CompanyId = 1;
                     accounts.Add(account);
                 }
 

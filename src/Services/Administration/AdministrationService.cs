@@ -42,6 +42,7 @@ namespace Services.Administration
         private readonly IFinancialService _financialService;
         private readonly ITaxService _taxService;
         private readonly IMapper _mapper;
+        private readonly Core.Tenancy.ITenantContext? _tenantContext;
 
         public AdministrationService(IRepository<FinancialYear> fiscalYearRepo,
             IRepository<TaxGroup> taxGroupRepo,
@@ -56,7 +57,8 @@ namespace Services.Administration
             IFinancialService financialService,
             ITaxService taxService,
             IMapper mapper,
-            IRepository<Company> company = null
+            IRepository<Company> company = null,
+            Core.Tenancy.ITenantContext? tenantContext = null
             )
             : base(null, generalLedgerSetting, paymentTermRepo, bankRepo)
         {
@@ -74,6 +76,7 @@ namespace Services.Administration
             _financialService = financialService;
             _taxService = taxService;
             _mapper = mapper;
+            _tenantContext = tenantContext;
         }
 
         public ICollection<Tax> GetAllTaxes(bool includeInActive)
@@ -293,11 +296,6 @@ namespace Services.Administration
             }
         }
 
-        public Company GetDefaultCompany()
-        {
-            return _company.Table.ToList().FirstOrDefault();
-        }
-
         public ICollection<Company> GetCompanies()
         {
             return _company.Table.ToList();
@@ -306,11 +304,7 @@ namespace Services.Administration
         public Company? GetCompanyBySlug(string slug)
         {
             if (string.IsNullOrWhiteSpace(slug)) return null;
-            var list = _company.Table.ToList();
-            return list.FirstOrDefault(c =>
-                string.Equals(c.Slug, slug, StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(c.ShortName, slug, StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(c.CompanyCode, slug, StringComparison.OrdinalIgnoreCase));
+            return _company.Table.FirstOrDefault(c => c.Slug == slug);
         }
 
         public ICollection<PaymentTerm> GetPaymentTerms()
@@ -333,7 +327,14 @@ namespace Services.Administration
             {
                 _company.Insert(company);
             }
-            else { _company.Update(company); }
+            else
+            {
+                if (_tenantContext?.CompanyId.HasValue == true && company.Id != _tenantContext.CompanyId.Value)
+                {
+                    throw new Core.Tenancy.CrossTenantWriteException("Cannot update another organization's settings.");
+                }
+                _company.Update(company);
+            }
         }
 
         public bool IsSystemInitialized()
@@ -369,28 +370,19 @@ namespace Services.Administration
             return _auditLogRepo.Table.AsEnumerable();
         }
 
-        public TenantSubscriptionDto GetCurrentSubscription(string? slug = null)
+        public TenantSubscriptionDto GetCurrentSubscription()
         {
-            var company = !string.IsNullOrWhiteSpace(slug) ? GetCompanyBySlug(slug) : null;
-            company ??= GetDefaultCompany();
-            if (company == null)
-            {
-                return new TenantSubscriptionDto
-                {
-                    CompanyId = 0,
-                    CompanyName = "Default Organization",
-                    Slug = "default",
-                    Plan = "invoicing",
-                    SubscriptionStatus = "active",
-                    ActiveModules = new List<string> { "sales" }
-                };
-            }
+            // Workspace context only. Never accept a client-supplied slug/id here.
+            int companyId = _tenantContext?.RequireCompanyId()
+                ?? throw new Core.Tenancy.TenantNotResolvedException();
+            var company = _company.GetById(companyId)
+                ?? throw new Core.Tenancy.TenantEntityNotFoundException(nameof(Company), companyId);
 
             return new TenantSubscriptionDto
             {
                 CompanyId = company.Id,
                 CompanyName = company.Name ?? "AccountGo Organization",
-                Slug = company.Slug ?? company.ShortName?.ToLowerInvariant() ?? $"org-{company.Id}",
+                Slug = company.Slug ?? $"org-{company.Id}",
                 Plan = company.Plan ?? "accounting",
                 SubscriptionStatus = company.SubscriptionStatus ?? "active",
                 SubscriptionValidUntil = company.SubscriptionValidUntil,
@@ -400,27 +392,14 @@ namespace Services.Administration
 
         public TenantSubscriptionDto UpdateSubscription(UpdateSubscriptionDto dto)
         {
-            Company? company = null;
-            if (dto.CompanyId.HasValue && dto.CompanyId.Value > 0)
-            {
-                company = _company.GetById(dto.CompanyId.Value);
-            }
-            else if (!string.IsNullOrWhiteSpace(dto.Slug))
-            {
-                company = GetCompanyBySlug(dto.Slug);
-            }
+            // Workspace context only: dto.CompanyId / dto.Slug are ignored.
+            int companyId = _tenantContext?.RequireCompanyId()
+                ?? throw new Core.Tenancy.TenantNotResolvedException();
 
-            company ??= GetDefaultCompany();
+            var company = _company.GetById(companyId);
             if (company == null)
             {
-                company = new Company
-                {
-                    Name = "Financial Solutions Inc.",
-                    ShortName = "FSI",
-                    Slug = "ph-financials",
-                    CompanyCode = "100"
-                };
-                _company.Insert(company);
+                throw new Core.Tenancy.TenantEntityNotFoundException(nameof(Company), companyId);
             }
 
             company.Plan = dto.Plan?.ToLowerInvariant() ?? "invoicing";
@@ -434,13 +413,16 @@ namespace Services.Administration
             }
 
             _company.Update(company);
-            return GetCurrentSubscription(company.Slug);
+            return GetCurrentSubscription();
         }
 
         public bool IsModuleEnabled(string moduleKey)
         {
-            var company = GetDefaultCompany();
-            if (company == null) return true;
+            if (_tenantContext == null || !_tenantContext.CompanyId.HasValue)
+                return false;
+
+            var company = _company.GetById(_tenantContext.CompanyId.Value);
+            if (company == null) return false;
             return company.HasModule(moduleKey);
         }
 

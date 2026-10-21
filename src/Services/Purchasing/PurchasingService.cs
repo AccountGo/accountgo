@@ -335,6 +335,9 @@ namespace Services.Purchasing
                 .Where(v => v.Id == id)
                 .FirstOrDefault();
 
+            if (vendor == null)
+                return null;
+
             foreach (var invoice in vendor.PurchaseInvoices)
             {
                 invoice.PurchaseInvoiceLines = GetPurchaseInvoiceById(invoice.Id).PurchaseInvoiceLines;

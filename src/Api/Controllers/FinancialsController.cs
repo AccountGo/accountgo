@@ -10,6 +10,7 @@ using System.Linq;
 
 namespace Api.Controllers
 {
+    [Core.Tenancy.TenantScoped]
     [Route("api/[controller]")]
     [RequireModule("financials")]
     //[Authorize]
@@ -18,13 +19,17 @@ namespace Api.Controllers
         private readonly IAdministrationService _adminService;
         private readonly IFinancialService _financialService;
         private readonly IAccountService _accountService;
+        private readonly Core.Tenancy.ITenantGuard _tenantGuard;
 
         public FinancialsController(IAdministrationService adminService,
-            IFinancialService financialService, IAccountService accountService)
+            IFinancialService financialService,
+            IAccountService accountService,
+            Core.Tenancy.ITenantGuard tenantGuard)
         {
             _adminService = adminService;
             _financialService = financialService;
             _accountService = accountService;
+            _tenantGuard = tenantGuard;
         }
 
         [HttpGet]
@@ -65,6 +70,8 @@ namespace Api.Controllers
         public IActionResult Account(int id)
         {
             var account = _financialService.GetAccount(id);
+            if (account == null)
+                return NotFound(new { message = $"Account #{id} not found." });
 
             var accountDto = new Dto.Financial.Account()
             {
@@ -130,6 +137,8 @@ namespace Api.Controllers
         public IActionResult JournalEntry(int id)
         {
             var je = _financialService.GetJournalEntry(id);
+            if (je == null)
+                return NotFound(new { message = $"Journal entry #{id} not found." });
 
             var journalEntryDto = new JournalEntry()
             {
@@ -192,6 +201,7 @@ namespace Api.Controllers
             }
             catch (Exception ex)
             {
+                if (ex is Core.Tenancy.TenantException) throw;
                 errors = new string[1] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
                 return new BadRequestObjectResult(errors);
             }
@@ -237,9 +247,7 @@ namespace Api.Controllers
                 }
                 else
                 {
-                    journalEntry = _financialService.GetJournalEntry(journalEntryDto.Id, false);
-                    if (journalEntry == null)
-                        throw new Exception("Journal entry not found.");
+                    journalEntry = _tenantGuard.EnsureOwned<Core.Domain.Financials.JournalEntryHeader>(journalEntryDto.Id, nameof(journalEntryDto.Id));
 
                     var dtoLineIds = journalEntryDto.JournalEntryLines
                         .Where(l => l.Id != 0)
@@ -263,6 +271,8 @@ namespace Api.Controllers
 
                 foreach (var line in journalEntryDto.JournalEntryLines)
                 {
+                    _tenantGuard.EnsureOwned<Core.Domain.Financials.Account>(line.AccountId, nameof(line.AccountId));
+
                     if (!isNew)
                     {
                         var existingLine = journalEntry.JournalEntryLines
@@ -310,6 +320,7 @@ namespace Api.Controllers
             }
             catch (Exception ex)
             {
+                if (ex is Core.Tenancy.TenantException) throw;
                 errors = new string[1] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
                 return new BadRequestObjectResult(errors);
             }
@@ -397,6 +408,8 @@ namespace Api.Controllers
         {
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
+
+            _tenantGuard.EnsureOwned<Core.Domain.Financials.Account>(newAccountDto.ParentAccountId, nameof(newAccountDto.ParentAccountId));
 
             var newAccount = new Core.Domain.Financials.Account
             {
@@ -590,6 +603,7 @@ namespace Api.Controllers
             }
             catch (Exception ex)
             {
+                if (ex is Core.Tenancy.TenantException) throw;
                 return BadRequest(new { message = ex.Message });
             }
         }
@@ -603,6 +617,7 @@ namespace Api.Controllers
                 if (!ModelState.IsValid)
                     return BadRequest(ModelState);
 
+                _tenantGuard.EnsureOwned<Core.Domain.Financials.Account>(bankDto.AccountId, nameof(bankDto.AccountId));
                 var account = GetEligibleBankAccount(bankDto.AccountId);
                 if (account == null)
                     return BadRequest(new { message = "Select an account with a code between 10100 and 10999." });
@@ -632,6 +647,7 @@ namespace Api.Controllers
             }
             catch (Exception ex)
             {
+                if (ex is Core.Tenancy.TenantException) throw;
                 return BadRequest(new { message = ex.Message });
             }
         }
@@ -645,13 +661,12 @@ namespace Api.Controllers
                 if (!ModelState.IsValid)
                     return BadRequest(ModelState);
 
+                _tenantGuard.EnsureOwned<Core.Domain.Financials.Account>(bankDto.AccountId, nameof(bankDto.AccountId));
                 var account = GetEligibleBankAccount(bankDto.AccountId);
                 if (account == null)
                     return BadRequest(new { message = "Select an account with a code between 10100 and 10999." });
 
-                var bank = _financialService.GetBank(id);
-                if (bank == null)
-                    return NotFound(new { message = "Bank not found" });
+                var bank = _tenantGuard.EnsureOwned<Core.Domain.Financials.Bank>(id, nameof(id));
 
                 bank.Name = account.AccountName;
                 bank.BankName = bankDto.BankName;
@@ -673,6 +688,7 @@ namespace Api.Controllers
             }
             catch (Exception ex)
             {
+                if (ex is Core.Tenancy.TenantException) throw;
                 return BadRequest(new { message = ex.Message });
             }
         }
@@ -693,6 +709,7 @@ namespace Api.Controllers
             }
             catch (Exception ex)
             {
+                if (ex is Core.Tenancy.TenantException) throw;
                 return BadRequest(new { message = ex.Message });
             }
         }

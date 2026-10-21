@@ -35,7 +35,7 @@ namespace Services.Financial
         IEnumerable<Bank> GetCashAndBanks();
         List<KeyValuePair<int, decimal>> ComputeInputTax(int vendorId, int itemId, decimal quantity, decimal amount, decimal discount);
         List<KeyValuePair<int, decimal>> ComputeOutputTax(int customerId, int itemId, decimal quantity, decimal amount, decimal discount);
-        GeneralLedgerSetting GetGeneralLedgerSetting(int? companyId = null);
+        GeneralLedgerSetting GetGeneralLedgerSetting();
         void SaveGeneralLedgerSetting(GeneralLedgerSetting setting);
         void AddMainContraAccountSetting(int masterAccountId, int contraAccountId);
         void UpdateAccount(Account account);

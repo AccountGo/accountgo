@@ -23,10 +23,15 @@ using Api.Data;
 
 namespace Api.Controllers
 {
+    [Core.Tenancy.TenantScoped]
     [ApiController]
     [Route("api/[controller]")]
     public class AdministrationController : BaseController
     {
+        // Global user/role management is platform-staff only until Phase 3.5 replaces it with
+        // workspace members/invitations. Workspace Owners must not manage other workspaces' users.
+        private const string PlatformAdminRole = "SystemAdministrators";
+
         private readonly IAdministrationService _adminService;
         private readonly IFinancialService _financialService;
         private readonly ISalesService _salesService;
@@ -34,6 +39,7 @@ namespace Api.Controllers
         private readonly IInventoryService _inventoryService;
         private readonly ISecurityService _securityService;
         private readonly UserManager<ApplicationUser> _userManager;
+        private readonly Core.Tenancy.ITenantContext _tenantContext;
 
         public AdministrationController(IAdministrationService adminService,
             IFinancialService financialService,
@@ -41,7 +47,8 @@ namespace Api.Controllers
             IPurchasingService purchasingService,
             IInventoryService inventoryService,
             ISecurityService securityService,
-            UserManager<ApplicationUser> userManager)
+            UserManager<ApplicationUser> userManager,
+            Core.Tenancy.ITenantContext tenantContext)
         {
             _adminService = adminService;
             _financialService = financialService;
@@ -50,8 +57,10 @@ namespace Api.Controllers
             _inventoryService = inventoryService;
             _securityService = securityService;
             _userManager = userManager;
+            _tenantContext = tenantContext;
         }
 
+        [Api.Filters.RequireWorkspaceRole(Core.Domain.CompanyMemberRole.Owner)]
         [HttpGet]
         [Route("Setup")]
         public IActionResult Setup()
@@ -64,6 +73,7 @@ namespace Api.Controllers
                 return BadRequest("{ 'message': 'Initialization not successful! Please check the log.' }");
         }
 
+        [Authorize(Roles = PlatformAdminRole)]
         [HttpGet]
         [Route("clear")]
         public IActionResult Clear()
@@ -76,26 +86,11 @@ namespace Api.Controllers
                 return BadRequest("{ 'message': 'Clearing database not successful! Please check the log.' }");
         }
 
-        [AllowAnonymous]
         [HttpGet("company")]
         public IActionResult Company([FromQuery] string? slug = null, [FromQuery] string? companyCode = null, [FromQuery] int? id = null)
         {
-            Core.Domain.Company? company = null;
-
-            if (id.HasValue && id.Value > 0)
-            {
-                company = _adminService.GetCompanies().FirstOrDefault(c => c.Id == id.Value);
-            }
-            else if (!string.IsNullOrWhiteSpace(slug))
-            {
-                company = _adminService.GetCompanyBySlug(slug);
-            }
-            else if (!string.IsNullOrWhiteSpace(companyCode))
-            {
-                company = _adminService.GetCompanies().FirstOrDefault(c => string.Equals(c.CompanyCode, companyCode, StringComparison.OrdinalIgnoreCase));
-            }
-
-            company ??= _adminService.GetDefaultCompany();
+            var companyId = _tenantContext.RequireCompanyId();
+            var company = _adminService.GetCompanies().FirstOrDefault(c => c.Id == companyId);
 
             if (company == null)
             {
@@ -146,93 +141,8 @@ namespace Api.Controllers
             }));
         }
 
-        [AllowAnonymous]
-        [HttpGet("companies")]
-        public IActionResult Companies()
-        {
-            var companies = _adminService.GetCompanies();
-            return Ok(companies.Select(c => new
-            {
-                id = c.Id.ToString(),
-                name = c.Name,
-                shortName = c.ShortName,
-                slug = string.IsNullOrWhiteSpace(c.Slug) ? (c.ShortName?.ToLowerInvariant() ?? $"org-{c.Id}") : c.Slug,
-                plan = c.Plan ?? "accounting",
-                subscriptionStatus = c.SubscriptionStatus ?? "active",
-                activeModules = c.GetActiveModules(),
-                companyCode = c.CompanyCode,
-                cra = c.CRA
-            }));
-        }
-
-        public class CreateCompanyRequest
-        {
-            public string Name { get; set; } = string.Empty;
-            public string? ShortName { get; set; }
-            public string? Slug { get; set; }
-            public string? Plan { get; set; } = "accounting";
-            public string? Currency { get; set; }
-        }
-
-        [AllowAnonymous]
-        [HttpPost("company")]
-        public IActionResult CreateCompany([FromBody] CreateCompanyRequest request)
-        {
-            if (string.IsNullOrWhiteSpace(request?.Name))
-                return BadRequest(new ProblemDetails
-                {
-                    Title = "Company Name Required",
-                    Detail = "Company name is required.",
-                    Status = StatusCodes.Status400BadRequest
-                });
-
-            var rawSlug = !string.IsNullOrWhiteSpace(request.Slug)
-                ? request.Slug
-                : request.Name;
-
-            var cleanSlug = System.Text.RegularExpressions.Regex.Replace(rawSlug.ToLowerInvariant().Trim(), @"[^a-z0-9\-]", "-");
-            cleanSlug = System.Text.RegularExpressions.Regex.Replace(cleanSlug, @"-+", "-").Trim('-');
-            if (string.IsNullOrWhiteSpace(cleanSlug))
-                cleanSlug = $"org-{RandomNumberGenerator.GetInt32(100, 1000)}";
-
-            var existing = _adminService.GetCompanyBySlug(cleanSlug);
-            if (existing != null)
-            {
-                return BadRequest(new ProblemDetails
-                {
-                    Title = "Workspace Slug Already Taken",
-                    Detail = $"A workspace with URL slug '{cleanSlug}' already exists. Please choose a different slug.",
-                    Status = StatusCodes.Status400BadRequest
-                });
-            }
-
-            var shortName = !string.IsNullOrWhiteSpace(request.ShortName)
-                ? request.ShortName.Trim()
-                : (request.Name.Trim().Length <= 5 ? request.Name.Trim().ToUpper() : request.Name.Trim().Substring(0, 4).ToUpper());
-
-            var company = new Core.Domain.Company
-            {
-                Name = request.Name.Trim(),
-                ShortName = shortName,
-                Slug = cleanSlug,
-                CompanyCode = RandomNumberGenerator.GetInt32(100, 1000).ToString(),
-                Plan = request.Plan?.ToLowerInvariant() ?? "accounting",
-                SubscriptionStatus = "active"
-            };
-
-            _adminService.SaveCompany(company);
-
-            return StatusCode(StatusCodes.Status201Created, new
-            {
-                id = company.Id.ToString(),
-                name = company.Name,
-                shortName = company.ShortName,
-                slug = company.Slug,
-                plan = company.Plan,
-                subscriptionStatus = company.SubscriptionStatus,
-                activeModules = company.GetActiveModules()
-            });
-        }
+        // GET companies (listed every workspace) and POST company were removed in Phase 2.
+        // Use GET/POST /api/organizations, which only lists the caller's memberships and makes the creator Owner.
 
         [HttpGet]
         [Route("auditlogs")] // api/Administration/AuditLogs
@@ -255,6 +165,7 @@ namespace Api.Controllers
             return new ObjectResult(auditLogsDto);
         }
 
+        [Authorize(Roles = PlatformAdminRole)]
         [HttpGet]
         [Route("users")] // api/Administration/Users
         public IActionResult Users()
@@ -278,6 +189,7 @@ namespace Api.Controllers
             public List<int>? RoleIds { get; set; }
         }
 
+        [Authorize(Roles = PlatformAdminRole)]
         [HttpPost("users")]
         public async Task<IActionResult> CreateUser([FromBody] CreateMemberRequest request)
         {
@@ -338,6 +250,7 @@ namespace Api.Controllers
             public List<int>? RoleIds { get; set; }
         }
 
+        [Authorize(Roles = PlatformAdminRole)]
         [HttpPut("users/{id:int}")]
         public async Task<IActionResult> UpdateUser(int id, [FromBody] UpdateMemberRequest request)
         {
@@ -390,6 +303,7 @@ namespace Api.Controllers
             return Ok(MapToUserDto(updatedUser));
         }
 
+        [Authorize(Roles = PlatformAdminRole)]
         [HttpDelete("users/{id:int}")]
         public async Task<IActionResult> DeleteUser(int id)
         {
@@ -489,6 +403,7 @@ namespace Api.Controllers
             public List<int>? PermissionIds { get; set; }
         }
 
+        [Authorize(Roles = PlatformAdminRole)]
         [HttpPost("roles")]
         public IActionResult SaveRole([FromBody] SaveRoleRequest request)
         {
@@ -501,6 +416,7 @@ namespace Api.Controllers
             return Ok(new { success = true });
         }
 
+        [Authorize(Roles = PlatformAdminRole)]
         [HttpDelete("roles/{id:int}")]
         public IActionResult DeleteRole(int id)
         {
@@ -551,6 +467,7 @@ namespace Api.Controllers
             return dto;
         }
 
+        [Authorize(Roles = PlatformAdminRole)]
         [HttpGet]
         [Route("groups")]
         // TODO: generates exception
@@ -586,6 +503,7 @@ namespace Api.Controllers
             return new ObjectResult(groupsDto);
         }
 
+        [Authorize(Roles = PlatformAdminRole)]
         [HttpGet]
         [Route("GetUser")]
         public IActionResult GetUser(string username)
@@ -639,6 +557,7 @@ namespace Api.Controllers
             public string? CRA { get; set; }
         }
 
+        [Api.Filters.RequireWorkspaceRole(Core.Domain.CompanyMemberRole.Admin)]
         [HttpPost("SaveCompany")]
         [HttpPut("company")]
         public IActionResult SaveCompany([FromBody] UpdateCompanyRequest request)
@@ -646,20 +565,11 @@ namespace Api.Controllers
             if (request == null)
                 return BadRequest(new { message = "Invalid company update request." });
 
-            Core.Domain.Company? company = null;
-            if (request.Id.HasValue && request.Id.Value > 0)
-            {
-                company = _adminService.GetCompanies().FirstOrDefault(c => c.Id == request.Id.Value);
-            }
-            else if (!string.IsNullOrWhiteSpace(request.Slug))
-            {
-                company = _adminService.GetCompanyBySlug(request.Slug);
-            }
-
-            company ??= _adminService.GetDefaultCompany();
+            var companyId = _tenantContext.RequireCompanyId();
+            var company = _adminService.GetCompanies().FirstOrDefault(c => c.Id == companyId);
             if (company == null)
             {
-                company = new Core.Domain.Company();
+                return NotFound(new { message = "Company not found." });
             }
 
             if (!string.IsNullOrWhiteSpace(request.Name))

@@ -41,6 +41,8 @@ export const OrgLayout: React.FC = () => {
   const [availableOrgs, setAvailableOrgs] = useState<OrgDetails[]>([]);
   const [currentOrg, setCurrentOrg] = useState<OrgDetails | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  // Permissions in the current workspace (from /api/organizations/current); null until loaded.
+  const [workspacePermissions, setWorkspacePermissions] = useState<string[] | null>(null);
   const [isMobileOpen, setIsMobileOpen] = useState<boolean>(false);
 
   const [sidebarMode, setSidebarModeState] = useState<SidebarMode>(() => {
@@ -72,7 +74,8 @@ export const OrgLayout: React.FC = () => {
 
     const loadAndResolve = async () => {
       try {
-        const res = await authFetch('/api/Administration/companies');
+        // Only the caller's own active workspaces (tenant-free endpoint).
+        const res = await authFetch('/api/organizations');
         if (res.ok) {
           const data = await res.json();
           if (Array.isArray(data) && mounted) {
@@ -83,7 +86,7 @@ export const OrgLayout: React.FC = () => {
               shortName: c.shortName,
               companyCode: c.companyCode,
               cra: c.cra,
-              role: 'Admin',
+              role: c.role || 'Member',
               plan: (c.plan || 'accounting') as PlanKey,
               currency: 'PHP',
               fiscalYearEnd: 'Dec 31',
@@ -110,7 +113,8 @@ export const OrgLayout: React.FC = () => {
             const match = orgs.find((o) => o.slug.toLowerCase() === orgSlug?.toLowerCase());
             if (match) {
               try {
-                const subRes = await authFetch(`/api/Subscription/current?slug=${match.slug}`);
+                // Workspace comes from the X-AccountGo-Org header that authFetch adds from the URL.
+                const subRes = await authFetch('/api/Subscription/current');
                 if (subRes.ok && mounted) {
                   const subData = await subRes.json();
                   if (subData && subData.plan) {
@@ -124,6 +128,15 @@ export const OrgLayout: React.FC = () => {
                     match.subscription = liveSub;
                     match.plan = subData.plan;
                   }
+                }
+              } catch {}
+
+              try {
+                const curRes = await authFetch('/api/organizations/current');
+                if (curRes.ok && mounted) {
+                  const cur = await curRes.json();
+                  if (cur?.role) match.role = cur.role;
+                  setWorkspacePermissions(Array.isArray(cur?.permissions) ? cur.permissions : []);
                 }
               } catch {}
 
@@ -182,8 +195,8 @@ export const OrgLayout: React.FC = () => {
   }, [currentOrg]);
 
   const userPermissions = useMemo<string[]>(() => {
-    return userProfile.permissions || [];
-  }, [userProfile]);
+    return workspacePermissions ?? userProfile.permissions ?? [];
+  }, [workspacePermissions, userProfile]);
 
   const hasModule = useCallback(
     (moduleKey: ModuleKey): boolean => {
