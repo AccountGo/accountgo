@@ -22,6 +22,28 @@
   --color-brand-subtle: var(--brand-subtle);
   --color-brand-ring: var(--brand-ring);
   --color-accent: var(--accent);
+  --color-border-subtle: var(--border-subtle);
+  --color-text-primary: var(--text-main);
+  --color-bg-muted: var(--bg-subtle);
+}
+
+/* ── Fallback Semantic Aliases & Scheme Dividers ──────────────── */
+:root {
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --text-primary: var(--text-main);
+  --bg-muted: var(--bg-subtle);
+}
+
+[data-scheme="light"] {
+  --border-subtle: rgba(15, 23, 42, 0.08);
+  --text-primary: var(--text-main);
+  --bg-muted: var(--bg-subtle);
+}
+
+[data-scheme="dark"] {
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --text-primary: var(--text-main);
+  --bg-muted: var(--bg-subtle);
 }
 
 /* ── 1. Default & AccountGo Emerald Theme ─────────────────────── */

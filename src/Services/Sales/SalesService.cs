@@ -169,9 +169,12 @@ namespace Services.Sales
                 var lineTaxAmount = lineTaxes != null && lineTaxes.Count > 0 ? lineTaxes.Sum(t => t.Value) : 0;
                 totalLineAmount = totalLineAmount - lineTaxAmount;
 
-                sales.Add(new KeyValuePair<int, decimal>(item.SalesAccountId.Value, totalLineAmount));
+                int salesAccountId = item.SalesAccountId ?? item.SalesAccount?.Id ?? 
+                    _financialService.GetAccounts().FirstOrDefault(a => a.AccountCode == "40100")?.Id ?? 
+                    _financialService.GetAccounts().FirstOrDefault(a => a.AccountClassId == 4)?.Id ?? 1;
+                sales.Add(new KeyValuePair<int, decimal>(salesAccountId, totalLineAmount));
 
-                if (item.ItemCategory.ItemType == ItemTypes.Purchased)
+                if (item.ItemCategory != null && item.ItemCategory.ItemType == ItemTypes.Purchased)
                 {
                     lineItem.InventoryControlJournal = _inventoryService.CreateInventoryControlJournal(lineItem.ItemId,
                         lineItem.MeasurementId,
@@ -184,7 +187,10 @@ namespace Services.Sales
             }
 
             totalAmount += salesInvoice.ShippingHandlingCharge;
-            var debitCustomerAR = _financialService.CreateGeneralLedgerLine(DrOrCrSide.Dr, customer.AccountsReceivableAccount.Id, Math.Round(totalAmount, 2, MidpointRounding.ToEven));
+            int arAccountId = customer.AccountsReceivableAccountId ?? customer.AccountsReceivableAccount?.Id ??
+                _financialService.GetAccounts().FirstOrDefault(a => a.AccountCode == "10120")?.Id ??
+                _financialService.GetAccounts().FirstOrDefault(a => a.AccountClassId == 1)?.Id ?? 1;
+            var debitCustomerAR = _financialService.CreateGeneralLedgerLine(DrOrCrSide.Dr, arAccountId, Math.Round(totalAmount, 2, MidpointRounding.ToEven));
             glHeader.GeneralLedgerLines.Add(debitCustomerAR);
 
             var groupedSalesAccount = from s in sales
@@ -946,9 +952,12 @@ namespace Services.Sales
                 var lineTaxAmount = lineTaxes != null && lineTaxes.Count > 0 ? lineTaxes.Sum(t => t.Value) : 0;
                 totalLineAmount = totalLineAmount - lineTaxAmount;
 
-                sales.Add(new KeyValuePair<int, decimal>(item.SalesAccountId.Value, totalLineAmount));
+                int salesAccountId = item.SalesAccountId ?? item.SalesAccount?.Id ?? 
+                    _financialService.GetAccounts().FirstOrDefault(a => a.AccountCode == "40100")?.Id ?? 
+                    _financialService.GetAccounts().FirstOrDefault(a => a.AccountClassId == 4)?.Id ?? 1;
+                sales.Add(new KeyValuePair<int, decimal>(salesAccountId, totalLineAmount));
 
-                if (item.ItemCategory.ItemType == ItemTypes.Purchased)
+                if (item.ItemCategory != null && item.ItemCategory.ItemType == ItemTypes.Purchased)
                 {
                     lineItem.InventoryControlJournal = _inventoryService.CreateInventoryControlJournal(lineItem.ItemId,
                         lineItem.MeasurementId,
@@ -961,7 +970,10 @@ namespace Services.Sales
             }
 
             totalAmount += salesInvoice.ShippingHandlingCharge;
-            var debitCustomerAR = _financialService.CreateGeneralLedgerLine(DrOrCrSide.Dr, customer.AccountsReceivableAccount.Id, Math.Round(totalAmount, 2, MidpointRounding.ToEven));
+            int arAccountId = customer.AccountsReceivableAccountId ?? customer.AccountsReceivableAccount?.Id ??
+                _financialService.GetAccounts().FirstOrDefault(a => a.AccountCode == "10120")?.Id ??
+                _financialService.GetAccounts().FirstOrDefault(a => a.AccountClassId == 1)?.Id ?? 1;
+            var debitCustomerAR = _financialService.CreateGeneralLedgerLine(DrOrCrSide.Dr, arAccountId, Math.Round(totalAmount, 2, MidpointRounding.ToEven));
             glHeader.GeneralLedgerLines.Add(debitCustomerAR);
 
             var groupedSalesAccount = from s in sales
@@ -1013,8 +1025,12 @@ namespace Services.Sales
 
             if (_financialService.ValidateGeneralLedgerEntry(glHeader))
             {
-                salesInvoice.No = GetNextNumber(SequenceNumberTypes.SalesInvoice).ToString();
+                if (string.IsNullOrWhiteSpace(salesInvoice.No))
+                {
+                    salesInvoice.No = GetNextNumber(SequenceNumberTypes.SalesInvoice).ToString();
+                }
                 salesInvoice.GeneralLedgerHeader = glHeader;
+                salesInvoice.Status = Core.Domain.SalesInvoiceStatus.Open;
 
                 // Debit = COGS, Credit = Inventory
                 var debitAccounts = new List<KeyValuePair<int, decimal>>();

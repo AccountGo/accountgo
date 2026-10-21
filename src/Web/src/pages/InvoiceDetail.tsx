@@ -15,6 +15,7 @@ import {
   Mail,
   Phone,
   MapPin,
+  Send,
 } from 'lucide-react';
 import {
   TenantContextType,
@@ -182,43 +183,69 @@ export const InvoiceDetail: React.FC = () => {
     }
   };
 
+  // Issue Draft Invoice
+  const [isSubmittingIssue, setIsSubmittingIssue] = useState<boolean>(false);
+  const handleIssueInvoice = async () => {
+    if (!invoice) return;
+    setIsSubmittingIssue(true);
+    setErrorBanner(null);
+
+    try {
+      const res = await authFetch(`/api/Sales/IssueSalesInvoice?id=${invoice.id}`, {
+        method: 'POST',
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => null);
+        throw new Error(errorData?.message || 'Failed to issue invoice.');
+      }
+
+      setSuccessBanner(`Invoice #${invoice.no || invoice.id} has been issued successfully!`);
+      await fetchInvoice();
+    } catch (err: any) {
+      setErrorBanner(err.message || 'An error occurred while issuing the invoice.');
+    } finally {
+      setIsSubmittingIssue(false);
+    }
+  };
+
   // Status Badge Component
   const getStatusBadge = (status: InvoiceStatus) => {
     switch (status) {
       case 'Paid':
         return (
-          <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-semibold rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
             <CheckCircle2 className="w-3.5 h-3.5" /> Paid
           </span>
         );
       case 'Partially Paid':
         return (
-          <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-semibold rounded-full bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-400 border border-blue-200 dark:border-blue-800">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20">
             <Clock className="w-3.5 h-3.5" /> Partially Paid
           </span>
         );
       case 'Overdue':
         return (
-          <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-semibold rounded-full bg-rose-50 text-rose-700 dark:bg-rose-950/50 dark:text-rose-400 border border-rose-200 dark:border-rose-800">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-full bg-rose-500/10 text-rose-500 border border-rose-500/20">
             <AlertTriangle className="w-3.5 h-3.5" /> Overdue
           </span>
         );
       case 'Draft':
         return (
-          <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-semibold rounded-full bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-full bg-slate-500/10 text-slate-400 border border-slate-500/20">
             <FileEdit className="w-3.5 h-3.5" /> Draft
           </span>
         );
       case 'Void':
         return (
-          <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-semibold rounded-full bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 border border-slate-200 dark:border-slate-700 line-through">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-full bg-neutral-500/10 text-neutral-400 border border-neutral-500/20 line-through">
             <Ban className="w-3.5 h-3.5" /> Void
           </span>
         );
       case 'Open':
       default:
         return (
-          <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-semibold rounded-full bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400 border border-amber-200 dark:border-amber-800">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">
             <Clock className="w-3.5 h-3.5" /> Open / Unpaid
           </span>
         );
@@ -227,8 +254,8 @@ export const InvoiceDetail: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[50vh] text-slate-400">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-600 mb-3" />
+      <div className="flex flex-col items-center justify-center min-h-[50vh] text-[var(--text-muted)]">
+        <Loader2 className="w-8 h-8 animate-spin text-[var(--brand-primary)] mb-3" />
         <p className="text-sm">Loading invoice details...</p>
       </div>
     );
@@ -238,15 +265,15 @@ export const InvoiceDetail: React.FC = () => {
     return (
       <div className="max-w-4xl mx-auto px-4 py-12 text-center">
         <AlertTriangle className="w-12 h-12 text-amber-500 mx-auto mb-3" />
-        <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
+        <h2 className="text-xl font-bold text-[var(--text-main)] mb-2">
           Invoice Not Found
         </h2>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
+        <p className="text-sm text-[var(--text-secondary)] mb-6">
           The requested invoice #{invoiceId} could not be retrieved.
         </p>
         <Link
           to={`/org/${orgSlug}/sales`}
-          className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition"
+          className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-[var(--brand-text)] bg-[var(--brand-primary)] rounded-xl hover:bg-[var(--brand-hover)] transition shadow-sm"
         >
           <ArrowLeft className="w-4 h-4" /> Back to Invoices
         </Link>
@@ -261,7 +288,7 @@ export const InvoiceDetail: React.FC = () => {
       invoice.balanceDue > 0);
 
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 pb-24 text-slate-900 dark:text-slate-100 print:p-0 print:m-0 print:max-w-none">
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 pb-24 text-[var(--text-main)] print:p-0 print:m-0 print:max-w-none">
       {/* Print Specific CSS */}
       <style>{`
         @media print {
@@ -278,6 +305,11 @@ export const InvoiceDetail: React.FC = () => {
             padding: 0 !important;
             margin: 0 !important;
             width: 100% !important;
+            background: white !important;
+            color: black !important;
+          }
+          .print-clean * {
+            color: black !important;
           }
         }
       `}</style>
@@ -287,13 +319,13 @@ export const InvoiceDetail: React.FC = () => {
         <div className="flex items-center gap-3">
           <Link
             to={`/org/${orgSlug}/sales`}
-            className="p-2 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+            className="p-2 text-[var(--text-secondary)] hover:text-[var(--text-main)] rounded-xl hover:bg-[var(--bg-surface-hover)] border border-[var(--border-subtle)] transition"
             title="Back to Invoices"
           >
             <ArrowLeft className="w-5 h-5" />
           </Link>
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+            <h1 className="text-2xl font-bold tracking-tight text-[var(--text-main)]">
               Invoice {invoice.no ? `#${invoice.no}` : `#${invoice.id}`}
             </h1>
             {getStatusBadge(invoice.status)}
@@ -306,9 +338,9 @@ export const InvoiceDetail: React.FC = () => {
           <button
             type="button"
             onClick={() => window.print()}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm transition"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium text-[var(--text-secondary)] bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-xl hover:bg-[var(--bg-surface-hover)] hover:text-[var(--text-main)] shadow-sm transition"
           >
-            <Printer className="w-4 h-4 text-slate-500" />
+            <Printer className="w-4 h-4 text-[var(--text-muted)]" />
             Print / PDF
           </button>
 
@@ -316,30 +348,45 @@ export const InvoiceDetail: React.FC = () => {
           {invoice.status !== 'Void' && invoice.paidAmount === 0 && (
             <Link
               to={`/org/${orgSlug}/sales/${invoice.id}/edit`}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm transition"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium text-[var(--text-secondary)] bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-xl hover:bg-[var(--bg-surface-hover)] hover:text-[var(--text-main)] shadow-sm transition"
             >
-              <FileEdit className="w-4 h-4 text-slate-500" />
+              <FileEdit className="w-4 h-4 text-[var(--text-muted)]" />
               Edit
             </Link>
           )}
 
-          {/* Record Payment Button (if balance due and not draft/void) */}
-          {invoice.status !== 'Draft' &&
-            invoice.status !== 'Void' &&
-            invoice.balanceDue > 0 && (
-              <button
-                type="button"
-                onClick={() => {
-                  setPaymentAmount(invoice.balanceDue.toFixed(2));
-                  setPaymentError(null);
-                  setIsPaymentModalOpen(true);
-                }}
-                className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 shadow-sm transition"
-              >
-                <CreditCard className="w-4 h-4" />
-                Record Payment
-              </button>
-            )}
+          {/* Issue Invoice Button (if Draft) */}
+          {invoice.status === 'Draft' && (
+            <button
+              type="button"
+              onClick={handleIssueInvoice}
+              disabled={isSubmittingIssue}
+              className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-[var(--brand-text)] bg-[var(--brand-primary)] rounded-xl hover:bg-[var(--brand-hover)] shadow-sm transition disabled:opacity-50"
+            >
+              {isSubmittingIssue ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Send className="w-4 h-4" />
+              )}
+              Issue Invoice
+            </button>
+          )}
+
+          {/* Record Payment Button (if balance due and not void) */}
+          {invoice.status !== 'Void' && invoice.balanceDue > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                setPaymentAmount(invoice.balanceDue.toFixed(2));
+                setPaymentError(null);
+                setIsPaymentModalOpen(true);
+              }}
+              className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-emerald-600 rounded-xl hover:bg-emerald-700 shadow-sm transition"
+            >
+              <CreditCard className="w-4 h-4" />
+              Record Payment
+            </button>
+          )}
 
           {/* Void Button (if not void and no payments) */}
           {invoice.status !== 'Void' && invoice.paidAmount === 0 && (
@@ -349,7 +396,7 @@ export const InvoiceDetail: React.FC = () => {
                 setVoidError(null);
                 setIsVoidModalOpen(true);
               }}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 border border-transparent rounded-lg transition"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium text-rose-500 hover:bg-rose-500/10 rounded-xl transition"
             >
               <Ban className="w-4 h-4" />
               Void
@@ -360,12 +407,12 @@ export const InvoiceDetail: React.FC = () => {
 
       {/* Notifications */}
       {errorBanner && (
-        <div className="no-print mb-6 p-4 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/50 rounded-xl flex items-start gap-3">
-          <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
-          <div className="flex-1 text-sm text-red-700 dark:text-red-300">{errorBanner}</div>
+        <div className="no-print mb-6 p-4 bg-rose-500/10 border border-rose-500/20 text-rose-500 rounded-xl flex items-start gap-3">
+          <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
+          <div className="flex-1 text-sm font-medium">{errorBanner}</div>
           <button
             onClick={() => setErrorBanner(null)}
-            className="text-red-500 hover:text-red-700 dark:hover:text-red-300"
+            className="p-1 hover:opacity-75 transition"
           >
             <X className="w-4 h-4" />
           </button>
@@ -373,12 +420,12 @@ export const InvoiceDetail: React.FC = () => {
       )}
 
       {successBanner && (
-        <div className="no-print mb-6 p-4 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/50 rounded-xl flex items-center gap-3">
-          <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-          <div className="flex-1 text-sm text-emerald-700 dark:text-emerald-300">{successBanner}</div>
+        <div className="no-print mb-6 p-4 bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 rounded-xl flex items-center gap-3">
+          <CheckCircle2 className="w-5 h-5 shrink-0" />
+          <div className="flex-1 text-sm font-medium">{successBanner}</div>
           <button
             onClick={() => setSuccessBanner(null)}
-            className="text-emerald-500 hover:text-emerald-700 dark:hover:text-emerald-300 ml-auto"
+            className="p-1 hover:opacity-75 ml-auto transition"
           >
             <X className="w-4 h-4" />
           </button>
@@ -386,28 +433,28 @@ export const InvoiceDetail: React.FC = () => {
       )}
 
       {/* Main Printable Invoice Sheet */}
-      <div className="print-clean bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm p-8 sm:p-12 space-y-10">
+      <div className="print-clean bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl shadow-sm p-8 sm:p-12 space-y-10">
         {/* Document Header */}
-        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-6 border-b border-slate-100 dark:border-slate-800 pb-8">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-6 border-b border-[var(--border-subtle)] pb-8">
           <div>
             <div className="flex items-center gap-2.5 mb-2">
-              <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold text-lg shadow-sm">
+              <div className="w-10 h-10 rounded-xl bg-[var(--brand-primary)] text-[var(--brand-text)] flex items-center justify-center font-bold text-lg shadow-sm">
                 {currentOrg.name?.substring(0, 1) || 'A'}
               </div>
-              <h2 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+              <h2 className="text-2xl font-bold tracking-tight text-[var(--text-main)]">
                 {currentOrg.name || invoice.companyName || 'AccountGo Organization'}
               </h2>
             </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
+            <p className="text-xs text-[var(--text-muted)]">
               Tax ID / CRA: {currentOrg.cra || 'N/A'}
             </p>
           </div>
 
           <div className="text-left sm:text-right">
-            <h3 className="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white uppercase mb-1">
+            <h3 className="text-3xl font-extrabold tracking-tight text-[var(--text-main)] uppercase mb-1">
               INVOICE
             </h3>
-            <p className="text-base font-semibold text-blue-600 dark:text-blue-400">
+            <p className="text-base font-bold font-mono text-[var(--brand-primary)]">
               #{invoice.no || invoice.id}
             </p>
             <div className="mt-2 flex sm:justify-end">{getStatusBadge(invoice.status)}</div>
@@ -418,27 +465,27 @@ export const InvoiceDetail: React.FC = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 text-sm">
           {/* Bill To */}
           <div className="space-y-1.5">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 block mb-1">
+            <span className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] block mb-1">
               Billed To
             </span>
-            <div className="font-bold text-slate-900 dark:text-white text-base">
+            <div className="font-bold text-[var(--text-main)] text-base">
               {invoice.customerName}
             </div>
             {invoice.customerEmail && (
-              <div className="flex items-center gap-1.5 text-slate-600 dark:text-slate-400">
-                <Mail className="w-3.5 h-3.5 text-slate-400" />
+              <div className="flex items-center gap-1.5 text-[var(--text-secondary)]">
+                <Mail className="w-3.5 h-3.5 text-[var(--text-muted)]" />
                 {invoice.customerEmail}
               </div>
             )}
             {invoice.customerPhone && (
-              <div className="flex items-center gap-1.5 text-slate-600 dark:text-slate-400">
-                <Phone className="w-3.5 h-3.5 text-slate-400" />
+              <div className="flex items-center gap-1.5 text-[var(--text-secondary)]">
+                <Phone className="w-3.5 h-3.5 text-[var(--text-muted)]" />
                 {invoice.customerPhone}
               </div>
             )}
             {invoice.customerAddress && (
-              <div className="flex items-start gap-1.5 text-slate-600 dark:text-slate-400 pt-1">
-                <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
+              <div className="flex items-start gap-1.5 text-[var(--text-secondary)] pt-1">
+                <MapPin className="w-3.5 h-3.5 text-[var(--text-muted)] shrink-0 mt-0.5" />
                 <span>{invoice.customerAddress}</span>
               </div>
             )}
@@ -447,8 +494,8 @@ export const InvoiceDetail: React.FC = () => {
           {/* Invoice Dates & Reference */}
           <div className="space-y-2.5 sm:text-right">
             <div className="flex justify-between sm:justify-end gap-6">
-              <span className="text-slate-500 dark:text-slate-400">Invoice Date:</span>
-              <span className="font-semibold text-slate-900 dark:text-white">
+              <span className="text-[var(--text-muted)]">Invoice Date:</span>
+              <span className="font-semibold text-[var(--text-main)]">
                 {new Date(invoice.invoiceDate).toLocaleDateString(undefined, {
                   year: 'numeric',
                   month: 'short',
@@ -459,12 +506,12 @@ export const InvoiceDetail: React.FC = () => {
 
             {invoice.dueDate && (
               <div className="flex justify-between sm:justify-end gap-6">
-                <span className="text-slate-500 dark:text-slate-400">Due Date:</span>
+                <span className="text-[var(--text-muted)]">Due Date:</span>
                 <span
                   className={`font-semibold ${
                     isOverdue
-                      ? 'text-rose-600 dark:text-rose-400'
-                      : 'text-slate-900 dark:text-white'
+                      ? 'text-rose-500'
+                      : 'text-[var(--text-main)]'
                   }`}
                 >
                   {new Date(invoice.dueDate).toLocaleDateString(undefined, {
@@ -478,8 +525,8 @@ export const InvoiceDetail: React.FC = () => {
 
             {invoice.referenceNo && (
               <div className="flex justify-between sm:justify-end gap-6">
-                <span className="text-slate-500 dark:text-slate-400">Reference / PO:</span>
-                <span className="font-medium text-slate-900 dark:text-white">
+                <span className="text-[var(--text-muted)]">Reference / PO:</span>
+                <span className="font-medium text-[var(--text-main)]">
                   {invoice.referenceNo}
                 </span>
               </div>
@@ -488,11 +535,11 @@ export const InvoiceDetail: React.FC = () => {
         </div>
 
         {/* Line Items Table */}
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)]">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="border-b-2 border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
-                <th className="py-3 px-2 w-12 text-center">#</th>
+              <tr className="bg-[var(--bg-subtle)] border-b border-[var(--border-subtle)] text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">
+                <th className="py-3 px-3 w-12 text-center">#</th>
                 <th className="py-3 px-4">Description</th>
                 <th className="py-3 px-3 text-right w-24">Qty</th>
                 <th className="py-3 px-3 text-right w-28">Unit Price</th>
@@ -500,7 +547,7 @@ export const InvoiceDetail: React.FC = () => {
                 <th className="py-3 px-4 text-right w-32">Total</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-sm">
+            <tbody className="divide-y divide-[var(--border-subtle)] text-sm">
               {invoice.salesInvoiceLines?.map((line, idx) => {
                 const qty = line.quantity || 1;
                 const price = line.amount || 0;
@@ -509,23 +556,23 @@ export const InvoiceDetail: React.FC = () => {
                 const net = line.lineTotal ?? Math.max(0, gross - disc);
 
                 return (
-                  <tr key={line.id || idx}>
-                    <td className="py-3.5 px-2 text-center text-slate-400 text-xs">
+                  <tr key={line.id || idx} className="hover:bg-[var(--bg-surface-hover)]/30 transition">
+                    <td className="py-3.5 px-3 text-center text-[var(--text-muted)] text-xs">
                       {idx + 1}
                     </td>
-                    <td className="py-3.5 px-4 font-medium text-slate-900 dark:text-slate-100">
+                    <td className="py-3.5 px-4 font-medium text-[var(--text-main)]">
                       {line.itemDescription || 'Service / Product'}
                     </td>
-                    <td className="py-3.5 px-3 text-right text-slate-600 dark:text-slate-300">
+                    <td className="py-3.5 px-3 text-right text-[var(--text-secondary)]">
                       {line.quantity}
                     </td>
-                    <td className="py-3.5 px-3 text-right text-slate-600 dark:text-slate-300">
+                    <td className="py-3.5 px-3 text-right font-mono text-[var(--text-secondary)]">
                       {formatCurrency(line.amount || 0)}
                     </td>
-                    <td className="py-3.5 px-3 text-right text-slate-600 dark:text-slate-300">
+                    <td className="py-3.5 px-3 text-right text-[var(--text-secondary)]">
                       {line.discount ? `${line.discount}%` : '—'}
                     </td>
-                    <td className="py-3.5 px-4 text-right font-semibold text-slate-900 dark:text-white">
+                    <td className="py-3.5 px-4 text-right font-semibold font-mono text-[var(--text-main)]">
                       {formatCurrency(net)}
                     </td>
                   </tr>
@@ -536,12 +583,12 @@ export const InvoiceDetail: React.FC = () => {
         </div>
 
         {/* Totals Summary */}
-        <div className="flex flex-col sm:flex-row justify-between gap-8 border-t border-slate-100 dark:border-slate-800 pt-6">
+        <div className="flex flex-col sm:flex-row justify-between gap-8 border-t border-[var(--border-subtle)] pt-6">
           {/* Notes & Payment Instructions */}
-          <div className="sm:max-w-md space-y-4 text-xs text-slate-600 dark:text-slate-400">
+          <div className="sm:max-w-md space-y-4 text-xs text-[var(--text-secondary)]">
             {invoice.notes && (
               <div>
-                <span className="font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 block mb-1">
+                <span className="font-semibold uppercase tracking-wider text-[var(--text-muted)] block mb-1">
                   Notes
                 </span>
                 <p className="whitespace-pre-line">{invoice.notes}</p>
@@ -550,10 +597,10 @@ export const InvoiceDetail: React.FC = () => {
 
             {invoice.paymentInstructions && (
               <div>
-                <span className="font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 block mb-1">
+                <span className="font-semibold uppercase tracking-wider text-[var(--text-muted)] block mb-1">
                   Payment Instructions
                 </span>
-                <p className="whitespace-pre-line p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200/60 dark:border-slate-700/60">
+                <p className="whitespace-pre-line p-3.5 bg-[var(--bg-subtle)] rounded-xl border border-[var(--border-subtle)] text-[var(--text-main)]">
                   {invoice.paymentInstructions}
                 </p>
               </div>
@@ -561,64 +608,64 @@ export const InvoiceDetail: React.FC = () => {
           </div>
 
           {/* Breakdown Box */}
-          <div className="w-full sm:w-72 space-y-2.5 text-sm">
-            <div className="flex justify-between text-slate-600 dark:text-slate-400">
+          <div className="w-full sm:w-80 space-y-2.5 text-sm bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-2xl p-5">
+            <div className="flex justify-between text-[var(--text-secondary)]">
               <span>Subtotal:</span>
-              <span className="font-medium text-slate-900 dark:text-slate-200">
+              <span className="font-medium font-mono text-[var(--text-main)]">
                 {formatCurrency(invoice.amount || 0)}
               </span>
             </div>
 
             {(invoice.totalTax || 0) > 0 && (
-              <div className="flex justify-between text-slate-600 dark:text-slate-400">
+              <div className="flex justify-between text-[var(--text-secondary)]">
                 <span>Tax:</span>
-                <span className="font-medium text-slate-900 dark:text-slate-200">
+                <span className="font-medium font-mono text-[var(--text-main)]">
                   {formatCurrency(invoice.totalTax || 0)}
                 </span>
               </div>
             )}
 
-            <div className="flex justify-between font-bold text-base text-slate-900 dark:text-white border-t border-slate-200 dark:border-slate-700 pt-2">
+            <div className="flex justify-between font-bold text-base text-[var(--text-main)] border-t border-[var(--border-subtle)] pt-2.5">
               <span>Total Amount:</span>
-              <span>{formatCurrency(invoice.totalAmountAfterTax || invoice.amount)}</span>
+              <span className="font-mono">{formatCurrency(invoice.totalAmountAfterTax || invoice.amount)}</span>
             </div>
 
             {invoice.paidAmount > 0 && (
-              <div className="flex justify-between text-emerald-600 dark:text-emerald-400 font-medium">
+              <div className="flex justify-between text-emerald-500 font-medium">
                 <span>Amount Paid:</span>
-                <span>-{formatCurrency(invoice.paidAmount)}</span>
+                <span className="font-mono">-{formatCurrency(invoice.paidAmount)}</span>
               </div>
             )}
 
-            <div className="flex justify-between font-extrabold text-lg text-blue-600 dark:text-blue-400 border-t-2 border-slate-300 dark:border-slate-700 pt-2">
-              <span>Balance Due:</span>
-              <span>{formatCurrency(invoice.balanceDue)}</span>
+            <div className="flex justify-between font-bold text-lg border-t border-[var(--border-subtle)] pt-2.5">
+              <span className="text-[var(--text-main)]">Balance Due:</span>
+              <span className="font-mono text-[var(--brand-primary)]">{formatCurrency(invoice.balanceDue)}</span>
             </div>
           </div>
         </div>
       </div>
 
       {/* Payment History Section (Hidden on Print) */}
-      <div className="no-print mt-8 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm p-6 sm:p-8">
+      <div className="no-print mt-8 bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl shadow-sm p-6 sm:p-8">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
-            <Receipt className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-            <h3 className="font-bold text-slate-900 dark:text-white text-base">
+            <Receipt className="w-5 h-5 text-[var(--brand-primary)]" />
+            <h3 className="font-bold text-[var(--text-main)] text-base">
               Payment History
             </h3>
           </div>
           {invoice.paidAmount > 0 && (
-            <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-1 rounded-full border border-emerald-200/50">
+            <span className="text-xs font-semibold text-emerald-500 bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20">
               Total Paid: {formatCurrency(invoice.paidAmount)}
             </span>
           )}
         </div>
 
         {invoice.payments && invoice.payments.length > 0 ? (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto rounded-xl border border-[var(--border-subtle)]">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="bg-slate-50 dark:bg-slate-800/60 text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">
+                <tr className="bg-[var(--bg-subtle)] text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider border-b border-[var(--border-subtle)]">
                   <th className="py-3 px-4">Payment Date</th>
                   <th className="py-3 px-4">Method</th>
                   <th className="py-3 px-4">Reference #</th>
@@ -626,26 +673,26 @@ export const InvoiceDetail: React.FC = () => {
                   <th className="py-3 px-4 text-right">Amount</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-sm">
+              <tbody className="divide-y divide-[var(--border-subtle)] text-sm">
                 {invoice.payments.map((p) => (
-                  <tr key={p.id}>
-                    <td className="py-3 px-4 text-slate-800 dark:text-slate-200">
+                  <tr key={p.id} className="hover:bg-[var(--bg-surface-hover)]/30 transition">
+                    <td className="py-3 px-4 text-[var(--text-main)]">
                       {new Date(p.date).toLocaleDateString(undefined, {
                         year: 'numeric',
                         month: 'short',
                         day: 'numeric',
                       })}
                     </td>
-                    <td className="py-3 px-4 font-medium text-slate-700 dark:text-slate-300">
+                    <td className="py-3 px-4 font-medium text-[var(--text-main)]">
                       {p.paymentMethod || 'Payment'}
                     </td>
-                    <td className="py-3 px-4 text-slate-500 dark:text-slate-400 text-xs">
+                    <td className="py-3 px-4 text-[var(--text-muted)] text-xs font-mono">
                       {p.referenceNo || p.receiptNo || '—'}
                     </td>
-                    <td className="py-3 px-4 text-slate-500 dark:text-slate-400 text-xs">
+                    <td className="py-3 px-4 text-[var(--text-secondary)] text-xs">
                       {p.notes || '—'}
                     </td>
-                    <td className="py-3 px-4 text-right font-semibold text-emerald-600 dark:text-emerald-400">
+                    <td className="py-3 px-4 text-right font-semibold font-mono text-emerald-500">
                       {formatCurrency(p.amount)}
                     </td>
                   </tr>
@@ -654,7 +701,7 @@ export const InvoiceDetail: React.FC = () => {
             </table>
           </div>
         ) : (
-          <div className="text-center py-6 text-sm text-slate-500 dark:text-slate-400">
+          <div className="text-center py-6 text-sm text-[var(--text-muted)] bg-[var(--bg-subtle)]/50 rounded-xl border border-dashed border-[var(--border-subtle)]">
             No payments have been recorded for this invoice yet.
           </div>
         )}
@@ -662,19 +709,19 @@ export const InvoiceDetail: React.FC = () => {
 
       {/* Record Payment Modal */}
       {isPaymentModalOpen && (
-        <div className="no-print fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-md w-full border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+        <div className="no-print fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-[var(--bg-surface)] rounded-2xl max-w-md w-full border border-[var(--border-subtle)] shadow-2xl overflow-hidden">
+            <div className="px-6 py-4 border-b border-[var(--border-subtle)] flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <CreditCard className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-                <h3 className="font-bold text-slate-900 dark:text-white text-base">
+                <CreditCard className="w-5 h-5 text-emerald-500" />
+                <h3 className="font-bold text-[var(--text-main)] text-base">
                   Record Payment
                 </h3>
               </div>
               <button
                 type="button"
                 onClick={() => setIsPaymentModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                className="text-[var(--text-muted)] hover:text-[var(--text-main)] p-1 rounded-lg transition"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -682,21 +729,21 @@ export const InvoiceDetail: React.FC = () => {
 
             <form onSubmit={handleRecordPayment} className="p-6 space-y-4">
               {paymentError && (
-                <div className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/50 rounded-xl text-xs text-red-600 dark:text-red-400">
+                <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl text-xs text-rose-500">
                   {paymentError}
                 </div>
               )}
 
-              <div className="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200/60 dark:border-slate-700/60 text-xs flex justify-between items-center">
-                <span className="text-slate-500 dark:text-slate-400">Balance Remaining:</span>
-                <span className="font-bold text-blue-600 dark:text-blue-400 text-sm">
+              <div className="p-3.5 bg-[var(--bg-subtle)] rounded-xl border border-[var(--border-subtle)] text-xs flex justify-between items-center">
+                <span className="text-[var(--text-secondary)]">Balance Remaining:</span>
+                <span className="font-bold font-mono text-[var(--brand-primary)] text-sm">
                   {formatCurrency(invoice.balanceDue)}
                 </span>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
-                  Payment Amount ({currencySymbol}) <span className="text-red-500">*</span>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1">
+                  Payment Amount ({currencySymbol}) <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="number"
@@ -706,32 +753,32 @@ export const InvoiceDetail: React.FC = () => {
                   required
                   value={paymentAmount}
                   onChange={(e) => setPaymentAmount(e.target.value)}
-                  className="w-full px-3.5 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-slate-900 dark:text-slate-100 font-bold"
+                  className="w-full px-3.5 py-2.5 text-sm bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xl focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] font-mono font-bold transition"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
-                    Payment Date <span className="text-red-500">*</span>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1">
+                    Payment Date <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="date"
                     required
                     value={paymentDate}
                     onChange={(e) => setPaymentDate(e.target.value)}
-                    className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-emerald-500 text-slate-900 dark:text-slate-100"
+                    className="w-full px-3 py-2 text-xs bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xl focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] transition"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1">
                     Payment Method
                   </label>
                   <select
                     value={paymentMethod}
                     onChange={(e) => setPaymentMethod(e.target.value)}
-                    className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-emerald-500 text-slate-900 dark:text-slate-100"
+                    className="w-full px-3 py-2 text-xs bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xl focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] transition"
                   >
                     <option value="Bank Transfer">Bank Wire / Transfer</option>
                     <option value="Credit Card">Credit Card</option>
@@ -744,7 +791,7 @@ export const InvoiceDetail: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
+                <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1">
                   Reference / Transaction #
                 </label>
                 <input
@@ -752,12 +799,12 @@ export const InvoiceDetail: React.FC = () => {
                   placeholder="e.g. Wire Ref #TX-98421"
                   value={paymentReference}
                   onChange={(e) => setPaymentReference(e.target.value)}
-                  className="w-full px-3.5 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-slate-900 dark:text-slate-100"
+                  className="w-full px-3.5 py-2.5 text-sm bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xl focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] placeholder-[var(--text-muted)] transition"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
+                <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1">
                   Memo / Notes
                 </label>
                 <input
@@ -765,7 +812,7 @@ export const InvoiceDetail: React.FC = () => {
                   placeholder="Optional internal memo"
                   value={paymentNotes}
                   onChange={(e) => setPaymentNotes(e.target.value)}
-                  className="w-full px-3.5 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-slate-900 dark:text-slate-100"
+                  className="w-full px-3.5 py-2.5 text-sm bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xl focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] placeholder-[var(--text-muted)] transition"
                 />
               </div>
 
@@ -773,14 +820,14 @@ export const InvoiceDetail: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setIsPaymentModalOpen(false)}
-                  className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition"
+                  className="px-4 py-2.5 text-sm font-medium text-[var(--text-secondary)] bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xl hover:bg-[var(--bg-surface-hover)] hover:text-[var(--text-main)] transition"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmittingPayment}
-                  className="inline-flex items-center gap-2 px-5 py-2 text-sm font-medium text-white bg-emerald-600 rounded-xl hover:bg-emerald-700 transition disabled:opacity-50"
+                  className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-emerald-600 rounded-xl hover:bg-emerald-700 transition disabled:opacity-50 shadow-sm"
                 >
                   {isSubmittingPayment && <Loader2 className="w-4 h-4 animate-spin" />}
                   Confirm Payment
@@ -793,23 +840,23 @@ export const InvoiceDetail: React.FC = () => {
 
       {/* Void Invoice Confirmation Modal */}
       {isVoidModalOpen && (
-        <div className="no-print fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-md w-full border border-slate-200 dark:border-slate-800 shadow-2xl p-6 space-y-4">
-            <div className="flex items-center gap-3 text-rose-600 dark:text-rose-400">
-              <Ban className="w-6 h-6" />
-              <h3 className="font-bold text-lg text-slate-900 dark:text-white">
+        <div className="no-print fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-[var(--bg-surface)] rounded-2xl max-w-md w-full border border-[var(--border-subtle)] shadow-2xl p-6 space-y-4">
+            <div className="flex items-center gap-3 text-rose-500">
+              <Ban className="w-6 h-6 shrink-0" />
+              <h3 className="font-bold text-lg text-[var(--text-main)]">
                 Void Invoice #{invoice.no || invoice.id}?
               </h3>
             </div>
 
-            <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
+            <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
               Are you sure you want to void this invoice? In accordance with standard accounting
               controls, this will mark the invoice as Void and auto-post a reversing journal entry
               to cancel all receivables and revenues.
             </p>
 
             {voidError && (
-              <div className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/50 rounded-xl text-xs text-red-600 dark:text-red-400">
+              <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl text-xs text-rose-500">
                 {voidError}
               </div>
             )}
@@ -818,7 +865,7 @@ export const InvoiceDetail: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setIsVoidModalOpen(false)}
-                className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition"
+                className="px-4 py-2.5 text-sm font-medium text-[var(--text-secondary)] bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xl hover:bg-[var(--bg-surface-hover)] hover:text-[var(--text-main)] transition"
               >
                 Cancel
               </button>
@@ -826,7 +873,7 @@ export const InvoiceDetail: React.FC = () => {
                 type="button"
                 onClick={handleVoidInvoice}
                 disabled={isSubmittingVoid}
-                className="inline-flex items-center gap-2 px-5 py-2 text-sm font-medium text-white bg-rose-600 rounded-xl hover:bg-rose-700 transition disabled:opacity-50"
+                className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-rose-600 rounded-xl hover:bg-rose-700 transition disabled:opacity-50 shadow-sm"
               >
                 {isSubmittingVoid && <Loader2 className="w-4 h-4 animate-spin" />}
                 Yes, Void Invoice

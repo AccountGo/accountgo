@@ -122,17 +122,17 @@ namespace Core.Domain.Items
 
         public bool GLAccountsValidated()
         {
-            bool validated = true;
-
-            if (this.CostOfGoodsSoldAccount == null
-                || this.InventoryAccount == null
-                || this.InventoryAdjustmentAccount == null
-                || this.SalesAccount == null)
+            // For service items, only sales account is required as there is no physical inventory or COGS
+            if (this.ItemCategory != null && this.ItemCategory.ItemType == ItemTypes.Service)
             {
-                validated = false;
+                return this.SalesAccount != null || this.SalesAccountId.HasValue;
             }
 
-            return validated;
+            // For inventory / manufactured / purchased items, all 4 accounts are required
+            return (this.CostOfGoodsSoldAccount != null || this.CostOfGoodsSoldAccountId.HasValue)
+                && (this.InventoryAccount != null || this.InventoryAccountId.HasValue)
+                && (this.InventoryAdjustmentAccount != null || this.InventoryAdjustmentAccountId.HasValue)
+                && (this.SalesAccount != null || this.SalesAccountId.HasValue);
         }
     }
 }

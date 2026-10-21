@@ -438,28 +438,28 @@ namespace Api.Controllers
                 salesInvoiceDto.PaidAmount = allocated;
                 salesInvoiceDto.BalanceDue = Math.Max(0, grandTotal - allocated);
 
-                // Compute calculated status
+                // Compute calculated status following lifecycle rules:
                 if (salesInvoice.Status == Core.Domain.SalesInvoiceStatus.Void)
                 {
                     salesInvoiceDto.Status = "Void";
                     salesInvoiceDto.StatusId = (int)Core.Domain.SalesInvoiceStatus.Void;
                 }
-                else if (salesInvoice.Status == Core.Domain.SalesInvoiceStatus.Draft || (!salesInvoiceDto.Posted && salesInvoice.Status != Core.Domain.SalesInvoiceStatus.Open))
-                {
-                    salesInvoiceDto.Status = "Draft";
-                    salesInvoiceDto.StatusId = (int)Core.Domain.SalesInvoiceStatus.Draft;
-                }
-                else if (salesInvoiceDto.BalanceDue <= 0 && allocated > 0)
+                else if (salesInvoice.Status == Core.Domain.SalesInvoiceStatus.Closed || (salesInvoiceDto.BalanceDue <= 0.005m && allocated > 0))
                 {
                     salesInvoiceDto.Status = "Paid";
                     salesInvoiceDto.StatusId = (int)Core.Domain.SalesInvoiceStatus.Closed;
                 }
-                else if (allocated > 0 && salesInvoiceDto.BalanceDue > 0)
+                else if (allocated > 0 && salesInvoiceDto.BalanceDue > 0.005m)
                 {
                     salesInvoiceDto.Status = "Partially Paid";
                     salesInvoiceDto.StatusId = (int)Core.Domain.SalesInvoiceStatus.Open;
                 }
-                else if (dueDate.Date < DateTime.UtcNow.Date)
+                else if (salesInvoice.Status == Core.Domain.SalesInvoiceStatus.Draft && allocated == 0)
+                {
+                    salesInvoiceDto.Status = "Draft";
+                    salesInvoiceDto.StatusId = (int)Core.Domain.SalesInvoiceStatus.Draft;
+                }
+                else if (dueDate.Date < DateTime.UtcNow.Date && salesInvoiceDto.BalanceDue > 0.005m)
                 {
                     salesInvoiceDto.Status = "Overdue";
                     salesInvoiceDto.StatusId = (int)Core.Domain.SalesInvoiceStatus.Overdue;
@@ -676,28 +676,28 @@ namespace Api.Controllers
                 salesInvoiceDto.TotalAmountAfterTax = grandTotal;
                 salesInvoiceDto.BalanceDue = Math.Max(0, grandTotal - allocatedAmount);
 
-                // Compute calculated status
+                // Compute calculated status following lifecycle rules:
                 if (salesInvoice.Status == Core.Domain.SalesInvoiceStatus.Void)
                 {
                     salesInvoiceDto.Status = "Void";
                     salesInvoiceDto.StatusId = (int)Core.Domain.SalesInvoiceStatus.Void;
                 }
-                else if (salesInvoice.Status == Core.Domain.SalesInvoiceStatus.Draft || (!salesInvoiceDto.Posted && salesInvoice.Status != Core.Domain.SalesInvoiceStatus.Open))
-                {
-                    salesInvoiceDto.Status = "Draft";
-                    salesInvoiceDto.StatusId = (int)Core.Domain.SalesInvoiceStatus.Draft;
-                }
-                else if (salesInvoiceDto.BalanceDue <= 0 && allocatedAmount > 0)
+                else if (salesInvoice.Status == Core.Domain.SalesInvoiceStatus.Closed || (salesInvoiceDto.BalanceDue <= 0.005m && allocatedAmount > 0))
                 {
                     salesInvoiceDto.Status = "Paid";
                     salesInvoiceDto.StatusId = (int)Core.Domain.SalesInvoiceStatus.Closed;
                 }
-                else if (allocatedAmount > 0 && salesInvoiceDto.BalanceDue > 0)
+                else if (allocatedAmount > 0 && salesInvoiceDto.BalanceDue > 0.005m)
                 {
                     salesInvoiceDto.Status = "Partially Paid";
                     salesInvoiceDto.StatusId = (int)Core.Domain.SalesInvoiceStatus.Open;
                 }
-                else if (dueDate.Date < DateTime.UtcNow.Date)
+                else if (salesInvoice.Status == Core.Domain.SalesInvoiceStatus.Draft && allocatedAmount == 0)
+                {
+                    salesInvoiceDto.Status = "Draft";
+                    salesInvoiceDto.StatusId = (int)Core.Domain.SalesInvoiceStatus.Draft;
+                }
+                else if (dueDate.Date < DateTime.UtcNow.Date && salesInvoiceDto.BalanceDue > 0.005m)
                 {
                     salesInvoiceDto.Status = "Overdue";
                     salesInvoiceDto.StatusId = (int)Core.Domain.SalesInvoiceStatus.Overdue;
@@ -1279,6 +1279,20 @@ namespace Api.Controllers
                     _financialService.GetAccountByAccountCode("10120")?.Id ?? 
                     _financialService.GetAccounts().FirstOrDefault(a => a.AccountClassId == 1)?.Id ?? 1;
 
+                // Auto-post invoice first if unposted, guaranteeing double-entry integrity (DR AR, CR Revenue)
+                if (!invoice.GeneralLedgerHeaderId.HasValue)
+                {
+                    try
+                    {
+                        _salesService.PostSalesInvoice(invoice.Id);
+                        invoice = _salesService.GetSalesInvoiceById(invoice.Id);
+                    }
+                    catch (Exception postEx)
+                    {
+                        _logger.LogWarning(postEx, "Invoice {InvoiceId} unposted before payment; auto-posting warning: {Error}", invoice.Id, postEx.Message);
+                    }
+                }
+
                 var paymentDate = paymentDto.PaymentDate == default ? DateTime.UtcNow : paymentDto.PaymentDate;
 
                 // 1. Create and post SalesReceiptHeader (DR Cash, CR Accounts Receivable)
@@ -1314,8 +1328,10 @@ namespace Api.Controllers
                 };
                 invoice.CustomerAllocations.Add(allocation);
 
-                // Update invoice status if fully paid
-                if (invoice.IsFullPaid())
+                // Update invoice status based on total allocations
+                decimal totalAllocated = invoice.CustomerAllocations != null ? invoice.CustomerAllocations.Sum(a => a.Amount) : 0;
+                decimal totalAmount = invoice.ComputeTotalAmount();
+                if (totalAllocated >= totalAmount - 0.005m || invoice.IsFullPaid())
                 {
                     invoice.Status = Core.Domain.SalesInvoiceStatus.Closed;
                 }
@@ -1367,6 +1383,43 @@ namespace Api.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to void invoice {InvoiceId}", id);
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpPost]
+        [Route("IssueSalesInvoice")]
+        public IActionResult IssueSalesInvoice(int id)
+        {
+            try
+            {
+                var invoice = _salesService.GetSalesInvoiceById(id);
+                if (invoice == null)
+                    return NotFound(new { message = $"Invoice #{id} not found." });
+
+                if (invoice.Status == Core.Domain.SalesInvoiceStatus.Void)
+                    return BadRequest(new { message = "Cannot issue a void invoice." });
+
+                invoice.Status = Core.Domain.SalesInvoiceStatus.Open;
+                _salesService.UpdateSalesInvoice(invoice);
+
+                if (!invoice.GeneralLedgerHeaderId.HasValue)
+                {
+                    try
+                    {
+                        _salesService.PostSalesInvoice(invoice.Id);
+                    }
+                    catch (Exception postEx)
+                    {
+                        _logger.LogWarning(postEx, "Invoice {InvoiceId} issued but GL auto-posting warning: {Error}", invoice.Id, postEx.Message);
+                    }
+                }
+
+                return Ok(new { success = true, invoiceId = invoice.Id, status = "Open" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to issue invoice {InvoiceId}", id);
                 return BadRequest(new { message = ex.Message });
             }
         }

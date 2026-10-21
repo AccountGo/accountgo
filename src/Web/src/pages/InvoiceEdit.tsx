@@ -442,22 +442,22 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
   };
 
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 pb-24 text-slate-900 dark:text-slate-100">
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 pb-24 text-[var(--text-main)]">
       {/* Top Breadcrumb & Action Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div className="flex items-center gap-3">
           <Link
             to={`/org/${orgSlug}/sales`}
-            className="p-2 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+            className="p-2 text-[var(--text-secondary)] hover:text-[var(--text-main)] rounded-xl hover:bg-[var(--bg-surface-hover)] border border-[var(--border-subtle)] transition"
             title="Back to Invoices"
           >
             <ArrowLeft className="w-5 h-5" />
           </Link>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+            <h1 className="text-2xl font-bold tracking-tight text-[var(--text-main)]">
               {isEdit ? `Edit Invoice ${invoiceNo || ''}` : 'New Invoice'}
             </h1>
-            <p className="text-sm text-slate-500 dark:text-slate-400">
+            <p className="text-sm text-[var(--text-secondary)] mt-0.5">
               Create and issue standard invoices to your clients with automated bookkeeping.
             </p>
           </div>
@@ -467,7 +467,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
         <div className="flex items-center gap-3">
           <Link
             to={`/org/${orgSlug}/sales`}
-            className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition"
+            className="px-4 py-2.5 text-sm font-medium text-[var(--text-secondary)] bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-xl hover:bg-[var(--bg-surface-hover)] hover:text-[var(--text-main)] transition"
           >
             Cancel
           </Link>
@@ -476,12 +476,12 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
             type="button"
             onClick={() => handleSaveInvoice(true)}
             disabled={isSavingDraft || isSavingIssue}
-            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition disabled:opacity-50"
+            className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-[var(--text-main)] bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-xl hover:bg-[var(--bg-surface-hover)] transition disabled:opacity-50 shadow-sm"
           >
             {isSavingDraft ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
+              <Loader2 className="w-4 h-4 animate-spin text-[var(--brand-primary)]" />
             ) : (
-              <Save className="w-4 h-4" />
+              <Save className="w-4 h-4 text-[var(--text-secondary)]" />
             )}
             Save as Draft
           </button>
@@ -490,7 +490,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
             type="button"
             onClick={() => handleSaveInvoice(false)}
             disabled={isSavingDraft || isSavingIssue}
-            className="inline-flex items-center gap-2 px-5 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 shadow-sm transition disabled:opacity-50"
+            className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-[var(--brand-text)] bg-[var(--brand-primary)] rounded-xl hover:bg-[var(--brand-hover)] shadow-sm transition disabled:opacity-50"
           >
             {isSavingIssue ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -504,12 +504,12 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
 
       {/* Notifications */}
       {errorBanner && (
-        <div className="mb-6 p-4 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/50 rounded-xl flex items-start gap-3">
-          <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
-          <div className="flex-1 text-sm text-red-700 dark:text-red-300">{errorBanner}</div>
+        <div className="mb-6 p-4 bg-rose-500/10 border border-rose-500/20 text-rose-500 rounded-xl flex items-start gap-3">
+          <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
+          <div className="flex-1 text-sm font-medium">{errorBanner}</div>
           <button
             onClick={() => setErrorBanner(null)}
-            className="text-red-500 hover:text-red-700 dark:hover:text-red-300"
+            className="p-1 hover:opacity-75 transition"
           >
             <X className="w-4 h-4" />
           </button>
@@ -517,28 +517,28 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
       )}
 
       {successBanner && (
-        <div className="mb-6 p-4 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/50 rounded-xl flex items-center gap-3">
-          <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-          <div className="flex-1 text-sm text-emerald-700 dark:text-emerald-300">{successBanner}</div>
+        <div className="mb-6 p-4 bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 rounded-xl flex items-center gap-3">
+          <CheckCircle2 className="w-5 h-5 shrink-0" />
+          <div className="flex-1 text-sm font-medium">{successBanner}</div>
         </div>
       )}
 
       {/* Main Invoice Card */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm p-6 sm:p-8 space-y-8">
+      <div className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl shadow-sm p-6 sm:p-8 space-y-8">
         {/* Section 1: Parties & Invoice Meta */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 border-b border-slate-100 dark:border-slate-800 pb-8">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 border-b border-[var(--border-subtle)] pb-8">
           {/* Client Selection */}
           <div className="lg:col-span-6 space-y-4">
             <div className="flex items-center justify-between">
-              <label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              <label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                 <span>Bill To (Client)</span>
-                <span className="text-red-500">*</span>
-                {isLoadingRefs && <Loader2 className="w-3 h-3 animate-spin text-blue-500" />}
+                <span className="text-rose-500">*</span>
+                {isLoadingRefs && <Loader2 className="w-3 h-3 animate-spin text-[var(--brand-primary)]" />}
               </label>
               <button
                 type="button"
                 onClick={() => setIsAddCustomerOpen(true)}
-                className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--brand-primary)] hover:opacity-80 transition"
               >
                 <UserPlus className="w-3.5 h-3.5" />
                 + Add Client
@@ -558,7 +558,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
                     }
                   }
                 }}
-                className="w-full px-4 py-2.5 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-slate-900 dark:text-slate-100"
+                className="w-full px-4 py-2.5 text-sm bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xl focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] transition"
               >
                 <option value="">-- Select a Client --</option>
                 {customers.map((c) => (
@@ -570,20 +570,20 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
             </div>
 
             {selectedCustomerId && (
-              <div className="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200/60 dark:border-slate-700/60 text-xs space-y-1">
+              <div className="p-4 bg-[var(--bg-subtle)] rounded-xl border border-[var(--border-subtle)] text-xs space-y-1">
                 {(() => {
                   const cust = customers.find((c) => c.id === Number(selectedCustomerId));
                   if (!cust) return null;
                   return (
                     <>
-                      <div className="font-semibold text-slate-800 dark:text-slate-200 text-sm">
+                      <div className="font-semibold text-[var(--text-main)] text-sm">
                         {cust.name}
                       </div>
                       {cust.email && (
-                        <div className="text-slate-500 dark:text-slate-400">{cust.email}</div>
+                        <div className="text-[var(--text-secondary)]">{cust.email}</div>
                       )}
                       {cust.phone && (
-                        <div className="text-slate-500 dark:text-slate-400">{cust.phone}</div>
+                        <div className="text-[var(--text-secondary)]">{cust.phone}</div>
                       )}
                     </>
                   );
@@ -595,21 +595,21 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
           {/* Invoice Metadata (Dates, Terms, PO #) */}
           <div className="lg:col-span-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
-                Issue Date <span className="text-red-500">*</span>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1.5">
+                Issue Date <span className="text-rose-500">*</span>
               </label>
               <div className="relative">
                 <input
                   type="date"
                   value={invoiceDate}
                   onChange={(e) => setInvoiceDate(e.target.value)}
-                  className="w-full px-3.5 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-slate-900 dark:text-slate-100"
+                  className="w-full px-3.5 py-2.5 text-sm bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xl focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] transition"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1.5">
                 Payment Terms
               </label>
               <select
@@ -617,7 +617,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
                 onChange={(e) =>
                   setPaymentTermId(e.target.value ? Number(e.target.value) : '')
                 }
-                className="w-full px-3.5 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-slate-900 dark:text-slate-100"
+                className="w-full px-3.5 py-2.5 text-sm bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xl focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] transition"
               >
                 <option value="">Custom / Default</option>
                 {paymentTerms.map((t) => (
@@ -629,19 +629,19 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1.5">
                 Due Date
               </label>
               <input
                 type="date"
                 value={dueDate}
                 onChange={(e) => setDueDate(e.target.value)}
-                className="w-full px-3.5 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-slate-900 dark:text-slate-100"
+                className="w-full px-3.5 py-2.5 text-sm bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xl focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] transition"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1.5">
                 Reference / PO #
               </label>
               <input
@@ -649,7 +649,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
                 placeholder="e.g. PO-9842"
                 value={referenceNo}
                 onChange={(e) => setReferenceNo(e.target.value)}
-                className="w-full px-3.5 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-slate-900 dark:text-slate-100"
+                className="w-full px-3.5 py-2.5 text-sm bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xl focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] placeholder-[var(--text-muted)] transition"
               />
             </div>
           </div>
@@ -658,20 +658,20 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
         {/* Section 2: Line Items Table */}
         <div>
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
               Line Items
             </h3>
             {catalogItems.length > 0 && (
-              <span className="text-xs text-slate-400 dark:text-slate-500">
+              <span className="text-xs text-[var(--text-muted)]">
                 Type freeform or pick from catalog
               </span>
             )}
           </div>
 
-          <div className="overflow-x-auto border border-slate-200 dark:border-slate-800 rounded-xl">
+          <div className="overflow-x-auto border border-[var(--border-subtle)] rounded-xl bg-[var(--bg-surface)]">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="bg-slate-50 dark:bg-slate-800/80 text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">
+                <tr className="bg-[var(--bg-subtle)] text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider border-b border-[var(--border-subtle)]">
                   <th className="py-3 px-4 min-w-[220px]">Item & Description</th>
                   <th className="py-3 px-3 w-24 text-right">Qty</th>
                   <th className="py-3 px-3 w-32 text-right">Unit Price</th>
@@ -681,7 +681,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
                   <th className="py-3 px-2 w-12 text-center"></th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 text-sm">
+              <tbody className="divide-y divide-[var(--border-subtle)] text-sm">
                 {lines.map((line, idx) => {
                   const qty = Number(line.quantity) || 0;
                   const rate = Number(line.amount) || 0;
@@ -690,7 +690,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
                   const lineTotal = Math.max(0, gross - disc);
 
                   return (
-                    <tr key={idx} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition">
+                    <tr key={idx} className="hover:bg-[var(--bg-surface-hover)]/40 transition">
                       <td className="py-2.5 px-4 space-y-1.5">
                         <input
                           type="text"
@@ -699,15 +699,15 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
                           onChange={(e) =>
                             handleLineChange(idx, 'itemDescription', e.target.value)
                           }
-                          className="w-full px-3 py-1.5 text-sm bg-transparent border border-slate-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:bg-white dark:focus:bg-slate-800 text-slate-900 dark:text-slate-100"
+                          className="w-full px-3 py-1.5 text-sm bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-lg focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] placeholder-[var(--text-muted)] transition"
                         />
                         {catalogItems.length > 0 && (
                           <div className="flex items-center gap-1.5">
-                            <span className="text-[11px] text-slate-400">or pick:</span>
+                            <span className="text-[11px] text-[var(--text-muted)]">or pick:</span>
                             <select
                               value={line.itemId || ''}
                               onChange={(e) => handleSelectItem(idx, e.target.value)}
-                              className="text-[11px] py-0.5 px-2 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-slate-600 dark:text-slate-300"
+                              className="text-[11px] py-0.5 px-2 bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded text-[var(--text-secondary)] focus:outline-none"
                             >
                               <option value="">Catalog Item...</option>
                               {catalogItems.map((ci) => (
@@ -729,7 +729,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
                           onChange={(e) =>
                             handleLineChange(idx, 'quantity', parseFloat(e.target.value) || 0)
                           }
-                          className="w-full px-2.5 py-1.5 text-sm text-right bg-transparent border border-slate-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:bg-white dark:focus:bg-slate-800 text-slate-900 dark:text-slate-100"
+                          className="w-full px-2.5 py-1.5 text-sm text-right bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-lg focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] transition"
                         />
                       </td>
 
@@ -742,7 +742,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
                           onChange={(e) =>
                             handleLineChange(idx, 'amount', parseFloat(e.target.value) || 0)
                           }
-                          className="w-full px-2.5 py-1.5 text-sm text-right bg-transparent border border-slate-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:bg-white dark:focus:bg-slate-800 text-slate-900 dark:text-slate-100"
+                          className="w-full px-2.5 py-1.5 text-sm text-right bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-lg focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] transition"
                         />
                       </td>
 
@@ -756,7 +756,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
                           onChange={(e) =>
                             handleLineChange(idx, 'discount', parseFloat(e.target.value) || 0)
                           }
-                          className="w-full px-2 py-1.5 text-sm text-right bg-transparent border border-slate-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:bg-white dark:focus:bg-slate-800 text-slate-900 dark:text-slate-100"
+                          className="w-full px-2 py-1.5 text-sm text-right bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-lg focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] transition"
                         />
                       </td>
 
@@ -766,7 +766,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
                           onChange={(e) =>
                             handleLineChange(idx, 'taxRate', parseFloat(e.target.value) || 0)
                           }
-                          className="w-full px-2 py-1.5 text-xs text-right bg-transparent border border-slate-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:bg-white dark:focus:bg-slate-800 text-slate-900 dark:text-slate-100"
+                          className="w-full px-2 py-1.5 text-xs text-right bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-lg focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] transition"
                         >
                           <option value="0">0%</option>
                           <option value="5">5%</option>
@@ -779,7 +779,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
                         </select>
                       </td>
 
-                      <td className="py-2.5 px-4 text-right font-medium text-slate-900 dark:text-white">
+                      <td className="py-2.5 px-4 text-right font-medium font-mono text-[var(--text-main)]">
                         {formatCurrency(lineTotal)}
                       </td>
 
@@ -788,7 +788,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
                           type="button"
                           onClick={() => handleRemoveLine(idx)}
                           disabled={lines.length <= 1}
-                          className="p-1.5 text-slate-400 hover:text-red-500 rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition disabled:opacity-20"
+                          className="p-1.5 text-[var(--text-muted)] hover:text-rose-500 rounded-lg hover:bg-[var(--bg-surface-hover)] transition disabled:opacity-20"
                           title="Remove item"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -805,7 +805,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
             <button
               type="button"
               onClick={handleAddLine}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/60 transition"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-[var(--brand-primary)] bg-[var(--brand-subtle)] rounded-xl hover:opacity-85 transition"
             >
               <Plus className="w-3.5 h-3.5" />
               Add Line Item
@@ -814,11 +814,11 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
         </div>
 
         {/* Section 3: Notes & Totals Breakdown */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 border-t border-slate-100 dark:border-slate-800 pt-8">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 border-t border-[var(--border-subtle)] pt-8">
           {/* Notes & Payment Instructions */}
           <div className="lg:col-span-7 space-y-4">
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1.5">
                 Client Notes
               </label>
               <textarea
@@ -826,12 +826,12 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder="Notes visible to your client on the invoice..."
-                className="w-full px-3.5 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-slate-900 dark:text-slate-100"
+                className="w-full px-3.5 py-2.5 text-sm bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xl focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] placeholder-[var(--text-muted)] transition"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1.5">
                 Payment Instructions / Bank Wire Info
               </label>
               <textarea
@@ -839,39 +839,39 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
                 value={paymentInstructions}
                 onChange={(e) => setPaymentInstructions(e.target.value)}
                 placeholder="Bank name, Swift/IBAN, routing, or PayPal info..."
-                className="w-full px-3.5 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-slate-900 dark:text-slate-100"
+                className="w-full px-3.5 py-2.5 text-sm bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xl focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] placeholder-[var(--text-muted)] transition"
               />
             </div>
           </div>
 
           {/* Totals Summary Box */}
-          <div className="lg:col-span-5 bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 rounded-2xl p-5 space-y-3">
-            <div className="flex items-center justify-between text-sm text-slate-600 dark:text-slate-400">
+          <div className="lg:col-span-5 bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-2xl p-6 space-y-3">
+            <div className="flex items-center justify-between text-sm text-[var(--text-secondary)]">
               <span>Subtotal</span>
-              <span className="font-medium text-slate-900 dark:text-slate-200">
+              <span className="font-medium font-mono text-[var(--text-main)]">
                 {formatCurrency(calculatedTotals.subtotal)}
               </span>
             </div>
 
             {calculatedTotals.totalDiscount > 0 && (
-              <div className="flex items-center justify-between text-sm text-emerald-600 dark:text-emerald-400">
+              <div className="flex items-center justify-between text-sm text-emerald-500">
                 <span>Discounts</span>
-                <span>-{formatCurrency(calculatedTotals.totalDiscount)}</span>
+                <span className="font-mono">-{formatCurrency(calculatedTotals.totalDiscount)}</span>
               </div>
             )}
 
-            <div className="flex items-center justify-between text-sm text-slate-600 dark:text-slate-400">
+            <div className="flex items-center justify-between text-sm text-[var(--text-secondary)]">
               <span>Estimated Tax</span>
-              <span className="font-medium text-slate-900 dark:text-slate-200">
+              <span className="font-medium font-mono text-[var(--text-main)]">
                 {formatCurrency(calculatedTotals.totalTax)}
               </span>
             </div>
 
-            <div className="border-t border-slate-200 dark:border-slate-700 pt-3 flex items-center justify-between">
-              <span className="text-base font-bold text-slate-900 dark:text-white">
+            <div className="border-t border-[var(--border-subtle)] pt-3 flex items-center justify-between">
+              <span className="text-base font-bold text-[var(--text-main)]">
                 Total Due
               </span>
-              <span className="text-xl font-extrabold text-blue-600 dark:text-blue-400">
+              <span className="text-xl font-bold font-mono text-[var(--brand-primary)]">
                 {formatCurrency(calculatedTotals.grandTotal)}
               </span>
             </div>
@@ -881,19 +881,19 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
 
       {/* Inline Modal: Add New Client */}
       {isAddCustomerOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-lg w-full border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-[var(--bg-surface)] rounded-2xl max-w-lg w-full border border-[var(--border-subtle)] shadow-2xl overflow-hidden">
+            <div className="px-6 py-4 border-b border-[var(--border-subtle)] flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Building2 className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                <h3 className="font-bold text-slate-900 dark:text-white text-base">
+                <Building2 className="w-5 h-5 text-[var(--brand-primary)]" />
+                <h3 className="font-bold text-[var(--text-main)] text-base">
                   Add New Client
                 </h3>
               </div>
               <button
                 type="button"
                 onClick={() => setIsAddCustomerOpen(false)}
-                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                className="text-[var(--text-muted)] hover:text-[var(--text-main)] p-1 rounded-lg transition"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -901,14 +901,14 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
 
             <form onSubmit={handleCreateCustomer} className="p-6 space-y-4">
               {customerModalError && (
-                <div className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/50 rounded-xl text-xs text-red-600 dark:text-red-400">
+                <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl text-xs text-rose-500">
                   {customerModalError}
                 </div>
               )}
 
               <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
-                  Client / Company Name <span className="text-red-500">*</span>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1">
+                  Client / Company Name <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -916,14 +916,14 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
                   placeholder="e.g. Acme Corporation"
                   value={newCustomerName}
                   onChange={(e) => setNewCustomerName(e.target.value)}
-                  className="w-full px-3.5 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-slate-900 dark:text-slate-100"
+                  className="w-full px-3.5 py-2.5 text-sm bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xl focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] placeholder-[var(--text-muted)] transition"
                 />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
-                    Email Address <span className="text-red-500">*</span>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1">
+                    Email Address <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="email"
@@ -931,12 +931,12 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
                     placeholder="billing@acme.com"
                     value={newCustomerEmail}
                     onChange={(e) => setNewCustomerEmail(e.target.value)}
-                    className="w-full px-3.5 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-slate-900 dark:text-slate-100"
+                    className="w-full px-3.5 py-2.5 text-sm bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xl focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] placeholder-[var(--text-muted)] transition"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1">
                     Phone Number
                   </label>
                   <input
@@ -944,13 +944,13 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
                     placeholder="+1 (555) 000-0000"
                     value={newCustomerPhone}
                     onChange={(e) => setNewCustomerPhone(e.target.value)}
-                    className="w-full px-3.5 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-slate-900 dark:text-slate-100"
+                    className="w-full px-3.5 py-2.5 text-sm bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xl focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] placeholder-[var(--text-muted)] transition"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
+                <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1">
                   Street Address
                 </label>
                 <input
@@ -958,13 +958,13 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
                   placeholder="123 Market St, Suite 400"
                   value={newCustomerStreet}
                   onChange={(e) => setNewCustomerStreet(e.target.value)}
-                  className="w-full px-3.5 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-slate-900 dark:text-slate-100"
+                  className="w-full px-3.5 py-2.5 text-sm bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xl focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] placeholder-[var(--text-muted)] transition"
                 />
               </div>
 
               <div className="grid grid-cols-3 gap-2">
                 <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1">
                     City/State
                   </label>
                   <input
@@ -972,12 +972,12 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
                     placeholder="New York, NY"
                     value={newCustomerProvince}
                     onChange={(e) => setNewCustomerProvince(e.target.value)}
-                    className="w-full px-2.5 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-slate-100"
+                    className="w-full px-2.5 py-2 text-xs bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xl focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] placeholder-[var(--text-muted)] transition"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1">
                     Postal Code
                   </label>
                   <input
@@ -985,12 +985,12 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
                     placeholder="10001"
                     value={newCustomerPostal}
                     onChange={(e) => setNewCustomerPostal(e.target.value)}
-                    className="w-full px-2.5 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-slate-100"
+                    className="w-full px-2.5 py-2 text-xs bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xl focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] placeholder-[var(--text-muted)] transition"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1">
                     Country
                   </label>
                   <input
@@ -998,13 +998,13 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
                     placeholder="USA"
                     value={newCustomerCountry}
                     onChange={(e) => setNewCustomerCountry(e.target.value)}
-                    className="w-full px-2.5 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-slate-100"
+                    className="w-full px-2.5 py-2 text-xs bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xl focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] placeholder-[var(--text-muted)] transition"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
+                <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1">
                   Default Payment Terms
                 </label>
                 <select
@@ -1012,7 +1012,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
                   onChange={(e) =>
                     setNewCustomerTermId(e.target.value ? Number(e.target.value) : '')
                   }
-                  className="w-full px-3.5 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-slate-100"
+                  className="w-full px-3.5 py-2.5 text-sm bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xl focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] transition"
                 >
                   <option value="">Default Terms</option>
                   {paymentTerms.map((t) => (
@@ -1027,14 +1027,14 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
                 <button
                   type="button"
                   onClick={() => setIsAddCustomerOpen(false)}
-                  className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition"
+                  className="px-4 py-2.5 text-sm font-medium text-[var(--text-secondary)] bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xl hover:bg-[var(--bg-surface-hover)] hover:text-[var(--text-main)] transition"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmittingCustomer}
-                  className="inline-flex items-center gap-2 px-5 py-2 text-sm font-medium text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition disabled:opacity-50"
+                  className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-[var(--brand-text)] bg-[var(--brand-primary)] rounded-xl hover:bg-[var(--brand-hover)] transition disabled:opacity-50 shadow-sm"
                 >
                   {isSubmittingCustomer && <Loader2 className="w-4 h-4 animate-spin" />}
                   Create Client

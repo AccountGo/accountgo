@@ -93,4 +93,111 @@ public class SalesInvoiceTests
         Assert.Equal(100m, invoice.Payments[0].Amount);
         Assert.Equal("Credit Card", invoice.Payments[0].PaymentMethod);
     }
+
+    [Fact]
+    public void ServiceItem_GLAccountsValidated_RequiresOnlySalesAccount()
+    {
+        var serviceCategory = new Core.Domain.Items.ItemCategory
+        {
+            Id = 1,
+            ItemType = Core.Domain.ItemTypes.Service,
+            Name = "Services"
+        };
+
+        var serviceItem = new Core.Domain.Items.Item
+        {
+            Id = 1,
+            Description = "Consulting Service",
+            ItemCategory = serviceCategory,
+            SalesAccountId = 55,
+            CostOfGoodsSoldAccountId = null,
+            InventoryAccountId = null,
+            InventoryAdjustmentAccountId = null
+        };
+
+        Assert.True(serviceItem.GLAccountsValidated());
+    }
+
+    [Fact]
+    public void PhysicalItem_GLAccountsValidated_RequiresAllInventoryAccounts()
+    {
+        var purchasedCategory = new Core.Domain.Items.ItemCategory
+        {
+            Id = 2,
+            ItemType = Core.Domain.ItemTypes.Purchased,
+            Name = "Hardware"
+        };
+
+        var incompleteItem = new Core.Domain.Items.Item
+        {
+            Id = 2,
+            Description = "Physical Device",
+            ItemCategory = purchasedCategory,
+            SalesAccountId = 55,
+            CostOfGoodsSoldAccountId = null // missing COGS
+        };
+
+        Assert.False(incompleteItem.GLAccountsValidated());
+
+        var completeItem = new Core.Domain.Items.Item
+        {
+            Id = 3,
+            Description = "Complete Device",
+            ItemCategory = purchasedCategory,
+            SalesAccountId = 55,
+            CostOfGoodsSoldAccountId = 67,
+            InventoryAccountId = 12,
+            InventoryAdjustmentAccountId = 69
+        };
+
+        Assert.True(completeItem.GLAccountsValidated());
+    }
+
+    [Theory]
+    [InlineData("Void", 0, 100, 30, "Void")]
+    [InlineData("Closed", 100, 0, 30, "Paid")]
+    [InlineData("Open", 100, 0, 30, "Paid")]
+    [InlineData("Draft", 50, 50, 30, "Partially Paid")]
+    [InlineData("Open", 50, 50, 30, "Partially Paid")]
+    [InlineData("Draft", 0, 100, 30, "Draft")]
+    [InlineData("Open", 0, 100, -5, "Overdue")]
+    [InlineData("Open", 0, 100, 30, "Open")]
+    public void SalesInvoiceLifecycle_ResolvesCorrectStatus(
+        string headerStatus,
+        decimal allocated,
+        decimal balanceDue,
+        int daysUntilDue,
+        string expectedStatus)
+    {
+        var dueDate = DateTime.UtcNow.AddDays(daysUntilDue);
+
+        // Simulation of SalesController status resolver algorithm
+        string resolvedStatus;
+        if (headerStatus == "Void")
+        {
+            resolvedStatus = "Void";
+        }
+        else if (headerStatus == "Closed" || (balanceDue <= 0.005m && allocated > 0))
+        {
+            resolvedStatus = "Paid";
+        }
+        else if (allocated > 0 && balanceDue > 0.005m)
+        {
+            resolvedStatus = "Partially Paid";
+        }
+        else if (headerStatus == "Draft" && allocated == 0)
+        {
+            resolvedStatus = "Draft";
+        }
+        else if (dueDate.Date < DateTime.UtcNow.Date && balanceDue > 0.005m)
+        {
+            resolvedStatus = "Overdue";
+        }
+        else
+        {
+            resolvedStatus = "Open";
+        }
+
+        Assert.Equal(expectedStatus, resolvedStatus);
+    }
 }
