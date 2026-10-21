@@ -28,6 +28,25 @@ export interface OtpSendResponse {
   message: string;
   expiresInSeconds: number;
   devCode?: string | null;
+  orgSlug?: string | null;
+}
+
+export interface SignUpPayload {
+  email: string;
+  firstName: string;
+  lastName: string;
+  organizationName?: string;
+  organizationSlug?: string;
+  currency?: string;
+}
+
+export interface SignUpResponse {
+  success: boolean;
+  message: string;
+  email: string;
+  orgSlug?: string | null;
+  expiresInSeconds: number;
+  devCode?: string | null;
 }
 
 export interface AuthContextType {
@@ -36,6 +55,7 @@ export interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   sendOtp: (email: string) => Promise<OtpSendResponse>;
+  signUp: (payload: SignUpPayload) => Promise<SignUpResponse>;
   verifyOtp: (email: string, otp: string) => Promise<void>;
   logout: () => Promise<void>;
   authFetch: (url: string, init?: RequestInit) => Promise<Response>;

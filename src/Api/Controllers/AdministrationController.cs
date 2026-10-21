@@ -16,6 +16,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Security.Claims;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
 using Api.Data;
@@ -169,7 +170,8 @@ namespace Api.Controllers
             public string Name { get; set; } = string.Empty;
             public string? ShortName { get; set; }
             public string? Slug { get; set; }
-            public string? Plan { get; set; } = "invoicing";
+            public string? Plan { get; set; } = "accounting";
+            public string? Currency { get; set; }
         }
 
         [AllowAnonymous]
@@ -177,29 +179,50 @@ namespace Api.Controllers
         public IActionResult CreateCompany([FromBody] CreateCompanyRequest request)
         {
             if (string.IsNullOrWhiteSpace(request?.Name))
-                return BadRequest(new { message = "Company name is required." });
+                return BadRequest(new ProblemDetails
+                {
+                    Title = "Company Name Required",
+                    Detail = "Company name is required.",
+                    Status = StatusCodes.Status400BadRequest
+                });
 
-            var slug = !string.IsNullOrWhiteSpace(request.Slug)
-                ? request.Slug.ToLowerInvariant().Trim()
-                : request.Name.ToLowerInvariant().Replace(" ", "-").Trim();
+            var rawSlug = !string.IsNullOrWhiteSpace(request.Slug)
+                ? request.Slug
+                : request.Name;
+
+            var cleanSlug = System.Text.RegularExpressions.Regex.Replace(rawSlug.ToLowerInvariant().Trim(), @"[^a-z0-9\-]", "-");
+            cleanSlug = System.Text.RegularExpressions.Regex.Replace(cleanSlug, @"-+", "-").Trim('-');
+            if (string.IsNullOrWhiteSpace(cleanSlug))
+                cleanSlug = $"org-{RandomNumberGenerator.GetInt32(100, 1000)}";
+
+            var existing = _adminService.GetCompanyBySlug(cleanSlug);
+            if (existing != null)
+            {
+                return BadRequest(new ProblemDetails
+                {
+                    Title = "Workspace Slug Already Taken",
+                    Detail = $"A workspace with URL slug '{cleanSlug}' already exists. Please choose a different slug.",
+                    Status = StatusCodes.Status400BadRequest
+                });
+            }
 
             var shortName = !string.IsNullOrWhiteSpace(request.ShortName)
-                ? request.ShortName
-                : (request.Name.Length <= 5 ? request.Name.ToUpper() : request.Name.Substring(0, 4).ToUpper());
+                ? request.ShortName.Trim()
+                : (request.Name.Trim().Length <= 5 ? request.Name.Trim().ToUpper() : request.Name.Trim().Substring(0, 4).ToUpper());
 
             var company = new Core.Domain.Company
             {
-                Name = request.Name,
+                Name = request.Name.Trim(),
                 ShortName = shortName,
-                Slug = slug,
-                CompanyCode = new Random().Next(100, 999).ToString(),
-                Plan = request.Plan?.ToLowerInvariant() ?? "invoicing",
+                Slug = cleanSlug,
+                CompanyCode = RandomNumberGenerator.GetInt32(100, 1000).ToString(),
+                Plan = request.Plan?.ToLowerInvariant() ?? "accounting",
                 SubscriptionStatus = "active"
             };
 
             _adminService.SaveCompany(company);
 
-            return Ok(new
+            return StatusCode(StatusCodes.Status201Created, new
             {
                 id = company.Id.ToString(),
                 name = company.Name,

@@ -1,5 +1,9 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Api.Data;
 using Api.Service;
@@ -12,6 +16,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Services.Administration;
 using Services.Security;
 
 namespace Api.Controllers
@@ -25,6 +30,7 @@ namespace Api.Controllers
         private readonly IEmailOtpService _otpService;
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly ISecurityService _securityService;
+        private readonly IAdministrationService _adminService;
         private readonly IConfiguration _configuration;
         private readonly ILogger<AuthController> _logger;
         private readonly ApplicationIdentityDbContext _identityContext;
@@ -33,6 +39,7 @@ namespace Api.Controllers
             IEmailOtpService otpService,
             UserManager<ApplicationUser> userManager,
             ISecurityService securityService,
+            IAdministrationService adminService,
             IConfiguration configuration,
             ILogger<AuthController> logger,
             ApplicationIdentityDbContext identityContext)
@@ -40,6 +47,7 @@ namespace Api.Controllers
             _otpService = otpService;
             _userManager = userManager;
             _securityService = securityService;
+            _adminService = adminService;
             _configuration = configuration;
             _logger = logger;
             _identityContext = identityContext;
@@ -156,6 +164,123 @@ namespace Api.Controllers
                     Status = StatusCodes.Status400BadRequest
                 });
             }
+        }
+
+        [AllowAnonymous]
+        [EnableRateLimiting("otp-send")]
+        [HttpPost("signup")]
+        public async Task<IActionResult> SignUp([FromBody] SignUpRequest request)
+        {
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+
+            var normalizedEmail = request.Email.Trim().ToLowerInvariant();
+
+            // 1. Check if user already exists
+            var existingAppUser = await _userManager.FindByEmailAsync(normalizedEmail);
+            var existingDomainUser = _securityService.GetUser(normalizedEmail);
+
+            if (existingAppUser != null || existingDomainUser != null)
+            {
+                return BadRequest(new ProblemDetails
+                {
+                    Title = "Account Already Exists",
+                    Detail = "An account with this email address already exists. Please sign in instead.",
+                    Status = StatusCodes.Status400BadRequest
+                });
+            }
+
+            // 2. Validate and prepare organization slug ahead of time
+            string? cleanSlug = null;
+            if (!string.IsNullOrWhiteSpace(request.OrganizationName))
+            {
+                var rawSlug = !string.IsNullOrWhiteSpace(request.OrganizationSlug)
+                    ? request.OrganizationSlug
+                    : request.OrganizationName;
+
+                cleanSlug = Regex.Replace(rawSlug.ToLowerInvariant().Trim(), @"[^a-z0-9\-]", "-");
+                cleanSlug = Regex.Replace(cleanSlug, @"-+", "-").Trim('-');
+                if (string.IsNullOrWhiteSpace(cleanSlug)) cleanSlug = "org";
+
+                if (_adminService.GetCompanyBySlug(cleanSlug) != null)
+                {
+                    cleanSlug = $"{cleanSlug}-{RandomNumberGenerator.GetInt32(100, 1000)}";
+                }
+            }
+
+            // 3. Create Identity user first (ApplicationUser)
+            var appUser = new ApplicationUser
+            {
+                UserName = normalizedEmail,
+                Email = normalizedEmail,
+                EmailConfirmed = false
+            };
+
+            var createResult = await _userManager.CreateAsync(appUser);
+            if (!createResult.Succeeded)
+            {
+                return BadRequest(new ProblemDetails
+                {
+                    Title = "Registration Failed",
+                    Detail = string.Join("; ", createResult.Errors.Select(e => e.Description)),
+                    Status = StatusCodes.Status400BadRequest
+                });
+            }
+
+            // 4. Create Domain user with SystemAdministrators role
+            var adminRole = _securityService.GetRole("SystemAdministrators") ?? _securityService.GetRole("Administrator");
+            var roleIds = adminRole != null ? new List<int> { adminRole.Id } : new List<int>();
+
+            _securityService.AddUser(
+                normalizedEmail,
+                normalizedEmail,
+                request.FirstName.Trim(),
+                request.LastName.Trim(),
+                roleIds);
+
+            // 5. Save Company now that user registration succeeded
+            Core.Domain.Company? company = null;
+            if (!string.IsNullOrWhiteSpace(request.OrganizationName) && cleanSlug != null)
+            {
+                var shortName = request.OrganizationName.Trim().Length <= 5
+                    ? request.OrganizationName.Trim().ToUpper()
+                    : request.OrganizationName.Trim().Substring(0, 4).ToUpper();
+
+                company = new Core.Domain.Company
+                {
+                    Name = request.OrganizationName.Trim(),
+                    ShortName = shortName,
+                    Slug = cleanSlug,
+                    CompanyCode = RandomNumberGenerator.GetInt32(100, 1000).ToString(),
+                    Plan = "accounting",
+                    SubscriptionStatus = "active"
+                };
+
+                _adminService.SaveCompany(company);
+            }
+
+            // 6. Send Welcome verification code via Resend
+            var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+            var result = await _otpService.SendWelcomeOtpAsync(appUser, request.FirstName.Trim(), company?.Name, ipAddress);
+
+            if (!result.Success)
+            {
+                return BadRequest(new ProblemDetails
+                {
+                    Title = "Verification Email Failed",
+                    Detail = result.Error ?? "Failed to deliver verification code email. Please check your address or try again.",
+                    Status = StatusCodes.Status400BadRequest
+                });
+            }
+
+            return Ok(new SignUpResponse(
+                Success: true,
+                Message: result.Message,
+                Email: normalizedEmail,
+                OrgSlug: company?.Slug,
+                ExpiresInSeconds: result.ExpiresInSeconds,
+                DevCode: result.DevCode
+            ));
         }
 
         [AllowAnonymous]
