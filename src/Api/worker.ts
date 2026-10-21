@@ -251,14 +251,14 @@ export class AccountGoApiContainer extends Container<Env> {
 
     // 2. Build check and D1 restore (single-flight across concurrent requests)
     if (!this.restored) {
-      if (!this.initPromise) {
-        this.initPromise = this.initialize();
-      }
+      const p = (this.initPromise ??= this.initialize());
 
       try {
-        await this.initPromise;
+        await p;
       } catch (prepErr: any) {
-        this.initPromise = null;
+        if (this.initPromise === p) {
+          this.initPromise = null;
+        }
         this.restored = false;
 
         if (prepErr instanceof BuildMismatchError) {

@@ -20,7 +20,7 @@ export function parseSyncSqlHeaders(headers: Headers): string[] {
   if (countHeader !== null) {
     const count = parseInt(countHeader, 10);
     if (isNaN(count) || count < 0) {
-      throw new Error(`Invalid x-d1-sync-sql-count header: "${countHeader}"`);
+      throw new Error(`Invalid x-d1-sync-sql-count header`);
     }
 
     const statements: string[] = [];
@@ -28,7 +28,7 @@ export function parseSyncSqlHeaders(headers: Headers): string[] {
       const headerName = `x-d1-sync-sql-${i}`;
       const chunkB64 = headers.get(headerName);
       if (chunkB64 === null) {
-        throw new Error(`Missing expected chunk header: "${headerName}" (count=${count})`);
+        throw new Error(`Missing expected chunk header: "${headerName}"`);
       }
       try {
         const bytes = Uint8Array.from(atob(chunkB64), (c) => c.charCodeAt(0));
@@ -38,7 +38,12 @@ export function parseSyncSqlHeaders(headers: Headers): string[] {
         }
         statements.push(...chunkStmts);
       } catch (err: any) {
-        throw new Error(`Failed to decode/parse chunk header "${headerName}": ${err?.message ?? err}`);
+        if (err?.message?.includes("did not decode to a JSON array")) {
+          throw err;
+        }
+        // Do not echo err.message as V8 JSON.parse errors contain snippets of the input
+        const errorType = err instanceof SyntaxError ? "SyntaxError" : (err?.name || "Error");
+        throw new Error(`Failed to decode/parse chunk header "${headerName}": ${errorType}`);
       }
     }
     return statements;
@@ -54,7 +59,12 @@ export function parseSyncSqlHeaders(headers: Headers): string[] {
       }
       return statements;
     } catch (err: any) {
-      throw new Error(`Failed to decode/parse x-d1-sync-sql header: ${err?.message ?? err}`);
+      if (err?.message?.includes("did not decode to a JSON array")) {
+        throw err;
+      }
+      // Do not echo err.message as V8 JSON.parse errors contain snippets of the input
+      const errorType = err instanceof SyntaxError ? "SyntaxError" : (err?.name || "Error");
+      throw new Error(`Failed to decode/parse x-d1-sync-sql header: ${errorType}`);
     }
   }
 

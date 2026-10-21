@@ -56,15 +56,21 @@ test("parseSyncSqlHeaders throws error on invalid count header", () => {
   );
 });
 
-test("parseSyncSqlHeaders throws error on malformed chunk JSON", () => {
+test("parseSyncSqlHeaders throws error on malformed chunk JSON and does not echo payload", () => {
   const headers = new Headers();
   headers.set("x-d1-sync-sql-count", "1");
-  headers.set("x-d1-sync-sql-0", Buffer.from("not-json").toString("base64"));
+  headers.set("x-d1-sync-sql-0", Buffer.from("SELECT * FROM sensitive_table;").toString("base64"));
 
-  assert.throws(
-    () => parseSyncSqlHeaders(headers),
-    /Failed to decode\/parse chunk header/
-  );
+  let caughtError = null;
+  try {
+    parseSyncSqlHeaders(headers);
+  } catch (err) {
+    caughtError = err;
+  }
+
+  assert(caughtError !== null, "Expected parseSyncSqlHeaders to throw");
+  assert.match(caughtError.message, /Failed to decode\/parse chunk header "x-d1-sync-sql-0": SyntaxError/);
+  assert(!caughtError.message.includes("sensitive_table"), "Error must not echo SQL payload");
 });
 
 test("parseSyncSqlHeaders returns empty array when no sync headers present", () => {
