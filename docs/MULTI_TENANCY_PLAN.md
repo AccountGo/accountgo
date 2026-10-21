@@ -177,6 +177,105 @@ In `src/Api/worker.ts` `restoreD1ToContainer`:
 
 ---
 
+## Phase 1.1 — Live D1 write sync (done, on `main`)
+
+Shipped directly on `main` (commits `5bb85fcc`, `e08fc978`). For context only — do not redo:
+- `D1SqlGenerator.Capture()` records entry states **before** `SaveChanges` (EF resets them after), generates `DELETE`s up front and upserts after the save. Both DbContexts override the `bool acceptAllChangesOnSuccess` overloads.
+- Upserts are `INSERT … ON CONFLICT (<pk>) DO UPDATE SET …` — **never `INSERT OR REPLACE`**: D1 enforces foreign keys and REPLACE's implicit delete fires `ON DELETE CASCADE`, wiping children.
+- `x-d1-sync-sql` is base64(UTF-8 JSON array of statements); `worker.ts` runs them with `DB.batch()` prefixed by `PRAGMA defer_foreign_keys = on`.
+- `test/AccountGo.ServicesTests/D1SyncTests.cs` applies statements to a replica the way D1 does (FKs on, deferred, one transaction). Keep these green.
+
+---
+
+## Phase 1.2 — Container routing, deploy switch-over, sync durability (do before Phase 2)
+
+Branch: `feat/mt-phase-1.2-container-runtime`. Scope is `src/Api/worker.ts`, `src/Api/wrangler.jsonc`, `src/Api/Dockerfile`, `.github/workflows/api.yml`, one internal .NET endpoint, two small seed/web fixes. **No schema changes. No D1 migration.**
+
+### Why (observed on production 2026-10-21)
+1. **Anyone can choose the Durable Object.** `worker.ts` default `fetch` uses `request.headers.get("x-container-name") || env.CONTAINER_NAME`. Any internet client can start containers up to `max_instances` (5) — and each container is a separate SQLite copy accepting writes.
+2. **Deploys don't switch over.** The hand-written `alarm()` keep-alive (sleeps 15 s, re-arms itself while there was activity in the last 15 min) means the Durable Object never idles, so Cloudflare never loads new worker code into it. We had to bump `CONTAINER_NAME` (v5→v6→v7) twice by hand.
+3. **New worker code can run against an old image.** A container started during the image rollout kept the previous image (v7 started 12:20:30, rollout completed 12:22:21) and kept writing with the old `INSERT OR REPLACE` generator.
+4. **Sync is fire-and-forget.** The D1 batch runs in `ctx.waitUntil` *after* the response is returned; if it fails (or the isolate dies) the client sees success, the container has the write, D1 doesn't, and the write is lost at the next cold start — silently.
+5. **Cold start exceeds the 30 s readiness budget** on the current instance size (kept deliberately small), returning 503 to users.
+6. **Seed company has no `Slug`**, so a fresh DB resolves company 1 as `fsi`; browsers that stored `accountgo:lastOrgSlug = fsi` land on "Organization Not Found" forever.
+
+### 1.2.1 Lock down Durable Object selection (`worker.ts`)
+- Public traffic: the Durable Object name is computed server-side only (see 1.2.2). **Ignore `x-container-name`** on public requests.
+- Admin requests (`/restart-container`, `x-restart-container`): accept `x-container-name` **only** after `x-internal-key` passes the constant-time check; otherwise 404 as today.
+- Strip `x-container-name`, `x-internal-key`, `x-restart-container` from the request before forwarding to the container.
+
+### 1.2.2 One Durable Object per deployed version (`wrangler.jsonc`, `worker.ts`)
+- Add `"version_metadata": { "binding": "CF_VERSION_METADATA" }` to `wrangler.jsonc`; regenerate `worker-configuration.d.ts` with `npx wrangler types`.
+- Route public traffic to `idFromName(\`${env.CONTAINER_NAME}-${env.CF_VERSION_METADATA.id}\`)`. Every deploy then lands on a fresh Durable Object running the new worker code; the old one receives no traffic and sleeps. `CONTAINER_NAME` stays as a manual "epoch" prefix but should no longer need bumping.
+- Accept the trade-off: one cold start per deploy (already the case).
+
+### 1.2.3 Replace the hand-written keep-alive with `@cloudflare/containers` (`worker.ts`)
+- `AccountGoApiContainer extends Container` (package already in `package.json`, 0.3.7). Set `defaultPort = 8001`, `sleepAfter = "10m"`, `enableInternet = true`, `envVars` built from `env` exactly as today (`ASPNETCORE_URLS`, `ASPNETCORE_ENVIRONMENT=Production`, `DatabaseProvider=Sqlite`, plus all string vars/secrets).
+- **Delete** `touchActivity`, the custom `alarm()`, `KEEPALIVE_HOLD_MS`, the manual `container.start()` / readiness loop. Do **not** override `alarm()` — the base class uses it for `sleepAfter`.
+- Override `fetch(request)` in the subclass to keep our behaviour around the base proxy:
+  1. `await this.startAndWaitForPorts({ ports: 8001, cancellationOptions: { portReadyTimeoutMS: 90_000 } })` (90 s budget — see reason 5).
+  2. If not yet restored in this container's lifetime: run the **build check (1.2.4)**, then the **D1 restore** (existing `restoreD1ToContainer` logic, unchanged semantics: clear + insert, fail closed). Track with an in-memory flag reset in `onStop()`.
+  3. On any failure in 1–2: return 503 problem+json with `Retry-After: 5` (no stack traces).
+  4. `const res = await this.containerFetch(request)`; then handle `x-d1-sync-sql` per 1.2.5; strip internal headers; return.
+- Keep the restart endpoint working via `this.destroy()` (or `stop()`); it must reset the restored flag.
+- Verify the Durable Object migration needs no new tag (same class name, still SQLite-backed). If wrangler asks for one, add it — do not rename the class.
+
+### 1.2.4 Guarantee the container runs the deployed build
+- CI writes the commit SHA into the image and the worker:
+  - `api.yml`: before deploy, `echo "${GITHUB_SHA}" > src/Api/BUILD_SHA`, and replace the deploy command with `npx wrangler deploy --var BUILD_SHA:${GITHUB_SHA}` (avoid `pnpm run deploy -- …`, which can forward the literal `--`).
+  - `Dockerfile`: `COPY src/Api/BUILD_SHA /app/BUILD_SHA` in the runtime stage (make the build tolerate a missing file locally, e.g. default `dev`).
+  - Add `src/Api/BUILD_SHA` to `.gitignore`.
+- .NET: `GET /api/internal/build` → `{ "sha": "<contents of /app/BUILD_SHA or 'dev'>" }`, `[AllowAnonymous]` but requires `x-internal-key` (same constant-time check as `InternalSyncController`; reuse a helper rather than copy-pasting).
+- Durable Object, before restore: fetch `/api/internal/build` from the container; if `env.BUILD_SHA` is set and differs, `destroy()` the container and return 503 + `Retry-After: 5`. The next request starts a container on the current image. Log the mismatch once (`console.warn`) with both SHAs.
+
+### 1.2.5 Make sync durable and visible (`worker.ts`)
+- **Await** the D1 batch before returning the response (no `waitUntil`).
+- If the batch fails:
+  - `console.error` with request method, path, D1 error message, and statement count (never the SQL values — they contain user data and token hashes).
+  - `destroy()` the container so its SQLite (which already committed the write) is discarded and the next request restores from D1 — keeping the container and D1 consistent.
+  - Return **503** problem+json: `title: "Change not saved"`, `detail: "Your change could not be saved. Please retry."`, `Retry-After: 5`. The client must not see 2xx for a write that D1 does not have.
+- Header size: if the encoded payload exceeds 32 KB, the .NET middleware splits it across `x-d1-sync-sql-0 … x-d1-sync-sql-N` (each ≤ 32 KB, same base64 JSON array format, split on statement boundaries) plus `x-d1-sync-sql-count: N+1`. The worker concatenates the arrays in order and runs **one** batch. Strip all of these before returning. Add a .NET unit test for splitting and a worker-side test (see acceptance).
+
+### 1.2.6 Run D1 migrations in CI (`.github/workflows/api.yml`)
+Add before "Deploy API Container to Cloudflare":
+```yaml
+      - name: Apply D1 migrations
+        working-directory: src/Api
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler d1 migrations apply accountgo-db --remote
+```
+Note in the PR that the CI token needs **D1 Edit** permission. Already-applied `0001` is skipped by wrangler's tracking.
+
+### 1.2.7 Small fixes
+- `src/Api/Data/Seed/SeeData.cs`: seed Company 1 with `Slug = "ph-financials"` (and keep `CreatedAt`). Fresh DBs then match production.
+- `src/Web/src/layouts/OrgLayout.tsx`: when the org is not found, clear `accountgo:lastOrgSlug` (via `src/Web/src/lib/storage.ts`) so the next login doesn't loop back to a dead slug. (Phase 4 replaces this screen; this is the minimal fix.)
+- `src/Web/src/auth/AuthContext.tsx`: on 503 with `Retry-After`, `authFetch` retries the request up to 3 times honouring `Retry-After` (max 10 s each) before surfacing the error. `send-otp`/`verify-otp` do the same.
+
+### Acceptance (Phase 1.2)
+Automated:
+1. `dotnet test` all suites green (incl. `D1SyncTests`); new tests: header splitting round-trip (> 32 KB payload → multiple headers → same statement list), `/api/internal/build` returns 401 without key, 200 + SHA with key.
+2. `cd src/Api && npx wrangler deploy --dry-run` succeeds; `cd src/Web && pnpm build` succeeds.
+
+Local, with Docker running (`cd src/Api && npx wrangler dev`, local D1) — paste output in the PR:
+
+3. `curl -H "x-container-name: attacker" …/api/Administration/companies` → served by the version-named Durable Object (log the name once at start in dev only), no new container started.
+4. Make a write (e.g. `send-otp` for a seeded user), confirm the row in local D1 (`wrangler d1 execute accountgo-db --local …`).
+5. Force a D1 failure (e.g. temporarily drop the target table in local D1) → client gets 503 "Change not saved", container is destroyed, next request restores from D1.
+6. Set `BUILD_SHA` var to a value different from the image file → first request 503, container destroyed; set them equal → normal service.
+7. Stop sending traffic for > 10 min → container sleeps (`wrangler containers list` / logs); next request cold-starts and restores.
+
+Production (reviewer verifies after deploy):
+
+8. Two consecutive deploys switch traffic without any `CONTAINER_NAME` bump: `wrangler tail` shows the Durable Object `scriptVersion` equal to the latest version on the first request after each deploy.
+9. A sign-in code request writes an `AspNetUserTokens` row (`LoginProvider='EmailOtp'`) to D1; verifying it deletes that row and adds a `RefreshTokens` row.
+
+### Out of scope for 1.2
+Changing the instance size (kept small on purpose), moving off the SQLite-in-container + D1 design, and any tenant isolation work (Phase 2).
+
+---
+
 ## Phase 2 — Tenant resolution and data isolation (the core)
 
 ### 2.1 Tenant context
