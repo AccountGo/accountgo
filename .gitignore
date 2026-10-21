@@ -229,3 +229,4 @@ accountgo.db*
 # Web & Build artifacts
 dist/
 *.tsbuildinfo
+.wrangler/
