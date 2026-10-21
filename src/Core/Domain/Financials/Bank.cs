@@ -11,8 +11,9 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Core.Domain.Financials
 {
     [Table("Bank")]
-    public partial class Bank : BaseEntity
+    public partial class Bank : BaseEntity, ICompanyOwned
     {
+        public int CompanyId { get; set; }
         public BankTypes Type { get; set; }
         public string Name { get; set; }
         public int? AccountId { get; set; }

@@ -14,7 +14,7 @@ using System.Linq;
 namespace Core.Domain.Sales
 {
     [Table("Customer")]
-    public partial class Customer : BaseEntity
+    public partial class Customer : BaseEntity, ICompanyOwned
     {
         public Customer()
         {
@@ -24,6 +24,7 @@ namespace Core.Domain.Sales
             CustomerAllocations = new HashSet<CustomerAllocation>();
         }
 
+        public int CompanyId { get; set; }
         public string No { get; set; }
         public int? PartyId { get; set; }
         public int? PrimaryContactId { get; set; }

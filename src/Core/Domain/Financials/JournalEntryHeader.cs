@@ -13,12 +13,14 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Core.Domain.Financials
 {
     [Table("JournalEntryHeader")]
-    public partial class JournalEntryHeader : BaseEntity
+    public partial class JournalEntryHeader : BaseEntity, ICompanyOwned
     {
         public JournalEntryHeader()
         {
             JournalEntryLines = new HashSet<JournalEntryLine>();
         }
+
+        public int CompanyId { get; set; }
 
         public int? GeneralLedgerHeaderId { get; set; }
         public int? PartyId { get; set; }

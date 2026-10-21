@@ -13,8 +13,9 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Core.Domain.Purchases
 {
     [Table("PurchaseInvoiceLine")]
-    public partial class PurchaseInvoiceLine : BaseEntity
+    public partial class PurchaseInvoiceLine : BaseEntity, ICompanyOwned
     {
+        public int CompanyId { get; set; }
         public int PurchaseInvoiceHeaderId { get; set; }
         public int ItemId { get; set; }
         public int? TaxGroupId { get; set; }

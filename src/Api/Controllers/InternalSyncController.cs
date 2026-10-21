@@ -94,20 +94,35 @@ namespace Api.Controllers
 
             try
             {
-                using var transaction = await _context.Database.BeginTransactionAsync();
-                foreach (var stmt in statements)
+                await _context.Database.ExecuteSqlRawAsync("PRAGMA foreign_keys=OFF;");
+                try
+                {
+                    using var transaction = await _context.Database.BeginTransactionAsync();
+                    foreach (var stmt in statements)
+                    {
+                        try
+                        {
+                            await _context.Database.ExecuteSqlRawAsync(stmt);
+                            executedCount++;
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex, "Failed to execute restore statement: {Sql}", stmt);
+                        }
+                    }
+                    await transaction.CommitAsync();
+                }
+                finally
                 {
                     try
                     {
-                        await _context.Database.ExecuteSqlRawAsync(stmt);
-                        executedCount++;
+                        await _context.Database.ExecuteSqlRawAsync("PRAGMA foreign_keys=ON;");
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogWarning(ex, "Failed to execute restore statement: {Sql}", stmt);
+                        _logger.LogWarning(ex, "Failed to re-enable foreign keys after restore.");
                     }
                 }
-                await transaction.CommitAsync();
 
                 _logger.LogInformation("Restored {Count} statements from Cloudflare D1 into local SQLite.", executedCount);
                 return Ok(new { restored = executedCount, total = statements.Count });

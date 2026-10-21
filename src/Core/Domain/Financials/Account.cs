@@ -15,7 +15,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Core.Domain.Financials
 {
     [Table("Account")]
-    public partial class Account : BaseEntity
+    public partial class Account : BaseEntity, ICompanyOwned
     {
         public Account()
         {

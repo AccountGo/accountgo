@@ -12,8 +12,9 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Core.Domain
 {
     [Table("PaymentTerm")]
-    public partial class PaymentTerm : BaseEntity
+    public partial class PaymentTerm : BaseEntity, ICompanyOwned
     {
+        public int CompanyId { get; set; }
         public string Description { get; set; }
         public PaymentTypes PaymentType { get; set; }
         public int? DueAfterDays { get; set; }

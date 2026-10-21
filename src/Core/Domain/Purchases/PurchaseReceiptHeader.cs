@@ -14,12 +14,14 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Core.Domain.Purchases
 {
     [Table("PurchaseReceiptHeader")]
-    public partial class PurchaseReceiptHeader : BaseEntity
+    public partial class PurchaseReceiptHeader : BaseEntity, ICompanyOwned
     {
         public PurchaseReceiptHeader()
         {
             PurchaseReceiptLines = new HashSet<PurchaseReceiptLine>();
         }
+
+        public int CompanyId { get; set; }
 
         public int VendorId { get; set; }
         public int? GeneralLedgerHeaderId { get; set; }

@@ -11,8 +11,9 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Core.Domain.Financials
 {
     [Table("JournalEntryLine")]
-    public partial class JournalEntryLine : BaseEntity
+    public partial class JournalEntryLine : BaseEntity, ICompanyOwned
     {
+        public int CompanyId { get; set; }
         public int JournalEntryHeaderId { get; set; }
         public int AccountId { get; set; }
         public DrOrCrSide DrCr { get; set; }

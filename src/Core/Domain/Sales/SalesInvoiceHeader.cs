@@ -15,7 +15,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Core.Domain.Sales
 {
     [Table("SalesInvoiceHeader")]
-    public partial class SalesInvoiceHeader : BaseEntity
+    public partial class SalesInvoiceHeader : BaseEntity, ICompanyOwned
     {
         public SalesInvoiceHeader()
         {
@@ -23,6 +23,8 @@ namespace Core.Domain.Sales
             SalesReceipts = new HashSet<SalesReceiptHeader>();
             CustomerAllocations = new HashSet<CustomerAllocation>();
         }
+
+        public int CompanyId { get; set; }
 
         public int CustomerId { get; set; }
         public int? GeneralLedgerHeaderId { get; set; }

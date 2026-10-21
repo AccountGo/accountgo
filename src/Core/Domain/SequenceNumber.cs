@@ -11,8 +11,9 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Core.Domain
 {
     [Table("SequenceNumber")]
-    public partial class SequenceNumber : BaseEntity
+    public partial class SequenceNumber : BaseEntity, ICompanyOwned
     {
+        public int CompanyId { get; set; }
         public SequenceNumberTypes SequenceNumberType { get; set; }
         public string Description { get; set; }
         public string Prefix { get; set; }

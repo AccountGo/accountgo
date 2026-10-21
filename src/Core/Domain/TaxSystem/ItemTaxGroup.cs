@@ -13,13 +13,14 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Core.Domain.TaxSystem
 {
     [Table("ItemTaxGroup")]
-    public partial class ItemTaxGroup : BaseEntity
+    public partial class ItemTaxGroup : BaseEntity, ICompanyOwned
     {
         public ItemTaxGroup()
         {
             ItemTaxGroupTax = new HashSet<ItemTaxGroupTax>();
         }
 
+        public int CompanyId { get; set; }
         public string Name { get; set; }
 
         [Display(Name = "Fully Exempt")]
@@ -29,8 +30,9 @@ namespace Core.Domain.TaxSystem
     }
 
     [Table("ItemTaxGroupTax")]
-    public partial class ItemTaxGroupTax : BaseEntity
+    public partial class ItemTaxGroupTax : BaseEntity, ICompanyOwned
     {
+        public int CompanyId { get; set; }
         public int TaxId { get; set; }
         public int ItemTaxGroupId { get; set; }
         public bool IsExempt { get; set; }

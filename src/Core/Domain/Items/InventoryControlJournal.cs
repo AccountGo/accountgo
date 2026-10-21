@@ -12,8 +12,9 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Core.Domain.Items
 {
     [Table("InventoryControlJournal")]
-    public partial class InventoryControlJournal : BaseEntity
+    public partial class InventoryControlJournal : BaseEntity, ICompanyOwned
     {
+        public int CompanyId { get; set; }
         public int ItemId { get; set; }
         public int MeasurementId { get; set; }
         public DocumentTypes DocumentType { get; set; }

@@ -49,22 +49,13 @@ export class AccountGoApiContainer extends DurableObject {
     const db = (this.env as any).DB;
     if (!db) return;
     try {
-      const syncTables = [
-        "AspNetUsers",
-        "RefreshTokens",
-        "Party",
-        "Customer",
-        "Vendor",
-        "Item",
-        "FinancialYear",
-        "SalesInvoiceHeader",
-        "SalesInvoiceLine",
-        "CustomerAllocation",
-        "SalesReceiptHeader",
-        "SalesReceiptLine",
-        "GeneralLedgerHeader",
-        "GeneralLedgerLine",
-      ];
+      const tableRes = await db
+        .prepare(
+          "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' AND name != 'd1_migrations' AND name != '__SchemaVersion'"
+        )
+        .all();
+
+      const syncTables = (tableRes.results || []).map((r: any) => r.name);
 
       const statements: string[] = [];
 
@@ -98,16 +89,21 @@ export class AccountGoApiContainer extends DurableObject {
           console.error("Cold start D1 restore skipped: SECRET_KEY is not configured.");
           return;
         }
-        await portObj.fetch(
-          new Request("http://127.0.0.1:8001/api/internal/d1-restore", {
-            method: "POST",
-            headers: {
-              "content-type": "application/json",
-              "x-internal-key": secret,
-            },
-            body: JSON.stringify({ statements }),
-          })
-        );
+
+        const batchSize = 500;
+        for (let i = 0; i < statements.length; i += batchSize) {
+          const batch = statements.slice(i, i + batchSize);
+          await portObj.fetch(
+            new Request("http://127.0.0.1:8001/api/internal/d1-restore", {
+              method: "POST",
+              headers: {
+                "content-type": "application/json",
+                "x-internal-key": secret,
+              },
+              body: JSON.stringify({ statements: batch }),
+            })
+          );
+        }
       }
     } catch (err) {
       console.error("Cold start D1 restore failed:", err);
@@ -212,8 +208,8 @@ export class AccountGoApiContainer extends DurableObject {
             }
           );
         }
+        await this.restoreD1ToContainer(portObj);
         this.containerReady = true;
-        this.ctx.waitUntil(this.restoreD1ToContainer(portObj));
       }
 
       // Forward incoming request

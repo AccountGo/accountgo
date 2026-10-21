@@ -16,7 +16,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Core.Domain.Purchases
 {
     [Table("PurchaseInvoiceHeader")]
-    public partial class PurchaseInvoiceHeader : BaseEntity
+    public partial class PurchaseInvoiceHeader : BaseEntity, ICompanyOwned
     {
         public PurchaseInvoiceHeader()
         {
@@ -25,6 +25,7 @@ namespace Core.Domain.Purchases
             VendorPayments = new HashSet<VendorPayment>();
         }
         
+        public int CompanyId { get; set; }
         public int? VendorId { get; set; }
         public int? GeneralLedgerHeaderId { get; set; }
         public DateTime Date { get; set; }

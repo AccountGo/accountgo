@@ -13,8 +13,9 @@ using System.Linq;
 namespace Core.Domain.Sales
 {
     [Table("SalesOrderLine")]
-    public partial class SalesOrderLine : BaseEntity
+    public partial class SalesOrderLine : BaseEntity, ICompanyOwned
     {
+        public int CompanyId { get; set; }
         public int SalesOrderHeaderId { get; set; }
         public int ItemId { get; set; }
         public int MeasurementId { get; set; }

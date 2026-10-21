@@ -14,8 +14,9 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Core.Domain.Purchases
 {
     [Table("PurchaseReceiptLine")]
-    public partial class PurchaseReceiptLine : BaseEntity
+    public partial class PurchaseReceiptLine : BaseEntity, ICompanyOwned
     {
+        public int CompanyId { get; set; }
         public int PurchaseReceiptHeaderId { get; set; }
         public int ItemId { get; set; }
         public int? InventoryControlJournalId { get; set; }

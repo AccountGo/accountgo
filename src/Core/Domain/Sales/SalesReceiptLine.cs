@@ -16,11 +16,13 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Core.Domain.Sales
 {
     [Table("SalesReceiptLine")]
-    public partial class SalesReceiptLine : BaseEntity
+    public partial class SalesReceiptLine : BaseEntity, ICompanyOwned
     {
         public SalesReceiptLine()
         {            
         }
+
+        public int CompanyId { get; set; }
 
         public int SalesReceiptHeaderId { get; set; }
         public int? SalesInvoiceLineId { get; set; }

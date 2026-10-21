@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Core.Domain.Auditing
@@ -11,10 +11,11 @@ namespace Core.Domain.Auditing
     }
 
     [Table("AuditLog", Schema = "dbo")]
-    public class AuditLog : BaseEntity
+    public class AuditLog : BaseEntity, ICompanyOwned
     {
         ////[Key]
         //public int AuditLogId { get; set; }
+        public int CompanyId { get; set; }
         public string UserName { get; set; }
         public DateTime AuditEventDateUTC { get; set; }
         public int AuditEventType { get; set; }

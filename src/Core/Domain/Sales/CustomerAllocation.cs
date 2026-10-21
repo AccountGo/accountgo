@@ -13,11 +13,13 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Core.Domain.Sales
 {
     [Table("CustomerAllocation")]
-    public partial class CustomerAllocation : BaseEntity
+    public partial class CustomerAllocation : BaseEntity, ICompanyOwned
     {
         public CustomerAllocation()
         {
         }
+
+        public int CompanyId { get; set; }
 
         public int CustomerId { get; set; }
         public int SalesInvoiceHeaderId { get; set; }

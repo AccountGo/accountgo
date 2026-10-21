@@ -1,10 +1,11 @@
-﻿using System.ComponentModel.DataAnnotations.Schema;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Core.Domain.Financials
 {
     [Table("MainContraAccount")]
-    public class MainContraAccount : BaseEntity
+    public class MainContraAccount : BaseEntity, ICompanyOwned
     {
+        public int CompanyId { get; set; }
         public int MainAccountId { get; set; }
         public int RelatedContraAccountId { get; set; }
 

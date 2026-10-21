@@ -311,6 +311,59 @@ namespace Api.Data
                 .Property(p => p.Rate)
                 .HasColumnType("decimal(18, 2)");
 
+            builder.Entity<CompanyMember>(entity =>
+            {
+                entity.HasIndex(e => new { e.CompanyId, e.UserId }).IsUnique();
+                entity.HasIndex(e => e.UserId);
+                entity.HasOne(e => e.Company)
+                    .WithMany()
+                    .HasForeignKey(e => e.CompanyId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            builder.Entity<CompanyMemberSecurityRole>(entity =>
+            {
+                entity.HasIndex(e => new { e.CompanyMemberId, e.SecurityRoleId }).IsUnique();
+                entity.HasOne(e => e.CompanyMember)
+                    .WithMany(m => m.SecurityRoles)
+                    .HasForeignKey(e => e.CompanyMemberId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                entity.HasOne(e => e.SecurityRole)
+                    .WithMany()
+                    .HasForeignKey(e => e.SecurityRoleId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            builder.Entity<CompanyInvitation>(entity =>
+            {
+                entity.HasIndex(e => e.TokenHash).IsUnique();
+                entity.HasIndex(e => new { e.CompanyId, e.Email });
+                entity.HasOne(e => e.Company)
+                    .WithMany()
+                    .HasForeignKey(e => e.CompanyId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            builder.Entity<Account>()
+                .HasIndex(e => new { e.CompanyId, e.AccountCode })
+                .IsUnique();
+
+            builder.Entity<SequenceNumber>()
+                .HasIndex(e => new { e.CompanyId, e.SequenceNumberType })
+                .IsUnique();
+
+            builder.Entity<Customer>()
+                .HasIndex(e => new { e.CompanyId, e.No })
+                .IsUnique();
+
+            builder.Entity<Vendor>()
+                .HasIndex(e => new { e.CompanyId, e.No })
+                .IsUnique();
+
+            builder.Entity<Item>()
+                .HasIndex(e => new { e.CompanyId, e.No })
+                .IsUnique();
+
             builder.Seed();
             /* Medhat END */
 
@@ -324,6 +377,9 @@ namespace Api.Data
         public virtual DbSet<AuditableEntity> AuditableEntities { get; set; }
         public virtual DbSet<Bank> Banks { get; set; }
         public virtual DbSet<Company> Companies { get; set; }
+        public virtual DbSet<CompanyMember> CompanyMembers { get; set; }
+        public virtual DbSet<CompanyMemberSecurityRole> CompanyMemberSecurityRoles { get; set; }
+        public virtual DbSet<CompanyInvitation> CompanyInvitations { get; set; }
         public virtual DbSet<CompanySetting> CompanySettings { get; set; }
         public virtual DbSet<Contact> Contacts { get; set; }
         public virtual DbSet<Customer> Customers { get; set; }

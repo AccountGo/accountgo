@@ -16,12 +16,13 @@ using Core.Domain.TaxSystem;
 namespace Core.Domain.Sales
 {
     [Table("SalesInvoiceLine")]
-    public partial class SalesInvoiceLine : BaseEntity
+    public partial class SalesInvoiceLine : BaseEntity, ICompanyOwned
     {
         public SalesInvoiceLine()
         {
             SalesReceiptLines = new HashSet<SalesReceiptLine>();
         }
+        public int CompanyId { get; set; }
         public int SalesInvoiceHeaderId { get; set; }
         public int? SalesOrderLineId { get; set; }
         public int ItemId { get; set; }

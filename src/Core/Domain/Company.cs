@@ -28,6 +28,8 @@ namespace Core.Domain
         public string? ActiveModulesJson { get; set; }
         public string? SubscriptionStatus { get; set; } = "active";
         public DateTime? SubscriptionValidUntil { get; set; }
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public string? CreatedByUserId { get; set; }
 
         public List<string> GetActiveModules()
         {
