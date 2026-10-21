@@ -367,8 +367,7 @@ namespace Api.Controllers
                     PaymentTermId = salesInvoice.PaymentTermId,
                     ReferenceNo = salesInvoice.ReferenceNo,
                     Posted = salesInvoice.GeneralLedgerHeaderId != null,
-                    CompanyName = defaultCompany?.Name,
-                    CompanyEmail = defaultCompany?.Email
+                    CompanyName = defaultCompany?.Name
                 };
 
                 decimal totalTax = 0;
