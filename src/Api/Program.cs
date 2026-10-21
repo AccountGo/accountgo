@@ -91,6 +91,7 @@ builder.Services.AddAuthorization(options =>
 
 builder.Services.AddScoped<IFinancialService, FinancialService>();
 builder.Services.AddScoped<IAccountService, AccountService>();
+builder.Services.AddScoped<Api.Service.D1Sync.ID1SyncContext, Api.Service.D1Sync.D1SyncContext>();
 
 builder.Services.AddControllers()
 .AddNewtonsoftJson(
@@ -234,6 +235,7 @@ if (app.Environment.IsDevelopment())
 //app.UseHttpsRedirection();
 app.UseRouting();
 app.UseCors("Frontend");
+app.UseMiddleware<Api.Service.D1Sync.D1SyncMiddleware>();
 
 // Pre-rate-limiting middleware: protect against large-body DoS and extract normalized email asynchronously
 app.Use(async (context, next) =>
