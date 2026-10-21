@@ -341,29 +341,10 @@ namespace Api.Controllers
 
         [HttpGet]
         [Route("BalanceSheet")]
-        // TODO: this generates an error a.ContraAccounts' is invalid inside an 'Include' operation
         public ActionResult BalanceSheet()
         {
-            var Dto = _financialService.BalanceSheet().ToList();
-            var dt = Helpers.CollectionHelper.ConvertTo<BalanceSheet>(Dto);
-            var incomestatement = _financialService.IncomeStatement();
-            var netincome = incomestatement.Where(a => a.IsExpense == false).Sum(a => a.Amount) - incomestatement.Where(a => a.IsExpense == true).Sum(a => a.Amount);
-
-            // TODO: Add logic to get the correct account for accumulated profit/loss. Currently, the account code is hard-coded here.
-            // Solution 1: Add two columns in general ledger setting for the account id of accumulated profit and loss.
-            // Solution 2: Add column to Account table to flag if account is net income (profit and loss)
-            //if (netincome < 0)
-            //{
-            //    var loss = Dto.Where(a => a.AccountCode == "30500").FirstOrDefault();
-            //    loss.Amount = netincome;
-            //}
-            //else
-            //{
-            //    var profit = Dto.Where(a => a.AccountCode == "30400").FirstOrDefault();
-            //    profit.Amount = netincome;
-            //}
-
-            return new ObjectResult(Dto);
+            var dto = _financialService.BalanceSheet().ToList();
+            return new ObjectResult(dto);
         }
 
         [HttpGet]
