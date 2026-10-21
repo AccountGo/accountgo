@@ -40,8 +40,13 @@
   "vars": {
     "ENVIRONMENT": "Production",
     "CONTAINER_NAME": "v5",
-    "SECRET__key": "1618184c2fea71c86669fa7d6611a55db32e5ac7b238f235b1bbbbdb14c2a9be",
-    "DatabaseProvider": "Sqlite"
+    "DatabaseProvider": "Sqlite",
+    "EMAIL__PROVIDER": "Resend",
+    "RESEND_EMAIL_FROM": "noreply@marvinperez.com",
+    "RESEND_FROM_NAME": "AccountGo",
+    "JwtSettings__validIssuer": "AccountGo API",
+    "JwtSettings__validAudience": "https://accountgo-api.anter.workers.dev",
+    "Cors__AllowedOrigins__0": "https://accountgo.anter.workers.dev"
   },
   "observability": {
     "enabled": true,
