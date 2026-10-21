@@ -6,18 +6,22 @@ using Services.Financial;
 
 namespace Api.Controllers
 {
+    [Core.Tenancy.TenantScoped]
     [Route("api/[controller]")]
     public class DonationsController : BaseController
     {
         private readonly IDonationsService _donationsService;
         private readonly ILogger<DonationsController> _logger;
         private readonly IFinancialService _financialService;
+        private readonly Core.Tenancy.ITenantGuard _tenantGuard;
 
-        public DonationsController(IDonationsService donationsService, ILogger<DonationsController> logger, IFinancialService financialService)
+        public DonationsController(IDonationsService donationsService, ILogger<DonationsController> logger, IFinancialService financialService,
+            Core.Tenancy.ITenantGuard tenantGuard)
         {
             _donationsService = donationsService;
             _logger = logger;
             _financialService = financialService;
+            _tenantGuard = tenantGuard;
         }
 
         [HttpGet("DonationAccounts")]
@@ -136,6 +140,7 @@ namespace Api.Controllers
         [ServiceFilter(typeof(ValidationFilterAttribute))]
         public IActionResult CreateDonationInvoice([FromBody] DonationInvoice donationInvoiceDto)
         {
+            EnsureDonationReferencesOwned(donationInvoiceDto);
             var result = _donationsService.CreateDonationInvoice(donationInvoiceDto);
 
             if (result.IsFailure)
@@ -148,12 +153,22 @@ namespace Api.Controllers
         [ServiceFilter(typeof(ValidationFilterAttribute))]
         public IActionResult UpdateDonationInvoice([FromBody] DonationInvoice donationInvoiceDto)
         {
+            EnsureDonationReferencesOwned(donationInvoiceDto);
             var result = _donationsService.UpdateDonationInvoice(donationInvoiceDto);
 
             if (result.IsFailure)
                 return BadRequest(result.Error.Message);
 
             return Ok(result.Value);
+        }
+
+        // DonationsService assigns DonorId and GlAccountId as given, so both must belong to the current workspace.
+        private void EnsureDonationReferencesOwned(DonationInvoice dto)
+        {
+            if (dto.Id > 0)
+                _tenantGuard.EnsureOwned<Core.Domain.Donations.DonationInvoiceHeader>(dto.Id, nameof(dto.Id));
+            _tenantGuard.EnsureOwned<Core.Domain.Donations.Donor>(dto.DonorId, nameof(dto.DonorId));
+            _tenantGuard.EnsureOwned<Core.Domain.Financials.Account>(dto.GlAccountId, nameof(dto.GlAccountId));
         }
 
         [HttpDelete("DeleteDonationInvoice")]

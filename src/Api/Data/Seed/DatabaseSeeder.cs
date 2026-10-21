@@ -23,36 +23,40 @@ namespace Api.Data.Seed
         public void Seed()
         {
             using var scope = _serviceProvider.CreateScope();
-            var adminService = scope.ServiceProvider.GetRequiredService<IAdministrationService>();
-            var financialService = scope.ServiceProvider.GetRequiredService<IFinancialService>();
-            var salesService = scope.ServiceProvider.GetRequiredService<ISalesService>();
-            var purchasingService = scope.ServiceProvider.GetRequiredService<IPurchasingService>();
-            var inventoryService = scope.ServiceProvider.GetRequiredService<IInventoryService>();
-            var securityService = scope.ServiceProvider.GetRequiredService<ISecurityService>();
-
-            var initializer = new Initializer(
-                adminService,
-                financialService,
-                salesService,
-                purchasingService,
-                inventoryService,
-                securityService
-            );
-
-            var success = initializer.Setup();
-
-            securityService.EnsureDefaultPermissionsAndRoles();
-
-            if (success)
+            var tenantContext = scope.ServiceProvider.GetRequiredService<Core.Tenancy.ITenantContext>();
+            using (tenantContext.Impersonate(1, "ph-financials", Core.Domain.CompanyMemberRole.Owner))
             {
-                Console.WriteLine("Database seeding completed successfully.");
-            }
-            else
-            {
-                Console.WriteLine("Database seeding failed. Check logs for details.");
-            }
+                var adminService = scope.ServiceProvider.GetRequiredService<IAdministrationService>();
+                var financialService = scope.ServiceProvider.GetRequiredService<IFinancialService>();
+                var salesService = scope.ServiceProvider.GetRequiredService<ISalesService>();
+                var purchasingService = scope.ServiceProvider.GetRequiredService<IPurchasingService>();
+                var inventoryService = scope.ServiceProvider.GetRequiredService<IInventoryService>();
+                var securityService = scope.ServiceProvider.GetRequiredService<ISecurityService>();
 
-            SeedDonations(scope.ServiceProvider.GetRequiredService<ApiDbContext>());
+                var initializer = new Initializer(
+                    adminService,
+                    financialService,
+                    salesService,
+                    purchasingService,
+                    inventoryService,
+                    securityService
+                );
+
+                var success = initializer.Setup();
+
+                securityService.EnsureDefaultPermissionsAndRoles();
+
+                if (success)
+                {
+                    Console.WriteLine("Database seeding completed successfully.");
+                }
+                else
+                {
+                    Console.WriteLine("Database seeding failed. Check logs for details.");
+                }
+
+                SeedDonations(scope.ServiceProvider.GetRequiredService<ApiDbContext>());
+            }
         }
 
         private static void SeedDonations(ApiDbContext context)
@@ -95,7 +99,7 @@ namespace Api.Data.Seed
                     continue;
 
                 var donor = context.Donors.FirstOrDefault(entity => entity.Id == sample.DonorId);
-                var account = context.Accounts.FirstOrDefault(entity => entity.CompanyId == 1 && entity.AccountCode == sample.GlAccountCode);
+                var account = context.Accounts.FirstOrDefault(entity => entity.AccountCode == sample.GlAccountCode);
                 if (donor == null || account == null)
                 {
                     Console.WriteLine($"Skipped sample donation {sample.No}: its donor or GL account is missing.");

@@ -301,8 +301,9 @@ public class MultiTenancyPhase1Tests
             });
 
             using var client = factory.CreateClient();
-            var response = await client.GetAsync("/api/administration/company");
-            Assert.True(response.IsSuccessStatusCode, $"Expected success status code, got {response.StatusCode}");
+            var response = await client.GetAsync("/health");
+            var body = await response.Content.ReadAsStringAsync();
+            Assert.True(response.IsSuccessStatusCode, $"Expected success status code, got {response.StatusCode}. Body: {body}");
 
             // Verify __SchemaVersion has version 2 recorded
             using var connection = new SqliteConnection($"Data Source={tempDb}");
@@ -343,8 +344,9 @@ public class MultiTenancyPhase1Tests
             });
 
             using var client = factory.CreateClient();
-            var response = await client.GetAsync("/api/administration/company");
-            Assert.True(response.IsSuccessStatusCode, $"Expected success status code, got {response.StatusCode}");
+            var response = await client.GetAsync("/health");
+            var body = await response.Content.ReadAsStringAsync();
+            Assert.True(response.IsSuccessStatusCode, $"Expected success status code, got {response.StatusCode}. Body: {body}");
         }
         finally
         {

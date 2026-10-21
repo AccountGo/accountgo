@@ -6,6 +6,7 @@ using Services.Inventory;
 
 namespace Api.Controllers
 {
+    [Core.Tenancy.TenantScoped]
     [Route("api/[controller]")]
     [RequireModule("inventory")]
     public class InventoryController : BaseController
@@ -13,14 +14,17 @@ namespace Api.Controllers
         private readonly IAdministrationService _adminService;
         private readonly IInventoryService _inventoryService;
         private readonly ILogger<InventoryController> _logger;
+        private readonly Core.Tenancy.ITenantGuard _tenantGuard;
 
         public InventoryController(IAdministrationService adminService,
             IInventoryService inventoryService,
-            ILogger<InventoryController> logger)
+            ILogger<InventoryController> logger,
+            Core.Tenancy.ITenantGuard tenantGuard)
         {
             _adminService = adminService;
             _inventoryService = inventoryService;
             _logger = logger;
+            _tenantGuard = tenantGuard;
         }
 
         [HttpPost]
@@ -40,13 +44,27 @@ namespace Api.Controllers
                 }
                 else
                 {
-                    item = _inventoryService.GetItemById(itemDto.Id);
-                    if (item == null)
-                    {
-                        _logger.LogWarning($"Item not found: {itemDto.Id}");
-                        return NotFound($"Item {itemDto.Id} not found");
-                    }
+                    item = _tenantGuard.EnsureOwned<Core.Domain.Items.Item>(itemDto.Id, nameof(itemDto.Id));
                 }
+
+                if (itemDto.SmallestMeasurementId > 0)
+                    _tenantGuard.EnsureOwned<Core.Domain.Items.Measurement>(itemDto.SmallestMeasurementId, nameof(itemDto.SmallestMeasurementId));
+                if (itemDto.SellMeasurementId.HasValue && itemDto.SellMeasurementId.Value > 0)
+                    _tenantGuard.EnsureOwned<Core.Domain.Items.Measurement>(itemDto.SellMeasurementId.Value, nameof(itemDto.SellMeasurementId));
+                if (itemDto.PurchaseMeasurementId.HasValue && itemDto.PurchaseMeasurementId.Value > 0)
+                    _tenantGuard.EnsureOwned<Core.Domain.Items.Measurement>(itemDto.PurchaseMeasurementId.Value, nameof(itemDto.PurchaseMeasurementId));
+                if (itemDto.ItemCategoryId > 0)
+                    _tenantGuard.EnsureOwned<Core.Domain.Items.ItemCategory>(itemDto.ItemCategoryId, nameof(itemDto.ItemCategoryId));
+                if (itemDto.ItemTaxGroupId.HasValue && itemDto.ItemTaxGroupId.Value > 0)
+                    _tenantGuard.EnsureOwned<Core.Domain.TaxSystem.ItemTaxGroup>(itemDto.ItemTaxGroupId.Value, nameof(itemDto.ItemTaxGroupId));
+                if (itemDto.SalesAccountId.HasValue && itemDto.SalesAccountId.Value > 0)
+                    _tenantGuard.EnsureOwned<Core.Domain.Financials.Account>(itemDto.SalesAccountId.Value, nameof(itemDto.SalesAccountId));
+                if (itemDto.InventoryAccountId.HasValue && itemDto.InventoryAccountId.Value > 0)
+                    _tenantGuard.EnsureOwned<Core.Domain.Financials.Account>(itemDto.InventoryAccountId.Value, nameof(itemDto.InventoryAccountId));
+                if (itemDto.InventoryAdjustmentAccountId.HasValue && itemDto.InventoryAdjustmentAccountId.Value > 0)
+                    _tenantGuard.EnsureOwned<Core.Domain.Financials.Account>(itemDto.InventoryAdjustmentAccountId.Value, nameof(itemDto.InventoryAdjustmentAccountId));
+                if (itemDto.CostOfGoodsSoldAccountId.HasValue && itemDto.CostOfGoodsSoldAccountId.Value > 0)
+                    _tenantGuard.EnsureOwned<Core.Domain.Financials.Account>(itemDto.CostOfGoodsSoldAccountId.Value, nameof(itemDto.CostOfGoodsSoldAccountId));
 
                 item.No = itemDto.No;
                 item.Code = itemDto.Code;
@@ -80,6 +98,7 @@ namespace Api.Controllers
             }
             catch (Exception ex)
             {
+                if (ex is Core.Tenancy.TenantException) throw;
                 _logger.LogError($"SaveItem Error: {ex.Message}\n{ex.StackTrace}");
                 return BadRequest(new { error = ex.Message });
             }
@@ -116,6 +135,9 @@ namespace Api.Controllers
         public IActionResult Item(int id)
         {
             var item = _inventoryService.GetItemById(id);
+            if (item == null)
+                return NotFound(new { message = $"Item #{id} not found." });
+
             var itemDto = new Item()
             {
                 Id = item.Id,

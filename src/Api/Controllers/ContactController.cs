@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -10,16 +10,22 @@ using Services.Purchasing;
 
 namespace Api.Controllers
 {
+    [Core.Tenancy.TenantScoped]
     [Route("api/[controller]")]
     public class ContactController : BaseController
     {
 
         private readonly ISalesService _salesService;
         private readonly IPurchasingService _purchasingService;
-        public ContactController(ISalesService salesService, IPurchasingService purchasingService)
+        private readonly Core.Tenancy.ITenantGuard _tenantGuard;
+
+        public ContactController(ISalesService salesService,
+            IPurchasingService purchasingService,
+            Core.Tenancy.ITenantGuard tenantGuard)
         {
             _salesService = salesService;
             _purchasingService = purchasingService;
+            _tenantGuard = tenantGuard;
         }
 
         [HttpGet]
@@ -51,8 +57,10 @@ namespace Api.Controllers
         [Route("Contact")]
         public IActionResult Contact(int id, int partyId, int partyType)
         {
-            Core.Domain.Contact contact = _salesService.GetContacyById(id);
- 
+            Core.Domain.Contact? contact = _salesService.GetContacyById(id);
+            if (contact == null)
+                return NotFound(new { message = $"Contact #{id} not found." });
+
             var contactDto = new Dto.Common.Contact();
             var partyDto = new Dto.Common.Party();
 
@@ -97,8 +105,13 @@ namespace Api.Controllers
                 }
                 else
                 {
-                    contact = _salesService.GetContacyById(model.Id);
+                    contact = _tenantGuard.EnsureOwned<Core.Domain.Contact>(model.Id, nameof(model.Id));
                 }
+
+                if (model.HoldingPartyType == 1 && model.HoldingPartyId > 0)
+                    _tenantGuard.EnsureOwned<Core.Domain.Sales.Customer>(model.HoldingPartyId, nameof(model.HoldingPartyId));
+                else if (model.HoldingPartyType == 2 && model.HoldingPartyId > 0)
+                    _tenantGuard.EnsureOwned<Core.Domain.Purchases.Vendor>(model.HoldingPartyId, nameof(model.HoldingPartyId));
                 //Contact
                 contact.Id = model.Id;
                 contact.ContactType = (Core.Domain.ContactTypes)model.HoldingPartyType; // customer or vendor
@@ -159,6 +172,7 @@ namespace Api.Controllers
             }
             catch (Exception ex)
             {
+                if (ex is Core.Tenancy.TenantException) throw;
                 errors = new string[1] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
                 return new BadRequestObjectResult(errors);
             }

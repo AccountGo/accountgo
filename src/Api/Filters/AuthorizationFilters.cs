@@ -1,11 +1,12 @@
 using System;
 using System.Threading.Tasks;
+using Core.Domain;
+using Core.Tenancy;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.Extensions.DependencyInjection;
 using Services.Administration;
-using Services.Security;
 
 namespace Api.Filters
 {
@@ -21,6 +22,22 @@ namespace Api.Filters
 
         public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
         {
+            var tenantContext = context.HttpContext.RequestServices.GetRequiredService<ITenantContext>();
+            if (!tenantContext.IsResolved)
+            {
+                var tenantProblem = new ProblemDetails
+                {
+                    Title = "Bad Request",
+                    Detail = "X-AccountGo-Org header required",
+                    Status = StatusCodes.Status400BadRequest
+                };
+                context.Result = new ObjectResult(tenantProblem)
+                {
+                    StatusCode = StatusCodes.Status400BadRequest
+                };
+                return;
+            }
+
             var adminService = context.HttpContext.RequestServices.GetRequiredService<IAdministrationService>();
 
             if (!adminService.IsModuleEnabled(_moduleKey))
@@ -66,13 +83,8 @@ namespace Api.Filters
                 return;
             }
 
-            var username = user.Identity.Name 
-                ?? user.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value 
-                ?? user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-
-            var securityService = context.HttpContext.RequestServices.GetRequiredService<ISecurityService>();
-
-            if (string.IsNullOrEmpty(username) || !securityService.CheckPermission(_permission, username))
+            var tenantContext = context.HttpContext.RequestServices.GetRequiredService<ITenantContext>();
+            if (!tenantContext.IsResolved || !tenantContext.Permissions.Contains(_permission))
             {
                 var problem = new ProblemDetails
                 {
@@ -84,6 +96,77 @@ namespace Api.Filters
                 problem.Extensions["code"] = "PERMISSION_DENIED";
                 problem.Extensions["requiredPermission"] = _permission;
 
+                context.Result = new ObjectResult(problem)
+                {
+                    StatusCode = StatusCodes.Status403Forbidden
+                };
+                return;
+            }
+
+            await next();
+        }
+    }
+
+    [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = false, Inherited = true)]
+    public class RequireWorkspaceRoleAttribute : Attribute, IAsyncActionFilter
+    {
+        private readonly CompanyMemberRole _minRole;
+
+        public RequireWorkspaceRoleAttribute(CompanyMemberRole minRole)
+        {
+            _minRole = minRole;
+        }
+
+        public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
+        {
+            var user = context.HttpContext.User;
+            if (user?.Identity == null || !user.Identity.IsAuthenticated)
+            {
+                context.Result = new UnauthorizedResult();
+                return;
+            }
+
+            var tenantContext = context.HttpContext.RequestServices.GetRequiredService<ITenantContext>();
+            if (!tenantContext.IsResolved || !tenantContext.Role.HasValue)
+            {
+                var problem = new ProblemDetails
+                {
+                    Title = "Workspace not found",
+                    Status = StatusCodes.Status404NotFound,
+                    Detail = "The requested workspace was not found or you are not an active member."
+                };
+                context.Result = new ObjectResult(problem)
+                {
+                    StatusCode = StatusCodes.Status404NotFound
+                };
+                return;
+            }
+
+            var currentRole = tenantContext.Role.Value;
+            bool allowed = false;
+
+            if (_minRole == CompanyMemberRole.Owner)
+            {
+                allowed = currentRole == CompanyMemberRole.Owner;
+            }
+            else if (_minRole == CompanyMemberRole.Admin)
+            {
+                // Owner satisfies Admin
+                allowed = currentRole == CompanyMemberRole.Owner || currentRole == CompanyMemberRole.Admin;
+            }
+            else if (_minRole == CompanyMemberRole.Member)
+            {
+                allowed = true;
+            }
+
+            if (!allowed)
+            {
+                var problem = new ProblemDetails
+                {
+                    Title = "Forbidden",
+                    Detail = $"This operation requires the {_minRole} role or higher in this workspace.",
+                    Status = StatusCodes.Status403Forbidden
+                };
                 context.Result = new ObjectResult(problem)
                 {
                     StatusCode = StatusCodes.Status403Forbidden

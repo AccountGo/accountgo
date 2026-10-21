@@ -21,6 +21,7 @@ using Services.Security;
 
 namespace Api.Controllers
 {
+    [Core.Tenancy.TenantFree]
     [ApiController]
     [Route("api/[controller]")]
     public class AuthController : BaseController
@@ -34,6 +35,7 @@ namespace Api.Controllers
         private readonly IConfiguration _configuration;
         private readonly ILogger<AuthController> _logger;
         private readonly ApplicationIdentityDbContext _identityContext;
+        private readonly ApiDbContext _apiDb;
 
         public AuthController(
             IEmailOtpService otpService,
@@ -42,7 +44,8 @@ namespace Api.Controllers
             IAdministrationService adminService,
             IConfiguration configuration,
             ILogger<AuthController> logger,
-            ApplicationIdentityDbContext identityContext)
+            ApplicationIdentityDbContext identityContext,
+            ApiDbContext apiDb)
         {
             _otpService = otpService;
             _userManager = userManager;
@@ -51,6 +54,7 @@ namespace Api.Controllers
             _configuration = configuration;
             _logger = logger;
             _identityContext = identityContext;
+            _apiDb = apiDb;
         }
 
         [AllowAnonymous]
@@ -227,9 +231,9 @@ namespace Api.Controllers
                 });
             }
 
-            // 4. Create Domain user with SystemAdministrators role
-            var adminRole = _securityService.GetRole("SystemAdministrators") ?? _securityService.GetRole("Administrator");
-            var roleIds = adminRole != null ? new List<int> { adminRole.Id } : new List<int>();
+            // 4. Create Domain user. No global roles: SystemAdministrators is platform staff only.
+            // What the user can do comes from their workspace membership (step 5).
+            var roleIds = new List<int>();
 
             _securityService.AddUser(
                 normalizedEmail,
@@ -256,7 +260,17 @@ namespace Api.Controllers
                     SubscriptionStatus = "active"
                 };
 
-                _adminService.SaveCompany(company);
+                // Company and the signer-up's Owner membership are saved together.
+                _apiDb.Companies.Add(company);
+                _apiDb.CompanyMembers.Add(new Core.Domain.CompanyMember
+                {
+                    Company = company,
+                    UserId = appUser.Id,
+                    Role = Core.Domain.CompanyMemberRole.Owner,
+                    Status = Core.Domain.CompanyMemberStatus.Active,
+                    JoinedAt = DateTime.UtcNow
+                });
+                _apiDb.SaveChanges();
             }
 
             // 6. Send Welcome verification code via Resend

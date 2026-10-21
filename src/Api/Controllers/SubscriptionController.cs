@@ -1,4 +1,8 @@
 using System.Collections.Generic;
+using System.Linq;
+using Api.Filters;
+using Core.Domain;
+using Core.Tenancy;
 using Dto.Subscription;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -17,33 +21,22 @@ namespace Api.Controllers
             _adminService = adminService;
         }
 
-        [AllowAnonymous]
-        [HttpGet("companies")]
-        public IActionResult GetCompanies()
-        {
-            var companies = _adminService.GetCompanies();
-            return Ok(companies.Select(c => new
-            {
-                id = c.Id.ToString(),
-                name = c.Name,
-                shortName = c.ShortName,
-                slug = string.IsNullOrWhiteSpace(c.Slug) ? (c.ShortName?.ToLowerInvariant() ?? $"org-{c.Id}") : c.Slug,
-                plan = c.Plan ?? "accounting",
-                subscriptionStatus = c.SubscriptionStatus ?? "active",
-                activeModules = c.GetActiveModules(),
-                companyCode = c.CompanyCode
-            }));
-        }
+        // GET /api/Subscription/companies was removed in Phase 2: it listed every workspace.
+        // Use GET /api/organizations (caller's own memberships only).
 
-        [AllowAnonymous]
+        [TenantScoped]
+        [Authorize]
         [HttpGet("current")]
-        public IActionResult GetCurrentSubscription([FromQuery] string? slug = null)
+        public IActionResult GetCurrentSubscription()
         {
-            var subscription = _adminService.GetCurrentSubscription(slug);
+            // Always the resolved workspace (X-AccountGo-Org); any ?slug= query value is ignored.
+            var subscription = _adminService.GetCurrentSubscription();
             return Ok(subscription);
         }
 
+        [TenantScoped]
         [Authorize]
+        [RequireWorkspaceRole(CompanyMemberRole.Owner)]
         [HttpPut("update")]
         public IActionResult UpdateSubscription([FromBody] UpdateSubscriptionDto dto)
         {
@@ -54,6 +47,7 @@ namespace Api.Controllers
             return Ok(updated);
         }
 
+        [TenantFree]
         [AllowAnonymous]
         [HttpGet("plans")]
         public IActionResult GetPlans()
@@ -62,6 +56,7 @@ namespace Api.Controllers
             return Ok(plans);
         }
 
+        [TenantFree]
         [AllowAnonymous]
         [HttpGet("modules")]
         public IActionResult GetModules()

@@ -9,8 +9,10 @@ using Core.Domain.Purchases;
 using Core.Domain.Sales;
 using Core.Domain.Security;
 using Core.Domain.TaxSystem;
+using Core.Tenancy;
 using Microsoft.EntityFrameworkCore;
 using System.Linq;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -19,16 +21,78 @@ namespace Api.Data
     public class ApiDbContext : DbContext
     {
         private readonly ID1SyncContext? _d1SyncContext;
+        private readonly ITenantContext? _tenantContext;
 
-        public ApiDbContext(DbContextOptions<ApiDbContext> options, ID1SyncContext? d1SyncContext = null)
+        public int CurrentTenantCompanyId => _tenantContext?.CompanyId ?? -1;
+
+        public ApiDbContext(
+            DbContextOptions<ApiDbContext> options,
+            ID1SyncContext? d1SyncContext = null,
+            ITenantContext? tenantContext = null)
             : base(options)
         {
             _d1SyncContext = d1SyncContext;
+            _tenantContext = tenantContext;
+        }
+
+        private void EnforceTenantSecurity()
+        {
+            if (_tenantContext == null)
+                return;
+
+            // Only pending writes need a tenant; unchanged tracked rows (e.g. lookups) must not force one.
+            var entries = ChangeTracker.Entries<ICompanyOwned>()
+                .Where(e => e.State == EntityState.Added || e.State == EntityState.Modified || e.State == EntityState.Deleted)
+                .ToList();
+            if (entries.Count == 0)
+                return;
+
+            int currentCompanyId = _tenantContext.RequireCompanyId();
+
+            foreach (var entry in entries)
+            {
+                if (entry.State == EntityState.Added)
+                {
+                    if (entry.Entity.CompanyId == 0)
+                    {
+                        entry.Entity.CompanyId = currentCompanyId;
+                    }
+                    else if (entry.Entity.CompanyId != currentCompanyId)
+                    {
+                        throw new CrossTenantWriteException(
+                            $"Cannot add {entry.Metadata.ClrType.Name} with CompanyId {entry.Entity.CompanyId} while active tenant is {currentCompanyId}.");
+                    }
+                }
+                else if (entry.State == EntityState.Modified)
+                {
+                    var prop = entry.Property(nameof(ICompanyOwned.CompanyId));
+                    if (prop.IsModified && !Equals(prop.CurrentValue, prop.OriginalValue))
+                    {
+                        throw new CrossTenantWriteException(
+                            $"Cannot modify CompanyId of existing {entry.Metadata.ClrType.Name}.");
+                    }
+                    if (entry.Entity.CompanyId != currentCompanyId)
+                    {
+                        throw new CrossTenantWriteException(
+                            $"Cannot modify {entry.Metadata.ClrType.Name} with CompanyId {entry.Entity.CompanyId} while active tenant is {currentCompanyId}.");
+                    }
+                }
+                else if (entry.State == EntityState.Deleted)
+                {
+                    if (entry.Entity.CompanyId != currentCompanyId)
+                    {
+                        throw new CrossTenantWriteException(
+                            $"Cannot delete {entry.Metadata.ClrType.Name} with CompanyId {entry.Entity.CompanyId} while active tenant is {currentCompanyId}.");
+                    }
+                }
+            }
         }
 
         // Every SaveChanges/SaveChangesAsync overload funnels into these two.
         public override int SaveChanges(bool acceptAllChangesOnSuccess)
         {
+            EnforceTenantSecurity();
+
             if (_d1SyncContext == null)
                 return base.SaveChanges(acceptAllChangesOnSuccess);
 
@@ -41,6 +105,8 @@ namespace Api.Data
 
         public override async Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
         {
+            EnforceTenantSecurity();
+
             if (_d1SyncContext == null)
                 return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
 
@@ -57,6 +123,17 @@ namespace Api.Data
         protected override void OnModelCreating(ModelBuilder builder)
         {
             base.OnModelCreating(builder);
+
+            foreach (var entityType in builder.Model.GetEntityTypes())
+            {
+                if (typeof(ICompanyOwned).IsAssignableFrom(entityType.ClrType))
+                {
+                    var method = typeof(ApiDbContext)
+                        .GetMethod(nameof(ConfigureTenantFilter), BindingFlags.NonPublic | BindingFlags.Instance)?
+                        .MakeGenericMethod(entityType.ClrType);
+                    method?.Invoke(this, new object[] { builder });
+                }
+            }
 
             builder.Entity<DonationInvoiceHeader>()
                 .HasOne(donation => donation.Donor)
@@ -338,8 +415,11 @@ namespace Api.Data
 
             builder.Seed();
             /* Medhat END */
+        }
 
-
+        private void ConfigureTenantFilter<TEntity>(ModelBuilder builder) where TEntity : class, ICompanyOwned
+        {
+            builder.Entity<TEntity>().HasQueryFilter(e => e.CompanyId == CurrentTenantCompanyId);
         }
         public virtual DbSet<Account> Accounts { get; set; }
         public virtual DbSet<AccountClass> AccountClasses { get; set; }

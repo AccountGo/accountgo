@@ -92,8 +92,15 @@ builder.Services.AddAuthorization(options =>
 builder.Services.AddScoped<IFinancialService, FinancialService>();
 builder.Services.AddScoped<IAccountService, AccountService>();
 builder.Services.AddScoped<Api.Service.D1Sync.ID1SyncContext, Api.Service.D1Sync.D1SyncContext>();
+builder.Services.AddScoped<Core.Tenancy.ITenantContext, Api.Tenancy.TenantContext>();
+builder.Services.AddScoped<Core.Tenancy.ITenantGuard, Services.Tenancy.TenantGuard>();
+builder.Services.AddMemoryCache();
+builder.Services.AddExceptionHandler<Api.Filters.MultiTenancyExceptionHandler>();
 
-builder.Services.AddControllers()
+builder.Services.AddControllers(options =>
+{
+    options.Filters.Add<Api.Filters.TenantEndpointFilter>();
+})
 .AddNewtonsoftJson(
     options =>
         {
@@ -290,20 +297,26 @@ app.Use(async (context, next) =>
 app.UseRateLimiter();
 
 app.UseAuthentication();
+app.UseMiddleware<Api.Middleware.TenantResolutionMiddleware>();
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapGet("/health", () => Results.Ok(new { status = "healthy" })).AllowAnonymous();
+
+Api.Filters.TenantEndpointValidator.ValidateAllEndpoints(typeof(Program).Assembly);
 
 using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
-
-    try
+    var tenantContext = services.GetRequiredService<Core.Tenancy.ITenantContext>();
+    using (tenantContext.Impersonate(1, "ph-financials", Core.Domain.CompanyMemberRole.Owner))
     {
-        var apiDbContext = services.GetRequiredService<ApiDbContext>();
-        var identityDbContext = services.GetRequiredService<ApplicationIdentityDbContext>();
-        
-        Console.WriteLine("====== Starting Database Initialization ======");
+        try
+        {
+            var apiDbContext = services.GetRequiredService<ApiDbContext>();
+            var identityDbContext = services.GetRequiredService<ApplicationIdentityDbContext>();
+            
+            Console.WriteLine("====== Starting Database Initialization ======");
 
         if (apiDbContext.Database.IsSqlite())
         {
@@ -516,6 +529,7 @@ using (var scope = app.Services.CreateScope())
         Console.WriteLine($"✗ FATAL ERROR: Database initialization failed - Application startup aborted.");
         Console.WriteLine($"Details: {ex}");
         throw;
+    }
     }
 }
 

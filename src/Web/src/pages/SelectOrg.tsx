@@ -48,7 +48,8 @@ export const SelectOrg: React.FC = () => {
     let mounted = true;
     const fetchCompanies = async () => {
       try {
-        const res = await authFetch('/api/Administration/companies');
+        // Only workspaces the caller is an active member of.
+        const res = await authFetch('/api/organizations');
         if (res.ok) {
           const data = await res.json();
           if (Array.isArray(data) && mounted) {
@@ -56,7 +57,7 @@ export const SelectOrg: React.FC = () => {
               id: c.id?.toString() || c.slug,
               name: c.name,
               slug: c.slug,
-              role: 'Admin',
+              role: c.role || 'Member',
               plan: c.plan || 'accounting',
               currency: 'PHP',
               fiscalYearEnd: 'Dec 31',
@@ -141,7 +142,8 @@ export const SelectOrg: React.FC = () => {
     setCreateError(null);
 
     try {
-      const res = await authFetch('/api/Administration/company', {
+      // Creates the workspace and makes the caller its Owner.
+      const res = await authFetch('/api/organizations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -166,7 +168,7 @@ export const SelectOrg: React.FC = () => {
         id: createdCompany.id?.toString() || cleanSlug,
         name: createdCompany.name,
         slug: createdCompany.slug || cleanSlug,
-        role: 'Admin',
+        role: createdCompany.role || 'Owner',
         plan: createdCompany.plan || 'accounting',
         currency: newOrgCurrency,
         fiscalYearEnd: 'Dec 31',

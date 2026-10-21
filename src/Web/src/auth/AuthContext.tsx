@@ -3,6 +3,19 @@ import { UserDto, AuthResponse, OtpSendResponse, SignUpPayload, SignUpResponse, 
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+export const ORG_HEADER = 'X-AccountGo-Org';
+
+// Reads the workspace slug from the current URL (/org/:orgSlug/...). Returns null outside a workspace.
+export function getOrgSlugFromLocation(pathname: string = window.location.pathname): string | null {
+  const match = /^\/org\/([^/?#]+)/.exec(pathname);
+  if (!match) return null;
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return null;
+  }
+}
+
 async function fetchWith503Retry(
   input: RequestInfo | URL,
   init?: RequestInit,
@@ -211,6 +224,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (token && !headers.has('Authorization')) {
         headers.set('Authorization', `Bearer ${token}`);
       }
+      // Workspace context: every call made under /org/:orgSlug carries the slug as X-AccountGo-Org.
+      const orgSlug = getOrgSlugFromLocation();
+      if (orgSlug && !headers.has(ORG_HEADER)) {
+        headers.set(ORG_HEADER, orgSlug);
+      }
 
       const method = (init?.method || 'GET').toUpperCase();
       const shouldRetry503 = method === 'GET';
@@ -225,6 +243,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (newToken) {
           const retryHeaders = new Headers(init?.headers || {});
           retryHeaders.set('Authorization', `Bearer ${newToken}`);
+          if (orgSlug && !retryHeaders.has(ORG_HEADER)) {
+            retryHeaders.set(ORG_HEADER, orgSlug);
+          }
           res = shouldRetry503
             ? await fetchWith503Retry(url, { ...init, headers: retryHeaders, credentials: 'include' })
             : await fetch(url, { ...init, headers: retryHeaders, credentials: 'include' });

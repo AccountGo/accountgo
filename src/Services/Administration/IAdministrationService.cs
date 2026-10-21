@@ -34,7 +34,6 @@ namespace Services.Administration
         Task<Result<Dto.TaxSystem.TaxGroup>> DeleteTaxGroupAsync(int id);
         Task<Result<Dto.TaxSystem.ItemTaxGroup>> DeleteItemTaxGroupAsync(int id);
         void InitializeCompany();
-        Company GetDefaultCompany();
         ICollection<Company> GetCompanies();
         Company? GetCompanyBySlug(string slug);
         ICollection<PaymentTerm> GetPaymentTerms();
@@ -45,7 +44,7 @@ namespace Services.Administration
         User GetUser(string username);
         IEnumerable<AuditLog> AuditLogs();
 
-        TenantSubscriptionDto GetCurrentSubscription(string? slug = null);
+        TenantSubscriptionDto GetCurrentSubscription();
         TenantSubscriptionDto UpdateSubscription(UpdateSubscriptionDto dto);
         bool IsModuleEnabled(string moduleKey);
         List<PlanDefinitionDto> GetPlanDefinitions();

@@ -451,6 +451,9 @@ namespace Services.Sales
             var customer = _customerRepo.GetAllIncluding(includeProperties)
                 .Where(c => c.Id == id).FirstOrDefault();
 
+            if (customer == null)
+                return null;
+
             foreach (var customerContact in customer.CustomerContact)
             {
                 var contact = GetContacyById(customerContact.ContactId);

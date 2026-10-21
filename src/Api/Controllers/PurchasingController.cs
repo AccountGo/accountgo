@@ -6,6 +6,7 @@ using Services.Purchasing;
 
 namespace Api.Controllers
 {
+    [Core.Tenancy.TenantScoped]
     [Route("api/[controller]")]
     [RequireModule("purchases")]
     public class PurchasingController : BaseController
@@ -13,14 +14,17 @@ namespace Api.Controllers
         private readonly IAdministrationService _adminService;
         private readonly IPurchasingService _purchasingService;
         private readonly IFinancialService _financialService;
+        private readonly Core.Tenancy.ITenantGuard _tenantGuard;
 
         public PurchasingController(IAdministrationService adminService,
             IPurchasingService purchasingService,
-            IFinancialService financialService)
+            IFinancialService financialService,
+            Core.Tenancy.ITenantGuard tenantGuard)
         {
             _adminService = adminService;
             _purchasingService = purchasingService;
             _financialService = financialService;
+            _tenantGuard = tenantGuard;
         }
 
         [HttpGet]
@@ -129,13 +133,17 @@ namespace Api.Controllers
                 bool isNew = purchaseOrderDto.Id == 0;
                 Core.Domain.Purchases.PurchaseOrderHeader? purchaseOrder = null;
 
+                _tenantGuard.EnsureOwned<Core.Domain.Purchases.Vendor>(purchaseOrderDto.VendorId, nameof(purchaseOrderDto.VendorId));
+                if (purchaseOrderDto.PaymentTermId.HasValue && purchaseOrderDto.PaymentTermId.Value > 0)
+                    _tenantGuard.EnsureOwned<Core.Domain.PaymentTerm>(purchaseOrderDto.PaymentTermId.Value, nameof(purchaseOrderDto.PaymentTermId));
+
                 if (isNew)
                 {
                     purchaseOrder = new Core.Domain.Purchases.PurchaseOrderHeader();
                 }
                 else
                 {
-                    purchaseOrder = _purchasingService.GetPurchaseOrderById(purchaseOrderDto.Id);
+                    purchaseOrder = _tenantGuard.EnsureOwned<Core.Domain.Purchases.PurchaseOrderHeader>(purchaseOrderDto.Id, nameof(purchaseOrderDto.Id));
                 }
                 purchaseOrder.ReferenceNo = purchaseOrderDto.ReferenceNo;
                 purchaseOrder.PaymentTermId = purchaseOrderDto.PaymentTermId;
@@ -144,6 +152,11 @@ namespace Api.Controllers
 
                 foreach (var line in purchaseOrderDto.PurchaseOrderLines)
                 {
+                    if (line.ItemId > 0)
+                        _tenantGuard.EnsureOwned<Core.Domain.Items.Item>(line.ItemId, nameof(line.ItemId));
+                    if (line.TaxGroupId.HasValue && line.TaxGroupId.Value > 0)
+                        _tenantGuard.EnsureOwned<Core.Domain.TaxSystem.TaxGroup>(line.TaxGroupId.Value, nameof(line.TaxGroupId));
+
                     if (!isNew)
                     {
                         var existingLine = purchaseOrder.PurchaseOrderLines.Where(id => id.Id == line.Id).FirstOrDefault();
@@ -208,6 +221,7 @@ namespace Api.Controllers
             }
             catch (Exception ex)
             {
+                if (ex is Core.Tenancy.TenantException) throw;
                 errors = new string[1] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
                 return new BadRequestObjectResult(errors);
             }
@@ -355,6 +369,7 @@ namespace Api.Controllers
             }
             catch (Exception ex)
             {
+                if (ex is Core.Tenancy.TenantException) throw;
                 errors = new string[1] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
                 return new BadRequestObjectResult(errors);
             }
@@ -385,12 +400,16 @@ namespace Api.Controllers
                 Core.Domain.Purchases.PurchaseInvoiceHeader? purchaseInvoice = null;
                 Core.Domain.Purchases.PurchaseOrderHeader? purchaseOrder = null;
 
+                _tenantGuard.EnsureOwned<Core.Domain.Purchases.Vendor>(purchaseInvoiceDto.VendorId, nameof(purchaseInvoiceDto.VendorId));
+                if (purchaseInvoiceDto.PaymentTermId.HasValue && purchaseInvoiceDto.PaymentTermId.Value > 0)
+                    _tenantGuard.EnsureOwned<Core.Domain.PaymentTerm>(purchaseInvoiceDto.PaymentTermId.Value, nameof(purchaseInvoiceDto.PaymentTermId));
+
                 if (isNew)
                 {
                     if (!purchaseInvoiceDto.FromPurchaseOrderId.HasValue)
-    throw new Exception("A Purchase Order must be selected before saving an invoice.");
+                        throw new Exception("A Purchase Order must be selected before saving an invoice.");
 
-purchaseOrder = _purchasingService.GetPurchaseOrderById(purchaseInvoiceDto.FromPurchaseOrderId.GetValueOrDefault());
+                    purchaseOrder = _tenantGuard.EnsureOwned<Core.Domain.Purchases.PurchaseOrderHeader>(purchaseInvoiceDto.FromPurchaseOrderId.GetValueOrDefault(), nameof(purchaseInvoiceDto.FromPurchaseOrderId));
 
                     purchaseInvoice = new Core.Domain.Purchases.PurchaseInvoiceHeader();
                     purchaseInvoice.VendorId = purchaseInvoiceDto.VendorId;
@@ -401,6 +420,11 @@ purchaseOrder = _purchasingService.GetPurchaseOrderById(purchaseInvoiceDto.FromP
 
                     foreach (var line in purchaseInvoiceDto.PurchaseInvoiceLines)
                     {
+                        if (line.ItemId.GetValueOrDefault() > 0)
+                            _tenantGuard.EnsureOwned<Core.Domain.Items.Item>(line.ItemId.GetValueOrDefault(), nameof(line.ItemId));
+                        if (line.TaxGroupId.HasValue && line.TaxGroupId.Value > 0)
+                            _tenantGuard.EnsureOwned<Core.Domain.TaxSystem.TaxGroup>(line.TaxGroupId.Value, nameof(line.TaxGroupId));
+
                         var purchaseInvoiceLine = new Core.Domain.Purchases.PurchaseInvoiceLine();
                         purchaseInvoice.PurchaseInvoiceLines.Add(purchaseInvoiceLine);
                         purchaseInvoiceLine.Amount = line.Amount.GetValueOrDefault();
@@ -431,7 +455,7 @@ purchaseOrder = _purchasingService.GetPurchaseOrderById(purchaseInvoiceDto.FromP
                 }
                 else
                 {
-                    purchaseInvoice = _purchasingService.GetPurchaseInvoiceById(purchaseInvoiceDto.Id);
+                    purchaseInvoice = _tenantGuard.EnsureOwned<Core.Domain.Purchases.PurchaseInvoiceHeader>(purchaseInvoiceDto.Id, nameof(purchaseInvoiceDto.Id));
 
                     if (purchaseInvoice.GeneralLedgerHeaderId.HasValue)
                         throw new Exception("Invoice is already posted. Update is not allowed.");
@@ -444,6 +468,11 @@ purchaseOrder = _purchasingService.GetPurchaseOrderById(purchaseInvoiceDto.FromP
 
                     foreach (var line in purchaseInvoiceDto.PurchaseInvoiceLines)
                     {
+                        if (line.ItemId.GetValueOrDefault() > 0)
+                            _tenantGuard.EnsureOwned<Core.Domain.Items.Item>(line.ItemId.GetValueOrDefault(), nameof(line.ItemId));
+                        if (line.TaxGroupId.HasValue && line.TaxGroupId.Value > 0)
+                            _tenantGuard.EnsureOwned<Core.Domain.TaxSystem.TaxGroup>(line.TaxGroupId.Value, nameof(line.TaxGroupId));
+
                         var existingLine = purchaseInvoice.PurchaseInvoiceLines
                             .FirstOrDefault(l => l.Id == line.Id);
 
@@ -522,6 +551,7 @@ purchaseOrder = _purchasingService.GetPurchaseOrderById(purchaseInvoiceDto.FromP
             }
             catch (Exception ex)
             {
+                if (ex is Core.Tenancy.TenantException) throw;
                 errors = new string[1] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
                 return new BadRequestObjectResult(errors);
             }
@@ -556,8 +586,19 @@ purchaseOrder = _purchasingService.GetPurchaseOrderById(purchaseInvoiceDto.FromP
                 }
                 else
                 {
-                    vendor = _purchasingService.GetVendorById(vendorDto.Id);
+                    vendor = _tenantGuard.EnsureOwned<Core.Domain.Purchases.Vendor>(vendorDto.Id, nameof(vendorDto.Id));
                 }
+
+                if (vendorDto.AccountsPayableAccountId > 0)
+                    _tenantGuard.EnsureOwned<Core.Domain.Financials.Account>(vendorDto.AccountsPayableAccountId, nameof(vendorDto.AccountsPayableAccountId));
+                if (vendorDto.PurchaseAccountId > 0)
+                    _tenantGuard.EnsureOwned<Core.Domain.Financials.Account>(vendorDto.PurchaseAccountId, nameof(vendorDto.PurchaseAccountId));
+                if (vendorDto.PurchaseDiscountAccountId > 0)
+                    _tenantGuard.EnsureOwned<Core.Domain.Financials.Account>(vendorDto.PurchaseDiscountAccountId, nameof(vendorDto.PurchaseDiscountAccountId));
+                if (vendorDto.TaxGroupId > 0)
+                    _tenantGuard.EnsureOwned<Core.Domain.TaxSystem.TaxGroup>(vendorDto.TaxGroupId, nameof(vendorDto.TaxGroupId));
+                if (vendorDto.PaymentTermId > 0)
+                    _tenantGuard.EnsureOwned<Core.Domain.PaymentTerm>(vendorDto.PaymentTermId, nameof(vendorDto.PaymentTermId));
 
                 if (vendor.Party == null) vendor.Party = new Core.Domain.Party();
 
@@ -614,6 +655,7 @@ purchaseOrder = _purchasingService.GetPurchaseOrderById(purchaseInvoiceDto.FromP
             }
             catch (Exception ex)
             {
+                if (ex is Core.Tenancy.TenantException) throw;
                 errors = new string[1] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
                 return new BadRequestObjectResult(errors);
             }
@@ -669,6 +711,8 @@ purchaseOrder = _purchasingService.GetPurchaseOrderById(purchaseInvoiceDto.FromP
             try
             {
                 var vendor = _purchasingService.GetVendorById(id);
+                if (vendor == null)
+                    return NotFound($"Vendor with ID {id} was not found.");
 
                 var vendorDto = new Dto.Purchasing.Vendor()
                 {
@@ -759,12 +803,14 @@ purchaseOrder = _purchasingService.GetPurchaseOrderById(purchaseInvoiceDto.FromP
                     return new BadRequestObjectResult(errors);
                 }
 
-                var bank = _financialService.GetCashAndBanks().Where(id => id.Id == (int)paymentDto.AccountId).FirstOrDefault();
+                _tenantGuard.EnsureOwned<Core.Domain.Purchases.PurchaseInvoiceHeader>((int)paymentDto.InvoiceId, "InvoiceId");
+                _tenantGuard.EnsureOwned<Core.Domain.Purchases.Vendor>((int)paymentDto.VendorId, "VendorId");
+                var bank = _tenantGuard.EnsureOwned<Core.Domain.Financials.Bank>((int)paymentDto.AccountId, "AccountId");
 
                 _purchasingService.SavePayment(
                     (int)paymentDto.InvoiceId,
                     (int)paymentDto.VendorId,
-                    ((int?)bank!.AccountId).GetValueOrDefault(),
+                    bank.AccountId.GetValueOrDefault(),
                     (decimal)paymentDto.AmountToPay,
                     (DateTime)paymentDto.Date);
 
@@ -772,6 +818,7 @@ purchaseOrder = _purchasingService.GetPurchaseOrderById(purchaseInvoiceDto.FromP
             }
             catch (Exception ex)
             {
+                if (ex is Core.Tenancy.TenantException) throw;
                 errors = new string[1] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
                 return new BadRequestObjectResult(errors);
             }

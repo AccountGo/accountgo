@@ -33,7 +33,11 @@ public class D1SyncTests : IDisposable
     private ApiDbContext NewApiContext(bool withSync = true, SqliteConnection? connection = null)
     {
         var options = new DbContextOptionsBuilder<ApiDbContext>().UseSqlite(connection ?? _connection).Options;
-        return new ApiDbContext(options, withSync ? _sync : null);
+        var tenantMock = new Moq.Mock<Core.Tenancy.ITenantContext>();
+        tenantMock.Setup(t => t.CompanyId).Returns(1);
+        tenantMock.Setup(t => t.RequireCompanyId()).Returns(1);
+        tenantMock.Setup(t => t.IsResolved).Returns(true);
+        return new ApiDbContext(options, withSync ? _sync : null, tenantMock.Object);
     }
 
     [Fact]

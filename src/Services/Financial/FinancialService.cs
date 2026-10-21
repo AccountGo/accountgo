@@ -600,15 +600,9 @@ namespace Services.Financial
             return taxes;
         }
 
-        public GeneralLedgerSetting GetGeneralLedgerSetting(int? companyId = null)
+        public GeneralLedgerSetting GetGeneralLedgerSetting()
         {
-            GeneralLedgerSetting glSetting = null;
-            if (companyId == null)
-                glSetting = _glSettingRepo.Table.FirstOrDefault();
-            else
-                glSetting = _glSettingRepo.Table.Where(s => s.CompanyId == companyId).FirstOrDefault();
-
-            return glSetting;
+            return _glSettingRepo.Table.FirstOrDefault();
         }
 
         public void SaveGeneralLedgerSetting(GeneralLedgerSetting setting)

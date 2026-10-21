@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using Core.Data;
 using Core.Domain;
@@ -104,6 +104,7 @@ namespace Api.Data
             //}
             catch (Exception ex) {
                 _logger.LogError(ex.Message);
+                throw;
             }
         }
 
@@ -137,6 +138,7 @@ namespace Api.Data
             //}
             catch (Exception ex) {
                 _logger.LogError(ex.Message);
+                throw;
             }
         }
 
@@ -159,6 +161,7 @@ namespace Api.Data
             catch (Exception ex)
             {
                 _logger.LogError(ex.Message);
+                throw;
             }
         }
 
@@ -189,6 +192,7 @@ namespace Api.Data
             //}
             catch (Exception ex) {
                 _logger.LogError(ex.Message);
+                throw;
             }
         }
 
@@ -208,6 +212,7 @@ namespace Api.Data
             catch (Exception ex)
             {
                 _logger.LogError(ex.Message);
+                throw;
             }
         }
 
@@ -240,6 +245,7 @@ namespace Api.Data
             //}
             catch (Exception ex) {
                 _logger.LogError(ex.Message);
+                throw;
             }
         }
 
@@ -261,6 +267,7 @@ namespace Api.Data
             catch (Exception ex)
             {
                 _logger.LogError(ex.Message);
+                throw;
             }
         }
 
@@ -294,6 +301,7 @@ namespace Api.Data
             //}
             catch (Exception ex) {
                 _logger.LogError(ex.Message);
+                throw;
             }
         }
 

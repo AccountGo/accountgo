@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using Dto.Inventory;
 using Dto.Purchasing;
 using Dto.Sales;
@@ -15,6 +15,7 @@ using Core.Domain;
 
 namespace Api.Controllers
 {
+    [Core.Tenancy.TenantScoped]
     [Route("api/[controller]")]
     public class CommonController : BaseController
     {
