@@ -281,8 +281,11 @@ export class AccountGoApiContainer extends DurableObject {
             const bytes = Uint8Array.from(atob(syncSqlBase64), (c) => c.charCodeAt(0));
             const statements: string[] = JSON.parse(new TextDecoder().decode(bytes));
             const db = (this.env as any).DB;
+            // Statement order follows EF's change tracker, not dependency order, so a child row can
+            // precede its parent. Defer FK checks to the end of the batch transaction.
+            const prepared = [db.prepare("PRAGMA defer_foreign_keys = on"), ...statements.map((s) => db.prepare(s))];
             this.ctx.waitUntil(
-              db.batch(statements.map((s) => db.prepare(s))).catch((syncErr: any) => {
+              db.batch(prepared).catch((syncErr: any) => {
                 console.error("Failed executing real-time D1 mutation:", syncErr?.message ?? syncErr);
               })
             );

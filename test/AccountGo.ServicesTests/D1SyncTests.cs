@@ -53,7 +53,8 @@ public class D1SyncTests : IDisposable
 
         Assert.True(member.Id > 0);
         var sql = Assert.Single(_sync.GetStatements());
-        Assert.StartsWith("INSERT OR REPLACE INTO \"CompanyMember\"", sql);
+        Assert.StartsWith("INSERT INTO \"CompanyMember\"", sql);
+        Assert.Contains("ON CONFLICT (\"Id\") DO UPDATE SET", sql);
         Assert.Contains($"{member.Id}, ", sql);
         Assert.DoesNotContain("'Owner'", sql);
         Assert.DoesNotContain("'Active'", sql);
@@ -74,7 +75,8 @@ public class D1SyncTests : IDisposable
         ctx.SaveChanges();
 
         var sql = Assert.Single(_sync.GetStatements());
-        Assert.StartsWith("INSERT OR REPLACE INTO \"CompanyMember\"", sql);
+        Assert.StartsWith("INSERT INTO \"CompanyMember\"", sql);
+        Assert.Contains("ON CONFLICT (\"Id\") DO UPDATE SET", sql);
         Assert.Contains("'user-2'", sql);
     }
 
@@ -133,12 +135,7 @@ public class D1SyncTests : IDisposable
         {
             replica.Database.EnsureCreated();
         }
-        foreach (var stmt in _sync.GetStatements())
-        {
-            using var cmd = replicaConn.CreateCommand();
-            cmd.CommandText = stmt;
-            cmd.ExecuteNonQuery();
-        }
+        ApplyLikeD1(replicaConn, _sync.GetStatements());
 
         using var check = NewApiContext(withSync: false, connection: replicaConn);
         var m = check.CompanyMembers.Single(x => x.Id == memberId);
@@ -148,6 +145,85 @@ public class D1SyncTests : IDisposable
         var t = check.Set<Tax>().Single(x => x.Id == taxId);
         Assert.Equal(0.125m, t.Rate);
         Assert.True(t.IsActive);
+    }
+
+    /// <summary>Applies statements the way worker.ts does on D1: FKs enforced, deferred, one transaction.</summary>
+    private static void ApplyLikeD1(SqliteConnection conn, System.Collections.Generic.IEnumerable<string> statements)
+    {
+        Exec(conn, "PRAGMA foreign_keys = ON;");
+        using var tx = conn.BeginTransaction();
+        Exec(conn, "PRAGMA defer_foreign_keys = ON;", tx);
+        foreach (var stmt in statements) Exec(conn, stmt, tx);
+        tx.Commit();
+    }
+
+    private static void Exec(SqliteConnection conn, string sql, SqliteTransaction? tx = null)
+    {
+        using var cmd = conn.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText = sql;
+        cmd.ExecuteNonQuery();
+    }
+
+    [Fact]
+    public async Task Updating_A_Parent_Does_Not_Cascade_Delete_Its_Children_In_Replica()
+    {
+        // Replica starts as a copy of the source (company 1 + one member).
+        using var replicaConn = new SqliteConnection("DataSource=:memory:");
+        replicaConn.Open();
+        using (var replica = NewApiContext(withSync: false, connection: replicaConn))
+        {
+            replica.Database.EnsureCreated();
+            replica.CompanyMembers.Add(new CompanyMember { CompanyId = 1, UserId = "child", Role = CompanyMemberRole.Member, JoinedAt = DateTime.UtcNow });
+            replica.SaveChanges();
+        }
+        using (var seed = NewApiContext(withSync: false))
+        {
+            seed.CompanyMembers.Add(new CompanyMember { CompanyId = 1, UserId = "child", Role = CompanyMemberRole.Member, JoinedAt = DateTime.UtcNow });
+            seed.SaveChanges();
+        }
+
+        // Update the parent (Company, which CompanyMember references with ON DELETE CASCADE).
+        using (var ctx = NewApiContext())
+        {
+            var company = ctx.Companies.Single(c => c.Id == 1);
+            company.Name = "Renamed Co";
+            await ctx.SaveChangesAsync();
+        }
+        ApplyLikeD1(replicaConn, _sync.GetStatements());
+
+        using var check = NewApiContext(withSync: false, connection: replicaConn);
+        Assert.Equal("Renamed Co", check.Companies.Single(c => c.Id == 1).Name);
+        Assert.Equal(1, check.CompanyMembers.Count(m => m.UserId == "child"));
+    }
+
+    [Fact]
+    public void Child_Statement_Before_Parent_Statement_Applies_With_Deferred_Foreign_Keys()
+    {
+        using var replicaConn = new SqliteConnection("DataSource=:memory:");
+        replicaConn.Open();
+        using (var replica = NewApiContext(withSync: false, connection: replicaConn))
+        {
+            replica.Database.EnsureCreated();
+        }
+
+        Company company;
+        CompanyMember member;
+        using (var ctx = NewApiContext())
+        {
+            company = new Company { Name = "New Co", ShortName = "NEW", Slug = "new-co" };
+            member = new CompanyMember { Company = company, UserId = "owner", Role = CompanyMemberRole.Owner, JoinedAt = DateTime.UtcNow };
+            ctx.CompanyMembers.Add(member);
+            ctx.SaveChanges();
+        }
+
+        // Force child-first order, as EF's change tracker may produce.
+        var ordered = _sync.GetStatements().OrderBy(s => s.Contains("\"CompanyMember\"") ? 0 : 1).ToList();
+        Assert.Contains("\"CompanyMember\"", ordered[0]);
+        ApplyLikeD1(replicaConn, ordered);
+
+        using var check = NewApiContext(withSync: false, connection: replicaConn);
+        Assert.Equal(company.Id, check.CompanyMembers.Single(m => m.UserId == "owner").CompanyId);
     }
 
     [Fact]
@@ -164,7 +240,7 @@ public class D1SyncTests : IDisposable
         await ctx.SaveChangesAsync();
 
         var sql = Assert.Single(_sync.GetStatements());
-        Assert.StartsWith("INSERT OR REPLACE INTO \"AspNetUserTokens\"", sql);
+        Assert.StartsWith("INSERT INTO \"AspNetUserTokens\"", sql);
         Assert.Contains("'{\"CodeHash\":\"x\"}'", sql);
     }
 }

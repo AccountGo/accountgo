@@ -72,24 +72,32 @@ namespace Api.Service.D1Sync
                 return $"DELETE FROM \"{tableName}\" WHERE {string.Join(" AND ", whereClauses)};";
             }
 
-            // Added or Modified: generate INSERT OR REPLACE INTO
+            // Added or Modified: upsert on the primary key. Not INSERT OR REPLACE: REPLACE deletes the
+            // existing row first, and D1 enforces foreign keys, so ON DELETE CASCADE would wipe the
+            // row's children (e.g. a user's tokens, an invoice's lines, a company's members).
+            var keyProps = entityType.FindPrimaryKey()?.Properties;
+            if (keyProps == null || keyProps.Count == 0)
+                return null;
+
             var columns = new List<string>();
             var values = new List<string>();
+            var updates = new List<string>();
 
             foreach (var prop in entityType.GetProperties())
             {
-                var colName = prop.GetColumnName() ?? prop.Name;
-                var propEntry = entry.Property(prop.Name);
-                var val = FormatValue(prop, propEntry.CurrentValue);
-
-                columns.Add($"\"{colName}\"");
-                values.Add(val);
+                var colName = $"\"{prop.GetColumnName() ?? prop.Name}\"";
+                columns.Add(colName);
+                values.Add(FormatValue(prop, entry.Property(prop.Name).CurrentValue));
+                if (!keyProps.Contains(prop))
+                    updates.Add($"{colName} = excluded.{colName}");
             }
 
-            if (columns.Count == 0)
-                return null;
+            var keyColumns = string.Join(", ", keyProps.Select(p => $"\"{p.GetColumnName() ?? p.Name}\""));
+            var onConflict = updates.Count > 0
+                ? $"ON CONFLICT ({keyColumns}) DO UPDATE SET {string.Join(", ", updates)}"
+                : $"ON CONFLICT ({keyColumns}) DO NOTHING";
 
-            return $"INSERT OR REPLACE INTO \"{tableName}\" ({string.Join(", ", columns)}) VALUES ({string.Join(", ", values)});";
+            return $"INSERT INTO \"{tableName}\" ({string.Join(", ", columns)}) VALUES ({string.Join(", ", values)}) {onConflict};";
         }
 
         private static string FormatValue(IProperty prop, object? val)
