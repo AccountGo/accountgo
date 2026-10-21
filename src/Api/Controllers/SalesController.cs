@@ -81,19 +81,55 @@ namespace Api.Controllers
             customer.Party.ShippingProvince = customerDto.ShippingAddress?.Province;
             customer.Party.ShippingPostalCode = customerDto.ShippingAddress?.PostalCode;
             customer.Party.ShippingCountry = customerDto.ShippingAddress?.Country;
-            customer.PrimaryContact.FirstName = customerDto.PrimaryContact!.FirstName;
-            customer.PrimaryContact.LastName = customerDto.PrimaryContact.LastName;
-            customer.PrimaryContact.Party.Name = customerDto.PrimaryContact.Party.Name;
-            customer.PrimaryContact.Party.Phone = customerDto.PrimaryContact.Party.Phone;
-            customer.PrimaryContact.Party.Email = customerDto.PrimaryContact.Party.Email;
-            customer.PrimaryContact.Party.Fax = customerDto.PrimaryContact.Party.Fax;
-            customer.PrimaryContact.Party.Website = customerDto.PrimaryContact.Party.Website;
-            customer.AccountsReceivableAccountId = customerDto.AccountsReceivableId;
-            customer.SalesAccountId = customerDto.SalesAccountId;
-            customer.CustomerAdvancesAccountId = customerDto.PrepaymentAccountId;
-            customer.SalesDiscountAccountId = customerDto.SalesDiscountAccountId;
-            customer.PaymentTermId = customerDto.PaymentTermId;
-            customer.TaxGroupId = customerDto.TaxGroupId;
+
+            var firstName = customerDto.PrimaryContact?.FirstName;
+            var lastName = customerDto.PrimaryContact?.LastName;
+            if (string.IsNullOrWhiteSpace(firstName))
+            {
+                var nameParts = (customerDto.Name ?? "Customer Contact").Trim().Split(' ', 2);
+                firstName = nameParts.FirstOrDefault() ?? "Customer";
+                lastName = nameParts.Length > 1 ? nameParts[1] : "Contact";
+            }
+            customer.PrimaryContact.FirstName = firstName;
+            customer.PrimaryContact.LastName = lastName ?? "Contact";
+            customer.PrimaryContact.Party.Name = $"{customer.PrimaryContact.FirstName} {customer.PrimaryContact.LastName}".Trim();
+            customer.PrimaryContact.Party.Phone = customerDto.PrimaryContact?.Party?.Phone ?? customerDto.Phone;
+            customer.PrimaryContact.Party.Email = customerDto.PrimaryContact?.Party?.Email ?? customerDto.Email;
+            customer.PrimaryContact.Party.Fax = customerDto.PrimaryContact?.Party?.Fax ?? customerDto.Fax;
+            customer.PrimaryContact.Party.Website = customerDto.PrimaryContact?.Party?.Website ?? customerDto.Website;
+
+            // Safe auto-assign default accounts for Invoicing continuity if omitted
+            var accounts = _financialService.GetAccounts().ToList();
+            var accountAR = accounts.FirstOrDefault(a => a.AccountCode == "10120") ?? accounts.FirstOrDefault(a => a.AccountClassId == 1);
+            var accountSales = accounts.FirstOrDefault(a => a.AccountCode == "40100") ?? accounts.FirstOrDefault(a => a.AccountClassId == 4);
+            var accountAdvances = accounts.FirstOrDefault(a => a.AccountCode == "20120") ?? accounts.FirstOrDefault(a => a.AccountClassId == 2);
+            var accountDiscount = accounts.FirstOrDefault(a => a.AccountCode == "40400");
+
+            customer.AccountsReceivableAccountId = (customerDto.AccountsReceivableId.HasValue && customerDto.AccountsReceivableId.Value > 0)
+                ? customerDto.AccountsReceivableId.Value
+                : (customer.AccountsReceivableAccountId ?? accountAR?.Id);
+
+            customer.SalesAccountId = (customerDto.SalesAccountId.HasValue && customerDto.SalesAccountId.Value > 0)
+                ? customerDto.SalesAccountId.Value
+                : (customer.SalesAccountId ?? accountSales?.Id);
+
+            customer.CustomerAdvancesAccountId = (customerDto.PrepaymentAccountId.HasValue && customerDto.PrepaymentAccountId.Value > 0)
+                ? customerDto.PrepaymentAccountId.Value
+                : (customer.CustomerAdvancesAccountId ?? accountAdvances?.Id);
+
+            customer.SalesDiscountAccountId = (customerDto.SalesDiscountAccountId.HasValue && customerDto.SalesDiscountAccountId.Value > 0)
+                ? customerDto.SalesDiscountAccountId.Value
+                : (customer.SalesDiscountAccountId ?? accountDiscount?.Id);
+
+            var defaultPaymentTerm = _adminService.GetPaymentTerms().FirstOrDefault();
+            customer.PaymentTermId = (customerDto.PaymentTermId.HasValue && customerDto.PaymentTermId.Value > 0)
+                ? customerDto.PaymentTermId.Value
+                : (customer.PaymentTermId ?? defaultPaymentTerm?.Id);
+
+            customer.TaxGroupId = (customerDto.TaxGroupId.HasValue && customerDto.TaxGroupId.Value > 0)
+                ? customerDto.TaxGroupId.Value
+                : customer.TaxGroupId;
+
             customer.ModifiedBy = GetUserNameFromRequestHeader();
 
             if (isNew)
@@ -101,7 +137,7 @@ namespace Api.Controllers
             else
                 _salesService.UpdateCustomer(customer);
 
-            return Ok();
+            return Ok(new { id = customer.Id, no = customer.No, name = customer.Party.Name });
         }
 
         [HttpGet]
@@ -185,7 +221,7 @@ namespace Api.Controllers
                     customerDto.Fax = customer.Party.Fax;
                     customerDto.Balance = customer.Balance;
                     customerDto.PrepaymentAccountId = customer.CustomerAdvancesAccountId;
-                    customerDto.Contact = customer.PrimaryContact.FirstName + " " + customer.PrimaryContact.LastName;
+                    customerDto.Contact = customer.PrimaryContact != null ? $"{customer.PrimaryContact.FirstName} {customer.PrimaryContact.LastName}".Trim() : string.Empty;
                     customerDto.TaxGroup = customer.TaxGroup == null ? string.Empty : customer.TaxGroup.Description;
                     customersDto.Add(customerDto);
                 }
@@ -309,33 +345,129 @@ namespace Api.Controllers
             try
             {
                 var salesInvoice = _salesService.GetSalesInvoiceById(id);
+                if (salesInvoice == null)
+                    return NotFound(new { message = $"Invoice #{id} not found." });
+
+                var paymentTerm = _adminService.GetPaymentTerms().FirstOrDefault(t => t.Id == salesInvoice.PaymentTermId);
+                var dueDays = paymentTerm?.DueAfterDays ?? 30;
+                var dueDate = salesInvoice.Date.AddDays(dueDays);
+
+                var defaultCompany = _adminService.GetDefaultCompany();
+
+                var party = salesInvoice.Customer?.Party;
+                var addressParts = new List<string>();
+                if (!string.IsNullOrWhiteSpace(party?.CompanyStreet)) addressParts.Add(party.CompanyStreet);
+                if (!string.IsNullOrWhiteSpace(party?.CompanyProvince)) addressParts.Add(party.CompanyProvince);
+                if (!string.IsNullOrWhiteSpace(party?.CompanyPostalCode)) addressParts.Add(party.CompanyPostalCode);
+                if (!string.IsNullOrWhiteSpace(party?.CompanyCountry)) addressParts.Add(party.CompanyCountry);
+                var customerAddress = addressParts.Count > 0 ? string.Join(", ", addressParts) : null;
 
                 var salesInvoiceDto = new Dto.Sales.SalesInvoice()
                 {
                     Id = salesInvoice.Id,
                     CustomerId = salesInvoice.CustomerId,
-                    CustomerName = salesInvoice.Customer.Party.Name,
+                    CustomerName = party?.Name ?? "Unknown",
+                    CustomerEmail = party?.Email,
+                    CustomerPhone = party?.Phone,
+                    CustomerAddress = customerAddress,
                     No = salesInvoice.No,
                     InvoiceDate = salesInvoice.Date,
+                    DueDate = dueDate,
                     SalesInvoiceLines = new List<Dto.Sales.SalesInvoiceLine>(),
                     PaymentTermId = salesInvoice.PaymentTermId,
                     ReferenceNo = salesInvoice.ReferenceNo,
-                    Posted = salesInvoice.GeneralLedgerHeaderId != null
+                    Posted = salesInvoice.GeneralLedgerHeaderId != null,
+                    CompanyName = defaultCompany?.Name
                 };
 
+                if (salesInvoice.CustomerAllocations != null)
+                {
+                    salesInvoiceDto.Payments = salesInvoice.CustomerAllocations
+                        .OrderByDescending(a => a.Date)
+                        .Select(a => new Dto.Sales.InvoicePaymentItemDto
+                        {
+                            Id = a.Id,
+                            ReceiptNo = a.SalesReceiptHeader?.No,
+                            Date = a.Date,
+                            Amount = a.Amount,
+                            PaymentMethod = a.SalesReceiptHeader?.PaymentMethod ?? "Payment",
+                            ReferenceNo = a.SalesReceiptHeader?.ReferenceNo,
+                            Notes = a.SalesReceiptHeader?.Memo
+                        }).ToList();
+                }
+
+                decimal totalTax = 0;
                 foreach (var line in salesInvoice.SalesInvoiceLines)
                 {
-                    var lineDto = new Dto.Sales.SalesInvoiceLine();
-                    lineDto.Id = line.Id;
-                    lineDto.Amount = line.Amount;
-                    lineDto.Discount = line.Discount;
-                    lineDto.Quantity = line.Quantity;
-                    lineDto.ItemId = line.ItemId;
-                    lineDto.MeasurementId = line.MeasurementId;
-                    lineDto.ItemDescription = line.Item.Description;
-                    lineDto.MeasurementDescription = line.Measurement.Description;
+                    var lineDto = new Dto.Sales.SalesInvoiceLine
+                    {
+                        Id = line.Id,
+                        Amount = line.Amount,
+                        Discount = line.Discount,
+                        Quantity = line.Quantity,
+                        ItemId = line.ItemId,
+                        MeasurementId = line.MeasurementId,
+                        ItemDescription = line.Item?.Description ?? "Item",
+                        MeasurementDescription = line.Measurement?.Description ?? "EA"
+                    };
+
+                    decimal lineAmount = (line.Quantity * line.Amount) - ((line.Discount / 100m) * (line.Quantity * line.Amount));
+                    lineDto.LineTotal = lineAmount;
+
+                    if (_taxService != null && line.ItemId > 0 && salesInvoice.Customer?.Party != null)
+                    {
+                        try
+                        {
+                            var taxes = _taxService.GetIntersectionTaxes(line.ItemId, salesInvoice.CustomerId, salesInvoice.Customer.Party.PartyType);
+                            var taxAmount = _taxService.GetSalesLineTaxAmount(line.Quantity, line.Amount, line.Discount, taxes);
+                            lineDto.TaxAmount = taxAmount;
+                            totalTax += taxAmount;
+                        }
+                        catch { /* Ignore tax calc errors */ }
+                    }
 
                     salesInvoiceDto.SalesInvoiceLines.Add(lineDto);
+                }
+
+                salesInvoiceDto.TotalTax = totalTax;
+                decimal grandTotal = salesInvoiceDto.Amount + totalTax + salesInvoice.ShippingHandlingCharge;
+                salesInvoiceDto.TotalAmountAfterTax = grandTotal;
+
+                decimal allocated = salesInvoice.CustomerAllocations != null ? salesInvoice.CustomerAllocations.Sum(a => a.Amount) : 0;
+                salesInvoiceDto.TotalAllocatedAmount = allocated;
+                salesInvoiceDto.PaidAmount = allocated;
+                salesInvoiceDto.BalanceDue = Math.Max(0, grandTotal - allocated);
+
+                // Compute calculated status
+                if (salesInvoice.Status == Core.Domain.SalesInvoiceStatus.Void)
+                {
+                    salesInvoiceDto.Status = "Void";
+                    salesInvoiceDto.StatusId = (int)Core.Domain.SalesInvoiceStatus.Void;
+                }
+                else if (salesInvoice.Status == Core.Domain.SalesInvoiceStatus.Draft || (!salesInvoiceDto.Posted && salesInvoice.Status != Core.Domain.SalesInvoiceStatus.Open))
+                {
+                    salesInvoiceDto.Status = "Draft";
+                    salesInvoiceDto.StatusId = (int)Core.Domain.SalesInvoiceStatus.Draft;
+                }
+                else if (salesInvoiceDto.BalanceDue <= 0 && allocated > 0)
+                {
+                    salesInvoiceDto.Status = "Paid";
+                    salesInvoiceDto.StatusId = (int)Core.Domain.SalesInvoiceStatus.Closed;
+                }
+                else if (allocated > 0 && salesInvoiceDto.BalanceDue > 0)
+                {
+                    salesInvoiceDto.Status = "Partially Paid";
+                    salesInvoiceDto.StatusId = (int)Core.Domain.SalesInvoiceStatus.Open;
+                }
+                else if (dueDate.Date < DateTime.UtcNow.Date)
+                {
+                    salesInvoiceDto.Status = "Overdue";
+                    salesInvoiceDto.StatusId = (int)Core.Domain.SalesInvoiceStatus.Overdue;
+                }
+                else
+                {
+                    salesInvoiceDto.Status = "Open";
+                    salesInvoiceDto.StatusId = (int)Core.Domain.SalesInvoiceStatus.Open;
                 }
 
                 // is this journal entry ready for posting?
@@ -475,35 +607,105 @@ namespace Api.Controllers
         [Route("SalesInvoices")] // api/Sales/SalesInvoices
         public IActionResult SalesInvoices()
         {
-            var salesInvoices = _salesService.GetSalesInvoices();
+            var salesInvoices = _salesService.GetSalesInvoices().OrderByDescending(i => i.Date).ThenByDescending(i => i.Id);
             IList<Dto.Sales.SalesInvoice> salesInvoicesDto = new List<Dto.Sales.SalesInvoice>();
+            var paymentTerms = _adminService.GetPaymentTerms();
 
             foreach (var salesInvoice in salesInvoices)
             {
+                var term = paymentTerms.FirstOrDefault(t => t.Id == salesInvoice.PaymentTermId);
+                var dueDays = term?.DueAfterDays ?? 30;
+                var dueDate = salesInvoice.Date.AddDays(dueDays);
+
+                decimal allocatedAmount = salesInvoice.CustomerAllocations != null 
+                    ? salesInvoice.CustomerAllocations.Sum(i => i.Amount) 
+                    : 0;
+
                 var salesInvoiceDto = new Dto.Sales.SalesInvoice()
                 {
                     Id = salesInvoice.Id,
                     No = salesInvoice.No,
                     CustomerId = salesInvoice.CustomerId,
                     CustomerName = salesInvoice.Customer?.Party?.Name ?? "Unknown",
+                    CustomerEmail = salesInvoice.Customer?.Party?.Email,
                     InvoiceDate = salesInvoice.Date,
+                    DueDate = dueDate,
+                    PaymentTermId = salesInvoice.PaymentTermId,
                     ReferenceNo = salesInvoice.ReferenceNo,
-                    TotalAllocatedAmount = (decimal)salesInvoice.CustomerAllocations.Sum(i => i.Amount),
+                    TotalAllocatedAmount = allocatedAmount,
+                    PaidAmount = allocatedAmount,
                     Posted = salesInvoice.GeneralLedgerHeaderId != null
                 };
 
+                decimal totalTax = 0;
                 // Populate line items - Amount will be calculated automatically by the DTO
                 foreach (var line in salesInvoice.SalesInvoiceLines)
                 {
                     var lineDto = new Dto.Sales.SalesInvoiceLine()
                     {
+                        Id = line.Id,
                         ItemId = line.ItemId,
                         MeasurementId = line.MeasurementId,
                         Quantity = line.Quantity,
                         Amount = line.Amount,
-                        Discount = line.Discount
+                        Discount = line.Discount,
+                        ItemDescription = line.Item?.Description ?? "Item",
+                        MeasurementDescription = line.Measurement?.Description ?? "EA"
                     };
+
+                    decimal lineAmount = (line.Quantity * line.Amount) - ((line.Discount / 100m) * (line.Quantity * line.Amount));
+                    lineDto.LineTotal = lineAmount;
+
+                    if (_taxService != null && line.ItemId > 0 && salesInvoice.Customer?.Party != null)
+                    {
+                        try
+                        {
+                            var taxes = _taxService.GetIntersectionTaxes(line.ItemId, salesInvoice.CustomerId, salesInvoice.Customer.Party.PartyType);
+                            var taxAmount = _taxService.GetSalesLineTaxAmount(line.Quantity, line.Amount, line.Discount, taxes);
+                            lineDto.TaxAmount = taxAmount;
+                            totalTax += taxAmount;
+                        }
+                        catch { /* Ignore tax calc errors on listing */ }
+                    }
+
                     salesInvoiceDto.SalesInvoiceLines!.Add(lineDto);
+                }
+
+                salesInvoiceDto.TotalTax = totalTax;
+                decimal grandTotal = salesInvoiceDto.Amount + totalTax + salesInvoice.ShippingHandlingCharge;
+                salesInvoiceDto.TotalAmountAfterTax = grandTotal;
+                salesInvoiceDto.BalanceDue = Math.Max(0, grandTotal - allocatedAmount);
+
+                // Compute calculated status
+                if (salesInvoice.Status == Core.Domain.SalesInvoiceStatus.Void)
+                {
+                    salesInvoiceDto.Status = "Void";
+                    salesInvoiceDto.StatusId = (int)Core.Domain.SalesInvoiceStatus.Void;
+                }
+                else if (salesInvoice.Status == Core.Domain.SalesInvoiceStatus.Draft || (!salesInvoiceDto.Posted && salesInvoice.Status != Core.Domain.SalesInvoiceStatus.Open))
+                {
+                    salesInvoiceDto.Status = "Draft";
+                    salesInvoiceDto.StatusId = (int)Core.Domain.SalesInvoiceStatus.Draft;
+                }
+                else if (salesInvoiceDto.BalanceDue <= 0 && allocatedAmount > 0)
+                {
+                    salesInvoiceDto.Status = "Paid";
+                    salesInvoiceDto.StatusId = (int)Core.Domain.SalesInvoiceStatus.Closed;
+                }
+                else if (allocatedAmount > 0 && salesInvoiceDto.BalanceDue > 0)
+                {
+                    salesInvoiceDto.Status = "Partially Paid";
+                    salesInvoiceDto.StatusId = (int)Core.Domain.SalesInvoiceStatus.Open;
+                }
+                else if (dueDate.Date < DateTime.UtcNow.Date)
+                {
+                    salesInvoiceDto.Status = "Overdue";
+                    salesInvoiceDto.StatusId = (int)Core.Domain.SalesInvoiceStatus.Overdue;
+                }
+                else
+                {
+                    salesInvoiceDto.Status = "Open";
+                    salesInvoiceDto.StatusId = (int)Core.Domain.SalesInvoiceStatus.Open;
                 }
 
                 salesInvoicesDto.Add(salesInvoiceDto);
@@ -784,11 +986,16 @@ namespace Api.Controllers
                 // Creating a new invoice
                 if (isNew)
                 {
+                    var defaultPaymentTerm = _adminService.GetPaymentTerms().FirstOrDefault();
+                    int? paymentTermId = (salesInvoiceDto.PaymentTermId.HasValue && salesInvoiceDto.PaymentTermId.Value > 0)
+                        ? salesInvoiceDto.PaymentTermId.Value
+                        : defaultPaymentTerm?.Id;
+
                     if (!salesInvoiceDto.FromSalesOrderId.HasValue)
                     {
                         salesOrder = new Core.Domain.Sales.SalesOrderHeader();
                         salesOrder.Date = salesInvoiceDto.InvoiceDate;
-                        salesOrder.PaymentTermId = salesInvoiceDto.PaymentTermId;
+                        salesOrder.PaymentTermId = paymentTermId;
                         salesOrder.CustomerId = salesInvoiceDto.CustomerId;
                         salesOrder.ReferenceNo = salesInvoiceDto.ReferenceNo;
                         salesOrder.Status = SalesOrderStatus.FullyInvoiced;
@@ -803,8 +1010,20 @@ namespace Api.Controllers
                     salesInvoice = new Core.Domain.Sales.SalesInvoiceHeader();
                     salesInvoice.CustomerId = salesInvoiceDto.CustomerId;
                     salesInvoice.Date = salesInvoiceDto.InvoiceDate;
-                    salesInvoice.PaymentTermId = salesInvoiceDto.PaymentTermId;
+                    salesInvoice.PaymentTermId = paymentTermId;
                     salesInvoice.ReferenceNo = salesInvoiceDto.ReferenceNo;
+                    salesInvoice.Status = salesInvoiceDto.Status == "Draft" 
+                        ? Core.Domain.SalesInvoiceStatus.Draft 
+                        : Core.Domain.SalesInvoiceStatus.Open;
+
+                    // Resolve default service item and measurement if omitted for flexible invoicing
+                    var items = _inventoryService.GetAllItems().ToList();
+                    var defaultItem = items.FirstOrDefault(i => i.ItemCategory != null && i.ItemCategory.ItemType == ItemTypes.Service) 
+                        ?? items.FirstOrDefault();
+                    var defaultMeasurement = defaultItem?.SellMeasurementId 
+                        ?? defaultItem?.SmallestMeasurementId 
+                        ?? _inventoryService.GetMeasurements().FirstOrDefault()?.Id 
+                        ?? 1;
 
                     foreach (var line in salesInvoiceDto.SalesInvoiceLines!)
                     {
@@ -812,9 +1031,32 @@ namespace Api.Controllers
 
                         salesInvoiceLine.Amount = line.Amount.GetValueOrDefault();
                         salesInvoiceLine.Discount = line.Discount.GetValueOrDefault();
-                        salesInvoiceLine.Quantity = line.Quantity.GetValueOrDefault();
-                        salesInvoiceLine.ItemId = line.ItemId.GetValueOrDefault();
-                        salesInvoiceLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
+                        salesInvoiceLine.Quantity = line.Quantity.GetValueOrDefault(1);
+
+                        int lineItemId = line.ItemId.GetValueOrDefault();
+                        int lineMeasurementId = line.MeasurementId.GetValueOrDefault();
+
+                        if (lineItemId == 0 && !string.IsNullOrWhiteSpace(line.ItemDescription))
+                        {
+                            var existing = items.FirstOrDefault(i => i.Description.Equals(line.ItemDescription, StringComparison.OrdinalIgnoreCase));
+                            if (existing != null)
+                            {
+                                lineItemId = existing.Id;
+                                lineMeasurementId = existing.SellMeasurementId ?? existing.SmallestMeasurementId ?? defaultMeasurement;
+                            }
+                        }
+
+                        if (lineItemId == 0 && defaultItem != null)
+                        {
+                            lineItemId = defaultItem.Id;
+                        }
+                        if (lineMeasurementId == 0)
+                        {
+                            lineMeasurementId = defaultMeasurement;
+                        }
+
+                        salesInvoiceLine.ItemId = lineItemId;
+                        salesInvoiceLine.MeasurementId = lineMeasurementId;
                         salesInvoice.SalesInvoiceLines.Add(salesInvoiceLine);
 
                         // line.Id here is referring to SalesOrderLineId. It is pre-populated when you create a new sales invoice from sales order.
@@ -826,11 +1068,11 @@ namespace Api.Controllers
                         {
                             // if you reach here, this line item is newly added to invoice which is not originally in sales order. create correspondin orderline and add to sales order.
                             var salesOrderLine = new Core.Domain.Sales.SalesOrderLine();
-                            salesOrderLine.Amount = line.Amount.GetValueOrDefault();
-                            salesOrderLine.Discount = line.Discount.GetValueOrDefault();
-                            salesOrderLine.Quantity = line.Quantity.GetValueOrDefault();
-                            salesOrderLine.ItemId = line.ItemId.GetValueOrDefault();
-                            salesOrderLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
+                            salesOrderLine.Amount = salesInvoiceLine.Amount;
+                            salesOrderLine.Discount = salesInvoiceLine.Discount;
+                            salesOrderLine.Quantity = salesInvoiceLine.Quantity;
+                            salesOrderLine.ItemId = salesInvoiceLine.ItemId;
+                            salesOrderLine.MeasurementId = salesInvoiceLine.MeasurementId;
                             salesInvoiceLine.SalesOrderLine = salesOrderLine;
 
                             salesOrder.SalesOrderLines.Add(salesOrderLine);
@@ -847,21 +1089,61 @@ namespace Api.Controllers
                     if (salesInvoice.GeneralLedgerHeaderId.HasValue)
                         throw new Exception("Invoice is already posted. Update is not allowed.");
 
+                    var defaultPaymentTerm = _adminService.GetPaymentTerms().FirstOrDefault();
                     salesInvoice.Date = salesInvoiceDto.InvoiceDate;
-                    salesInvoice.PaymentTermId = salesInvoiceDto.PaymentTermId;
+                    salesInvoice.PaymentTermId = (salesInvoiceDto.PaymentTermId.HasValue && salesInvoiceDto.PaymentTermId.Value > 0)
+                        ? salesInvoiceDto.PaymentTermId.Value
+                        : (salesInvoice.PaymentTermId ?? defaultPaymentTerm?.Id);
                     salesInvoice.ReferenceNo = salesInvoiceDto.ReferenceNo;
                     salesInvoice.CustomerId = salesInvoiceDto.CustomerId;
+                    if (!string.IsNullOrWhiteSpace(salesInvoiceDto.Status))
+                    {
+                        salesInvoice.Status = salesInvoiceDto.Status == "Draft" 
+                            ? Core.Domain.SalesInvoiceStatus.Draft 
+                            : Core.Domain.SalesInvoiceStatus.Open;
+                    }
+
+                    var items = _inventoryService.GetAllItems().ToList();
+                    var defaultItem = items.FirstOrDefault(i => i.ItemCategory != null && i.ItemCategory.ItemType == ItemTypes.Service) 
+                        ?? items.FirstOrDefault();
+                    var defaultMeasurement = defaultItem?.SellMeasurementId 
+                        ?? defaultItem?.SmallestMeasurementId 
+                        ?? _inventoryService.GetMeasurements().FirstOrDefault()?.Id 
+                        ?? 1;
 
                     foreach (var line in salesInvoiceDto.SalesInvoiceLines!)
                     {
                         var existingLine = salesInvoice.SalesInvoiceLines.Where(id => id.Id == line.Id).FirstOrDefault();
-                        if (salesInvoice.SalesInvoiceLines.Where(id => id.Id == line.Id).FirstOrDefault() != null)
+
+                        int lineItemId = line.ItemId.GetValueOrDefault();
+                        int lineMeasurementId = line.MeasurementId.GetValueOrDefault();
+
+                        if (lineItemId == 0 && !string.IsNullOrWhiteSpace(line.ItemDescription))
                         {
-                            existingLine!.Amount = line.Amount.GetValueOrDefault();
+                            var existing = items.FirstOrDefault(i => i.Description.Equals(line.ItemDescription, StringComparison.OrdinalIgnoreCase));
+                            if (existing != null)
+                            {
+                                lineItemId = existing.Id;
+                                lineMeasurementId = existing.SellMeasurementId ?? existing.SmallestMeasurementId ?? defaultMeasurement;
+                            }
+                        }
+
+                        if (lineItemId == 0 && defaultItem != null)
+                        {
+                            lineItemId = defaultItem.Id;
+                        }
+                        if (lineMeasurementId == 0)
+                        {
+                            lineMeasurementId = defaultMeasurement;
+                        }
+
+                        if (existingLine != null)
+                        {
+                            existingLine.Amount = line.Amount.GetValueOrDefault();
                             existingLine.Discount = line.Discount.GetValueOrDefault();
-                            existingLine.Quantity = line.Quantity.GetValueOrDefault();
-                            existingLine.ItemId = line.ItemId.GetValueOrDefault();
-                            existingLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
+                            existingLine.Quantity = line.Quantity.GetValueOrDefault(1);
+                            existingLine.ItemId = lineItemId;
+                            existingLine.MeasurementId = lineMeasurementId;
                         }
                         else
                         {
@@ -869,30 +1151,27 @@ namespace Api.Controllers
                             var salesInvoiceLine = new Core.Domain.Sales.SalesInvoiceLine();
                             salesInvoiceLine.Amount = line.Amount.GetValueOrDefault();
                             salesInvoiceLine.Discount = line.Discount.GetValueOrDefault();
-                            salesInvoiceLine.Quantity = line.Quantity.GetValueOrDefault();
-                            salesInvoiceLine.ItemId = line.ItemId.GetValueOrDefault();
-                            salesInvoiceLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
+                            salesInvoiceLine.Quantity = line.Quantity.GetValueOrDefault(1);
+                            salesInvoiceLine.ItemId = lineItemId;
+                            salesInvoiceLine.MeasurementId = lineMeasurementId;
                             salesInvoice.SalesInvoiceLines.Add(salesInvoiceLine);
 
                             // add a new order line.
                             var salesOrderLine = new Core.Domain.Sales.SalesOrderLine();
-                            salesOrderLine.Amount = line.Amount.GetValueOrDefault();
-                            salesOrderLine.Discount = line.Discount.GetValueOrDefault();
-                            salesOrderLine.Quantity = line.Quantity.GetValueOrDefault();
-                            salesOrderLine.ItemId = line.ItemId.GetValueOrDefault();
-                            salesOrderLine.MeasurementId = line.MeasurementId.GetValueOrDefault();
-
-                            // but on what order should the new orderline be added?
-                            // note: each invoice is map to one and only one sales order. it can't be done that invoice lines came from multiple sales orders.
-                            // with this rule, we are sure that all invoice lines are contained in the same sales order.
-                            // therefore, we could just pick the first line, get the salesorderlineid, then get the salesorderheader.
+                            salesOrderLine.Amount = salesInvoiceLine.Amount;
+                            salesOrderLine.Discount = salesInvoiceLine.Discount;
+                            salesOrderLine.Quantity = salesInvoiceLine.Quantity;
+                            salesOrderLine.ItemId = salesInvoiceLine.ItemId;
+                            salesOrderLine.MeasurementId = salesInvoiceLine.MeasurementId;
 
                             // you will retrieve salesorder one time.
                             if (salesOrder == null)
                             {
-                                // use the last value of existingLine
-                                salesOrder = _salesService.GetSalesOrderLineById(existingLine!.SalesOrderLine.SalesOrderHeaderId).SalesOrderHeader;
-                                salesOrder.SalesOrderLines.Add(salesOrderLine);
+                                salesOrder = _salesService.GetSalesOrderLineById(existingLine?.SalesOrderLine?.SalesOrderHeaderId ?? 0)?.SalesOrderHeader;
+                                if (salesOrder != null)
+                                {
+                                    salesOrder.SalesOrderLines.Add(salesOrderLine);
+                                }
                             }
 
                             salesInvoiceLine.SalesOrderLine = salesOrderLine; // map invoice line to newly added orderline
@@ -916,7 +1195,20 @@ namespace Api.Controllers
 
                 _salesService.SaveSalesInvoice(salesInvoice, salesOrder);
 
-                return new OkObjectResult(Ok());
+                // Auto-post to GL if issued (not draft) and not already posted
+                if (salesInvoiceDto.Status != "Draft" && salesInvoice.Id > 0 && !salesInvoice.GeneralLedgerHeaderId.HasValue)
+                {
+                    try
+                    {
+                        _salesService.PostSalesInvoice(salesInvoice.Id);
+                    }
+                    catch (Exception postEx)
+                    {
+                        _logger.LogWarning(postEx, "Invoice {InvoiceId} saved but GL auto-posting failed: {Error}", salesInvoice.Id, postEx.Message);
+                    }
+                }
+
+                return Ok(new { id = salesInvoice.Id, no = salesInvoice.No, customerId = salesInvoice.CustomerId });
             }
             catch (Exception ex)
             {
@@ -962,6 +1254,121 @@ namespace Api.Controllers
                 return BadRequest(result.Error.Message);
 
             return NoContent();
+        }
+
+        [HttpPost]
+        [Route("RecordPayment")]
+        public IActionResult RecordPayment([FromBody] RecordInvoicePaymentDto paymentDto)
+        {
+            try
+            {
+                if (!ModelState.IsValid)
+                    return BadRequest(ModelState);
+
+                var invoice = _salesService.GetSalesInvoiceById(paymentDto.InvoiceId);
+                if (invoice == null)
+                    return NotFound(new { message = $"Invoice #{paymentDto.InvoiceId} not found." });
+
+                var cashBanks = _financialService.GetCashAndBanks();
+                var primaryBank = cashBanks.FirstOrDefault();
+                int accountToDebitId = primaryBank?.AccountId ?? 
+                    _financialService.GetAccounts().FirstOrDefault(a => a.IsCash || a.AccountCode == "10110")?.Id ?? 
+                    _financialService.GetAccounts().FirstOrDefault(a => a.AccountClassId == 1)?.Id ?? 1;
+
+                int accountToCreditId = invoice.Customer?.AccountsReceivableAccountId ?? 
+                    _financialService.GetAccountByAccountCode("10120")?.Id ?? 
+                    _financialService.GetAccounts().FirstOrDefault(a => a.AccountClassId == 1)?.Id ?? 1;
+
+                var paymentDate = paymentDto.PaymentDate == default ? DateTime.UtcNow : paymentDto.PaymentDate;
+
+                // 1. Create and post SalesReceiptHeader (DR Cash, CR Accounts Receivable)
+                var receipt = new Core.Domain.Sales.SalesReceiptHeader
+                {
+                    CustomerId = invoice.CustomerId,
+                    Date = paymentDate,
+                    Amount = paymentDto.Amount,
+                    AccountToDebitId = accountToDebitId,
+                    PaymentMethod = string.IsNullOrWhiteSpace(paymentDto.PaymentMethod) ? "Bank Transfer" : paymentDto.PaymentMethod,
+                    ReferenceNo = string.IsNullOrWhiteSpace(paymentDto.ReferenceNo) ? invoice.No : paymentDto.ReferenceNo,
+                    Memo = paymentDto.Notes
+                };
+
+                receipt.SalesReceiptLines.Add(new Core.Domain.Sales.SalesReceiptLine
+                {
+                    Quantity = 1,
+                    Amount = paymentDto.Amount,
+                    AmountPaid = paymentDto.Amount,
+                    AccountToCreditId = accountToCreditId
+                });
+
+                _salesService.AddSalesReceipt(receipt);
+
+                // 2. Add CustomerAllocation linking receipt to invoice
+                var allocation = new Core.Domain.Sales.CustomerAllocation
+                {
+                    CustomerId = invoice.CustomerId,
+                    Date = paymentDate,
+                    SalesInvoiceHeaderId = invoice.Id,
+                    SalesReceiptHeaderId = receipt.Id,
+                    Amount = paymentDto.Amount
+                };
+                invoice.CustomerAllocations.Add(allocation);
+
+                // Update invoice status if fully paid
+                if (invoice.IsFullPaid())
+                {
+                    invoice.Status = Core.Domain.SalesInvoiceStatus.Closed;
+                }
+                else
+                {
+                    invoice.Status = Core.Domain.SalesInvoiceStatus.Open;
+                }
+                _salesService.UpdateSalesInvoice(invoice);
+
+                return Ok(new
+                {
+                    success = true,
+                    receiptId = receipt.Id,
+                    receiptNo = receipt.No,
+                    amountPaid = paymentDto.Amount,
+                    invoiceId = invoice.Id,
+                    invoiceNo = invoice.No,
+                    isFullyPaid = invoice.IsFullPaid()
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to record payment for invoice {InvoiceId}", paymentDto.InvoiceId);
+                return BadRequest(new { message = ex.InnerException != null ? ex.InnerException.Message : ex.Message });
+            }
+        }
+
+        [HttpPost]
+        [Route("VoidSalesInvoice")]
+        public IActionResult VoidSalesInvoice(int id)
+        {
+            try
+            {
+                var invoice = _salesService.GetSalesInvoiceById(id);
+                if (invoice == null)
+                    return NotFound(new { message = $"Invoice #{id} not found." });
+
+                decimal allocated = invoice.CustomerAllocations != null ? invoice.CustomerAllocations.Sum(a => a.Amount) : 0;
+                if (allocated > 0)
+                {
+                    return BadRequest(new { message = "Cannot void an invoice with recorded payments. Please unallocate or refund payments first." });
+                }
+
+                invoice.Status = Core.Domain.SalesInvoiceStatus.Void;
+                _salesService.UpdateSalesInvoice(invoice);
+
+                return Ok(new { success = true, invoiceId = invoice.Id, status = "Void" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to void invoice {InvoiceId}", id);
+                return BadRequest(new { message = ex.Message });
+            }
         }
 
         [HttpPost]
