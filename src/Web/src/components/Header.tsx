@@ -86,7 +86,7 @@ export const Header: React.FC<HeaderProps> = ({
         </Link>
 
         {/* Dynamic Breadcrumbs */}
-        <nav className="flex items-center gap-1.5 sm:gap-2 text-xs md:text-sm text-[var(--text-secondary)] min-w-0">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 sm:gap-2 text-xs md:text-sm text-[var(--text-secondary)] min-w-0">
           <Link
             to="/select-org"
             className="hidden sm:flex items-center gap-1 hover:text-[var(--text-main)] transition-colors shrink-0"
@@ -116,6 +116,7 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             type="button"
             onClick={handleInstallClick}
+            aria-label="Install AccountGo as an application"
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--brand-subtle)] hover:opacity-90 text-[var(--brand-primary)] text-xs font-semibold transition-all shadow-sm active:scale-95"
             title="Install AccountGo as an application"
           >
@@ -141,13 +142,17 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
 
         {/* Quick Search trigger */}
-        <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-surface-hover)] text-[var(--text-muted)] text-xs cursor-pointer transition-colors shadow-inner">
+        <button
+          type="button"
+          aria-label="Quick search (Press Command+K)"
+          className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-surface-hover)] text-[var(--text-muted)] text-xs cursor-pointer transition-colors shadow-inner"
+        >
           <Search className="w-3.5 h-3.5" />
           <span>Search...</span>
           <kbd className="ml-1 font-mono text-[10px] px-1.5 py-0.5 rounded bg-[var(--bg-canvas)] text-[var(--text-secondary)]">
             ⌘K
           </kbd>
-        </div>
+        </button>
 
         {/* Notifications */}
         <button

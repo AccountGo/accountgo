@@ -175,7 +175,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               Workspace
             </div>
           )}
-          <nav className="space-y-1">
+          <nav aria-label="Workspace navigation" className="space-y-1">
             {visibleMainLinks.map((link) => {
               const Icon = link.icon;
               return (
@@ -192,14 +192,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   }
                   title={isCollapsed && !isMobile ? link.name : undefined}
                 >
-                  <Icon className="w-4 h-4 flex-shrink-0 transition-transform group-hover:scale-110" />
-                  {(!isCollapsed || isMobile) && (
-                    <span className="flex-1 truncate">{link.name}</span>
-                  )}
-                  {(!isCollapsed || isMobile) && link.badge && (
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-[var(--bg-subtle)] text-[var(--text-muted)] font-mono">
-                      {link.badge}
-                    </span>
+                  {({ isActive }) => (
+                    <>
+                      <Icon className="w-4 h-4 flex-shrink-0 transition-transform group-hover:scale-110" />
+                      <span className={isCollapsed && !isMobile ? 'sr-only' : 'flex-1 truncate'}>
+                        {link.name}
+                      </span>
+                      {(!isCollapsed || isMobile) && link.badge && (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-[var(--bg-subtle)] text-[var(--text-muted)] font-mono">
+                          {link.badge}
+                        </span>
+                      )}
+                      {isActive && <span className="sr-only">(current page)</span>}
+                    </>
                   )}
                 </NavLink>
               );
@@ -234,7 +239,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               Administration
             </div>
           )}
-          <nav className="space-y-1">
+          <nav aria-label="Administration navigation" className="space-y-1">
             {adminLinks.map((link) => {
               const Icon = link.icon;
               return (
@@ -251,8 +256,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   }
                   title={isCollapsed && !isMobile ? link.name : undefined}
                 >
-                  <Icon className="w-4 h-4 flex-shrink-0 transition-transform group-hover:scale-110" />
-                  {(!isCollapsed || isMobile) && <span className="flex-1 truncate">{link.name}</span>}
+                  {({ isActive }) => (
+                    <>
+                      <Icon className="w-4 h-4 flex-shrink-0 transition-transform group-hover:scale-110" />
+                      <span className={isCollapsed && !isMobile ? 'sr-only' : 'flex-1 truncate'}>
+                        {link.name}
+                      </span>
+                      {isActive && <span className="sr-only">(current page)</span>}
+                    </>
+                  )}
                 </NavLink>
               );
             })}

@@ -276,12 +276,15 @@ export const Dashboard: React.FC = () => {
 
           <div className="rounded-2xl bg-[var(--bg-surface)] backdrop-blur-md shadow-md overflow-hidden">
             <div className="overflow-x-auto smooth-scroll">
-              <table className="w-full min-w-[540px] text-left text-xs">
+              <table
+                className="w-full min-w-[540px] text-left text-xs"
+                aria-label="Live database entries and journal transactions"
+              >
                 <thead className="bg-[var(--bg-subtle)] text-[var(--text-muted)] uppercase tracking-wider text-[10px] font-semibold">
                   <tr>
-                    <th className="px-4 py-3">Type</th>
-                    <th className="px-4 py-3">Description</th>
-                    <th className="px-4 py-3 text-right">Date</th>
+                    <th scope="col" className="px-4 py-3">Type</th>
+                    <th scope="col" className="px-4 py-3">Description</th>
+                    <th scope="col" className="px-4 py-3 text-right">Date</th>
                   </tr>
                 </thead>
                 <tbody className="text-[var(--text-secondary)] font-mono divide-y divide-[var(--bg-subtle)]">

@@ -70,7 +70,8 @@ export const OrgSwitcher: React.FC<OrgSwitcherProps> = ({
             : 'bg-[var(--bg-subtle)] hover:bg-[var(--bg-surface-hover)]'
         } ${collapsed ? 'justify-center p-2' : ''}`}
         title={collapsed ? currentOrg.name : undefined}
-        aria-haspopup="true"
+        aria-label={collapsed ? `Current workspace: ${currentOrg.name}` : undefined}
+        aria-haspopup="menu"
         aria-expanded={isOpen}
       >
         {/* Monogram avatar */}
@@ -107,6 +108,8 @@ export const OrgSwitcher: React.FC<OrgSwitcherProps> = ({
       {/* Dropdown Popover (Border-Less with Ambient Shadow) */}
       {isOpen && (
         <div
+          role="menu"
+          aria-label="Available Workspaces"
           className={`absolute z-50 rounded-2xl bg-[var(--bg-surface)] backdrop-blur-2xl shadow-2xl shadow-black/80 p-1.5 text-[var(--text-main)] transition-all ring-1 ring-white/10 ${
             collapsed
               ? 'left-full ml-3 top-0 w-64'
@@ -126,6 +129,8 @@ export const OrgSwitcher: React.FC<OrgSwitcherProps> = ({
               return (
                 <button
                   key={org.id}
+                  type="button"
+                  role="menuitem"
                   onClick={() => handleSelectOrg(org.slug)}
                   className={`w-full flex items-center gap-3 p-2 rounded-xl text-left transition-colors cursor-pointer ${
                     isSelected
@@ -158,6 +163,8 @@ export const OrgSwitcher: React.FC<OrgSwitcherProps> = ({
 
           <div className="mt-1.5 pt-1.5 space-y-0.5 border-t border-[var(--bg-subtle)]">
             <button
+              type="button"
+              role="menuitem"
               onClick={() => {
                 setIsOpen(false);
                 navigate('/select-org');
@@ -169,6 +176,8 @@ export const OrgSwitcher: React.FC<OrgSwitcherProps> = ({
               <ExternalLink className="w-3 h-3 text-[var(--text-muted)] ml-auto" />
             </button>
             <button
+              type="button"
+              role="menuitem"
               onClick={() => {
                 setIsOpen(false);
                 navigate('/select-org?action=new');

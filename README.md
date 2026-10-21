@@ -188,6 +188,8 @@ Comprehensive architecture, development, and operational guides are available in
 - 🏛️ [System Architecture](docs/ARCHITECTURE.md) — Multi-tenant domain model, Clean Architecture, and Cloudflare edge design.
 - 💻 [Development Guide](docs/DEVELOPMENT.md) — Local workstation setup, running services, debugging, and testing.
 - 🚀 [Deployment Guide](docs/DEPLOYMENT.md) — Production deployment to Cloudflare Workers and Containers.
+- 📒 [Chart of Accounts & Posting Rules](docs/accounting/coa-register.md) — COA register, posting rules, and GAAP/IFRS controls.
+- 🧪 [Double-Entry Accounting Tests](docs/accounting/double-entry-tests.md) — 7 Accuracy Guarantees and automated ledger verification suite.
 - 📋 [Changelog](docs/CHANGELOG.md) — Version history and release notes.
 
 ---

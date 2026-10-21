@@ -338,6 +338,11 @@ export const OrgLayout: React.FC = () => {
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-[var(--bg-canvas)] text-[var(--text-main)] transition-colors duration-200">
+      {/* Skip to Main Content Link for Keyboard Users (WCAG 2.4.1) */}
+      <a href="#main-content" className="skip-link">
+        Skip to main content
+      </a>
+
       {/* Sidebar with active tenant navigation */}
       <Sidebar
         currentOrg={currentOrg}
@@ -362,7 +367,9 @@ export const OrgLayout: React.FC = () => {
 
         {/* Dynamic Page Content with context injection & mobile bottom clearance */}
         <main
-          className={`flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 lg:p-8 pb-20 md:pb-8 bg-[var(--bg-canvas)] smooth-scroll transition-all duration-300 ease-in-out ${
+          id="main-content"
+          tabIndex={-1}
+          className={`flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 lg:p-8 pb-20 md:pb-8 bg-[var(--bg-canvas)] smooth-scroll transition-all duration-300 ease-in-out focus:outline-none ${
             sidebarMode === 'collapsed' ? 'md:pr-20' : sidebarMode === 'closed' ? 'pr-0' : ''
           }`}
         >

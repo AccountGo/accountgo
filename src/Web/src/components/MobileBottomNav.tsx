@@ -89,6 +89,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
       <button
         type="button"
         onClick={onOpenMenu}
+        aria-label="Open navigation menu"
         className="flex flex-col items-center justify-center flex-1 h-full py-1 text-[10px] font-medium text-[var(--text-muted)] hover:text-[var(--text-main)] transition-all active:scale-95 cursor-pointer"
       >
         <div className="p-1.5 rounded-xl">

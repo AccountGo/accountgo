@@ -91,6 +91,18 @@ export const SelectOrg: React.FC = () => {
     };
   }, [authFetch]);
 
+  // Accessibility: close modal on Escape key
+  React.useEffect(() => {
+    if (!showCreateModal) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowCreateModal(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showCreateModal]);
+
   const handleLogout = async () => {
     await logout();
     navigate('/login');
@@ -188,9 +200,10 @@ export const SelectOrg: React.FC = () => {
         {/* Search & Actions Bar (Border-Less) */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mb-6">
           <div className="relative flex-1 w-full">
-            <Search className="w-4 h-4 text-[var(--text-muted)] absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <Search className="w-4 h-4 text-[var(--text-muted)] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="text"
+              aria-label="Filter organizations by name or slug"
               placeholder="Filter by organization name or slug..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -218,10 +231,12 @@ export const SelectOrg: React.FC = () => {
           ) : (
             <>
               {filteredOrgs.map((org) => (
-                <div
+                <button
+                  type="button"
                   key={org.id}
                   onClick={() => handleSelectOrg(org)}
-                  className="group cursor-pointer p-4 sm:p-5 rounded-2xl bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-hover)] backdrop-blur-md shadow-md hover:shadow-2xl transition-all duration-200 flex flex-col justify-between active:scale-[0.99]"
+                  aria-label={`Enter workspace ${org.name}`}
+                  className="group cursor-pointer p-4 sm:p-5 rounded-2xl bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-hover)] backdrop-blur-md shadow-md hover:shadow-2xl transition-all duration-200 flex flex-col justify-between active:scale-[0.99] text-left w-full"
                 >
                   <div>
                     <div className="flex items-start justify-between gap-3 mb-3">
@@ -247,15 +262,15 @@ export const SelectOrg: React.FC = () => {
                       </div>
                     </div>
 
-                    <h3 className="font-bold text-base text-[var(--text-main)] group-hover:text-[var(--brand-primary)] transition-colors truncate">
+                    <h2 className="font-bold text-base text-[var(--text-main)] group-hover:text-[var(--brand-primary)] transition-colors truncate">
                       {org.whitelabel?.brandName ? `${org.name} (${org.whitelabel.brandName})` : org.name}
-                    </h3>
+                    </h2>
                     <p className="text-xs text-[var(--text-muted)] font-mono mt-0.5">
                       /org/{org.slug}
                     </p>
                   </div>
 
-                  <div className="mt-4 pt-3 border-t border-[var(--bg-subtle)] flex items-center justify-between text-xs text-[var(--text-muted)]">
+                  <div className="mt-4 pt-3 border-t border-[var(--bg-subtle)] flex items-center justify-between text-xs text-[var(--text-muted)] w-full">
                     <span className="flex items-center gap-1.5">
                       <ShieldCheck className="w-3.5 h-3.5 text-indigo-400" />
                       <span>Role: {org.role || 'Member'}</span>
@@ -265,7 +280,7 @@ export const SelectOrg: React.FC = () => {
                       <ArrowRight className="w-3.5 h-3.5" />
                     </span>
                   </div>
-                </div>
+                </button>
               ))}
 
               {filteredOrgs.length === 0 && (
@@ -284,7 +299,12 @@ export const SelectOrg: React.FC = () => {
 
       {/* Create Organization Modal (Border-Less Floating Surface) */}
       {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-4">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="create-org-title"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-4"
+        >
           <div className="w-full max-w-md bg-[var(--bg-surface)] backdrop-blur-2xl rounded-2xl p-5 sm:p-6 shadow-2xl shadow-black/80 animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2.5">
@@ -292,7 +312,7 @@ export const SelectOrg: React.FC = () => {
                   <Layers className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-[var(--text-main)] text-base">New Organization</h3>
+                  <h3 id="create-org-title" className="font-bold text-[var(--text-main)] text-base">New Organization</h3>
                   <p className="text-xs text-[var(--text-muted)]">Create a dedicated tenant workspace</p>
                 </div>
               </div>
@@ -308,10 +328,11 @@ export const SelectOrg: React.FC = () => {
 
             <form onSubmit={handleCreateOrg} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1.5">
+                <label htmlFor="new-org-name" className="block text-xs font-semibold text-[var(--text-secondary)] mb-1.5">
                   Organization Name
                 </label>
                 <input
+                  id="new-org-name"
                   type="text"
                   required
                   placeholder="e.g., Global Freight Inc."
@@ -329,12 +350,13 @@ export const SelectOrg: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1.5">
+                <label htmlFor="new-org-slug" className="block text-xs font-semibold text-[var(--text-secondary)] mb-1.5">
                   Workspace URL Slug
                 </label>
                 <div className="flex items-center rounded-xl bg-[var(--bg-subtle)] shadow-inner px-3.5 h-11 text-sm focus-within:ring-2 focus-within:ring-[var(--brand-ring)]">
                   <span className="text-[var(--text-muted)] font-mono text-xs">/org/</span>
                   <input
+                    id="new-org-slug"
                     type="text"
                     required
                     placeholder="global-freight"
@@ -349,10 +371,11 @@ export const SelectOrg: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1.5">
+                <label htmlFor="new-org-currency" className="block text-xs font-semibold text-[var(--text-secondary)] mb-1.5">
                   Base Accounting Currency
                 </label>
                 <select
+                  id="new-org-currency"
                   value={newOrgCurrency}
                   onChange={(e) => setNewOrgCurrency(e.target.value)}
                   className="w-full h-11 px-3.5 rounded-xl bg-[var(--bg-subtle)] shadow-inner text-sm text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--brand-ring)] cursor-pointer"

@@ -157,6 +157,7 @@ export const RolesSettingsTab: React.FC<RolesSettingsTabProps> = () => {
               <button
                 key={role.id}
                 type="button"
+                aria-pressed={isSelected}
                 onClick={() => setSelectedRoleId(role.id)}
                 className={`p-4 rounded-xl text-left transition-all cursor-pointer flex flex-col justify-between ${
                   isSelected
@@ -207,9 +208,10 @@ export const RolesSettingsTab: React.FC<RolesSettingsTabProps> = () => {
           </div>
 
           <div className="relative w-full sm:w-64">
-            <Search className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-2.5" />
+            <Search className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-2.5 pointer-events-none" />
             <input
               type="text"
+              aria-label="Search permissions"
               placeholder="Search permissions..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}

@@ -230,3 +230,5 @@ accountgo.db*
 dist/
 *.tsbuildinfo
 .wrangler/
+
+scratch/

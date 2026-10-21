@@ -246,7 +246,11 @@ export const Login: React.FC = () => {
 
             {/* Error Banner */}
             {errorMessage && (
-              <div className="flex items-start gap-2.5 p-3 rounded-xl bg-rose-500/10 text-rose-400 text-xs font-medium ring-1 ring-rose-500/20 animate-fade-in">
+              <div
+                role="alert"
+                aria-live="assertive"
+                className="flex items-start gap-2.5 p-3 rounded-xl bg-rose-500/10 text-rose-400 text-xs font-medium ring-1 ring-rose-500/20 animate-fade-in"
+              >
                 <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
                 <span className="flex-1">{errorMessage}</span>
               </div>
@@ -293,6 +297,7 @@ export const Login: React.FC = () => {
               <button
                 type="submit"
                 disabled={isSending || !email}
+                aria-busy={isSending}
                 className="w-full py-3.5 px-4 rounded-xl bg-[var(--brand-primary)] text-[var(--brand-text)] font-semibold text-sm flex items-center justify-center gap-2 shadow-lg shadow-[var(--brand-primary)]/25 hover:brightness-110 active:scale-[0.99] disabled:opacity-50 disabled:pointer-events-none transition-all cursor-pointer"
               >
                 {isSending ? (
@@ -359,7 +364,11 @@ export const Login: React.FC = () => {
 
             {/* Error Banner */}
             {errorMessage && (
-              <div className="flex items-start gap-2.5 p-3 rounded-xl bg-rose-500/10 text-rose-400 text-xs font-medium ring-1 ring-rose-500/20 animate-fade-in">
+              <div
+                role="alert"
+                aria-live="assertive"
+                className="flex items-start gap-2.5 p-3 rounded-xl bg-rose-500/10 text-rose-400 text-xs font-medium ring-1 ring-rose-500/20 animate-fade-in"
+              >
                 <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
                 <span className="flex-1">{errorMessage}</span>
               </div>
@@ -411,6 +420,7 @@ export const Login: React.FC = () => {
                     onChange={(e) => handleOtpChange(idx, e.target.value)}
                     onKeyDown={(e) => handleKeyDown(idx, e)}
                     disabled={isVerifying}
+                    aria-label={`Verification code digit ${idx + 1} of 6`}
                     className="w-full aspect-[4/5] sm:h-16 text-center text-xl sm:text-2xl font-bold font-mono rounded-xl sm:rounded-2xl bg-[var(--bg-canvas)] text-[var(--text-main)] ring-1 ring-white/10 focus:ring-2 focus:ring-[var(--brand-primary)] focus:outline-none transition-all shadow-inner caret-[var(--brand-primary)] disabled:opacity-50"
                   />
                 ))}
@@ -422,6 +432,7 @@ export const Login: React.FC = () => {
               type="button"
               onClick={() => handleVerifyCode()}
               disabled={!isOtpComplete || isVerifying || expirySeconds === 0}
+              aria-busy={isVerifying}
               className="w-full py-3.5 px-4 rounded-xl bg-[var(--brand-primary)] text-[var(--brand-text)] font-semibold text-sm flex items-center justify-center gap-2 shadow-lg shadow-[var(--brand-primary)]/25 hover:brightness-110 active:scale-[0.99] disabled:opacity-50 disabled:pointer-events-none transition-all cursor-pointer"
             >
               {isVerifying ? (

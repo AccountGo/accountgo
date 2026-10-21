@@ -246,12 +246,15 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
                 {/* Toggle switch */}
                 <button
                   type="button"
+                  role="switch"
+                  aria-checked={isEnabled}
+                  aria-label={`Toggle ${mod.name} module`}
                   disabled={mod.isCore || saving}
                   onClick={() => handleToggleModule(mod.key)}
                   className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out focus:outline-none ${
                     mod.isCore ? 'opacity-40 cursor-not-allowed' : ''
                   } ${isEnabled ? 'bg-[var(--brand-primary)]' : 'bg-slate-700'}`}
-                  title={mod.isCore ? 'Core feature cannot be disabled' : 'Toggle module'}
+                  title={mod.isCore ? 'Core feature cannot be disabled' : `Toggle ${mod.name}`}
                 >
                   <span
                     className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${

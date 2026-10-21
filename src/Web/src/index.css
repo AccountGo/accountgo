@@ -405,3 +405,81 @@ body.is-scrolling *,
 ::-webkit-scrollbar-thumb:hover {
   background-color: rgba(148, 163, 184, 0.55) !important;
 }
+
+/* ── Focus Visibility & Accessible Outlines (WCAG 2.4.7 / 2.4.11 / 2.4.13) ──── */
+:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 2px;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[role="button"]:focus-visible,
+[role="tab"]:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 2px;
+}
+
+/* ── Accessible Skip to Content Link (WCAG 2.4.1 Bypass Blocks) ─────────────── */
+.skip-link {
+  position: fixed;
+  top: 1rem;
+  left: 1rem;
+  z-index: 100;
+  padding: 0.75rem 1.25rem;
+  background-color: var(--brand-primary);
+  color: var(--brand-text);
+  font-weight: 700;
+  font-size: 0.875rem;
+  border-radius: 0.75rem;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+  transform: translateY(-200%);
+  transition: transform 0.2s ease-in-out;
+  text-decoration: none;
+}
+
+.skip-link:focus,
+.skip-link:focus-visible {
+  transform: translateY(0);
+  outline: 3px solid #ffffff;
+  outline-offset: 2px;
+}
+
+/* ── Respect Prefers-Reduced-Motion (WCAG 2.3.3 / 2.2.2) ───────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ── High Contrast & Forced Colors (WCAG 1.4.3 / 1.4.6 / 1.4.11) ───────────── */
+@media (prefers-contrast: more) {
+  :root {
+    --text-muted: #94a3b8;
+  }
+  .card-surface,
+  [class*="rounded-2xl"],
+  [class*="rounded-xl"] {
+    border: 1px solid rgba(255, 255, 255, 0.25) !important;
+  }
+}
+
+@media (forced-colors: active) {
+  :focus-visible {
+    outline: 3px solid Highlight;
+    outline-offset: 2px;
+  }
+  .btn-primary,
+  .btn-secondary {
+    border: 2px solid ButtonText;
+  }
+}

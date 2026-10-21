@@ -294,9 +294,17 @@ export const Settings: React.FC = () => {
       </div>
 
       {/* Modern Border-Less Tab Controls */}
-      <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-[var(--bg-surface)] backdrop-blur-md shadow-sm w-full sm:w-fit overflow-x-auto">
+      <div
+        role="tablist"
+        aria-label="Organization Settings Sections"
+        className="flex items-center gap-1.5 p-1 rounded-2xl bg-[var(--bg-surface)] backdrop-blur-md shadow-sm w-full sm:w-fit overflow-x-auto"
+      >
         <button
           type="button"
+          role="tab"
+          id="tab-general"
+          aria-controls="panel-general"
+          aria-selected={currentTab === 'general'}
           onClick={() => handleTabChange('general')}
           className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
             currentTab === 'general'
@@ -310,6 +318,10 @@ export const Settings: React.FC = () => {
 
         <button
           type="button"
+          role="tab"
+          id="tab-financials"
+          aria-controls="panel-financials"
+          aria-selected={currentTab === 'financials'}
           onClick={() => handleTabChange('financials')}
           className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
             currentTab === 'financials'
@@ -323,6 +335,10 @@ export const Settings: React.FC = () => {
 
         <button
           type="button"
+          role="tab"
+          id="tab-whitelabel"
+          aria-controls="panel-whitelabel"
+          aria-selected={currentTab === 'whitelabel'}
           onClick={() => handleTabChange('whitelabel')}
           className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
             currentTab === 'whitelabel'
@@ -336,6 +352,10 @@ export const Settings: React.FC = () => {
 
         <button
           type="button"
+          role="tab"
+          id="tab-subscription"
+          aria-controls="panel-subscription"
+          aria-selected={currentTab === 'subscription'}
           onClick={() => handleTabChange('subscription')}
           className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
             currentTab === 'subscription'
@@ -349,6 +369,10 @@ export const Settings: React.FC = () => {
 
         <button
           type="button"
+          role="tab"
+          id="tab-roles"
+          aria-controls="panel-roles"
+          aria-selected={currentTab === 'roles'}
           onClick={() => handleTabChange('roles')}
           className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
             currentTab === 'roles'
@@ -365,17 +389,31 @@ export const Settings: React.FC = () => {
       {/* TAB 1: GENERAL PROFILE (Live Database Company Table)                      */}
       {/* ========================================================================= */}
       {currentTab === 'general' && (
-        <div className="space-y-6">
+        <div
+          role="tabpanel"
+          id="panel-general"
+          aria-labelledby="tab-general"
+          tabIndex={0}
+          className="space-y-6 focus:outline-none"
+        >
           <form onSubmit={handleSaveCompany} className="space-y-6">
             {/* Feedback Notifications */}
             {companySaveSuccess && (
-              <div className="p-4 rounded-2xl bg-emerald-500/10 text-emerald-400 text-xs font-semibold flex items-center gap-2.5 shadow-sm">
+              <div
+                role="alert"
+                aria-live="polite"
+                className="p-4 rounded-2xl bg-emerald-500/10 text-emerald-400 text-xs font-semibold flex items-center gap-2.5 shadow-sm"
+              >
                 <CheckCircle2 className="w-4 h-4 shrink-0" />
                 <span>Organization profile updated successfully in live SQLite database.</span>
               </div>
             )}
             {companySaveError && (
-              <div className="p-4 rounded-2xl bg-rose-500/10 text-rose-400 text-xs font-semibold flex items-center gap-2.5 shadow-sm">
+              <div
+                role="alert"
+                aria-live="assertive"
+                className="p-4 rounded-2xl bg-rose-500/10 text-rose-400 text-xs font-semibold flex items-center gap-2.5 shadow-sm"
+              >
                 <AlertCircle className="w-4 h-4 shrink-0" />
                 <span>{companySaveError}</span>
               </div>
@@ -402,10 +440,11 @@ export const Settings: React.FC = () => {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1.5">
+                  <label htmlFor="org-name-input" className="block text-xs font-semibold text-[var(--text-secondary)] mb-1.5">
                     Organization Legal Name
                   </label>
                   <input
+                    id="org-name-input"
                     type="text"
                     required
                     value={orgName}
@@ -419,10 +458,11 @@ export const Settings: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1.5">
+                  <label htmlFor="short-name-input" className="block text-xs font-semibold text-[var(--text-secondary)] mb-1.5">
                     Short Name / Trading Acronym
                   </label>
                   <input
+                    id="short-name-input"
                     type="text"
                     value={shortName}
                     onChange={(e) => setShortName(e.target.value.toUpperCase())}
@@ -435,10 +475,11 @@ export const Settings: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1.5">
+                  <label htmlFor="company-code-input" className="block text-xs font-semibold text-[var(--text-secondary)] mb-1.5">
                     Internal Company Code
                   </label>
                   <input
+                    id="company-code-input"
                     type="text"
                     value={companyCode}
                     onChange={(e) => setCompanyCode(e.target.value)}
@@ -451,10 +492,11 @@ export const Settings: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1.5">
+                  <label htmlFor="cra-input" className="block text-xs font-semibold text-[var(--text-secondary)] mb-1.5">
                     CRA / Tax Registration Number
                   </label>
                   <input
+                    id="cra-input"
                     type="text"
                     value={cra}
                     onChange={(e) => setCra(e.target.value)}
@@ -467,10 +509,11 @@ export const Settings: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1.5">
+                  <label htmlFor="currency-input" className="block text-xs font-semibold text-[var(--text-secondary)] mb-1.5">
                     Functional Base Currency
                   </label>
                   <select
+                    id="currency-input"
                     value={currency}
                     onChange={(e) => setCurrency(e.target.value)}
                     className="w-full h-11 px-3.5 rounded-xl bg-[var(--bg-subtle)] shadow-inner text-sm font-mono text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--brand-ring)] cursor-pointer"
@@ -487,12 +530,13 @@ export const Settings: React.FC = () => {
                 </div>
 
                 <div className="sm:col-span-1">
-                  <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1.5">
+                  <label htmlFor="org-slug-input" className="block text-xs font-semibold text-[var(--text-secondary)] mb-1.5">
                     Tenant Workspace URL Slug (:orgSlug)
                   </label>
                   <div className="flex items-center rounded-xl bg-[var(--bg-subtle)] shadow-inner px-3.5 h-11 text-sm focus-within:ring-2 focus-within:ring-[var(--brand-ring)]">
                     <span className="text-[var(--text-muted)] font-mono text-xs">/org/</span>
                     <input
+                      id="org-slug-input"
                       type="text"
                       required
                       value={orgSlug}
@@ -632,7 +676,13 @@ export const Settings: React.FC = () => {
       {/* TAB 2: FINANCIAL RULES & BANKING (Live SQLite Database Tables)            */}
       {/* ========================================================================= */}
       {currentTab === 'financials' && (
-        <div className="space-y-6">
+        <div
+          role="tabpanel"
+          id="panel-financials"
+          aria-labelledby="tab-financials"
+          tabIndex={0}
+          className="space-y-6 focus:outline-none"
+        >
           {/* Fiscal Year Section */}
           <div className="p-4 sm:p-6 rounded-2xl bg-[var(--bg-surface)] backdrop-blur-md shadow-md space-y-4">
             <div className="flex items-center justify-between pb-2 border-b border-[var(--border-subtle)]">
@@ -794,9 +844,20 @@ export const Settings: React.FC = () => {
       {/* TAB 3: WHITELABEL BRANDING & THEME                                        */}
       {/* ========================================================================= */}
       {currentTab === 'whitelabel' && (
-        <form onSubmit={handleSaveWhitelabel} className="space-y-6">
+        <form
+          role="tabpanel"
+          id="panel-whitelabel"
+          aria-labelledby="tab-whitelabel"
+          tabIndex={0}
+          onSubmit={handleSaveWhitelabel}
+          className="space-y-6 focus:outline-none"
+        >
           {whitelabelSaved && (
-            <div className="p-4 rounded-2xl bg-emerald-500/10 text-emerald-400 text-xs font-semibold flex items-center gap-2.5 shadow-sm">
+            <div
+              role="alert"
+              aria-live="polite"
+              className="p-4 rounded-2xl bg-emerald-500/10 text-emerald-400 text-xs font-semibold flex items-center gap-2.5 shadow-sm"
+            >
               <CheckCircle2 className="w-4 h-4 shrink-0" />
               <span>Whitelabel branding and palette settings applied successfully.</span>
             </div>
@@ -817,10 +878,11 @@ export const Settings: React.FC = () => {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1.5">
+                <label htmlFor="brand-name-input" className="block text-xs font-semibold text-[var(--text-secondary)] mb-1.5">
                   Whitelabel Header Title
                 </label>
                 <input
+                  id="brand-name-input"
                   type="text"
                   placeholder="AccountGo (Default)"
                   value={brandName}
@@ -833,18 +895,21 @@ export const Settings: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1.5">
+                <label htmlFor="custom-accent-color-hex" className="block text-xs font-semibold text-[var(--text-secondary)] mb-1.5">
                   Custom Accent Color Hex (Optional)
                 </label>
                 <div className="flex items-center gap-2">
                   <input
+                    id="custom-accent-color-picker"
                     type="color"
+                    aria-label="Pick custom brand color"
                     value={customPrimaryColor || '#10b981'}
                     onChange={(e) => setCustomPrimaryColor(e.target.value)}
                     className="w-11 h-11 rounded-xl bg-[var(--bg-subtle)] p-1 cursor-pointer border-none"
                     title="Pick custom brand color"
                   />
                   <input
+                    id="custom-accent-color-hex"
                     type="text"
                     placeholder="#10b981"
                     value={customPrimaryColor}
@@ -951,14 +1016,30 @@ export const Settings: React.FC = () => {
       {/* TAB 4: SUBSCRIPTION & CENTRAL MODULES (Live Database Company Plan)        */}
       {/* ========================================================================= */}
       {currentTab === 'subscription' && (
-        <SubscriptionSettingsTab tenantContext={tenantContext} />
+        <div
+          role="tabpanel"
+          id="panel-subscription"
+          aria-labelledby="tab-subscription"
+          tabIndex={0}
+          className="focus:outline-none"
+        >
+          <SubscriptionSettingsTab tenantContext={tenantContext} />
+        </div>
       )}
 
       {/* ========================================================================= */}
       {/* TAB 5: ROLES & PERMISSIONS (Live Database SecurityRole Table)             */}
       {/* ========================================================================= */}
       {currentTab === 'roles' && (
-        <RolesSettingsTab tenantContext={tenantContext} />
+        <div
+          role="tabpanel"
+          id="panel-roles"
+          aria-labelledby="tab-roles"
+          tabIndex={0}
+          className="focus:outline-none"
+        >
+          <RolesSettingsTab tenantContext={tenantContext} />
+        </div>
       )}
     </div>
   );
