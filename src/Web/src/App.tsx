@@ -7,6 +7,9 @@ import Members from './pages/Members';
 import Profile from './pages/Profile';
 import SelectOrg from './pages/SelectOrg';
 import Login from './pages/Login';
+import { Invoices } from './pages/Invoices';
+import { InvoiceEdit } from './pages/InvoiceEdit';
+import { InvoiceDetail } from './pages/InvoiceDetail';
 import PlaceholderView from './pages/PlaceholderView';
 import NotFound from './pages/NotFound';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -82,7 +85,31 @@ const router = createBrowserRouter([
             path: 'sales',
             element: (
               <RequiresModule module="sales">
-                <PlaceholderView />
+                <Invoices />
+              </RequiresModule>
+            ),
+          },
+          {
+            path: 'sales/new',
+            element: (
+              <RequiresModule module="sales">
+                <InvoiceEdit />
+              </RequiresModule>
+            ),
+          },
+          {
+            path: 'sales/:invoiceId',
+            element: (
+              <RequiresModule module="sales">
+                <InvoiceDetail />
+              </RequiresModule>
+            ),
+          },
+          {
+            path: 'sales/:invoiceId/edit',
+            element: (
+              <RequiresModule module="sales">
+                <InvoiceEdit isEdit={true} />
               </RequiresModule>
             ),
           },

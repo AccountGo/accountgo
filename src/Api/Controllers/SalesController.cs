@@ -221,7 +221,7 @@ namespace Api.Controllers
                     customerDto.Fax = customer.Party.Fax;
                     customerDto.Balance = customer.Balance;
                     customerDto.PrepaymentAccountId = customer.CustomerAdvancesAccountId;
-                    customerDto.Contact = customer.PrimaryContact.FirstName + " " + customer.PrimaryContact.LastName;
+                    customerDto.Contact = customer.PrimaryContact != null ? $"{customer.PrimaryContact.FirstName} {customer.PrimaryContact.LastName}".Trim() : string.Empty;
                     customerDto.TaxGroup = customer.TaxGroup == null ? string.Empty : customer.TaxGroup.Description;
                     customersDto.Add(customerDto);
                 }
@@ -354,12 +354,22 @@ namespace Api.Controllers
 
                 var defaultCompany = _adminService.GetDefaultCompany();
 
+                var party = salesInvoice.Customer?.Party;
+                var addressParts = new List<string>();
+                if (!string.IsNullOrWhiteSpace(party?.CompanyStreet)) addressParts.Add(party.CompanyStreet);
+                if (!string.IsNullOrWhiteSpace(party?.CompanyProvince)) addressParts.Add(party.CompanyProvince);
+                if (!string.IsNullOrWhiteSpace(party?.CompanyPostalCode)) addressParts.Add(party.CompanyPostalCode);
+                if (!string.IsNullOrWhiteSpace(party?.CompanyCountry)) addressParts.Add(party.CompanyCountry);
+                var customerAddress = addressParts.Count > 0 ? string.Join(", ", addressParts) : null;
+
                 var salesInvoiceDto = new Dto.Sales.SalesInvoice()
                 {
                     Id = salesInvoice.Id,
                     CustomerId = salesInvoice.CustomerId,
-                    CustomerName = salesInvoice.Customer?.Party?.Name ?? "Unknown",
-                    CustomerEmail = salesInvoice.Customer?.Party?.Email,
+                    CustomerName = party?.Name ?? "Unknown",
+                    CustomerEmail = party?.Email,
+                    CustomerPhone = party?.Phone,
+                    CustomerAddress = customerAddress,
                     No = salesInvoice.No,
                     InvoiceDate = salesInvoice.Date,
                     DueDate = dueDate,
@@ -369,6 +379,22 @@ namespace Api.Controllers
                     Posted = salesInvoice.GeneralLedgerHeaderId != null,
                     CompanyName = defaultCompany?.Name
                 };
+
+                if (salesInvoice.CustomerAllocations != null)
+                {
+                    salesInvoiceDto.Payments = salesInvoice.CustomerAllocations
+                        .OrderByDescending(a => a.Date)
+                        .Select(a => new Dto.Sales.InvoicePaymentItemDto
+                        {
+                            Id = a.Id,
+                            ReceiptNo = a.SalesReceiptHeader?.No,
+                            Date = a.Date,
+                            Amount = a.Amount,
+                            PaymentMethod = a.SalesReceiptHeader?.PaymentMethod ?? "Payment",
+                            ReferenceNo = a.SalesReceiptHeader?.ReferenceNo,
+                            Notes = a.SalesReceiptHeader?.Memo
+                        }).ToList();
+                }
 
                 decimal totalTax = 0;
                 foreach (var line in salesInvoice.SalesInvoiceLines)

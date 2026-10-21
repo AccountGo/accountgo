@@ -35,6 +35,9 @@ namespace Dto.Sales
         public decimal BalanceDue { get; set; }
         public string? Notes { get; set; }
         public string? PaymentInstructions { get; set; }
+        public string? CustomerAddress { get; set; }
+        public string? CustomerPhone { get; set; }
+        public List<InvoicePaymentItemDto>? Payments { get; set; }
 
         public SalesInvoice()
         {
@@ -84,5 +87,16 @@ namespace Dto.Sales
         public decimal? LineTotal { get; set; }
         public decimal? TaxRate { get; set; }
         public decimal? TaxAmount { get; set; }
+    }
+
+    public class InvoicePaymentItemDto
+    {
+        public int Id { get; set; }
+        public string? ReceiptNo { get; set; }
+        public DateTime Date { get; set; }
+        public decimal Amount { get; set; }
+        public string? PaymentMethod { get; set; }
+        public string? ReferenceNo { get; set; }
+        public string? Notes { get; set; }
     }
 }
