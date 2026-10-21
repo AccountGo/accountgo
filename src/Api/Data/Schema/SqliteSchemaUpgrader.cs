@@ -302,6 +302,7 @@ namespace Api.Data.Schema
             {
                 cmd.Transaction = tx;
                 cmd.CommandText = @"
+                    DROP INDEX IF EXISTS ""IX_Account_CompanyId"";
                     CREATE UNIQUE INDEX IF NOT EXISTS ""IX_Account_CompanyId_AccountCode"" ON ""Account"" (""CompanyId"", ""AccountCode"");
                     CREATE UNIQUE INDEX IF NOT EXISTS ""IX_SequenceNumber_CompanyId_SequenceNumberType"" ON ""SequenceNumber"" (""CompanyId"", ""SequenceNumberType"");
                     CREATE UNIQUE INDEX IF NOT EXISTS ""IX_Customer_CompanyId_No"" ON ""Customer"" (""CompanyId"", ""No"");
@@ -347,6 +348,7 @@ namespace Api.Data.Schema
             using (var cmd = connection.CreateCommand())
             {
                 cmd.CommandText = @"
+                    DROP INDEX IF EXISTS ""IX_Account_CompanyId"";
                     CREATE UNIQUE INDEX IF NOT EXISTS ""IX_Account_CompanyId_AccountCode"" ON ""Account"" (""CompanyId"", ""AccountCode"");
                     CREATE UNIQUE INDEX IF NOT EXISTS ""IX_SequenceNumber_CompanyId_SequenceNumberType"" ON ""SequenceNumber"" (""CompanyId"", ""SequenceNumberType"");
                     CREATE UNIQUE INDEX IF NOT EXISTS ""IX_Customer_CompanyId_No"" ON ""Customer"" (""CompanyId"", ""No"");

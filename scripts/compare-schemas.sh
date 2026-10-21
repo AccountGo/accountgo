@@ -79,34 +79,39 @@ except:
 dump_schema_details() {
     local db="$1"
     local out="$2"
-    python3 -c "
-import sqlite3
+    python3 - "$db" "$out" << 'EOF'
+import sys, sqlite3
 
-conn = sqlite3.connect('$db')
+db_path = sys.argv[1]
+out_path = sys.argv[2]
+
+conn = sqlite3.connect(db_path)
 cursor = conn.cursor()
 
-# Get all tables
-cursor.execute(\"SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '__%' ORDER BY name;\")
-tables = [row[0] for row in cursor.fetchall()]
+# Get all tables, excluding sqlite internal and EF metadata
+cursor.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;")
+tables = [row[0] for row in cursor.fetchall() if not row[0].startswith("sqlite_") and not row[0].startswith("__")]
 
 lines = []
 for table in tables:
-    lines.append(f'TABLE: {table}')
-    # Columns: cid, name, type, notnull, dflt_value, pk
-    cursor.execute(f'PRAGMA table_info(\"{table}\");')
-    for col in cursor.fetchall():
+    lines.append(f"TABLE: {table}")
+    # Columns: sorted alphabetically so ALTER TABLE ADD COLUMN order doesn't cause spurious diffs
+    cursor.execute(f'PRAGMA table_info("{table}");')
+    cols = sorted(cursor.fetchall(), key=lambda c: c[1].lower())
+    for col in cols:
         col_name = col[1]
         col_type = col[2].upper()
-        lines.append(f'  COL: {col_name} {col_type}')
+        lines.append(f"  COL: {col_name} {col_type}")
     # Indexes
-    cursor.execute(f\"SELECT name, sql FROM sqlite_master WHERE type='index' AND tbl_name='{table}' AND name NOT LIKE 'sqlite_%' ORDER BY name;\")
+    cursor.execute(f'SELECT name FROM sqlite_master WHERE type="index" AND tbl_name="{table}" ORDER BY name;')
     for idx in cursor.fetchall():
         idx_name = idx[0]
-        lines.append(f'  IDX: {idx_name}')
+        if not idx_name.startswith("sqlite_"):
+            lines.append(f"  IDX: {idx_name}")
 
-with open('$out', 'w') as f:
-    f.write('\n'.join(lines) + '\n')
-"
+with open(out_path, "w") as f:
+    f.write("\n".join(lines) + "\n")
+EOF
 }
 
 echo "==> 4. Extracting columns and indexes..."
@@ -115,7 +120,40 @@ dump_schema_details "$UPGRADED_DB" "$UPGRADED_SCHEMA"
 
 echo "==> 5. Diffing fresh schema vs upgraded schema..."
 if diff -u "$FRESH_SCHEMA" "$UPGRADED_SCHEMA"; then
-    echo "✓ SUCCESS: Fresh database and upgraded database have identical columns and indexes across all tables!"
+    python3 - "$FRESH_DB" "$UPGRADED_DB" << 'EOF'
+import sys, sqlite3
+
+fresh_db = sys.argv[1]
+upgraded_db = sys.argv[2]
+
+conn_fresh = sqlite3.connect(fresh_db)
+conn_upgraded = sqlite3.connect(upgraded_db)
+cur_fresh = conn_fresh.cursor()
+cur_upgraded = conn_upgraded.cursor()
+
+cur_fresh.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;")
+tables = [row[0] for row in cur_fresh.fetchall() if not row[0].startswith("sqlite_") and not row[0].startswith("__")]
+
+warns = []
+for table in tables:
+    cur_fresh.execute(f'PRAGMA table_info("{table}");')
+    fresh_cols = {row[1]: row[3] for row in cur_fresh.fetchall()}
+    cur_upgraded.execute(f'PRAGMA table_info("{table}");')
+    upgraded_cols = {row[1]: row[3] for row in cur_upgraded.fetchall()}
+    for col_name, fresh_notnull in fresh_cols.items():
+        upgraded_notnull = upgraded_cols.get(col_name)
+        if upgraded_notnull is not None and fresh_notnull != upgraded_notnull:
+            f_str = "NOT NULL" if fresh_notnull == 1 else "NULL"
+            u_str = "NOT NULL" if upgraded_notnull == 1 else "NULL"
+            warns.append(f"  [WARN] {table}.{col_name}: Fresh is {f_str}, Upgraded is {u_str} (SQLite preserves column nullability without table rebuild; data is backfilled)")
+
+if warns:
+    print(f"\nNotice: Nullability differences on pre-existing columns across {len(tables)} tables:")
+    for w in warns:
+        print(w)
+    print()
+EOF
+    echo "✓ SUCCESS: Fresh database and upgraded database have matching tables, columns, types, and indexes across all tables (with expected SQLite column nullability warnings noted above)."
 else
     echo "✗ ERROR: Schema difference detected between fresh and upgraded database."
     exit 1

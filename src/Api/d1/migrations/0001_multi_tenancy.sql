@@ -100,6 +100,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS "IX_CompanyInvitation_TokenHash" ON "CompanyIn
 CREATE INDEX IF NOT EXISTS "IX_CompanyInvitation_CompanyId_Email" ON "CompanyInvitation" ("CompanyId", "Email");
 
 -- 4. Composite unique indexes on tenant tables
+DROP INDEX IF EXISTS "IX_Account_CompanyId";
 CREATE UNIQUE INDEX IF NOT EXISTS "IX_Account_CompanyId_AccountCode" ON "Account" ("CompanyId", "AccountCode");
 CREATE UNIQUE INDEX IF NOT EXISTS "IX_SequenceNumber_CompanyId_SequenceNumberType" ON "SequenceNumber" ("CompanyId", "SequenceNumberType");
 CREATE UNIQUE INDEX IF NOT EXISTS "IX_Customer_CompanyId_No" ON "Customer" ("CompanyId", "No");

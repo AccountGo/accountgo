@@ -131,6 +131,73 @@ public class SecurityHotfixesTests
     }
 
     [Fact]
+    public async Task InternalSyncController_RestoresStatements_ContainingJsonAndFormattingBraces()
+    {
+        // Arrange - use a persistent in-memory SQLite connection so the schema and data remain alive
+        using var connection = new Microsoft.Data.Sqlite.SqliteConnection("Data Source=:memory:");
+        connection.Open();
+
+        using (var initCmd = connection.CreateCommand())
+        {
+            initCmd.CommandText = @"
+                CREATE TABLE ""AspNetUserTokens"" (
+                    ""UserId"" TEXT NOT NULL,
+                    ""LoginProvider"" TEXT NOT NULL,
+                    ""Name"" TEXT NOT NULL,
+                    ""Value"" TEXT NULL,
+                    PRIMARY KEY (""UserId"", ""LoginProvider"", ""Name"")
+                );";
+            initCmd.ExecuteNonQuery();
+        }
+
+        var options = new DbContextOptionsBuilder<ApiDbContext>()
+            .UseSqlite(connection)
+            .Options;
+        using var context = new ApiDbContext(options);
+
+        var secret = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["SECRET_KEY"] = secret
+        }).Build();
+        var logger = new Mock<ILogger<InternalSyncController>>();
+
+        var controller = new InternalSyncController(context, config, logger.Object);
+        var httpContext = new DefaultHttpContext();
+        httpContext.Request.Headers["x-internal-key"] = secret;
+        controller.ControllerContext = new ControllerContext { HttpContext = httpContext };
+
+        var request = new InternalSyncController.RestoreRequest
+        {
+            Statements = new List<string>
+            {
+                "INSERT INTO \"AspNetUserTokens\" (\"UserId\", \"LoginProvider\", \"Name\", \"Value\") VALUES ('u1', 'p1', 'n1', '{\"a\":1}');",
+                "INSERT INTO \"AspNetUserTokens\" (\"UserId\", \"LoginProvider\", \"Name\", \"Value\") VALUES ('u2', 'p2', 'n2', '{0}');",
+                "INSERT INTO \"AspNetUserTokens\" (\"UserId\", \"LoginProvider\", \"Name\", \"Value\") VALUES ('u3', 'EmailOtp', 'Default', '{\"CodeHash\":\"$2a$11$xyz\",\"Expiry\":\"2026-10-21T18:00:00Z\"}');"
+            }
+        };
+
+        // Act
+        var result = await controller.RestoreFromD1(request);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result);
+        Assert.Equal(200, okResult.StatusCode);
+
+        using (var verifyCmd = connection.CreateCommand())
+        {
+            verifyCmd.CommandText = "SELECT \"Value\" FROM \"AspNetUserTokens\" WHERE \"UserId\" = 'u1';";
+            Assert.Equal("{\"a\":1}", verifyCmd.ExecuteScalar());
+
+            verifyCmd.CommandText = "SELECT \"Value\" FROM \"AspNetUserTokens\" WHERE \"UserId\" = 'u2';";
+            Assert.Equal("{0}", verifyCmd.ExecuteScalar());
+
+            verifyCmd.CommandText = "SELECT \"Value\" FROM \"AspNetUserTokens\" WHERE \"UserId\" = 'u3';";
+            Assert.Equal("{\"CodeHash\":\"$2a$11$xyz\",\"Expiry\":\"2026-10-21T18:00:00Z\"}", verifyCmd.ExecuteScalar());
+        }
+    }
+
+    [Fact]
     public async Task EmailOtpService_DoesNotReturnDevCode_InProduction()
     {
         // Arrange
