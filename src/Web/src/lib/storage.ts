@@ -15,3 +15,11 @@ export function setPersistedOrgSlug(slug: string): void {
     // Ignore storage errors in restricted contexts
   }
 }
+
+export function clearPersistedOrgSlug(): void {
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // Ignore storage errors in restricted contexts
+  }
+}

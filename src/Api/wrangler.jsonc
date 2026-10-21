@@ -6,6 +6,9 @@
   "compatibility_flags": [
     "nodejs_compat"
   ],
+  "version_metadata": {
+    "binding": "CF_VERSION_METADATA"
+  },
   "containers": [
     {
       "class_name": "AccountGoApiContainer",

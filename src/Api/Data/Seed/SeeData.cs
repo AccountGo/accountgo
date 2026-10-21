@@ -55,6 +55,7 @@ namespace Api.Data.Seed
                     Name = "Financial Solutions Inc.",
                     CompanyCode = "100",
                     ShortName = "FSI",
+                    Slug = "ph-financials",
                     CRA = "012345678",
                     CreatedAt = new System.DateTime(2025, 1, 1, 0, 0, 0, System.DateTimeKind.Utc)
                 }

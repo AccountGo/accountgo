@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, Outlet, Link, useNavigate } from 'react-router-dom';
 import { Building2, AlertCircle, ArrowLeft, RefreshCw } from 'lucide-react';
 import { OrgDetails, TenantContextType, WhitelabelConfig, SidebarMode, UserProfile, ModuleKey, PlanKey, SubscriptionInfo } from '../types';
-import { setPersistedOrgSlug } from '../lib/storage';
+import { setPersistedOrgSlug, clearPersistedOrgSlug } from '../lib/storage';
 import { Sidebar } from '../components/Sidebar';
 import { Header } from '../components/Header';
 import { MobileBottomNav } from '../components/MobileBottomNav';
@@ -135,6 +135,7 @@ export const OrgLayout: React.FC = () => {
               }
             } else {
               if (mounted) {
+                clearPersistedOrgSlug();
                 setCurrentOrg(null);
                 setTenantWhitelabel(null);
                 setLoading(false);
