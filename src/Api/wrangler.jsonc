@@ -32,7 +32,7 @@
   ],
   "vars": {
     "ENVIRONMENT": "Production",
-    "CONTAINER_NAME": "v4",
+    "CONTAINER_NAME": "v5",
     "SECRET__key": "1618184c2fea71c86669fa7d6611a55db32e5ac7b238f235b1bbbbdb14c2a9be",
     "DatabaseProvider": "Sqlite"
   },

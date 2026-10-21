@@ -151,7 +151,7 @@ export default {
       });
     }
 
-    const containerName = env.CONTAINER_NAME || "default";
+    const containerName = request.headers.get("x-container-name") || env.CONTAINER_NAME || "default";
     const id = env.CONTAINER.idFromName(containerName);
     const stub = env.CONTAINER.get(id);
     return stub.fetch(request);
