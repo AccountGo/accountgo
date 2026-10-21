@@ -17,7 +17,7 @@
   <img src="https://img.shields.io/badge/Vite-8.3-646CFF?logo=vite" alt="Vite" />
   <img src="https://img.shields.io/badge/TailwindCSS-v4-06B6D4?logo=tailwindcss" alt="Tailwind CSS v4" />
   <img src="https://img.shields.io/badge/Cloudflare-Workers_%26_Containers-F38020?logo=cloudflare" alt="Cloudflare" />
-  <img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="License" />
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-emerald.svg" alt="License: MIT" /></a>
 </p>
 
 ---
@@ -181,51 +181,71 @@ accountgo/
 
 ---
 
-## Getting Started
+## Documentation
+
+Comprehensive architecture, development, and operational guides are available in the [`docs/`](docs/) directory:
+
+- 🏛️ [System Architecture](docs/ARCHITECTURE.md) — Multi-tenant domain model, Clean Architecture, and Cloudflare edge design.
+- 💻 [Development Guide](docs/DEVELOPMENT.md) — Local workstation setup, running services, debugging, and testing.
+- 🚀 [Deployment Guide](docs/DEPLOYMENT.md) — Production deployment to Cloudflare Workers and Containers.
+- 📋 [Changelog](docs/CHANGELOG.md) — Version history and release notes.
+
+---
+
+## Installation
 
 ### Prerequisites
 
 - [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) (`net10.0`)
 - [Node.js 22+](https://nodejs.org/)
-- [pnpm 10+](https://pnpm.io/) (`npm install -g pnpm`)
+- [pnpm 9+](https://pnpm.io/) (`npm install -g pnpm`)
+- [Git](https://git-scm.com/)
 
----
+### Clone & Install
 
-### Running with .NET Aspire (Recommended)
-
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/AccountGo/accountgo.git
-   cd accountgo
-   ```
-2. Launch the Aspire AppHost:
-   ```bash
-   dotnet run --project src/src.AppHost/src.AppHost.csproj
-   ```
-3. Open the Aspire Dashboard URL displayed in your terminal to inspect logs, traces, and service endpoints.
-
----
-
-### Running API and Web Independently
-
-#### 1. Start Backend API
 ```bash
-cd src/Api
-dotnet run
-```
-The API starts locally on `http://localhost:8001`.
+# Clone the repository
+git clone https://github.com/AccountGo/accountgo.git
+cd accountgo
 
-#### 2. Start Frontend Web
+# Restore .NET packages
+dotnet restore
+
+# Install Web frontend dependencies
+cd src/Web && pnpm install && cd ../..
+```
+
+---
+
+## Usage & Getting Started
+
+### 1. Running API and Web Independently (Recommended)
+
+#### Start Backend API:
+```bash
+dotnet run --project src/Api/Api.csproj --urls "http://localhost:8001"
+```
+The API boots on `http://localhost:8001` with automated SQLite initialization and schema seeding.
+
+#### Start Frontend Web SPA:
+In a separate terminal:
 ```bash
 cd src/Web
-pnpm install
-pnpm run dev
+pnpm dev
 ```
-The application opens at `http://localhost:5173`.
+Navigate to `http://localhost:3000` (or `http://localhost:5173`).
 
-#### Default Credentials
-- **Default Email**: `admin@accountgo.ph`
-- **Authentication**: Enter your email to receive an instant 6-digit verification code. In local development and staging environments, the code is auto-filled or printed directly to the API console.
+### 2. Running with .NET Aspire
+
+```bash
+dotnet run --project src/Aspire/AccountGo.AppHost/AccountGo.AppHost.csproj
+```
+Access the Aspire Dashboard at `http://localhost:15888` for unified telemetry, logs, and service orchestration.
+
+### 3. Signing In & Workflows
+- **Authentication**: Enter `admin@accountgo.org` on the login screen.
+- **Verification Code**: Retrieve the 6-digit dev verification code logged in the API terminal (or returned in the development response `devCode`).
+- **Organization Dashboard**: Access executive metrics, manage customers and sales invoices (`/org/ph-financials/sales`), track purchase bills (`/org/ph-financials/purchases`), and configure company profile and financial rules (`/org/ph-financials/settings`).
 
 ---
 
@@ -316,17 +336,24 @@ pnpm run deploy
 
 ## Contributing
 
-Contributions, issues, and feature requests are welcome!
+Contributions, issues, and feature requests are welcome! We appreciate help making AccountGo the leading open-source accounting platform.
 
-1. Fork the project.
-2. Create your feature branch (`git checkout -b feature/amazing-feature`).
-3. Commit your changes (`git commit -m 'feat: add amazing feature'`).
-4. Ensure all tests pass (`dotnet test`).
-5. Push to your branch (`git push origin feature/amazing-feature`).
-6. Open a Pull Request.
+- 📖 **Contribution Guidelines**: Please review our [Contributing Guide](CONTRIBUTING.md) for branch naming, coding standards, and testing expectations.
+- 🤝 **Code of Conduct**: All participants are expected to adhere to our [Code of Conduct](CODE_OF_CONDUCT.md).
+- 🔒 **Security Disclosures**: Found a vulnerability? Please follow our [Security Policy](SECURITY.md) instead of filing a public issue.
+- 🐛 **Issue Tracker**: Report bugs and propose features on the [GitHub Issues](https://github.com/AccountGo/accountgo/issues) page using our templates.
+
+---
+
+## Author & Maintainer
+
+**AccountGo** was created and is actively maintained by **Marvin Perez**.
+
+- ✉️ **Email**: [hello@marvinperez.com](mailto:hello@marvinperez.com)
+- 🌐 **GitHub**: [@mvperez](https://github.com/mvperez) / [AccountGo](https://github.com/AccountGo)
 
 ---
 
 ## License
 
-This project is licensed under the Apache License 2.0. See the [LICENSE](LICENSE) file for details.
+This project is licensed under the **MIT License**. See the [LICENSE](LICENSE) file for the full license text.
