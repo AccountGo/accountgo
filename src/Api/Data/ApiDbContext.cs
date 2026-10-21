@@ -1,4 +1,5 @@
-﻿using Api.Data.Seed;
+using Api.Data.Seed;
+using Api.Service.D1Sync;
 using Core.Domain;
 using Core.Domain.Auditing;
 using Core.Domain.Donations;
@@ -10,14 +11,73 @@ using Core.Domain.Security;
 using Core.Domain.TaxSystem;
 using Microsoft.EntityFrameworkCore;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Api.Data
 {
     public class ApiDbContext : DbContext
     {
-        public ApiDbContext(DbContextOptions<ApiDbContext> options)
+        private readonly ID1SyncContext? _d1SyncContext;
+
+        public ApiDbContext(DbContextOptions<ApiDbContext> options, ID1SyncContext? d1SyncContext = null)
             : base(options)
         {
+            _d1SyncContext = d1SyncContext;
+        }
+
+        public override int SaveChanges()
+        {
+            if (_d1SyncContext == null)
+                return base.SaveChanges();
+
+            var pendingEntries = ChangeTracker.Entries()
+                .Where(e => e.State == EntityState.Added || e.State == EntityState.Modified || e.State == EntityState.Deleted)
+                .ToList();
+
+            var result = base.SaveChanges();
+
+            foreach (var entry in pendingEntries)
+            {
+                try
+                {
+                    var sql = D1SqlGenerator.GenerateSql(entry);
+                    if (!string.IsNullOrEmpty(sql))
+                    {
+                        _d1SyncContext.AddStatement(sql);
+                    }
+                }
+                catch { }
+            }
+
+            return result;
+        }
+
+        public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+        {
+            if (_d1SyncContext == null)
+                return await base.SaveChangesAsync(cancellationToken);
+
+            var pendingEntries = ChangeTracker.Entries()
+                .Where(e => e.State == EntityState.Added || e.State == EntityState.Modified || e.State == EntityState.Deleted)
+                .ToList();
+
+            var result = await base.SaveChangesAsync(cancellationToken);
+
+            foreach (var entry in pendingEntries)
+            {
+                try
+                {
+                    var sql = D1SqlGenerator.GenerateSql(entry);
+                    if (!string.IsNullOrEmpty(sql))
+                    {
+                        _d1SyncContext.AddStatement(sql);
+                    }
+                }
+                catch { }
+            }
+
+            return result;
         }
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
@@ -315,18 +375,6 @@ namespace Api.Data
         public virtual DbSet<Vendor> Vendors { get; set; }
         public virtual DbSet<VendorPayment> VendorPayments { get; set; }
         public virtual DbSet<Party> Parties { get; set; }
-
-        public override int SaveChanges()
-        {
-            // TODO : Implementation Required
-            //SaveAuditLog();
-
-            var ret = base.SaveChanges();
-
-            //UpdateAuditLogRecordId();
-
-            return ret;
-        }
 
         #region Audit Logs
         private void SaveAuditLog()
