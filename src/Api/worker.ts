@@ -1,5 +1,15 @@
 import { DurableObject } from "cloudflare:workers";
 
+function constantTimeEqual(a: string, b: string): boolean {
+  const enc = new TextEncoder();
+  const aBuf = enc.encode(a);
+  const bBuf = enc.encode(b);
+  if (aBuf.byteLength !== bBuf.byteLength) {
+    return false;
+  }
+  return crypto.subtle.timingSafeEqual(aBuf, bBuf);
+}
+
 const CONTAINER_PORT = 8001;
 const MAX_READY_ATTEMPTS = 30;
 const RETRY_DELAY_MS = 1000;
@@ -83,7 +93,11 @@ export class AccountGoApiContainer extends DurableObject {
       }
 
       if (statements.length > 0) {
-        const secret = this.env.SECRET_KEY || (this.env as any).SECRET__key || "1618184c2fea71c86669fa7d6611a55db32e5ac7b238f235b1bbbbdb14c2a9be";
+        const secret = this.env.SECRET_KEY || (this.env as any).SECRET__key;
+        if (!secret) {
+          console.error("Cold start D1 restore skipped: SECRET_KEY is not configured.");
+          return;
+        }
         await portObj.fetch(
           new Request("http://127.0.0.1:8001/api/internal/d1-restore", {
             method: "POST",
@@ -105,11 +119,31 @@ export class AccountGoApiContainer extends DurableObject {
     try {
       const container = (this.ctx as any).container;
       if (!container) {
-        return new Response("Container context missing", { status: 500 });
+        return new Response(
+          JSON.stringify({
+            title: "Internal Server Error",
+            status: 500,
+            detail: "Container context missing",
+          }),
+          { status: 500, headers: { "content-type": "application/problem+json" } }
+        );
       }
 
       const url = new URL(request.url);
       if (url.pathname === "/restart-container" || request.headers.get("x-restart-container") === "true") {
+        const secret = this.env.SECRET_KEY || (this.env as any).SECRET__key;
+        const providedKey = request.headers.get("x-internal-key");
+        if (!secret || !providedKey || !constantTimeEqual(secret, providedKey)) {
+          return new Response(
+            JSON.stringify({
+              title: "Not Found",
+              status: 404,
+              detail: "Not Found",
+            }),
+            { status: 404, headers: { "content-type": "application/problem+json" } }
+          );
+        }
+
         try {
           if (typeof container.destroy === "function") {
             await container.destroy();
@@ -165,10 +199,17 @@ export class AccountGoApiContainer extends DurableObject {
         if (!ready) {
           return new Response(
             JSON.stringify({
-              error: "Container startup timeout",
-              lastError: lastErr?.message || "container did not become ready",
+              title: "Service Unavailable",
+              status: 503,
+              detail: "Service is starting up, please retry in a few seconds",
             }),
-            { status: 504, headers: { "content-type": "application/json" } }
+            {
+              status: 503,
+              headers: {
+                "content-type": "application/problem+json",
+                "Retry-After": "5",
+              },
+            }
           );
         }
         this.containerReady = true;
@@ -213,8 +254,12 @@ export class AccountGoApiContainer extends DurableObject {
       }
     } catch (err: any) {
       return new Response(
-        JSON.stringify({ scope: "AccountGoApiContainer", error: err.message, stack: err.stack }),
-        { status: 500, headers: { "content-type": "application/json" } }
+        JSON.stringify({
+          title: "Internal Server Error",
+          status: 500,
+          detail: "An unexpected error occurred in container orchestration.",
+        }),
+        { status: 500, headers: { "content-type": "application/problem+json" } }
       );
     }
   }

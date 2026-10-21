@@ -5,23 +5,19 @@ namespace Api.Controllers
 {
     public class BaseController : Controller
     {
-        protected string GetCurrentUserName()
+        protected string? GetCurrentUserName()
         {
             var user = HttpContext.User;
             if (user?.Identity?.IsAuthenticated == true)
             {
                 return user.Identity.Name
                     ?? user.FindFirst(ClaimTypes.Email)?.Value
-                    ?? user.FindFirst(ClaimTypes.NameIdentifier)?.Value
-                    ?? "authenticated-user";
+                    ?? user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             }
 
-            if (HttpContext.Request.Headers.TryGetValue("UserName", out var val) && !string.IsNullOrWhiteSpace(val[0]))
-                return val[0]!;
-
-            return "anonymous";
+            return null;
         }
 
-        protected string GetUserNameFromRequestHeader() => GetCurrentUserName();
+        protected string? GetUserNameFromRequestHeader() => GetCurrentUserName();
     }
 }

@@ -85,6 +85,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (res.status === 429) {
         throw new Error('Too many sign-in code requests. Please wait a few minutes before trying again.');
       }
+      if (res.status === 503 || res.status === 504) {
+        throw new Error(data?.detail || 'Service is starting up, please retry in a few seconds');
+      }
       const errorMsg = data?.detail || data?.title || 'Unable to send verification code. Please try again.';
       throw new Error(errorMsg);
     }
@@ -117,6 +120,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (res.status === 429) {
         throw new Error('Too many requests. Please wait a few minutes before trying again.');
       }
+      if (res.status === 503 || res.status === 504) {
+        throw new Error(data?.detail || 'Service is starting up, please retry in a few seconds');
+      }
       const errorMsg = data?.detail || data?.title || 'Unable to complete registration. Please try again.';
       throw new Error(errorMsg);
     }
@@ -146,6 +152,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const data = await res.json().catch(() => null);
 
     if (!res.ok) {
+      if (res.status === 503 || res.status === 504) {
+        throw new Error(data?.detail || 'Service is starting up, please retry in a few seconds');
+      }
       const errorMsg = data?.detail || data?.title || 'Invalid or expired verification code.';
       throw new Error(errorMsg);
     }

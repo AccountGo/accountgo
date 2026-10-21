@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading.Tasks;
 using Api.Data;
 using Microsoft.AspNetCore.Authorization;
@@ -38,10 +40,29 @@ namespace Api.Controllers
         [HttpPost("d1-restore")]
         public async Task<IActionResult> RestoreFromD1([FromBody] RestoreRequest request)
         {
-            var expectedKey = _configuration["SECRET_KEY"] ?? _configuration["SECRET:key"] ?? _configuration["SECRET__key"] ?? Environment.GetEnvironmentVariable("SECRET_KEY") ?? Environment.GetEnvironmentVariable("SECRET__key") ?? "1618184c2fea71c86669fa7d6611a55db32e5ac7b238f235b1bbbbdb14c2a9be";
-            var providedKey = Request.Headers["x-internal-key"].ToString();
+            var expectedKey = _configuration["SECRET_KEY"]
+                ?? _configuration["SECRET:key"]
+                ?? _configuration["SECRET__key"]
+                ?? Environment.GetEnvironmentVariable("SECRET_KEY")
+                ?? Environment.GetEnvironmentVariable("SECRET__key");
 
-            if (string.IsNullOrEmpty(providedKey) || providedKey != expectedKey)
+            if (string.IsNullOrWhiteSpace(expectedKey))
+            {
+                _logger.LogError("Internal sync endpoint called but SECRET_KEY is not configured.");
+                return StatusCode(503, new { error = "Internal sync is unavailable: SECRET_KEY is not configured." });
+            }
+
+            var providedKey = Request.Headers["x-internal-key"].ToString();
+            if (string.IsNullOrEmpty(providedKey))
+            {
+                return Unauthorized(new { error = "Invalid internal sync key" });
+            }
+
+            var expectedBytes = Encoding.UTF8.GetBytes(expectedKey);
+            var providedBytes = Encoding.UTF8.GetBytes(providedKey);
+
+            if (expectedBytes.Length != providedBytes.Length ||
+                !CryptographicOperations.FixedTimeEquals(expectedBytes, providedBytes))
             {
                 return Unauthorized(new { error = "Invalid internal sync key" });
             }
