@@ -229,6 +229,54 @@ The application opens at `http://localhost:5173`.
 
 ---
 
+## Database Setup (SQLite & Multi-Engine)
+
+### Zero-Configuration SQLite (Default)
+
+AccountGo comes pre-configured with **SQLite** as the primary, zero-configuration database engine. You do not need to install SQL Server, MySQL, or run heavy Docker database containers to get started.
+
+- **Configuration**: Set in [`src/Api/appsettings.json`](src/Api/appsettings.json):
+  ```json
+  "DatabaseProvider": "Sqlite",
+  "ConnectionStrings": {
+    "SqliteConnection": "Data Source=accountgo.db"
+  }
+  ```
+- **Automated Lifecycle on API Startup**:
+  1. **Automatic Database Creation**: If `accountgo.db` does not exist, EF Core automatically creates the file on startup.
+  2. **Schema Generation**: Automatically executes table creation for both `ApiDbContext` (business domains) and `ApplicationIdentityDbContext` (ASP.NET Identity auth, users, and refresh tokens).
+  3. **Initial Data Seeding**: Populates initial chart of accounts, company setup ("Financial Solutions Inc."), tax configurations, default vendors, customers, items, banks, and RBAC roles (`SystemAdministrators`, `GeneralUsers`).
+  4. **Admin User Provisioning**: Guarantees `admin@accountgo.ph` is seeded and initialized with master administrative permissions.
+
+### Resetting or Re-seeding the Database
+To reset the database back to clean seeded defaults at any time:
+```bash
+# Remove local SQLite database and write-ahead logs
+rm -f src/Api/accountgo.db*
+
+# Start the API - it will automatically recreate and reseed
+cd src/Api && dotnet run
+```
+
+### Inspecting the SQLite Database
+You can query and explore the database directly using the SQLite CLI or visual tools:
+```bash
+sqlite3 src/Api/accountgo.db ".tables"
+sqlite3 src/Api/accountgo.db "SELECT Name, ShortName, Slug FROM Company;"
+sqlite3 src/Api/accountgo.db "SELECT UserName, Email FROM AspNetUsers;"
+```
+Visual tools supported:
+- **VS Code**: SQLite Viewer or SQLite Explorer extension
+- **GUI**: [DB Browser for SQLite](https://sqlitebrowser.org/)
+
+### Switching to Microsoft SQL Server (Optional)
+If you prefer running against Microsoft SQL Server for enterprise deployments:
+1. Set the environment variable `DBPROVIDER=SqlServer` (or edit `DatabaseProvider` in [`src/Api/appsettings.json`](src/Api/appsettings.json)).
+2. Configure your connection string in `ConnectionStrings:DefaultConnection`.
+3. Start the API — EF Core will automatically target your SQL Server instance.
+
+---
+
 ## Running Automated Tests
 
 AccountGo includes a comprehensive automated test suite covering domain entities, accounting algorithms, RBAC security, and service boundaries:
