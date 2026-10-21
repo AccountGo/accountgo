@@ -183,6 +183,11 @@ export const Invoices: React.FC = () => {
       setPaymentError('Please enter a valid positive payment amount.');
       return;
     }
+    const maxPayable = Number(paymentModalInvoice.balanceDue.toFixed(2));
+    if (parsedAmount > maxPayable + 0.005) {
+      setPaymentError(`Amount cannot exceed the remaining balance due (${formatCurrency(maxPayable)}).`);
+      return;
+    }
 
     setIsSubmittingPayment(true);
     setPaymentError(null);
@@ -677,6 +682,8 @@ export const Invoices: React.FC = () => {
                 <input
                   type="number"
                   step="0.01"
+                  min="0.01"
+                  max={Number(paymentModalInvoice.balanceDue.toFixed(2))}
                   required
                   value={paymentAmount}
                   onChange={(e) => setPaymentAmount(e.target.value)}

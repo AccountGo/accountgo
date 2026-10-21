@@ -1,4 +1,4 @@
-﻿using Core.Data;
+using Core.Data;
 using Core.Domain.Items;
 using Core.Domain.Purchases;
 using Core.Domain.Sales;
@@ -376,7 +376,7 @@ namespace Services.TaxSystem
                 lineTaxTotal = lineTaxTotal + (amount - (amount / (1 + (tax.Rate / 100))));
             }
 
-            return lineTaxTotal;
+            return Math.Round(lineTaxTotal, 2, MidpointRounding.AwayFromZero);
         }
     }
 }

@@ -113,9 +113,10 @@ export const InvoiceDetail: React.FC = () => {
       setPaymentError('Please enter a valid positive payment amount.');
       return;
     }
-    if (amountNum > invoice.balanceDue + 0.001) {
+    const maxPayable = Number(invoice.balanceDue.toFixed(2));
+    if (amountNum > maxPayable + 0.005) {
       setPaymentError(
-        `Amount cannot exceed the current balance due (${formatCurrency(invoice.balanceDue)}).`
+        `Amount cannot exceed the current balance due (${formatCurrency(maxPayable)}).`
       );
       return;
     }
@@ -749,7 +750,7 @@ export const InvoiceDetail: React.FC = () => {
                   type="number"
                   step="0.01"
                   min="0.01"
-                  max={invoice.balanceDue}
+                  max={Number(invoice.balanceDue.toFixed(2))}
                   required
                   value={paymentAmount}
                   onChange={(e) => setPaymentAmount(e.target.value)}

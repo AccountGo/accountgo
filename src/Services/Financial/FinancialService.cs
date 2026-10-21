@@ -562,7 +562,7 @@ namespace Services.Financial
 
             foreach (var tax in intersectionTaxes)
             {
-                taxAmount = subTotalAmount - (subTotalAmount / (1 + (tax.Rate / 100)));
+                taxAmount = Math.Round(subTotalAmount - (subTotalAmount / (1 + (tax.Rate / 100))), 2, MidpointRounding.AwayFromZero);
                 taxes.Add(new KeyValuePair<int, decimal>(tax.Id, taxAmount));
             }
 
@@ -593,7 +593,7 @@ namespace Services.Financial
 
             foreach (var tax in intersectionTaxes)
             {
-                taxAmount = subTotalAmount - (subTotalAmount / (1 + (tax.Rate / 100)));
+                taxAmount = Math.Round(subTotalAmount - (subTotalAmount / (1 + (tax.Rate / 100))), 2, MidpointRounding.AwayFromZero);
                 taxes.Add(new KeyValuePair<int, decimal>(tax.Id, taxAmount));
             }
 
