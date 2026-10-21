@@ -79,6 +79,7 @@ CREATE TABLE IF NOT EXISTS "CompanyMemberSecurityRole" (
     CONSTRAINT "FK_CompanyMemberSecurityRole_SecurityRole_SecurityRoleId" FOREIGN KEY ("SecurityRoleId") REFERENCES "SecurityRole" ("Id") ON DELETE CASCADE
 );
 CREATE UNIQUE INDEX IF NOT EXISTS "IX_CompanyMemberSecurityRole_CompanyMemberId_SecurityRoleId" ON "CompanyMemberSecurityRole" ("CompanyMemberId", "SecurityRoleId");
+CREATE INDEX IF NOT EXISTS "IX_CompanyMemberSecurityRole_SecurityRoleId" ON "CompanyMemberSecurityRole" ("SecurityRoleId");
 
 CREATE TABLE IF NOT EXISTS "CompanyInvitation" (
     "Id" INTEGER NOT NULL CONSTRAINT "PK_CompanyInvitation" PRIMARY KEY AUTOINCREMENT,

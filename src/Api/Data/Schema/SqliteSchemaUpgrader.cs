@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
-using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
 
 namespace Api.Data.Schema
@@ -99,19 +98,96 @@ namespace Api.Data.Schema
 
                 if (currentVersion < 1)
                 {
-                    logger?.LogInformation("Applying SQLite Schema Upgrade Version 1 (Multi-Tenancy)...");
-                    ApplyVersion1(connection, logger);
-
-                    using (var cmd = connection.CreateCommand())
+                    logger?.LogInformation("Applying SQLite Schema Upgrade Version 1 (Multi-Tenancy DDL)...");
+                    using var tx = connection.BeginTransaction();
+                    try
                     {
-                        cmd.CommandText = "INSERT INTO \"__SchemaVersion\" (\"Version\", \"AppliedAt\") VALUES (1, $appliedAt);";
-                        var param = cmd.CreateParameter();
-                        param.ParameterName = "$appliedAt";
-                        param.Value = DateTime.UtcNow.ToString("o");
-                        cmd.Parameters.Add(param);
-                        cmd.ExecuteNonQuery();
+                        ApplyVersion1(connection, tx, logger);
+
+                        using (var cmd = connection.CreateCommand())
+                        {
+                            cmd.Transaction = tx;
+                            cmd.CommandText = "INSERT INTO \"__SchemaVersion\" (\"Version\", \"AppliedAt\") VALUES (1, $appliedAt);";
+                            var param = cmd.CreateParameter();
+                            param.ParameterName = "$appliedAt";
+                            param.Value = DateTime.UtcNow.ToString("o");
+                            cmd.Parameters.Add(param);
+                            cmd.ExecuteNonQuery();
+                        }
+                        tx.Commit();
+                        logger?.LogInformation("✓ SQLite Schema Upgrade Version 1 applied successfully.");
                     }
-                    logger?.LogInformation("✓ SQLite Schema Upgrade Version 1 applied successfully.");
+                    catch
+                    {
+                        tx.Rollback();
+                        throw;
+                    }
+                }
+
+                // Ensure all indexes exist idempotently even if v1 was previously applied
+                EnsureAllIndexes(connection, logger);
+            }
+            finally
+            {
+                if (wasClosed)
+                {
+                    connection.Close();
+                }
+            }
+        }
+
+        public static void UpgradePostSeed(DbConnection connection, ILogger? logger = null)
+        {
+            bool wasClosed = connection.State == ConnectionState.Closed;
+            if (wasClosed)
+            {
+                connection.Open();
+            }
+
+            try
+            {
+                if (!TableExists(connection, "__SchemaVersion"))
+                {
+                    return;
+                }
+
+                int currentVersion = 0;
+                using (var cmd = connection.CreateCommand())
+                {
+                    cmd.CommandText = "SELECT IFNULL(MAX(\"Version\"), 0) FROM \"__SchemaVersion\";";
+                    var val = cmd.ExecuteScalar();
+                    if (val != null && val != DBNull.Value)
+                    {
+                        currentVersion = Convert.ToInt32(val);
+                    }
+                }
+
+                if (currentVersion < 2)
+                {
+                    logger?.LogInformation("Applying SQLite Schema Upgrade Version 2 (Membership & Role Backfill)...");
+                    using var tx = connection.BeginTransaction();
+                    try
+                    {
+                        ApplyVersion2(connection, tx, logger);
+
+                        using (var cmd = connection.CreateCommand())
+                        {
+                            cmd.Transaction = tx;
+                            cmd.CommandText = "INSERT INTO \"__SchemaVersion\" (\"Version\", \"AppliedAt\") VALUES (2, $appliedAt);";
+                            var param = cmd.CreateParameter();
+                            param.ParameterName = "$appliedAt";
+                            param.Value = DateTime.UtcNow.ToString("o");
+                            cmd.Parameters.Add(param);
+                            cmd.ExecuteNonQuery();
+                        }
+                        tx.Commit();
+                        logger?.LogInformation("✓ SQLite Schema Upgrade Version 2 applied successfully.");
+                    }
+                    catch
+                    {
+                        tx.Rollback();
+                        throw;
+                    }
                 }
             }
             finally
@@ -123,38 +199,50 @@ namespace Api.Data.Schema
             }
         }
 
-        private static void ApplyVersion1(DbConnection connection, ILogger? logger)
+        private static void ApplyVersion1(DbConnection connection, DbTransaction tx, ILogger? logger)
         {
             // 1. Ensure CompanyId exists on all tenant tables
             foreach (var table in TenantTables)
             {
-                if (!TableExists(connection, table))
+                if (!TableExists(connection, table, tx))
                 {
                     continue;
                 }
 
-                if (!ColumnExists(connection, table, "CompanyId"))
+                if (!ColumnExists(connection, table, "CompanyId", tx))
                 {
                     using var cmd = connection.CreateCommand();
+                    cmd.Transaction = tx;
                     cmd.CommandText = $"ALTER TABLE \"{table}\" ADD COLUMN \"CompanyId\" INTEGER NOT NULL DEFAULT 1;";
                     cmd.ExecuteNonQuery();
                     logger?.LogInformation("Added CompanyId to table {Table}", table);
                 }
             }
 
-            // 2. Add CreatedAt and CreatedByUserId to Company table
-            if (TableExists(connection, "Company"))
+            // 1b. Backfill GeneralLedgerSetting.CompanyId NULLs to 1 (Item 7 gap)
+            if (TableExists(connection, "GeneralLedgerSetting", tx))
             {
-                if (!ColumnExists(connection, "Company", "CreatedAt"))
+                using var cmd = connection.CreateCommand();
+                cmd.Transaction = tx;
+                cmd.CommandText = "UPDATE \"GeneralLedgerSetting\" SET \"CompanyId\" = 1 WHERE \"CompanyId\" IS NULL;";
+                cmd.ExecuteNonQuery();
+            }
+
+            // 2. Add CreatedAt and CreatedByUserId to Company table
+            if (TableExists(connection, "Company", tx))
+            {
+                if (!ColumnExists(connection, "Company", "CreatedAt", tx))
                 {
                     using var cmd = connection.CreateCommand();
+                    cmd.Transaction = tx;
                     cmd.CommandText = "ALTER TABLE \"Company\" ADD COLUMN \"CreatedAt\" TEXT NOT NULL DEFAULT '2025-01-01T00:00:00Z';";
                     cmd.ExecuteNonQuery();
                 }
 
-                if (!ColumnExists(connection, "Company", "CreatedByUserId"))
+                if (!ColumnExists(connection, "Company", "CreatedByUserId", tx))
                 {
                     using var cmd = connection.CreateCommand();
+                    cmd.Transaction = tx;
                     cmd.CommandText = "ALTER TABLE \"Company\" ADD COLUMN \"CreatedByUserId\" TEXT NULL;";
                     cmd.ExecuteNonQuery();
                 }
@@ -163,6 +251,7 @@ namespace Api.Data.Schema
             // 3. Create Tenancy tables
             using (var cmd = connection.CreateCommand())
             {
+                cmd.Transaction = tx;
                 cmd.CommandText = @"
                     CREATE TABLE IF NOT EXISTS ""CompanyMember"" (
                         ""Id"" INTEGER NOT NULL CONSTRAINT ""PK_CompanyMember"" PRIMARY KEY AUTOINCREMENT,
@@ -185,6 +274,7 @@ namespace Api.Data.Schema
                         CONSTRAINT ""FK_CompanyMemberSecurityRole_SecurityRole_SecurityRoleId"" FOREIGN KEY (""SecurityRoleId"") REFERENCES ""SecurityRole"" (""Id"") ON DELETE CASCADE
                     );
                     CREATE UNIQUE INDEX IF NOT EXISTS ""IX_CompanyMemberSecurityRole_CompanyMemberId_SecurityRoleId"" ON ""CompanyMemberSecurityRole"" (""CompanyMemberId"", ""SecurityRoleId"");
+                    CREATE INDEX IF NOT EXISTS ""IX_CompanyMemberSecurityRole_SecurityRoleId"" ON ""CompanyMemberSecurityRole"" (""SecurityRoleId"");
 
                     CREATE TABLE IF NOT EXISTS ""CompanyInvitation"" (
                         ""Id"" INTEGER NOT NULL CONSTRAINT ""PK_CompanyInvitation"" PRIMARY KEY AUTOINCREMENT,
@@ -210,6 +300,7 @@ namespace Api.Data.Schema
             // 4. Create composite unique indexes on tenant tables
             using (var cmd = connection.CreateCommand())
             {
+                cmd.Transaction = tx;
                 cmd.CommandText = @"
                     CREATE UNIQUE INDEX IF NOT EXISTS ""IX_Account_CompanyId_AccountCode"" ON ""Account"" (""CompanyId"", ""AccountCode"");
                     CREATE UNIQUE INDEX IF NOT EXISTS ""IX_SequenceNumber_CompanyId_SequenceNumberType"" ON ""SequenceNumber"" (""CompanyId"", ""SequenceNumberType"");
@@ -219,149 +310,181 @@ namespace Api.Data.Schema
                 ";
                 cmd.ExecuteNonQuery();
             }
-
-            // 5. Backfill memberships and adjust roles if users exist
-            EnsureDefaultMemberships(connection, logger);
         }
 
-        public static void EnsureDefaultMemberships(DbConnection connection, ILogger? logger = null)
+        private static void EnsureAllIndexes(DbConnection connection, ILogger? logger)
         {
-            if (!TableExists(connection, "AspNetUsers") || !TableExists(connection, "CompanyMember"))
+            if (TableExists(connection, "CompanyMemberSecurityRole"))
+            {
+                using var cmd = connection.CreateCommand();
+                cmd.CommandText = @"
+                    CREATE UNIQUE INDEX IF NOT EXISTS ""IX_CompanyMemberSecurityRole_CompanyMemberId_SecurityRoleId"" ON ""CompanyMemberSecurityRole"" (""CompanyMemberId"", ""SecurityRoleId"");
+                    CREATE INDEX IF NOT EXISTS ""IX_CompanyMemberSecurityRole_SecurityRoleId"" ON ""CompanyMemberSecurityRole"" (""SecurityRoleId"");
+                ";
+                cmd.ExecuteNonQuery();
+            }
+
+            if (TableExists(connection, "CompanyMember"))
+            {
+                using var cmd = connection.CreateCommand();
+                cmd.CommandText = @"
+                    CREATE UNIQUE INDEX IF NOT EXISTS ""IX_CompanyMember_CompanyId_UserId"" ON ""CompanyMember"" (""CompanyId"", ""UserId"");
+                    CREATE INDEX IF NOT EXISTS ""IX_CompanyMember_UserId"" ON ""CompanyMember"" (""UserId"");
+                ";
+                cmd.ExecuteNonQuery();
+            }
+
+            if (TableExists(connection, "CompanyInvitation"))
+            {
+                using var cmd = connection.CreateCommand();
+                cmd.CommandText = @"
+                    CREATE UNIQUE INDEX IF NOT EXISTS ""IX_CompanyInvitation_TokenHash"" ON ""CompanyInvitation"" (""TokenHash"");
+                    CREATE INDEX IF NOT EXISTS ""IX_CompanyInvitation_CompanyId_Email"" ON ""CompanyInvitation"" (""CompanyId"", ""Email"");
+                ";
+                cmd.ExecuteNonQuery();
+            }
+
+            using (var cmd = connection.CreateCommand())
+            {
+                cmd.CommandText = @"
+                    CREATE UNIQUE INDEX IF NOT EXISTS ""IX_Account_CompanyId_AccountCode"" ON ""Account"" (""CompanyId"", ""AccountCode"");
+                    CREATE UNIQUE INDEX IF NOT EXISTS ""IX_SequenceNumber_CompanyId_SequenceNumberType"" ON ""SequenceNumber"" (""CompanyId"", ""SequenceNumberType"");
+                    CREATE UNIQUE INDEX IF NOT EXISTS ""IX_Customer_CompanyId_No"" ON ""Customer"" (""CompanyId"", ""No"");
+                    CREATE UNIQUE INDEX IF NOT EXISTS ""IX_Vendor_CompanyId_No"" ON ""Vendor"" (""CompanyId"", ""No"");
+                    CREATE UNIQUE INDEX IF NOT EXISTS ""IX_Item_CompanyId_No"" ON ""Item"" (""CompanyId"", ""No"");
+                ";
+                cmd.ExecuteNonQuery();
+            }
+        }
+
+        private static void ApplyVersion2(DbConnection connection, DbTransaction tx, ILogger? logger)
+        {
+            if (!TableExists(connection, "AspNetUsers", tx) || !TableExists(connection, "CompanyMember", tx))
             {
                 return;
             }
 
-            bool wasClosed = connection.State == ConnectionState.Closed;
-            if (wasClosed)
+            string now = DateTime.UtcNow.ToString("o");
+
+            // D1: marvinperez@gmail.com = Owner (1)
+            using (var cmd = connection.CreateCommand())
             {
-                connection.Open();
+                cmd.Transaction = tx;
+                cmd.CommandText = @"
+                    INSERT INTO ""CompanyMember"" (""CompanyId"", ""UserId"", ""Role"", ""Status"", ""JoinedAt"")
+                    SELECT 1, ""Id"", 1, 1, $now
+                    FROM ""AspNetUsers""
+                    WHERE LOWER(""Email"") = 'marvinperez@gmail.com'
+                      AND NOT EXISTS (
+                          SELECT 1 FROM ""CompanyMember""
+                          WHERE ""CompanyId"" = 1 AND ""UserId"" = ""AspNetUsers"".""Id""
+                      );";
+                var p = cmd.CreateParameter();
+                p.ParameterName = "$now";
+                p.Value = now;
+                cmd.Parameters.Add(p);
+                int inserted = cmd.ExecuteNonQuery();
+                if (inserted > 0)
+                {
+                    logger?.LogInformation("✓ Backfilled Owner membership for marvinperez@gmail.com in Company 1.");
+                }
             }
 
-            try
+            // D1: hello@marvinperez.com = Admin (2)
+            using (var cmd = connection.CreateCommand())
             {
-                string now = DateTime.UtcNow.ToString("o");
-
-                // D1: marvinperez@gmail.com = Owner (1)
-                using (var cmd = connection.CreateCommand())
+                cmd.Transaction = tx;
+                cmd.CommandText = @"
+                    INSERT INTO ""CompanyMember"" (""CompanyId"", ""UserId"", ""Role"", ""Status"", ""JoinedAt"")
+                    SELECT 1, ""Id"", 2, 1, $now
+                    FROM ""AspNetUsers""
+                    WHERE LOWER(""Email"") = 'hello@marvinperez.com'
+                      AND NOT EXISTS (
+                          SELECT 1 FROM ""CompanyMember""
+                          WHERE ""CompanyId"" = 1 AND ""UserId"" = ""AspNetUsers"".""Id""
+                      );";
+                var p = cmd.CreateParameter();
+                p.ParameterName = "$now";
+                p.Value = now;
+                cmd.Parameters.Add(p);
+                int inserted = cmd.ExecuteNonQuery();
+                if (inserted > 0)
                 {
-                    cmd.CommandText = @"
-                        INSERT INTO ""CompanyMember"" (""CompanyId"", ""UserId"", ""Role"", ""Status"", ""JoinedAt"")
-                        SELECT 1, ""Id"", 1, 1, $now
-                        FROM ""AspNetUsers""
-                        WHERE LOWER(""Email"") = 'marvinperez@gmail.com'
-                          AND NOT EXISTS (
-                              SELECT 1 FROM ""CompanyMember""
-                              WHERE ""CompanyId"" = 1 AND ""UserId"" = ""AspNetUsers"".""Id""
-                          );";
-                    var p = cmd.CreateParameter();
-                    p.ParameterName = "$now";
-                    p.Value = now;
-                    cmd.Parameters.Add(p);
-                    int inserted = cmd.ExecuteNonQuery();
-                    if (inserted > 0)
-                    {
-                        logger?.LogInformation("✓ Backfilled Owner membership for marvinperez@gmail.com in Company 1.");
-                    }
-                }
-
-                // D1: hello@marvinperez.com = Admin (2)
-                using (var cmd = connection.CreateCommand())
-                {
-                    cmd.CommandText = @"
-                        INSERT INTO ""CompanyMember"" (""CompanyId"", ""UserId"", ""Role"", ""Status"", ""JoinedAt"")
-                        SELECT 1, ""Id"", 2, 1, $now
-                        FROM ""AspNetUsers""
-                        WHERE LOWER(""Email"") = 'hello@marvinperez.com'
-                          AND NOT EXISTS (
-                              SELECT 1 FROM ""CompanyMember""
-                              WHERE ""CompanyId"" = 1 AND ""UserId"" = ""AspNetUsers"".""Id""
-                          );";
-                    var p = cmd.CreateParameter();
-                    p.ParameterName = "$now";
-                    p.Value = now;
-                    cmd.Parameters.Add(p);
-                    int inserted = cmd.ExecuteNonQuery();
-                    if (inserted > 0)
-                    {
-                        logger?.LogInformation("✓ Backfilled Admin membership for hello@marvinperez.com in Company 1.");
-                    }
-                }
-
-                // D1: admin@accountgo.ph = Member (3)
-                using (var cmd = connection.CreateCommand())
-                {
-                    cmd.CommandText = @"
-                        INSERT INTO ""CompanyMember"" (""CompanyId"", ""UserId"", ""Role"", ""Status"", ""JoinedAt"")
-                        SELECT 1, ""Id"", 3, 1, $now
-                        FROM ""AspNetUsers""
-                        WHERE LOWER(""Email"") = 'admin@accountgo.ph'
-                          AND NOT EXISTS (
-                              SELECT 1 FROM ""CompanyMember""
-                              WHERE ""CompanyId"" = 1 AND ""UserId"" = ""AspNetUsers"".""Id""
-                          );";
-                    var p = cmd.CreateParameter();
-                    p.ParameterName = "$now";
-                    p.Value = now;
-                    cmd.Parameters.Add(p);
-                    int inserted = cmd.ExecuteNonQuery();
-                    if (inserted > 0)
-                    {
-                        logger?.LogInformation("✓ Backfilled Member membership for admin@accountgo.ph in Company 1.");
-                    }
-                }
-
-                // D1: Attach 'Auditor / Viewer' role to admin@accountgo.ph's CompanyMember
-                if (TableExists(connection, "CompanyMemberSecurityRole") && TableExists(connection, "SecurityRole"))
-                {
-                    using var cmd = connection.CreateCommand();
-                    cmd.CommandText = @"
-                        INSERT INTO ""CompanyMemberSecurityRole"" (""CompanyMemberId"", ""SecurityRoleId"")
-                        SELECT cm.""Id"", sr.""Id""
-                        FROM ""CompanyMember"" cm
-                        JOIN ""AspNetUsers"" u ON u.""Id"" = cm.""UserId""
-                        JOIN ""SecurityRole"" sr ON sr.""Name"" = 'Auditor / Viewer'
-                        WHERE cm.""CompanyId"" = 1 AND LOWER(u.""Email"") = 'admin@accountgo.ph'
-                          AND NOT EXISTS (
-                              SELECT 1 FROM ""CompanyMemberSecurityRole"" cmsr
-                              WHERE cmsr.""CompanyMemberId"" = cm.""Id"" AND cmsr.""SecurityRoleId"" = sr.""Id""
-                          );";
-                    int roleAttached = cmd.ExecuteNonQuery();
-                    if (roleAttached > 0)
-                    {
-                        logger?.LogInformation("✓ Attached 'Auditor / Viewer' role to admin@accountgo.ph in Company 1.");
-                    }
-                }
-
-                // D2: Remove SystemAdministrators from SecurityUserRole for users other than marvinperez@gmail.com
-                if (TableExists(connection, "SecurityUserRole") && TableExists(connection, "SecurityRole") && TableExists(connection, "User"))
-                {
-                    using var cmd = connection.CreateCommand();
-                    cmd.CommandText = @"
-                        DELETE FROM ""SecurityUserRole""
-                        WHERE ""SecurityRoleId"" IN (SELECT ""Id"" FROM ""SecurityRole"" WHERE ""Name"" = 'SystemAdministrators')
-                          AND ""UserId"" NOT IN (
-                              SELECT ""Id"" FROM ""User""
-                              WHERE LOWER(""UserName"") = 'marvinperez@gmail.com' OR LOWER(""EmailAddress"") = 'marvinperez@gmail.com'
-                          );";
-                    int removed = cmd.ExecuteNonQuery();
-                    if (removed > 0)
-                    {
-                        logger?.LogInformation("✓ Removed SystemAdministrators role from non-platform staff ({Count} records).", removed);
-                    }
+                    logger?.LogInformation("✓ Backfilled Admin membership for hello@marvinperez.com in Company 1.");
                 }
             }
-            finally
+
+            // D1: admin@accountgo.ph = Member (3)
+            using (var cmd = connection.CreateCommand())
             {
-                if (wasClosed)
+                cmd.Transaction = tx;
+                cmd.CommandText = @"
+                    INSERT INTO ""CompanyMember"" (""CompanyId"", ""UserId"", ""Role"", ""Status"", ""JoinedAt"")
+                    SELECT 1, ""Id"", 3, 1, $now
+                    FROM ""AspNetUsers""
+                    WHERE LOWER(""Email"") = 'admin@accountgo.ph'
+                      AND NOT EXISTS (
+                          SELECT 1 FROM ""CompanyMember""
+                          WHERE ""CompanyId"" = 1 AND ""UserId"" = ""AspNetUsers"".""Id""
+                      );";
+                var p = cmd.CreateParameter();
+                p.ParameterName = "$now";
+                p.Value = now;
+                cmd.Parameters.Add(p);
+                int inserted = cmd.ExecuteNonQuery();
+                if (inserted > 0)
                 {
-                    connection.Close();
+                    logger?.LogInformation("✓ Backfilled Member membership for admin@accountgo.ph in Company 1.");
+                }
+            }
+
+            // D1: Attach 'Auditor / Viewer' role to admin@accountgo.ph's CompanyMember
+            if (TableExists(connection, "CompanyMemberSecurityRole", tx) && TableExists(connection, "SecurityRole", tx))
+            {
+                using var cmd = connection.CreateCommand();
+                cmd.Transaction = tx;
+                cmd.CommandText = @"
+                    INSERT INTO ""CompanyMemberSecurityRole"" (""CompanyMemberId"", ""SecurityRoleId"")
+                    SELECT cm.""Id"", sr.""Id""
+                    FROM ""CompanyMember"" cm
+                    JOIN ""AspNetUsers"" u ON u.""Id"" = cm.""UserId""
+                    JOIN ""SecurityRole"" sr ON sr.""Name"" = 'Auditor / Viewer'
+                    WHERE cm.""CompanyId"" = 1 AND LOWER(u.""Email"") = 'admin@accountgo.ph'
+                      AND NOT EXISTS (
+                          SELECT 1 FROM ""CompanyMemberSecurityRole"" cmsr
+                          WHERE cmsr.""CompanyMemberId"" = cm.""Id"" AND cmsr.""SecurityRoleId"" = sr.""Id""
+                      );";
+                int roleAttached = cmd.ExecuteNonQuery();
+                if (roleAttached > 0)
+                {
+                    logger?.LogInformation("✓ Attached 'Auditor / Viewer' role to admin@accountgo.ph in Company 1.");
+                }
+            }
+
+            // D2: Remove SystemAdministrators from SecurityUserRole for users other than marvinperez@gmail.com
+            if (TableExists(connection, "SecurityUserRole", tx) && TableExists(connection, "SecurityRole", tx) && TableExists(connection, "User", tx))
+            {
+                using var cmd = connection.CreateCommand();
+                cmd.Transaction = tx;
+                cmd.CommandText = @"
+                    DELETE FROM ""SecurityUserRole""
+                    WHERE ""SecurityRoleId"" IN (SELECT ""Id"" FROM ""SecurityRole"" WHERE ""Name"" = 'SystemAdministrators')
+                      AND ""UserId"" NOT IN (
+                          SELECT ""Id"" FROM ""User""
+                          WHERE LOWER(""UserName"") = 'marvinperez@gmail.com' OR LOWER(""EmailAddress"") = 'marvinperez@gmail.com'
+                      );";
+                int removed = cmd.ExecuteNonQuery();
+                if (removed > 0)
+                {
+                    logger?.LogInformation("✓ Removed SystemAdministrators role from non-platform staff ({Count} records).", removed);
                 }
             }
         }
 
-        private static bool TableExists(DbConnection connection, string tableName)
+        private static bool TableExists(DbConnection connection, string tableName, DbTransaction? tx = null)
         {
             using var cmd = connection.CreateCommand();
+            if (tx != null) cmd.Transaction = tx;
             cmd.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=$tableName;";
             var p = cmd.CreateParameter();
             p.ParameterName = "$tableName";
@@ -370,9 +493,10 @@ namespace Api.Data.Schema
             return Convert.ToInt32(cmd.ExecuteScalar()) > 0;
         }
 
-        private static bool ColumnExists(DbConnection connection, string tableName, string columnName)
+        private static bool ColumnExists(DbConnection connection, string tableName, string columnName, DbTransaction? tx = null)
         {
             using var cmd = connection.CreateCommand();
+            if (tx != null) cmd.Transaction = tx;
             cmd.CommandText = $"PRAGMA table_info(\"{tableName}\");";
             using var reader = cmd.ExecuteReader();
             while (reader.Read())

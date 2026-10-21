@@ -66,26 +66,39 @@ public class SecurityHotfixesTests
     [Fact]
     public async Task InternalSyncController_Returns503_WhenSecretKeyMissing()
     {
-        // Arrange
-        var options = new DbContextOptionsBuilder<ApiDbContext>()
-            .UseSqlite("DataSource=:memory:")
-            .Options;
-        using var context = new ApiDbContext(options);
+        var prevKey = Environment.GetEnvironmentVariable("SECRET_KEY");
+        var prevKeyAlt = Environment.GetEnvironmentVariable("SECRET__key");
+        try
+        {
+            Environment.SetEnvironmentVariable("SECRET_KEY", null);
+            Environment.SetEnvironmentVariable("SECRET__key", null);
 
-        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>()).Build();
-        var logger = new Mock<ILogger<InternalSyncController>>();
+            // Arrange
+            var options = new DbContextOptionsBuilder<ApiDbContext>()
+                .UseSqlite("DataSource=:memory:")
+                .Options;
+            using var context = new ApiDbContext(options);
 
-        var controller = new InternalSyncController(context, config, logger.Object);
-        var httpContext = new DefaultHttpContext();
-        httpContext.Request.Headers["x-internal-key"] = "some-key";
-        controller.ControllerContext = new ControllerContext { HttpContext = httpContext };
+            var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>()).Build();
+            var logger = new Mock<ILogger<InternalSyncController>>();
 
-        // Act
-        var result = await controller.RestoreFromD1(new InternalSyncController.RestoreRequest());
+            var controller = new InternalSyncController(context, config, logger.Object);
+            var httpContext = new DefaultHttpContext();
+            httpContext.Request.Headers["x-internal-key"] = "some-key";
+            controller.ControllerContext = new ControllerContext { HttpContext = httpContext };
 
-        // Assert
-        var statusResult = Assert.IsType<ObjectResult>(result);
-        Assert.Equal(503, statusResult.StatusCode);
+            // Act
+            var result = await controller.RestoreFromD1(new InternalSyncController.RestoreRequest());
+
+            // Assert
+            var statusResult = Assert.IsType<ObjectResult>(result);
+            Assert.Equal(503, statusResult.StatusCode);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("SECRET_KEY", prevKey);
+            Environment.SetEnvironmentVariable("SECRET__key", prevKeyAlt);
+        }
     }
 
     [Fact]

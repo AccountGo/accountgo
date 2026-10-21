@@ -35,6 +35,7 @@ namespace Api.Controllers
         {
             public List<string>? Statements { get; set; }
             public string? RawSql { get; set; }
+            public List<string>? TablesToClear { get; set; }
         }
 
         [HttpPost("d1-restore")]
@@ -87,9 +88,10 @@ namespace Api.Controllers
                 }
             }
 
-            if (statements.Count == 0)
+            bool hasTablesToClear = request.TablesToClear != null && request.TablesToClear.Count > 0;
+            if (statements.Count == 0 && !hasTablesToClear)
             {
-                return Ok(new { restored = 0, message = "No statements to execute." });
+                return Ok(new { restored = 0, total = 0, message = "No operations to execute." });
             }
 
             try
@@ -98,19 +100,42 @@ namespace Api.Controllers
                 try
                 {
                     using var transaction = await _context.Database.BeginTransactionAsync();
-                    foreach (var stmt in statements)
+                    try
                     {
-                        try
+                        if (hasTablesToClear)
+                        {
+                            foreach (var table in request.TablesToClear!)
+                            {
+                                if (!string.IsNullOrWhiteSpace(table) && System.Text.RegularExpressions.Regex.IsMatch(table, @"^[a-zA-Z0-9_]+$"))
+                                {
+                                    await _context.Database.ExecuteSqlRawAsync($"DELETE FROM \"{table}\";");
+                                }
+                            }
+                        }
+
+                        foreach (var stmt in statements)
                         {
                             await _context.Database.ExecuteSqlRawAsync(stmt);
                             executedCount++;
                         }
-                        catch (Exception ex)
-                        {
-                            _logger.LogWarning(ex, "Failed to execute restore statement: {Sql}", stmt);
-                        }
+
+                        await transaction.CommitAsync();
+
+                        _logger.LogInformation("Restored {Count} statements from Cloudflare D1 into local SQLite.", executedCount);
+                        return Ok(new { restored = executedCount, total = statements.Count });
                     }
-                    await transaction.CommitAsync();
+                    catch (Exception ex)
+                    {
+                        await transaction.RollbackAsync();
+                        _logger.LogError(ex, "Failed executing restore statement. Transaction rolled back.");
+                        return StatusCode(500, new
+                        {
+                            error = "Restore failed: statement execution threw an exception.",
+                            details = ex.Message,
+                            executedBeforeFailure = executedCount,
+                            total = statements.Count
+                        });
+                    }
                 }
                 finally
                 {
@@ -123,9 +148,6 @@ namespace Api.Controllers
                         _logger.LogWarning(ex, "Failed to re-enable foreign keys after restore.");
                     }
                 }
-
-                _logger.LogInformation("Restored {Count} statements from Cloudflare D1 into local SQLite.", executedCount);
-                return Ok(new { restored = executedCount, total = statements.Count });
             }
             catch (Exception ex)
             {

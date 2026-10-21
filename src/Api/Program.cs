@@ -441,8 +441,8 @@ using (var scope = app.Services.CreateScope())
                 }
             }
 
-            // Ensure Company 1 memberships and roles (D1 & D2)
-            Api.Data.Schema.SqliteSchemaUpgrader.EnsureDefaultMemberships(apiDbContext.Database.GetDbConnection());
+            // Run one-time post-seed membership and role backfill -> Version 2
+            Api.Data.Schema.SqliteSchemaUpgrader.UpgradePostSeed(apiDbContext.Database.GetDbConnection());
         }
         else
         {
@@ -520,3 +520,5 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.Run();
+
+public partial class Program { }

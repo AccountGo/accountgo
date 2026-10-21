@@ -324,6 +324,7 @@ namespace Api.Data
             builder.Entity<CompanyMemberSecurityRole>(entity =>
             {
                 entity.HasIndex(e => new { e.CompanyMemberId, e.SecurityRoleId }).IsUnique();
+                entity.HasIndex(e => e.SecurityRoleId);
                 entity.HasOne(e => e.CompanyMember)
                     .WithMany(m => m.SecurityRoles)
                     .HasForeignKey(e => e.CompanyMemberId)

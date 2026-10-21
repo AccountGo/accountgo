@@ -4,9 +4,11 @@ using System.Data;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Threading.Tasks;
 using Api.Data;
 using Api.Data.Schema;
 using Core.Domain;
+using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -74,10 +76,16 @@ public class MultiTenancyPhase1Tests
         Assert.True(File.Exists(dbPath), $"Target database not found at {dbPath}");
 
         using var connection = new SqliteConnection($"Data Source={dbPath}");
-        connection.Open();
+        // Note: intentionally test calling Upgrade and UpgradePostSeed on a CLOSED connection to verify it handles closed connections cleanly!
+        Assert.Equal(ConnectionState.Closed, connection.State);
 
-        // Run upgrader
+        // Run DDL upgrader (v1)
         SqliteSchemaUpgrader.Upgrade(connection);
+        // Run post-seed backfill (v2)
+        SqliteSchemaUpgrader.UpgradePostSeed(connection);
+
+        // Connection should be reopened to inspect schema
+        connection.Open();
 
         // Verify every tenant table has CompanyId
         foreach (var table in SqliteSchemaUpgrader.TenantTables)
@@ -106,7 +114,7 @@ public class MultiTenancyPhase1Tests
             Assert.Equal(1, Convert.ToInt32(cmd.ExecuteScalar()));
         }
 
-        // Verify composite unique indexes exist
+        // Verify indexes exist including IX_CompanyMemberSecurityRole_SecurityRoleId
         var expectedIndexes = new[]
         {
             "IX_Account_CompanyId_AccountCode",
@@ -116,6 +124,7 @@ public class MultiTenancyPhase1Tests
             "IX_Item_CompanyId_No",
             "IX_CompanyMember_CompanyId_UserId",
             "IX_CompanyMemberSecurityRole_CompanyMemberId_SecurityRoleId",
+            "IX_CompanyMemberSecurityRole_SecurityRoleId",
             "IX_CompanyInvitation_TokenHash"
         };
         foreach (var idx in expectedIndexes)
@@ -136,9 +145,11 @@ public class MultiTenancyPhase1Tests
         }
 
         using var connection = new SqliteConnection($"Data Source={dbPath}");
-        connection.Open();
-
+        // Test calling on a closed connection
         SqliteSchemaUpgrader.Upgrade(connection);
+        SqliteSchemaUpgrader.UpgradePostSeed(connection);
+
+        connection.Open();
 
         // Verify marvinperez@gmail.com is Owner (Role = 1)
         using (var cmd = connection.CreateCommand())
@@ -208,7 +219,6 @@ public class MultiTenancyPhase1Tests
     [Fact]
     public void Fresh_Database_Schema_Matches_Upgraded_Database_Schema()
     {
-        // 1. Upgraded DB (accountgo.db copy)
         var tempUpgradedDb = Path.GetTempFileName();
         var tempFreshDb = Path.GetTempFileName();
 
@@ -223,11 +233,10 @@ public class MultiTenancyPhase1Tests
 
             using (var connUpgraded = new SqliteConnection($"Data Source={tempUpgradedDb}"))
             {
-                connUpgraded.Open();
                 SqliteSchemaUpgrader.Upgrade(connUpgraded);
+                SqliteSchemaUpgrader.UpgradePostSeed(connUpgraded);
             }
 
-            // 2. Fresh DB created via EF Core and then upgraded
             var options = new DbContextOptionsBuilder<ApiDbContext>()
                 .UseSqlite($"Data Source={tempFreshDb}")
                 .Options;
@@ -240,14 +249,12 @@ public class MultiTenancyPhase1Tests
 
                 var connFresh = freshContext.Database.GetDbConnection();
                 SqliteSchemaUpgrader.Upgrade(connFresh);
+                SqliteSchemaUpgrader.UpgradePostSeed(connFresh);
             }
 
-            // 3. Compare tables in both databases
             var upgradedTables = GetTableNames(tempUpgradedDb);
             var freshTables = GetTableNames(tempFreshDb);
 
-            // Fresh database contains the business tables of ApiDbContext
-            // Verify every ApiDbContext table in fresh DB also exists in upgraded DB with identical columns
             foreach (var table in freshTables)
             {
                 if (table.StartsWith("sqlite_") || table.StartsWith("__")) continue;
@@ -263,7 +270,6 @@ public class MultiTenancyPhase1Tests
                         $"Upgraded table {table} is missing column {col.Key} present in fresh database.");
                 }
 
-                // Verify CompanyId presence if tenant table
                 if (SqliteSchemaUpgrader.TenantTables.Contains(table))
                 {
                     Assert.True(freshColumns.ContainsKey("companyid"),
@@ -277,6 +283,75 @@ public class MultiTenancyPhase1Tests
         {
             if (File.Exists(tempUpgradedDb)) File.Delete(tempUpgradedDb);
             if (File.Exists(tempFreshDb)) File.Delete(tempFreshDb);
+        }
+    }
+
+    [Fact]
+    public async Task Real_App_Boots_Successfully_On_Empty_Database()
+    {
+        var tempDb = Path.Combine(Path.GetTempPath(), $"accountgo_empty_{Guid.NewGuid():N}.db");
+        try
+        {
+            var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+            {
+                builder.UseSetting("DatabaseProvider", "Sqlite");
+                builder.UseSetting("ConnectionStrings:SqliteConnection", $"Data Source={tempDb}");
+                builder.UseSetting("ENVIRONMENT", "Development");
+                builder.UseSetting("SECRET_KEY", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
+            });
+
+            using var client = factory.CreateClient();
+            var response = await client.GetAsync("/api/administration/company");
+            Assert.True(response.IsSuccessStatusCode, $"Expected success status code, got {response.StatusCode}");
+
+            // Verify __SchemaVersion has version 2 recorded
+            using var connection = new SqliteConnection($"Data Source={tempDb}");
+            connection.Open();
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = "SELECT MAX(\"Version\") FROM \"__SchemaVersion\";";
+            var maxVer = Convert.ToInt32(cmd.ExecuteScalar());
+            Assert.Equal(2, maxVer);
+        }
+        finally
+        {
+            if (File.Exists(tempDb))
+            {
+                try { File.Delete(tempDb); } catch { }
+            }
+        }
+    }
+
+    [Fact]
+    public async Task Real_App_Boots_Successfully_On_Existing_Upgraded_Database()
+    {
+        var tempDb = Path.Combine(Path.GetTempPath(), $"accountgo_prod_{Guid.NewGuid():N}.db");
+        try
+        {
+            var sourceDbPath = Path.Combine(AppContext.BaseDirectory, "../../../../../src/Api/accountgo.db");
+            if (!File.Exists(sourceDbPath))
+            {
+                sourceDbPath = Path.GetFullPath("src/Api/accountgo.db");
+            }
+            File.Copy(sourceDbPath, tempDb, overwrite: true);
+
+            var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+            {
+                builder.UseSetting("DatabaseProvider", "Sqlite");
+                builder.UseSetting("ConnectionStrings:SqliteConnection", $"Data Source={tempDb}");
+                builder.UseSetting("ENVIRONMENT", "Production");
+                builder.UseSetting("SECRET_KEY", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
+            });
+
+            using var client = factory.CreateClient();
+            var response = await client.GetAsync("/api/administration/company");
+            Assert.True(response.IsSuccessStatusCode, $"Expected success status code, got {response.StatusCode}");
+        }
+        finally
+        {
+            if (File.Exists(tempDb))
+            {
+                try { File.Delete(tempDb); } catch { }
+            }
         }
     }
 
