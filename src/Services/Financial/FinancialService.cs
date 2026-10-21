@@ -1,4 +1,4 @@
-﻿//-----------------------------------------------------------------------
+//-----------------------------------------------------------------------
 // <copyright file="FinancialService.cs" company="AccountGo">
 // Copyright (c) AccountGo. All rights reserved.
 // <author>Marvin Perez</author>
@@ -185,11 +185,7 @@ namespace Services.Financial
         {
             if (ValidateGeneralLedgerEntry(entry))
             {
-                try
-                {
-                    _generalLedgerRepository.Insert(entry);
-                }
-                catch { }
+                _generalLedgerRepository.Insert(entry);
             }
         }
 
@@ -201,16 +197,11 @@ namespace Services.Financial
             if (!FinancialHelper.NoLineAmountIsEqualToZero(glEntry))
                 throw new InvalidOperationException("One or more line(s) amount is zero.");
 
-            var fiscalYear = CurrentFiscalYear();
-            //TODO: Fix this
-            // if (fiscalYear == null 
-            //     || !FinancialHelper.InRange(glEntry.Date, fiscalYear.StartDate, fiscalYear.EndDate)
-            //     || !FinancialHelper.InRange(DateTime.Now, fiscalYear.StartDate, fiscalYear.EndDate))
-            //     throw new InvalidOperationException("Date is out of range. Must within financial year.");
+            var activeFiscalYear = _fiscalYearRepo.Table
+                .FirstOrDefault(fy => fy.IsActive && glEntry.Date >= fy.StartDate && glEntry.Date <= fy.EndDate);
 
-            //var duplicateAccounts = glEntry.GeneralLedgerLines.GroupBy(gl => gl.AccountId).Where(gl => gl.Count() > 1);
-            //if (duplicateAccounts.Count() > 0)
-            //    throw new InvalidOperationException("Duplicate account id in a collection.");
+            if (activeFiscalYear == null)
+                throw new InvalidOperationException($"Posting date {glEntry.Date:yyyy-MM-dd} is out of range. No active financial year covers this period.");
 
             foreach (var line in glEntry.GeneralLedgerLines)
             {
@@ -218,12 +209,12 @@ namespace Services.Financial
                     .Where(a => a.Id == line.AccountId)
                     .FirstOrDefault();
 
-                if (!account.CanPost())
-                    throw new InvalidOperationException("One of the account is not valid for posting");
-            }
+                if (account == null)
+                    throw new InvalidOperationException($"Account ID {line.AccountId} does not exist.");
 
-            //if(!glEntry.ValidateAccountingEquation())
-            //    throw new InvalidOperationException("One of the account not equal.");
+                if (!account.CanPost())
+                    throw new InvalidOperationException($"Account '{account.AccountName}' ({account.AccountCode}) is a summary/parent account and cannot be posted to directly.");
+            }
 
             return true;
         }
@@ -371,6 +362,50 @@ namespace Services.Financial
                     Amount = equity.Balance - ((equity.IsContraAccount && equity.ContraAccounts.Count > 0) == true ? equity.ContraAccounts.FirstOrDefault().RelatedContraAccount.Balance : 0)
                 });
             }
+
+            // IFRS IAS 1 Presentation: Incorporate current period unclosed net income into equity
+            var incomeStatement = IncomeStatement(from, to);
+            var netIncome = incomeStatement.Where(a => !a.IsExpense).Sum(a => a.Amount) - incomeStatement.Where(a => a.IsExpense).Sum(a => a.Amount);
+
+            if (netIncome > 0)
+            {
+                var profitAccount = balanceSheet.FirstOrDefault(a => a.AccountCode == "30400");
+                if (profitAccount != null)
+                {
+                    profitAccount.Amount += netIncome;
+                }
+                else
+                {
+                    balanceSheet.Add(new BalanceSheet
+                    {
+                        AccountId = 0,
+                        AccountClassId = 3,
+                        AccountCode = "30400",
+                        AccountName = "Accumulated Profits",
+                        Amount = netIncome
+                    });
+                }
+            }
+            else if (netIncome < 0)
+            {
+                var lossAccount = balanceSheet.FirstOrDefault(a => a.AccountCode == "30500");
+                if (lossAccount != null)
+                {
+                    lossAccount.Amount += Math.Abs(netIncome);
+                }
+                else
+                {
+                    balanceSheet.Add(new BalanceSheet
+                    {
+                        AccountId = 0,
+                        AccountClassId = 3,
+                        AccountCode = "30500",
+                        AccountName = "Accumulated Losses",
+                        Amount = Math.Abs(netIncome)
+                    });
+                }
+            }
+
             return balanceSheet;
         }
 
