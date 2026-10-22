@@ -61,7 +61,10 @@ namespace Core.Domain.Sales
             decimal totalInvoiceAmount = 0;
             decimal totalReceiptAmount = 0;
 
-            totalInvoiceAmount = SalesInvoices.Sum(i => i.SalesInvoiceLines.Sum(l => l.Amount * l.Quantity));
+            // Drafts and voided invoices were never issued, so they are not receivables.
+            totalInvoiceAmount = SalesInvoices
+                .Where(i => i.Status != SalesInvoiceStatus.Void && (i.Status != SalesInvoiceStatus.Draft || i.GeneralLedgerHeaderId.HasValue))
+                .Sum(i => i.SalesInvoiceLines.Sum(l => l.Amount * l.Quantity));
             totalReceiptAmount = SalesReceipts.Sum(r => r.SalesReceiptLines.Sum(l => l.Amount.GetValueOrDefault() * l.Quantity.GetValueOrDefault()));
 
             balance = totalInvoiceAmount - totalReceiptAmount;
