@@ -1369,11 +1369,17 @@ namespace Api.Controllers
 
                 var invoice = _tenantGuard.EnsureOwned<Core.Domain.Sales.SalesInvoiceHeader>(paymentDto.InvoiceId, nameof(paymentDto.InvoiceId));
 
-                var cashBanks = _financialService.GetCashAndBanks();
-                var primaryBank = cashBanks.FirstOrDefault();
-                int accountToDebitId = primaryBank?.AccountId ?? 
-                    _financialService.GetAccounts().FirstOrDefault(a => a.IsCash || a.AccountCode == "10110")?.Id ?? 
-                    _financialService.GetAccounts().FirstOrDefault(a => a.AccountClassId == 1)?.Id ?? 1;
+                // Summary accounts such as 10110 can't take postings, so only postable cash accounts qualify.
+                var postable = _financialService.GetAccounts().Where(a => a.CanPost()).ToList();
+                var bankAccountId = _financialService.GetCashAndBanks()
+                    .Select(b => b.AccountId)
+                    .FirstOrDefault(id => id.HasValue && postable.Any(a => a.Id == id));
+                var cashAccount = postable
+                    .Where(a => a.IsCash || (a.ParentAccount != null && a.ParentAccount.IsCash))
+                    .OrderBy(a => a.AccountCode)
+                    .FirstOrDefault();
+                int accountToDebitId = bankAccountId ?? cashAccount?.Id
+                    ?? throw new Exception("No cash or bank account is set up to receive payments.");
 
                 int accountToCreditId = invoice.Customer?.AccountsReceivableAccountId ?? 
                     _financialService.GetAccountByAccountCode("10120")?.Id ?? 

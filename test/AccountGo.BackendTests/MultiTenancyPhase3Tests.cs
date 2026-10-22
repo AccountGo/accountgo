@@ -168,6 +168,32 @@ namespace AccountGo.BackendTests
         }
 
         [Fact]
+        public async Task RecordPayment_InNewWorkspace_DebitsPostableCashAccount()
+        {
+            var invoice = await NewInvoice();
+            invoice.Status = "Open";
+            var saved = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
+            Assert.True(saved.IsSuccessStatusCode, await saved.Content.ReadAsStringAsync());
+            var invoiceId = (await saved.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt32();
+
+            var paid = await Send(HttpMethod.Post, "/api/Sales/RecordPayment",
+                new Dto.Sales.RecordInvoicePaymentDto { InvoiceId = invoiceId, Amount = 100, PaymentDate = DateTime.UtcNow });
+            Assert.True(paid.IsSuccessStatusCode, await paid.Content.ReadAsStringAsync());
+
+            using (var scope = _factory.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+                using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
+                {
+                    Assert.Empty(db.Banks);
+                    var receipt = db.SalesReceiptHeaders.Include(r => r.AccountToDebit).Single();
+                    Assert.Equal("10111", receipt.AccountToDebit.AccountCode);
+                    Assert.NotNull(receipt.GeneralLedgerHeaderId);
+                }
+            }
+        }
+
+        [Fact]
         public async Task Invite_EmailHashAndSecurityRoles_WrongEmailDenied_SingleUse()
         {
             var roleId = ViewerRoleId();
