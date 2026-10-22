@@ -55,7 +55,7 @@ export const Header: React.FC<HeaderProps> = ({
     currentSection.charAt(0).toUpperCase() + currentSection.slice(1);
 
   return (
-    <header className="h-16 px-3 sm:px-4 md:px-6 bg-[var(--bg-header)] backdrop-blur-xl flex items-center justify-between gap-2 md:gap-4 z-10 flex-shrink-0 safe-top transition-colors duration-200">
+    <header className="no-print h-16 px-3 sm:px-4 md:px-6 bg-[var(--bg-header)] backdrop-blur-xl flex items-center justify-between gap-2 md:gap-4 z-10 flex-shrink-0 safe-top transition-colors duration-200">
       {/* Left: Desktop sidebar toggle + Mobile brand logo + Breadcrumbs */}
       <div className="flex items-center gap-2 sm:gap-3 min-w-0">
         {/* Desktop Sidebar Toggle */}
