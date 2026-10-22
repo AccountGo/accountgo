@@ -153,6 +153,9 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<string>("CreatedByUserId")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -165,7 +168,7 @@ namespace Api.Data.Migrations.ApiDb
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Slug")
-                        .HasColumnType("nvarchar(max)");
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<string>("SubscriptionStatus")
                         .HasColumnType("nvarchar(max)");
@@ -174,6 +177,10 @@ namespace Api.Data.Migrations.ApiDb
                         .HasColumnType("datetime2");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("Slug")
+                        .IsUnique()
+                        .HasFilter("[Slug] IS NOT NULL");
 
                     b.ToTable("Company");
 
@@ -187,6 +194,7 @@ namespace Api.Data.Migrations.ApiDb
                             Name = "Financial Solutions Inc.",
                             Plan = "accounting",
                             ShortName = "FSI",
+                            Slug = "ph-financials",
                             SubscriptionStatus = "active"
                         });
                 });
@@ -221,6 +229,12 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<string>("InvitedByUserId")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("ResendCount")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("ResendWindowStart")
+                        .HasColumnType("datetime2");
 
                     b.Property<DateTime?>("RevokedAt")
                         .HasColumnType("datetime2");
@@ -317,6 +331,13 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.Property<int>("CompanyId")
                         .HasColumnType("int");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(3)
+                        .HasColumnType("nvarchar(3)")
+                        .HasDefaultValue("PHP");
 
                     b.HasKey("Id");
 

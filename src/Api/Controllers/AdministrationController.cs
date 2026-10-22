@@ -28,8 +28,7 @@ namespace Api.Controllers
     [Route("api/[controller]")]
     public class AdministrationController : BaseController
     {
-        // Global user/role management is platform-staff only until Phase 3.5 replaces it with
-        // workspace members/invitations. Workspace Owners must not manage other workspaces' users.
+        // Global role-template management is platform-staff only. User CRUD routes are retired.
         private const string PlatformAdminRole = "SystemAdministrators";
 
         private readonly IAdministrationService _adminService;
@@ -63,14 +62,15 @@ namespace Api.Controllers
         [Api.Filters.RequireWorkspaceRole(Core.Domain.CompanyMemberRole.Owner)]
         [HttpGet]
         [Route("Setup")]
-        public IActionResult Setup()
+        public IActionResult Setup([FromServices] Api.Service.CompanyProvisioningService provisioning, [FromServices] ApiDbContext db)
         {
-            Api.Data.Initializer initializer = new Data.Initializer(_adminService, _financialService, _salesService, _purchasingService, _inventoryService, _securityService);
-            bool success = initializer.Setup();
-            if (success)
-                return Ok("{ 'message': 'Initialization completed!' }");
-            else
-                return BadRequest("{ 'message': 'Initialization not successful! Please check the log.' }");
+            var company = db.Companies.Single(c => c.Id == _tenantContext.RequireCompanyId());
+            using (var tx = db.Database.BeginTransaction())
+            {
+                provisioning.Provision(company);
+                tx.Commit();
+            }
+            return Ok(new { message = "Workspace defaults initialized." });
         }
 
         [Authorize(Roles = PlatformAdminRole)]
@@ -163,197 +163,6 @@ namespace Api.Controllers
             }).ToList();
 
             return new ObjectResult(auditLogsDto);
-        }
-
-        [Authorize(Roles = PlatformAdminRole)]
-        [HttpGet]
-        [Route("users")] // api/Administration/Users
-        public IActionResult Users()
-        {
-            var users = _securityService.GetAllUser();
-            var usersDto = new List<User>();
-
-            foreach (var user in users)
-            {
-                usersDto.Add(MapToUserDto(user));
-            }
-
-            return Ok(usersDto);
-        }
-
-        public class CreateMemberRequest
-        {
-            public string Email { get; set; } = string.Empty;
-            public string? FirstName { get; set; }
-            public string? LastName { get; set; }
-            public List<int>? RoleIds { get; set; }
-        }
-
-        [Authorize(Roles = PlatformAdminRole)]
-        [HttpPost("users")]
-        public async Task<IActionResult> CreateUser([FromBody] CreateMemberRequest request)
-        {
-            if (string.IsNullOrWhiteSpace(request?.Email))
-                return BadRequest(new ProblemDetails
-                {
-                    Title = "Invalid Email",
-                    Detail = "Email address is required.",
-                    Status = StatusCodes.Status400BadRequest
-                });
-
-            var email = request.Email.Trim().ToLowerInvariant();
-
-            // Check if user already exists in domain model
-            var existingDomain = _securityService.GetUser(email);
-            if (existingDomain != null)
-                return BadRequest(new ProblemDetails
-                {
-                    Title = "User Already Exists",
-                    Detail = $"A member with email '{email}' already exists in this organization.",
-                    Status = StatusCodes.Status400BadRequest
-                });
-
-            // Ensure ApplicationUser in Identity
-            var identityUser = await _userManager.FindByEmailAsync(email);
-            if (identityUser == null)
-            {
-                identityUser = new ApplicationUser
-                {
-                    UserName = email,
-                    Email = email,
-                    EmailConfirmed = true
-                };
-                var createResult = await _userManager.CreateAsync(identityUser);
-                if (!createResult.Succeeded)
-                {
-                    return BadRequest(new ProblemDetails
-                    {
-                        Title = "Failed to Create User",
-                        Detail = string.Join("; ", createResult.Errors.Select(e => e.Description)),
-                        Status = StatusCodes.Status400BadRequest
-                    });
-                }
-            }
-
-            var roleIds = request.RoleIds ?? new List<int>();
-            _securityService.AddUser(email, email, request.FirstName?.Trim() ?? string.Empty, request.LastName?.Trim() ?? string.Empty, roleIds);
-
-            var createdUser = _securityService.GetUser(email);
-            return Ok(createdUser != null ? MapToUserDto(createdUser) : null);
-        }
-
-        public class UpdateMemberRequest
-        {
-            public string? FirstName { get; set; }
-            public string? LastName { get; set; }
-            public string? Email { get; set; }
-            public List<int>? RoleIds { get; set; }
-        }
-
-        [Authorize(Roles = PlatformAdminRole)]
-        [HttpPut("users/{id:int}")]
-        public async Task<IActionResult> UpdateUser(int id, [FromBody] UpdateMemberRequest request)
-        {
-            var user = _securityService.GetUserById(id);
-            if (user == null)
-                return NotFound(new ProblemDetails
-                {
-                    Title = "User Not Found",
-                    Detail = $"Member with ID {id} was not found.",
-                    Status = StatusCodes.Status404NotFound
-                });
-
-            if (request.FirstName != null)
-                user.Firstname = request.FirstName.Trim();
-
-            if (request.LastName != null)
-                user.Lastname = request.LastName.Trim();
-
-            if (!string.IsNullOrWhiteSpace(request.Email))
-            {
-                var newEmail = request.Email.Trim().ToLowerInvariant();
-                if (!string.Equals(user.EmailAddress, newEmail, StringComparison.OrdinalIgnoreCase))
-                {
-                    var existing = _securityService.GetUser(newEmail);
-                    if (existing != null && existing.Id != id)
-                        return BadRequest(new ProblemDetails
-                        {
-                            Title = "Email In Use",
-                            Detail = $"Email '{newEmail}' is already assigned to another user.",
-                            Status = StatusCodes.Status400BadRequest
-                        });
-
-                    var oldEmail = user.EmailAddress;
-                    user.EmailAddress = newEmail;
-                    user.UserName = newEmail;
-
-                    var identityUser = await _userManager.FindByEmailAsync(oldEmail);
-                    if (identityUser != null)
-                    {
-                        identityUser.Email = newEmail;
-                        identityUser.UserName = newEmail;
-                        await _userManager.UpdateAsync(identityUser);
-                    }
-                }
-            }
-
-            _securityService.UpdateUser(user, request.RoleIds);
-
-            var updatedUser = _securityService.GetUserById(id);
-            return Ok(MapToUserDto(updatedUser));
-        }
-
-        [Authorize(Roles = PlatformAdminRole)]
-        [HttpDelete("users/{id:int}")]
-        public async Task<IActionResult> DeleteUser(int id)
-        {
-            var user = _securityService.GetUserById(id);
-            if (user == null)
-                return NotFound(new ProblemDetails
-                {
-                    Title = "User Not Found",
-                    Detail = $"Member with ID {id} was not found.",
-                    Status = StatusCodes.Status404NotFound
-                });
-
-            // Prevent deleting own account
-            var currentCallerEmail = User.FindFirst(ClaimTypes.Email)?.Value ?? User.FindFirst(ClaimTypes.Name)?.Value;
-            if (!string.IsNullOrEmpty(currentCallerEmail) && string.Equals(user.EmailAddress, currentCallerEmail, StringComparison.OrdinalIgnoreCase))
-            {
-                return BadRequest(new ProblemDetails
-                {
-                    Title = "Action Denied",
-                    Detail = "You cannot delete your own account.",
-                    Status = StatusCodes.Status400BadRequest
-                });
-            }
-
-            // Prevent deleting last sysadmin
-            if (user.IsSysAdmin())
-            {
-                var allUsers = _securityService.GetAllUser();
-                var adminCount = allUsers.Count(u => u.IsSysAdmin());
-                if (adminCount <= 1)
-                {
-                    return BadRequest(new ProblemDetails
-                    {
-                        Title = "Action Denied",
-                        Detail = "Cannot delete the last System Administrator in the organization.",
-                        Status = StatusCodes.Status400BadRequest
-                    });
-                }
-            }
-
-            var email = user.EmailAddress;
-            _securityService.DeleteUser(id);
-
-            var identityUser = await _userManager.FindByEmailAsync(email);
-            if (identityUser != null)
-            {
-                await _userManager.DeleteAsync(identityUser);
-            }
-
-            return Ok(new { success = true, message = $"User '{email}' was removed successfully." });
         }
 
         [HttpGet]

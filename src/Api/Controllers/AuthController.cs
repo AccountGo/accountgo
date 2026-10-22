@@ -16,6 +16,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Services.Administration;
 using Services.Security;
 
@@ -36,6 +38,7 @@ namespace Api.Controllers
         private readonly ILogger<AuthController> _logger;
         private readonly ApplicationIdentityDbContext _identityContext;
         private readonly ApiDbContext _apiDb;
+        private readonly WorkspaceService _workspaces;
 
         public AuthController(
             IEmailOtpService otpService,
@@ -45,7 +48,8 @@ namespace Api.Controllers
             IConfiguration configuration,
             ILogger<AuthController> logger,
             ApplicationIdentityDbContext identityContext,
-            ApiDbContext apiDb)
+            ApiDbContext apiDb,
+            WorkspaceService workspaces)
         {
             _otpService = otpService;
             _userManager = userManager;
@@ -55,6 +59,7 @@ namespace Api.Controllers
             _logger = logger;
             _identityContext = identityContext;
             _apiDb = apiDb;
+            _workspaces = workspaces;
         }
 
         [AllowAnonymous]
@@ -196,105 +201,71 @@ namespace Api.Controllers
 
             // 2. Validate and prepare organization slug ahead of time
             string? cleanSlug = null;
-            if (!string.IsNullOrWhiteSpace(request.OrganizationName))
+            if (string.IsNullOrWhiteSpace(request.InvitationToken) && !string.IsNullOrWhiteSpace(request.OrganizationName))
             {
                 var rawSlug = !string.IsNullOrWhiteSpace(request.OrganizationSlug)
                     ? request.OrganizationSlug
                     : request.OrganizationName;
 
-                cleanSlug = Regex.Replace(rawSlug.ToLowerInvariant().Trim(), @"[^a-z0-9\-]", "-");
-                cleanSlug = Regex.Replace(cleanSlug, @"-+", "-").Trim('-');
-                if (string.IsNullOrWhiteSpace(cleanSlug)) cleanSlug = "org";
-
-                if (_adminService.GetCompanyBySlug(cleanSlug) != null)
-                {
-                    cleanSlug = $"{cleanSlug}-{RandomNumberGenerator.GetInt32(100, 1000)}";
-                }
+                cleanSlug = WorkspaceService.NormalizeSlug(rawSlug);
+                if (cleanSlug.Length == 0 || cleanSlug.Length > 100)
+                    return Problem(statusCode: 400, title: "Invalid workspace slug");
             }
 
-            // 3. Create Identity user first (ApplicationUser)
-            var appUser = new ApplicationUser
-            {
-                UserName = normalizedEmail,
-                Email = normalizedEmail,
-                EmailConfirmed = false
-            };
+            var currency = (request.Currency ?? "PHP").Trim().ToUpperInvariant();
+            if (!Regex.IsMatch(currency, "^[A-Z]{3}$"))
+                return Problem(statusCode: 400, title: "Invalid currency");
 
-            var createResult = await _userManager.CreateAsync(appUser);
-            if (!createResult.Succeeded)
+            // Identity and domain writes share a transaction; failed provisioning or email delivery leaves no orphan.
+            using (var transaction = await _apiDb.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable))
             {
-                return BadRequest(new ProblemDetails
+                _identityContext.Database.SetDbConnection(_apiDb.Database.GetDbConnection());
+                await _identityContext.Database.UseTransactionAsync(transaction.GetDbTransaction());
+                if (cleanSlug != null && _workspaces.SlugExists(cleanSlug))
+                    return Problem(statusCode: 409, title: "Workspace Slug Already Taken");
+
+                var appUser = new ApplicationUser
                 {
-                    Title = "Registration Failed",
-                    Detail = string.Join("; ", createResult.Errors.Select(e => e.Description)),
-                    Status = StatusCodes.Status400BadRequest
-                });
-            }
-
-            // 4. Create Domain user. No global roles: SystemAdministrators is platform staff only.
-            // What the user can do comes from their workspace membership (step 5).
-            var roleIds = new List<int>();
-
-            _securityService.AddUser(
-                normalizedEmail,
-                normalizedEmail,
-                request.FirstName.Trim(),
-                request.LastName.Trim(),
-                roleIds);
-
-            // 5. Save Company now that user registration succeeded
-            Core.Domain.Company? company = null;
-            if (!string.IsNullOrWhiteSpace(request.OrganizationName) && cleanSlug != null)
-            {
-                var shortName = request.OrganizationName.Trim().Length <= 5
-                    ? request.OrganizationName.Trim().ToUpper()
-                    : request.OrganizationName.Trim().Substring(0, 4).ToUpper();
-
-                company = new Core.Domain.Company
-                {
-                    Name = request.OrganizationName.Trim(),
-                    ShortName = shortName,
-                    Slug = cleanSlug,
-                    CompanyCode = RandomNumberGenerator.GetInt32(100, 1000).ToString(),
-                    Plan = "accounting",
-                    SubscriptionStatus = "active"
+                    UserName = normalizedEmail,
+                    Email = normalizedEmail,
+                    EmailConfirmed = false
                 };
 
-                // Company and the signer-up's Owner membership are saved together.
-                _apiDb.Companies.Add(company);
-                _apiDb.CompanyMembers.Add(new Core.Domain.CompanyMember
+                var createResult = await _userManager.CreateAsync(appUser);
+                if (!createResult.Succeeded)
                 {
-                    Company = company,
-                    UserId = appUser.Id,
-                    Role = Core.Domain.CompanyMemberRole.Owner,
-                    Status = Core.Domain.CompanyMemberStatus.Active,
-                    JoinedAt = DateTime.UtcNow
-                });
-                _apiDb.SaveChanges();
-            }
+                    return BadRequest(new ProblemDetails
+                    {
+                        Title = "Registration Failed",
+                        Detail = string.Join("; ", createResult.Errors.Select(e => e.Description)),
+                        Status = StatusCodes.Status400BadRequest
+                    });
+                }
 
-            // 6. Send Welcome verification code via Resend
-            var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
-            var result = await _otpService.SendWelcomeOtpAsync(appUser, request.FirstName.Trim(), company?.Name, ipAddress);
+                _securityService.AddUser(normalizedEmail, normalizedEmail,
+                    request.FirstName.Trim(), request.LastName.Trim(), new List<int>());
 
-            if (!result.Success)
-            {
-                return BadRequest(new ProblemDetails
+                Core.Domain.Company? company = null;
+                if (cleanSlug != null)
+                    company = _workspaces.Create(appUser.Id, request.OrganizationName, cleanSlug, "accounting", currency);
+
+                var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+                // Keep delivery inside the transaction so a failed send rolls back signup and workspace creation.
+                var result = await _otpService.SendWelcomeOtpAsync(appUser, request.FirstName.Trim(), company?.Name, ipAddress);
+                if (!result.Success)
                 {
-                    Title = "Verification Email Failed",
-                    Detail = result.Error ?? "Failed to deliver verification code email. Please check your address or try again.",
-                    Status = StatusCodes.Status400BadRequest
-                });
+                    return BadRequest(new ProblemDetails
+                    {
+                        Title = "Verification Email Failed",
+                        Detail = result.Error ?? "Failed to deliver verification code email. Please check your address or try again.",
+                        Status = StatusCodes.Status400BadRequest
+                    });
+                }
+                await transaction.CommitAsync();
+                return Ok(new SignUpResponse(
+                    Success: true, Message: result.Message, Email: normalizedEmail, OrgSlug: company?.Slug,
+                    ExpiresInSeconds: result.ExpiresInSeconds, DevCode: result.DevCode));
             }
-
-            return Ok(new SignUpResponse(
-                Success: true,
-                Message: result.Message,
-                Email: normalizedEmail,
-                OrgSlug: company?.Slug,
-                ExpiresInSeconds: result.ExpiresInSeconds,
-                DevCode: result.DevCode
-            ));
         }
 
         [AllowAnonymous]
@@ -354,6 +325,13 @@ namespace Api.Controllers
                 SetRefreshTokenCookie(result.RawRefreshToken);
             }
 
+            var verifiedUser = await _userManager.FindByEmailAsync(request.Email.Trim());
+            if (verifiedUser == null)
+                return Unauthorized();
+            result.Response.Organizations = (from m in _apiDb.CompanyMembers
+                                             join c in _apiDb.Companies on m.CompanyId equals c.Id
+                                             where m.UserId == verifiedUser.Id && m.Status == Core.Domain.CompanyMemberStatus.Active
+                                             select new OrganizationDto { Slug = c.Slug ?? "", Name = c.Name, Role = m.Role.ToString() }).ToList();
             return Ok(result.Response);
         }
 

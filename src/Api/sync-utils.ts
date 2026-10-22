@@ -15,58 +15,58 @@ export function constantTimeEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
-export function parseSyncSqlHeaders(headers: Headers): string[] {
+export async function parseSyncSqlHeaders(headers: Headers): Promise<string[]> {
+  const encoding = headers.get("x-d1-sync-encoding");
+  if (encoding !== null && encoding !== "gzip") {
+    throw new Error("Unsupported x-d1-sync-encoding header");
+  }
   const countHeader = headers.get("x-d1-sync-sql-count");
+  const chunks: string[] = [];
   if (countHeader !== null) {
-    const count = parseInt(countHeader, 10);
-    if (isNaN(count) || count < 0) {
+    const count = Number(countHeader);
+    if (!/^[1-9]\d*$/.test(countHeader) || !Number.isSafeInteger(count)) {
       throw new Error(`Invalid x-d1-sync-sql-count header`);
     }
 
-    const statements: string[] = [];
     for (let i = 0; i < count; i++) {
       const headerName = `x-d1-sync-sql-${i}`;
       const chunkB64 = headers.get(headerName);
       if (chunkB64 === null) {
         throw new Error(`Missing expected chunk header: "${headerName}"`);
       }
-      try {
-        const bytes = Uint8Array.from(atob(chunkB64), (c) => c.charCodeAt(0));
-        const chunkStmts = JSON.parse(new TextDecoder().decode(bytes));
-        if (!Array.isArray(chunkStmts)) {
-          throw new Error(`Chunk header "${headerName}" did not decode to a JSON array`);
-        }
-        statements.push(...chunkStmts);
-      } catch (err: any) {
-        if (err?.message?.includes("did not decode to a JSON array")) {
-          throw err;
-        }
-        // Do not echo err.message as V8 JSON.parse errors contain snippets of the input
-        const errorType = err instanceof SyntaxError ? "SyntaxError" : (err?.name || "Error");
-        throw new Error(`Failed to decode/parse chunk header "${headerName}": ${errorType}`);
-      }
+      chunks.push(chunkB64);
     }
-    return statements;
+  } else {
+    const singleB64 = headers.get("x-d1-sync-sql");
+    if (singleB64 !== null) chunks.push(singleB64);
   }
-
-  const singleB64 = headers.get("x-d1-sync-sql");
-  if (singleB64 !== null) {
+  if (chunks.length === 0) return [];
+  if (encoding === "gzip") {
     try {
-      const bytes = Uint8Array.from(atob(singleB64), (c) => c.charCodeAt(0));
-      const statements = JSON.parse(new TextDecoder().decode(bytes));
-      if (!Array.isArray(statements)) {
-        throw new Error(`x-d1-sync-sql header did not decode to a JSON array`);
-      }
-      return statements;
-    } catch (err: any) {
-      if (err?.message?.includes("did not decode to a JSON array")) {
-        throw err;
-      }
-      // Do not echo err.message as V8 JSON.parse errors contain snippets of the input
-      const errorType = err instanceof SyntaxError ? "SyntaxError" : (err?.name || "Error");
-      throw new Error(`Failed to decode/parse x-d1-sync-sql header: ${errorType}`);
+      const bytes = Uint8Array.from(atob(chunks.join("")), c => c.charCodeAt(0));
+      const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"));
+      return validateStatements(JSON.parse(await new Response(stream).text()));
+    } catch {
+      throw new Error("Failed to decode/parse gzip sync headers");
     }
   }
 
-  return [];
+  // Old containers emit independently encoded JSON arrays per chunk, without an encoding header.
+  return chunks.flatMap((chunk, index) => {
+    const label = countHeader !== null ? `chunk header "x-d1-sync-sql-${index}"` : "x-d1-sync-sql header";
+    try {
+      const bytes = Uint8Array.from(atob(chunk), c => c.charCodeAt(0));
+      return validateStatements(JSON.parse(new TextDecoder().decode(bytes)));
+    } catch (err) {
+      const errorType = err instanceof SyntaxError ? "SyntaxError" : "Error";
+      throw new Error(`Failed to decode/parse ${label}: ${errorType}`);
+    }
+  });
+}
+
+function validateStatements(value: unknown): string[] {
+  if (!Array.isArray(value) || !value.every(statement => typeof statement === "string")) {
+    throw new Error("Sync payload must be an array of SQL strings");
+  }
+  return value;
 }

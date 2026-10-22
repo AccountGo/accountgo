@@ -34,7 +34,7 @@ namespace Api.Data
             _inventoryService = inventoryService;
             _securityService = securityService;
         }
-        public bool Setup()
+        public bool Setup(Api.Service.CompanyProvisioningService provisioning)
         {
             /*
              * 1.Company
@@ -56,21 +56,7 @@ namespace Api.Data
                 var company = SetupCompany();
                 Console.WriteLine("SetupCompany() - Completed!");
 
-                // 2.Chart of accounts/ account classes
-                SetupChartOfAccountsAndAccountClasses();
-                Console.WriteLine("SetupChartOfAccountsAndAccountClasses() - Completed!");
-
-                //3.Financial year
-                SetupFinancialYear();
-                Console.WriteLine("SetupFinancialYear() - Completed!");
-
-                //4.Payment terms
-                SetupPaymentTerms();
-                Console.WriteLine("SetupPaymentTerms() - Completed!");
-
-                //5.gl setting
-                SetupLedgerSetting(company);
-                Console.WriteLine("setupledgersetting() - completed!");
+                provisioning.Provision(company);
 
                 //6.Tax
                 SetupTax();
@@ -208,7 +194,7 @@ namespace Api.Data
                 var resourceStream = assembly!.GetManifestResourceStream("Api.Data.coa.csv");
                 using (var reader = new StreamReader(resourceStream!, Encoding.UTF8))
                 {
-                    var coa = reader.ReadToEndAsync().Result;
+                    var coa = reader.ReadToEnd();
                     values = LoadCsv(coa);
                 }
                 List<Core.Domain.Financials.Account> accounts = new List<Core.Domain.Financials.Account>();
@@ -566,7 +552,7 @@ namespace Api.Data
         private void SetupTax()
         {
             IList<Core.Domain.TaxSystem.Tax> taxes = new List<Core.Domain.TaxSystem.Tax>();
-            if (_financialService.GetTaxes().Any()) return;
+            if (_financialService.GetTaxes().Any(t => t.TaxCode != "NONE")) return;
 
             var salesTaxAccount = _financialService.GetAccountByAccountCode("20300");
             var purchaseTaxAccount = _financialService.GetAccountByAccountCode("50700");
@@ -771,7 +757,8 @@ namespace Api.Data
 
             foreach (var m in measurements)
             {
-                _inventoryService.SaveMeasurement(m);
+                if (!_inventoryService.GetMeasurements().Any(existing => existing.Code == m.Code))
+                    _inventoryService.SaveMeasurement(m);
             }
 
             // Accounts = Sales A/C (40100), Inventory (10800), COGS (50300), Inv Adjustment (50500), Item Assm Cost (10900)

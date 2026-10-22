@@ -1010,6 +1010,7 @@ namespace Api.Controllers
 
         [HttpPost]
         [Route("SaveSalesInvoice")]
+        [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesCreate)]
         public IActionResult SaveSalesInvoice([FromBody] Dto.Sales.SalesInvoice salesInvoiceDto)
         {
             string[]? errors = null;
@@ -1280,6 +1281,7 @@ namespace Api.Controllers
         }
 
         [HttpPost("CreateSalesInvoice")]
+        [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesCreate)]
         [ServiceFilter(typeof(ValidationFilterAttribute))]
         public IActionResult CreateSalesInvoice([FromBody] Dto.Sales.SalesInvoice salesInvoiceDto)
         {
@@ -1295,6 +1297,7 @@ namespace Api.Controllers
         }
 
         [HttpPost("UpdateSalesInvoice")]
+        [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesCreate)]
         [ServiceFilter(typeof(ValidationFilterAttribute))]
         public IActionResult UpdateSalesInvoice([FromBody] Dto.Sales.SalesInvoice salesInvoiceDto)
         {

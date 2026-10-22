@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.IO.Compression;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -26,17 +28,14 @@ namespace Api.Service.D1Sync
                     var statements = syncContext.GetStatements();
                     if (statements.Count > 0)
                     {
-                        var fullJson = JsonSerializer.Serialize(statements);
-                        var fullBytes = Encoding.UTF8.GetBytes(fullJson);
-                        var fullBase64 = Convert.ToBase64String(fullBytes);
-
-                        if (fullBase64.Length <= MaxHeaderPayloadLength)
+                        var chunks = SplitStatementsIntoChunks(statements);
+                        context.Response.Headers["x-d1-sync-encoding"] = "gzip";
+                        if (chunks.Count == 1)
                         {
-                            context.Response.Headers["x-d1-sync-sql"] = fullBase64;
+                            context.Response.Headers["x-d1-sync-sql"] = chunks[0];
                         }
                         else
                         {
-                            var chunks = SplitStatementsIntoChunks(statements, MaxHeaderPayloadLength);
                             for (int i = 0; i < chunks.Count; i++)
                             {
                                 context.Response.Headers[$"x-d1-sync-sql-{i}"] = chunks[i];
@@ -51,42 +50,29 @@ namespace Api.Service.D1Sync
             await _next(context);
         }
 
-        // Note: Splits statements on statement boundaries. If a single statement's serialized base64
-        // payload exceeds maxChunkBase64Length (32 KB), it will produce one oversized chunk (acceptable for now;
-        // accounting transaction rows are well below 32 KB).
+        // Compress once for the best ratio, then split the base64 stream. The worker joins before decoding.
         public static List<string> SplitStatementsIntoChunks(IReadOnlyList<string> statements, int maxChunkBase64Length = MaxHeaderPayloadLength)
         {
+            if (maxChunkBase64Length <= 0)
+                throw new ArgumentOutOfRangeException(nameof(maxChunkBase64Length));
             var chunks = new List<string>();
             if (statements == null || statements.Count == 0)
             {
                 return chunks;
             }
 
-            var currentChunk = new List<string>();
-
-            foreach (var statement in statements)
+            string encoded;
+            using (var output = new MemoryStream())
             {
-                currentChunk.Add(statement);
-                var json = JsonSerializer.Serialize(currentChunk);
-                var byteCount = Encoding.UTF8.GetByteCount(json);
-                var b64Length = ((byteCount + 2) / 3) * 4;
-
-                if (b64Length > maxChunkBase64Length && currentChunk.Count > 1)
+                using (var gzip = new GZipStream(output, CompressionLevel.SmallestSize, true))
                 {
-                    currentChunk.RemoveAt(currentChunk.Count - 1);
-                    var chunkJson = JsonSerializer.Serialize(currentChunk);
-                    chunks.Add(Convert.ToBase64String(Encoding.UTF8.GetBytes(chunkJson)));
-
-                    currentChunk = new List<string> { statement };
+                    var bytes = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(statements));
+                    gzip.Write(bytes, 0, bytes.Length);
                 }
+                encoded = Convert.ToBase64String(output.ToArray());
             }
-
-            if (currentChunk.Count > 0)
-            {
-                var chunkJson = JsonSerializer.Serialize(currentChunk);
-                chunks.Add(Convert.ToBase64String(Encoding.UTF8.GetBytes(chunkJson)));
-            }
-
+            for (var offset = 0; offset < encoded.Length; offset += maxChunkBase64Length)
+                chunks.Add(encoded.Substring(offset, Math.Min(maxChunkBase64Length, encoded.Length - offset)));
             return chunks;
         }
     }

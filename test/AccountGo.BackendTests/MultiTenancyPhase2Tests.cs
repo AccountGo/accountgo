@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -530,7 +531,12 @@ namespace AccountGo.BackendTests
                 ? res.Headers.GetValues("x-d1-sync-sql").First()
                 : res.Headers.GetValues("x-d1-sync-sql-0").First();
 
-            var decodedJson = Encoding.UTF8.GetString(Convert.FromBase64String(syncHeader));
+            Assert.Equal("gzip", res.Headers.GetValues("x-d1-sync-encoding").Single());
+            string decodedJson;
+            using (var input = new MemoryStream(Convert.FromBase64String(syncHeader)))
+            using (var gzip = new GZipStream(input, CompressionMode.Decompress))
+            using (var reader = new StreamReader(gzip, Encoding.UTF8))
+                decodedJson = reader.ReadToEnd();
             var stmts = System.Text.Json.JsonSerializer.Deserialize<List<string>>(decodedJson);
             Assert.NotNull(stmts);
             var customerInsert = Assert.Single(stmts, s => s.StartsWith("INSERT INTO \"Customer\""));
@@ -732,14 +738,14 @@ namespace AccountGo.BackendTests
             Assert.DoesNotContain("Beta Enterprise", orgsJson);
         }
 
-        // Global user/role management is platform staff only; a workspace Owner without SystemAdministrators gets 403.
+        // Global user CRUD is retired; remaining role-template/platform operations are staff-only.
         [Fact]
         public async Task Test13_Global_Admin_Endpoints_Forbidden_For_Workspace_Owner()
         {
-            Assert.Equal(HttpStatusCode.Forbidden, (await SendJsonAsync(HttpMethod.Get, "/api/Administration/users", TokenUA, SlugA)).StatusCode);
+            Assert.Equal(HttpStatusCode.NotFound, (await SendJsonAsync(HttpMethod.Get, "/api/Administration/users", TokenUA, SlugA)).StatusCode);
             Assert.Equal(HttpStatusCode.Forbidden, (await SendJsonAsync(HttpMethod.Get, "/api/Administration/GetUser?username=ub@test.com", TokenUA, SlugA)).StatusCode);
             Assert.Equal(HttpStatusCode.Forbidden, (await SendJsonAsync(HttpMethod.Get, "/api/Administration/clear", TokenUA, SlugA)).StatusCode);
-            Assert.Equal(HttpStatusCode.Forbidden, (await SendJsonAsync(HttpMethod.Post, "/api/Administration/users", TokenUA, SlugA, new { email = "x@test.com" })).StatusCode);
+            Assert.Equal(HttpStatusCode.NotFound, (await SendJsonAsync(HttpMethod.Post, "/api/Administration/users", TokenUA, SlugA, new { email = "x@test.com" })).StatusCode);
             Assert.Equal(HttpStatusCode.Forbidden, (await SendJsonAsync(HttpMethod.Delete, "/api/Administration/roles/1", TokenUA, SlugA)).StatusCode);
         }
 

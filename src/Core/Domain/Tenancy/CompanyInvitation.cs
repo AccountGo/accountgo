@@ -18,6 +18,8 @@ namespace Core.Domain
         public DateTime? AcceptedAt { get; set; }
         public string? AcceptedByUserId { get; set; }
         public DateTime? RevokedAt { get; set; }
+        public DateTime? ResendWindowStart { get; set; }
+        public int ResendCount { get; set; }
         public virtual Company Company { get; set; } = null!;
     }
 }

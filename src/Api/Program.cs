@@ -76,6 +76,9 @@ else
 }
 
 builder.Services.AddScoped<IEmailOtpService, EmailOtpService>();
+builder.Services.AddScoped<CompanyProvisioningService>();
+builder.Services.AddScoped<WorkspaceService>();
+builder.Services.AddScoped<WorkspaceInvitationService>();
 builder.Services.AddAuthentication();
 builder.Services.ConfigureIdentity();
 builder.Services.ConfigureJWT(builder.Configuration);
@@ -177,6 +180,9 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy("invitation-preview", context =>
+        RateLimitPartition.GetFixedWindowLimiter(context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions { PermitLimit = 30, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
 
     // Chained Limiter Level 1: Global IP limiter for auth endpoints (loosened to 30 req/15 min)
     options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(ctx =>

@@ -20,7 +20,19 @@ namespace Dto.Security
         string AccessToken,
         int ExpiresIn,
         UserDto User
-    );
+    )
+    {
+        public IEnumerable<OrganizationDto> Organizations { get; set; } = new List<OrganizationDto>();
+    }
+
+    #nullable disable
+    public class OrganizationDto
+    {
+        public string Slug { get; set; }
+        public string Name { get; set; }
+        public string Role { get; set; }
+    }
+    #nullable restore
 
     public record UserDto(
         string Id,
@@ -67,7 +79,12 @@ namespace Dto.Security
         string? OrganizationName = null,
         string? OrganizationSlug = null,
         string? Currency = null
-    );
+    )
+    {
+        #nullable disable
+        public string InvitationToken { get; set; }
+        #nullable restore
+    }
 
     public record SignUpResponse(
         bool Success,

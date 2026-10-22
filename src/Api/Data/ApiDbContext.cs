@@ -123,6 +123,9 @@ namespace Api.Data
         protected override void OnModelCreating(ModelBuilder builder)
         {
             base.OnModelCreating(builder);
+            builder.Entity<Company>().HasQueryFilter(c => c.DeletedAt == null);
+            builder.Entity<Company>().HasIndex(c => c.Slug).IsUnique();
+            builder.Entity<CompanySetting>().Property(s => s.Currency).IsRequired().HasMaxLength(3).HasDefaultValue("PHP");
 
             foreach (var entityType in builder.Model.GetEntityTypes())
             {

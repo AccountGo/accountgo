@@ -42,7 +42,7 @@ namespace Api.Data.Seed
                     securityService
                 );
 
-                var success = initializer.Setup();
+                var success = initializer.Setup(scope.ServiceProvider.GetRequiredService<Api.Service.CompanyProvisioningService>());
 
                 securityService.EnsureDefaultPermissionsAndRoles();
 

@@ -334,7 +334,7 @@ export class AccountGoApiContainer extends Container<Env> {
       // Handle mutation SQL sync
       let syncStatements: string[] = [];
       try {
-        syncStatements = parseSyncSqlHeaders(containerRes.headers);
+        syncStatements = await parseSyncSqlHeaders(containerRes.headers);
       } catch (headerErr: any) {
         console.error(
           `[worker] Failed to parse D1 sync headers: method=${request.method} path=${url.pathname} error=${headerErr?.message ?? headerErr}`
@@ -401,7 +401,7 @@ export class AccountGoApiContainer extends Container<Env> {
       // Strip sync headers before returning response
       const responseHeaders = new Headers(containerRes.headers);
       for (const key of Array.from(responseHeaders.keys())) {
-        if (key.startsWith("x-d1-sync-sql")) {
+        if (key.startsWith("x-d1-sync-sql") || key === "x-d1-sync-encoding") {
           responseHeaders.delete(key);
         }
       }

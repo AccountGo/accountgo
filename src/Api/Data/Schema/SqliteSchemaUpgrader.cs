@@ -126,6 +126,7 @@ namespace Api.Data.Schema
 
                 // Ensure all indexes exist idempotently even if v1 was previously applied
                 EnsureAllIndexes(connection, logger);
+                EnsureLifecycleColumns(connection);
             }
             finally
             {
@@ -133,6 +134,33 @@ namespace Api.Data.Schema
                 {
                     connection.Close();
                 }
+            }
+        }
+
+        private static void EnsureLifecycleColumns(DbConnection connection)
+        {
+            using (var tx = connection.BeginTransaction())
+            {
+                var columns = new[]
+                {
+                    new[] { "Company", "DeletedAt", "TEXT NULL" },
+                    new[] { "CompanySetting", "Currency", "TEXT NOT NULL DEFAULT 'PHP'" },
+                    new[] { "CompanyInvitation", "ResendWindowStart", "TEXT NULL" },
+                    new[] { "CompanyInvitation", "ResendCount", "INTEGER NOT NULL DEFAULT 0" }
+                };
+                foreach (var column in columns)
+                {
+                    if (TableExists(connection, column[0], tx) && !ColumnExists(connection, column[0], column[1], tx))
+                    {
+                        using (var cmd = connection.CreateCommand())
+                        {
+                            cmd.Transaction = tx;
+                            cmd.CommandText = $"ALTER TABLE \"{column[0]}\" ADD COLUMN \"{column[1]}\" {column[2]};";
+                            cmd.ExecuteNonQuery();
+                        }
+                    }
+                }
+                tx.Commit();
             }
         }
 
