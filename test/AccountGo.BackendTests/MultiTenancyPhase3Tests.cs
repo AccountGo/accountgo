@@ -194,6 +194,28 @@ namespace AccountGo.BackendTests
         }
 
         [Fact]
+        public async Task DashboardReceivables_ExcludeDraftInvoices()
+        {
+            var invoice = await NewInvoice();
+            invoice.Status = "Draft";
+            var draft = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
+            Assert.True(draft.IsSuccessStatusCode, await draft.Content.ReadAsStringAsync());
+            Assert.Equal(0m, await OutstandingReceivables());
+
+            invoice.Status = "Open";
+            var issued = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
+            Assert.True(issued.IsSuccessStatusCode, await issued.Content.ReadAsStringAsync());
+            Assert.Equal(100m, await OutstandingReceivables());
+        }
+
+        private async Task<decimal> OutstandingReceivables()
+        {
+            var response = await Send(HttpMethod.Get, "/api/Dashboard/Summary");
+            Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
+            return (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("kpis").GetProperty("outstandingReceivables").GetDecimal();
+        }
+
+        [Fact]
         public async Task Invite_EmailHashAndSecurityRoles_WrongEmailDenied_SingleUse()
         {
             var roleId = ViewerRoleId();
