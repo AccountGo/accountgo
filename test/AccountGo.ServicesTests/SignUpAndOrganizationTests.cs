@@ -3,6 +3,8 @@ using System.Linq;
 using System.Security.Claims;
 using Api.Controllers;
 using Api.Data;
+using Api.Service;
+using Api.Tenancy;
 using Core.Domain;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -24,13 +26,13 @@ public class SignUpAndOrganizationTests : IDisposable
     private readonly SqliteConnection _connection;
     private readonly ApiDbContext _db;
     private readonly Mock<IAdministrationService> _mockAdminService = new();
-    private readonly Mock<Core.Tenancy.ITenantContext> _mockTenantContext = new();
+    private readonly TenantContext _tenantContext = new();
 
     public SignUpAndOrganizationTests()
     {
         _connection = new SqliteConnection("DataSource=:memory:");
         _connection.Open();
-        _db = new ApiDbContext(new DbContextOptionsBuilder<ApiDbContext>().UseSqlite(_connection).Options);
+        _db = new ApiDbContext(new DbContextOptionsBuilder<ApiDbContext>().UseSqlite(_connection).Options, tenantContext: _tenantContext);
         _db.Database.EnsureCreated();
 
         _mockAdminService.Setup(s => s.GetCompanyBySlug(It.IsAny<string>()))
@@ -45,7 +47,8 @@ public class SignUpAndOrganizationTests : IDisposable
 
     private OrganizationsController NewController()
     {
-        var controller = new OrganizationsController(_mockTenantContext.Object, _mockAdminService.Object, _db);
+        var controller = new OrganizationsController(_tenantContext, _db,
+            new WorkspaceService(_db, new CompanyProvisioningService(_db, _tenantContext)));
         controller.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
@@ -61,7 +64,8 @@ public class SignUpAndOrganizationTests : IDisposable
     {
         var result = NewController().Create(new OrganizationsController.CreateOrganizationRequest { Name = "" });
 
-        var badRequest = Assert.IsType<BadRequestObjectResult>(result);
+        var badRequest = Assert.IsType<ObjectResult>(result);
+        Assert.Equal(StatusCodes.Status400BadRequest, badRequest.StatusCode);
         var problem = Assert.IsType<ProblemDetails>(badRequest.Value);
         Assert.Equal("Company Name Required", problem.Title);
     }
@@ -90,7 +94,7 @@ public class SignUpAndOrganizationTests : IDisposable
     }
 
     [Fact]
-    public void CreateCompany_WhenSlugAlreadyExists_ReturnsBadRequest()
+    public void CreateCompany_WhenSlugAlreadyExists_ReturnsConflict()
     {
         _db.Companies.Add(new Company { Name = "Existing Workspace", Slug = "existing-workspace" });
         _db.SaveChanges();
@@ -102,8 +106,9 @@ public class SignUpAndOrganizationTests : IDisposable
             Slug = "existing-workspace"
         });
 
-        var badRequest = Assert.IsType<BadRequestObjectResult>(result);
-        var problem = Assert.IsType<ProblemDetails>(badRequest.Value);
+        var conflict = Assert.IsType<ObjectResult>(result);
+        Assert.Equal(StatusCodes.Status409Conflict, conflict.StatusCode);
+        var problem = Assert.IsType<ProblemDetails>(conflict.Value);
         Assert.Equal("Workspace Slug Already Taken", problem.Title);
         Assert.Equal(before, _db.Companies.Count());
     }

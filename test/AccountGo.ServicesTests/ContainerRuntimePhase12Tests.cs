@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
@@ -95,7 +96,7 @@ public class ContainerRuntimePhase12Tests
     }
 
     [Fact]
-    public void D1SyncMiddleware_SplitStatementsIntoChunks_SplitsWhenExceeding32KB_AndRoundTrips()
+    public void D1SyncMiddleware_SplitStatementsIntoChunks_CompressesAndSplitsAtConfiguredLimit_AndRoundTrips()
     {
         // Arrange: Generate statements totaling > 60 KB
         var statements = new List<string>();
@@ -110,25 +111,17 @@ public class ContainerRuntimePhase12Tests
         Assert.True(fullB64.Length > 32768, $"Full payload was {fullB64.Length}, expected > 32768");
 
         // Act
-        var chunks = D1SyncMiddleware.SplitStatementsIntoChunks(statements, 32768);
+        var chunks = D1SyncMiddleware.SplitStatementsIntoChunks(statements, 1024);
 
-        // Assert: Multiple chunks, all <= 32768 chars
+        // Assert: Multiple compressed chunks, all within the configured limit
         Assert.True(chunks.Count >= 2, $"Expected at least 2 chunks, got {chunks.Count}");
         foreach (var chunk in chunks)
         {
-            Assert.True(chunk.Length <= 32768, $"Chunk length {chunk.Length} exceeded 32768");
+            Assert.True(chunk.Length <= 1024, $"Chunk length {chunk.Length} exceeded 1024");
         }
 
-        // Assert round-trip: decode chunks and concatenate
-        var reconstructed = new List<string>();
-        foreach (var chunk in chunks)
-        {
-            var bytes = Convert.FromBase64String(chunk);
-            var json = Encoding.UTF8.GetString(bytes);
-            var chunkStatements = JsonSerializer.Deserialize<List<string>>(json);
-            Assert.NotNull(chunkStatements);
-            reconstructed.AddRange(chunkStatements);
-        }
+        // Join before decoding and decompressing.
+        var reconstructed = DecodeChunks(chunks);
 
         Assert.Equal(statements.Count, reconstructed.Count);
         for (int i = 0; i < statements.Count; i++)
@@ -167,9 +160,9 @@ public class ContainerRuntimePhase12Tests
     {
         // Arrange
         var statements = new List<string>();
-        for (int i = 0; i < 300; i++)
+        for (int i = 0; i < 2000; i++)
         {
-            statements.Add($"INSERT INTO \"Item\" (\"Id\", \"No\", \"Description\", \"CompanyId\") VALUES ({i}, 'ITM-{i:D4}', 'Long item description with extra padding {i}', 1);");
+            statements.Add($"INSERT INTO \"Item\" (\"Id\", \"No\", \"Description\", \"CompanyId\") VALUES ({i}, 'ITM-{Guid.NewGuid():N}', '{Guid.NewGuid():N}', 1);");
         }
 
         var syncContextMock = new Mock<ID1SyncContext>();
@@ -188,12 +181,13 @@ public class ContainerRuntimePhase12Tests
 
         // Assert
         Assert.False(httpContext.Response.Headers.ContainsKey("x-d1-sync-sql"));
+        Assert.Equal("gzip", httpContext.Response.Headers["x-d1-sync-encoding"].ToString());
         Assert.True(httpContext.Response.Headers.ContainsKey("x-d1-sync-sql-count"));
 
         int count = int.Parse(httpContext.Response.Headers["x-d1-sync-sql-count"]!);
         Assert.True(count >= 2);
 
-        var reconstructed = new List<string>();
+        var chunks = new List<string>();
         for (int i = 0; i < count; i++)
         {
             var headerKey = $"x-d1-sync-sql-{i}";
@@ -201,14 +195,10 @@ public class ContainerRuntimePhase12Tests
             var chunkB64 = httpContext.Response.Headers[headerKey].ToString();
             Assert.True(chunkB64.Length <= 32768);
 
-            var bytes = Convert.FromBase64String(chunkB64);
-            var json = Encoding.UTF8.GetString(bytes);
-            var chunkStmts = JsonSerializer.Deserialize<List<string>>(json);
-            Assert.NotNull(chunkStmts);
-            reconstructed.AddRange(chunkStmts);
+            chunks.Add(chunkB64);
         }
 
-        Assert.Equal(statements, reconstructed);
+        Assert.Equal(statements, DecodeChunks(chunks));
     }
 
     [Fact]
@@ -236,12 +226,19 @@ public class ContainerRuntimePhase12Tests
 
         // Assert
         Assert.True(httpContext.Response.Headers.ContainsKey("x-d1-sync-sql"));
+        Assert.Equal("gzip", httpContext.Response.Headers["x-d1-sync-encoding"].ToString());
         Assert.False(httpContext.Response.Headers.ContainsKey("x-d1-sync-sql-count"));
 
         var b64 = httpContext.Response.Headers["x-d1-sync-sql"].ToString();
-        var bytes = Convert.FromBase64String(b64);
-        var json = Encoding.UTF8.GetString(bytes);
-        var chunkStmts = JsonSerializer.Deserialize<List<string>>(json);
-        Assert.Equal(statements, chunkStmts);
+        Assert.Equal(statements, DecodeChunks(new[] { b64 }));
+    }
+
+    private static List<string> DecodeChunks(IEnumerable<string> chunks)
+    {
+        using (var input = new MemoryStream(Convert.FromBase64String(string.Concat(chunks))))
+        using (var gzip = new GZipStream(input, CompressionMode.Decompress))
+        using (var reader = new StreamReader(gzip, Encoding.UTF8))
+            return JsonSerializer.Deserialize<List<string>>(reader.ReadToEnd())
+                ?? throw new InvalidOperationException("Expected a JSON statement array.");
     }
 }

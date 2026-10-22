@@ -14,7 +14,6 @@ namespace Api.Service
     public class ResendEmailSender : IEmailSender
     {
         private const string ResendApiEndpoint = "https://api.resend.com/emails";
-        private const string SandboxSender = "AccountGo <onboarding@resend.dev>";
 
         private readonly HttpClient _httpClient;
         private readonly IConfiguration _configuration;
@@ -39,7 +38,7 @@ namespace Api.Service
             if (string.IsNullOrWhiteSpace(apiKey))
             {
                 _logger.LogWarning("Resend API key is missing. Email to {To} will not be dispatched.", to);
-                return;
+                throw new InvalidOperationException("Resend API key is not configured.");
             }
 
             var fromEmail = _configuration["RESEND_EMAIL_FROM"] 
@@ -54,14 +53,8 @@ namespace Api.Service
 
             var success = await DispatchEmailAsync(apiKey, formattedFrom, to, subject, htmlBody, ct);
 
-            // If the primary send failed because the custom domain is not yet verified on Resend,
-            // check if the recipient is the verified account owner and retry via the sandbox sender.
-            if (!success && (to.Equals("marvinperez@gmail.com", StringComparison.OrdinalIgnoreCase) || 
-                             to.Equals("hello@marvinperez.com", StringComparison.OrdinalIgnoreCase)))
-            {
-                _logger.LogInformation("Attempting fallback dispatch to verified account owner via Resend sandbox '{SandboxSender}'...", SandboxSender);
-                await DispatchEmailAsync(apiKey, SandboxSender, "marvinperez@gmail.com", subject, htmlBody, ct);
-            }
+            if (!success)
+                throw new HttpRequestException("Resend failed to deliver the email. See server logs for the provider response.");
         }
 
         private async Task<bool> DispatchEmailAsync(

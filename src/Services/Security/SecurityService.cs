@@ -471,15 +471,6 @@ namespace Services.Security
                     ? roleIds.Distinct().ToList()
                     : new List<int>();
 
-                if (roleIdList.Count == 0)
-                {
-                    var defaultRole = _securityRoleRepo.Table.FirstOrDefault(r => r.Name == "GeneralUsers");
-                    if (defaultRole != null)
-                    {
-                        roleIdList.Add(defaultRole.Id);
-                    }
-                }
-
                 foreach (var roleId in roleIdList)
                 {
                     _securityUserRoleRepo.Insert(new SecurityUserRole

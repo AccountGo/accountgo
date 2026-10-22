@@ -182,7 +182,7 @@ In `src/Api/worker.ts` `restoreD1ToContainer`:
 Shipped directly on `main` (commits `5bb85fcc`, `e08fc978`). For context only — do not redo:
 - `D1SqlGenerator.Capture()` records entry states **before** `SaveChanges` (EF resets them after), generates `DELETE`s up front and upserts after the save. Both DbContexts override the `bool acceptAllChangesOnSuccess` overloads.
 - Upserts are `INSERT … ON CONFLICT (<pk>) DO UPDATE SET …` — **never `INSERT OR REPLACE`**: D1 enforces foreign keys and REPLACE's implicit delete fires `ON DELETE CASCADE`, wiping children.
-- `x-d1-sync-sql` is base64(UTF-8 JSON array of statements); `worker.ts` runs them with `DB.batch()` prefixed by `PRAGMA defer_foreign_keys = on`.
+- `x-d1-sync-sql` is base64(gzip(UTF-8 JSON array of statements)), with `x-d1-sync-encoding: gzip`; `worker.ts` decompresses and runs them with `DB.batch()` prefixed by `PRAGMA defer_foreign_keys = on`. The worker also accepts legacy uncompressed containers.
 - `test/AccountGo.ServicesTests/D1SyncTests.cs` applies statements to a replica the way D1 does (FKs on, deferred, one transaction). Keep these green.
 
 ---
@@ -234,7 +234,7 @@ Branch: `feat/mt-phase-1.2-container-runtime`. Scope is `src/Api/worker.ts`, `sr
   - `console.error` with request method, path, D1 error message, and statement count (never the SQL values — they contain user data and token hashes).
   - `destroy()` the container so its SQLite (which already committed the write) is discarded and the next request restores from D1 — keeping the container and D1 consistent.
   - Return **503** problem+json: `title: "Change not saved"`, `detail: "Your change could not be saved. Please retry."`, `Retry-After: 5`. The client must not see 2xx for a write that D1 does not have.
-- Header size: if the encoded payload exceeds 32 KB, the .NET middleware splits it across `x-d1-sync-sql-0 … x-d1-sync-sql-N` (each ≤ 32 KB, same base64 JSON array format, split on statement boundaries) plus `x-d1-sync-sql-count: N+1`. The worker concatenates the arrays in order and runs **one** batch. Strip all of these before returning. Add a .NET unit test for splitting and a worker-side test (see acceptance).
+- Header size: gzip the entire JSON statement array before base64 encoding. If the encoded payload exceeds 32 KB, split the base64 stream across `x-d1-sync-sql-0 … x-d1-sync-sql-N` (each ≤ 32 KB) plus `x-d1-sync-sql-count: N+1` and `x-d1-sync-encoding: gzip`. The worker joins the chunks before decoding and decompressing, then runs **one** batch. Strip all sync SQL and encoding headers before returning. Chunking alone does not bypass Cloudflare's total header limit: the Phase 3 workspace provisioning regression test requires **all response headers combined < 32 KB**. Legacy headers without an encoding marker retain their per-chunk base64 JSON-array format.
 
 ### 1.2.6 Run D1 migrations in CI (`.github/workflows/api.yml`)
 Add before "Deploy API Container to Cloudflare":
@@ -378,6 +378,59 @@ Query filters stop reads, but a request can still **reference** another tenant's
 ---
 
 ## Phase 3 — Workspace lifecycle, membership, invitations (API)
+
+**Implementation (2026-10-22):** API and Team & Members UI are implemented locally; not deployed.
+Membership/permissions are re-read on each request (the 60-second membership cache is removed),
+so removals, role changes, slug changes and workspace deletion take effect on the next request.
+The members page now uses workspace membership IDs, governance roles and security-role templates;
+global `Administration/users` CRUD routes are removed.
+
+Workspace creation and signup provision clean books in a transaction: the existing `coa.csv`
+template, GL settings, current financial year, sequence numbers, payment terms, measurements,
+currency (PHP by default), and a neutral zero-rate "No tax" tax/group. Tax rates are configured
+per workspace rather than copying the demo company's jurisdiction-specific taxes.
+Existing accounts/settings are preserved when provisioning is re-run. Startup demo seeding uses
+the same provisioner; sample transactions remain confined to the demo seeder.
+
+Invitation preview remains anonymous and masks the email. Acceptance and pending invitations
+require a verified Identity email; tokens are SHA-256 hashed, single use and expire after seven days.
+Re-invite revokes previous pending links; resend rotates the token and expiry. Limits are persisted:
+20 invitations/workspace/hour and 5 resends/invitation per rolling day; previews allow 30/IP/minute.
+Email delivery failures roll back the operation rather than reporting a sent invitation.
+
+Phase 4 still owns `/invite/:token`, carrying the invitation through login/signup, and pending-invite
+display on SelectOrg. Per D7, the frontend accepts after OTP verification; `signup.invitationToken`
+only suppresses workspace creation and never grants membership. For recovery without a raw link,
+`GET /api/invitations/pending` returns IDs (never tokens), accepted with
+`POST /api/invitations/pending/{id}/accept`; the same verified-email check applies.
+`GET /api/organizations/current/security-roles` supplies non-platform role templates to the members UI.
+`PATCH /api/organizations/current` accepts name, slug and currency settings.
+
+**Rollout:** Apply `src/Api/d1/migrations/0002_workspace_lifecycle.sql` before deploying the API;
+the SQLite upgrader adds the matching columns idempotently at container startup. SQL Server uses
+the `WorkspaceLifecycle` EF migration instead. `PUBLIC_WEB_URL` must be the deployed web origin
+(currently `https://accountgo-web.anter.workers.dev`, matching CORS), or localhost for development.
+The Invite and Resend actions in Team & Members are disabled with an explanation until the Phase 4
+invitation page is deployed; the backend invitation endpoints remain available for acceptance testing.
+Do not send production invitations before that page is deployed.
+The DDL is additive; rollback application code without dropping the new columns.
+
+**Local validation (2026-10-22, including NO-GO remediation):** MSBuild rebuilds passed for
+`src/src.sln` and both backend test projects; 35 Phase 2/3 integration tests and 39 selected
+signup/security/schema/email/sync/container-runtime service tests passed.
+The schema checks cover both D1 migration application and idempotent SQLite upgrades; provisioning
+sync SQL is replayed with foreign keys enabled. `cd src/Web && pnpm build` and
+`cd src/Api && pnpm test` passed (11 worker tests, including gzip, chunk joining, Unicode,
+corrupt payloads, error redaction and legacy headers). The worker sync parser's strict TypeScript
+check passed. The workspace provisioning regression measured **5,195 sync header bytes** and
+**5,265 total response header bytes** (names, values and CRLF included), both below 32 KB,
+and replayed the decompressed SQL with foreign keys enabled. The header-size test and six
+container-runtime tests also passed after the final test naming/decoder cleanup. SQL Server
+`dotnet ef migrations has-pending-model-changes --project src/Api/Api.csproj --context ApiDbContext --no-build`
+with `DBPROVIDER=SqlServer` reported no pending model changes. `git diff --check` passed.
+These are local checks, not production or browser smoke tests. Non-failing warnings remain for
+existing C# code, Vite bundle size, older installed EF tooling, and the filtered Company navigation
+relationships; invitation and membership endpoints explicitly scope/join active companies.
 
 New `OrganizationsController` (`api/organizations`) and `InvitationsController` (`api/invitations`). Retire the company endpoints in `AdministrationController` (`companies`, `company` POST) — keep them as thin aliases returning the new behaviour for one release, or remove and update the frontend in the same PR.
 

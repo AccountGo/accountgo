@@ -94,6 +94,28 @@ export interface TeamMember {
   roles: RoleItem[];
 }
 
+export type WorkspaceRole = 'Owner' | 'Admin' | 'Member';
+
+export interface WorkspaceMember {
+  memberId: number;
+  userId: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  role: WorkspaceRole;
+  securityRoles: RoleItem[];
+  status: 'Active' | 'Suspended';
+  joinedAt: string;
+}
+
+export interface WorkspaceInvitation {
+  id: number;
+  email: string;
+  role: Exclude<WorkspaceRole, 'Owner'>;
+  securityRoleIds: number[];
+  expiresAt: string;
+}
+
 export interface TenantContextType {
   currentOrg: OrgDetails;
   availableOrgs: OrgDetails[];
