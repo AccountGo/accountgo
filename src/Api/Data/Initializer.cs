@@ -56,7 +56,7 @@ namespace Api.Data
                 var company = SetupCompany();
                 Console.WriteLine("SetupCompany() - Completed!");
 
-                provisioning.Provision(company);
+                provisioning.Provision(company, "PHP");
 
                 //6.Tax
                 SetupTax();

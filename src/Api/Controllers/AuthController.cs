@@ -212,7 +212,7 @@ namespace Api.Controllers
                     return Problem(statusCode: 400, title: "Invalid workspace slug");
             }
 
-            var currency = (request.Currency ?? "PHP").Trim().ToUpperInvariant();
+            var currency = (request.Currency ?? "USD").Trim().ToUpperInvariant();
             if (!Regex.IsMatch(currency, "^[A-Z]{3}$"))
                 return Problem(statusCode: 400, title: "Invalid currency");
 

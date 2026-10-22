@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useOutletContext, useParams, Link } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -24,6 +24,7 @@ import {
   RecordPaymentPayload,
 } from '../types';
 import { useAuth } from '../auth/AuthContext';
+import { currencySymbol as getCurrencySymbol } from '../lib/currency';
 
 export const InvoiceDetail: React.FC = () => {
   const { currentOrg } = useOutletContext<TenantContextType>();
@@ -54,16 +55,7 @@ export const InvoiceDetail: React.FC = () => {
   const [voidError, setVoidError] = useState<string | null>(null);
 
   // Currency
-  const currencySymbol = useMemo(() => {
-    switch (currentOrg.currency) {
-      case 'EUR': return '€';
-      case 'GBP': return '£';
-      case 'PHP': return '₱';
-      case 'CAD': return 'CA$';
-      case 'AUD': return 'AU$';
-      default: return '$';
-    }
-  }, [currentOrg.currency]);
+  const currencySymbol = getCurrencySymbol(currentOrg.currency);
 
   const formatCurrency = useCallback(
     (val: number) => {

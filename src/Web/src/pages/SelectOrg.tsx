@@ -39,7 +39,7 @@ export const SelectOrg: React.FC = () => {
   // New org form state
   const [newOrgName, setNewOrgName] = useState('');
   const [newOrgSlug, setNewOrgSlug] = useState('');
-  const [newOrgCurrency, setNewOrgCurrency] = useState('PHP');
+  const [newOrgCurrency, setNewOrgCurrency] = useState('USD');
 
   const { user: authUser, logout, authFetch } = useAuth();
   const userName = authUser
@@ -536,6 +536,7 @@ export const SelectOrg: React.FC = () => {
                 >
                   <option value="USD">USD — US Dollar ($)</option>
                   <option value="PHP">PHP — Philippine Peso (₱)</option>
+                  <option value="CAD">CAD — Canadian Dollar (CA$)</option>
                   <option value="EUR">EUR — Euro (€)</option>
                   <option value="GBP">GBP — British Pound (£)</option>
                   <option value="SGD">SGD — Singapore Dollar (S$)</option>

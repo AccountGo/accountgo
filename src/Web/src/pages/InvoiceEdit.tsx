@@ -22,6 +22,7 @@ import {
   ItemOption,
 } from '../types';
 import { useAuth } from '../auth/AuthContext';
+import { currencySymbol as getCurrencySymbol } from '../lib/currency';
 
 interface InvoiceEditProps {
   isEdit?: boolean;
@@ -94,16 +95,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
   const [customerModalError, setCustomerModalError] = useState<string | null>(null);
 
   // Currency
-  const currencySymbol = useMemo(() => {
-    switch (currentOrg.currency) {
-      case 'EUR': return '€';
-      case 'GBP': return '£';
-      case 'PHP': return '₱';
-      case 'CAD': return 'CA$';
-      case 'AUD': return 'AU$';
-      default: return '$';
-    }
-  }, [currentOrg.currency]);
+  const currencySymbol = getCurrencySymbol(currentOrg.currency);
 
   const formatCurrency = useCallback(
     (val: number) => {

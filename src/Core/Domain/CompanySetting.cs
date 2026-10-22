@@ -16,6 +16,6 @@ namespace Core.Domain
     {
         public int CompanyId { get; set; }
         public Company Company { get; set; }
-        public string Currency { get; set; } = "PHP";
+        public string Currency { get; set; } = "USD";
     }
 }

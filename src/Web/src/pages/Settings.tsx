@@ -23,6 +23,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { TenantContextType, WorkspaceMember } from '../types';
+import { DEFAULT_CURRENCY } from '../lib/currency';
 import { THEMES, SCHEMES, ThemeId, SchemeId } from '../themes';
 import { useTheme } from '../themes/ThemeContext';
 import { useAuth } from '../auth/AuthContext';
@@ -78,7 +79,7 @@ export const Settings: React.FC = () => {
   const [companyCode, setCompanyCode] = useState(currentOrg.companyCode || '');
   const [cra, setCra] = useState(currentOrg.cra || '');
   const [orgSlug, setOrgSlug] = useState(currentOrg.slug);
-  const [currency, setCurrency] = useState(currentOrg.currency || '');
+  const [currency, setCurrency] = useState(currentOrg.currency || DEFAULT_CURRENCY);
   const [isLoadingCompany, setIsLoadingCompany] = useState(true);
   const [isSavingCompany, setIsSavingCompany] = useState(false);
   const [companySaveSuccess, setCompanySaveSuccess] = useState(false);
@@ -566,14 +567,15 @@ export const Settings: React.FC = () => {
                     onChange={(e) => setCurrency(e.target.value)}
                     className="w-full h-11 px-3.5 rounded-xl bg-[var(--bg-subtle)] shadow-inner text-sm font-mono text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--brand-ring)] cursor-pointer"
                   >
-                    <option value="PHP">PHP - Philippine Peso (₱)</option>
                     <option value="USD">USD - United States Dollar ($)</option>
+                    <option value="PHP">PHP - Philippine Peso (₱)</option>
                     <option value="CAD">CAD - Canadian Dollar ($)</option>
                     <option value="EUR">EUR - Euro (€)</option>
                     <option value="GBP">GBP - British Pound (£)</option>
+                    <option value="SGD">SGD - Singapore Dollar (S$)</option>
                   </select>
                   <p className="text-[11px] text-[var(--text-muted)] mt-1">
-                    Reporting currency configured for general ledger presentation.
+                    Display only: changing it swaps the symbol, amounts are not converted.
                   </p>
                 </div>
 
@@ -665,7 +667,7 @@ export const Settings: React.FC = () => {
                 </div>
               ) : (
                 members.slice(0, 4).map((m) => {
-                  const fullName = `${m.firstName || ''} ${m.lastName || ''}`.trim() || m.email;
+                  const fullName = `${m.firstName || ''} ${m.lastName || ''}`.trim() || m.email || 'Unknown user';
                   const isCurrentUser = user.email?.toLowerCase() === m.email?.toLowerCase();
 
                   return (
