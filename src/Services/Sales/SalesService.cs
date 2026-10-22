@@ -1042,7 +1042,7 @@ namespace Services.Sales
                 foreach (var line in salesInvoice.SalesInvoiceLines)
                 {
                     var item = _inventoryService.GetItemById(line.ItemId);
-                    if (item.ItemCategory.ItemType == ItemTypes.Purchased)
+                    if (item.ItemCategory?.ItemType == ItemTypes.Purchased)
                     {
                         debitAccounts.Add(new KeyValuePair<int, decimal>(item.CostOfGoodsSoldAccountId.Value, item.Cost.Value * line.Quantity));
                         creditAccounts.Add(new KeyValuePair<int, decimal>(item.InventoryAccountId.Value, item.Cost.Value * line.Quantity));

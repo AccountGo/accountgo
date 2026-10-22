@@ -129,6 +129,45 @@ namespace AccountGo.BackendTests
         }
 
         [Fact]
+        public async Task SaveSalesInvoice_FreeTextLine_InNewWorkspace_CreatesItemAndPosts()
+        {
+            var invoice = await NewInvoice();
+            var line = invoice.SalesInvoiceLines.Single();
+            line.ItemId = null;
+            line.MeasurementId = null;
+            line.ItemDescription = "Website design";
+            invoice.Status = "Open";
+            using (var scope = _factory.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+                using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
+                {
+                    // A fresh workspace has no items at all.
+                    db.Items.RemoveRange(db.Items);
+                    db.SaveChanges();
+                }
+            }
+
+            for (var i = 0; i < 2; i++)
+            {
+                var response = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
+                Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
+            }
+
+            using (var scope = _factory.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+                using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
+                {
+                    var item = db.Items.Single(i => i.Description == "Website design");
+                    var lines = db.SalesInvoiceLines.Include(l => l.SalesInvoiceHeader).Where(l => l.ItemId == item.Id).ToList();
+                    Assert.Equal(2, lines.Count);
+                    Assert.All(lines, l => Assert.NotNull(l.SalesInvoiceHeader.GeneralLedgerHeaderId));
+                }
+            }
+        }
+
+        [Fact]
         public async Task Invite_EmailHashAndSecurityRoles_WrongEmailDenied_SingleUse()
         {
             var roleId = ViewerRoleId();
