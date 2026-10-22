@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { TenantContextType, Invoice, InvoiceStatus, InvoicingKPIs, RecordPaymentPayload } from '../types';
 import { useAuth } from '../auth/AuthContext';
+import { currencySymbol as getCurrencySymbol } from '../lib/currency';
 
 export const Invoices: React.FC = () => {
   const { currentOrg } = useOutletContext<TenantContextType>();
@@ -50,16 +51,7 @@ export const Invoices: React.FC = () => {
   const [voidError, setVoidError] = useState<string | null>(null);
 
   // Currency Formatter
-  const currencySymbol = useMemo(() => {
-    switch (currentOrg.currency) {
-      case 'EUR': return '€';
-      case 'GBP': return '£';
-      case 'PHP': return '₱';
-      case 'CAD': return 'CA$';
-      case 'AUD': return 'AU$';
-      default: return '$';
-    }
-  }, [currentOrg.currency]);
+  const currencySymbol = getCurrencySymbol(currentOrg.currency);
 
   const formatCurrency = useCallback((val: number) => {
     return `${currencySymbol}${val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;

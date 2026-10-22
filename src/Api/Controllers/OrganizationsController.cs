@@ -48,7 +48,7 @@ namespace Api.Controllers
             public string ShortName { get; set; }
             public string Slug { get; set; }
             public string Plan { get; set; } = "accounting";
-            public string Currency { get; set; } = "PHP";
+            public string Currency { get; set; } = "USD";
         }
 
         [TenantFree]
@@ -60,7 +60,7 @@ namespace Api.Controllers
             if (string.IsNullOrWhiteSpace(request.Name))
                 return Problem(statusCode: 400, title: "Company Name Required", detail: "Company name is required.");
             var slug = WorkspaceService.NormalizeSlug(string.IsNullOrWhiteSpace(request.Slug) ? request.Name : request.Slug);
-            var currency = (request.Currency ?? "PHP").Trim().ToUpperInvariant();
+            var currency = (request.Currency ?? "USD").Trim().ToUpperInvariant();
             var plan = (request.Plan ?? "accounting").ToLowerInvariant();
             if (slug.Length == 0 || slug.Length > 100 || !System.Text.RegularExpressions.Regex.IsMatch(currency, "^[A-Z]{3}$") ||
                 !new[] { "invoicing", "accounting", "enterprise" }.Contains(plan))
@@ -87,7 +87,7 @@ namespace Api.Controllers
                 id = company.Id, name = company.Name, slug = company.Slug, shortName = company.ShortName,
                 plan = company.Plan, activeModules = company.GetActiveModules(), subscriptionStatus = company.SubscriptionStatus,
                 role = _tenant.Role.ToString(), permissions = _tenant.Permissions,
-                currency = _db.CompanySettings.Select(s => s.Currency).FirstOrDefault() ?? "PHP"
+                currency = _db.CompanySettings.Select(s => s.Currency).FirstOrDefault() ?? "USD"
             });
         }
 

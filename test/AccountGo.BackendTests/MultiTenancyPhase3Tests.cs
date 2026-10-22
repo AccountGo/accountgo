@@ -75,7 +75,7 @@ namespace AccountGo.BackendTests
             _otherToken = other.Item1;
             _otherId = other.Item2;
             _slug = "phase-three";
-            var response = await Send(HttpMethod.Post, "/api/organizations", new { name = "Phase Three", slug = _slug, currency = "USD" }, scoped: false);
+            var response = await Send(HttpMethod.Post, "/api/organizations", new { name = "Phase Three", slug = _slug }, scoped: false);
             Assert.Equal(HttpStatusCode.Created, response.StatusCode);
             var created = await Json(response);
             _companyId = int.Parse(created.GetProperty("id").GetString());

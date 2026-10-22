@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { TenantContextType } from '../types';
 import { useAuth } from '../auth/AuthContext';
+import { currencySymbol as getCurrencySymbol } from '../lib/currency';
 
 interface DashboardSummary {
   kpis: {
@@ -62,14 +63,7 @@ export const Dashboard: React.FC = () => {
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const currencySymbol =
-    currentOrg.currency === 'PHP'
-      ? '₱'
-      : currentOrg.currency === 'EUR'
-      ? '€'
-      : currentOrg.currency === 'GBP'
-      ? '£'
-      : '$';
+  const currencySymbol = getCurrencySymbol(currentOrg.currency);
 
   useEffect(() => {
     let mounted = true;

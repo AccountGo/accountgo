@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { TenantContextType } from '../types';
 import { useAuth } from '../auth/AuthContext';
+import { currencySymbol as getCurrencySymbol } from '../lib/currency';
 
 interface LiveRow {
   col1: string;
@@ -56,14 +57,7 @@ export const PlaceholderView: React.FC = () => {
   const [rows, setRows] = useState<LiveRow[]>([]);
   const [metrics, setMetrics] = useState<LiveMetric[]>([]);
 
-  const currencySymbol =
-    currentOrg.currency === 'PHP'
-      ? '₱'
-      : currentOrg.currency === 'EUR'
-      ? '€'
-      : currentOrg.currency === 'GBP'
-      ? '£'
-      : '$';
+  const currencySymbol = getCurrencySymbol(currentOrg.currency);
 
   const formatAmount = (val: number | undefined) => {
     if (val === undefined || isNaN(val)) return '0.00';

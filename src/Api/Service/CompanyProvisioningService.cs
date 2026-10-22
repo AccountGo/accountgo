@@ -31,7 +31,7 @@ namespace Api.Service
         }
 
         /// <summary>Seeds missing defaults. The caller owns the transaction.</summary>
-        public void Provision(Company company, string currency = "PHP")
+        public void Provision(Company company, string currency = "USD")
         {
             using (_tenant.Impersonate(company.Id, company.Slug, CompanyMemberRole.Owner))
             {

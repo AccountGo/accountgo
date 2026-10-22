@@ -144,7 +144,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         lastName: payload.lastName.trim(),
         organizationName: payload.organizationName?.trim() || undefined,
         organizationSlug: payload.organizationSlug?.trim() || undefined,
-        currency: payload.currency || 'PHP',
+        currency: payload.currency || 'USD',
         invitationToken: payload.invitationToken || undefined,
       }),
     });
