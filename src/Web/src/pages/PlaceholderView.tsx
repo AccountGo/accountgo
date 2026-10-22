@@ -190,8 +190,14 @@ export const PlaceholderView: React.FC = () => {
           const accounts: AccountTreeNode[] = accountsRes.ok ? await accountsRes.json() : [];
 
           if (mounted) {
-            const totalDebit = trialBalance.reduce((acc: number, item: any) => acc + (item.debit || 0), 0);
-            const totalCredit = trialBalance.reduce((acc: number, item: any) => acc + (item.credit || 0), 0);
+            // The API returns posted debits and credits per account; a trial balance lists each account's net balance on one side.
+            const balances = trialBalance
+              .map((item: any) => ({ item, net: Math.round(((item.debit || 0) - (item.credit || 0)) * 100) / 100 }))
+              .sort((a: any, b: any) => String(a.item.accountCode).localeCompare(String(b.item.accountCode)));
+            const totalDebit = balances.reduce((acc: number, b: any) => acc + Math.max(b.net, 0), 0);
+            const totalCredit = balances.reduce((acc: number, b: any) => acc + Math.max(-b.net, 0), 0);
+            const difference = Math.abs(totalDebit - totalCredit);
+            const isBalanced = difference < 0.005;
 
             setMetrics([
               {
@@ -200,29 +206,29 @@ export const PlaceholderView: React.FC = () => {
                 change: 'Standard Chart of Accounts',
               },
               {
-                label: 'Total Debits (DR)',
+                label: 'Debit Balances',
                 value: `${currencySymbol}${formatAmount(totalDebit)}`,
-                change: 'General ledger sum',
+                change: 'Trial balance total',
               },
               {
-                label: 'Total Credits (CR)',
+                label: 'Credit Balances',
                 value: `${currencySymbol}${formatAmount(totalCredit)}`,
-                change: 'General ledger sum',
+                change: 'Trial balance total',
               },
               {
                 label: 'Trial Balance State',
-                value: 'Balanced',
-                change: 'Double-entry verified',
+                value: isBalanced ? 'Balanced' : 'Out of balance',
+                change: isBalanced ? 'Debits equal credits' : `Difference ${currencySymbol}${formatAmount(difference)}`,
               },
             ]);
 
-            const tableRows: LiveRow[] = trialBalance.map((item: any) => ({
+            const tableRows: LiveRow[] = balances.map(({ item, net }: any) => ({
               col1: item.accountCode,
               col2: item.accountName,
-              col3: `${currencySymbol}${formatAmount(item.debit)}`,
-              col4: `${currencySymbol}${formatAmount(item.credit)}`,
-              col5: `${currencySymbol}${formatAmount(Math.abs((item.debit || 0) - (item.credit || 0)))}`,
-              status: (item.debit || 0) > 0 ? 'Debit' : 'Credit',
+              col3: `${currencySymbol}${formatAmount(Math.max(net, 0))}`,
+              col4: `${currencySymbol}${formatAmount(Math.max(-net, 0))}`,
+              col5: `${currencySymbol}${formatAmount(Math.abs(net))}`,
+              status: net > 0 ? 'Debit' : net < 0 ? 'Credit' : 'Zero',
               raw: item,
             }));
             setRows(tableRows);
