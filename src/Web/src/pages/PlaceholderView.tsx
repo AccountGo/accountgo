@@ -35,6 +35,14 @@ interface LiveMetric {
   change: string;
 }
 
+interface AccountTreeNode {
+  childAccounts?: AccountTreeNode[];
+}
+
+function countAccounts(accounts: AccountTreeNode[]): number {
+  return accounts.reduce((total, account) => total + 1 + countAccounts(account.childAccounts || []), 0);
+}
+
 export const PlaceholderView: React.FC = () => {
   const { currentOrg } = useOutletContext<TenantContextType>();
   const { authFetch } = useAuth();
@@ -179,12 +187,13 @@ export const PlaceholderView: React.FC = () => {
             setRows(tableRows);
           }
         } else if (currentSection === 'financials') {
-          const [tbRes] = await Promise.all([
+          const [tbRes, accountsRes] = await Promise.all([
             authFetch('/api/Financials/trialbalance'),
             authFetch('/api/Financials/Accounts'),
           ]);
 
           const trialBalance = tbRes.ok ? await tbRes.json() : [];
+          const accounts: AccountTreeNode[] = accountsRes.ok ? await accountsRes.json() : [];
 
           if (mounted) {
             const totalDebit = trialBalance.reduce((acc: number, item: any) => acc + (item.debit || 0), 0);
@@ -193,7 +202,7 @@ export const PlaceholderView: React.FC = () => {
             setMetrics([
               {
                 label: 'Active COA Accounts',
-                value: `${trialBalance.length} Accounts`,
+                value: `${countAccounts(accounts)} Accounts`,
                 change: 'Standard Chart of Accounts',
               },
               {

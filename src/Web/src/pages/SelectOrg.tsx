@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Building2,
   Search,
@@ -14,11 +14,12 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { setPersistedOrgSlug } from '../lib/storage';
-import { OrgDetails } from '../types';
+import { OrgDetails, Organization, PendingInvitation } from '../types';
 import { useAuth } from '../auth/AuthContext';
 
 export const SelectOrg: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(
@@ -27,7 +28,11 @@ export const SelectOrg: React.FC = () => {
 
   // Live database organizations
   const [orgsList, setOrgsList] = useState<OrgDetails[]>([]);
+  const [pendingInvitations, setPendingInvitations] = useState<PendingInvitation[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isLoadingInvitations, setIsLoadingInvitations] = useState<boolean>(true);
+  const [acceptingInvitation, setAcceptingInvitation] = useState<number | null>(null);
+  const [invitationError, setInvitationError] = useState('');
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
@@ -49,42 +54,51 @@ export const SelectOrg: React.FC = () => {
     const fetchCompanies = async () => {
       try {
         // Only workspaces the caller is an active member of.
-        const res = await authFetch('/api/organizations');
-        if (res.ok) {
-          const data = await res.json();
+        const [response, invitationsResponse] = await Promise.all([
+          authFetch('/api/organizations'),
+          authFetch('/api/invitations/pending'),
+        ]);
+        if (response.ok) {
+          const data = await response.json() as Organization[];
           if (Array.isArray(data) && mounted) {
-            const live: OrgDetails[] = data.map((c: any) => ({
-              id: c.id?.toString() || c.slug,
-              name: c.name,
-              slug: c.slug,
-              role: c.role || 'Member',
-              plan: c.plan || 'accounting',
-              currency: 'PHP',
-              fiscalYearEnd: 'Dec 31',
-              avatarBg:
-                c.plan === 'invoicing'
-                  ? 'bg-gradient-to-br from-violet-500 to-fuchsia-600'
-                  : c.plan === 'enterprise'
+            const live: OrgDetails[] = data.map((organization) => ({
+              id: organization.id,
+              name: organization.name,
+              slug: organization.slug,
+              role: organization.role,
+              plan: organization.plan,
+              avatarBg: organization.plan === 'invoicing'
+                ? 'bg-gradient-to-br from-violet-500 to-fuchsia-600'
+                : organization.plan === 'enterprise'
                   ? 'bg-gradient-to-br from-indigo-500 to-blue-600'
                   : 'bg-gradient-to-br from-emerald-500 to-teal-600',
               whitelabel: {
-                themeId: c.plan === 'invoicing' ? 'tokyo-night' : c.plan === 'enterprise' ? 'sapphire' : 'accountgo',
-                brandName: c.name,
+                themeId: organization.plan === 'invoicing' ? 'tokyo-night' : organization.plan === 'enterprise' ? 'sapphire' : 'accountgo',
+                brandName: organization.name,
               },
               subscription: {
-                planId: c.plan,
-                planName: (c.plan || 'accounting').charAt(0).toUpperCase() + (c.plan || 'accounting').slice(1),
-                status: c.subscriptionStatus || 'active',
-                activeModules: c.activeModules || ['sales'],
-                validUntil: '2028-12-31',
+                planId: organization.plan,
+                planName: organization.plan.charAt(0).toUpperCase() + organization.plan.slice(1),
+                status: organization.subscriptionStatus,
+                activeModules: organization.activeModules,
               },
             }));
             setOrgsList(live);
+            if (invitationsResponse.ok) {
+              const pending = await invitationsResponse.json() as PendingInvitation[];
+              if (mounted) setPendingInvitations(Array.isArray(pending) ? pending : []);
+            } else if (mounted) {
+              setInvitationError('Could not load pending invitations.');
+            }
           }
         }
       } catch {
+        if (mounted) setInvitationError('Could not load your workspaces or invitations.');
       } finally {
-        if (mounted) setIsLoading(false);
+        if (mounted) {
+          setIsLoading(false);
+          setIsLoadingInvitations(false);
+        }
       }
     };
 
@@ -93,6 +107,14 @@ export const SelectOrg: React.FC = () => {
       mounted = false;
     };
   }, [authFetch]);
+
+  React.useEffect(() => {
+    if (location.state?.fromSignIn === true &&
+        !isLoading && !isLoadingInvitations && !showCreateModal && !location.state?.notice &&
+        !invitationError && orgsList.length === 1 && pendingInvitations.length === 0) {
+      handleSelectOrg(orgsList[0]);
+    }
+  }, [isLoading, isLoadingInvitations, showCreateModal, location.state, invitationError, orgsList, pendingInvitations]);
 
   // Accessibility: close modal on Escape key
   React.useEffect(() => {
@@ -120,6 +142,32 @@ export const SelectOrg: React.FC = () => {
   const handleSelectOrg = (org: OrgDetails) => {
     setPersistedOrgSlug(org.slug);
     navigate(`/org/${org.slug}/dashboard`);
+  };
+
+  const handleAcceptInvitation = async (invitation: PendingInvitation) => {
+    setAcceptingInvitation(invitation.id);
+    setInvitationError('');
+    try {
+      const response = await authFetch(`/api/invitations/pending/${invitation.id}/accept`, { method: 'POST' });
+      if (response.status === 403) {
+        setInvitationError('Verify your email before accepting this invitation.');
+        return;
+      }
+      if (!response.ok) {
+        setInvitationError(response.status === 410
+          ? 'This invitation has expired or has already been accepted.'
+          : 'Could not accept this invitation. Refresh the page and try again.');
+        return;
+      }
+      const accepted = await response.json() as { slug: string };
+      setPendingInvitations((previous) => previous.filter((item) => item.id !== invitation.id));
+      setPersistedOrgSlug(accepted.slug);
+      navigate(`/org/${encodeURIComponent(accepted.slug)}/dashboard`);
+    } catch {
+      setInvitationError('Could not accept this invitation. Please try again.');
+    } finally {
+      setAcceptingInvitation(null);
+    }
   };
 
   const handleCreateOrg = async (e: React.FormEvent) => {
@@ -181,8 +229,7 @@ export const SelectOrg: React.FC = () => {
           planId: createdCompany.plan || 'accounting',
           planName: 'Accounting',
           status: 'active',
-          activeModules: createdCompany.activeModules || ['sales', 'financials', 'purchases', 'reports'],
-          validUntil: '2028-12-31',
+          activeModules: createdCompany.activeModules,
         },
       };
 
@@ -251,6 +298,46 @@ export const SelectOrg: React.FC = () => {
             Choose a workspace to enter or create a new organization. All accounting data, chart of accounts, and permissions are isolated by tenant.
           </p>
         </div>
+        {typeof location.state?.notice === 'string' && (
+          <p role="status" className="max-w-4xl w-full mx-auto mb-4 p-3 rounded-xl bg-amber-500/10 text-amber-300">
+            {location.state.notice}
+          </p>
+        )}
+        {invitationError && (
+          <p role="alert" className="max-w-4xl w-full mx-auto mb-4 p-3 rounded-xl bg-rose-500/10 text-rose-400">
+            {invitationError}
+          </p>
+        )}
+
+        <section aria-labelledby="pending-invitations-title" className="max-w-4xl w-full mx-auto mb-6 p-4 sm:p-5 rounded-2xl bg-[var(--bg-surface)]">
+          <h2 id="pending-invitations-title" className="text-lg font-bold mb-3">Pending invitations</h2>
+          {isLoadingInvitations ? (
+            <p role="status" className="text-sm text-[var(--text-muted)]">Loading invitations...</p>
+          ) : pendingInvitations.length === 0 ? (
+            <p className="text-sm text-[var(--text-muted)]">No pending invitations.</p>
+          ) : (
+            <div className="space-y-3">
+              {pendingInvitations.map((invitation) => (
+                <div key={invitation.id} className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--border-subtle)] pt-3">
+                  <div>
+                    <p className="font-semibold">{invitation.workspaceName}</p>
+                    <p className="text-sm text-[var(--text-muted)]">
+                      Invited as {invitation.role} · expires {new Date(invitation.expiresAt).toLocaleDateString()}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    disabled={acceptingInvitation !== null}
+                    onClick={() => void handleAcceptInvitation(invitation)}
+                  >
+                    {acceptingInvitation === invitation.id ? 'Accepting...' : 'Accept'}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
 
         {/* Search & Actions Bar (Border-Less) */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mb-6">
@@ -328,7 +415,9 @@ export const SelectOrg: React.FC = () => {
                   <div className="mt-4 pt-3 border-t border-[var(--bg-subtle)] flex items-center justify-between text-xs text-[var(--text-muted)] w-full">
                     <span className="flex items-center gap-1.5">
                       <ShieldCheck className="w-3.5 h-3.5 text-indigo-400" />
-                      <span>Role: {org.role || 'Member'}</span>
+                      <span className="px-2 py-0.5 rounded-full bg-[var(--brand-subtle)] text-[var(--brand-primary)] font-semibold">
+                        {org.role}
+                      </span>
                     </span>
                     <span className="flex items-center gap-1 text-[var(--brand-primary)] font-semibold group-hover:translate-x-1 transition-transform">
                       <span>Enter</span>

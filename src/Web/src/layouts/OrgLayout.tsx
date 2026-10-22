@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { useParams, Outlet, Link, useNavigate } from 'react-router-dom';
+import { useParams, Outlet, useNavigate, Link } from 'react-router-dom';
 import { Building2, AlertCircle, ArrowLeft, RefreshCw } from 'lucide-react';
-import { OrgDetails, TenantContextType, WhitelabelConfig, SidebarMode, UserProfile, ModuleKey, PlanKey, SubscriptionInfo } from '../types';
+import { OrgDetails, TenantContextType, WhitelabelConfig, SidebarMode, UserProfile, ModuleKey, PlanKey, SubscriptionInfo, Organization } from '../types';
 import { setPersistedOrgSlug, clearPersistedOrgSlug } from '../lib/storage';
 import { Sidebar } from '../components/Sidebar';
 import { Header } from '../components/Header';
@@ -15,35 +15,19 @@ export const OrgLayout: React.FC = () => {
   const { setTenantWhitelabel } = useTheme();
   const { user: authUser, authFetch } = useAuth();
 
-  const userProfile: UserProfile = useMemo(() => {
-    if (!authUser) {
-      return {
-        id: '',
-        name: '',
-        email: '',
-        role: 'Member',
-        permissions: [],
-      };
-    }
-    const name = [authUser.firstName, authUser.lastName].filter(Boolean).join(' ') || authUser.email.split('@')[0];
-    const role = authUser.roles?.includes('SystemAdministrators')
-      ? 'System Administrator'
-      : (authUser.roles?.[0] || 'Member');
-    return {
-      id: authUser.id,
-      name,
-      email: authUser.email,
-      role,
-      permissions: authUser.permissions || [],
-    };
-  }, [authUser]);
-
   const [availableOrgs, setAvailableOrgs] = useState<OrgDetails[]>([]);
   const [currentOrg, setCurrentOrg] = useState<OrgDetails | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
-  // Permissions in the current workspace (from /api/organizations/current); null until loaded.
-  const [workspacePermissions, setWorkspacePermissions] = useState<string[] | null>(null);
   const [isMobileOpen, setIsMobileOpen] = useState<boolean>(false);
+  const userProfile: UserProfile = useMemo(() => ({
+    id: authUser?.id || '',
+    name: authUser
+      ? [authUser.firstName, authUser.lastName].filter(Boolean).join(' ') || authUser.email.split('@')[0]
+      : '',
+    email: authUser?.email || '',
+    role: currentOrg?.role || '',
+    permissions: currentOrg?.permissions || [],
+  }), [authUser, currentOrg]);
 
   const [sidebarMode, setSidebarModeState] = useState<SidebarMode>(() => {
     if (typeof window === 'undefined') return 'expanded';
@@ -67,7 +51,7 @@ export const OrgLayout: React.FC = () => {
     setSidebarMode(sidebarMode === 'collapsed' ? 'expanded' : 'collapsed');
   };
 
-  // Fetch available organizations directly from live database and resolve tenant
+  // Resolve both membership and workspace-specific access from the API.
   useEffect(() => {
     let mounted = true;
     setLoading(true);
@@ -76,95 +60,97 @@ export const OrgLayout: React.FC = () => {
       try {
         // Only the caller's own active workspaces (tenant-free endpoint).
         const res = await authFetch('/api/organizations');
-        if (res.ok) {
-          const data = await res.json();
-          if (Array.isArray(data) && mounted) {
-            const orgs: OrgDetails[] = data.map((c: any) => ({
-              id: c.id?.toString() || c.slug,
-              name: c.name,
-              slug: c.slug,
-              shortName: c.shortName,
-              companyCode: c.companyCode,
-              cra: c.cra,
-              role: c.role || 'Member',
-              plan: (c.plan || 'accounting') as PlanKey,
-              currency: 'PHP',
-              fiscalYearEnd: 'Dec 31',
-              avatarBg:
-                c.plan === 'invoicing'
-                  ? 'bg-gradient-to-br from-violet-500 to-fuchsia-600'
-                  : c.plan === 'enterprise'
-                  ? 'bg-gradient-to-br from-indigo-500 to-blue-600'
-                  : 'bg-gradient-to-br from-emerald-500 to-teal-600',
-              whitelabel: {
-                themeId: c.plan === 'invoicing' ? 'tokyo-night' : c.plan === 'enterprise' ? 'sapphire' : 'accountgo',
-                brandName: c.name,
-              },
-              subscription: {
-                planId: (c.plan || 'accounting') as PlanKey,
-                planName: (c.plan || 'accounting').charAt(0).toUpperCase() + (c.plan || 'accounting').slice(1),
-                status: c.subscriptionStatus || 'active',
-                activeModules: c.activeModules || ['sales'],
-                validUntil: '2028-12-31',
-              },
-            }));
-            setAvailableOrgs(orgs);
-
-            const match = orgs.find((o) => o.slug.toLowerCase() === orgSlug?.toLowerCase());
-            if (match) {
-              try {
-                // Workspace comes from the X-AccountGo-Org header that authFetch adds from the URL.
-                const subRes = await authFetch('/api/Subscription/current');
-                if (subRes.ok && mounted) {
-                  const subData = await subRes.json();
-                  if (subData && subData.plan) {
-                    const liveSub: SubscriptionInfo = {
-                      planId: subData.plan,
-                      planName: subData.plan.charAt(0).toUpperCase() + subData.plan.slice(1),
-                      status: subData.subscriptionStatus || 'active',
-                      activeModules: subData.activeModules || ['sales'],
-                      validUntil: subData.subscriptionValidUntil || '2028-12-31',
-                    };
-                    match.subscription = liveSub;
-                    match.plan = subData.plan;
-                  }
-                }
-              } catch {}
-
-              try {
-                const curRes = await authFetch('/api/organizations/current');
-                if (curRes.ok && mounted) {
-                  const cur = await curRes.json();
-                  if (cur?.role) match.role = cur.role;
-                  setWorkspacePermissions(Array.isArray(cur?.permissions) ? cur.permissions : []);
-                }
-              } catch {}
-
-              if (mounted) {
-                setCurrentOrg({ ...match });
-                setPersistedOrgSlug(match.slug);
-                setTenantWhitelabel(match.whitelabel || null);
-                setLoading(false);
-              }
-            } else {
-              if (mounted) {
-                clearPersistedOrgSlug();
-                setCurrentOrg(null);
-                setTenantWhitelabel(null);
-                setLoading(false);
-              }
-            }
-            return;
+        if (!res.ok) throw new Error('Could not load workspaces');
+        const data = await res.json() as Organization[];
+        if (!Array.isArray(data) || !mounted) return;
+        const orgs: OrgDetails[] = data.map((organization) => ({
+          id: organization.id,
+          name: organization.name,
+          slug: organization.slug,
+          shortName: organization.shortName,
+          role: organization.role,
+          plan: organization.plan,
+          avatarBg: organization.plan === 'invoicing'
+            ? 'bg-gradient-to-br from-violet-500 to-fuchsia-600'
+            : organization.plan === 'enterprise'
+              ? 'bg-gradient-to-br from-indigo-500 to-blue-600'
+              : 'bg-gradient-to-br from-emerald-500 to-teal-600',
+          whitelabel: {
+            themeId: organization.plan === 'invoicing' ? 'tokyo-night' : organization.plan === 'enterprise' ? 'sapphire' : 'accountgo',
+            brandName: organization.name,
+          },
+          subscription: {
+            planId: organization.plan,
+            planName: organization.plan.charAt(0).toUpperCase() + organization.plan.slice(1),
+            status: organization.subscriptionStatus,
+            activeModules: organization.activeModules,
+          },
+        }));
+        setAvailableOrgs(orgs);
+        const match = orgs.find((organization) => organization.slug.toLowerCase() === orgSlug?.toLowerCase());
+        if (!match) {
+          if (mounted) {
+            clearPersistedOrgSlug();
+            setCurrentOrg(null);
+            setTenantWhitelabel(null);
+            navigate('/select-org', { replace: true, state: { notice: "You don't have access to that workspace" } });
           }
+          return;
+        }
+
+        const currentResponse = await authFetch('/api/organizations/current');
+        if (currentResponse.status === 404) {
+          if (mounted) {
+            clearPersistedOrgSlug();
+            setCurrentOrg(null);
+            setTenantWhitelabel(null);
+            navigate('/select-org', { replace: true, state: { notice: "You don't have access to that workspace" } });
+          }
+          return;
+        }
+        if (!currentResponse.ok) throw new Error('Could not load current workspace');
+        const current = await currentResponse.json() as {
+          id: number;
+          name: string;
+          slug: string;
+          shortName?: string;
+          plan: PlanKey;
+          activeModules: ModuleKey[];
+          subscriptionStatus: SubscriptionInfo['status'];
+          role: OrgDetails['role'];
+          permissions: string[];
+          currency: string;
+        };
+        if (mounted) {
+          const resolvedOrg: OrgDetails = {
+            ...match,
+            id: String(current.id),
+            name: current.name,
+            slug: current.slug,
+            shortName: current.shortName,
+            plan: current.plan,
+            role: current.role,
+            currency: current.currency,
+            permissions: current.permissions,
+            subscription: {
+              planId: current.plan,
+              planName: current.plan.charAt(0).toUpperCase() + current.plan.slice(1),
+              status: current.subscriptionStatus,
+              activeModules: current.activeModules,
+            },
+          };
+          setCurrentOrg(resolvedOrg);
+          setAvailableOrgs((previous) => previous.map((organization) =>
+            organization.slug === resolvedOrg.slug ? resolvedOrg : organization
+          ));
+          setPersistedOrgSlug(resolvedOrg.slug);
+          setTenantWhitelabel(resolvedOrg.whitelabel || null);
         }
         if (mounted) {
-          setAvailableOrgs([]);
-          setCurrentOrg(null);
           setLoading(false);
         }
       } catch {
         if (mounted) {
-          setAvailableOrgs([]);
           setCurrentOrg(null);
           setLoading(false);
         }
@@ -175,28 +161,22 @@ export const OrgLayout: React.FC = () => {
     return () => {
       mounted = false;
     };
-  }, [authFetch, orgSlug, setTenantWhitelabel]);
+  }, [authFetch, navigate, orgSlug, setTenantWhitelabel]);
 
   const subscription: SubscriptionInfo = useMemo(() => {
     if (currentOrg?.subscription) return currentOrg.subscription;
     const plan: PlanKey = currentOrg?.plan || 'accounting';
-    const activeModules: ModuleKey[] = plan === 'invoicing'
-      ? ['sales']
-      : plan === 'enterprise'
-      ? ['sales', 'financials', 'purchases', 'inventory', 'reports', 'donations', 'audit']
-      : ['sales', 'financials', 'purchases', 'reports'];
     return {
       planId: plan,
       planName: plan.charAt(0).toUpperCase() + plan.slice(1),
-      status: 'active',
-      activeModules,
-      validUntil: '2027-12-31',
+      status: currentOrg?.subscription?.status || 'active',
+      activeModules: currentOrg?.subscription?.activeModules || [],
     };
   }, [currentOrg]);
 
   const userPermissions = useMemo<string[]>(() => {
-    return workspacePermissions ?? userProfile.permissions ?? [];
-  }, [workspacePermissions, userProfile]);
+    return currentOrg?.permissions || [];
+  }, [currentOrg]);
 
   const hasModule = useCallback(
     (moduleKey: ModuleKey): boolean => {
@@ -207,17 +187,13 @@ export const OrgLayout: React.FC = () => {
 
   const hasPermission = useCallback(
     (permission: string | string[]): boolean => {
-      if (
-        authUser?.roles?.includes('SystemAdministrators') ||
-        userProfile.role === 'System Administrator' ||
-        currentOrg?.role === 'Owner'
-      ) {
+      if (currentOrg?.role === 'Owner' || currentOrg?.role === 'Admin') {
         return true;
       }
       const perms = Array.isArray(permission) ? permission : [permission];
       return perms.some((p) => userPermissions.includes(p));
     },
-    [authUser, userProfile, currentOrg, userPermissions]
+    [currentOrg, userPermissions]
   );
 
   const canAccess = useCallback(
@@ -232,6 +208,15 @@ export const OrgLayout: React.FC = () => {
   const switchOrg = (newSlug: string) => {
     navigate(`/org/${newSlug}/dashboard`);
   };
+
+  const updateCurrentOrg = useCallback((updates: Partial<OrgDetails>) => {
+    if (!currentOrg) return;
+    const updated = { ...currentOrg, ...updates };
+    setCurrentOrg(updated);
+    setAvailableOrgs((previous) => previous.map((organization) =>
+      organization.id === updated.id ? updated : organization
+    ));
+  }, [currentOrg]);
 
   const updateOrgWhitelabel = (config: WhitelabelConfig) => {
     if (!currentOrg) return;
@@ -260,7 +245,6 @@ export const OrgLayout: React.FC = () => {
       planName: newPlan.charAt(0).toUpperCase() + newPlan.slice(1),
       status: 'active',
       activeModules: resolvedModules,
-      validUntil: '2028-12-31',
     };
     const updated = {
       ...currentOrg,
@@ -341,6 +325,7 @@ export const OrgLayout: React.FC = () => {
     subscription,
     userPermissions,
     switchOrg,
+    updateCurrentOrg,
     updateOrgWhitelabel,
     updateSubscription,
     hasModule,
@@ -396,6 +381,7 @@ export const OrgLayout: React.FC = () => {
         <MobileBottomNav
           currentOrg={currentOrg}
           onOpenMenu={() => setIsMobileOpen(true)}
+          hasPermission={hasPermission}
         />
       </div>
     </div>
@@ -403,4 +389,3 @@ export const OrgLayout: React.FC = () => {
 };
 
 export default OrgLayout;
-

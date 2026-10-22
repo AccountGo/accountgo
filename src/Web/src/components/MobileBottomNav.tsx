@@ -7,48 +7,63 @@ import {
   Settings,
   Menu,
 } from 'lucide-react';
-import { OrgDetails } from '../types';
+import { ModuleKey, OrgDetails } from '../types';
 
 interface MobileBottomNavProps {
   currentOrg: OrgDetails;
   onOpenMenu: () => void;
+  hasPermission: (permission: string | string[]) => boolean;
 }
 
 export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   currentOrg,
   onOpenMenu,
+  hasPermission,
 }) => {
-  const activeModules = currentOrg.subscription?.activeModules || (
-    currentOrg.plan === 'invoicing' ? ['sales'] : ['sales', 'financials', 'purchases', 'reports']
-  );
+  const activeModules = currentOrg.subscription?.activeModules || [];
 
-  const allNavItems = [
+  const allNavItems: Array<{
+    name: string;
+    path: string;
+    icon: typeof LayoutDashboard;
+    module?: ModuleKey;
+    permission?: string;
+    adminOnly?: boolean;
+  }> = [
     {
       name: 'Dashboard',
       path: `/org/${currentOrg.slug}/dashboard`,
       icon: LayoutDashboard,
       module: 'sales',
+      permission: 'sales.invoices.view',
     },
     {
       name: 'Sales',
       path: `/org/${currentOrg.slug}/sales`,
       icon: Receipt,
       module: 'sales',
+      permission: 'sales.invoices.view',
     },
     {
       name: 'Ledger',
       path: `/org/${currentOrg.slug}/financials`,
       icon: BookOpen,
       module: 'financials',
+      permission: 'financials.accounts.view',
     },
     {
       name: 'Settings',
       path: `/org/${currentOrg.slug}/settings`,
       icon: Settings,
+      adminOnly: true,
     },
   ];
 
-  const navItems = allNavItems.filter((item) => !item.module || activeModules.includes(item.module as any));
+  const navItems = allNavItems.filter((item) =>
+    (!item.module || activeModules.includes(item.module)) &&
+    (!item.permission || hasPermission(item.permission)) &&
+    (!item.adminOnly || currentOrg.role === 'Owner' || currentOrg.role === 'Admin')
+  );
 
   return (
     <nav

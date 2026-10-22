@@ -38,6 +38,7 @@ export interface SignUpPayload {
   organizationName?: string;
   organizationSlug?: string;
   currency?: string;
+  invitationToken?: string;
 }
 
 export interface SignUpResponse {

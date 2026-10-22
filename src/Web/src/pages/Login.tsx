@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { getPersistedOrgSlug, setPersistedOrgSlug } from '../lib/storage';
+import { clearInvitationToken, getInvitationToken, storeInvitationToken } from '../lib/invitationStorage';
 import {
   Mail,
   User,
@@ -22,7 +23,11 @@ interface LoginProps {
 export const Login: React.FC<LoginProps> = ({ initialMode }) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { isAuthenticated, isLoading: isAuthLoading, sendOtp, signUp, verifyOtp } = useAuth();
+  const { isAuthenticated, isLoading: isAuthLoading, sendOtp, signUp, verifyOtp, authFetch } = useAuth();
+  const queryInviteToken = new URLSearchParams(location.search).get('invite');
+  const [invitationToken, setInvitationToken] = useState<string | null>(
+    () => queryInviteToken || getInvitationToken()
+  );
 
   // Mode state: 'signin' or 'signup'
   const [mode, setMode] = useState<'signin' | 'signup'>(() => {
@@ -57,10 +62,21 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
 
   // Input refs for the 6 OTP boxes
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const verificationOwnsNavigation = useRef(false);
 
   // If already authenticated, redirect away
   useEffect(() => {
-    if (!isAuthLoading && isAuthenticated) {
+    if (queryInviteToken) {
+      storeInvitationToken(queryInviteToken);
+      setInvitationToken(queryInviteToken);
+      navigate(location.pathname, { replace: true, state: location.state });
+      return;
+    }
+    if (!isAuthLoading && isAuthenticated && !isVerifying && !verificationOwnsNavigation.current) {
+      if (invitationToken) {
+        navigate(`/invite/${encodeURIComponent(invitationToken)}`, { replace: true });
+        return;
+      }
       const fromPath = (location.state as any)?.from?.pathname;
       const lastSlug = getPersistedOrgSlug();
       if (fromPath && fromPath !== '/login' && fromPath !== '/signup') {
@@ -68,10 +84,10 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
       } else if (lastSlug) {
         navigate(`/org/${lastSlug}/dashboard`, { replace: true });
       } else {
-        navigate('/select-org', { replace: true });
+        navigate('/select-org', { replace: true, state: { fromSignIn: true } });
       }
     }
-  }, [isAuthenticated, isAuthLoading, navigate, location.state]);
+  }, [isAuthenticated, isAuthLoading, navigate, location.pathname, location.search, location.state, queryInviteToken, invitationToken, isVerifying]);
 
   // Handle countdowns for resend cooldown and code expiry
   useEffect(() => {
@@ -167,6 +183,7 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
         email: email.trim(),
         organizationName: orgName.trim() || undefined,
         organizationSlug: orgSlug.trim() || undefined,
+        invitationToken: invitationToken || undefined,
       });
 
       if (res.orgSlug) {
@@ -193,13 +210,45 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
   // Submit Step 2: Verify OTP code
   const handleVerifyCode = async (codeToVerify?: string) => {
     const code = codeToVerify || otp.join('');
-    if (code.length !== 6 || isVerifying) return;
+    if (code.length !== 6 || isVerifying || verificationOwnsNavigation.current) return;
 
     setErrorMessage(null);
     setIsVerifying(true);
+    verificationOwnsNavigation.current = true;
+    let verified = false;
 
     try {
       await verifyOtp(email, code);
+      verified = true;
+
+      const pendingToken = invitationToken || getInvitationToken();
+      if (pendingToken) {
+        const acceptResponse = await authFetch(`/api/invitations/${encodeURIComponent(pendingToken)}/accept`, {
+          method: 'POST',
+        });
+        if (acceptResponse.status === 403) {
+          throw new Error('This invitation was sent to a different email. Use the invited email address and try again.');
+        }
+        if (acceptResponse.status === 410) {
+          clearInvitationToken();
+          setInvitationToken(null);
+          throw new Error('This invitation has expired or has already been accepted.');
+        }
+        if (acceptResponse.status === 404) {
+          clearInvitationToken();
+          setInvitationToken(null);
+          throw new Error('This invitation is invalid or has been revoked.');
+        }
+        if (!acceptResponse.ok) {
+          throw new Error('We could not accept this invitation. You can try again from Pending invitations.');
+        }
+        const accepted = await acceptResponse.json() as { slug: string };
+        clearInvitationToken();
+        setInvitationToken(null);
+        setPersistedOrgSlug(accepted.slug);
+        navigate(`/org/${encodeURIComponent(accepted.slug)}/dashboard`, { replace: true });
+        return;
+      }
 
       // Successfully authenticated! Route to target organization or org selector
       const fromPath = (location.state as any)?.from?.pathname;
@@ -213,11 +262,13 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
       } else if (destinationSlug) {
         navigate(`/org/${destinationSlug}/dashboard`, { replace: true });
       } else {
-        navigate('/select-org', { replace: true });
+        navigate('/select-org', { replace: true, state: { fromSignIn: true } });
       }
     } catch (err: any) {
       setErrorMessage(err.message || 'Invalid or expired verification code.');
     } finally {
+      // After verification, keep ownership so auth redirects cannot replace acceptance errors or navigation.
+      if (!verified) verificationOwnsNavigation.current = false;
       setIsVerifying(false);
     }
   };
@@ -339,6 +390,11 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
                   ? 'Enter your registered work email to receive a single-use 6-digit sign-in code.'
                   : 'Start managing your financials, invoicing, and organization with modern double-entry standards.'}
               </p>
+              {invitationToken && (
+                <p className="text-sm text-[var(--brand-primary)]">
+                  You are joining a workspace. Use the email address that received the invitation; no new workspace will be created.
+                </p>
+              )}
             </div>
 
             {/* Error Banner */}
@@ -499,34 +555,36 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
                 </div>
 
                 {/* Initial Organization / Workspace (Optional) */}
-                <div className="space-y-1.5 pt-1">
-                  <div className="flex items-center justify-between">
-                    <label
-                      htmlFor="signup-org-name"
-                      className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider"
-                    >
-                      Workspace Name
-                    </label>
-                    <span className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider">Optional</span>
-                  </div>
-                  <div className="relative">
-                    <Building2 className="w-4 h-4 text-[var(--text-muted)] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                    <input
-                      id="signup-org-name"
-                      type="text"
-                      value={orgName}
-                      onChange={(e) => handleOrgNameChange(e.target.value)}
-                      placeholder="e.g. Pacific Rim Trading"
-                      className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-[var(--bg-canvas)] text-sm font-medium text-[var(--text-main)] placeholder-[var(--text-muted)] ring-1 ring-white/10 focus:ring-2 focus:ring-[var(--brand-primary)] focus:outline-none transition-all shadow-inner"
-                    />
-                  </div>
-                  {orgSlug && (
-                    <div className="flex items-center gap-1.5 text-[11px] text-[var(--text-muted)] font-mono pl-1">
-                      <span>URL preview:</span>
-                      <span className="text-[var(--brand-primary)]">/org/{orgSlug}</span>
+                {!invitationToken && (
+                  <div className="space-y-1.5 pt-1">
+                    <div className="flex items-center justify-between">
+                      <label
+                        htmlFor="signup-org-name"
+                        className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider"
+                      >
+                        Workspace Name
+                      </label>
+                      <span className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider">Optional</span>
                     </div>
-                  )}
-                </div>
+                    <div className="relative">
+                      <Building2 className="w-4 h-4 text-[var(--text-muted)] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      <input
+                        id="signup-org-name"
+                        type="text"
+                        value={orgName}
+                        onChange={(e) => handleOrgNameChange(e.target.value)}
+                        placeholder="e.g. Pacific Rim Trading"
+                        className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-[var(--bg-canvas)] text-sm font-medium text-[var(--text-main)] placeholder-[var(--text-muted)] ring-1 ring-white/10 focus:ring-2 focus:ring-[var(--brand-primary)] focus:outline-none transition-all shadow-inner"
+                      />
+                    </div>
+                    {orgSlug && (
+                      <div className="flex items-center gap-1.5 text-[11px] text-[var(--text-muted)] font-mono pl-1">
+                        <span>URL preview:</span>
+                        <span className="text-[var(--brand-primary)]">/org/{orgSlug}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Submit Sign Up */}
                 <button

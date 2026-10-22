@@ -7,13 +7,14 @@ import Members from './pages/Members';
 import Profile from './pages/Profile';
 import SelectOrg from './pages/SelectOrg';
 import Login from './pages/Login';
+import Invitation from './pages/Invitation';
 import { Invoices } from './pages/Invoices';
 import { InvoiceEdit } from './pages/InvoiceEdit';
 import { InvoiceDetail } from './pages/InvoiceDetail';
 import PlaceholderView from './pages/PlaceholderView';
 import NotFound from './pages/NotFound';
 import ProtectedRoute from './components/ProtectedRoute';
-import { RequiresModule } from './components/Gating';
+import { PermissionDeniedCard, RequiresModule, useTenantContext } from './components/Gating';
 import { useAuth } from './auth/AuthContext';
 import { getPersistedOrgSlug } from './lib/storage';
 import { Loader2 } from 'lucide-react';
@@ -41,6 +42,13 @@ const RootRedirect: React.FC = () => {
   return <Navigate to="/select-org" replace />;
 };
 
+const WorkspaceSettings: React.FC = () => {
+  const { currentOrg } = useTenantContext();
+  return currentOrg.role === 'Owner' || currentOrg.role === 'Admin'
+    ? <Settings />
+    : <PermissionDeniedCard permission="Owner or Admin" />;
+};
+
 const router = createBrowserRouter([
   {
     path: '/',
@@ -53,6 +61,14 @@ const router = createBrowserRouter([
   {
     path: '/signup',
     element: <Login initialMode="signup" />,
+  },
+  {
+    path: '/invite',
+    element: <Invitation />,
+  },
+  {
+    path: '/invite/:token',
+    element: <Invitation />,
   },
   {
     element: <ProtectedRoute />,
@@ -75,7 +91,7 @@ const router = createBrowserRouter([
           },
           {
             path: 'settings',
-            element: <Settings />,
+            element: <WorkspaceSettings />,
           },
           {
             path: 'financials',
