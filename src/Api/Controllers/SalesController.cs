@@ -1070,12 +1070,7 @@ namespace Api.Controllers
 
                     // Resolve default service item and measurement if omitted for flexible invoicing
                     var items = _inventoryService.GetAllItems().ToList();
-                    var defaultItem = items.FirstOrDefault(i => i.ItemCategory != null && i.ItemCategory.ItemType == ItemTypes.Service) 
-                        ?? items.FirstOrDefault();
-                    var defaultMeasurement = defaultItem?.SellMeasurementId 
-                        ?? defaultItem?.SmallestMeasurementId 
-                        ?? _inventoryService.GetMeasurements().FirstOrDefault()?.Id 
-                        ?? 1;
+                    var defaultMeasurement = new Lazy<int>(DefaultMeasurementId);
 
                     foreach (var line in salesInvoiceDto.SalesInvoiceLines!)
                     {
@@ -1093,23 +1088,15 @@ namespace Api.Controllers
                         int lineItemId = line.ItemId.GetValueOrDefault();
                         int lineMeasurementId = line.MeasurementId.GetValueOrDefault();
 
-                        if (lineItemId == 0 && !string.IsNullOrWhiteSpace(line.ItemDescription))
+                        if (lineItemId == 0)
                         {
-                            var existing = items.FirstOrDefault(i => i.Description.Equals(line.ItemDescription, StringComparison.OrdinalIgnoreCase));
-                            if (existing != null)
-                            {
-                                lineItemId = existing.Id;
-                                lineMeasurementId = existing.SellMeasurementId ?? existing.SmallestMeasurementId ?? defaultMeasurement;
-                            }
-                        }
-
-                        if (lineItemId == 0 && defaultItem != null)
-                        {
-                            lineItemId = defaultItem.Id;
+                            var lineItem = ResolveFreeTextItem(items, line.ItemDescription, line.Amount.GetValueOrDefault(), defaultMeasurement.Value);
+                            lineItemId = lineItem.Id;
+                            lineMeasurementId = lineItem.SellMeasurementId ?? lineItem.SmallestMeasurementId ?? defaultMeasurement.Value;
                         }
                         if (lineMeasurementId == 0)
                         {
-                            lineMeasurementId = defaultMeasurement;
+                            lineMeasurementId = defaultMeasurement.Value;
                         }
 
                         salesInvoiceLine.ItemId = lineItemId;
@@ -1161,12 +1148,7 @@ namespace Api.Controllers
                     }
 
                     var items = _inventoryService.GetAllItems().ToList();
-                    var defaultItem = items.FirstOrDefault(i => i.ItemCategory != null && i.ItemCategory.ItemType == ItemTypes.Service) 
-                        ?? items.FirstOrDefault();
-                    var defaultMeasurement = defaultItem?.SellMeasurementId 
-                        ?? defaultItem?.SmallestMeasurementId 
-                        ?? _inventoryService.GetMeasurements().FirstOrDefault()?.Id 
-                        ?? 1;
+                    var defaultMeasurement = new Lazy<int>(DefaultMeasurementId);
 
                     foreach (var line in salesInvoiceDto.SalesInvoiceLines!)
                     {
@@ -1180,23 +1162,15 @@ namespace Api.Controllers
                         int lineItemId = line.ItemId.GetValueOrDefault();
                         int lineMeasurementId = line.MeasurementId.GetValueOrDefault();
 
-                        if (lineItemId == 0 && !string.IsNullOrWhiteSpace(line.ItemDescription))
+                        if (lineItemId == 0)
                         {
-                            var existing = items.FirstOrDefault(i => i.Description.Equals(line.ItemDescription, StringComparison.OrdinalIgnoreCase));
-                            if (existing != null)
-                            {
-                                lineItemId = existing.Id;
-                                lineMeasurementId = existing.SellMeasurementId ?? existing.SmallestMeasurementId ?? defaultMeasurement;
-                            }
-                        }
-
-                        if (lineItemId == 0 && defaultItem != null)
-                        {
-                            lineItemId = defaultItem.Id;
+                            var lineItem = ResolveFreeTextItem(items, line.ItemDescription, line.Amount.GetValueOrDefault(), defaultMeasurement.Value);
+                            lineItemId = lineItem.Id;
+                            lineMeasurementId = lineItem.SellMeasurementId ?? lineItem.SmallestMeasurementId ?? defaultMeasurement.Value;
                         }
                         if (lineMeasurementId == 0)
                         {
-                            lineMeasurementId = defaultMeasurement;
+                            lineMeasurementId = defaultMeasurement.Value;
                         }
 
                         if (existingLine != null)
@@ -1310,6 +1284,48 @@ namespace Api.Controllers
             var salesInvoiceToReturn = result.Value;
 
             return Ok(salesInvoiceToReturn);
+        }
+
+        // A new workspace has no items, so a typed line must not fall back to a missing or foreign item id.
+        private Core.Domain.Items.Item ResolveFreeTextItem(List<Core.Domain.Items.Item> items, string? description, decimal price, int measurementId)
+        {
+            var text = string.IsNullOrWhiteSpace(description) ? "Service / Product" : description.Trim();
+            var item = items.FirstOrDefault(i => string.Equals(i.Description, text, StringComparison.OrdinalIgnoreCase));
+            if (item != null)
+                return item;
+
+            var category = _inventoryService.GetItemCategories().FirstOrDefault(c => c.ItemType == ItemTypes.Service);
+            if (category == null)
+            {
+                category = new Core.Domain.Items.ItemCategory
+                {
+                    Name = "Services",
+                    ItemType = ItemTypes.Service,
+                    MeasurementId = measurementId,
+                    SalesAccountId = _financialService.GetAccounts().FirstOrDefault(a => a.AccountCode == "40100")?.Id
+                };
+                _inventoryService.SaveItemCategory(category);
+            }
+
+            item = new Core.Domain.Items.Item
+            {
+                ItemCategoryId = category.Id,
+                Description = text,
+                SellDescription = text,
+                Price = price,
+                SmallestMeasurementId = measurementId,
+                SellMeasurementId = measurementId
+            };
+            _inventoryService.AddItem(item);
+            items.Add(item);
+            return item;
+        }
+
+        private int DefaultMeasurementId()
+        {
+            var measurements = _inventoryService.GetMeasurements().ToList();
+            var measurement = measurements.FirstOrDefault(m => m.Code == "EA") ?? measurements.FirstOrDefault();
+            return measurement?.Id ?? throw new Exception("No unit of measure is set up for this workspace.");
         }
 
         // SalesService maps these ids straight onto entities, so each must belong to the current workspace first.
