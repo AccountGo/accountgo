@@ -54,10 +54,13 @@ namespace Services.Dashboard
                 .Select(a => a.Id)
                 .ToHashSet();
 
+            // Workspaces without bank records still hold cash in the postable cash accounts (e.g. 10111).
             var bankAccountIds = _financialService.GetCashAndBanks()
                 .Where(b => b.AccountId.HasValue)
                 .Select(b => b.AccountId!.Value)
-                .Distinct()
+                .Concat(accounts
+                    .Where(a => a.CanPost() && (a.IsCash || (a.ParentAccount != null && a.ParentAccount.IsCash)))
+                    .Select(a => a.Id))
                 .ToHashSet();
 
             var totalSalesYtd = ComputeNetAmount(ledger, revenueAccountIds, normalBalanceIsDebit: false);
@@ -68,7 +71,7 @@ namespace Services.Dashboard
             {
                 Kpis = new DashboardKpiDto
                 {
-                    MoneyInBank = bankAccountIds.Sum(accountId => _financialService.GetAccount(accountId)?.Balance ?? 0m),
+                    MoneyInBank = accounts.Where(a => bankAccountIds.Contains(a.Id)).Sum(a => a.Balance),
                     OutstandingReceivables = customers.Sum(c => c.Balance),
                     TotalPayables = vendors.Sum(v => v.GetBalance()),
                     TotalAssets = balanceSheet

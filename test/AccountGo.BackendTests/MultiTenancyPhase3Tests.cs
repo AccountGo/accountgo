@@ -179,6 +179,7 @@ namespace AccountGo.BackendTests
             var paid = await Send(HttpMethod.Post, "/api/Sales/RecordPayment",
                 new Dto.Sales.RecordInvoicePaymentDto { InvoiceId = invoiceId, Amount = 100, PaymentDate = DateTime.UtcNow });
             Assert.True(paid.IsSuccessStatusCode, await paid.Content.ReadAsStringAsync());
+            Assert.Equal(100m, await DashboardKpi("moneyInBank"));
 
             using (var scope = _factory.Services.CreateScope())
             {
@@ -208,11 +209,13 @@ namespace AccountGo.BackendTests
             Assert.Equal(100m, await OutstandingReceivables());
         }
 
-        private async Task<decimal> OutstandingReceivables()
+        private Task<decimal> OutstandingReceivables() => DashboardKpi("outstandingReceivables");
+
+        private async Task<decimal> DashboardKpi(string name)
         {
             var response = await Send(HttpMethod.Get, "/api/Dashboard/Summary");
             Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
-            return (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("kpis").GetProperty("outstandingReceivables").GetDecimal();
+            return (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("kpis").GetProperty(name).GetDecimal();
         }
 
         [Fact]
