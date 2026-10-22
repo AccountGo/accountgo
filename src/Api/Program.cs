@@ -50,6 +50,9 @@ builder.AddServiceDefaults();
 builder.Services.AddScoped<ValidationFilterAttribute>();
 builder.Services.AddProblemDetails();
 
+// Invoice PDFs (QuestPDF Community licence: free for organisations under USD 1M annual revenue)
+QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
+
 // Mapping
 builder.Services.AddAutoMapper(typeof(Program));
 

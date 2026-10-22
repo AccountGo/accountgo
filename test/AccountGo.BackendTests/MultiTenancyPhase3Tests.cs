@@ -195,6 +195,29 @@ namespace AccountGo.BackendTests
         }
 
         [Fact]
+        public async Task SalesInvoicePdf_ReturnsPdf_OnlyInsideTheWorkspace()
+        {
+            var invoice = await NewInvoice();
+            invoice.Status = "Open";
+            var saved = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
+            Assert.True(saved.IsSuccessStatusCode, await saved.Content.ReadAsStringAsync());
+            var invoiceId = (await saved.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt32();
+            var paid = await Send(HttpMethod.Post, "/api/Sales/RecordPayment",
+                new Dto.Sales.RecordInvoicePaymentDto { InvoiceId = invoiceId, Amount = 40, PaymentDate = DateTime.UtcNow });
+            Assert.True(paid.IsSuccessStatusCode, await paid.Content.ReadAsStringAsync());
+
+            var pdf = await Send(HttpMethod.Get, $"/api/Sales/SalesInvoicePdf?id={invoiceId}");
+            Assert.Equal(HttpStatusCode.OK, pdf.StatusCode);
+            Assert.Equal("application/pdf", pdf.Content.Headers.ContentType.MediaType);
+            Assert.StartsWith("Invoice-", pdf.Content.Headers.ContentDisposition.FileName.Trim('"'));
+            var bytes = await pdf.Content.ReadAsByteArrayAsync();
+            Assert.Equal("%PDF", System.Text.Encoding.ASCII.GetString(bytes, 0, 4));
+
+            Assert.Equal(HttpStatusCode.NotFound, (await Send(HttpMethod.Get, $"/api/Sales/SalesInvoicePdf?id={invoiceId + 999}")).StatusCode);
+            Assert.False((await Send(HttpMethod.Get, $"/api/Sales/SalesInvoicePdf?id={invoiceId}", token: _otherToken)).IsSuccessStatusCode);
+        }
+
+        [Fact]
         public async Task DashboardReceivables_ExcludeDraftInvoices()
         {
             var invoice = await NewInvoice();

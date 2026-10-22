@@ -16,6 +16,7 @@ import {
   Phone,
   MapPin,
   Send,
+  FileDown,
 } from 'lucide-react';
 import {
   TenantContextType,
@@ -94,6 +95,36 @@ export const InvoiceDetail: React.FC = () => {
   useEffect(() => {
     fetchInvoice();
   }, [fetchInvoice]);
+
+  // PDF is rendered by the API so it looks the same whatever browser saves it.
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState<boolean>(false);
+  const handleDownloadPdf = async () => {
+    if (!invoice) return;
+    setIsDownloadingPdf(true);
+    setErrorBanner(null);
+    try {
+      const res = await authFetch(`/api/Sales/SalesInvoicePdf?id=${invoice.id}`);
+      if (!res.ok) {
+        throw new Error(`Could not generate the PDF (${res.status})`);
+      }
+      const blob = await res.blob();
+      const fileName =
+        res.headers.get('Content-Disposition')?.match(/filename="?([^";]+)"?/)?.[1] ||
+        `Invoice-${invoice.no || invoice.id}.pdf`;
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err: any) {
+      setErrorBanner(err.message || 'Could not generate the PDF.');
+    } finally {
+      setIsDownloadingPdf(false);
+    }
+  };
 
   // Payment Submission
   const handleRecordPayment = async (e: React.FormEvent) => {
@@ -303,14 +334,30 @@ export const InvoiceDetail: React.FC = () => {
 
         {/* Action Buttons */}
         <div className="flex items-center flex-wrap gap-2.5">
+          {/* Download PDF Button */}
+          <button
+            type="button"
+            onClick={handleDownloadPdf}
+            disabled={isDownloadingPdf}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium text-[var(--text-secondary)] bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-xl hover:bg-[var(--bg-surface-hover)] hover:text-[var(--text-main)] shadow-sm transition disabled:opacity-50"
+          >
+            {isDownloadingPdf ? (
+              <Loader2 className="w-4 h-4 animate-spin text-[var(--text-muted)]" />
+            ) : (
+              <FileDown className="w-4 h-4 text-[var(--text-muted)]" />
+            )}
+            Download PDF
+          </button>
+
           {/* Print Button */}
           <button
             type="button"
             onClick={() => window.print()}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium text-[var(--text-secondary)] bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-xl hover:bg-[var(--bg-surface-hover)] hover:text-[var(--text-main)] shadow-sm transition"
+            title="Print"
+            aria-label="Print invoice"
+            className="inline-flex items-center gap-1.5 px-2.5 py-2 text-sm font-medium text-[var(--text-secondary)] bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-xl hover:bg-[var(--bg-surface-hover)] hover:text-[var(--text-main)] shadow-sm transition"
           >
             <Printer className="w-4 h-4 text-[var(--text-muted)]" />
-            Print / PDF
           </button>
 
           {/* Edit Button (if unposted draft or open with no payments) */}

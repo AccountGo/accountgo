@@ -24,6 +24,7 @@ namespace Api.Controllers
         private readonly ILogger<SalesController> _logger;
         private readonly Core.Tenancy.ITenantContext _tenantContext;
         private readonly Core.Tenancy.ITenantGuard _tenantGuard;
+        private readonly Api.Data.ApiDbContext _db;
 
         public SalesController(IAdministrationService adminService,
             ISalesService salesService,
@@ -32,7 +33,8 @@ namespace Api.Controllers
             ITaxService taxService,
             ILogger<SalesController> logger,
             Core.Tenancy.ITenantContext tenantContext,
-            Core.Tenancy.ITenantGuard tenantGuard)
+            Core.Tenancy.ITenantGuard tenantGuard,
+            Api.Data.ApiDbContext db)
         {
             _adminService = adminService;
             _salesService = salesService;
@@ -42,6 +44,7 @@ namespace Api.Controllers
             _logger = logger;
             _tenantContext = tenantContext;
             _tenantGuard = tenantGuard;
+            _db = db;
         }
 
         [HttpPost]
@@ -366,138 +369,9 @@ namespace Api.Controllers
         {
             try
             {
-                var salesInvoice = _salesService.GetSalesInvoiceById(id);
-                if (salesInvoice == null)
+                var salesInvoiceDto = BuildSalesInvoiceDto(id);
+                if (salesInvoiceDto == null)
                     return NotFound(new { message = $"Invoice #{id} not found." });
-
-                var paymentTerm = _adminService.GetPaymentTerms().FirstOrDefault(t => t.Id == salesInvoice.PaymentTermId);
-                var dueDays = paymentTerm?.DueAfterDays ?? 30;
-                var dueDate = salesInvoice.Date.AddDays(dueDays);
-
-                var defaultCompany = (!string.IsNullOrWhiteSpace(_tenantContext.CompanySlug) ? _adminService.GetCompanyBySlug(_tenantContext.CompanySlug) : null)
-                    ?? _adminService.GetCompanies().FirstOrDefault(c => c.Id == _tenantContext.CompanyId);
-
-                var party = salesInvoice.Customer?.Party;
-                var addressParts = new List<string>();
-                if (!string.IsNullOrWhiteSpace(party?.CompanyStreet)) addressParts.Add(party.CompanyStreet);
-                if (!string.IsNullOrWhiteSpace(party?.CompanyProvince)) addressParts.Add(party.CompanyProvince);
-                if (!string.IsNullOrWhiteSpace(party?.CompanyPostalCode)) addressParts.Add(party.CompanyPostalCode);
-                if (!string.IsNullOrWhiteSpace(party?.CompanyCountry)) addressParts.Add(party.CompanyCountry);
-                var customerAddress = addressParts.Count > 0 ? string.Join(", ", addressParts) : null;
-
-                var salesInvoiceDto = new Dto.Sales.SalesInvoice()
-                {
-                    Id = salesInvoice.Id,
-                    CustomerId = salesInvoice.CustomerId,
-                    CustomerName = party?.Name ?? "Unknown",
-                    CustomerEmail = party?.Email,
-                    CustomerPhone = party?.Phone,
-                    CustomerAddress = customerAddress,
-                    No = salesInvoice.No,
-                    InvoiceDate = salesInvoice.Date,
-                    DueDate = dueDate,
-                    SalesInvoiceLines = new List<Dto.Sales.SalesInvoiceLine>(),
-                    PaymentTermId = salesInvoice.PaymentTermId,
-                    ReferenceNo = salesInvoice.ReferenceNo,
-                    Posted = salesInvoice.GeneralLedgerHeaderId != null,
-                    CompanyName = defaultCompany?.Name
-                };
-
-                if (salesInvoice.CustomerAllocations != null)
-                {
-                    salesInvoiceDto.Payments = salesInvoice.CustomerAllocations
-                        .OrderByDescending(a => a.Date)
-                        .Select(a => new Dto.Sales.InvoicePaymentItemDto
-                        {
-                            Id = a.Id,
-                            ReceiptNo = a.SalesReceiptHeader?.No,
-                            Date = a.Date,
-                            Amount = a.Amount,
-                            PaymentMethod = a.SalesReceiptHeader?.PaymentMethod ?? "Payment",
-                            ReferenceNo = a.SalesReceiptHeader?.ReferenceNo,
-                            Notes = a.SalesReceiptHeader?.Memo
-                        }).ToList();
-                }
-
-                decimal totalTax = 0;
-                foreach (var line in salesInvoice.SalesInvoiceLines)
-                {
-                    var lineDto = new Dto.Sales.SalesInvoiceLine
-                    {
-                        Id = line.Id,
-                        Amount = line.Amount,
-                        Discount = line.Discount,
-                        Quantity = line.Quantity,
-                        ItemId = line.ItemId,
-                        MeasurementId = line.MeasurementId,
-                        ItemDescription = line.Item?.Description ?? "Item",
-                        MeasurementDescription = line.Measurement?.Description ?? "EA"
-                    };
-
-                    decimal lineAmount = Math.Round((line.Quantity * line.Amount) - ((line.Discount / 100m) * (line.Quantity * line.Amount)), 2, MidpointRounding.AwayFromZero);
-                    lineDto.LineTotal = lineAmount;
-
-                    if (_taxService != null && line.ItemId > 0 && salesInvoice.Customer?.Party != null)
-                    {
-                        try
-                        {
-                            var taxes = _taxService.GetIntersectionTaxes(line.ItemId, salesInvoice.CustomerId, salesInvoice.Customer.Party.PartyType);
-                            var taxAmount = Math.Round(_taxService.GetSalesLineTaxAmount(line.Quantity, line.Amount, line.Discount, taxes), 2, MidpointRounding.AwayFromZero);
-                            lineDto.TaxAmount = taxAmount;
-                            totalTax += taxAmount;
-                        }
-                        catch { /* Ignore tax calc errors */ }
-                    }
-
-                    salesInvoiceDto.SalesInvoiceLines.Add(lineDto);
-                }
-
-                salesInvoiceDto.TotalTax = Math.Round(totalTax, 2, MidpointRounding.AwayFromZero);
-                decimal grandTotal = Math.Round(salesInvoiceDto.Amount + totalTax + salesInvoice.ShippingHandlingCharge, 2, MidpointRounding.AwayFromZero);
-                salesInvoiceDto.TotalAmountAfterTax = grandTotal;
-
-                decimal allocated = salesInvoice.CustomerAllocations != null ? Math.Round(salesInvoice.CustomerAllocations.Sum(a => a.Amount), 2, MidpointRounding.AwayFromZero) : 0;
-                salesInvoiceDto.TotalAllocatedAmount = allocated;
-                salesInvoiceDto.PaidAmount = allocated;
-                salesInvoiceDto.BalanceDue = Math.Round(Math.Max(0, grandTotal - allocated), 2, MidpointRounding.AwayFromZero);
-
-                // Compute calculated status following lifecycle rules:
-                if (salesInvoice.Status == Core.Domain.SalesInvoiceStatus.Void)
-                {
-                    salesInvoiceDto.Status = "Void";
-                    salesInvoiceDto.StatusId = (int)Core.Domain.SalesInvoiceStatus.Void;
-                }
-                else if (salesInvoice.Status == Core.Domain.SalesInvoiceStatus.Closed || (salesInvoiceDto.BalanceDue <= 0.005m && allocated > 0))
-                {
-                    salesInvoiceDto.Status = "Paid";
-                    salesInvoiceDto.StatusId = (int)Core.Domain.SalesInvoiceStatus.Closed;
-                }
-                else if (allocated > 0 && salesInvoiceDto.BalanceDue > 0.005m)
-                {
-                    salesInvoiceDto.Status = "Partially Paid";
-                    salesInvoiceDto.StatusId = (int)Core.Domain.SalesInvoiceStatus.Open;
-                }
-                else if (salesInvoice.Status == Core.Domain.SalesInvoiceStatus.Draft && allocated == 0)
-                {
-                    salesInvoiceDto.Status = "Draft";
-                    salesInvoiceDto.StatusId = (int)Core.Domain.SalesInvoiceStatus.Draft;
-                }
-                else if (dueDate.Date < DateTime.UtcNow.Date && salesInvoiceDto.BalanceDue > 0.005m)
-                {
-                    salesInvoiceDto.Status = "Overdue";
-                    salesInvoiceDto.StatusId = (int)Core.Domain.SalesInvoiceStatus.Overdue;
-                }
-                else
-                {
-                    salesInvoiceDto.Status = "Open";
-                    salesInvoiceDto.StatusId = (int)Core.Domain.SalesInvoiceStatus.Open;
-                }
-
-                // is this journal entry ready for posting?
-                if (!salesInvoiceDto.Posted && salesInvoiceDto.SalesInvoiceLines.Count >= 1)
-                {
-                    salesInvoiceDto.ReadyForPosting = true;
-                }
 
                 return new ObjectResult(salesInvoiceDto);
             }
@@ -505,6 +379,167 @@ namespace Api.Controllers
             {
                 return new ObjectResult(ex);
             }
+        }
+
+        [HttpGet]
+        [Route("SalesInvoicePdf")]
+        public IActionResult SalesInvoicePdf(int id)
+        {
+            var salesInvoiceDto = BuildSalesInvoiceDto(id);
+            if (salesInvoiceDto == null)
+                return NotFound(new { message = $"Invoice #{id} not found." });
+
+            var company = CurrentCompany();
+            var document = new Api.Service.InvoicePdfDocument(
+                salesInvoiceDto,
+                company?.Name ?? salesInvoiceDto.CompanyName ?? "AccountGo",
+                company?.CRA,
+                _db.CompanySettings.Select(s => s.Currency).FirstOrDefault());
+
+            var bytes = QuestPDF.Fluent.GenerateExtensions.GeneratePdf(document);
+            return File(bytes, "application/pdf", $"Invoice-{document.InvoiceNumber}.pdf");
+        }
+
+        private Core.Domain.Company? CurrentCompany() =>
+            (!string.IsNullOrWhiteSpace(_tenantContext.CompanySlug) ? _adminService.GetCompanyBySlug(_tenantContext.CompanySlug) : null)
+            ?? _adminService.GetCompanies().FirstOrDefault(c => c.Id == _tenantContext.CompanyId);
+
+        /// <summary>Shapes an invoice with its computed totals and status; null when it is not in this workspace.</summary>
+        private Dto.Sales.SalesInvoice? BuildSalesInvoiceDto(int id)
+        {
+            var salesInvoice = _salesService.GetSalesInvoiceById(id);
+            if (salesInvoice == null)
+                return null;
+
+            var paymentTerm = _adminService.GetPaymentTerms().FirstOrDefault(t => t.Id == salesInvoice.PaymentTermId);
+            var dueDays = paymentTerm?.DueAfterDays ?? 30;
+            var dueDate = salesInvoice.Date.AddDays(dueDays);
+
+            var defaultCompany = CurrentCompany();
+
+            var party = salesInvoice.Customer?.Party;
+            var addressParts = new List<string>();
+            if (!string.IsNullOrWhiteSpace(party?.CompanyStreet)) addressParts.Add(party.CompanyStreet);
+            if (!string.IsNullOrWhiteSpace(party?.CompanyProvince)) addressParts.Add(party.CompanyProvince);
+            if (!string.IsNullOrWhiteSpace(party?.CompanyPostalCode)) addressParts.Add(party.CompanyPostalCode);
+            if (!string.IsNullOrWhiteSpace(party?.CompanyCountry)) addressParts.Add(party.CompanyCountry);
+            var customerAddress = addressParts.Count > 0 ? string.Join(", ", addressParts) : null;
+
+            var salesInvoiceDto = new Dto.Sales.SalesInvoice()
+            {
+                Id = salesInvoice.Id,
+                CustomerId = salesInvoice.CustomerId,
+                CustomerName = party?.Name ?? "Unknown",
+                CustomerEmail = party?.Email,
+                CustomerPhone = party?.Phone,
+                CustomerAddress = customerAddress,
+                No = salesInvoice.No,
+                InvoiceDate = salesInvoice.Date,
+                DueDate = dueDate,
+                SalesInvoiceLines = new List<Dto.Sales.SalesInvoiceLine>(),
+                PaymentTermId = salesInvoice.PaymentTermId,
+                ReferenceNo = salesInvoice.ReferenceNo,
+                Posted = salesInvoice.GeneralLedgerHeaderId != null,
+                CompanyName = defaultCompany?.Name
+            };
+
+            if (salesInvoice.CustomerAllocations != null)
+            {
+                salesInvoiceDto.Payments = salesInvoice.CustomerAllocations
+                    .OrderByDescending(a => a.Date)
+                    .Select(a => new Dto.Sales.InvoicePaymentItemDto
+                    {
+                        Id = a.Id,
+                        ReceiptNo = a.SalesReceiptHeader?.No,
+                        Date = a.Date,
+                        Amount = a.Amount,
+                        PaymentMethod = a.SalesReceiptHeader?.PaymentMethod ?? "Payment",
+                        ReferenceNo = a.SalesReceiptHeader?.ReferenceNo,
+                        Notes = a.SalesReceiptHeader?.Memo
+                    }).ToList();
+            }
+
+            decimal totalTax = 0;
+            foreach (var line in salesInvoice.SalesInvoiceLines)
+            {
+                var lineDto = new Dto.Sales.SalesInvoiceLine
+                {
+                    Id = line.Id,
+                    Amount = line.Amount,
+                    Discount = line.Discount,
+                    Quantity = line.Quantity,
+                    ItemId = line.ItemId,
+                    MeasurementId = line.MeasurementId,
+                    ItemDescription = line.Item?.Description ?? "Item",
+                    MeasurementDescription = line.Measurement?.Description ?? "EA"
+                };
+
+                decimal lineAmount = Math.Round((line.Quantity * line.Amount) - ((line.Discount / 100m) * (line.Quantity * line.Amount)), 2, MidpointRounding.AwayFromZero);
+                lineDto.LineTotal = lineAmount;
+
+                if (_taxService != null && line.ItemId > 0 && salesInvoice.Customer?.Party != null)
+                {
+                    try
+                    {
+                        var taxes = _taxService.GetIntersectionTaxes(line.ItemId, salesInvoice.CustomerId, salesInvoice.Customer.Party.PartyType);
+                        var taxAmount = Math.Round(_taxService.GetSalesLineTaxAmount(line.Quantity, line.Amount, line.Discount, taxes), 2, MidpointRounding.AwayFromZero);
+                        lineDto.TaxAmount = taxAmount;
+                        totalTax += taxAmount;
+                    }
+                    catch { /* Ignore tax calc errors */ }
+                }
+
+                salesInvoiceDto.SalesInvoiceLines.Add(lineDto);
+            }
+
+            salesInvoiceDto.TotalTax = Math.Round(totalTax, 2, MidpointRounding.AwayFromZero);
+            decimal grandTotal = Math.Round(salesInvoiceDto.Amount + totalTax + salesInvoice.ShippingHandlingCharge, 2, MidpointRounding.AwayFromZero);
+            salesInvoiceDto.TotalAmountAfterTax = grandTotal;
+
+            decimal allocated = salesInvoice.CustomerAllocations != null ? Math.Round(salesInvoice.CustomerAllocations.Sum(a => a.Amount), 2, MidpointRounding.AwayFromZero) : 0;
+            salesInvoiceDto.TotalAllocatedAmount = allocated;
+            salesInvoiceDto.PaidAmount = allocated;
+            salesInvoiceDto.BalanceDue = Math.Round(Math.Max(0, grandTotal - allocated), 2, MidpointRounding.AwayFromZero);
+
+            // Compute calculated status following lifecycle rules:
+            if (salesInvoice.Status == Core.Domain.SalesInvoiceStatus.Void)
+            {
+                salesInvoiceDto.Status = "Void";
+                salesInvoiceDto.StatusId = (int)Core.Domain.SalesInvoiceStatus.Void;
+            }
+            else if (salesInvoice.Status == Core.Domain.SalesInvoiceStatus.Closed || (salesInvoiceDto.BalanceDue <= 0.005m && allocated > 0))
+            {
+                salesInvoiceDto.Status = "Paid";
+                salesInvoiceDto.StatusId = (int)Core.Domain.SalesInvoiceStatus.Closed;
+            }
+            else if (allocated > 0 && salesInvoiceDto.BalanceDue > 0.005m)
+            {
+                salesInvoiceDto.Status = "Partially Paid";
+                salesInvoiceDto.StatusId = (int)Core.Domain.SalesInvoiceStatus.Open;
+            }
+            else if (salesInvoice.Status == Core.Domain.SalesInvoiceStatus.Draft && allocated == 0)
+            {
+                salesInvoiceDto.Status = "Draft";
+                salesInvoiceDto.StatusId = (int)Core.Domain.SalesInvoiceStatus.Draft;
+            }
+            else if (dueDate.Date < DateTime.UtcNow.Date && salesInvoiceDto.BalanceDue > 0.005m)
+            {
+                salesInvoiceDto.Status = "Overdue";
+                salesInvoiceDto.StatusId = (int)Core.Domain.SalesInvoiceStatus.Overdue;
+            }
+            else
+            {
+                salesInvoiceDto.Status = "Open";
+                salesInvoiceDto.StatusId = (int)Core.Domain.SalesInvoiceStatus.Open;
+            }
+
+            // is this journal entry ready for posting?
+            if (!salesInvoiceDto.Posted && salesInvoiceDto.SalesInvoiceLines.Count >= 1)
+            {
+                salesInvoiceDto.ReadyForPosting = true;
+            }
+
+            return salesInvoiceDto;
         }
 
         [HttpPost]
