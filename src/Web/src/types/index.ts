@@ -98,16 +98,6 @@ export interface RoleItem {
   permissions?: RolePermissionItem[];
 }
 
-export interface TeamMember {
-  id: number;
-  firstName?: string;
-  lastName?: string;
-  userName: string;
-  email: string;
-  sysAdmin?: boolean;
-  roles: RoleItem[];
-}
-
 export type WorkspaceRole = 'Owner' | 'Admin' | 'Member';
 
 export interface WorkspaceMember {

@@ -75,32 +75,6 @@ namespace Services.Security
             return _securityRoleRepo.Table.Where(r => r.Name == rolename).FirstOrDefault();
         }
 
-        public bool CheckPermission(string permissionName, string username)
-        {
-            if (string.IsNullOrEmpty(username)) return false;
-            var user = GetUser(username);
-            if (user == null) return false;
-
-            if (user.IsSysAdmin()) return true;
-
-            if (user.Roles != null)
-            {
-                foreach (var role in user.Roles)
-                {
-                    if (role?.SecurityRole == null) continue;
-                    if (role.SecurityRole.SysAdmin || role.SecurityRole.Name == "SystemAdministrators") return true;
-
-                    if (role.SecurityRole.Permissions != null && 
-                        role.SecurityRole.Permissions.Any(p => p.SecurityPermission != null && p.SecurityPermission.Name == permissionName))
-                    {
-                        return true;
-                    }
-                }
-            }
-
-            return false;
-        }
-
         public IEnumerable<SecurityUserRole> GetUsersInSecurityRole(string securityRoleName)
         {
             var role = GetRole(securityRoleName);

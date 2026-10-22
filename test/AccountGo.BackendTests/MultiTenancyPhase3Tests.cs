@@ -369,6 +369,26 @@ namespace AccountGo.BackendTests
         }
 
         [Fact]
+        public async Task GlobalRoleListing_IsPlatformOnly_WorkspaceRolesCarryPermissionsAndMemberCounts()
+        {
+            Assert.Equal(HttpStatusCode.Forbidden, (await Send(HttpMethod.Get, "/api/Administration/roles")).StatusCode);
+
+            var viewerId = ViewerRoleId();
+            await Invite("phase3-other@example.com", securityRoleIds: new[] { viewerId });
+            Assert.Equal(HttpStatusCode.OK, (await Send(HttpMethod.Post, "/api/invitations/" + InvitationToken() + "/accept", token: _otherToken, scoped: false)).StatusCode);
+            // A role held in another workspace must not count here.
+            await Send(HttpMethod.Post, "/api/organizations", new { name = "Elsewhere", slug = "elsewhere" }, token: _otherToken, scoped: false);
+
+            var roles = (await Json(await Send(HttpMethod.Get, Current + "/security-roles"))).EnumerateArray().ToList();
+            Assert.DoesNotContain(roles, r => r.GetProperty("name").GetString() == "SystemAdministrators");
+            var viewer = roles.Single(r => r.GetProperty("id").GetInt32() == viewerId);
+            Assert.Equal(1, viewer.GetProperty("memberCount").GetInt32());
+            Assert.True(viewer.GetProperty("permissions").GetArrayLength() > 0);
+            Assert.All(roles.Where(r => r.GetProperty("id").GetInt32() != viewerId),
+                r => Assert.Equal(0, r.GetProperty("memberCount").GetInt32()));
+        }
+
+        [Fact]
         public async Task Create_SyncPayload_HeadersUnder32KB_AndReplaysAllDefaults()
         {
             using (var source = new SqliteConnection("Data Source=" + _path))

@@ -23,6 +23,14 @@ interface RoleDefinition {
   isSystem?: boolean;
 }
 
+interface WorkspaceSecurityRole {
+  id: number;
+  name: string;
+  displayName?: string;
+  permissions: string[];
+  memberCount: number;
+}
+
 const PERMISSION_GROUPS = [
   {
     group: 'Sales & Invoicing',
@@ -75,41 +83,40 @@ export const RolesSettingsTab: React.FC<RolesSettingsTabProps> = () => {
   const [roles, setRoles] = useState<RoleDefinition[]>([]);
   const [selectedRoleId, setSelectedRoleId] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [loadFailed, setLoadFailed] = useState(false);
 
   useEffect(() => {
     let mounted = true;
     const fetchRoles = async () => {
       try {
-        const res = await authFetch('/api/Administration/roles');
-        if (res.ok) {
-          const data = await res.json();
-          if (Array.isArray(data) && data.length > 0 && mounted) {
-            // Map live database roles
-            const liveRoles: RoleDefinition[] = data.map((r: any) => {
-              const perms = (r.permissions || []).map((p: any) => p.name || p);
-              return {
-                id: r.name?.toLowerCase() || r.id?.toString(),
-                name: r.displayName || r.name,
-                description: r.name === 'SystemAdministrators'
-                  ? 'Full administrative and operational privileges across all subscribed modules.'
-                  : `Standard operational privileges for ${r.displayName || r.name}.`,
-                userCount: r.users?.length || 1,
-                isSystem: r.sysAdmin || r.name === 'SystemAdministrators',
-                permissions: perms,
-              };
-            });
+        // Workspace-safe role templates (platform roles excluded); memberCount is per workspace.
+        const res = await authFetch('/api/organizations/current/security-roles');
+        if (!res.ok) {
+          if (mounted) setLoadFailed(true);
+          return;
+        }
+        const data = await res.json() as WorkspaceSecurityRole[];
+        if (Array.isArray(data) && data.length > 0 && mounted) {
+          const liveRoles: RoleDefinition[] = data.map((r) => ({
+            id: r.name.toLowerCase(),
+            name: r.displayName || r.name,
+            description: 'Built-in role template. Assign it to Members from Team & Members.',
+            userCount: r.memberCount,
+            isSystem: true,
+            permissions: r.permissions,
+          }));
 
-            setRoles(liveRoles);
-            setSelectedRoleId((prev) => {
-              if (!prev || !liveRoles.some((lr) => lr.id === prev)) {
-                return liveRoles[0].id;
-              }
-              return prev;
-            });
-          }
+          setRoles(liveRoles);
+          setSelectedRoleId((prev) => {
+            if (!prev || !liveRoles.some((lr) => lr.id === prev)) {
+              return liveRoles[0].id;
+            }
+            return prev;
+          });
         }
       } catch (err) {
         console.error('Failed to load roles from API:', err);
+        if (mounted) setLoadFailed(true);
       }
     };
 
@@ -120,6 +127,14 @@ export const RolesSettingsTab: React.FC<RolesSettingsTabProps> = () => {
   }, [authFetch]);
 
   const selectedRole = roles.find((r) => r.id === selectedRoleId) || roles[0];
+
+  if (loadFailed) {
+    return (
+      <div role="alert" className="p-12 text-center text-xs text-[var(--text-muted)] rounded-2xl bg-[var(--bg-surface)] shadow-md">
+        Could not load role definitions. Refresh the page to try again.
+      </div>
+    );
+  }
 
   if (roles.length === 0 || !selectedRole) {
     return (
@@ -138,15 +153,9 @@ export const RolesSettingsTab: React.FC<RolesSettingsTabProps> = () => {
           <div>
             <h3 className="text-base font-bold text-[var(--text-main)]">Tenant Roles &amp; Permissions</h3>
             <p className="text-xs text-[var(--text-muted)] mt-0.5">
-              Select a role to inspect its granular permission matrix across subscribed modules.
+              Select a role to inspect its permissions. Owners and Admins always have full access.
             </p>
           </div>
-          <button
-            type="button"
-            className="h-9 px-3.5 self-start sm:self-auto rounded-xl bg-[var(--brand-primary)] text-white text-xs font-semibold shadow-sm hover:brightness-110 active:scale-[0.98] transition-all cursor-pointer"
-          >
-            + Create Custom Role
-          </button>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-2">

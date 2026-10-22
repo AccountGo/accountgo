@@ -21,7 +21,6 @@ namespace Services.Security
         SecurityRole GetRole(string rolename);
         SecurityRole GetSecurityRole(int securityRoleId);
         SecurityPermission GetSecurityPermission(int securityPermissionId);
-        bool CheckPermission(string permissionName, string username);
         IEnumerable<SecurityUserRole> GetUsersInSecurityRole(string seurityRoleName);
         void AddUserInRole(int userId, int securityRoleId);
         void RemoveUserInRole(int userId, int roleId);

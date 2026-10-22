@@ -59,8 +59,16 @@ namespace Api.Controllers
         [HttpGet("security-roles")]
         public IActionResult SecurityRoles()
         {
+            var companyId = _tenant.RequireCompanyId();
+            // Role templates are global; memberCount is this workspace's active members holding the role.
             return Ok(_db.SecurityRoles.Where(r => !r.SysAdmin && r.Name != "SystemAdministrators")
-                .Select(r => new { r.Id, r.Name, r.DisplayName }).ToList());
+                .Select(r => new
+                {
+                    r.Id, r.Name, r.DisplayName,
+                    permissions = r.Permissions.Select(p => p.SecurityPermission.Name).ToList(),
+                    memberCount = _db.CompanyMemberSecurityRoles.Count(mr => mr.SecurityRoleId == r.Id
+                        && mr.CompanyMember.CompanyId == companyId && mr.CompanyMember.Status == CompanyMemberStatus.Active)
+                }).ToList());
         }
 
         public class UpdateMemberRequest

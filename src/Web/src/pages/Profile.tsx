@@ -23,7 +23,7 @@ import { UserSession } from '../types/auth';
 
 export const Profile: React.FC = () => {
   const tenantContext = useOutletContext<TenantContextType>();
-  const { currentOrg, availableOrgs, switchOrg } = tenantContext;
+  const { currentOrg, availableOrgs, switchOrg, userPermissions } = tenantContext;
   const { user, authFetch, refreshUser } = useAuth();
 
   // Profile fields state
@@ -195,7 +195,9 @@ export const Profile: React.FC = () => {
   const displayName =
     `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || user?.email || 'User';
   const initial = displayName.charAt(0).toUpperCase();
+  // Platform staff role (global); workspace access comes from the tenant context below.
   const isSysAdmin = (user?.roles || []).includes('SystemAdministrators');
+  const hasFullWorkspaceAccess = currentOrg.role === 'Owner' || currentOrg.role === 'Admin';
 
   return (
     <div className="space-y-6 w-full animate-in fade-in duration-200 text-[var(--text-main)]">
@@ -572,21 +574,13 @@ export const Profile: React.FC = () => {
             </div>
 
             <div className="flex flex-wrap gap-1.5 pt-1">
-              {user?.roles && user.roles.length > 0 ? (
-                user.roles.map((role) => (
-                  <span
-                    key={role}
-                    className={`px-2.5 py-1 rounded-xl text-xs font-semibold ${
-                      role === 'SystemAdministrators'
-                        ? 'bg-purple-500/15 text-purple-400 ring-1 ring-purple-500/30'
-                        : 'bg-[var(--brand-subtle)] text-[var(--brand-primary)] ring-1 ring-[var(--brand-ring)]'
-                    }`}
-                  >
-                    {role}
-                  </span>
-                ))
-              ) : (
-                <span className="text-xs text-[var(--text-muted)] italic">No roles assigned.</span>
+              <span className="px-2.5 py-1 rounded-xl text-xs font-semibold bg-[var(--brand-subtle)] text-[var(--brand-primary)] ring-1 ring-[var(--brand-ring)]">
+                {currentOrg.role || 'Member'}
+              </span>
+              {isSysAdmin && (
+                <span className="px-2.5 py-1 rounded-xl text-xs font-semibold bg-purple-500/15 text-purple-400 ring-1 ring-purple-500/30">
+                  Platform administrator
+                </span>
               )}
             </div>
 
@@ -594,20 +588,24 @@ export const Profile: React.FC = () => {
               <div className="flex items-center justify-between text-xs">
                 <span className="font-semibold text-[var(--text-main)]">Granted Permissions</span>
                 <span className="font-mono text-[10px] text-[var(--text-muted)]">
-                  {user?.permissions?.length || 0} active
+                  {userPermissions.length} active
                 </span>
               </div>
 
-              {isSysAdmin ? (
-                <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-300 text-xs">
-                  <div className="font-semibold">Unrestricted Administrative Access</div>
-                  <p className="text-[10px] text-purple-300/80 mt-0.5">
-                    As a System Administrator, you have complete authority across all modules and settings.
+              {hasFullWorkspaceAccess ? (
+                <div className="p-3 rounded-xl bg-[var(--brand-subtle)] text-[var(--brand-primary)] text-xs">
+                  <div className="font-semibold">Full workspace access</div>
+                  <p className="text-[10px] opacity-80 mt-0.5">
+                    As {currentOrg.role} of {currentOrg.name}, you have every permission in this workspace.
                   </p>
                 </div>
+              ) : userPermissions.length === 0 ? (
+                <p className="text-xs text-[var(--text-muted)] italic">
+                  No permissions in this workspace yet. Ask an Owner or Admin to assign a security role.
+                </p>
               ) : (
                 <div className="max-h-48 overflow-y-auto space-y-1 pr-1">
-                  {(user?.permissions || []).map((p) => (
+                  {userPermissions.map((p) => (
                     <div
                       key={p}
                       className="p-2 rounded-lg bg-[var(--bg-subtle)] text-[11px] font-mono flex items-center gap-2 text-[var(--text-secondary)]"
