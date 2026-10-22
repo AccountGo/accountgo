@@ -439,7 +439,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 pb-24 text-[var(--text-main)]">
       {/* Top Breadcrumb & Action Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
         <div className="flex items-center gap-3">
           <Link
             to={`/org/${orgSlug}/sales`}
@@ -458,11 +458,11 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
           </div>
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex items-center gap-3">
+        {/* Action Buttons: one row at every width; labels never wrap */}
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
           <Link
             to={`/org/${orgSlug}/sales`}
-            className="px-4 py-2.5 text-sm font-medium text-[var(--text-secondary)] bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-xl hover:bg-[var(--bg-surface-hover)] hover:text-[var(--text-main)] transition"
+            className="shrink-0 whitespace-nowrap px-3 sm:px-4 py-2.5 text-sm font-medium text-[var(--text-secondary)] bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-xl hover:bg-[var(--bg-surface-hover)] hover:text-[var(--text-main)] transition"
           >
             Cancel
           </Link>
@@ -471,12 +471,12 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
             type="button"
             onClick={() => handleSaveInvoice(true)}
             disabled={isSavingDraft || isSavingIssue}
-            className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-[var(--text-main)] bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-xl hover:bg-[var(--bg-surface-hover)] transition disabled:opacity-50 shadow-sm"
+            className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 whitespace-nowrap px-3 sm:px-4 py-2.5 text-sm font-medium text-[var(--text-main)] bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-xl hover:bg-[var(--bg-surface-hover)] transition disabled:opacity-50 shadow-sm"
           >
             {isSavingDraft ? (
               <Loader2 className="w-4 h-4 animate-spin text-[var(--brand-primary)]" />
             ) : (
-              <Save className="w-4 h-4 text-[var(--text-secondary)]" />
+              <Save className="max-sm:hidden w-4 h-4 text-[var(--text-secondary)]" />
             )}
             Save as Draft
           </button>
@@ -485,12 +485,12 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
             type="button"
             onClick={() => handleSaveInvoice(false)}
             disabled={isSavingDraft || isSavingIssue}
-            className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-[var(--brand-text)] bg-[var(--brand-primary)] rounded-xl hover:bg-[var(--brand-hover)] shadow-sm transition disabled:opacity-50"
+            className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 whitespace-nowrap px-3 sm:px-5 py-2.5 text-sm font-semibold text-[var(--brand-text)] bg-[var(--brand-primary)] border border-transparent rounded-xl hover:bg-[var(--brand-hover)] shadow-sm transition disabled:opacity-50"
           >
             {isSavingIssue ? (
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
-              <Send className="w-4 h-4" />
+              <Send className="max-sm:hidden w-4 h-4" />
             )}
             Save & Issue
           </button>
