@@ -135,13 +135,10 @@ export const Members: React.FC = () => {
           <button type="button" className={button} disabled={busy || loading} onClick={() => void load()}>
             <RefreshCw className="inline w-4 h-4 mr-2" aria-hidden="true" />Refresh
           </button>
-          {canManage && <button type="button" className={button} disabled aria-describedby="invitations-unavailable">
+          {canManage && <button type="button" className={button} disabled={busy || loading} onClick={() => openForm('invite')}>
             <UserPlus className="inline w-4 h-4 mr-2" aria-hidden="true" />Invite member
           </button>}
         </div>
-        {canManage && <p id="invitations-unavailable" className="text-sm text-[var(--text-muted)]">
-          Invitations and resends are unavailable until the invitation acceptance page launches in Phase 4.
-        </p>}
       </div>
       {error && <div role="alert" className="p-4 rounded-xl bg-red-500/10 text-red-400">{error}</div>}
       {notice && <div role="status" className="p-4 rounded-xl bg-emerald-500/10 text-emerald-400">{notice}</div>}
@@ -219,7 +216,9 @@ export const Members: React.FC = () => {
           <div><p>{invite.email} · {invite.role}</p>
             <p className="text-sm text-[var(--text-muted)]">Expires {new Date(invite.expiresAt).toLocaleString()}</p></div>
           {(isOwner || invite.role === 'Member') && <div className="flex gap-2">
-            <button type="button" className={button} disabled aria-describedby="invitations-unavailable">Resend</button>
+            <button type="button" className={button} disabled={busy} onClick={() =>
+              void mutate(`invitations/${invite.id}/resend`, 'POST', undefined, 'Invitation email resent.')
+            }>Resend</button>
             <button type="button" className={button} disabled={busy} onClick={() => {
               if (window.confirm(`Revoke the invitation for ${invite.email}?`))
                 void mutate(`invitations/${invite.id}`, 'DELETE', undefined, 'Invitation revoked.');

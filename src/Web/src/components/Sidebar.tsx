@@ -96,13 +96,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
       name: 'Team & Members',
       path: `/org/${currentOrg.slug}/members`,
       icon: Users,
+      visible: true,
     },
     {
       name: 'Organization Settings',
       path: `/org/${currentOrg.slug}/settings`,
       icon: Settings,
+      visible: currentOrg.role === 'Owner' || currentOrg.role === 'Admin',
     },
-  ];
+  ].filter((link) => link.visible);
 
   const renderContent = (isMobile: boolean = false) => (
     <aside

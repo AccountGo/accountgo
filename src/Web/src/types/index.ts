@@ -53,10 +53,24 @@ export interface OrgDetails {
   role?: string;
   plan?: PlanKey;
   currency?: string;
+  permissions?: string[];
   fiscalYearEnd?: string;
   avatarBg?: string;
   whitelabel?: WhitelabelConfig;
   subscription?: SubscriptionInfo;
+}
+
+export interface Organization {
+  id: string;
+  name: string;
+  shortName?: string;
+  slug: string;
+  plan: PlanKey;
+  subscriptionStatus: SubscriptionInfo['status'];
+  activeModules: ModuleKey[];
+  role: WorkspaceRole;
+  currency?: string;
+  permissions?: string[];
 }
 
 export interface UserProfile {
@@ -116,6 +130,23 @@ export interface WorkspaceInvitation {
   expiresAt: string;
 }
 
+export interface PendingInvitation {
+  id: number;
+  workspaceName: string;
+  slug: string;
+  role: Exclude<WorkspaceRole, 'Owner'>;
+  expiresAt: string;
+}
+
+export interface InvitationPreview {
+  workspaceName: string;
+  inviterName: string;
+  role: Exclude<WorkspaceRole, 'Owner'>;
+  emailMasked: string;
+  expired: boolean;
+  accepted: boolean;
+}
+
 export interface TenantContextType {
   currentOrg: OrgDetails;
   availableOrgs: OrgDetails[];
@@ -123,6 +154,7 @@ export interface TenantContextType {
   subscription: SubscriptionInfo;
   userPermissions: string[];
   switchOrg: (slug: string) => void;
+  updateCurrentOrg: (updates: Partial<OrgDetails>) => void;
   updateOrgWhitelabel?: (config: WhitelabelConfig) => void;
   updateSubscription?: (plan: PlanKey, activeModules?: ModuleKey[]) => Promise<void>;
   hasModule: (module: ModuleKey) => boolean;

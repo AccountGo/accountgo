@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useOutletContext, useNavigate, useSearchParams, Link } from 'react-router-dom';
 import {
   Building2,
@@ -22,11 +22,11 @@ import {
   ExternalLink,
   RefreshCw,
 } from 'lucide-react';
-import { TenantContextType, TeamMember } from '../types';
+import { TenantContextType, WorkspaceMember } from '../types';
 import { THEMES, SCHEMES, ThemeId, SchemeId } from '../themes';
 import { useTheme } from '../themes/ThemeContext';
 import { useAuth } from '../auth/AuthContext';
-import { setPersistedOrgSlug } from '../lib/storage';
+import { clearPersistedOrgSlug, setPersistedOrgSlug } from '../lib/storage';
 import { SubscriptionSettingsTab } from '../components/SubscriptionSettingsTab';
 import { RolesSettingsTab } from '../components/RolesSettingsTab';
 
@@ -57,7 +57,7 @@ interface LiveCashBank {
 
 export const Settings: React.FC = () => {
   const tenantContext = useOutletContext<TenantContextType>();
-  const { currentOrg, user, updateOrgWhitelabel } = tenantContext;
+  const { currentOrg, user, updateCurrentOrg, updateOrgWhitelabel } = tenantContext;
   const { authFetch } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -72,17 +72,24 @@ export const Settings: React.FC = () => {
   const { setTheme, setScheme, resolvedScheme } = useTheme();
 
   // 1. General Profile State (bound to live database Company table)
-  const [companyId, setCompanyId] = useState<number>(Number(currentOrg.id) || 1);
+  const [companyId, setCompanyId] = useState<number>(Number(currentOrg.id) || 0);
   const [orgName, setOrgName] = useState(currentOrg.name);
   const [shortName, setShortName] = useState(currentOrg.shortName || '');
   const [companyCode, setCompanyCode] = useState(currentOrg.companyCode || '');
   const [cra, setCra] = useState(currentOrg.cra || '');
   const [orgSlug, setOrgSlug] = useState(currentOrg.slug);
-  const [currency, setCurrency] = useState(currentOrg.currency || 'PHP');
+  const [currency, setCurrency] = useState(currentOrg.currency || '');
   const [isLoadingCompany, setIsLoadingCompany] = useState(true);
   const [isSavingCompany, setIsSavingCompany] = useState(false);
   const [companySaveSuccess, setCompanySaveSuccess] = useState(false);
   const [companySaveError, setCompanySaveError] = useState<string | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteSlug, setDeleteSlug] = useState('');
+  const [deleteError, setDeleteError] = useState('');
+  const [deletingWorkspace, setDeletingWorkspace] = useState(false);
+  const deleteTriggerRef = useRef<HTMLButtonElement>(null);
+  const deleteConfirmRef = useRef<HTMLInputElement>(null);
+  const deleteDialogRef = useRef<HTMLFormElement>(null);
 
   // 2. Financial & Accounting Rules State
   const [fiscalYears, setFiscalYears] = useState<LiveFinancialYear[]>([]);
@@ -91,7 +98,7 @@ export const Settings: React.FC = () => {
   const [isLoadingFinancials, setIsLoadingFinancials] = useState(false);
 
   // 3. Authorized Members Summary State
-  const [members, setMembers] = useState<TeamMember[]>([]);
+  const [members, setMembers] = useState<WorkspaceMember[]>([]);
 
   // 4. Whitelabel State
   const [brandName, setBrandName] = useState(currentOrg.whitelabel?.brandName || '');
@@ -108,7 +115,7 @@ export const Settings: React.FC = () => {
       if (res.ok) {
         const data = await res.json();
         if (data) {
-          setCompanyId(data.id || 1);
+          setCompanyId(data.id || 0);
           setOrgName(data.name || '');
           setShortName(data.shortName || '');
           setCompanyCode(data.companyCode || '');
@@ -155,19 +162,25 @@ export const Settings: React.FC = () => {
   // Load live team members summary
   const fetchMembers = useCallback(async () => {
     try {
-      const res = await authFetch('/api/Administration/users');
+      const res = await authFetch('/api/organizations/current/members');
       if (res.ok) {
-        const data = await res.json();
+        const data = await res.json() as WorkspaceMember[];
         if (Array.isArray(data)) setMembers(data);
       }
     } catch {}
-  }, [authFetch]);
+  }, [authFetch, currentOrg.slug]);
 
   useEffect(() => {
     fetchCompanyDetails();
     fetchFinancialRules();
     fetchMembers();
   }, [fetchCompanyDetails, fetchFinancialRules, fetchMembers]);
+
+  useEffect(() => {
+    if (!deleteDialogOpen) return;
+    deleteConfirmRef.current?.focus();
+    return () => deleteTriggerRef.current?.focus();
+  }, [deleteDialogOpen]);
 
   // Save General Profile to Database
   const handleSaveCompany = async (e: React.FormEvent) => {
@@ -181,37 +194,72 @@ export const Settings: React.FC = () => {
     const cleanSlug = orgSlug.toLowerCase().replace(/[^a-z0-9-]/g, '-').trim();
 
     try {
-      const res = await authFetch('/api/Administration/company', {
+      const metadataResponse = await authFetch('/api/Administration/company', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id: companyId,
-          name: orgName.trim(),
           shortName: shortName.trim(),
-          slug: cleanSlug,
           companyCode: companyCode.trim(),
           cra: cra.trim(),
         }),
       });
+      if (!metadataResponse.ok) {
+        throw new Error('Failed to update workspace registration details.');
+      }
+
+      const res = await authFetch('/api/organizations/current', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: orgName.trim(),
+          slug: cleanSlug,
+          currency,
+        }),
+      });
 
       if (!res.ok) {
-        const err = await res.json().catch(() => null);
-        throw new Error(err?.message || 'Failed to update company in database.');
+        const err = await res.json().catch(() => null) as { detail?: string; title?: string; message?: string } | null;
+        throw new Error(err?.detail || err?.title || 'Failed to update workspace settings.');
       }
 
-      await res.json();
+      const updated = await res.json() as { id: string; name: string; slug: string };
+      setCompanyId(Number(updated.id));
+      setOrgSlug(updated.slug);
+      setPersistedOrgSlug(updated.slug);
+      updateCurrentOrg({ name: orgName.trim(), slug: updated.slug, currency });
+      navigate(`/org/${updated.slug}/settings`, { replace: true });
       setCompanySaveSuccess(true);
       setTimeout(() => setCompanySaveSuccess(false), 3000);
-
-      // If slug was changed, persist and navigate to the new workspace route
-      if (cleanSlug !== currentOrg.slug) {
-        setPersistedOrgSlug(cleanSlug);
-        navigate(`/org/${cleanSlug}/settings`);
-      }
-    } catch (err: any) {
-      setCompanySaveError(err.message || 'Error updating organization settings.');
+    } catch (err) {
+      setCompanySaveError(err instanceof Error ? err.message : 'Error updating organization settings.');
     } finally {
       setIsSavingCompany(false);
+    }
+  };
+
+  const handleDeleteWorkspace = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (deleteSlug !== currentOrg.slug || deletingWorkspace) return;
+    setDeletingWorkspace(true);
+    setDeleteError('');
+    try {
+      const response = await authFetch('/api/organizations/current', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirmSlug: deleteSlug }),
+      });
+      if (!response.ok) {
+        const problem = await response.json().catch(() => null) as { detail?: string; title?: string } | null;
+        setDeleteError(problem?.detail || problem?.title || 'Workspace could not be deleted.');
+        return;
+      }
+      clearPersistedOrgSlug();
+      navigate('/select-org', { replace: true, state: { notice: 'Workspace deleted.' } });
+    } catch {
+      setDeleteError('Workspace could not be deleted. Please try again.');
+    } finally {
+      setDeletingWorkspace(false);
     }
   };
 
@@ -612,25 +660,18 @@ export const Settings: React.FC = () => {
                     </div>
                   </div>
                   <span className="px-2.5 py-1 rounded-full bg-[var(--brand-subtle)] text-[var(--brand-primary)] text-xs font-semibold shrink-0">
-                    Owner / Admin
+                    {currentOrg.role}
                   </span>
                 </div>
               ) : (
                 members.slice(0, 4).map((m) => {
-                  const fullName = `${m.firstName || ''} ${m.lastName || ''}`.trim() || m.userName || m.email;
+                  const fullName = `${m.firstName || ''} ${m.lastName || ''}`.trim() || m.email;
                   const isCurrentUser = user.email?.toLowerCase() === m.email?.toLowerCase();
-                  const isSysAdmin = m.sysAdmin || (m.roles || []).some((r) => r.sysAdmin || r.name === 'SystemAdministrators');
 
                   return (
-                    <div key={m.id} className="p-3 rounded-xl bg-[var(--bg-subtle)] flex items-center justify-between gap-3">
+                    <div key={m.memberId} className="p-3 rounded-xl bg-[var(--bg-subtle)] flex items-center justify-between gap-3">
                       <div className="flex items-center gap-3 min-w-0">
-                        <div
-                          className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs ring-1 shrink-0 ${
-                            isSysAdmin
-                              ? 'bg-purple-500/15 text-purple-400 ring-purple-500/30'
-                              : 'bg-[var(--brand-subtle)] text-[var(--brand-primary)] ring-[var(--brand-ring)]'
-                          }`}
-                        >
+                        <div className="w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs ring-1 shrink-0 bg-[var(--brand-subtle)] text-[var(--brand-primary)] ring-[var(--brand-ring)]">
                           {fullName.charAt(0).toUpperCase()}
                         </div>
                         <div className="min-w-0">
@@ -644,24 +685,19 @@ export const Settings: React.FC = () => {
                         </div>
                       </div>
                       <div className="flex items-center gap-1.5 shrink-0">
-                        {m.roles && m.roles.length > 0 ? (
-                          m.roles.map((r) => (
+                        <span className="px-2.5 py-1 rounded-full bg-[var(--brand-subtle)] text-[var(--brand-primary)] text-xs font-semibold">
+                          {m.role}
+                        </span>
+                        {m.securityRoles.length > 0 ? (
+                          m.securityRoles.map((r) => (
                             <span
                               key={r.id}
-                              className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
-                                r.sysAdmin || r.name === 'SystemAdministrators'
-                                  ? 'bg-purple-500/15 text-purple-400'
-                                  : 'bg-[var(--bg-surface-hover)] text-[var(--text-secondary)]'
-                              }`}
+                              className="px-2.5 py-1 rounded-full bg-[var(--bg-surface-hover)] text-[var(--text-secondary)] text-xs font-semibold"
                             >
                               {r.displayName || r.name}
                             </span>
                           ))
-                        ) : (
-                          <span className="px-2.5 py-1 rounded-full bg-[var(--bg-surface-hover)] text-[var(--text-muted)] text-xs font-semibold">
-                            Member
-                          </span>
-                        )}
+                        ) : <span className="text-xs text-[var(--text-muted)]">No security roles</span>}
                       </div>
                     </div>
                   );
@@ -669,6 +705,103 @@ export const Settings: React.FC = () => {
               )}
             </div>
           </div>
+
+          {currentOrg.role === 'Owner' && (
+            <section className="p-4 sm:p-6 rounded-2xl border border-rose-500/30 bg-rose-500/5 space-y-3">
+              <div>
+                <h2 className="text-sm font-bold text-rose-400">Danger zone</h2>
+                <p className="mt-1 text-xs text-[var(--text-secondary)]">
+                  Deleting this workspace removes it from your workspace list and cannot be undone.
+                </p>
+              </div>
+              <button
+                type="button"
+                ref={deleteTriggerRef}
+                onClick={() => {
+                  setDeleteSlug('');
+                  setDeleteError('');
+                  setDeleteDialogOpen(true);
+                }}
+                className="h-10 px-4 rounded-xl border border-rose-500/40 text-rose-400 text-xs font-semibold hover:bg-rose-500/10"
+              >
+                Delete workspace
+              </button>
+            </section>
+          )}
+        </div>
+      )}
+
+      {deleteDialogOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+        >
+          <form
+            ref={deleteDialogRef}
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="delete-workspace-title"
+            aria-describedby="delete-workspace-description"
+            onSubmit={handleDeleteWorkspace}
+            onKeyDown={(event) => {
+              if (event.key === 'Escape' && !deletingWorkspace) {
+                event.preventDefault();
+                setDeleteDialogOpen(false);
+                return;
+              }
+              if (event.key !== 'Tab') return;
+              const focusable = deleteDialogRef.current?.querySelectorAll<HTMLElement>(
+                'input:not(:disabled), button:not(:disabled)',
+              );
+              if (!focusable?.length) return;
+              const first = focusable[0];
+              const last = focusable[focusable.length - 1];
+              if (event.shiftKey && document.activeElement === first) {
+                event.preventDefault();
+                last.focus();
+              } else if (!event.shiftKey && document.activeElement === last) {
+                event.preventDefault();
+                first.focus();
+              }
+            }}
+            className="w-full max-w-md rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-6 shadow-2xl space-y-4"
+          >
+            <div>
+              <h2 id="delete-workspace-title" className="text-base font-bold text-[var(--text-main)]">
+                Delete {currentOrg.name}?
+              </h2>
+              <p id="delete-workspace-description" className="mt-2 text-sm text-[var(--text-secondary)]">
+                This action cannot be undone. Type <strong>{currentOrg.slug}</strong> to confirm.
+              </p>
+            </div>
+            <label htmlFor="confirm-workspace-slug" className="block text-xs font-semibold text-[var(--text-secondary)]">
+              Workspace slug
+            </label>
+            <input
+              id="confirm-workspace-slug"
+              ref={deleteConfirmRef}
+              value={deleteSlug}
+              onChange={(event) => setDeleteSlug(event.target.value)}
+              className="w-full h-11 px-3 rounded-xl bg-[var(--bg-subtle)] text-sm font-mono text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-rose-500"
+            />
+            {deleteError && <p role="alert" className="text-sm text-rose-400">{deleteError}</p>}
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={deletingWorkspace}
+                onClick={() => setDeleteDialogOpen(false)}
+                className="h-10 px-4 rounded-xl text-xs font-semibold text-[var(--text-secondary)] hover:bg-[var(--bg-surface-hover)]"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={deleteSlug !== currentOrg.slug || deletingWorkspace}
+                className="h-10 px-4 rounded-xl bg-rose-600 text-white text-xs font-semibold disabled:opacity-50"
+              >
+                {deletingWorkspace ? 'Deleting…' : 'Delete workspace'}
+              </button>
+            </div>
+          </form>
         </div>
       )}
 

@@ -145,6 +145,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         organizationName: payload.organizationName?.trim() || undefined,
         organizationSlug: payload.organizationSlug?.trim() || undefined,
         currency: payload.currency || 'PHP',
+        invitationToken: payload.invitationToken || undefined,
       }),
     });
 
@@ -194,6 +195,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     const authData = data as AuthResponse;
+    tokenRef.current = authData.accessToken;
     setAccessToken(authData.accessToken);
     setUser(authData.user);
   }, []);
@@ -224,8 +226,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (token && !headers.has('Authorization')) {
         headers.set('Authorization', `Bearer ${token}`);
       }
-      // Workspace context: every call made under /org/:orgSlug carries the slug as X-AccountGo-Org.
-      const orgSlug = getOrgSlugFromLocation();
+      const requestPath = new URL(url.toString(), window.location.origin).pathname;
+      const isTenantFreeRequest =
+        requestPath.startsWith('/api/auth/') ||
+        requestPath === '/api/organizations' ||
+        requestPath.startsWith('/api/invitations/');
+      const orgSlug = isTenantFreeRequest ? null : getOrgSlugFromLocation();
       if (orgSlug && !headers.has(ORG_HEADER)) {
         headers.set(ORG_HEADER, orgSlug);
       }
