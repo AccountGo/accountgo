@@ -165,6 +165,8 @@ namespace Api.Controllers
             return new ObjectResult(auditLogsDto);
         }
 
+        // Global role templates incl. the platform role; workspaces use /api/organizations/current/security-roles.
+        [Authorize(Roles = PlatformAdminRole)]
         [HttpGet]
         [Route("roles")] // api/Administration/Roles
         public IActionResult Roles()

@@ -3,6 +3,15 @@ import { useNavigate, useOutletContext } from 'react-router-dom';
 import { RefreshCw, Users, UserPlus } from 'lucide-react';
 import { RoleItem, TenantContextType, WorkspaceInvitation, WorkspaceMember, WorkspaceRole } from '../types';
 import { useAuth } from '../auth/AuthContext';
+import { ConfirmDialog } from '../components/ConfirmDialog';
+
+interface PendingConfirm {
+  title: string;
+  message: string;
+  confirmLabel: string;
+  destructive: boolean;
+  action: () => Promise<void>;
+}
 
 const base = '/api/organizations/current';
 const button = 'px-3 py-2 rounded-lg border border-[var(--border-subtle)] hover:bg-[var(--bg-subtle)] disabled:opacity-50 disabled:cursor-not-allowed';
@@ -38,6 +47,7 @@ export const Members: React.FC = () => {
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<'Admin' | 'Member'>('Member');
   const [roleIds, setRoleIds] = useState<number[]>([]);
+  const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm | null>(null);
   const canManage = currentRole === 'Owner' || currentRole === 'Admin';
   const isOwner = currentRole === 'Owner';
 
@@ -193,14 +203,22 @@ export const Members: React.FC = () => {
                 <td className="p-4">{new Date(member.joinedAt).toLocaleDateString()}</td>
                 <td className="p-4"><div className="flex flex-wrap gap-2">
                   {editable && <button type="button" className={button} disabled={busy} onClick={() => openForm(member)}>Edit access</button>}
-                  {(editable || self) && <button type="button" className={button} disabled={busy} onClick={() => {
-                    if (window.confirm(self ? 'Leave this workspace? The last Owner must transfer ownership first.' : `Remove ${member.email} from this workspace?`))
-                      void mutate(`members/${member.memberId}`, 'DELETE', undefined, 'Member removed.', self);
-                  }}>{self ? 'Leave' : 'Remove'}</button>}
-                  {isOwner && !self && member.status === 'Active' && <button type="button" className={button} disabled={busy} onClick={() => {
-                    if (window.confirm(`Transfer ownership to ${member.email}? You will become an Admin.`))
-                      void mutate('transfer-ownership', 'POST', { memberId: member.memberId }, 'Ownership transferred.');
-                  }}>Transfer ownership</button>}
+                  {(editable || self) && <button type="button" className={button} disabled={busy} onClick={() => setPendingConfirm({
+                    title: self ? 'Leave this workspace?' : 'Remove member?',
+                    message: self
+                      ? `You will lose access to ${currentOrg.name}. The last Owner must transfer ownership first.`
+                      : `${member.email} will lose access to ${currentOrg.name}.`,
+                    confirmLabel: self ? 'Leave workspace' : 'Remove member',
+                    destructive: true,
+                    action: () => mutate(`members/${member.memberId}`, 'DELETE', undefined, 'Member removed.', self),
+                  })}>{self ? 'Leave' : 'Remove'}</button>}
+                  {isOwner && !self && member.status === 'Active' && <button type="button" className={button} disabled={busy} onClick={() => setPendingConfirm({
+                    title: 'Transfer ownership?',
+                    message: `${member.email} will become the Owner of ${currentOrg.name}. You will become an Admin.`,
+                    confirmLabel: 'Transfer ownership',
+                    destructive: true,
+                    action: () => mutate('transfer-ownership', 'POST', { memberId: member.memberId }, 'Ownership transferred.'),
+                  })}>Transfer ownership</button>}
                 </div></td>
               </tr>;
             })}</tbody>
@@ -219,13 +237,31 @@ export const Members: React.FC = () => {
             <button type="button" className={button} disabled={busy} onClick={() =>
               void mutate(`invitations/${invite.id}/resend`, 'POST', undefined, 'Invitation email resent.')
             }>Resend</button>
-            <button type="button" className={button} disabled={busy} onClick={() => {
-              if (window.confirm(`Revoke the invitation for ${invite.email}?`))
-                void mutate(`invitations/${invite.id}`, 'DELETE', undefined, 'Invitation revoked.');
-            }}>Revoke</button>
+            <button type="button" className={button} disabled={busy} onClick={() => setPendingConfirm({
+              title: 'Revoke invitation?',
+              message: `The invitation link sent to ${invite.email} will stop working.`,
+              confirmLabel: 'Revoke invitation',
+              destructive: true,
+              action: () => mutate(`invitations/${invite.id}`, 'DELETE', undefined, 'Invitation revoked.'),
+            })}>Revoke</button>
           </div>}
         </div>)}
       </section>}
+
+      {pendingConfirm && (
+        <ConfirmDialog
+          title={pendingConfirm.title}
+          message={pendingConfirm.message}
+          confirmLabel={pendingConfirm.confirmLabel}
+          destructive={pendingConfirm.destructive}
+          busy={busy}
+          onCancel={() => setPendingConfirm(null)}
+          onConfirm={() => {
+            const { action } = pendingConfirm;
+            void action().finally(() => setPendingConfirm(null));
+          }}
+        />
+      )}
     </div>
   );
 };
