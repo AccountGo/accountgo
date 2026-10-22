@@ -457,6 +457,33 @@ namespace AccountGo.BackendTests
         }
 
         [Fact]
+        public async Task ChartOfAccounts_ExposesNormalSideClassAndHeaderFlags()
+        {
+            var tree = await Json(await Send(HttpMethod.Get, "/api/Financials/Accounts"));
+            JsonElement Find(JsonElement list, string code)
+            {
+                foreach (var account in list.EnumerateArray())
+                {
+                    if (account.GetProperty("accountCode").GetString() == code)
+                        return account;
+                    var match = Find(account.GetProperty("childAccounts"), code);
+                    if (match.ValueKind != JsonValueKind.Undefined)
+                        return match;
+                }
+                return default;
+            }
+
+            var fixedAssets = Find(tree, "10300");
+            Assert.False(fixedAssets.GetProperty("canPost").GetBoolean());
+            Assert.Equal("Assets", fixedAssets.GetProperty("accountClassName").GetString());
+            var depreciation = Find(tree, "14001");
+            Assert.True(depreciation.GetProperty("canPost").GetBoolean());
+            Assert.True(depreciation.GetProperty("isContraAccount").GetBoolean());
+            Assert.Equal("Cr", depreciation.GetProperty("normalBalance").GetString());
+            Assert.Equal("Dr", Find(tree, "10111").GetProperty("normalBalance").GetString());
+        }
+
+        [Fact]
         public async Task Workspace_UpdateSlugSettings_AndReserveDeletedSlug()
         {
             Assert.Equal(HttpStatusCode.OK, (await Send(HttpMethod.Patch, Current,

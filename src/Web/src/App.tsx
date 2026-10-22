@@ -12,6 +12,7 @@ import { Invoices } from './pages/Invoices';
 import { InvoiceEdit } from './pages/InvoiceEdit';
 import { InvoiceDetail } from './pages/InvoiceDetail';
 import PlaceholderView from './pages/PlaceholderView';
+import ChartOfAccounts from './pages/ChartOfAccounts';
 import NotFound from './pages/NotFound';
 import ProtectedRoute from './components/ProtectedRoute';
 import { PermissionDeniedCard, RequiresModule, useTenantContext } from './components/Gating';
@@ -98,6 +99,14 @@ const router = createBrowserRouter([
             element: (
               <RequiresModule module="financials">
                 <PlaceholderView />
+              </RequiresModule>
+            ),
+          },
+          {
+            path: 'financials/accounts',
+            element: (
+              <RequiresModule module="financials">
+                <ChartOfAccounts />
               </RequiresModule>
             ),
           },
