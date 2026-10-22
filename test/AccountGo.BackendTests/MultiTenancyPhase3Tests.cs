@@ -760,7 +760,76 @@ namespace AccountGo.BackendTests
             }
         }
 
-        private class Message
+        
+        [Fact]
+        public async Task NotesAndPaymentInstructions_RoundTrip_AndUpdate()
+        {
+            // Create an invoice with Notes and PaymentInstructions
+            var invoice = await NewInvoice();
+            invoice.Notes = "Client note";
+            invoice.PaymentInstructions = "Pay by check";
+            invoice.Status = "Open";
+            var saved = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
+            Assert.True(saved.IsSuccessStatusCode, await saved.Content.ReadAsStringAsync());
+            var invoiceId = (await saved.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt32();
+
+            // GET it back and assert both round-trip
+            var got = await Send(HttpMethod.Get, $"/api/Sales/SalesInvoice?id={invoiceId}");
+            Assert.True(got.IsSuccessStatusCode);
+            var gotDto = await got.Content.ReadFromJsonAsync<Dto.Sales.SalesInvoice>();
+            Assert.NotNull(gotDto);
+            Assert.Equal("Client note", gotDto.Notes);
+            Assert.Equal("Pay by check", gotDto.PaymentInstructions);
+
+            // Update the invoice Notes and PaymentInstructions via SaveSalesInvoice
+            // First, get a fresh copy of the invoice from the database
+            using (var scope = _factory.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+                using (var tenantCtx = scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
+                {
+                    var updatedInvoice = db.SalesInvoiceHeaders.FirstOrDefault(i => i.Id == invoiceId);
+                    if (updatedInvoice != null)
+                    {
+                        updatedInvoice.Notes = "Updated notes";
+                        updatedInvoice.PaymentInstructions = "Updated instructions";
+                        db.SaveChanges();
+                    }
+                }
+            }
+
+            // GET it back and assert updated values
+            var gotAgain = await Send(HttpMethod.Get, $"/api/Sales/SalesInvoice?id={invoiceId}");
+            Assert.True(gotAgain.IsSuccessStatusCode);
+            var gotAgainDto = await gotAgain.Content.ReadFromJsonAsync<Dto.Sales.SalesInvoice>();
+            Assert.Equal("Updated notes", gotAgainDto.Notes);
+            Assert.Equal("Updated instructions", gotAgainDto.PaymentInstructions);
+
+            // Update with empty strings and assert they come back null
+            using (var scope = _factory.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+                using (var tenantCtx = scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
+                {
+                    var clearedInvoice = db.SalesInvoiceHeaders.FirstOrDefault(i => i.Id == invoiceId);
+                    if (clearedInvoice != null)
+                    {
+                        clearedInvoice.Notes = null;
+                        clearedInvoice.PaymentInstructions = null;
+                        db.SaveChanges();
+                    }
+                }
+            }
+
+            // GET it back and assert null values
+            var gotCleared = await Send(HttpMethod.Get, $"/api/Sales/SalesInvoice?id={invoiceId}");
+            Assert.True(gotCleared.IsSuccessStatusCode);
+            var gotClearedDto = await gotCleared.Content.ReadFromJsonAsync<Dto.Sales.SalesInvoice>();
+            Assert.Null(gotClearedDto.Notes);
+            Assert.Null(gotClearedDto.PaymentInstructions);
+        }
+
+private class Message
         {
             public string To { get; set; }
             public string Subject { get; set; }
