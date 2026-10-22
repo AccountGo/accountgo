@@ -505,3 +505,73 @@ textarea:focus-visible,
     border: 2px solid ButtonText;
   }
 }
+
+/* ── Print (invoices, statements) ─────────────────────────────── */
+@media print {
+  @page {
+    margin: 14mm;
+  }
+
+  /* Paper is always white, whatever theme the screen uses. */
+  html[data-theme][data-scheme],
+  html {
+    --bg-canvas: #ffffff;
+    --bg-surface: #ffffff;
+    --bg-surface-hover: #ffffff;
+    --bg-subtle: #f1f5f9;
+    --text-main: #0f172a;
+    --text-secondary: #475569;
+    --text-muted: #64748b;
+    --border-subtle: #e2e8f0;
+    color-scheme: light;
+  }
+
+  html,
+  body,
+  #root {
+    height: auto !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+  }
+
+  .no-print,
+  .skip-link {
+    display: none !important;
+  }
+
+  /* The app shell scrolls inside a fixed-height viewport; on paper it must flow
+     across pages and drop the sidebar/header gutters. */
+  .app-shell,
+  .app-shell-column,
+  #main-content,
+  #main-content > div {
+    display: block !important;
+    height: auto !important;
+    width: auto !important;
+    max-width: none !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: #ffffff !important;
+  }
+
+  .print-page {
+    max-width: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .print-sheet {
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .print-sheet tr,
+  .print-avoid-break {
+    break-inside: avoid;
+  }
+}

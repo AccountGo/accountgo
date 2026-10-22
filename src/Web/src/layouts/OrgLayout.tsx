@@ -336,7 +336,7 @@ export const OrgLayout: React.FC = () => {
   };
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-[var(--bg-canvas)] text-[var(--text-main)] transition-colors duration-200">
+    <div className="app-shell flex h-screen w-screen overflow-hidden bg-[var(--bg-canvas)] text-[var(--text-main)] transition-colors duration-200">
       {/* Skip to Main Content Link for Keyboard Users (WCAG 2.4.1) */}
       <a href="#main-content" className="skip-link">
         Skip to main content
@@ -355,7 +355,7 @@ export const OrgLayout: React.FC = () => {
         hasPermission={hasPermission}
       />
 
-      <div className="flex flex-1 flex-col overflow-hidden min-w-0 transition-all duration-300 ease-in-out relative z-10">
+      <div className="app-shell-column flex flex-1 flex-col overflow-hidden min-w-0 transition-all duration-300 ease-in-out relative z-10">
         {/* Top Header with Breadcrumbs & Tenant Quick-Actions */}
         <Header
           currentOrg={currentOrg}

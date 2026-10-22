@@ -281,31 +281,7 @@ export const InvoiceDetail: React.FC = () => {
       invoice.balanceDue > 0);
 
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 pb-24 text-[var(--text-main)] print:p-0 print:m-0 print:max-w-none">
-      {/* Print Specific CSS */}
-      <style>{`
-        @media print {
-          body {
-            background: white !important;
-            color: black !important;
-          }
-          header, nav, aside, .no-print, button, a {
-            display: none !important;
-          }
-          .print-clean {
-            box-shadow: none !important;
-            border: none !important;
-            padding: 0 !important;
-            margin: 0 !important;
-            width: 100% !important;
-            background: white !important;
-            color: black !important;
-          }
-          .print-clean * {
-            color: black !important;
-          }
-        }
-      `}</style>
+    <div className="print-page max-w-5xl mx-auto px-4 sm:px-6 py-6 pb-24 text-[var(--text-main)]">
 
       {/* Top Navigation & Action Bar (Hidden on Print) */}
       <div className="no-print flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
@@ -426,7 +402,7 @@ export const InvoiceDetail: React.FC = () => {
       )}
 
       {/* Main Printable Invoice Sheet */}
-      <div className="print-clean bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl shadow-sm p-8 sm:p-12 space-y-10">
+      <div className="print-sheet bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl shadow-sm p-8 sm:p-12 space-y-10">
         {/* Document Header */}
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-6 border-b border-[var(--border-subtle)] pb-8">
           <div>
@@ -532,11 +508,11 @@ export const InvoiceDetail: React.FC = () => {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-[var(--bg-subtle)] border-b border-[var(--border-subtle)] text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">
-                <th className="py-3 px-3 w-12 text-center">#</th>
+                <th className="py-3 px-3 w-12 print:w-10 text-center">#</th>
                 <th className="py-3 px-4">Description</th>
-                <th className="py-3 px-3 text-right w-24">Qty</th>
+                <th className="py-3 px-3 text-right w-24 print:w-16">Qty</th>
                 <th className="py-3 px-3 text-right w-28">Unit Price</th>
-                <th className="py-3 px-3 text-right w-24">Disc %</th>
+                <th className="py-3 px-3 text-right w-24 print:w-20">Disc %</th>
                 <th className="py-3 px-4 text-right w-32">Total</th>
               </tr>
             </thead>
@@ -601,7 +577,7 @@ export const InvoiceDetail: React.FC = () => {
           </div>
 
           {/* Breakdown Box */}
-          <div className="w-full sm:w-80 space-y-2.5 text-sm bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-2xl p-5">
+          <div className="print-avoid-break w-full sm:w-80 space-y-2.5 text-sm bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-2xl p-5">
             <div className="flex justify-between text-[var(--text-secondary)]">
               <span>Subtotal:</span>
               <span className="font-medium font-mono text-[var(--text-main)]">

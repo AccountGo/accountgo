@@ -67,7 +67,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
 
   return (
     <nav
-      className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-[var(--bg-header)] backdrop-blur-2xl px-2 safe-bottom flex items-center justify-around h-16 shadow-[0_-8px_30px_rgba(0,0,0,0.4)] transition-colors duration-200"
+      className="no-print md:hidden fixed bottom-0 left-0 right-0 z-30 bg-[var(--bg-header)] backdrop-blur-2xl px-2 safe-bottom flex items-center justify-around h-16 shadow-[0_-8px_30px_rgba(0,0,0,0.4)] transition-colors duration-200"
       aria-label="Mobile Bottom Navigation"
     >
       {navItems.map((item) => {
