@@ -523,6 +523,9 @@ namespace Api.Controllers
                     Description = account.Description,
                     IsCash = account.IsCash,
                     IsContraAccount = account.IsContraAccount,
+                    NormalBalance = account.DrOrCrSide.ToString(),
+                    AccountClassName = account.AccountClass?.Name,
+                    CanPost = account.CanPost(),
                     Balance = account.Balance,
                     DebitBalance = account.DebitBalance,
                     CreditBalance = account.CreditBalance

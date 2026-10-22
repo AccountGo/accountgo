@@ -12,6 +12,11 @@ namespace Dto.Financial
         public string? Description { get; set; }
         public bool IsCash { get; set; }
         public bool IsContraAccount { get; set; }
+        /// <summary>The account's own normal side: "Dr", "Cr" or "NA".</summary>
+        public string? NormalBalance { get; set; }
+        public string? AccountClassName { get; set; }
+        /// <summary>False for header accounts (they have sub-accounts and only group totals).</summary>
+        public bool CanPost { get; set; }
         public decimal Balance { get; set; }
         public decimal DebitBalance { get; set; }
         public decimal CreditBalance { get; set; }

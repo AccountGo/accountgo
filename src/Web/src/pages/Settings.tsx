@@ -19,7 +19,6 @@ import {
   CreditCard,
   CheckCircle2,
   AlertCircle,
-  ExternalLink,
   RefreshCw,
 } from 'lucide-react';
 import { TenantContextType, WorkspaceMember } from '../types';
@@ -891,11 +890,11 @@ export const Settings: React.FC = () => {
                 </div>
               </div>
               <Link
-                to={`/org/${currentOrg.slug}/financials`}
+                to={`/org/${currentOrg.slug}/financials/accounts`}
                 className="h-9 px-3 self-start sm:self-auto rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-surface-hover)] text-xs font-semibold text-[var(--text-main)] transition-colors flex items-center gap-1.5 cursor-pointer"
               >
                 <span>View Full Chart of Accounts</span>
-                <ExternalLink className="w-3.5 h-3.5" />
+                <ArrowRight className="w-3.5 h-3.5" />
               </Link>
             </div>
 
