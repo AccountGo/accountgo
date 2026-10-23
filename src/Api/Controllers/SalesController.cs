@@ -405,8 +405,7 @@ namespace Api.Controllers
         [Route("SendSalesInvoiceEmail")]
         [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesCreate)]
         public async Task<IActionResult> SendSalesInvoiceEmail(int id,
-            [FromServices] Api.Service.IEmailSender emailSender,
-            CancellationToken ct)
+            [FromServices] Api.Service.IEmailSender emailSender)
         {
             var invoice = BuildSalesInvoiceDto(id);
             if (invoice == null)
@@ -450,12 +449,15 @@ namespace Api.Controllers
             string? providerMessageId;
             try
             {
-                providerMessageId = await emailSender.SendAsync(message, ct);
+                // Deliberately not tied to the request's abort token: behind the Workers container proxy a request can read as
+                // aborted while it is still being served, and an email half-sent on cancel is worse than one that finishes.
+                providerMessageId = await emailSender.SendAsync(message, CancellationToken.None);
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            catch (Exception ex)
             {
                 _logger.LogError(ex, "Invoice {InvoiceId} email to the customer could not be sent", id);
-                return StatusCode(StatusCodes.Status502BadGateway, new { message = "The email could not be sent. Please try again in a few minutes." });
+                var reason = ex is Api.Service.EmailDeliveryException ? $" {ex.Message}" : string.Empty;
+                return StatusCode(StatusCodes.Status502BadGateway, new { message = $"The email could not be sent.{reason}" });
             }
 
             var record = new Core.Domain.Sales.SalesInvoiceEmail

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -26,6 +27,12 @@ namespace Api.Service
         public string? ReplyTo { get; set; }
         public List<string> Bcc { get; set; } = new();
         public List<EmailAttachment> Attachments { get; set; } = new();
+    }
+
+    /// <summary>The provider did not take the message; the message says why, in words safe to show the sender.</summary>
+    public class EmailDeliveryException : HttpRequestException
+    {
+        public EmailDeliveryException(string message, Exception? inner = null) : base(message, inner) { }
     }
 
     public class EmailAttachment
