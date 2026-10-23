@@ -50,6 +50,12 @@ const WorkspaceSettings: React.FC = () => {
     : <PermissionDeniedCard permission="Owner or Admin" />;
 };
 
+// The dashboard summarises the books, so it needs the accounting module; an invoicing-only workspace opens on its invoices.
+const WorkspaceHome: React.FC = () => {
+  const { hasModule } = useTenantContext();
+  return hasModule('financials') ? <Dashboard /> : <Navigate to="../sales" replace />;
+};
+
 const router = createBrowserRouter([
   {
     path: '/',
@@ -88,7 +94,7 @@ const router = createBrowserRouter([
           },
           {
             path: 'dashboard',
-            element: <Dashboard />,
+            element: <WorkspaceHome />,
           },
           {
             path: 'settings',

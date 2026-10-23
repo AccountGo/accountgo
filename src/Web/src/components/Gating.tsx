@@ -139,6 +139,7 @@ export const ModuleLockedCard: React.FC<{ module: ModuleKey; orgSlug?: string }>
   module,
   orgSlug,
 }) => {
+  const { hasModule } = useTenantContext();
   const info = MODULE_METADATA[module] || {
     title: module,
     desc: 'This module is not active in your current subscription plan.',
@@ -211,7 +212,7 @@ export const ModuleLockedCard: React.FC<{ module: ModuleKey; orgSlug?: string }>
               to={`/org/${orgSlug}/dashboard`}
               className="w-full sm:w-auto px-6 py-3 rounded-xl text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-main)] hover:bg-[var(--bg-surface-hover)] transition-all"
             >
-              Back to Dashboard
+              {hasModule('financials') ? 'Back to Dashboard' : 'Back to Invoices'}
             </Link>
           )}
         </div>

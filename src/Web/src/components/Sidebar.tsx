@@ -52,7 +52,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       name: 'Dashboard',
       path: `/org/${currentOrg.slug}/dashboard`,
       icon: LayoutDashboard,
-      module: 'sales',
+      module: 'financials',
     },
     {
       name: 'Invoices & Sales',
