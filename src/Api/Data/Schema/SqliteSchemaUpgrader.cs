@@ -430,7 +430,19 @@ namespace Api.Data.Schema
                 ";
                 cmd.ExecuteNonQuery();
             }
+
+            if (TableExists(connection, "SalesInvoiceHeader"))
+            {
+                using var cmd = connection.CreateCommand();
+                cmd.CommandText = SalesInvoiceNumberIndexSql;
+                cmd.ExecuteNonQuery();
+            }
         }
+
+        // D1 0008_invoice_number_unique.sql. A blank number means "not numbered yet"; NULLs never clash in a unique index.
+        private const string SalesInvoiceNumberIndexSql = @"
+            UPDATE ""SalesInvoiceHeader"" SET ""No"" = NULL WHERE ""No"" IS NOT NULL AND TRIM(""No"") = '';
+            CREATE UNIQUE INDEX IF NOT EXISTS ""IX_SalesInvoiceHeader_CompanyId_No"" ON ""SalesInvoiceHeader"" (""CompanyId"", ""No"");";
 
         private static void ApplyVersion2(DbConnection connection, DbTransaction tx, ILogger? logger)
         {

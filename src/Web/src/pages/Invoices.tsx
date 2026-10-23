@@ -19,6 +19,7 @@ import { PageHeader, HeaderButton } from '../components/PageHeader';
 import { TenantContextType, Invoice, InvoiceStatus, InvoicingKPIs, RecordPaymentPayload } from '../types';
 import { useAuth } from '../auth/AuthContext';
 import { currencySymbol as getCurrencySymbol } from '../lib/currency';
+import { invoiceTitle } from '../lib/invoiceNumber';
 
 export const Invoices: React.FC = () => {
   const { currentOrg } = useOutletContext<TenantContextType>();
@@ -206,7 +207,7 @@ export const Invoices: React.FC = () => {
         throw new Error(errorData.message || `Payment recording failed (${res.status})`);
       }
 
-      setSuccessBanner(`Payment of ${formatCurrency(parsedAmount)} recorded for Invoice ${paymentModalInvoice.no || `#${paymentModalInvoice.id}`}`);
+      setSuccessBanner(`Payment of ${formatCurrency(parsedAmount)} recorded for ${invoiceTitle(paymentModalInvoice)}`);
       setPaymentModalInvoice(null);
       await fetchInvoices(true);
       setTimeout(() => setSuccessBanner(null), 5000);
@@ -239,7 +240,7 @@ export const Invoices: React.FC = () => {
         throw new Error(errorData.message || `Void failed (${res.status})`);
       }
 
-      setSuccessBanner(`Invoice ${voidModalInvoice.no || `#${voidModalInvoice.id}`} marked as Void.`);
+      setSuccessBanner(`${invoiceTitle(voidModalInvoice)} marked as Void.`);
       setVoidModalInvoice(null);
       await fetchInvoices(true);
       setTimeout(() => setSuccessBanner(null), 5000);
@@ -528,7 +529,7 @@ export const Invoices: React.FC = () => {
                       {/* Invoice No */}
                       <td className="py-3.5 px-4 font-semibold text-[var(--brand-primary)] hover:underline whitespace-nowrap">
                         <Link to={`/org/${currentOrg.slug}/sales/${inv.id}`} onClick={(e) => e.stopPropagation()}>
-                          {inv.no || `INV-${String(inv.id).padStart(4, '0')}`}
+                          {inv.no ? `#${inv.no}` : <span className="font-medium italic text-[var(--text-muted)]">Draft</span>}
                         </Link>
                         {inv.referenceNo && (
                           <div className="text-[10px] text-[var(--text-secondary)] font-normal">
@@ -630,7 +631,7 @@ export const Invoices: React.FC = () => {
               <div>
                 <h3 className="text-base font-bold text-[var(--text-primary)]">Record Payment</h3>
                 <p className="text-xs text-[var(--text-secondary)] mt-0.5">
-                  Invoice {paymentModalInvoice.no || `#${paymentModalInvoice.id}`} — {paymentModalInvoice.customerName}
+                  {invoiceTitle(paymentModalInvoice)} — {paymentModalInvoice.customerName}
                 </p>
               </div>
               <button
@@ -777,9 +778,9 @@ export const Invoices: React.FC = () => {
                 </div>
               )}
               <p className="text-[var(--text-secondary)]">
-                Are you sure you want to void Invoice{' '}
+                Are you sure you want to void{' '}
                 <strong className="text-[var(--text-primary)]">
-                  {voidModalInvoice.no || `#${voidModalInvoice.id}`}
+                  {voidModalInvoice.no ? `invoice #${voidModalInvoice.no}` : 'this draft'}
                 </strong>{' '}
                 for <strong className="text-[var(--text-primary)]">{voidModalInvoice.customerName}</strong>?
               </p>

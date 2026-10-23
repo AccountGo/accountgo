@@ -26,7 +26,8 @@ export interface InvoicePaymentItem {
 
 export interface Invoice {
   id: number;
-  no: string;
+  /** Null while a draft has no number; it is numbered when issued. */
+  no: string | null;
   customerId: number;
   customerName: string;
   customerEmail?: string;

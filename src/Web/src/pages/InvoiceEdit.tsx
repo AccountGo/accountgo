@@ -63,6 +63,10 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
   // Form State
   const [selectedCustomerId, setSelectedCustomerId] = useState<number | ''>('');
   const [invoiceNo, setInvoiceNo] = useState<string>('');
+  // Issued invoices keep their number; only drafts (and new invoices) can change it.
+  const [isIssued, setIsIssued] = useState<boolean>(false);
+  // Shown as the placeholder: the number the invoice takes when issued, if none is typed.
+  const [nextNumber, setNextNumber] = useState<string | null>(null);
   const [referenceNo, setReferenceNo] = useState<string>('');
   const [invoiceDate, setInvoiceDate] = useState<string>(
     new Date().toISOString().split('T')[0]
@@ -160,6 +164,21 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
     loadReferenceData();
   }, [loadReferenceData]);
 
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await authFetch('/api/Sales/NextSalesInvoiceNumber');
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        setNextNumber(data?.next ?? null);
+      } catch (err) {
+        console.error('Error loading the next invoice number:', err);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [authFetch]);
+
   // Prefill a new invoice with the workspace's default notes and payment instructions
   useEffect(() => {
     if (isEdit) return;
@@ -190,6 +209,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
 
           setSelectedCustomerId(data.customerId);
           setInvoiceNo(data.no || '');
+          setIsIssued(data.status !== 'Draft');
           setReferenceNo(data.referenceNo || '');
           if (data.invoiceDate) {
             setInvoiceDate(data.invoiceDate.split('T')[0]);
@@ -360,6 +380,8 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
     try {
       const payload: any = {
         id: isEdit && invoiceId ? Number(invoiceId) : 0,
+        // Blank: the invoice takes the next number when it is issued.
+        no: invoiceNo.trim() || null,
         customerId: Number(selectedCustomerId),
         invoiceDate: invoiceDate,
         dueDate: dueDate || invoiceDate,
@@ -494,7 +516,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
       <PageHeader
         className="mb-6"
         back={{ to: `/org/${orgSlug}/sales`, label: 'Back to invoices' }}
-        title={isEdit ? `Edit invoice${invoiceNo ? ` #${invoiceNo}` : ''}` : 'New invoice'}
+        title={isEdit ? (invoiceNo && isIssued ? `Edit invoice #${invoiceNo}` : 'Edit draft') : 'New invoice'}
         subtitle="Save a draft to finish later, or issue it to post it to your books."
         actions={
           <>
@@ -595,8 +617,43 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
             )}
           </div>
 
-          {/* Invoice Metadata (Dates, Terms, PO #) */}
+          {/* Invoice Metadata (Number, Dates, Terms, PO #) */}
           <div className="lg:col-span-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="invoice-number" className="block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1.5">
+                Invoice #
+              </label>
+              <input
+                id="invoice-number"
+                type="text"
+                value={invoiceNo}
+                readOnly={isIssued}
+                maxLength={30}
+                autoComplete="off"
+                spellCheck={false}
+                placeholder={nextNumber ? `Auto · ${nextNumber}` : 'Auto'}
+                aria-describedby="invoice-number-hint"
+                onChange={(e) => setInvoiceNo(e.target.value)}
+                className="w-full px-3.5 py-2.5 text-sm font-mono bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xl focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] placeholder-[var(--text-muted)] transition read-only:opacity-70 read-only:cursor-not-allowed"
+              />
+              <p id="invoice-number-hint" className="mt-1.5 text-xs text-[var(--text-muted)]">
+                {isIssued ? 'Issued invoices keep their number.' : 'Blank: numbered when issued.'}
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1.5">
+                Reference / PO #
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. PO-9842"
+                value={referenceNo}
+                onChange={(e) => setReferenceNo(e.target.value)}
+                className="w-full px-3.5 py-2.5 text-sm bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xl focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] placeholder-[var(--text-muted)] transition"
+              />
+            </div>
+
             <div>
               <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1.5">
                 Issue Date <span className="text-rose-500">*</span>
@@ -663,18 +720,6 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
               )}
             </div>
 
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1.5">
-                Reference / PO #
-              </label>
-              <input
-                type="text"
-                placeholder="e.g. PO-9842"
-                value={referenceNo}
-                onChange={(e) => setReferenceNo(e.target.value)}
-                className="w-full px-3.5 py-2.5 text-sm bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xl focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] placeholder-[var(--text-muted)] transition"
-              />
-            </div>
           </div>
         </div>
 

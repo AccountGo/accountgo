@@ -77,7 +77,7 @@ namespace Api.Service
                 row.ConstantItem(200).AlignRight().Column(column =>
                 {
                     column.Item().AlignRight().Text("INVOICE").FontSize(22).ExtraBold().LetterSpacing(0.04f);
-                    column.Item().AlignRight().Text($"#{InvoiceNumber}").FontSize(11).SemiBold().FontColor(Brand);
+                    column.Item().AlignRight().Text(InvoiceFormat.Label(_invoice)).FontSize(11).SemiBold().FontColor(Brand);
                     // The PDF is what the customer receives, so it only marks statuses that change what the document is.
                     if (_invoice.Status is "Paid" or "Void" or "Draft")
                         column.Item().PaddingTop(6).AlignRight().Element(ComposeStatusBadge);
@@ -282,7 +282,7 @@ namespace Api.Service
         {
             container.BorderTop(0.75f).BorderColor(Rule).PaddingTop(8).Row(row =>
             {
-                row.RelativeItem().Text($"{SellerName} · Invoice #{InvoiceNumber}").FontSize(8).FontColor(Muted);
+                row.RelativeItem().Text($"{SellerName} · Invoice {InvoiceFormat.Label(_invoice)}").FontSize(8).FontColor(Muted);
                 row.AutoItem().Text(text =>
                 {
                     text.DefaultTextStyle(s => s.FontSize(8).FontColor(Muted));

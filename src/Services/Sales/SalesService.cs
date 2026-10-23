@@ -21,6 +21,7 @@ using Microsoft.Extensions.Logging;
 using AutoMapper;
 using Core.Domain.Error;
 using System.Threading.Tasks;
+using System.Globalization;
 
 namespace Services.Sales
 {
@@ -244,7 +245,7 @@ namespace Services.Sales
             {
                 salesInvoice.GeneralLedgerHeader = glHeader;
 
-                salesInvoice.No = GetNextNumber(SequenceNumberTypes.SalesInvoice).ToString();
+                salesInvoice.No = AllocateInvoiceNumber(salesInvoice.Id);
 
                 if (!salesDeliveryId.HasValue)
                 {
@@ -364,7 +365,56 @@ namespace Services.Sales
 
         public void UpdateSalesInvoice(SalesInvoiceHeader salesInvoice)
         {
+            ApplyInvoiceNumber(salesInvoice);
             _salesInvoiceRepo.Update(salesInvoice);
+        }
+
+        public string PeekNextInvoiceNumber()
+        {
+            var next = PeekNextNumber(SequenceNumberTypes.SalesInvoice);
+            while (InvoiceNumberTaken(next.ToString(CultureInfo.InvariantCulture), 0))
+                next++;
+            return next.ToString(CultureInfo.InvariantCulture);
+        }
+
+        // Every invoice write goes through here. Callers that issue invoices hold a write transaction (see
+        // SalesController), so the read-then-advance of the sequence can't interleave; the unique index on
+        // (CompanyId, No) is the last line of defence, locally and in D1.
+        private void ApplyInvoiceNumber(SalesInvoiceHeader invoice)
+        {
+            invoice.No = InvoiceNumber.Normalize(invoice.No);
+            if (invoice.No != null && InvoiceNumberTaken(invoice.No, invoice.Id))
+                throw new InvoiceNumberException(InvoiceNumberError.Taken,
+                    $"Invoice #{invoice.No} already exists. Use another number, or leave it blank to number it automatically.");
+
+            if (!InvoiceNumber.IsRequired(invoice.Status))
+                return;
+
+            if (invoice.No == null)
+            {
+                invoice.No = AllocateInvoiceNumber(invoice.Id);
+            }
+            else if (InvoiceNumber.AsSequence(invoice.No) is int typed)
+            {
+                // A typed plain number moves the sequence past it, so automatic numbering continues from there.
+                AdvanceNextNumber(SequenceNumberTypes.SalesInvoice, typed + 1);
+            }
+        }
+
+        private string AllocateInvoiceNumber(int invoiceId)
+        {
+            // Skip numbers a draft already holds because they were typed in.
+            var next = PeekNextNumber(SequenceNumberTypes.SalesInvoice);
+            while (InvoiceNumberTaken(next.ToString(CultureInfo.InvariantCulture), invoiceId))
+                next++;
+            AdvanceNextNumber(SequenceNumberTypes.SalesInvoice, next + 1);
+            return next.ToString(CultureInfo.InvariantCulture);
+        }
+
+        private bool InvoiceNumberTaken(string number, int exceptInvoiceId)
+        {
+            var lower = number.ToLower();
+            return _salesInvoiceRepo.Table.Any(i => i.Id != exceptInvoiceId && i.No != null && i.No.ToLower() == lower);
         }
 
         public IEnumerable<SalesReceiptHeader> GetSalesReceipts()
@@ -766,6 +816,7 @@ namespace Services.Sales
             }
 
             salesInvoice = _mapper.Map<Core.Domain.Sales.SalesInvoiceHeader>(salesInvoiceDto);
+            salesInvoice.No = InvoiceNumber.ForSave(null, null, exists: false, salesInvoiceDto.No);
 
             foreach (var invoiceLine in salesInvoice.SalesInvoiceLines)
             {
@@ -799,7 +850,10 @@ namespace Services.Sales
             if (salesInvoice.GeneralLedgerHeaderId.HasValue)
                 throw new Exception("Invoice is already posted. Update is not allowed.");
 
+            var currentNo = salesInvoice.No;
+            var currentStatus = salesInvoice.Status;
             _mapper.Map<Dto.Sales.SalesInvoice, Core.Domain.Sales.SalesInvoiceHeader>(salesInvoiceDto, salesInvoice);
+            salesInvoice.No = InvoiceNumber.ForSave(currentNo, currentStatus, exists: true, salesInvoiceDto.No);
 
             int existingOrderLineId = salesInvoice.SalesInvoiceLines.FirstOrDefault().SalesOrderLineId ??= 0;
             foreach (var invoiceLine in salesInvoice.SalesInvoiceLines!)
@@ -845,6 +899,15 @@ namespace Services.Sales
                 return Result<Dto.Sales.SalesInvoice>.Failure(Error.RecordNotFound(message));
             }
 
+            // An issued invoice keeps its number for good, so the series has no gaps; it can be voided, not deleted.
+            if (salesInvoice.Status != SalesInvoiceStatus.Draft
+                || salesInvoice.GeneralLedgerHeaderId.HasValue
+                || (salesInvoice.CustomerAllocations?.Any() ?? false))
+            {
+                return Result<Dto.Sales.SalesInvoice>.Failure(Error.ValidationError(
+                    "Only draft invoices can be deleted. Void an issued invoice instead."));
+            }
+
             await _salesInvoiceRepo.DeleteAsync(salesInvoice);
 
             return Result<Dto.Sales.SalesInvoice>.Success(null);
@@ -869,9 +932,9 @@ namespace Services.Sales
                     }
                 }
 
+                ApplyInvoiceNumber(salesInvoice);
                 if (salesInvoice.Id == 0)
                 {
-                    salesInvoice.No = GetNextNumber(SequenceNumberTypes.SalesInvoice).ToString();
                     _salesInvoiceRepo.Insert(salesInvoice);
                 }
                 else
@@ -1028,10 +1091,8 @@ namespace Services.Sales
 
             if (_financialService.ValidateGeneralLedgerEntry(glHeader))
             {
-                if (string.IsNullOrWhiteSpace(salesInvoice.No))
-                {
-                    salesInvoice.No = GetNextNumber(SequenceNumberTypes.SalesInvoice).ToString();
-                }
+                // Issuing normally numbers the invoice first; posting a draft directly numbers it here.
+                salesInvoice.No = InvoiceNumber.Normalize(salesInvoice.No) ?? AllocateInvoiceNumber(salesInvoice.Id);
                 salesInvoice.GeneralLedgerHeader = glHeader;
                 salesInvoice.Status = Core.Domain.SalesInvoiceStatus.Open;
 

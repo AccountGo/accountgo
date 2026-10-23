@@ -314,6 +314,221 @@ namespace AccountGo.BackendTests
             Assert.Equal(DateTime.Parse(expected, System.Globalization.CultureInfo.InvariantCulture),
                 BusinessDays.Add(DateTime.Parse(start, System.Globalization.CultureInfo.InvariantCulture), days));
 
+        [Fact]
+        public async Task InvoiceNumber_DraftsHaveNone_IssuingTakesTheNextInOrder()
+        {
+            var first = await SaveDraft();
+            var second = await SaveDraft();
+            Assert.Null((await GetInvoice(first)).No);
+            Assert.Null((await GetInvoice(second)).No);
+
+            var next = await NextNumber();
+            // Issue in the opposite order to saving: the number follows the issue, not the draft.
+            Assert.Equal(next, await Issue(second));
+            Assert.Equal((int.Parse(next) + 1).ToString(), await Issue(first));
+            Assert.Equal((int.Parse(next) + 2).ToString(), await NextNumber());
+
+            // Issuing straight from the form numbers the invoice too.
+            var invoice = await NewInvoice();
+            invoice.Status = "Open";
+            var saved = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
+            Assert.True(saved.IsSuccessStatusCode, await saved.Content.ReadAsStringAsync());
+            Assert.Equal((int.Parse(next) + 2).ToString(), (await Json(saved)).GetProperty("no").GetString());
+        }
+
+        [Fact]
+        public async Task InvoiceNumber_Typed_IsKept_Unique_AndMovesTheSequencePastIt()
+        {
+            var typed = await SaveDraft(" #INV-A ");
+            Assert.Equal("INV-A", (await GetInvoice(typed)).No);
+
+            // Unique per workspace, ignoring case.
+            var clash = await NewInvoice();
+            clash.Status = "Draft";
+            clash.No = "inv-a";
+            var refused = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", clash);
+            Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
+            Assert.Contains("already exists", await refused.Content.ReadAsStringAsync());
+
+            var invalid = await NewInvoice();
+            invalid.Status = "Draft";
+            invalid.No = "no spaces!";
+            Assert.Equal(HttpStatusCode.BadRequest, (await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invalid)).StatusCode);
+
+            // A draft holding a typed plain number is skipped by automatic numbering.
+            var next = int.Parse(await NextNumber());
+            var holder = await SaveDraft((next).ToString());
+            Assert.Equal((next + 1).ToString(), await NextNumber());
+            Assert.Equal((next + 1).ToString(), await Issue(await SaveDraft()));
+
+            // Issuing a typed number ahead of the sequence moves the sequence past it.
+            var ahead = await SaveDraft("5000");
+            Assert.Equal("5000", await Issue(ahead));
+            Assert.Equal("5001", await Issue(await SaveDraft()));
+            Assert.Equal(next.ToString(), await Issue(holder));
+        }
+
+        [Fact]
+        public async Task InvoiceNumber_ConcurrentIssues_NeverShareANumber()
+        {
+            var drafts = new List<int>();
+            for (var i = 0; i < 12; i++)
+                drafts.Add(await SaveDraft());
+            var next = int.Parse(await NextNumber());
+
+            var numbers = await Task.WhenAll(drafts.Select(Issue));
+
+            Assert.Equal(drafts.Count, numbers.Distinct().Count());
+            Assert.Equal(Enumerable.Range(next, drafts.Count).Select(n => n.ToString()).OrderBy(n => n), numbers.OrderBy(n => n));
+        }
+
+        [Fact]
+        public async Task InvoiceNumber_IssueRefusesWhenTheConfirmedNumberWasTaken()
+        {
+            var first = await SaveDraft();
+            var second = await SaveDraft();
+            var shown = await NextNumber();
+
+            var ok = await Send(HttpMethod.Post, $"/api/Sales/IssueSalesInvoice?id={second}&expectedNo={shown}");
+            Assert.True(ok.IsSuccessStatusCode, await ok.Content.ReadAsStringAsync());
+
+            // The first was confirmed against the same number; it is refused and stays an unnumbered draft.
+            var stale = await Send(HttpMethod.Post, $"/api/Sales/IssueSalesInvoice?id={first}&expectedNo={shown}");
+            Assert.Equal(HttpStatusCode.Conflict, stale.StatusCode);
+            var problem = await Json(stale);
+            Assert.Equal("number_changed", problem.GetProperty("code").GetString());
+            Assert.Equal((int.Parse(shown) + 1).ToString(), problem.GetProperty("next").GetString());
+            var unchanged = await GetInvoice(first);
+            Assert.Null(unchanged.No);
+            Assert.Equal("Draft", unchanged.Status);
+        }
+
+        [Fact]
+        public async Task InvoiceNumber_IssuedCantBeDeleted_DraftsCan()
+        {
+            var issued = await SaveDraft();
+            var number = await Issue(issued);
+            var refused = await Send(HttpMethod.Delete, $"/api/Sales/DeleteSalesInvoice?id={issued}");
+            Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
+            Assert.Equal(number, (await GetInvoice(issued)).No);
+
+            var draft = await SaveDraft();
+            Assert.Equal(HttpStatusCode.NoContent, (await Send(HttpMethod.Delete, $"/api/Sales/DeleteSalesInvoice?id={draft}")).StatusCode);
+        }
+
+        [Fact]
+        public async Task InvoiceNumber_UniqueIndex_RejectsADuplicate_LocallyAndOnD1Replay()
+        {
+            var draft = await SaveDraft();
+            var elsewhere = await SaveDraft();
+            var next = await NextNumber();
+
+            using (var source = new SqliteConnection("Data Source=" + _path))
+            using (var replica = new SqliteConnection("Data Source=:memory:;Foreign Keys=True"))
+            {
+                source.Open();
+                replica.Open();
+                source.BackupDatabase(replica);
+                using (var command = replica.CreateCommand())
+                {
+                    // The D1 migration applies cleanly on top of the existing schema.
+                    command.CommandText = File.ReadAllText(Path.Combine(RepoRoot(), "src/Api/d1/migrations/0008_invoice_number_unique.sql"));
+                    command.ExecuteNonQuery();
+                    // Another container already issued the same number into D1.
+                    command.CommandText = $"UPDATE SalesInvoiceHeader SET No = '{next}', Status = 1 WHERE Id = {elsewhere}";
+                    Assert.Equal(1, command.ExecuteNonQuery());
+                }
+
+                var issued = await Send(HttpMethod.Post, $"/api/Sales/IssueSalesInvoice?id={draft}");
+                Assert.True(issued.IsSuccessStatusCode, await issued.Content.ReadAsStringAsync());
+                var statements = AllSyncStatements(issued);
+                Assert.Contains(statements, s => s.StartsWith("INSERT INTO \"SalesInvoiceHeader\"") && s.Contains($"'{next}'"));
+
+                // The worker applies the batch in one transaction; the clash fails it instead of keeping two #next.
+                using (var tx = replica.BeginTransaction())
+                using (var command = replica.CreateCommand())
+                {
+                    command.Transaction = tx;
+                    command.CommandText = "PRAGMA defer_foreign_keys=ON";
+                    command.ExecuteNonQuery();
+                    var error = Assert.Throws<SqliteException>(() =>
+                    {
+                        foreach (var statement in statements)
+                        {
+                            command.CommandText = statement;
+                            command.ExecuteNonQuery();
+                        }
+                    });
+                    Assert.Contains("UNIQUE constraint failed: SalesInvoiceHeader.CompanyId, SalesInvoiceHeader.No", error.Message);
+                }
+            }
+
+            // And locally, a second invoice with an existing number can't be stored.
+            using (var scope = _factory.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+                using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
+                {
+                    var copy = db.SalesInvoiceHeaders.AsNoTracking().Single(i => i.Id == draft);
+                    copy.Id = 0;
+                    db.SalesInvoiceHeaders.Add(copy);
+                    Assert.Throws<DbUpdateException>(() => db.SaveChanges());
+                }
+            }
+        }
+
+        [Theory]
+        [InlineData(null, "Draft", false, " #A-1 ", "A-1")] // new: typed, trimmed, '#' dropped
+        [InlineData(null, "Draft", false, "  ", null)] // new: blank means numbered at issue
+        [InlineData("7", "Draft", true, "", null)] // draft: clearing the number hands it back to the sequence
+        [InlineData("7", "Open", true, null, "7")] // issued: an omitted number keeps the issued one
+        [InlineData("7", "Open", true, "7", "7")]
+        public void InvoiceNumber_ForSave(string current, string status, bool exists, string requested, string expected) =>
+            Assert.Equal(expected, InvoiceNumber.ForSave(current, Enum.Parse<SalesInvoiceStatus>(status), exists, requested));
+
+        [Fact]
+        public void InvoiceNumber_ForSave_RefusesChangingAnIssuedNumber_AndBadInput()
+        {
+            Assert.Equal(InvoiceNumberError.Locked,
+                Assert.Throws<InvoiceNumberException>(() => InvoiceNumber.ForSave("7", SalesInvoiceStatus.Open, true, "8")).Error);
+            Assert.Equal(InvoiceNumberError.Invalid,
+                Assert.Throws<InvoiceNumberException>(() => InvoiceNumber.ForSave(null, null, false, new string('1', 31))).Error);
+            Assert.Equal(InvoiceNumberError.Invalid,
+                Assert.Throws<InvoiceNumberException>(() => InvoiceNumber.ForSave(null, null, false, "-1")).Error);
+        }
+
+        private async Task<int> SaveDraft(string number = null)
+        {
+            var invoice = await NewInvoice();
+            invoice.Status = "Draft";
+            invoice.No = number;
+            var saved = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
+            Assert.True(saved.IsSuccessStatusCode, await saved.Content.ReadAsStringAsync());
+            return (await Json(saved)).GetProperty("id").GetInt32();
+        }
+
+        private async Task<string> Issue(int id)
+        {
+            var issued = await Send(HttpMethod.Post, $"/api/Sales/IssueSalesInvoice?id={id}");
+            Assert.True(issued.IsSuccessStatusCode, await issued.Content.ReadAsStringAsync());
+            return (await Json(issued)).GetProperty("no").GetString();
+        }
+
+        private async Task<string> NextNumber()
+        {
+            var response = await Send(HttpMethod.Get, "/api/Sales/NextSalesInvoiceNumber");
+            Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
+            return (await Json(response)).GetProperty("next").GetString();
+        }
+
+        private static string RepoRoot()
+        {
+            var dir = new DirectoryInfo(AppContext.BaseDirectory);
+            while (dir != null && !Directory.Exists(Path.Combine(dir.FullName, "src", "Api", "d1")))
+                dir = dir.Parent;
+            return dir?.FullName ?? throw new DirectoryNotFoundException("Repository root not found.");
+        }
+
         private async Task<Dto.Sales.SalesInvoice> GetInvoice(int id)
         {
             var response = await Send(HttpMethod.Get, $"/api/Sales/SalesInvoice?id={id}");

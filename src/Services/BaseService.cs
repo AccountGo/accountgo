@@ -57,6 +57,34 @@ namespace Services
             return nextNumber;
         }
 
+        /// <summary>The next value of a sequence without taking it; 1 when the sequence doesn't exist yet.</summary>
+        protected int PeekNextNumber(SequenceNumberTypes type)
+        {
+            var sequence = _sequenceNumberRepo.Table.FirstOrDefault(n => n.SequenceNumberType == type);
+            return Math.Max(sequence?.NextNumber ?? 1, 1);
+        }
+
+        /// <summary>Moves a sequence so its next value is <paramref name="nextNumber"/>. It only ever moves forward.</summary>
+        protected void AdvanceNextNumber(SequenceNumberTypes type, int nextNumber)
+        {
+            var sequence = _sequenceNumberRepo.Table.FirstOrDefault(n => n.SequenceNumberType == type);
+            if (sequence == null)
+            {
+                _sequenceNumberRepo.Insert(new SequenceNumber
+                {
+                    Description = Enum.GetName(typeof(SequenceNumberTypes), type),
+                    UsePrefix = false,
+                    SequenceNumberType = type,
+                    NextNumber = nextNumber
+                });
+            }
+            else if (nextNumber > sequence.NextNumber)
+            {
+                sequence.NextNumber = nextNumber;
+                _sequenceNumberRepo.Update(sequence);
+            }
+        }
+
         protected GeneralLedgerSetting GetGeneralLedgerSetting()
         {
             var query = from f in _generalLedgerSettingRepo.Table

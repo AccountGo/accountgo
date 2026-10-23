@@ -5,6 +5,8 @@ interface SendInvoiceDialogProps {
   /** 'issue' asks whether to email while issuing a draft; 'send' emails an invoice that is already issued. */
   mode: 'issue' | 'send';
   invoiceNumber: string;
+  /** The draft has no number yet; `invoiceNumber` is the one it takes when issued. */
+  numberOnIssue?: boolean;
   to: string;
   /** The signed-in user, who receives a blind copy. */
   bcc?: string;
@@ -27,6 +29,7 @@ const normalise = (value: string) => value.trim().replace(/^#/, '').toLowerCase(
 export const SendInvoiceDialog: React.FC<SendInvoiceDialogProps> = ({
   mode,
   invoiceNumber,
+  numberOnIssue = false,
   to,
   bcc,
   lastSent,
@@ -95,7 +98,7 @@ export const SendInvoiceDialog: React.FC<SendInvoiceDialogProps> = ({
               </h2>
               <p className="mt-0.5 text-sm text-[var(--text-secondary)]">
                 {mode === 'issue'
-                  ? 'Email it to the customer as you issue it?'
+                  ? `${numberOnIssue ? `It takes the next invoice number, #${invoiceNumber}. ` : ''}Email it to the customer as you issue it?`
                   : 'Send this invoice to the customer by email.'}
               </p>
             </div>

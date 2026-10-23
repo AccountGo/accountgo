@@ -1979,7 +1979,7 @@ namespace Api.Data.Migrations.ApiDb
                         .HasColumnType("int");
 
                     b.Property<string>("No")
-                        .HasColumnType("nvarchar(max)");
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<string>("Notes")
                         .HasColumnType("nvarchar(max)");
@@ -2007,6 +2007,11 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasIndex("CustomerId");
 
                     b.HasIndex("GeneralLedgerHeaderId");
+
+                    b.HasIndex("CompanyId", "No")
+                        .IsUnique()
+                        .HasDatabaseName("IX_SalesInvoiceHeader_CompanyId_No")
+                        .HasFilter("[No] IS NOT NULL");
 
                     b.ToTable("SalesInvoiceHeader");
                 });
