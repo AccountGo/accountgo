@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
-import { RefreshCw, Users, UserPlus } from 'lucide-react';
+import { RefreshCw, UserPlus } from 'lucide-react';
 import { RoleItem, TenantContextType, WorkspaceInvitation, WorkspaceMember, WorkspaceRole } from '../types';
 import { useAuth } from '../auth/AuthContext';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { PageHeader, HeaderButton } from '../components/PageHeader';
 
 interface PendingConfirm {
   title: string;
@@ -136,20 +137,18 @@ export const Members: React.FC = () => {
 
   return (
     <div className="space-y-6 text-[var(--text-main)]">
-      <div className="flex flex-wrap justify-between items-center gap-3">
-        <div>
-          <h1 className="text-2xl font-bold flex gap-2 items-center"><Users aria-hidden="true" /> Team &amp; Members</h1>
-          <p className="text-sm text-[var(--text-muted)]">{currentOrg.name} · Your workspace role: {currentRole}</p>
-        </div>
-        <div className="flex gap-2">
-          <button type="button" className={button} disabled={busy || loading} onClick={() => void load()}>
-            <RefreshCw className="inline w-4 h-4 mr-2" aria-hidden="true" />Refresh
-          </button>
-          {canManage && <button type="button" className={button} disabled={busy || loading} onClick={() => openForm('invite')}>
-            <UserPlus className="inline w-4 h-4 mr-2" aria-hidden="true" />Invite member
-          </button>}
-        </div>
-      </div>
+      <PageHeader
+        title="Team & Members"
+        subtitle={`${currentOrg.name} · Your workspace role: ${currentRole}`}
+        actions={
+          <>
+            <HeaderButton label="Refresh" icon={RefreshCw} iconOnly busy={loading} disabled={busy} onClick={() => void load()} />
+            {canManage && (
+              <HeaderButton label="Invite member" icon={UserPlus} variant="primary" disabled={busy || loading} onClick={() => openForm('invite')} />
+            )}
+          </>
+        }
+      />
       {error && <div role="alert" className="p-4 rounded-xl bg-red-500/10 text-red-400">{error}</div>}
       {notice && <div role="status" className="p-4 rounded-xl bg-emerald-500/10 text-emerald-400">{notice}</div>}
 

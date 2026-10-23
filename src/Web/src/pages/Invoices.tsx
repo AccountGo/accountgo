@@ -15,6 +15,7 @@ import {
   Mail,
   Loader2,
 } from 'lucide-react';
+import { PageHeader, HeaderButton } from '../components/PageHeader';
 import { TenantContextType, Invoice, InvoiceStatus, InvoicingKPIs, RecordPaymentPayload } from '../types';
 import { useAuth } from '../auth/AuthContext';
 import { currencySymbol as getCurrencySymbol } from '../lib/currency';
@@ -311,33 +312,22 @@ export const Invoices: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-[var(--text-primary)]">Invoices</h1>
-          <p className="text-sm text-[var(--text-secondary)] mt-1">
-            Create professional invoices, track payment status, and manage client balances with zero accounting complexity.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => fetchInvoices(true)}
-            disabled={isRefreshing}
-            className="p-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-muted)] transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--brand-primary)]"
-            title="Refresh Invoices"
-            aria-label="Refresh invoices"
-          >
-            <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin text-[var(--brand-primary)]' : ''}`} />
-          </button>
-          <Link
-            to={`/org/${currentOrg.slug}/sales/new`}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[var(--brand-primary)] text-white text-sm font-semibold hover:opacity-90 transition-opacity shadow-sm"
-          >
-            <Plus className="w-4 h-4" />
-            <span>New Invoice</span>
-          </Link>
-        </div>
-      </div>
+      <PageHeader
+        title="Invoices"
+        subtitle="Create invoices, track what's been paid, and see who still owes you."
+        actions={
+          <>
+            <HeaderButton
+              label="Refresh invoices"
+              icon={RefreshCw}
+              iconOnly
+              busy={isRefreshing}
+              onClick={() => fetchInvoices(true)}
+            />
+            <HeaderButton label="New invoice" icon={Plus} variant="primary" to={`/org/${currentOrg.slug}/sales/new`} />
+          </>
+        }
+      />
 
       {/* Success & Error Banners */}
       {successBanner && (
