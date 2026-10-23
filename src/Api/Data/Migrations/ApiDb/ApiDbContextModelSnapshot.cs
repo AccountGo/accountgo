@@ -1898,6 +1898,63 @@ namespace Api.Data.Migrations.ApiDb
                     b.ToTable("SalesDeliveryLine");
                 });
 
+            modelBuilder.Entity("Core.Domain.Sales.SalesInvoiceEmail", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("BccEmail")
+                        .HasMaxLength(320)
+                        .HasColumnType("nvarchar(320)");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("ProviderMessageId")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("SalesInvoiceHeaderId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("SentAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("SentByEmail")
+                        .HasMaxLength(320)
+                        .HasColumnType("nvarchar(320)");
+
+                    b.Property<string>("SentByUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<string>("ToEmail")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("nvarchar(320)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SalesInvoiceHeaderId");
+
+                    b.HasIndex("CompanyId", "SentAt");
+
+                    b.ToTable("SalesInvoiceEmail");
+                });
+
             modelBuilder.Entity("Core.Domain.Sales.SalesInvoiceHeader", b =>
                 {
                     b.Property<int>("Id")
@@ -3388,6 +3445,15 @@ namespace Api.Data.Migrations.ApiDb
                     b.Navigation("SalesDeliveryHeader");
 
                     b.Navigation("SalesInvoiceLine");
+                });
+
+            modelBuilder.Entity("Core.Domain.Sales.SalesInvoiceEmail", b =>
+                {
+                    b.HasOne("Core.Domain.Sales.SalesInvoiceHeader", null)
+                        .WithMany()
+                        .HasForeignKey("SalesInvoiceHeaderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Core.Domain.Sales.SalesInvoiceHeader", b =>

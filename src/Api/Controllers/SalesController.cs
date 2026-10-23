@@ -406,7 +406,6 @@ namespace Api.Controllers
         [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesCreate)]
         public async Task<IActionResult> SendSalesInvoiceEmail(int id,
             [FromServices] Api.Service.IEmailSender emailSender,
-            [FromServices] Api.Service.InvoiceEmailLimiter limiter,
             CancellationToken ct)
         {
             var invoice = BuildSalesInvoiceDto(id);
@@ -420,9 +419,12 @@ namespace Api.Controllers
             if (to == null)
                 return BadRequest(new { message = "This customer has no valid email address on record." });
 
-            if (!limiter.TryAcquire(_tenantContext.RequireCompanyId()))
+            // Customer addresses are whatever the workspace typed in, so cap sends to protect our domain's sending reputation.
+            // Counted from the audit trail, so the cap holds across restarts and instances.
+            var hourAgo = DateTime.UtcNow.AddHours(-1);
+            if (_db.SalesInvoiceEmails.Count(e => e.SentAt >= hourAgo) >= InvoiceEmailsPerHour)
                 return StatusCode(StatusCodes.Status429TooManyRequests,
-                    new { message = $"This workspace has reached its limit of {Api.Service.InvoiceEmailLimiter.PermitsPerHour} invoice emails an hour. Please try again later." });
+                    new { message = $"This workspace has reached its limit of {InvoiceEmailsPerHour} invoice emails an hour. Please try again later." });
 
             var senderEmail = ValidEmail(HttpContext.User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value);
             var replyTo = ValidEmail(invoice.Seller.Email) ?? senderEmail;
@@ -445,9 +447,10 @@ namespace Api.Controllers
             if (senderEmail != null && !string.Equals(senderEmail, to, StringComparison.OrdinalIgnoreCase))
                 message.Bcc.Add(senderEmail);
 
+            string? providerMessageId;
             try
             {
-                await emailSender.SendAsync(message, ct);
+                providerMessageId = await emailSender.SendAsync(message, ct);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -455,9 +458,43 @@ namespace Api.Controllers
                 return StatusCode(StatusCodes.Status502BadGateway, new { message = "The email could not be sent. Please try again in a few minutes." });
             }
 
+            var record = new Core.Domain.Sales.SalesInvoiceEmail
+            {
+                SalesInvoiceHeaderId = id,
+                Kind = Core.Domain.Sales.SalesInvoiceEmail.InvoiceKind,
+                ToEmail = to,
+                BccEmail = message.Bcc.FirstOrDefault(),
+                Subject = message.Subject.Length > 300 ? message.Subject[..300] : message.Subject,
+                SentAt = DateTime.UtcNow,
+                SentByUserId = HttpContext.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value,
+                SentByEmail = senderEmail,
+                ProviderMessageId = providerMessageId is { Length: > 100 } ? providerMessageId[..100] : providerMessageId,
+            };
+            try
+            {
+                _db.SalesInvoiceEmails.Add(record);
+                _db.SaveChanges();
+            }
+            catch (Exception ex)
+            {
+                // The customer already has the email; a lost audit row must not make the user send it twice.
+                _logger.LogError(ex, "Invoice {InvoiceId} was emailed to the customer but the send could not be recorded", id);
+            }
+
             _logger.LogInformation("Invoice {InvoiceId} emailed by {Sender} for workspace {CompanyId}", id, senderEmail, _tenantContext.CompanyId);
-            return Ok(new { success = true, to, bcc = message.Bcc });
+            return Ok(new { success = true, to, bcc = message.Bcc, email = ToEmailItem(record) });
         }
+
+        private const int InvoiceEmailsPerHour = 30;
+
+        private static Dto.Sales.InvoiceEmailItemDto ToEmailItem(Core.Domain.Sales.SalesInvoiceEmail email) => new()
+        {
+            Id = email.Id,
+            Kind = email.Kind,
+            To = email.ToEmail,
+            SentAt = DateTime.SpecifyKind(email.SentAt, DateTimeKind.Utc),
+            SentBy = email.SentByEmail,
+        };
 
         private static string? ValidEmail(string? value)
         {
@@ -550,6 +587,13 @@ namespace Api.Controllers
                         Notes = a.SalesReceiptHeader?.Memo
                     }).ToList();
             }
+
+            salesInvoiceDto.Emails = _db.SalesInvoiceEmails
+                .Where(e => e.SalesInvoiceHeaderId == salesInvoice.Id)
+                .OrderByDescending(e => e.SentAt)
+                .AsEnumerable()
+                .Select(ToEmailItem)
+                .ToList();
 
             decimal totalTax = 0;
             foreach (var line in salesInvoice.SalesInvoiceLines)
