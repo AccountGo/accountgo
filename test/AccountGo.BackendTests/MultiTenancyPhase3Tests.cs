@@ -1501,6 +1501,124 @@ namespace AccountGo.BackendTests
             Assert.Equal("Acme", InvoiceBillTo.FromJson(once.BillToJson).Name);
         }
 
+        [Fact]
+        public async Task Clients_CreateEditAndArchive_KeepIssuedInvoices()
+        {
+            var created = await SaveClient(new Dto.Sales.Client
+            {
+                Name = "  Acme Corp ", Email = "billing@acme.test", Phone = "+63 2 8000 0000",
+                Street = "1 Ayala Ave", City = "Makati", PostalCode = "1226", Country = "Philippines",
+                PaymentTermId = await FirstPaymentTermId()
+            });
+            Assert.True(created.Id > 0);
+            Assert.Equal("Acme Corp", created.Name);
+            Assert.True(created.CanDelete);
+            Assert.Contains(await Clients(), c => c.Id == created.Id && c.City == "Makati" && !c.Archived);
+
+            // The invoice picker gets the client's default terms.
+            var picker = await (await Send(HttpMethod.Get, "/api/Sales/Customers")).Content.ReadFromJsonAsync<List<Dto.Sales.Customer>>();
+            Assert.Equal(created.PaymentTermId, picker.Single(c => c.Id == created.Id).PaymentTermId);
+
+            // Issue an invoice to it, then edit the client: the invoice keeps its bill-to, and the client can't be deleted.
+            var invoice = await NewInvoice();
+            invoice.CustomerId = created.Id;
+            var issued = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
+            Assert.True(issued.IsSuccessStatusCode, await issued.Content.ReadAsStringAsync());
+            var invoiceId = (await Json(issued)).GetProperty("id").GetInt32();
+
+            created.Name = "Acme Corporation";
+            created.Email = "";
+            created.Street = null;
+            created.PaymentTermId = null;
+            var edited = await SaveClient(created);
+            Assert.Equal("Acme Corporation", edited.Name);
+            Assert.Null(edited.Email);
+            Assert.Null(edited.Street);
+            Assert.Null(edited.PaymentTermId);
+            Assert.False(edited.CanDelete);
+            Assert.Equal("Acme Corporation", (await GetClient(created.Id)).Name);
+            var printed = await GetInvoice(invoiceId);
+            Assert.Equal("Acme Corp", printed.CustomerName);
+            Assert.Equal("billing@acme.test", printed.CustomerEmail);
+            Assert.Null(printed.RecipientEmail);
+
+            // Archived: still listed and still on its invoices, flagged for the picker; restoring clears it.
+            var archived = await Send(HttpMethod.Post, $"/api/Sales/ArchiveClient?id={created.Id}");
+            Assert.True(archived.IsSuccessStatusCode, await archived.Content.ReadAsStringAsync());
+            Assert.True((await GetClient(created.Id)).Archived);
+            picker = await (await Send(HttpMethod.Get, "/api/Sales/Customers")).Content.ReadFromJsonAsync<List<Dto.Sales.Customer>>();
+            Assert.True(picker.Single(c => c.Id == created.Id).Archived);
+            Assert.Equal("Acme Corp", (await GetInvoice(invoiceId)).CustomerName);
+            Assert.True((await Send(HttpMethod.Post, $"/api/Sales/ArchiveClient?id={created.Id}&archived=false")).IsSuccessStatusCode);
+            Assert.False((await GetClient(created.Id)).Archived);
+
+            var refused = await Send(HttpMethod.Delete, $"/api/Sales/DeleteClient?id={created.Id}");
+            Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
+            Assert.Contains("Archive it instead", await refused.Content.ReadAsStringAsync());
+        }
+
+        [Fact]
+        public async Task Clients_ValidateInput_AndNeedManagePermission()
+        {
+            Assert.Equal(HttpStatusCode.BadRequest, (await Send(HttpMethod.Post, "/api/Sales/SaveClient", new Dto.Sales.Client { Name = "  " })).StatusCode);
+            Assert.Equal(HttpStatusCode.BadRequest, (await Send(HttpMethod.Post, "/api/Sales/SaveClient", new Dto.Sales.Client { Name = "Acme", Email = "not-an-email" })).StatusCode);
+            Assert.Equal(HttpStatusCode.BadRequest, (await Send(HttpMethod.Post, "/api/Sales/SaveClient", new Dto.Sales.Client { Name = new string('x', 201) })).StatusCode);
+            Assert.Equal(HttpStatusCode.NotFound, (await Send(HttpMethod.Get, "/api/Sales/Client?id=999999")).StatusCode);
+
+            var client = await SaveClient(new Dto.Sales.Client { Name = "Members can't edit" });
+            await JoinOther();
+            client.Name = "Hijacked";
+            Assert.Equal(HttpStatusCode.Forbidden, (await Send(HttpMethod.Post, "/api/Sales/SaveClient", client, _otherToken)).StatusCode);
+            Assert.Equal(HttpStatusCode.Forbidden, (await Send(HttpMethod.Post, $"/api/Sales/ArchiveClient?id={client.Id}", token: _otherToken)).StatusCode);
+            Assert.Equal(HttpStatusCode.Forbidden, (await Send(HttpMethod.Delete, $"/api/Sales/DeleteClient?id={client.Id}", token: _otherToken)).StatusCode);
+            Assert.Equal("Members can't edit", (await GetClient(client.Id)).Name);
+        }
+
+        [Fact]
+        public async Task DeleteClient_RemovesAnUnusedClient_InForeignKeyOrder()
+        {
+            var client = await SaveClient(new Dto.Sales.Client { Name = "Added by mistake", Email = "oops@example.com" });
+            var deleted = await Send(HttpMethod.Delete, $"/api/Sales/DeleteClient?id={client.Id}");
+            Assert.Equal(HttpStatusCode.NoContent, deleted.StatusCode);
+            Assert.Equal(HttpStatusCode.NotFound, (await Send(HttpMethod.Get, $"/api/Sales/Client?id={client.Id}")).StatusCode);
+
+            // D1 replays the statements in order and enforces foreign keys: the customer goes before its parties.
+            var statements = AllSyncStatements(deleted);
+            var customer = statements.FindIndex(sql => sql.StartsWith("DELETE FROM \"Customer\""));
+            var contact = statements.FindIndex(sql => sql.StartsWith("DELETE FROM \"Contact\""));
+            var party = statements.FindIndex(sql => sql.StartsWith("DELETE FROM \"Party\""));
+            Assert.True(customer >= 0 && contact > customer && party > contact, string.Join("\n", statements));
+            Assert.Equal(2, statements.Count(sql => sql.StartsWith("DELETE FROM \"Party\"")));
+
+            using var scope = _factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
+                Assert.DoesNotContain(db.Parties, p => p.Name == "Added by mistake");
+        }
+
+        private async Task<Dto.Sales.Client> SaveClient(Dto.Sales.Client client)
+        {
+            var response = await Send(HttpMethod.Post, "/api/Sales/SaveClient", client);
+            Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
+            return await response.Content.ReadFromJsonAsync<Dto.Sales.Client>();
+        }
+
+        private async Task<Dto.Sales.Client> GetClient(int id)
+        {
+            var response = await Send(HttpMethod.Get, $"/api/Sales/Client?id={id}");
+            Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
+            return await response.Content.ReadFromJsonAsync<Dto.Sales.Client>();
+        }
+
+        private async Task<List<Dto.Sales.Client>> Clients() =>
+            await (await Send(HttpMethod.Get, "/api/Sales/Clients")).Content.ReadFromJsonAsync<List<Dto.Sales.Client>>();
+
+        private async Task<int> FirstPaymentTermId()
+        {
+            var terms = await Json(await Send(HttpMethod.Get, "/api/Common/PaymentTerms"));
+            return terms[0].GetProperty("id").GetInt32();
+        }
+
         private async Task EditCustomer(int customerId, string name, string email, string street)
         {
             using var scope = _factory.Services.CreateScope();

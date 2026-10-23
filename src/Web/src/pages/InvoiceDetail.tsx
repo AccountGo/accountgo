@@ -813,9 +813,16 @@ export const InvoiceDetail: React.FC = () => {
             </ol>
           ) : (
             <div className="text-center py-6 text-sm text-[var(--text-muted)] bg-[var(--bg-subtle)]/50 rounded-xl border border-dashed border-[var(--border-subtle)]">
-              {invoice.recipientEmail
-                ? 'This invoice has not been emailed to the customer yet.'
-                : 'Add an email address to the customer to send invoices by email.'}
+              {invoice.recipientEmail ? (
+                'This invoice has not been emailed to the customer yet.'
+              ) : (
+                <>
+                  <Link to={`/org/${orgSlug}/sales/clients/${invoice.customerId}`} className="font-medium text-[var(--brand-primary)] hover:underline">
+                    Add an email address to the client
+                  </Link>{' '}
+                  to send invoices by email.
+                </>
+              )}
             </div>
           )}
         </div>

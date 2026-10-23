@@ -5,7 +5,6 @@ import {
   Trash2,
   Save,
   Send,
-  Building2,
   UserPlus,
   X,
   AlertTriangle,
@@ -15,15 +14,19 @@ import {
   Unlink,
   Users,
   ChevronsUpDown,
+  Pencil,
 } from 'lucide-react';
 import { PageHeader, HeaderButton } from '../components/PageHeader';
 import { CatalogPickerDialog } from '../components/CatalogPickerDialog';
 import { CustomerPickerDialog } from '../components/CustomerPickerDialog';
+import { ClientFormDialog } from '../components/ClientFormDialog';
+import { usePermissions } from '../components/Gating';
 import {
   TenantContextType,
   Invoice,
   InvoiceLineItem,
   CustomerOption,
+  Client,
   PaymentTermOption,
   ItemOption,
   SalesInvoiceSettings,
@@ -49,6 +52,7 @@ interface FormLineItem {
 export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
   const { currentOrg } = useOutletContext<TenantContextType>();
   const { authFetch } = useAuth();
+  const { hasPermission } = usePermissions();
   const { orgSlug, invoiceId } = useParams<{ orgSlug: string; invoiceId?: string }>();
   const navigate = useNavigate();
   // "Duplicate invoice" opens a new invoice prefilled from another one (?from=<id>).
@@ -98,19 +102,11 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
   const [successBanner, setSuccessBanner] = useState<string | null>(null);
 
-  // Add Customer Modal State
-  const [isAddCustomerOpen, setIsAddCustomerOpen] = useState<boolean>(false);
+  // Client picker and the add/edit client dialog (editing: the client being edited)
   const [isCustomerPickerOpen, setIsCustomerPickerOpen] = useState<boolean>(false);
-  const [newCustomerName, setNewCustomerName] = useState('');
-  const [newCustomerEmail, setNewCustomerEmail] = useState('');
-  const [newCustomerPhone, setNewCustomerPhone] = useState('');
-  const [newCustomerStreet, setNewCustomerStreet] = useState('');
-  const [newCustomerProvince, setNewCustomerProvince] = useState('');
-  const [newCustomerPostal, setNewCustomerPostal] = useState('');
-  const [newCustomerCountry, setNewCustomerCountry] = useState('');
-  const [newCustomerTermId, setNewCustomerTermId] = useState<number | ''>('');
-  const [isSubmittingCustomer, setIsSubmittingCustomer] = useState(false);
-  const [customerModalError, setCustomerModalError] = useState<string | null>(null);
+  const [clientDialog, setClientDialog] = useState<{ client?: Client } | null>(null);
+  const [isLoadingClient, setIsLoadingClient] = useState(false);
+  const canManageClients = hasPermission('sales.customers.manage');
 
   // Currency
   const currencySymbol = getCurrencySymbol(currentOrg.currency);
@@ -300,6 +296,19 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
     if (term && isValidDate(invoiceDate)) setDueDate(addBusinessDays(invoiceDate, term.dueAfterDays ?? 0));
   };
 
+  // "New invoice" from a client's page (?client=<id>) starts billed to that client, on its default terms. Once the
+  // clients and terms have loaded; never again after, so it can't undo a change.
+  const clientParam = isEdit || duplicateOf ? null : searchParams.get('client');
+  const [clientParamApplied, setClientParamApplied] = useState(false);
+  useEffect(() => {
+    if (!clientParam || clientParamApplied || customers.length === 0 || paymentTerms.length === 0) return;
+    setClientParamApplied(true);
+    const client = customers.find((c) => c.id === Number(clientParam) && !c.archived);
+    if (!client) return;
+    setSelectedCustomerId(client.id);
+    if (client.paymentTermId) applyTerm(client.paymentTermId);
+  }, [clientParam, clientParamApplied, customers, paymentTerms]);
+
   const matchTerm = (issue: string, due: string) => {
     if (!isValidDate(issue) || !isValidDate(due)) {
       setPaymentTermId('');
@@ -485,77 +494,36 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
     }
   };
 
-  // Inline Client Creation Handler
-  const handleCreateCustomer = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setCustomerModalError(null);
-
-    if (!newCustomerName.trim()) {
-      setCustomerModalError('Client name is required.');
-      return;
+  // A client added here is selected, with its default terms; an edited one updates the bill-to.
+  const handleClientSaved = (client: Client) => {
+    const option: CustomerOption = {
+      id: client.id,
+      name: client.name,
+      email: client.email ?? undefined,
+      phone: client.phone ?? undefined,
+      paymentTermId: client.paymentTermId ?? undefined,
+      archived: client.archived,
+    };
+    const isNew = !customers.some((c) => c.id === client.id);
+    setCustomers((prev) => (isNew ? [option, ...prev] : prev.map((c) => (c.id === client.id ? option : c))));
+    if (isNew) {
+      setSelectedCustomerId(client.id);
+      if (client.paymentTermId) applyTerm(client.paymentTermId);
     }
-    if (!newCustomerEmail.trim()) {
-      setCustomerModalError('Client email is required.');
-      return;
-    }
+    setClientDialog(null);
+  };
 
-    setIsSubmittingCustomer(true);
+  const handleEditClient = async () => {
+    if (!selectedCustomerId) return;
+    setIsLoadingClient(true);
     try {
-      const payload = {
-        id: 0,
-        name: newCustomerName.trim(),
-        email: newCustomerEmail.trim(),
-        phone: newCustomerPhone.trim() || undefined,
-        companyAddress: {
-          street1: newCustomerStreet.trim() || undefined,
-          province: newCustomerProvince.trim() || undefined,
-          postalCode: newCustomerPostal.trim() || undefined,
-          country: newCustomerCountry.trim() || undefined,
-        },
-        paymentTermId: newCustomerTermId ? Number(newCustomerTermId) : undefined,
-      };
-
-      const res = await authFetch('/api/Sales/SaveCustomer', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) {
-        const errJson = await res.json().catch(() => null);
-        throw new Error(errJson?.message || 'Failed to create client.');
-      }
-
-      const created = await res.json();
-      const newOption: CustomerOption = {
-        id: created.id,
-        name: created.name || newCustomerName.trim(),
-        email: newCustomerEmail.trim(),
-        phone: newCustomerPhone.trim() || undefined,
-        paymentTermId: newCustomerTermId ? Number(newCustomerTermId) : undefined,
-      };
-
-      // Add to list and select it
-      setCustomers((prev) => [newOption, ...prev]);
-      setSelectedCustomerId(created.id);
-      if (newCustomerTermId) {
-        applyTerm(newCustomerTermId);
-      }
-
-      // Reset modal fields and close
-      setNewCustomerName('');
-      setNewCustomerEmail('');
-      setNewCustomerPhone('');
-      setNewCustomerStreet('');
-      setNewCustomerProvince('');
-      setNewCustomerPostal('');
-      setNewCustomerCountry('');
-      setNewCustomerTermId('');
-      setIsAddCustomerOpen(false);
+      const res = await authFetch(`/api/Sales/Client?id=${Number(selectedCustomerId)}`);
+      if (!res.ok) throw new Error('The client could not be loaded.');
+      setClientDialog({ client: await res.json() });
     } catch (err: any) {
-      setCustomerModalError(err.message || 'Failed to create client.');
+      setErrorBanner(err.message);
     } finally {
-      setIsSubmittingCustomer(false);
+      setIsLoadingClient(false);
     }
   };
 
@@ -626,14 +594,29 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
                 <span className="text-rose-500">*</span>
                 {isLoadingRefs && <Loader2 className="w-3 h-3 animate-spin text-[var(--brand-primary)]" />}
               </label>
-              <button
-                type="button"
-                onClick={() => setIsAddCustomerOpen(true)}
-                className="inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--brand-primary)] hover:opacity-80 transition"
-              >
-                <UserPlus className="w-3.5 h-3.5" />
-                New client
-              </button>
+              {canManageClients && (
+                <div className="flex items-center gap-3">
+                  {selectedCustomer && (
+                    <button
+                      type="button"
+                      onClick={handleEditClient}
+                      disabled={isLoadingClient}
+                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--brand-primary)] hover:opacity-80 transition disabled:opacity-50"
+                    >
+                      {isLoadingClient ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Pencil className="w-3.5 h-3.5" />}
+                      Edit client
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setClientDialog({})}
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--brand-primary)] hover:opacity-80 transition"
+                  >
+                    <UserPlus className="w-3.5 h-3.5" />
+                    New client
+                  </button>
+                </div>
+              )}
             </div>
 
             {selectedCustomer ? (
@@ -1015,181 +998,28 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
         </div>
       </div>
 
-      {/* Inline Modal: Add New Client */}
-      {isAddCustomerOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-          <div className="bg-[var(--bg-surface)] rounded-2xl max-w-lg w-full border border-[var(--border-subtle)] shadow-2xl overflow-hidden">
-            <div className="px-6 py-4 border-b border-[var(--border-subtle)] flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Building2 className="w-5 h-5 text-[var(--brand-primary)]" />
-                <h3 className="font-bold text-[var(--text-main)] text-base">
-                  Add New Client
-                </h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsAddCustomerOpen(false)}
-                className="text-[var(--text-muted)] hover:text-[var(--text-main)] p-1 rounded-lg transition"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleCreateCustomer} className="p-6 space-y-4">
-              {customerModalError && (
-                <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl text-xs text-rose-500">
-                  {customerModalError}
-                </div>
-              )}
-
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1">
-                  Client / Company Name <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Acme Corporation"
-                  value={newCustomerName}
-                  onChange={(e) => setNewCustomerName(e.target.value)}
-                  className="w-full px-3.5 py-2.5 text-sm bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xl focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] placeholder-[var(--text-muted)] transition"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1">
-                    Email Address <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="email"
-                    required
-                    placeholder="billing@acme.com"
-                    value={newCustomerEmail}
-                    onChange={(e) => setNewCustomerEmail(e.target.value)}
-                    className="w-full px-3.5 py-2.5 text-sm bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xl focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] placeholder-[var(--text-muted)] transition"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1">
-                    Phone Number
-                  </label>
-                  <input
-                    type="tel"
-                    placeholder="+1 (555) 000-0000"
-                    value={newCustomerPhone}
-                    onChange={(e) => setNewCustomerPhone(e.target.value)}
-                    className="w-full px-3.5 py-2.5 text-sm bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xl focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] placeholder-[var(--text-muted)] transition"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1">
-                  Street Address
-                </label>
-                <input
-                  type="text"
-                  placeholder="123 Market St, Suite 400"
-                  value={newCustomerStreet}
-                  onChange={(e) => setNewCustomerStreet(e.target.value)}
-                  className="w-full px-3.5 py-2.5 text-sm bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xl focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] placeholder-[var(--text-muted)] transition"
-                />
-              </div>
-
-              <div className="grid grid-cols-3 gap-2">
-                <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1">
-                    City/State
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="New York, NY"
-                    value={newCustomerProvince}
-                    onChange={(e) => setNewCustomerProvince(e.target.value)}
-                    className="w-full px-2.5 py-2 text-xs bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xl focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] placeholder-[var(--text-muted)] transition"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1">
-                    Postal Code
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="10001"
-                    value={newCustomerPostal}
-                    onChange={(e) => setNewCustomerPostal(e.target.value)}
-                    className="w-full px-2.5 py-2 text-xs bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xl focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] placeholder-[var(--text-muted)] transition"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1">
-                    Country
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="USA"
-                    value={newCustomerCountry}
-                    onChange={(e) => setNewCustomerCountry(e.target.value)}
-                    className="w-full px-2.5 py-2 text-xs bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xl focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] placeholder-[var(--text-muted)] transition"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1">
-                  Default Payment Terms
-                </label>
-                <select
-                  value={newCustomerTermId}
-                  onChange={(e) =>
-                    setNewCustomerTermId(e.target.value ? Number(e.target.value) : '')
-                  }
-                  className="w-full px-3.5 py-2.5 text-sm bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xl focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] transition"
-                >
-                  <option value="">Default Terms</option>
-                  {paymentTerms.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.description}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="pt-2 flex items-center justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => setIsAddCustomerOpen(false)}
-                  className="px-4 py-2.5 text-sm font-medium text-[var(--text-secondary)] bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xl hover:bg-[var(--bg-surface-hover)] hover:text-[var(--text-main)] transition"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmittingCustomer}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-[var(--brand-text)] bg-[var(--brand-primary)] rounded-xl hover:bg-[var(--brand-hover)] transition disabled:opacity-50 shadow-sm"
-                >
-                  {isSubmittingCustomer && <Loader2 className="w-4 h-4 animate-spin" />}
-                  Create Client
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+      {clientDialog && (
+        <ClientFormDialog
+          client={clientDialog.client}
+          paymentTerms={paymentTerms}
+          onSaved={handleClientSaved}
+          onClose={() => setClientDialog(null)}
+        />
       )}
 
       {isCustomerPickerOpen && (
         <CustomerPickerDialog
-          customers={customers}
+          customers={customers.filter((c) => !c.archived || c.id === Number(selectedCustomerId))}
           selectedId={selectedCustomerId || null}
           onPick={handlePickCustomer}
-          onAddNew={() => {
-            setIsCustomerPickerOpen(false);
-            setIsAddCustomerOpen(true);
-          }}
+          onAddNew={
+            canManageClients
+              ? () => {
+                  setIsCustomerPickerOpen(false);
+                  setClientDialog({});
+                }
+              : undefined
+          }
           onClose={() => setIsCustomerPickerOpen(false)}
         />
       )}

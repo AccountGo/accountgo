@@ -1719,6 +1719,9 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<int?>("AccountsReceivableAccountId")
                         .HasColumnType("int");
 
+                    b.Property<DateTime?>("ArchivedAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<int>("CompanyId")
                         .HasColumnType("int");
 
