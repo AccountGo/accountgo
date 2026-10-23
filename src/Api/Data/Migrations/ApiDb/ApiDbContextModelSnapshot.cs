@@ -1322,6 +1322,9 @@ namespace Api.Data.Migrations.ApiDb
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("BillFromJson")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<int>("CompanyId")
                         .HasColumnType("int");
 
@@ -1331,10 +1334,16 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<string>("Description")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<DateTime?>("DueDate")
+                        .HasColumnType("datetime2");
+
                     b.Property<int?>("GeneralLedgerHeaderId")
                         .HasColumnType("int");
 
                     b.Property<string>("No")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Notes")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<int?>("PaymentTermId")
@@ -1353,11 +1362,16 @@ namespace Api.Data.Migrations.ApiDb
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<int?>("VoidGeneralLedgerHeaderId")
+                        .HasColumnType("int");
+
                     b.HasKey("Id");
 
                     b.HasIndex("GeneralLedgerHeaderId");
 
                     b.HasIndex("VendorId");
+
+                    b.HasIndex("VoidGeneralLedgerHeaderId");
 
                     b.ToTable("PurchaseInvoiceHeader");
                 });
@@ -1370,6 +1384,9 @@ namespace Api.Data.Migrations.ApiDb
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<int?>("AccountId")
+                        .HasColumnType("int");
+
                     b.Property<decimal>("Amount")
                         .HasColumnType("decimal(18, 2)");
 
@@ -1378,6 +1395,9 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.Property<decimal?>("Cost")
                         .HasColumnType("decimal(18, 2)");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<decimal?>("Discount")
                         .HasColumnType("decimal(18, 2)");
@@ -1400,10 +1420,18 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<decimal?>("ReceivedQuantity")
                         .HasColumnType("decimal(18, 2)");
 
+                    b.Property<decimal>("TaxAmount")
+                        .HasColumnType("decimal(18, 2)");
+
                     b.Property<int?>("TaxGroupId")
                         .HasColumnType("int");
 
+                    b.Property<int?>("TaxId")
+                        .HasColumnType("int");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("AccountId");
 
                     b.HasIndex("InventoryControlJournalId");
 
@@ -1412,6 +1440,8 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasIndex("PurchaseInvoiceHeaderId");
 
                     b.HasIndex("PurchaseOrderLineId");
+
+                    b.HasIndex("TaxId");
 
                     b.ToTable("PurchaseInvoiceLine");
                 });
@@ -1600,6 +1630,9 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<int?>("AccountsPayableAccountId")
                         .HasColumnType("int");
 
+                    b.Property<DateTime?>("ArchivedAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("City")
                         .HasColumnType("nvarchar(max)");
 
@@ -1679,6 +1712,9 @@ namespace Api.Data.Migrations.ApiDb
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<int?>("AccountId")
+                        .HasColumnType("int");
+
                     b.Property<decimal>("Amount")
                         .HasColumnType("decimal(18, 2)");
 
@@ -1691,16 +1727,27 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<int?>("GeneralLedgerHeaderId")
                         .HasColumnType("int");
 
+                    b.Property<string>("Memo")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("No")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("PaymentMethod")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<int?>("PurchaseInvoiceHeaderId")
                         .HasColumnType("int");
 
+                    b.Property<string>("ReferenceNo")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<int>("VendorId")
                         .HasColumnType("int");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("AccountId");
 
                     b.HasIndex("GeneralLedgerHeaderId");
 
@@ -2011,11 +2058,16 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<int?>("Status")
                         .HasColumnType("int");
 
+                    b.Property<int?>("VoidGeneralLedgerHeaderId")
+                        .HasColumnType("int");
+
                     b.HasKey("Id");
 
                     b.HasIndex("CustomerId");
 
                     b.HasIndex("GeneralLedgerHeaderId");
+
+                    b.HasIndex("VoidGeneralLedgerHeaderId");
 
                     b.HasIndex("CompanyId", "No")
                         .IsUnique()
@@ -3141,13 +3193,23 @@ namespace Api.Data.Migrations.ApiDb
                         .WithMany("PurchaseInvoices")
                         .HasForeignKey("VendorId");
 
+                    b.HasOne("Core.Domain.Financials.GeneralLedgerHeader", "VoidGeneralLedgerHeader")
+                        .WithMany()
+                        .HasForeignKey("VoidGeneralLedgerHeaderId");
+
                     b.Navigation("GeneralLedgerHeader");
 
                     b.Navigation("Vendor");
+
+                    b.Navigation("VoidGeneralLedgerHeader");
                 });
 
             modelBuilder.Entity("Core.Domain.Purchases.PurchaseInvoiceLine", b =>
                 {
+                    b.HasOne("Core.Domain.Financials.Account", "Account")
+                        .WithMany()
+                        .HasForeignKey("AccountId");
+
                     b.HasOne("Core.Domain.Items.InventoryControlJournal", "InventoryControlJournal")
                         .WithMany()
                         .HasForeignKey("InventoryControlJournalId");
@@ -3168,6 +3230,12 @@ namespace Api.Data.Migrations.ApiDb
                         .WithMany("PurchaseInvoiceLines")
                         .HasForeignKey("PurchaseOrderLineId");
 
+                    b.HasOne("Core.Domain.TaxSystem.Tax", "Tax")
+                        .WithMany()
+                        .HasForeignKey("TaxId");
+
+                    b.Navigation("Account");
+
                     b.Navigation("InventoryControlJournal");
 
                     b.Navigation("Item");
@@ -3175,6 +3243,8 @@ namespace Api.Data.Migrations.ApiDb
                     b.Navigation("PurchaseInvoiceHeader");
 
                     b.Navigation("PurchaseOrderLine");
+
+                    b.Navigation("Tax");
                 });
 
             modelBuilder.Entity("Core.Domain.Purchases.PurchaseOrderHeader", b =>
@@ -3312,6 +3382,10 @@ namespace Api.Data.Migrations.ApiDb
 
             modelBuilder.Entity("Core.Domain.Purchases.VendorPayment", b =>
                 {
+                    b.HasOne("Core.Domain.Financials.Account", "Account")
+                        .WithMany()
+                        .HasForeignKey("AccountId");
+
                     b.HasOne("Core.Domain.Financials.GeneralLedgerHeader", "GeneralLedgerHeader")
                         .WithMany()
                         .HasForeignKey("GeneralLedgerHeaderId");
@@ -3325,6 +3399,8 @@ namespace Api.Data.Migrations.ApiDb
                         .HasForeignKey("VendorId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("Account");
 
                     b.Navigation("GeneralLedgerHeader");
 
@@ -3488,9 +3564,15 @@ namespace Api.Data.Migrations.ApiDb
                         .WithMany()
                         .HasForeignKey("GeneralLedgerHeaderId");
 
+                    b.HasOne("Core.Domain.Financials.GeneralLedgerHeader", "VoidGeneralLedgerHeader")
+                        .WithMany()
+                        .HasForeignKey("VoidGeneralLedgerHeaderId");
+
                     b.Navigation("Customer");
 
                     b.Navigation("GeneralLedgerHeader");
+
+                    b.Navigation("VoidGeneralLedgerHeader");
                 });
 
             modelBuilder.Entity("Core.Domain.Sales.SalesInvoiceLine", b =>

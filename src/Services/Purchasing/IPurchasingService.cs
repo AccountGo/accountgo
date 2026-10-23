@@ -28,8 +28,11 @@ namespace Services.Purchasing
         void UpdateVendor(Vendor vendor);
         IEnumerable<PurchaseInvoiceHeader> GetPurchaseInvoices();
         PurchaseInvoiceHeader GetPurchaseInvoiceById(int id);
-        void SavePayment(int invoiceId, int vendorId, int accountId, decimal amount, DateTime date);
-        void SavePurchaseInvoice(PurchaseInvoiceHeader purchaseInvoice, PurchaseOrderHeader purchaseOrder);
-        void PostPurchaseInvoice(int invoiceId);
+        void SaveBill(PurchaseInvoiceHeader bill);
+        int DefaultLineAccountId(int itemId, Vendor vendor);
+        void ApproveBill(int billId);
+        void VoidBill(int billId);
+        VendorPayment PayBill(int billId, int accountId, decimal amount, DateTime date,
+            string paymentMethod = null, string referenceNo = null, string memo = null);
     }
 }

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using Core.Domain;
 using Core.Domain.Items;
@@ -51,6 +52,27 @@ namespace Api.Service
                 SmallestMeasurementId = measurementId,
                 SellMeasurementId = measurementId
             };
+        }
+
+        /// <summary>
+        /// The item a line typed without picking from the catalog is booked to: an active catalog item named exactly as
+        /// typed, or else the workspace's general item, added the first time it is needed. The line keeps its own text
+        /// either way, so typing doesn't add an item to the catalog. Shared by invoices and bills.
+        /// </summary>
+        public static Item ResolveFreeTextItem(IInventoryService inventoryService, Services.Financial.IFinancialService financialService,
+            List<Item> items, string? description)
+        {
+            var text = description?.Trim();
+            var item = string.IsNullOrEmpty(text) ? null
+                : items.FirstOrDefault(i => i.ArchivedAt == null && string.Equals(i.Description, text, StringComparison.OrdinalIgnoreCase));
+            item ??= items.FirstOrDefault(i => string.Equals(i.Description, GeneralItemName, StringComparison.OrdinalIgnoreCase));
+            if (item != null)
+                return item;
+
+            item = NewItem(inventoryService, financialService, GeneralItemName);
+            inventoryService.AddItem(item);
+            items.Add(item);
+            return item;
         }
     }
 }

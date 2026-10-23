@@ -32,7 +32,7 @@ using Xunit.Abstractions;
 
 namespace AccountGo.BackendTests
 {
-    public class MultiTenancyPhase3Tests : IAsyncLifetime
+    public partial class MultiTenancyPhase3Tests : IAsyncLifetime
     {
         private readonly string _path = Path.Combine(Path.GetTempPath(), "accountgo_p3_" + Guid.NewGuid().ToString("N") + ".db");
         private readonly FakeEmailSender _emails = new FakeEmailSender();

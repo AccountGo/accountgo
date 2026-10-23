@@ -27,6 +27,12 @@ namespace Core.Domain.Purchases
         public string No { get; set; }
         public DateTime Date { get; set; }
         public decimal Amount { get; set; }
+        /// <summary>The cash or bank account the payment was made from.</summary>
+        public int? AccountId { get; set; }
+        public string PaymentMethod { get; set; }
+        public string ReferenceNo { get; set; }
+        public string Memo { get; set; }
+        public virtual Account Account { get; set; }
         public virtual Vendor Vendor { get; set; }
         public virtual GeneralLedgerHeader GeneralLedgerHeader { get; set; }
         public virtual PurchaseInvoiceHeader PurchaseInvoiceHeader { get; set; }

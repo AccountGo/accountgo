@@ -46,6 +46,7 @@ namespace Core.Domain.Security
         public const string PurchasesBillsView = "purchases.bills.view";
         public const string PurchasesBillsCreate = "purchases.bills.create";
         public const string PurchasesBillsPost = "purchases.bills.post";
+        public const string PurchasesPaymentsCreate = "purchases.payments.create";
 
         // Inventory
         public const string InventoryItemsView = "inventory.items.view";

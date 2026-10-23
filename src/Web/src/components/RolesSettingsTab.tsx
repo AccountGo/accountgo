@@ -69,6 +69,7 @@ const PERMISSION_GROUPS: Array<{ group: string; module?: ModuleKey | ModuleKey[]
       { key: 'purchases.bills.view', label: 'View Bills' },
       { key: 'purchases.bills.create', label: 'Draft Bills' },
       { key: 'purchases.bills.post', label: 'Post / Approve Bills' },
+      { key: 'purchases.payments.create', label: 'Pay Bills' },
     ],
   },
   {

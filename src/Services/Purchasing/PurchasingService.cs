@@ -86,143 +86,11 @@ namespace Services.Purchasing
             _logger = logger;
         }
 
+        /// <summary>Adds a bill and approves it straight away; the seed data's bills are made this way.</summary>
         public void AddPurchaseInvoice(PurchaseInvoiceHeader purchaseIvoice, int? purchaseOrderId)
         {
-            #region Auto create purchase order
-            if (!purchaseOrderId.HasValue)
-            {
-                var po = new PurchaseOrderHeader()
-                {
-                    Date = purchaseIvoice.Date,
-                    No = GetNextNumber(SequenceNumberTypes.PurchaseOrder).ToString(),
-                    Vendor = purchaseIvoice.Vendor,
-                    VendorId = purchaseIvoice.VendorId.Value,
-                    Description = purchaseIvoice.Description,
-                };
-                foreach (var line in purchaseIvoice.PurchaseInvoiceLines)
-                {
-                    var item = _inventoryService.GetItemById(line.ItemId);
-
-                    po.PurchaseOrderLines.Add(new PurchaseOrderLine()
-                    {
-                        ItemId = item.Id,
-                        TaxGroupId = line.TaxGroupId,
-                        Quantity = line.Quantity,
-                        Cost = item.Cost.Value,
-                        Discount = line.Discount.HasValue ? line.Discount.Value : 0,
-                        Amount = line.Amount * line.Quantity,
-                    });
-                }
-                purchaseIvoice.PurchaseOrders.Add(po);
-                //var poReceipt = new PurchaseReceiptHeader()
-                //{
-                //    Date = DateTime.Now,
-                //    VendorId = po.VendorId.Value,
-                //    PurchaseOrderHeaderId = po.Id,
-                //};
-
-                //foreach (var line in purchaseIvoice.PurchaseInvoiceLines)
-                //{
-                //    poReceipt.PurchaseReceiptLines.Add(new PurchaseReceiptLine()
-                //    {
-                //        ItemId = line.ItemId,
-                //        MeasurementId = line.MeasurementId,
-                //        Quantity = line.Quantity,
-                //        ReceivedQuantity = (line.ReceivedQuantity.HasValue ? line.ReceivedQuantity.Value : 0),
-                //        Cost = line.Cost.Value,
-                //        Amount = line.Cost.Value * (line.ReceivedQuantity.HasValue ? line.ReceivedQuantity.Value : 0),
-                //    });
-                //}
-
-                //po.PurchaseReceipts.Add(poReceipt);
-
-                //AddPurchaseOrderReceipt(poReceipt);
-            }
-            #endregion
-
-            var glHeader = _financialService.CreateGeneralLedgerHeader(DocumentTypes.PurchaseInvoice, purchaseIvoice.Date, purchaseIvoice.Description);
-
-            decimal totalTaxAmount = 0, totalAmount = 0, totalDiscount = 0;
-            var taxes = new List<KeyValuePair<int, decimal>>();
-
-            foreach (var line in purchaseIvoice.PurchaseInvoiceLines)
-            {
-                var lineTaxes = _financialService.ComputeInputTax(purchaseIvoice.VendorId.GetValueOrDefault(), line.ItemId, line.Quantity, line.Amount, line.Discount.GetValueOrDefault());
-
-                var lineAmount = line.Quantity * line.Amount;
-
-                var totalLineAmount = lineAmount + lineTaxes.Sum(t => t.Value);
-
-                totalAmount += (decimal)totalLineAmount;
-
-                foreach (var t in lineTaxes)
-                    taxes.Add(t);
-
-                var item = _inventoryService.GetItemById(line.ItemId);
-                decimal lineItemTotalAmountAfterTax = line.Amount - lineTaxes.Sum(t => t.Value);
-
-                GeneralLedgerLine debitInventory = _financialService.CreateGeneralLedgerLine(DrOrCrSide.Dr, item.InventoryAccount.Id, lineItemTotalAmountAfterTax);
-                glHeader.GeneralLedgerLines.Add(debitInventory);
-
-                GeneralLedgerLine creditGRNClearingAccount = _financialService.CreateGeneralLedgerLine(DrOrCrSide.Cr, GetGeneralLedgerSetting().GoodsReceiptNoteClearingAccountId.Value, lineItemTotalAmountAfterTax);
-                glHeader.GeneralLedgerLines.Add(creditGRNClearingAccount);
-
-                line.InventoryControlJournal = _inventoryService.CreateInventoryControlJournal(line.ItemId,
-                    item.PurchaseMeasurementId.HasValue ? item.PurchaseMeasurementId.Value : 1,
-                    DocumentTypes.PurchaseReceipt,
-                    line.Quantity,
-                    null,
-                    line.Quantity * item.Cost,
-                    null);
-            }
-
-            if (taxes != null && taxes.Count > 0)
-            {
-                var groupedTaxes = from t in taxes
-                                   group t by t.Key into grouped
-                                   select new
-                                   {
-                                       Key = grouped.Key,
-                                       Value = grouped.Sum(t => t.Value)
-                                   };
-
-                totalTaxAmount = taxes.Sum(t => t.Value);
-
-                foreach (var tax in groupedTaxes)
-                {
-                    var tx = _financialService.GetTaxes().Where(t => t.Id == tax.Key).FirstOrDefault();
-                    var debitPurchaseTaxAccount = _financialService.CreateGeneralLedgerLine(DrOrCrSide.Dr, tx.PurchasingAccountId.Value, tax.Value);
-                    glHeader.GeneralLedgerLines.Add(debitPurchaseTaxAccount);
-                }
-            }
-
-            if (totalDiscount > 0)
-            {
-
-            }
-
-            Vendor vendor = GetVendorById(purchaseIvoice.VendorId.Value);
-            var creditVendorAccount = _financialService.CreateGeneralLedgerLine(DrOrCrSide.Cr, vendor.AccountsPayableAccountId.Value, totalAmount);
-            glHeader.GeneralLedgerLines.Add(creditVendorAccount);
-
-            var debitGRNClearingAccount = _financialService.CreateGeneralLedgerLine(DrOrCrSide.Dr, GetGeneralLedgerSetting().GoodsReceiptNoteClearingAccountId.Value, totalAmount - totalTaxAmount);
-            glHeader.GeneralLedgerLines.Add(debitGRNClearingAccount);
-
-            if (_financialService.ValidateGeneralLedgerEntry(glHeader))
-            {
-                purchaseIvoice.GeneralLedgerHeader = glHeader;
-
-                purchaseIvoice.No = GetNextNumber(SequenceNumberTypes.PurchaseInvoice).ToString();
-                _purchaseInvoiceRepo.Insert(purchaseIvoice);
-
-                if (purchaseOrderId.HasValue)
-                {
-                    // TODO: Look for other way to update the purchase order's invoice header id field so that it shall be in a single transaction along with purchase invoice saving
-                    var purchOrder = GetPurchaseOrderById(purchaseOrderId.GetValueOrDefault());
-                    //purchOrder.PurchaseInvoiceHeaderId = purchaseIvoice.Id;
-                    _purchaseOrderRepo.Update(purchOrder);
-                }
-            }
+            SaveBill(purchaseIvoice);
+            ApproveBill(purchaseIvoice.Id);
         }
 
         public void AddPurchaseOrder(PurchaseOrderHeader purchaseOrder, bool toSave)
@@ -429,192 +297,190 @@ namespace Services.Purchasing
             return invoice;
         }
 
-        public void SavePayment(int invoiceId, int vendorId, int accountId, decimal amount, DateTime date)
+        /// <summary>
+        /// Saves a draft bill. Each line gets its account (the default when none was picked) and its tax, worked out from
+        /// the line's tax rate and stored, so the bill keeps what it was entered with.
+        /// </summary>
+        public void SaveBill(PurchaseInvoiceHeader bill)
         {
-            var payment = new VendorPayment()
+            if (bill.GeneralLedgerHeaderId.HasValue)
+                throw new InvalidOperationException("This bill is approved, so it can't be changed. Void it and enter it again instead.");
+
+            var vendor = bill.VendorId.HasValue ? _vendorRepo.GetById(bill.VendorId.Value) : null;
+            var taxes = _financialService.GetTaxes().ToList();
+            foreach (var line in bill.PurchaseInvoiceLines)
             {
-                VendorId = vendorId,
-                PurchaseInvoiceHeaderId = invoiceId,
+                line.AccountId ??= DefaultLineAccountId(line.ItemId, vendor);
+                line.Cost = line.Amount;
+                line.TaxAmount = PurchaseInvoiceLine.TaxOf(line.Subtotal, taxes.FirstOrDefault(t => t.Id == line.TaxId)?.Rate);
+            }
+
+            bill.VendorInvoiceNo ??= "";
+            bill.Status ??= PurchaseInvoiceStatus.Draft;
+            if (bill.Id == 0)
+                _purchaseInvoiceRepo.Insert(bill);
+            else
+                _purchaseInvoiceRepo.Update(bill);
+        }
+
+        /// <summary>
+        /// The account a line is booked to when none was picked: an inventory item's inventory account, or else the
+        /// vendor's purchase account (Purchase A/C).
+        /// </summary>
+        public int DefaultLineAccountId(int itemId, Vendor vendor)
+        {
+            var item = itemId > 0 ? _itemRepo.GetById(itemId) : null;
+            if (item?.InventoryAccountId != null && item.ItemCategoryId.HasValue
+                && _inventoryService.GetItemCategories().Any(c => c.Id == item.ItemCategoryId && c.ItemType == ItemTypes.Purchased))
+                return item.InventoryAccountId.Value;
+
+            return vendor?.PurchaseAccountId
+                ?? _accountRepo.Table.Where(a => a.AccountCode == "50200").Select(a => (int?)a.Id).FirstOrDefault()
+                ?? throw new InvalidOperationException("Pick an account for each line: this workspace has no purchase account.");
+        }
+
+        /// <summary>
+        /// Approves a bill: posts it (each line's account and the claimable tax debited, Accounts Payable credited with
+        /// the total), gives it the workspace's next bill number and records the vendor as it is now.
+        /// </summary>
+        public void ApproveBill(int billId)
+        {
+            var bill = GetPurchaseInvoiceById(billId)
+                ?? throw new InvalidOperationException($"Bill #{billId} was not found.");
+            if (bill.GeneralLedgerHeaderId.HasValue)
+                throw new InvalidOperationException("This bill is already approved.");
+            if (bill.IsVoid)
+                throw new InvalidOperationException("A void bill can't be approved.");
+            if (!bill.VendorId.HasValue)
+                throw new InvalidOperationException("Pick the vendor the bill is from.");
+            if (bill.PurchaseInvoiceLines.Count == 0)
+                throw new InvalidOperationException("Add at least one line to the bill.");
+            if (bill.Total() <= 0)
+                throw new InvalidOperationException("A bill's total must be more than zero.");
+
+            var vendor = GetVendorById(bill.VendorId.Value);
+            var payableAccountId = vendor.AccountsPayableAccountId
+                ?? _accountRepo.Table.Where(a => a.AccountCode == "20110").Select(a => (int?)a.Id).FirstOrDefault()
+                ?? throw new InvalidOperationException("This workspace has no Accounts Payable account.");
+            var taxes = _financialService.GetTaxes().ToList();
+
+            var debits = new Dictionary<int, decimal>();
+            void Debit(int accountId, decimal amount) => debits[accountId] = debits.GetValueOrDefault(accountId) + amount;
+
+            foreach (var line in bill.PurchaseInvoiceLines)
+            {
+                var accountId = line.AccountId ?? DefaultLineAccountId(line.ItemId, vendor);
+                line.AccountId = accountId;
+                Debit(accountId, line.Subtotal);
+
+                // Tax with no purchase tax account can't be claimed back, so it is part of what the line cost.
+                var taxAccountId = taxes.FirstOrDefault(t => t.Id == line.TaxId)?.PurchasingAccountId;
+                if (line.TaxAmount != 0)
+                    Debit(taxAccountId ?? accountId, line.TaxAmount);
+
+                var item = _inventoryService.GetItemById(line.ItemId);
+                if (item?.ItemCategory?.ItemType == ItemTypes.Purchased && accountId == item.InventoryAccountId)
+                {
+                    line.InventoryControlJournal = _inventoryService.CreateInventoryControlJournal(line.ItemId,
+                        item.PurchaseMeasurementId ?? item.SmallestMeasurementId ?? 1,
+                        DocumentTypes.PurchaseInvoice,
+                        line.Quantity,
+                        null,
+                        line.Subtotal,
+                        null);
+                }
+            }
+
+            var vendorName = vendor.Party?.Name ?? "vendor";
+            var description = string.IsNullOrWhiteSpace(bill.VendorInvoiceNo) ? $"Bill from {vendorName}" : $"Bill {bill.VendorInvoiceNo} from {vendorName}";
+            var glHeader = _financialService.CreateGeneralLedgerHeader(DocumentTypes.PurchaseInvoice, bill.Date, description);
+            foreach (var debit in debits.Where(d => d.Value != 0))
+            {
+                // A line that lowers the bill, such as a credit or a refund on it, is a credit to its account.
+                glHeader.GeneralLedgerLines.Add(_financialService.CreateGeneralLedgerLine(
+                    debit.Value > 0 ? DrOrCrSide.Dr : DrOrCrSide.Cr, debit.Key, Math.Abs(debit.Value)));
+            }
+            glHeader.GeneralLedgerLines.Add(_financialService.CreateGeneralLedgerLine(DrOrCrSide.Cr, payableAccountId, bill.Total()));
+            _financialService.ValidateGeneralLedgerEntry(glHeader);
+
+            bill.GeneralLedgerHeader = glHeader;
+            bill.No ??= GetNextNumber(SequenceNumberTypes.PurchaseInvoice).ToString();
+            bill.Status = PurchaseInvoiceStatus.Open;
+            bill.CaptureBillFromIfApproved(vendor.Party);
+            _purchaseInvoiceRepo.Update(bill);
+        }
+
+        /// <summary>
+        /// Voids a bill. An approved bill's posting is reversed, so it no longer counts as owed or as spent; a bill
+        /// with payments can't be voided.
+        /// </summary>
+        public void VoidBill(int billId)
+        {
+            var bill = GetPurchaseInvoiceById(billId)
+                ?? throw new InvalidOperationException($"Bill #{billId} was not found.");
+            if (bill.IsVoid)
+                return;
+            if (bill.AmountPaid() > 0)
+                throw new InvalidOperationException("This bill has payments, so it can't be voided.");
+
+            if (bill.GeneralLedgerHeaderId.HasValue && !bill.VoidGeneralLedgerHeaderId.HasValue)
+                bill.VoidGeneralLedgerHeader = _financialService.CreateReversingEntry(bill.GeneralLedgerHeaderId.Value, $"Void of bill {bill.No ?? bill.Id.ToString()}");
+            bill.Status = PurchaseInvoiceStatus.Void;
+            _purchaseInvoiceRepo.Update(bill);
+        }
+
+        /// <summary>
+        /// Records a payment on an approved bill from a cash or bank account: Accounts Payable debited, the account
+        /// credited. A payment can't be more than what is still owed on the bill.
+        /// </summary>
+        public VendorPayment PayBill(int billId, int accountId, decimal amount, DateTime date,
+            string paymentMethod = null, string referenceNo = null, string memo = null)
+        {
+            var bill = GetPurchaseInvoiceById(billId)
+                ?? throw new InvalidOperationException($"Bill #{billId} was not found.");
+            if (bill.IsVoid)
+                throw new InvalidOperationException("A void bill can't be paid.");
+            if (!bill.GeneralLedgerHeaderId.HasValue)
+                throw new InvalidOperationException("Approve the bill before paying it.");
+            if (amount <= 0)
+                throw new InvalidOperationException("A payment must be more than zero.");
+            var balance = bill.BalanceDue();
+            if (amount > balance)
+                throw new InvalidOperationException($"The payment is more than the {balance:0.00} still owed on this bill.");
+
+            var vendor = GetVendorById(bill.VendorId.Value);
+            // The payable the bill was credited to when it was approved, even if the vendor's has changed since.
+            var payableAccountId = _financialService.GetGeneralLedgerLines(bill.GeneralLedgerHeaderId.Value)
+                    .Where(l => l.DrCr == DrOrCrSide.Cr).OrderByDescending(l => l.Amount).Select(l => (int?)l.AccountId).FirstOrDefault()
+                ?? vendor.AccountsPayableAccountId
+                ?? _accountRepo.Table.Where(a => a.AccountCode == "20110").Select(a => (int?)a.Id).FirstOrDefault()
+                ?? throw new InvalidOperationException("This workspace has no Accounts Payable account.");
+
+            var glHeader = _financialService.CreateGeneralLedgerHeader(DocumentTypes.PurchaseInvoicePayment, date,
+                $"Payment to {vendor.Party?.Name ?? "vendor"}" + (string.IsNullOrWhiteSpace(bill.VendorInvoiceNo) ? "" : $" for bill {bill.VendorInvoiceNo}"));
+            glHeader.GeneralLedgerLines.Add(_financialService.CreateGeneralLedgerLine(DrOrCrSide.Dr, payableAccountId, amount));
+            glHeader.GeneralLedgerLines.Add(_financialService.CreateGeneralLedgerLine(DrOrCrSide.Cr, accountId, amount));
+            _financialService.ValidateGeneralLedgerEntry(glHeader);
+
+            var payment = new VendorPayment
+            {
+                VendorId = vendor.Id,
+                PurchaseInvoiceHeaderId = bill.Id,
                 Date = date,
                 Amount = amount,
+                AccountId = accountId,
+                PaymentMethod = paymentMethod,
+                ReferenceNo = referenceNo,
+                Memo = memo,
+                GeneralLedgerHeader = glHeader,
+                No = GetNextNumber(SequenceNumberTypes.VendorPayment).ToString(),
             };
-            var vendor = GetVendorById(vendorId);
-            var debit = _financialService.CreateGeneralLedgerLine(DrOrCrSide.Dr, vendor.AccountsPayableAccountId.Value, amount);
-            var credit = _financialService.CreateGeneralLedgerLine(DrOrCrSide.Cr, accountId, amount);
-            var glHeader = _financialService.CreateGeneralLedgerHeader(DocumentTypes.PurchaseInvoicePayment, date, string.Empty);
-            glHeader.GeneralLedgerLines.Add(debit);
-            glHeader.GeneralLedgerLines.Add(credit);
+            _vendorPaymentRepo.Insert(payment);
 
-            if (_financialService.GetAccount(accountId).Balance < amount)
-                throw new Exception("Not enough balance.");
-
-            if (_financialService.ValidateGeneralLedgerEntry(glHeader))
-            {
-                payment.GeneralLedgerHeader = glHeader;
-                payment.No = GetNextNumber(SequenceNumberTypes.VendorPayment).ToString();
-                _vendorPaymentRepo.Insert(payment);
-            }
-        }
-
-        public void SavePurchaseInvoice(PurchaseInvoiceHeader purchaseInvoice, PurchaseOrderHeader purchaseOrder)
-        {
-            // This method should be in a single transaction. when one fails, roll back all changes.
-            try
-            {
-                // is there any new order line item? save it first. otherwise, saving invoice will fail.
-                if (purchaseOrder != null && purchaseOrder.PurchaseOrderLines.Where(id => id.Id == 0).Count() > 0)
-                {
-                    if (purchaseOrder.Id == 0)
-                    {
-                        purchaseOrder.No = GetNextNumber(SequenceNumberTypes.SalesOrder).ToString();
-                        purchaseOrder.Status = (int)PurchaseOrderStatus.Draft;
-                        _purchaseOrderRepo.Insert(purchaseOrder);
-                    }
-                    else
-                    {
-                        _purchaseOrderRepo.Update(purchaseOrder);
-                    }
-                }
-
-                if (purchaseInvoice.Id == 0)
-                {
-                    purchaseInvoice.No = GetNextNumber(SequenceNumberTypes.SalesInvoice).ToString();
-                    _purchaseInvoiceRepo.Insert(purchaseInvoice);
-                }
-                else
-                {
-                    _purchaseInvoiceRepo.Update(purchaseInvoice);
-                }
-
-                UpdatePurchaseOrderStatus(purchaseInvoice, purchaseOrder);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex.Message);
-                throw; // throw again
-            }
-        }
-
-        private void UpdatePurchaseOrderStatus(PurchaseInvoiceHeader purchaseInvoice, PurchaseOrderHeader purchaseOrder)
-        {
-            // update the purchase order status
-            if (purchaseOrder == null)
-            {
-                // get the first order line
-                purchaseOrder =
-                    GetPurchaseOrderLineById(
-                        purchaseInvoice.PurchaseInvoiceLines.FirstOrDefault().PurchaseOrderLineId.GetValueOrDefault())
-                        .PurhcaseOrderHeader;
-            }
-            // if all orderline has no remaining qty to invoice, set the status to fullyinvoice
-            bool hasRemainingQtyToInvoice = false;
-            foreach (var line in purchaseOrder.PurchaseOrderLines)
-            {
-                if (line.GetRemainingQtyToInvoice() > 0)
-                {
-                    hasRemainingQtyToInvoice = true;
-                    break;
-                }
-            }
-            if (!hasRemainingQtyToInvoice)
-            {
-                purchaseOrder.Status = PurchaseOrderStatus.FullReceived;
-                _purchaseOrderRepo.Update(purchaseOrder);
-            }
-        }
-
-        public void PostPurchaseInvoice(int invoiceId)
-        {
-            var purchaseInvoice = GetPurchaseInvoiceById(invoiceId);
-
-            if (purchaseInvoice.GeneralLedgerHeaderId.HasValue)
-                throw new Exception("Invoice is already posted. Update is not allowed.");
-
-            var glHeader = _financialService.CreateGeneralLedgerHeader(DocumentTypes.PurchaseInvoice, purchaseInvoice.Date, purchaseInvoice.Description);
-
-            decimal totalTaxAmount = 0, totalAmount = 0, totalDiscount = 0;
-            var taxes = new List<KeyValuePair<int, decimal>>();
-
-            foreach (var lineItem in purchaseInvoice.PurchaseInvoiceLines)
-            {
-                var item = _inventoryService.GetItemById(lineItem.ItemId);
-
-                if (!item.GLAccountsValidated())
-                    throw new Exception("Item is not correctly setup for financial transaction. Please check if GL accounts are all set.");
-
-                var lineAmount = lineItem.Quantity * lineItem.Amount;
-
-                var lineDiscountAmount = (lineItem.Discount / 100) * lineAmount;
-                totalDiscount += lineDiscountAmount.GetValueOrDefault();
-
-                var totalLineAmount = lineAmount - lineDiscountAmount;
-
-                totalAmount += totalLineAmount.GetValueOrDefault();
-
-                var lineTaxes = _financialService.ComputeInputTax(purchaseInvoice.VendorId.GetValueOrDefault(), lineItem.ItemId, lineItem.Quantity, lineItem.Amount, lineItem.Discount.GetValueOrDefault());
-
-                foreach (var t in lineTaxes)
-                    taxes.Add(t);
-
-                var lineTaxAmount = lineTaxes != null && lineTaxes.Count > 0 ? lineTaxes.Sum(t => t.Value) : 0;
-                totalLineAmount = totalLineAmount - lineTaxAmount;
-
-                GeneralLedgerLine debitInventory = _financialService.CreateGeneralLedgerLine(DrOrCrSide.Dr, item.InventoryAccount.Id, totalLineAmount.GetValueOrDefault());
-                glHeader.GeneralLedgerLines.Add(debitInventory);
-
-                GeneralLedgerLine creditGRNClearingAccount = _financialService.CreateGeneralLedgerLine(DrOrCrSide.Cr, GetGeneralLedgerSetting().GoodsReceiptNoteClearingAccountId.Value, totalLineAmount.GetValueOrDefault());
-                glHeader.GeneralLedgerLines.Add(creditGRNClearingAccount);
-
-                lineItem.InventoryControlJournal = _inventoryService.CreateInventoryControlJournal(lineItem.ItemId,
-                    item.PurchaseMeasurementId.HasValue ? item.PurchaseMeasurementId.Value : 1,
-                    DocumentTypes.PurchaseReceipt,
-                    lineItem.Quantity,
-                    null,
-                    lineItem.Quantity * item.Cost,
-                    null);
-            }
-
-            if (taxes != null && taxes.Count > 0)
-            {
-                var groupedTaxes = from t in taxes
-                                   group t by t.Key into grouped
-                                   select new
-                                   {
-                                       Key = grouped.Key,
-                                       Value = grouped.Sum(t => t.Value)
-                                   };
-
-                totalTaxAmount = taxes.Sum(t => t.Value);
-
-                foreach (var tax in groupedTaxes)
-                {
-                    var tx = _financialService.GetTaxes().Where(t => t.Id == tax.Key).FirstOrDefault();
-                    var debitPurchaseTaxAccount = _financialService.CreateGeneralLedgerLine(DrOrCrSide.Dr, tx.PurchasingAccountId.Value, tax.Value);
-                    glHeader.GeneralLedgerLines.Add(debitPurchaseTaxAccount);
-                }
-            }
-
-            if (totalDiscount > 0)
-            {
-                var purchasesDiscountAccount = base.GetGeneralLedgerSetting().PurchaseDiscountAccount;
-                var creditPurchaseDiscountAccount = _financialService.CreateGeneralLedgerLine(DrOrCrSide.Dr, purchasesDiscountAccount.Id, Math.Round(totalDiscount, 2, MidpointRounding.ToEven));
-                glHeader.GeneralLedgerLines.Add(creditPurchaseDiscountAccount);
-            }
-
-            Vendor vendor = GetVendorById(purchaseInvoice.VendorId.Value);
-            var creditVendorAccount = _financialService.CreateGeneralLedgerLine(DrOrCrSide.Cr, vendor.AccountsPayableAccountId.Value, totalAmount);
-            glHeader.GeneralLedgerLines.Add(creditVendorAccount);
-
-            var debitGRNClearingAccount = _financialService.CreateGeneralLedgerLine(DrOrCrSide.Dr, GetGeneralLedgerSetting().GoodsReceiptNoteClearingAccountId.Value, totalAmount - totalTaxAmount);
-            glHeader.GeneralLedgerLines.Add(debitGRNClearingAccount);
-
-            if (_financialService.ValidateGeneralLedgerEntry(glHeader))
-            {
-                purchaseInvoice.GeneralLedgerHeader = glHeader;
-
-                purchaseInvoice.No = GetNextNumber(SequenceNumberTypes.PurchaseInvoice).ToString();
-                _purchaseInvoiceRepo.Update(purchaseInvoice);
-            }
+            bill.VendorPayments.Add(payment);
+            bill.Status = bill.BalanceDue() <= 0.005m ? PurchaseInvoiceStatus.Paid : PurchaseInvoiceStatus.Open;
+            _purchaseInvoiceRepo.Update(bill);
+            return payment;
         }
 
         public Contact GetContacyById(int id)

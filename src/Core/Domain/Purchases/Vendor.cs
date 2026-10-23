@@ -42,6 +42,8 @@ namespace Core.Domain.Purchases
         public string Province { get; set; }
         public string PostalCode { get; set; }
         public string Country { get; set; }
+        /// <summary>When the vendor was archived: hidden when picking a vendor, its bills untouched. Null while active.</summary>
+        public System.DateTime? ArchivedAt { get; set; }
 
         public virtual Party Party { get; set; }
         public virtual Account AccountsPayableAccount { get; set; }
@@ -56,20 +58,7 @@ namespace Core.Domain.Purchases
         public virtual ICollection<PurchaseInvoiceHeader> PurchaseInvoices { get; set; }
         public virtual ICollection<VendorPayment> VendorPayments { get; set; }
         public virtual IList<VendorContact> VendorContact { get; set; }
-        public decimal GetBalance()
-        {
-            decimal balance = 0;
-            decimal totalInvoiceAmount = 0;
-            decimal totalInvoicePayment = 0;
-
-            foreach (var invoice in PurchaseInvoices)
-                totalInvoiceAmount += invoice.PurchaseInvoiceLines.Sum(a => a.Amount * a.Quantity);
-
-            foreach (var payment in VendorPayments)
-                totalInvoicePayment += payment.Amount;
-
-            balance = totalInvoiceAmount - totalInvoicePayment;
-            return balance;
-        }
+        /// <summary>What the workspace still owes the vendor on its approved bills.</summary>
+        public decimal GetBalance() => PurchaseInvoices.Where(i => i.IsPayable).Sum(i => i.BalanceDue());
     }
 }

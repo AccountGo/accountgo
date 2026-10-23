@@ -225,6 +225,10 @@ namespace Api.Data
                 .Property(p => p.Discount)
                 .HasColumnType("decimal(18, 2)");
 
+            builder.Entity<PurchaseInvoiceLine>()
+                .Property(p => p.TaxAmount)
+                .HasColumnType("decimal(18, 2)");
+
             builder.Entity<JournalEntryLine>()
                 .Property(p => p.Amount)
                 .HasColumnType("decimal(18, 2)");
