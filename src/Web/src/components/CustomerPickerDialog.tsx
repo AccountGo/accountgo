@@ -8,7 +8,8 @@ export const CustomerPickerDialog: React.FC<{
   customers: CustomerOption[];
   selectedId?: number | null;
   onPick: (customer: CustomerOption) => void;
-  onAddNew: () => void;
+  /** Omitted when the user can't add clients. */
+  onAddNew?: () => void;
   onClose: () => void;
 }> = ({ customers, selectedId, onPick, onAddNew, onClose }) => (
   <PickerDialog
@@ -38,7 +39,7 @@ export const CustomerPickerDialog: React.FC<{
     selectedId={selectedId}
     selectedLabel="Selected"
     noun={['client', 'clients']}
-    footerAction={{ label: 'New client', icon: UserPlus, onClick: onAddNew }}
+    footerAction={onAddNew && { label: 'New client', icon: UserPlus, onClick: onAddNew }}
     onPick={onPick}
     onClose={onClose}
   />

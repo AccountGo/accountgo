@@ -134,6 +134,26 @@ export interface CustomerOption {
   email?: string;
   phone?: string;
   paymentTermId?: number;
+  /** Archived clients are left out when picking a client for an invoice. */
+  archived?: boolean;
+}
+
+/** A client as the Clients pages show and edit it (api/Sales/Client). */
+export interface Client {
+  id: number;
+  name: string;
+  email?: string | null;
+  phone?: string | null;
+  street?: string | null;
+  /** City and state or province, one field as the invoice prints it. */
+  city?: string | null;
+  postalCode?: string | null;
+  country?: string | null;
+  /** Null: new invoices use the workspace's default terms. */
+  paymentTermId?: number | null;
+  archived: boolean;
+  /** Nothing recorded for it yet, so it can be deleted rather than archived. */
+  canDelete?: boolean;
 }
 
 export interface PaymentTermOption {

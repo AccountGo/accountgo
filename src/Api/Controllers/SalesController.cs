@@ -3,6 +3,7 @@ using Api.Filters;
 using Core.Domain;
 using Dto.Sales;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Services.Administration;
 using Services.Financial;
 using Services.Inventory;
@@ -122,27 +123,15 @@ namespace Api.Controllers
             customer.PrimaryContact.Party.Website = customerDto.PrimaryContact?.Party?.Website ?? customerDto.Website;
 
             // Safe auto-assign default accounts for Invoicing continuity if omitted
-            var accounts = _financialService.GetAccounts().ToList();
-            var accountAR = accounts.FirstOrDefault(a => a.AccountCode == "10120") ?? accounts.FirstOrDefault(a => a.AccountClassId == 1);
-            var accountSales = accounts.FirstOrDefault(a => a.AccountCode == "40100") ?? accounts.FirstOrDefault(a => a.AccountClassId == 4);
-            var accountAdvances = accounts.FirstOrDefault(a => a.AccountCode == "20120") ?? accounts.FirstOrDefault(a => a.AccountClassId == 2);
-            var accountDiscount = accounts.FirstOrDefault(a => a.AccountCode == "40400");
-
-            customer.AccountsReceivableAccountId = (customerDto.AccountsReceivableId.HasValue && customerDto.AccountsReceivableId.Value > 0)
-                ? customerDto.AccountsReceivableId.Value
-                : (customer.AccountsReceivableAccountId ?? accountAR?.Id);
-
-            customer.SalesAccountId = (customerDto.SalesAccountId.HasValue && customerDto.SalesAccountId.Value > 0)
-                ? customerDto.SalesAccountId.Value
-                : (customer.SalesAccountId ?? accountSales?.Id);
-
-            customer.CustomerAdvancesAccountId = (customerDto.PrepaymentAccountId.HasValue && customerDto.PrepaymentAccountId.Value > 0)
-                ? customerDto.PrepaymentAccountId.Value
-                : (customer.CustomerAdvancesAccountId ?? accountAdvances?.Id);
-
-            customer.SalesDiscountAccountId = (customerDto.SalesDiscountAccountId.HasValue && customerDto.SalesDiscountAccountId.Value > 0)
-                ? customerDto.SalesDiscountAccountId.Value
-                : (customer.SalesDiscountAccountId ?? accountDiscount?.Id);
+            if (customerDto.AccountsReceivableId.HasValue && customerDto.AccountsReceivableId.Value > 0)
+                customer.AccountsReceivableAccountId = customerDto.AccountsReceivableId.Value;
+            if (customerDto.SalesAccountId.HasValue && customerDto.SalesAccountId.Value > 0)
+                customer.SalesAccountId = customerDto.SalesAccountId.Value;
+            if (customerDto.PrepaymentAccountId.HasValue && customerDto.PrepaymentAccountId.Value > 0)
+                customer.CustomerAdvancesAccountId = customerDto.PrepaymentAccountId.Value;
+            if (customerDto.SalesDiscountAccountId.HasValue && customerDto.SalesDiscountAccountId.Value > 0)
+                customer.SalesDiscountAccountId = customerDto.SalesDiscountAccountId.Value;
+            ApplyDefaultAccounts(customer);
 
             var defaultPaymentTerm = _adminService.GetPaymentTerms().FirstOrDefault();
             customer.PaymentTermId = (customerDto.PaymentTermId.HasValue && customerDto.PaymentTermId.Value > 0)
@@ -161,6 +150,16 @@ namespace Api.Controllers
                 _salesService.UpdateCustomer(customer);
 
             return Ok(new { id = customer.Id, no = customer.No, name = customer.Party.Name });
+        }
+
+        /// <summary>Fills in the receivable, sales, advances and discount accounts a customer has no account for yet.</summary>
+        private void ApplyDefaultAccounts(Core.Domain.Sales.Customer customer)
+        {
+            var accounts = _financialService.GetAccounts().ToList();
+            customer.AccountsReceivableAccountId ??= (accounts.FirstOrDefault(a => a.AccountCode == "10120") ?? accounts.FirstOrDefault(a => a.AccountClassId == 1))?.Id;
+            customer.SalesAccountId ??= (accounts.FirstOrDefault(a => a.AccountCode == "40100") ?? accounts.FirstOrDefault(a => a.AccountClassId == 4))?.Id;
+            customer.CustomerAdvancesAccountId ??= (accounts.FirstOrDefault(a => a.AccountCode == "20120") ?? accounts.FirstOrDefault(a => a.AccountClassId == 2))?.Id;
+            customer.SalesDiscountAccountId ??= accounts.FirstOrDefault(a => a.AccountCode == "40400")?.Id;
         }
 
         [HttpGet]
@@ -223,6 +222,184 @@ namespace Api.Controllers
             }
         }
 
+        // Clients: the customers the Sales pages list and edit. Saving a client changes only the details below; the
+        // invoices already issued to it keep the bill-to they were issued with.
+
+        [HttpGet]
+        [Route("Clients")] // api/Sales/Clients
+        [RequirePermission(Core.Domain.Security.SystemPermissions.SalesCustomersView)]
+        public IActionResult Clients()
+        {
+            var clients = _db.Customers.Include(c => c.Party)
+                .Where(c => c.Party != null)
+                .OrderBy(c => c.Party.Name)
+                .AsEnumerable()
+                .Select(c => ToClient(c))
+                .ToList();
+            return Ok(clients);
+        }
+
+        [HttpGet]
+        [Route("Client")] // api/Sales/Client?id=
+        [RequirePermission(Core.Domain.Security.SystemPermissions.SalesCustomersView)]
+        public IActionResult Client(int id)
+        {
+            var customer = _db.Customers.Include(c => c.Party).FirstOrDefault(c => c.Id == id && c.Party != null);
+            if (customer == null)
+                return NotFound(new { message = "Client not found." });
+
+            var client = ToClient(customer);
+            client.CanDelete = !ClientHasRecords(id);
+            return Ok(client);
+        }
+
+        [HttpPost]
+        [Route("SaveClient")]
+        [RequirePermission(Core.Domain.Security.SystemPermissions.SalesCustomersManage)]
+        public IActionResult SaveClient([FromBody] Dto.Sales.Client clientDto)
+        {
+            var name = Blank(clientDto.Name);
+            if (name == null)
+                return BadRequest(new { message = "Enter the client's name." });
+            if (name.Length > ClientNameMaxLength)
+                return BadRequest(new { message = $"A client name can be at most {ClientNameMaxLength} characters." });
+            var email = Blank(clientDto.Email);
+            if (email != null && ValidEmail(email) == null)
+                return BadRequest(new { message = "Enter a valid email address, or leave it blank." });
+            int? paymentTermId = clientDto.PaymentTermId > 0 ? clientDto.PaymentTermId : null;
+            if (paymentTermId.HasValue)
+                _tenantGuard.EnsureOwned<Core.Domain.PaymentTerm>(paymentTermId.Value, nameof(clientDto.PaymentTermId));
+
+            Core.Domain.Sales.Customer customer;
+            bool isNew = clientDto.Id == 0;
+            if (isNew)
+            {
+                var contactName = name.Split(' ', 2);
+                customer = new Core.Domain.Sales.Customer
+                {
+                    Party = new Core.Domain.Party { PartyType = Core.Domain.PartyTypes.Customer, IsActive = true },
+                    PrimaryContact = new Core.Domain.Contact
+                    {
+                        ContactType = Core.Domain.ContactTypes.Customer,
+                        FirstName = contactName[0],
+                        LastName = contactName.Length > 1 ? contactName[1] : "Contact",
+                        Party = new Core.Domain.Party { PartyType = Core.Domain.PartyTypes.Contact, Name = name, Email = email }
+                    }
+                };
+                ApplyDefaultAccounts(customer);
+            }
+            else
+            {
+                _tenantGuard.EnsureOwned<Core.Domain.Sales.Customer>(clientDto.Id, nameof(clientDto.Id));
+                customer = _db.Customers.Include(c => c.Party).Single(c => c.Id == clientDto.Id);
+            }
+
+            customer.Party.Name = name;
+            customer.Party.Email = email;
+            customer.Party.Phone = Blank(clientDto.Phone);
+            customer.Party.CompanyStreet = Blank(clientDto.Street);
+            customer.Party.CompanyProvince = Blank(clientDto.City);
+            customer.Party.CompanyPostalCode = Blank(clientDto.PostalCode);
+            customer.Party.CompanyCountry = Blank(clientDto.Country);
+            customer.PaymentTermId = paymentTermId;
+            customer.ModifiedBy = GetUserNameFromRequestHeader();
+
+            if (isNew)
+                _salesService.AddCustomer(customer);
+            else
+                _salesService.UpdateCustomer(customer);
+
+            var saved = ToClient(customer);
+            saved.CanDelete = isNew || !ClientHasRecords(customer.Id);
+            return Ok(saved);
+        }
+
+        [HttpPost]
+        [Route("ArchiveClient")]
+        [RequirePermission(Core.Domain.Security.SystemPermissions.SalesCustomersManage)]
+        public IActionResult ArchiveClient(int id, bool archived = true)
+        {
+            _tenantGuard.EnsureOwned<Core.Domain.Sales.Customer>(id, nameof(id));
+            var customer = _db.Customers.Include(c => c.Party).Single(c => c.Id == id);
+            customer.ArchivedAt = archived ? customer.ArchivedAt ?? DateTime.UtcNow : null;
+            customer.ModifiedBy = GetUserNameFromRequestHeader();
+            _salesService.UpdateCustomer(customer);
+
+            var client = ToClient(customer);
+            client.CanDelete = !ClientHasRecords(id);
+            return Ok(client);
+        }
+
+        /// <summary>
+        /// Deletes a client nothing has been recorded for, such as one added by mistake. A client with invoices, orders,
+        /// quotes or payments is archived instead, so its history stays intact.
+        /// </summary>
+        [HttpDelete]
+        [Route("DeleteClient")]
+        [RequirePermission(Core.Domain.Security.SystemPermissions.SalesCustomersManage)]
+        public IActionResult DeleteClient(int id)
+        {
+            _tenantGuard.EnsureOwned<Core.Domain.Sales.Customer>(id, nameof(id));
+            if (ClientHasRecords(id))
+                return BadRequest(new { message = "This client has invoices or payments, so it can't be deleted. Archive it instead." });
+
+            var customer = _db.Customers.Single(c => c.Id == id);
+            var contact = customer.PrimaryContactId.HasValue ? _db.Contacts.FirstOrDefault(c => c.Id == customer.PrimaryContactId) : null;
+            var parties = new[] { customer.PartyId, contact?.PartyId }
+                .Where(partyId => partyId.HasValue)
+                .Select(partyId => partyId!.Value)
+                .Distinct()
+                .ToList();
+
+            // Saved in foreign-key order: D1 replays the statements in order and enforces the keys.
+            using var tx = _db.Database.BeginTransaction();
+            _db.RemoveRange(_db.Set<Core.Domain.CustomerContact>().Where(cc => cc.CustomerId == id));
+            _db.Customers.Remove(customer);
+            _db.SaveChanges();
+            if (contact != null && !_db.Customers.Any(c => c.PrimaryContactId == contact.Id) && !_db.Vendors.Any(v => v.PrimaryContactId == contact.Id))
+            {
+                _db.RemoveRange(_db.Set<Core.Domain.CustomerContact>().Where(cc => cc.ContactId == contact.Id));
+                _db.Contacts.Remove(contact);
+                _db.SaveChanges();
+            }
+            // A party still used by another role (say, the same business as a vendor) stays.
+            _db.Set<Core.Domain.Party>().RemoveRange(_db.Set<Core.Domain.Party>().Where(p => parties.Contains(p.Id)
+                && !_db.Customers.Any(c => c.PartyId == p.Id)
+                && !_db.Vendors.Any(v => v.PartyId == p.Id)
+                && !_db.Contacts.Any(c => c.PartyId == p.Id)));
+            _db.SaveChanges();
+            tx.Commit();
+
+            return NoContent();
+        }
+
+        private const int ClientNameMaxLength = 200;
+
+        private static string? Blank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+        private static Dto.Sales.Client ToClient(Core.Domain.Sales.Customer customer) => new()
+        {
+            Id = customer.Id,
+            Name = customer.Party?.Name,
+            Email = customer.Party?.Email,
+            Phone = customer.Party?.Phone,
+            Street = customer.Party?.CompanyStreet,
+            City = customer.Party?.CompanyProvince,
+            PostalCode = customer.Party?.CompanyPostalCode,
+            Country = customer.Party?.CompanyCountry,
+            PaymentTermId = customer.PaymentTermId,
+            Archived = customer.ArchivedAt.HasValue,
+        };
+
+        /// <summary>Whether anything has been recorded for the client: invoices (drafts too), orders, quotes, deliveries or payments.</summary>
+        private bool ClientHasRecords(int customerId) =>
+            _db.SalesInvoiceHeaders.Any(i => i.CustomerId == customerId)
+            || _db.SalesOrderHeaders.Any(o => o.CustomerId == customerId)
+            || _db.SalesQuoteHeaders.Any(q => q.CustomerId == customerId)
+            || _db.SalesDeliveryHeaders.Any(d => d.CustomerId == customerId)
+            || _db.SalesReceiptHeaders.Any(r => r.CustomerId == customerId)
+            || _db.CustomerAllocations.Any(a => a.CustomerId == customerId);
+
         [HttpGet]
         [Route("Customers")] // api/Sales/Customers
         public IActionResult Customers()
@@ -245,6 +422,8 @@ namespace Api.Controllers
                     customerDto.Phone = customer.Party.Phone;
                     customerDto.Fax = customer.Party.Fax;
                     customerDto.Balance = customer.Balance;
+                    customerDto.PaymentTermId = customer.PaymentTermId;
+                    customerDto.Archived = customer.ArchivedAt.HasValue;
                     customerDto.PrepaymentAccountId = customer.CustomerAdvancesAccountId;
                     customerDto.Contact = customer.PrimaryContact != null ? $"{customer.PrimaryContact.FirstName} {customer.PrimaryContact.LastName}".Trim() : string.Empty;
                     customerDto.TaxGroup = customer.TaxGroup == null ? string.Empty : customer.TaxGroup.Description;

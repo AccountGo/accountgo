@@ -35,6 +35,8 @@ namespace Core.Domain.Sales
         public int? PromptPaymentDiscountAccountId { get; set; }
         public int? PaymentTermId { get; set; }
         public int? CustomerAdvancesAccountId { get; set; }
+        /// <summary>When it was archived: hidden when picking a client, its invoices untouched. Null while active.</summary>
+        public System.DateTime? ArchivedAt { get; set; }
 
         public virtual Party Party { get; set; }
         public virtual TaxGroup TaxGroup { get; set; }

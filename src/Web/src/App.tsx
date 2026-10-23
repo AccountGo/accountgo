@@ -11,6 +11,8 @@ import Invitation from './pages/Invitation';
 import { Invoices } from './pages/Invoices';
 import { InvoiceEdit } from './pages/InvoiceEdit';
 import { InvoiceDetail } from './pages/InvoiceDetail';
+import { Clients } from './pages/Clients';
+import { ClientDetail } from './pages/ClientDetail';
 import PlaceholderView from './pages/PlaceholderView';
 import ChartOfAccounts from './pages/ChartOfAccounts';
 import NotFound from './pages/NotFound';
@@ -129,6 +131,22 @@ const router = createBrowserRouter([
             element: (
               <RequiresModule module="sales">
                 <InvoiceEdit />
+              </RequiresModule>
+            ),
+          },
+          {
+            path: 'sales/clients',
+            element: (
+              <RequiresModule module="sales">
+                <Clients />
+              </RequiresModule>
+            ),
+          },
+          {
+            path: 'sales/clients/:clientId',
+            element: (
+              <RequiresModule module="sales">
+                <ClientDetail />
               </RequiresModule>
             ),
           },
