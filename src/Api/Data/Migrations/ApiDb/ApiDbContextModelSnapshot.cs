@@ -329,6 +329,12 @@ namespace Api.Data.Migrations.ApiDb
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("BusinessEmail")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("BusinessPhone")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<int>("CompanyId")
                         .HasColumnType("int");
 
@@ -338,6 +344,12 @@ namespace Api.Data.Migrations.ApiDb
                         .HasMaxLength(3)
                         .HasColumnType("nvarchar(3)")
                         .HasDefaultValue("PHP");
+
+                    b.Property<string>("LegalName")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("SalesInvoiceSettingsJson")
+                        .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");
 
@@ -2647,6 +2659,39 @@ namespace Api.Data.Migrations.ApiDb
                         .HasForeignKey("CompanyId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.OwnsOne("Core.Domain.PostalAddress", "BusinessAddress", b1 =>
+                        {
+                            b1.Property<int>("CompanySettingId")
+                                .HasColumnType("int");
+
+                            b1.Property<string>("City")
+                                .HasColumnType("nvarchar(max)");
+
+                            b1.Property<string>("CountryCode")
+                                .HasColumnType("nvarchar(max)");
+
+                            b1.Property<string>("Line1")
+                                .HasColumnType("nvarchar(max)");
+
+                            b1.Property<string>("Line2")
+                                .HasColumnType("nvarchar(max)");
+
+                            b1.Property<string>("PostalCode")
+                                .HasColumnType("nvarchar(max)");
+
+                            b1.Property<string>("Region")
+                                .HasColumnType("nvarchar(max)");
+
+                            b1.HasKey("CompanySettingId");
+
+                            b1.ToTable("CompanySetting");
+
+                            b1.WithOwner()
+                                .HasForeignKey("CompanySettingId");
+                        });
+
+                    b.Navigation("BusinessAddress");
 
                     b.Navigation("Company");
                 });

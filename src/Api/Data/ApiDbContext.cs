@@ -127,6 +127,11 @@ namespace Api.Data
             builder.Entity<Company>().HasIndex(c => c.Slug).IsUnique();
             builder.Entity<CompanySetting>().Property(s => s.Currency).IsRequired().HasMaxLength(3).HasDefaultValue("PHP");
 
+            // Owned type: BusinessAddress (PostalAddress) on CompanySetting
+            // EF Core will use default column naming: BusinessAddress_Line1, BusinessAddress_Line2, etc.
+            builder.Entity<CompanySetting>()
+                .OwnsOne(s => s.BusinessAddress);
+
             foreach (var entityType in builder.Model.GetEntityTypes())
             {
                 if (typeof(ICompanyOwned).IsAssignableFrom(entityType.ClrType))

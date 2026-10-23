@@ -145,8 +145,16 @@ namespace Api.Data.Schema
                 {
                     new[] { "Company", "DeletedAt", "TEXT NULL" },
                     new[] { "CompanySetting", "Currency", "TEXT NOT NULL DEFAULT 'PHP'" },
-                    new[] { "CompanyInvitation", "ResendWindowStart", "TEXT NULL" },
-                    new[] { "CompanyInvitation", "ResendCount", "INTEGER NOT NULL DEFAULT 0" },
+                    new[] { "CompanySetting", "LegalName", "TEXT NULL" },
+                    new[] { "CompanySetting", "BusinessEmail", "TEXT NULL" },
+                    new[] { "CompanySetting", "BusinessPhone", "TEXT NULL" },
+                    new[] { "CompanySetting", "SalesInvoiceSettingsJson", "TEXT NULL" },
+                    new[] { "CompanySetting", "BusinessAddress_Line1", "TEXT NULL" },
+                    new[] { "CompanySetting", "BusinessAddress_Line2", "TEXT NULL" },
+                    new[] { "CompanySetting", "BusinessAddress_City", "TEXT NULL" },
+                    new[] { "CompanySetting", "BusinessAddress_Region", "TEXT NULL" },
+                    new[] { "CompanySetting", "BusinessAddress_PostalCode", "TEXT NULL" },
+                    new[] { "CompanySetting", "BusinessAddress_CountryCode", "TEXT NULL" },
                     new[] { "SalesInvoiceHeader", "Notes", "TEXT NULL" },
                     new[] { "SalesInvoiceHeader", "PaymentInstructions", "TEXT NULL" }
                 };
@@ -160,6 +168,24 @@ namespace Api.Data.Schema
                             cmd.CommandText = $"ALTER TABLE \"{column[0]}\" ADD COLUMN \"{column[1]}\" {column[2]};";
                             cmd.ExecuteNonQuery();
                         }
+                    }
+                }
+                // Ensure CompanyInvitation lifecycle columns (added by D1 migration 0002)
+                if (TableExists(connection, "CompanyInvitation", tx))
+                {
+                    if (!ColumnExists(connection, "CompanyInvitation", "ResendCount", tx))
+                    {
+                        using var cmd = connection.CreateCommand();
+                        cmd.Transaction = tx;
+                        cmd.CommandText = "ALTER TABLE \"CompanyInvitation\" ADD COLUMN \"ResendCount\" INTEGER NOT NULL DEFAULT 0;";
+                        cmd.ExecuteNonQuery();
+                    }
+                    if (!ColumnExists(connection, "CompanyInvitation", "ResendWindowStart", tx))
+                    {
+                        using var cmd = connection.CreateCommand();
+                        cmd.Transaction = tx;
+                        cmd.CommandText = "ALTER TABLE \"CompanyInvitation\" ADD COLUMN \"ResendWindowStart\" TEXT NULL;";
+                        cmd.ExecuteNonQuery();
                     }
                 }
                 tx.Commit();

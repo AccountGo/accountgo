@@ -31,18 +31,12 @@ namespace Api.Service
         };
 
         private readonly Dto.Sales.SalesInvoice _invoice;
-        private readonly string _companyName;
-        private readonly string? _companyTaxId;
         private readonly string _currencyCode;
-        private readonly string _currencySymbol;
 
-        public InvoicePdfDocument(Dto.Sales.SalesInvoice invoice, string companyName, string? companyTaxId, string? currencyCode)
+        public InvoicePdfDocument(Dto.Sales.SalesInvoice invoice, string currencyCode = "USD")
         {
             _invoice = invoice;
-            _companyName = companyName;
-            _companyTaxId = companyTaxId;
-            _currencyCode = string.IsNullOrWhiteSpace(currencyCode) ? "USD" : currencyCode.ToUpperInvariant();
-            _currencySymbol = CurrencySymbols.TryGetValue(_currencyCode, out var symbol) ? symbol : "$";
+            _currencyCode = currencyCode;
         }
 
         public string InvoiceNumber => string.IsNullOrWhiteSpace(_invoice.No) ? _invoice.Id.ToString(CultureInfo.InvariantCulture) : _invoice.No!;
@@ -50,7 +44,7 @@ namespace Api.Service
         public DocumentMetadata GetMetadata() => new()
         {
             Title = $"Invoice {InvoiceNumber}",
-            Author = _companyName,
+            Author = _invoice.Seller.Name,
             Subject = $"Invoice {InvoiceNumber} for {_invoice.CustomerName}",
             Creator = "AccountGo",
         };
@@ -73,15 +67,27 @@ namespace Api.Service
             });
         }
 
+        private string _currencySymbol => CurrencySymbols.TryGetValue(_currencyCode, out var symbol) ? symbol : "$";
+
         private void ComposeHeader(IContainer container)
         {
             container.PaddingBottom(18).BorderBottom(1).BorderColor(Rule).PaddingBottom(18).Row(row =>
             {
                 row.RelativeItem().Column(column =>
                 {
-                    column.Item().Text(_companyName).FontSize(18).Bold();
-                    if (!string.IsNullOrWhiteSpace(_companyTaxId))
-                        column.Item().PaddingTop(2).Text($"Tax ID: {_companyTaxId}").FontSize(8.5f).FontColor(Muted);
+                    // Seller name: LegalName when selected and non-blank, otherwise "AccountGo"
+                    var sellerName = !string.IsNullOrWhiteSpace(_invoice.Seller.Name)
+                        ? _invoice.Seller.Name
+                        : "AccountGo";
+                    column.Item().Text(sellerName).FontSize(18).Bold();
+                    if (!string.IsNullOrWhiteSpace(_invoice.Seller.TaxId))
+                        column.Item().PaddingTop(2).Text($"Tax ID: {_invoice.Seller.TaxId}").FontSize(8.5f).FontColor(Muted);
+                    // Show seller email when available
+                    if (!string.IsNullOrWhiteSpace(_invoice.Seller.Email))
+                        column.Item().PaddingTop(2).Text($"Email: {_invoice.Seller.Email}").FontSize(8.5f).FontColor(Muted);
+                    // Show seller phone when available
+                    if (!string.IsNullOrWhiteSpace(_invoice.Seller.Phone))
+                        column.Item().PaddingTop(2).Text($"Phone: {_invoice.Seller.Phone}").FontSize(8.5f).FontColor(Muted);
                 });
 
                 row.ConstantItem(200).AlignRight().Column(column =>
@@ -121,11 +127,12 @@ namespace Api.Service
                 if (_invoice.Payments is { Count: > 0 })
                     column.Item().ShowEntire().Element(ComposePayments);
 
-                if (!string.IsNullOrWhiteSpace(_invoice.Notes))
-                    column.Item().ShowEntire().Element(c => ComposeNote(c, "NOTES", _invoice.Notes!));
+                // Honor Display flags for NOTES and PAYMENT INSTRUCTIONS
+                if (_invoice.Display.ShowNotes && !string.IsNullOrWhiteSpace(_invoice.Notes))
+                    column.Item().ShowEntire().Element(c => ComposeNote(c, "NOTES", _invoice.Notes));
 
-                if (!string.IsNullOrWhiteSpace(_invoice.PaymentInstructions))
-                    column.Item().ShowEntire().Element(c => ComposeNote(c, "PAYMENT INSTRUCTIONS", _invoice.PaymentInstructions!));
+                if (_invoice.Display.ShowPaymentInstructions && !string.IsNullOrWhiteSpace(_invoice.PaymentInstructions))
+                    column.Item().ShowEntire().Element(c => ComposeNote(c, "PAYMENT INSTRUCTIONS", _invoice.PaymentInstructions));
             });
         }
 
@@ -137,11 +144,23 @@ namespace Api.Service
                 {
                     column.Spacing(2);
                     column.Item().Text("BILLED TO").FontSize(7.5f).SemiBold().FontColor(Muted).LetterSpacing(0.08f);
-                    column.Item().PaddingTop(2).Text(_invoice.CustomerName ?? "Customer").FontSize(11).Bold();
-                    if (!string.IsNullOrWhiteSpace(_invoice.CustomerAddress))
-                        column.Item().Text(_invoice.CustomerAddress).FontColor(Secondary);
-                    if (!string.IsNullOrWhiteSpace(_invoice.CustomerEmail))
+
+                    // Show customer name
+                    var customerName = !string.IsNullOrWhiteSpace(_invoice.CustomerName) ? _invoice.CustomerName : "Unknown";
+                    column.Item().PaddingTop(2).Text(customerName).FontSize(11).Bold();
+
+                    // Show customer email when ShowCustomerEmail is true
+                    if (_invoice.Display.ShowCustomerEmail && !string.IsNullOrWhiteSpace(_invoice.CustomerEmail))
                         column.Item().Text(_invoice.CustomerEmail).FontColor(Secondary);
+
+                    // Show address
+                    var addressParts = new List<string>();
+                    if (!string.IsNullOrWhiteSpace(_invoice.CustomerAddress)) addressParts.Add(_invoice.CustomerAddress);
+                    var customerAddress = addressParts.Count > 0 ? string.Join(", ", addressParts) : null;
+                    if (!string.IsNullOrWhiteSpace(customerAddress))
+                        column.Item().Text(customerAddress).FontColor(Secondary);
+
+                    // Show phone
                     if (!string.IsNullOrWhiteSpace(_invoice.CustomerPhone))
                         column.Item().Text(_invoice.CustomerPhone).FontColor(Secondary);
                 });
@@ -261,39 +280,11 @@ namespace Api.Service
             });
         }
 
-        private void ComposePayments(IContainer container)
-        {
-            container.Column(column =>
-            {
-                column.Item().PaddingBottom(6).Text("PAYMENTS RECEIVED").FontSize(7.5f).SemiBold().FontColor(Muted).LetterSpacing(0.08f);
-                foreach (var payment in _invoice.Payments!)
-                {
-                    column.Item().BorderBottom(0.75f).BorderColor(Rule).PaddingVertical(5).Row(row =>
-                    {
-                        row.ConstantItem(90).Text(FormatDate(payment.Date)).FontColor(Secondary);
-                        row.RelativeItem().Text(string.Join(" · ", new[] { payment.PaymentMethod, payment.ReferenceNo ?? payment.ReceiptNo }
-                            .Where(s => !string.IsNullOrWhiteSpace(s)))).FontColor(Secondary);
-                        row.AutoItem().Text(Money(payment.Amount)).SemiBold();
-                    });
-                }
-            });
-        }
-
-        private void ComposeNote(IContainer container, string heading, string text)
-        {
-            container.Column(column =>
-            {
-                column.Item().BorderBottom(0.75f).BorderColor(Rule).PaddingBottom(6)
-                    .Text(heading).FontSize(7.5f).SemiBold().FontColor(Muted).LetterSpacing(0.08f);
-                column.Item().PaddingTop(6).Text(text).FontColor(Ink);
-            });
-        }
-
         private void ComposeFooter(IContainer container)
         {
             container.BorderTop(0.75f).BorderColor(Rule).PaddingTop(8).Row(row =>
             {
-                row.RelativeItem().Text($"{_companyName} · Invoice #{InvoiceNumber}").FontSize(8).FontColor(Muted);
+                row.RelativeItem().Text($"{_invoice.Seller.Name} · Invoice #{InvoiceNumber}").FontSize(8).FontColor(Muted);
                 row.AutoItem().Text(text =>
                 {
                     text.DefaultTextStyle(s => s.FontSize(8).FontColor(Muted));
@@ -311,6 +302,34 @@ namespace Api.Service
             return $"{sign}{_currencySymbol}{Math.Abs(amount).ToString("#,##0.00", CultureInfo.InvariantCulture)}";
         }
 
-        private static string FormatDate(DateTime date) => date.ToString("MMM d, yyyy", CultureInfo.InvariantCulture);
+        
+
+        private void ComposeNote(IContainer container, string heading, string text)
+        {
+            container.Column(column =>
+            {
+                column.Item().BorderBottom(0.75f).BorderColor(Rule).PaddingBottom(6)
+                    .Text(heading).FontSize(7.5f).SemiBold().FontColor(Muted).LetterSpacing(0.08f);
+                column.Item().PaddingTop(6).Text(text).FontColor(Ink);
+            });
+        }
+
+        private void ComposePayments(IContainer container)
+        {
+            container.Column(column =>
+            {
+                column.Item().PaddingBottom(6).Text("PAYMENTS RECEIVED").FontSize(7.5f).SemiBold().FontColor(Muted).LetterSpacing(0.08f);
+                foreach (var payment in _invoice.Payments!)
+                {
+                    column.Item().BorderBottom(0.75f).BorderColor(Rule).PaddingVertical(5).Row(row =>
+                    {
+                        row.ConstantItem(90).Text(FormatDate(payment.Date)).FontColor(Secondary);
+                        row.RelativeItem().Text(string.Join(" · ", new[] { payment.PaymentMethod, payment.ReferenceNo ?? payment.ReceiptNo }
+                            .Where(s => !string.IsNullOrWhiteSpace(s)))).FontColor(Secondary);
+                        row.AutoItem().Text(Money(payment.Amount)).SemiBold();
+                    });
+                }
+            });
+        }        private static string FormatDate(DateTime date) => date.ToString("MMM d, yyyy", CultureInfo.InvariantCulture);
     }
 }

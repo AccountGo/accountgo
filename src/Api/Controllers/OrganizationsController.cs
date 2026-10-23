@@ -1,6 +1,7 @@
 #nullable disable
 using System;
 using System.Linq;
+using System.Text.Json;
 using System.Security.Claims;
 using Api.Data;
 using Api.Filters;
@@ -154,6 +155,240 @@ namespace Api.Controllers
             company.DeletedAt = DateTime.UtcNow;
             _db.SaveChanges();
             return NoContent();
+        }
+
+        // ===== Sales Invoice Settings =====
+
+        public class UpdateSalesInvoiceSettingsRequest
+        {
+            public string? SellerName { get; set; }
+            public string? LegalName { get; set; }
+            public bool? ShowNotes { get; set; }
+            public bool? ShowPaymentInstructions { get; set; }
+            public bool? ShowCustomerEmail { get; set; }
+            public string? DefaultNotes { get; set; }
+            public string? DefaultPaymentInstructions { get; set; }
+        }
+
+        public class UpdateBusinessProfileRequest
+        {
+            public string? LegalName { get; set; }
+            public string? BusinessEmail { get; set; }
+            public string? BusinessPhone { get; set; }
+            public string? BusinessAddressLine1 { get; set; }
+            public string? BusinessAddressLine2 { get; set; }
+            public string? BusinessAddressCity { get; set; }
+            public string? BusinessAddressRegion { get; set; }
+            public string? BusinessAddressPostalCode { get; set; }
+            public string? BusinessAddressCountryCode { get; set; }
+        }
+
+        [TenantScoped]
+        [HttpGet("current/sales-invoice-settings")]
+        public IActionResult GetSalesInvoiceSettings()
+        {
+            var company = _db.Companies.Single(c => c.Id == _tenant.RequireCompanyId());
+            var setting = _db.CompanySettings.FirstOrDefault(s => s.CompanyId == company.Id);
+            var salesSettings = setting?.GetSalesInvoiceSettings();
+
+            return Ok(new
+            {
+                sellerName = salesSettings?.SellerName,
+                legalName = setting?.LegalName,
+                showNotes = salesSettings?.ShowNotes ?? true,
+                showPaymentInstructions = salesSettings?.ShowPaymentInstructions ?? true,
+                showCustomerEmail = salesSettings?.ShowCustomerEmail ?? true,
+                defaultNotes = salesSettings?.DefaultNotes,
+                defaultPaymentInstructions = salesSettings?.DefaultPaymentInstructions
+            });
+        }
+
+        [TenantScoped]
+        [RequireWorkspaceRole(CompanyMemberRole.Admin)]
+        [HttpPatch("current/sales-invoice-settings")]
+        public IActionResult UpdateSalesInvoiceSettings([FromBody] UpdateSalesInvoiceSettingsRequest request)
+        {
+            var company = _db.Companies.Single(c => c.Id == _tenant.RequireCompanyId());
+            var setting = _db.CompanySettings.FirstOrDefault(s => s.CompanyId == company.Id) ?? new CompanySetting { CompanyId = company.Id };
+
+            if (request.SellerName != null)
+                setting.SalesInvoiceSettingsJson = UpdateSalesInvoiceSettingsJson(setting.SalesInvoiceSettingsJson, "SellerName", request.SellerName);
+            if (request.LegalName != null)
+                setting.LegalName = request.LegalName;
+            if (request.ShowNotes.HasValue)
+                setting.SalesInvoiceSettingsJson = UpdateSalesInvoiceSettingsJson(setting.SalesInvoiceSettingsJson, "ShowNotes", request.ShowNotes.Value.ToString());
+            if (request.ShowPaymentInstructions.HasValue)
+                setting.SalesInvoiceSettingsJson = UpdateSalesInvoiceSettingsJson(setting.SalesInvoiceSettingsJson, "ShowPaymentInstructions", request.ShowPaymentInstructions.Value.ToString());
+            if (request.ShowCustomerEmail.HasValue)
+                setting.SalesInvoiceSettingsJson = UpdateSalesInvoiceSettingsJson(setting.SalesInvoiceSettingsJson, "ShowCustomerEmail", request.ShowCustomerEmail.Value.ToString());
+            if (request.DefaultNotes != null)
+                setting.SalesInvoiceSettingsJson = UpdateSalesInvoiceSettingsJson(setting.SalesInvoiceSettingsJson, "DefaultNotes", request.DefaultNotes);
+            if (request.DefaultPaymentInstructions != null)
+                setting.SalesInvoiceSettingsJson = UpdateSalesInvoiceSettingsJson(setting.SalesInvoiceSettingsJson, "DefaultPaymentInstructions", request.DefaultPaymentInstructions);
+
+            if (setting.Id == 0)
+                _db.CompanySettings.Add(setting);
+
+            _db.SaveChanges();
+
+            var updatedSettings = setting.GetSalesInvoiceSettings();
+
+            return Ok(new
+            {
+                sellerName = updatedSettings.SellerName,
+                legalName = setting.LegalName,
+                showNotes = updatedSettings.ShowNotes,
+                showPaymentInstructions = updatedSettings.ShowPaymentInstructions,
+                showCustomerEmail = updatedSettings.ShowCustomerEmail,
+                defaultNotes = updatedSettings.DefaultNotes,
+                defaultPaymentInstructions = updatedSettings.DefaultPaymentInstructions
+            });
+        }
+
+        // Helper to update a JSON setting value by key
+        private static string? UpdateSalesInvoiceSettingsJson(string? json, string key, string value)
+        {
+            // Normalize key to camelCase for JSON storage (matches JsonNamingPolicy.CamelCase)
+            var camelKey = key switch
+            {
+                "SellerName" => "sellerName",
+                "LegalName" => "legalName",
+                "ShowNotes" => "showNotes",
+                "ShowPaymentInstructions" => "showPaymentInstructions",
+                "ShowCustomerEmail" => "showCustomerEmail",
+                "DefaultNotes" => "defaultNotes",
+                "DefaultPaymentInstructions" => "defaultPaymentInstructions",
+                _ => key.ToLowerInvariant()
+            };
+
+            if (string.IsNullOrEmpty(json))
+            {
+                var dict = new Dictionary<string, string?> { [camelKey] = value };
+                return JsonSerializer.Serialize(dict);
+            }
+
+            try
+            {
+                var dict = JsonSerializer.Deserialize<Dictionary<string, string?>>(json);
+                if (dict == null) return json;
+                dict[camelKey] = value;
+                return JsonSerializer.Serialize(dict);
+            }
+            catch
+            {
+                var dict = new Dictionary<string, string?> { [camelKey] = value };
+                return JsonSerializer.Serialize(dict);
+            }
+        }
+
+        // ===== Business Profile =====
+
+        [TenantScoped]
+        [HttpGet("current/business-profile")]
+        public IActionResult GetBusinessProfile()
+        {
+            var company = _db.Companies.Single(c => c.Id == _tenant.RequireCompanyId());
+            var setting = _db.CompanySettings.FirstOrDefault(s => s.CompanyId == company.Id);
+
+            var businessAddress = setting?.BusinessAddress;
+            return Ok(new
+            {
+                legalName = setting?.LegalName,
+                businessEmail = setting?.BusinessEmail,
+                businessPhone = setting?.BusinessPhone,
+                businessAddressLine1 = businessAddress?.Line1,
+                businessAddressLine2 = businessAddress?.Line2,
+                businessAddressCity = businessAddress?.City,
+                businessAddressRegion = businessAddress?.Region,
+                businessAddressPostalCode = businessAddress?.PostalCode,
+                businessAddressCountryCode = businessAddress?.CountryCode
+            });
+        }
+
+        [TenantScoped]
+        [RequireWorkspaceRole(CompanyMemberRole.Admin)]
+        [HttpPatch("current/business-profile")]
+        public IActionResult UpdateBusinessProfile([FromBody] UpdateBusinessProfileRequest request)
+        {
+            var company = _db.Companies.Single(c => c.Id == _tenant.RequireCompanyId());
+            var setting = _db.CompanySettings.FirstOrDefault(s => s.CompanyId == company.Id) ?? new CompanySetting { CompanyId = company.Id };
+
+            if (request.LegalName != null)
+                setting.LegalName = request.LegalName;
+            if (request.BusinessEmail != null)
+                setting.BusinessEmail = request.BusinessEmail;
+            if (request.BusinessPhone != null)
+                setting.BusinessPhone = request.BusinessPhone;
+            if (request.BusinessAddressLine1 != null)
+                setting.BusinessAddress.Line1 = request.BusinessAddressLine1;
+            if (request.BusinessAddressLine2 != null)
+                setting.BusinessAddress.Line2 = request.BusinessAddressLine2;
+            if (request.BusinessAddressCity != null)
+                setting.BusinessAddress.City = request.BusinessAddressCity;
+            if (request.BusinessAddressRegion != null)
+                setting.BusinessAddress.Region = request.BusinessAddressRegion;
+            if (request.BusinessAddressPostalCode != null)
+                setting.BusinessAddress.PostalCode = request.BusinessAddressPostalCode;
+            if (request.BusinessAddressCountryCode != null)
+                setting.BusinessAddress.CountryCode = request.BusinessAddressCountryCode;
+
+            // Ensure PostalAddress is created/updated
+            if (setting.BusinessAddress == null && (request.BusinessAddressLine1 != null || request.BusinessAddressCity != null || request.BusinessAddressRegion != null || request.BusinessAddressPostalCode != null || request.BusinessAddressCountryCode != null))
+            {
+                setting.BusinessAddress = new PostalAddress();
+                setting.BusinessAddress.Line1 = request.BusinessAddressLine1;
+                setting.BusinessAddress.Line2 = request.BusinessAddressLine2;
+                setting.BusinessAddress.City = request.BusinessAddressCity;
+                setting.BusinessAddress.Region = request.BusinessAddressRegion;
+                setting.BusinessAddress.PostalCode = request.BusinessAddressPostalCode;
+                setting.BusinessAddress.CountryCode = request.BusinessAddressCountryCode;
+            }
+            else
+            {
+                if (request.BusinessAddressLine1 != null)
+                    setting.BusinessAddress.Line1 = request.BusinessAddressLine1;
+                if (request.BusinessAddressLine2 != null)
+                    setting.BusinessAddress.Line2 = request.BusinessAddressLine2;
+                if (request.BusinessAddressCity != null)
+                    setting.BusinessAddress.City = request.BusinessAddressCity;
+                if (request.BusinessAddressRegion != null)
+                    setting.BusinessAddress.Region = request.BusinessAddressRegion;
+                if (request.BusinessAddressPostalCode != null)
+                    setting.BusinessAddress.PostalCode = request.BusinessAddressPostalCode;
+                if (request.BusinessAddressCountryCode != null)
+                    setting.BusinessAddress.CountryCode = request.BusinessAddressCountryCode;
+            }
+            if (request.BusinessAddressLine2 != null)
+                setting.BusinessAddress.Line2 = request.BusinessAddressLine2;
+            if (request.BusinessAddressCity != null)
+                setting.BusinessAddress.City = request.BusinessAddressCity;
+            if (request.BusinessAddressRegion != null)
+                setting.BusinessAddress.Region = request.BusinessAddressRegion;
+            if (request.BusinessAddressPostalCode != null)
+                setting.BusinessAddress.PostalCode = request.BusinessAddressPostalCode;
+            if (request.BusinessAddressCountryCode != null)
+                setting.BusinessAddress.CountryCode = request.BusinessAddressCountryCode;
+
+            if (setting.Id == 0)
+                _db.CompanySettings.Add(setting);
+
+            _db.SaveChanges();
+
+            var updatedSetting = _db.CompanySettings.FirstOrDefault(s => s.CompanyId == company.Id);
+            var businessAddress2 = updatedSetting?.BusinessAddress;
+
+            return Ok(new
+            {
+                legalName = updatedSetting?.LegalName,
+                businessEmail = updatedSetting?.BusinessEmail,
+                businessPhone = updatedSetting?.BusinessPhone,
+                businessAddressLine1 = businessAddress2?.Line1,
+                businessAddressLine2 = businessAddress2?.Line2,
+                businessAddressCity = businessAddress2?.City,
+                businessAddressRegion = businessAddress2?.Region,
+                businessAddressPostalCode = businessAddress2?.PostalCode,
+                businessAddressCountryCode = businessAddress2?.CountryCode
+            });
         }
 
         private static object Summary(Company company, CompanyMemberRole role)
