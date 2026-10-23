@@ -30,12 +30,14 @@ import { currencySymbol as getCurrencySymbol } from '../lib/currency';
 import { SendInvoiceDialog } from '../components/SendInvoiceDialog';
 import { invoiceTitle } from '../lib/invoiceNumber';
 import { PageHeader, HeaderButton, HeaderMenu, StatusPill } from '../components/PageHeader';
+import { usePermissions } from '../components/Gating';
 
 const formatDateTime = (iso: string) =>
   new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
 
 export const InvoiceDetail: React.FC = () => {
   const { currentOrg } = useOutletContext<TenantContextType>();
+  const { hasPermission } = usePermissions();
   const { authFetch, user } = useAuth();
   const { orgSlug, invoiceId } = useParams<{ orgSlug: string; invoiceId: string }>();
 
@@ -389,11 +391,15 @@ export const InvoiceDetail: React.FC = () => {
   const showNotes = invoice.display?.showNotes ?? true;
   const showPaymentInstructions = invoice.display?.showPaymentInstructions ?? true;
   const lastEmail = invoice.emails?.[0] ?? null;
-  // Edit and void are only offered before any payment; drafts are issued before taking payments or emails.
-  const canEdit = invoice.status !== 'Void' && invoice.paidAmount === 0;
-  const canVoid = canEdit;
-  const canEmail = invoice.status !== 'Draft' && invoice.status !== 'Void' && !!invoice.recipientEmail;
-  const canRecordPayment = invoice.status !== 'Void' && invoice.status !== 'Draft' && invoice.balanceDue > 0;
+  // Edit and void are only offered before any payment; drafts are issued before taking payments or emails. Each
+  // action also needs its permission: drafting, issuing (which voiding undoes), or recording receipts.
+  const canCreate = hasPermission('sales.invoices.create');
+  const canIssue = hasPermission('sales.invoices.post');
+  const canEdit = canCreate && invoice.status !== 'Void' && invoice.paidAmount === 0;
+  const canVoid = canIssue && invoice.status !== 'Void' && invoice.paidAmount === 0;
+  const canEmail = canCreate && invoice.status !== 'Draft' && invoice.status !== 'Void' && !!invoice.recipientEmail;
+  const canRecordPayment =
+    hasPermission('sales.receipts.create') && invoice.status !== 'Void' && invoice.status !== 'Draft' && invoice.balanceDue > 0;
   const dueOn = invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString(undefined, { dateStyle: 'medium' }) : null;
   const balanceSummary =
     invoice.status === 'Void'
@@ -440,7 +446,7 @@ export const InvoiceDetail: React.FC = () => {
             <HeaderMenu
               items={[
                 // Opens a new invoice prefilled from this one; nothing is saved until the user saves it.
-                { label: 'Duplicate invoice', icon: Copy, to: `/org/${orgSlug}/sales/new?from=${invoice.id}` },
+                canCreate && { label: 'Duplicate invoice', icon: Copy, to: `/org/${orgSlug}/sales/new?from=${invoice.id}` },
                 canEdit && { label: 'Edit invoice', icon: FileEdit, to: `/org/${orgSlug}/sales/${invoice.id}/edit` },
                 { label: 'Print', icon: Printer, onSelect: () => window.print() },
                 canVoid && 'separator',
@@ -456,7 +462,7 @@ export const InvoiceDetail: React.FC = () => {
               ]}
             />
             {invoice.status === 'Draft' ? (
-              <HeaderButton label="Issue invoice" icon={Send} variant="primary" busy={isSubmittingIssue} onClick={handleIssueClick} />
+              canIssue && <HeaderButton label="Issue invoice" icon={Send} variant="primary" busy={isSubmittingIssue} onClick={handleIssueClick} />
             ) : (
               canRecordPayment && (
                 <HeaderButton

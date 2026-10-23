@@ -154,6 +154,14 @@ export interface Client {
   archived: boolean;
   /** Nothing recorded for it yet, so it can be deleted rather than archived. */
   canDelete?: boolean;
+  /** Unpaid on its issued invoices. */
+  outstanding: number;
+  /** The part of it past due. */
+  overdue: number;
+  /** Payments recorded against its invoices. */
+  paidToDate: number;
+  /** Date of its latest issued invoice. */
+  lastInvoiceDate?: string | null;
 }
 
 export interface PaymentTermOption {

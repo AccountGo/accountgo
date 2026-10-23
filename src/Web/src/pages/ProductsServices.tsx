@@ -192,7 +192,7 @@ export const ProductsServices: React.FC = () => {
               <thead>
                 <tr className="border-b border-[var(--border-subtle)] bg-[var(--bg-muted)]/50 text-[var(--text-secondary)] font-medium">
                   <th className="py-3 px-4">Name</th>
-                  <th className="py-3 px-4">Code</th>
+                  <th className="hidden sm:table-cell py-3 px-4">Code</th>
                   {showPrice && <th className="py-3 px-4 text-right">Selling price</th>}
                   {showCost && <th className="py-3 px-4 text-right">Purchase cost</th>}
                 </tr>
@@ -221,7 +221,7 @@ export const ProductsServices: React.FC = () => {
                         <span className="block truncate font-medium text-[var(--text-primary)]">{item.name}</span>
                       )}
                     </td>
-                    <td className="py-3.5 px-4 font-mono text-[var(--text-secondary)] whitespace-nowrap">{item.code || '—'}</td>
+                    <td className="hidden sm:table-cell py-3.5 px-4 font-mono text-[var(--text-secondary)] whitespace-nowrap">{item.code || '—'}</td>
                     {showPrice && (
                       <td className="py-3.5 px-4 text-right font-mono text-[var(--text-primary)] whitespace-nowrap">
                         {item.price != null ? formatCurrency(item.price) : '—'}

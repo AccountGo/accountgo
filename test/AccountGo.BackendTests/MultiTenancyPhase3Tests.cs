@@ -1444,6 +1444,12 @@ namespace AccountGo.BackendTests
                 return scope.ServiceProvider.GetRequiredService<ApiDbContext>().SecurityRoles.Single(r => r.Name == "Auditor / Viewer").Id;
         }
 
+        private int RoleId(string name)
+        {
+            using (var scope = _factory.Services.CreateScope())
+                return scope.ServiceProvider.GetRequiredService<ApiDbContext>().SecurityRoles.Single(r => r.Name == name).Id;
+        }
+
         private int MemberId(string userId)
         {
             using (var scope = _factory.Services.CreateScope())
@@ -1666,6 +1672,113 @@ namespace AccountGo.BackendTests
             var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
             using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
                 Assert.DoesNotContain(db.Parties, p => p.Name == "Added by mistake");
+        }
+
+        [Fact]
+        public async Task IssuingAndVoiding_NeedThePostPermission_DraftingDoesNot()
+        {
+            // A sales representative drafts invoices and records receipts, but doesn't issue or void them.
+            await JoinOther();
+            Assert.Equal(HttpStatusCode.NoContent, (await Send(HttpMethod.Patch, Current + "/members/" + MemberId(_otherId),
+                new { securityRoleIds = new[] { RoleId("Sales Representative") } })).StatusCode);
+
+            var invoice = await NewInvoice();
+            invoice.Status = "Open";
+            var issuedOnSave = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice, _otherToken);
+            Assert.Equal(HttpStatusCode.Forbidden, issuedOnSave.StatusCode);
+            Assert.Contains("sales.invoices.post", await issuedOnSave.Content.ReadAsStringAsync());
+
+            invoice.Status = "Draft";
+            var drafted = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice, _otherToken);
+            Assert.True(drafted.IsSuccessStatusCode, await drafted.Content.ReadAsStringAsync());
+            var draftId = (await Json(drafted)).GetProperty("id").GetInt32();
+
+            Assert.Equal(HttpStatusCode.Forbidden, (await Send(HttpMethod.Post, $"/api/Sales/IssueSalesInvoice?id={draftId}", token: _otherToken)).StatusCode);
+            Assert.Equal(HttpStatusCode.Forbidden, (await Send(HttpMethod.Post, "/api/Sales/PostSalesInvoice", await GetInvoice(draftId), _otherToken)).StatusCode);
+            Assert.Equal("Draft", (await GetInvoice(draftId)).Status);
+
+            // The owner issues it; the representative records a payment but can't void.
+            await Issue(draftId);
+            Assert.Equal(HttpStatusCode.Forbidden, (await Send(HttpMethod.Post, $"/api/Sales/VoidSalesInvoice?id={draftId}", token: _otherToken)).StatusCode);
+            var paid = await Send(HttpMethod.Post, "/api/Sales/RecordPayment",
+                new Dto.Sales.RecordInvoicePaymentDto { InvoiceId = draftId, Amount = 10, PaymentDate = DateTime.UtcNow }, _otherToken);
+            Assert.True(paid.IsSuccessStatusCode, await paid.Content.ReadAsStringAsync());
+            Assert.Equal("Partially Paid", (await GetInvoice(draftId)).Status);
+
+            // Without any sales role, a member can't record payments either.
+            Assert.Equal(HttpStatusCode.NoContent, (await Send(HttpMethod.Patch, Current + "/members/" + MemberId(_otherId),
+                new { securityRoleIds = new[] { ViewerRoleId() } })).StatusCode);
+            Assert.Equal(HttpStatusCode.Forbidden, (await Send(HttpMethod.Post, "/api/Sales/RecordPayment",
+                new Dto.Sales.RecordInvoicePaymentDto { InvoiceId = draftId, Amount = 10, PaymentDate = DateTime.UtcNow }, _otherToken)).StatusCode);
+        }
+
+        [Fact]
+        public async Task DeletingADraft_RemovesItsSalesOrder_SoTheClientCanBeDeleted()
+        {
+            var client = await SaveClient(new Dto.Sales.Client { Name = "Drafted once" });
+            var invoice = await NewInvoice();
+            invoice.CustomerId = client.Id;
+            invoice.Status = "Draft";
+            var saved = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
+            Assert.True(saved.IsSuccessStatusCode, await saved.Content.ReadAsStringAsync());
+            var draftId = (await Json(saved)).GetProperty("id").GetInt32();
+            Assert.False((await GetClient(client.Id)).CanDelete);
+
+            var deleted = await Send(HttpMethod.Delete, $"/api/Sales/DeleteSalesInvoice?id={draftId}");
+            Assert.Equal(HttpStatusCode.NoContent, deleted.StatusCode);
+            // D1 replays in order and enforces foreign keys: the invoice lines go before the order lines they point to,
+            // and those before their order.
+            var statements = AllSyncStatements(deleted);
+            var invoiceLine = statements.FindIndex(sql => sql.StartsWith("DELETE FROM \"SalesInvoiceLine\""));
+            var orderLine = statements.FindIndex(sql => sql.StartsWith("DELETE FROM \"SalesOrderLine\""));
+            var order = statements.FindIndex(sql => sql.StartsWith("DELETE FROM \"SalesOrderHeader\""));
+            Assert.True(invoiceLine >= 0 && orderLine > invoiceLine && order > orderLine, string.Join("\n", statements));
+
+            Assert.True((await GetClient(client.Id)).CanDelete);
+            Assert.Equal(HttpStatusCode.NoContent, (await Send(HttpMethod.Delete, $"/api/Sales/DeleteClient?id={client.Id}")).StatusCode);
+        }
+
+        [Fact]
+        public async Task ClientBalances_MatchTheInvoiceTotals()
+        {
+            var client = await SaveClient(new Dto.Sales.Client { Name = "Balances" });
+            async Task<int> Invoice(string status, decimal amount, DateTime date, DateTime? due = null)
+            {
+                var dto = await NewInvoice();
+                dto.CustomerId = client.Id;
+                dto.Status = status;
+                dto.InvoiceDate = date;
+                dto.DueDate = due;
+                dto.SalesInvoiceLines.Single().Amount = amount;
+                var response = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", dto);
+                Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
+                return (await Json(response)).GetProperty("id").GetInt32();
+            }
+
+            var today = DateTime.UtcNow.Date;
+            var open = await Invoice("Open", 100, today);
+            var overdue = await Invoice("Open", 40, today.AddDays(-40), today.AddDays(-10));
+            await Invoice("Draft", 999, today.AddDays(1));
+            var voided = await Invoice("Open", 500, today.AddDays(-5));
+            Assert.True((await Send(HttpMethod.Post, $"/api/Sales/VoidSalesInvoice?id={voided}")).IsSuccessStatusCode);
+            Assert.True((await Send(HttpMethod.Post, "/api/Sales/RecordPayment",
+                new Dto.Sales.RecordInvoicePaymentDto { InvoiceId = open, Amount = 30, PaymentDate = DateTime.UtcNow })).IsSuccessStatusCode);
+
+            var invoices = await (await Send(HttpMethod.Get, $"/api/Sales/SalesInvoices?customerId={client.Id}")).Content.ReadFromJsonAsync<List<Dto.Sales.SalesInvoice>>();
+            Assert.Equal(4, invoices.Count);
+            Assert.All(invoices, i => Assert.Equal(client.Id, i.CustomerId));
+            var expectedOutstanding = invoices.Where(i => i.Status is not ("Draft" or "Void")).Sum(i => i.BalanceDue);
+
+            var fromList = (await Clients()).Single(c => c.Id == client.Id);
+            var single = await GetClient(client.Id);
+            foreach (var c in new[] { fromList, single })
+            {
+                Assert.Equal(expectedOutstanding, c.Outstanding);
+                Assert.Equal(invoices.Single(i => i.Id == overdue).BalanceDue, c.Overdue);
+                Assert.Equal(30, c.PaidToDate);
+                Assert.Equal(today, c.LastInvoiceDate?.Date);
+            }
+            Assert.Equal(70 + 40, single.Outstanding);
         }
 
         private async Task<Dto.Inventory.CatalogItem> SaveItem(Dto.Inventory.CatalogItem item)

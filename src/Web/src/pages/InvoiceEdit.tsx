@@ -552,14 +552,17 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
               disabled={isSavingIssue}
               onClick={() => handleSaveInvoice(true)}
             />
-            <HeaderButton
-              label="Save & issue"
-              icon={Send}
-              variant="primary"
-              busy={isSavingIssue}
-              disabled={isSavingDraft}
-              onClick={() => handleSaveInvoice(false)}
-            />
+            {/* Issuing needs its own permission; without it, invoices are saved as drafts for someone else to issue. */}
+            {hasPermission('sales.invoices.post') && (
+              <HeaderButton
+                label="Save & issue"
+                icon={Send}
+                variant="primary"
+                busy={isSavingIssue}
+                disabled={isSavingDraft}
+                onClick={() => handleSaveInvoice(false)}
+              />
+            )}
           </>
         }
       />

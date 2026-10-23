@@ -19,8 +19,10 @@ namespace AccountGo.ServicesTests
             {
                 var config = new ConfigurationBuilder().AddInMemoryCollection().Build();
                 config["RESEND_API_KEY"] = "test-only-key";
-                var sender = new ResendEmailSender(client, config, NullLogger<ResendEmailSender>.Instance);
-                await Assert.ThrowsAsync<HttpRequestException>(() => sender.SendAsync("recipient@example.com", "Invitation", "<p>Invitation</p>"));
+                IEmailSender sender = new ResendEmailSender(client, config, NullLogger<ResendEmailSender>.Instance);
+                // The provider's reason is passed on, and the message is not retried to any other address.
+                var error = await Assert.ThrowsAsync<EmailDeliveryException>(() => sender.SendAsync("recipient@example.com", "Invitation", "<p>Invitation</p>"));
+                Assert.Contains("domain is not verified", error.Message);
                 Assert.Equal(1, handler.RequestCount);
             }
         }
