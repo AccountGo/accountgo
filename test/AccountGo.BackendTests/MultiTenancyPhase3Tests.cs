@@ -423,6 +423,8 @@ namespace AccountGo.BackendTests
             var invoice = await NewInvoice();
             invoice.Notes = "Note";
             invoice.PaymentInstructions = "Pay";
+            // A draft follows the current business details; issued invoices are covered below.
+            invoice.Status = "Draft";
             var saved = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
             Assert.True(saved.IsSuccessStatusCode, await saved.Content.ReadAsStringAsync());
             var invoiceId = (await saved.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt32();
@@ -471,6 +473,56 @@ namespace AccountGo.BackendTests
             var noLegalName = await GetInvoice(invoiceId);
             Assert.Equal("Phase Three", noLegalName.Seller.Name);
             Assert.Empty(noLegalName.Seller.AddressLines);
+        }
+
+        [Fact]
+        public async Task IssuedInvoice_KeepsTheSellerItWasIssuedWith()
+        {
+            var profile = (string address) => new { legalName = "Juan Dela Cruz", businessEmail = "juan@example.com", address = new { line1 = address, city = "Makati" } };
+            Assert.True((await Send(HttpMethod.Put, Current + "/business-profile", profile("1 Old St"))).IsSuccessStatusCode);
+            Assert.True((await Send(HttpMethod.Put, Current + "/sales-invoice-settings", new { sellerName = "LegalName" })).IsSuccessStatusCode);
+
+            var issuedDto = await NewInvoice();
+            var issuedResponse = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", issuedDto);
+            Assert.True(issuedResponse.IsSuccessStatusCode, await issuedResponse.Content.ReadAsStringAsync());
+            Assert.Contains(AllSyncStatements(issuedResponse), sql => sql.Contains("SellerJson") && sql.Contains("1 Old St"));
+            var issuedId = (await issuedResponse.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt32();
+
+            var draftDto = await NewInvoice();
+            draftDto.Status = "Draft";
+            var draftResponse = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", draftDto);
+            Assert.True(draftResponse.IsSuccessStatusCode, await draftResponse.Content.ReadAsStringAsync());
+            var draftId = (await draftResponse.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt32();
+
+            // The business moves and switches back to its trading name.
+            Assert.True((await Send(HttpMethod.Put, Current + "/business-profile", profile("9 New St"))).IsSuccessStatusCode);
+            Assert.True((await Send(HttpMethod.Put, Current + "/sales-invoice-settings", new { sellerName = "TradingName" })).IsSuccessStatusCode);
+
+            var issued = await GetInvoice(issuedId);
+            Assert.Equal("Juan Dela Cruz", issued.Seller.Name);
+            Assert.Equal(new[] { "1 Old St", "Makati" }, issued.Seller.AddressLines);
+            var draft = await GetInvoice(draftId);
+            Assert.Equal("Phase Three", draft.Seller.Name);
+            Assert.Equal(new[] { "9 New St", "Makati" }, draft.Seller.AddressLines);
+
+            // Editing an issued invoice keeps the seller it was sent with.
+            var edit = await GetInvoice(issuedId);
+            edit.ReferenceNo = "PO-1";
+            var edited = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", edit);
+            Assert.True(edited.IsSuccessStatusCode, await edited.Content.ReadAsStringAsync());
+            Assert.Equal(new[] { "1 Old St", "Makati" }, (await GetInvoice(issuedId)).Seller.AddressLines);
+
+            // A draft records the seller when it is issued, not when it was drafted.
+            Assert.True((await Send(HttpMethod.Post, $"/api/Sales/IssueSalesInvoice?id={draftId}")).IsSuccessStatusCode);
+            Assert.True((await Send(HttpMethod.Put, Current + "/business-profile", profile("5 Later St"))).IsSuccessStatusCode);
+            Assert.Equal(new[] { "9 New St", "Makati" }, (await GetInvoice(draftId)).Seller.AddressLines);
+
+            // Show/hide options stay workspace-wide, including on issued invoices.
+            Assert.True((await Send(HttpMethod.Put, Current + "/sales-invoice-settings", new { showSellerAddress = false })).IsSuccessStatusCode);
+            Assert.Empty((await GetInvoice(issuedId)).Seller.AddressLines);
+
+            var pdf = await Send(HttpMethod.Get, $"/api/Sales/SalesInvoicePdf?id={issuedId}");
+            Assert.Equal(HttpStatusCode.OK, pdf.StatusCode);
         }
 
         [Fact]

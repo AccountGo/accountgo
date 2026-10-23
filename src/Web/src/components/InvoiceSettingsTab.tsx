@@ -98,7 +98,7 @@ export const InvoiceSettingsTab: React.FC<InvoiceSettingsTabProps> = ({ tradingN
       {saved && (
         <div role="alert" aria-live="polite" className="p-4 rounded-2xl bg-emerald-500/10 text-emerald-400 text-xs font-semibold flex items-center gap-2.5 shadow-sm">
           <CheckCircle2 className="w-4 h-4 shrink-0" />
-          <span>Invoice settings saved. They apply to every invoice, including ones already issued.</span>
+          <span>Invoice settings saved. Show/hide options apply to every invoice; the name applies to drafts and new invoices.</span>
         </div>
       )}
       {error && (
@@ -150,6 +150,7 @@ export const InvoiceSettingsTab: React.FC<InvoiceSettingsTabProps> = ({ tradingN
               );
             })}
           </div>
+          <p className="text-[11px] text-[var(--text-muted)]">Issued invoices keep the name they were sent with.</p>
           {settings.sellerName === 'LegalName' && !legalName && (
             <p className="text-[11px] text-amber-400">No legal name is set yet, so invoices keep using the trading name.</p>
           )}
