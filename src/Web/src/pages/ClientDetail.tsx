@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useOutletContext, useParams } from 'react-router-dom';
 import { AlertTriangle, Archive, ArchiveRestore, FilePlus, Loader2, Pencil, Receipt, Trash2, X } from 'lucide-react';
 import { PageHeader, HeaderButton, HeaderMenu, StatusPill } from '../components/PageHeader';
@@ -9,7 +9,6 @@ import { usePermissions } from '../components/Gating';
 import { Client, Invoice, PaymentTermOption, TenantContextType } from '../types';
 import { useAuth } from '../auth/AuthContext';
 import { currencySymbol as getCurrencySymbol } from '../lib/currency';
-import { clientBalances } from '../lib/clientBalances';
 
 /** One client: its details, what it owes, and its invoices. */
 export const ClientDetail: React.FC = () => {
@@ -47,7 +46,7 @@ export const ClientDetail: React.FC = () => {
       try {
         const [clientRes, invoicesRes, termsRes] = await Promise.all([
           authFetch(`/api/Sales/Client?id=${encodeURIComponent(clientId ?? '')}`),
-          authFetch('/api/Sales/SalesInvoices'),
+          authFetch(`/api/Sales/SalesInvoices?customerId=${encodeURIComponent(clientId ?? '')}`),
           authFetch('/api/Common/PaymentTerms'),
         ]);
         if (cancelled) return;
@@ -70,18 +69,8 @@ export const ClientDetail: React.FC = () => {
     };
   }, [authFetch, clientId]);
 
-  const clientInvoices = useMemo(
-    () =>
-      (invoices ?? [])
-        .filter((inv) => inv.customerId === client?.id)
-        .sort((a, b) => (b.invoiceDate ?? '').localeCompare(a.invoiceDate ?? '') || b.id - a.id),
-    [invoices, client]
-  );
-  const balance = useMemo(() => (client ? clientBalances(clientInvoices).get(client.id) : undefined), [clientInvoices, client]);
-  const paidToDate = useMemo(
-    () => clientInvoices.filter((inv) => inv.status !== 'Void').reduce((sum, inv) => sum + (inv.paidAmount ?? 0), 0),
-    [clientInvoices]
-  );
+  // Newest first, as the API returns them.
+  const clientInvoices = invoices ?? [];
 
   const setArchived = async (archived: boolean) => {
     if (!client) return;
@@ -151,7 +140,7 @@ export const ClientDetail: React.FC = () => {
         eyebrow="Client"
         title={client.name}
         badges={client.archived && <StatusPill tone="slate" icon={Archive}>Archived</StatusPill>}
-        subtitle={invoices && balance?.outstanding ? `Owes ${formatCurrency(balance.outstanding)}` : undefined}
+        subtitle={client.outstanding ? `Owes ${formatCurrency(client.outstanding)}` : undefined}
         actions={
           <>
             {canManage && <HeaderButton label="Edit" icon={Pencil} compact onClick={() => setIsEditing(true)} />}
@@ -220,13 +209,13 @@ export const ClientDetail: React.FC = () => {
 
         <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-4 content-start">
           {[
-            { label: 'Outstanding', value: balance?.outstanding ?? 0, note: 'Unpaid on issued invoices', tone: 'text-[var(--text-primary)]' },
-            { label: 'Overdue', value: balance?.overdue ?? 0, note: 'Past the due date', tone: balance?.overdue ? 'text-rose-600 dark:text-rose-400' : 'text-[var(--text-primary)]' },
-            { label: 'Paid to date', value: paidToDate, note: 'Payments recorded', tone: 'text-emerald-600 dark:text-emerald-400' },
+            { label: 'Outstanding', value: client.outstanding, note: 'Unpaid on issued invoices', tone: 'text-[var(--text-primary)]' },
+            { label: 'Overdue', value: client.overdue, note: 'Past the due date', tone: client.overdue ? 'text-rose-600 dark:text-rose-400' : 'text-[var(--text-primary)]' },
+            { label: 'Paid to date', value: client.paidToDate, note: 'Payments recorded', tone: 'text-emerald-600 dark:text-emerald-400' },
           ].map((tile) => (
             <div key={tile.label} className="p-5 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] shadow-sm">
               <div className="text-xs font-semibold uppercase tracking-wider text-[var(--text-secondary)]">{tile.label}</div>
-              <div className={`mt-3 text-2xl font-bold ${tile.tone}`}>{invoices ? formatCurrency(tile.value) : '—'}</div>
+              <div className={`mt-3 text-2xl font-bold ${tile.tone}`}>{formatCurrency(tile.value)}</div>
               <p className="text-xs text-[var(--text-secondary)] mt-1">{tile.note}</p>
             </div>
           ))}
@@ -257,8 +246,8 @@ export const ClientDetail: React.FC = () => {
                     <th className="py-3 px-4">Status</th>
                     <th className="py-3 px-4">Invoice #</th>
                     <th className="py-3 px-4">Date</th>
-                    <th className="py-3 px-4">Due date</th>
-                    <th className="py-3 px-4 text-right">Total</th>
+                    <th className="hidden sm:table-cell py-3 px-4">Due date</th>
+                    <th className="hidden sm:table-cell py-3 px-4 text-right">Total</th>
                     <th className="py-3 px-4 text-right">Balance due</th>
                   </tr>
                 </thead>
@@ -276,8 +265,8 @@ export const ClientDetail: React.FC = () => {
                           </Link>
                         </td>
                         <td className="py-3 px-4 text-[var(--text-secondary)] whitespace-nowrap">{formatDate(inv.invoiceDate)}</td>
-                        <td className="py-3 px-4 text-[var(--text-secondary)] whitespace-nowrap">{formatDate(inv.dueDate)}</td>
-                        <td className="py-3 px-4 text-right text-[var(--text-primary)] whitespace-nowrap">
+                        <td className="hidden sm:table-cell py-3 px-4 text-[var(--text-secondary)] whitespace-nowrap">{formatDate(inv.dueDate)}</td>
+                        <td className="hidden sm:table-cell py-3 px-4 text-right text-[var(--text-primary)] whitespace-nowrap">
                           {formatCurrency(inv.totalAmountAfterTax ?? inv.amount)}
                         </td>
                         <td className="py-3 px-4 text-right font-medium text-[var(--text-primary)] whitespace-nowrap">

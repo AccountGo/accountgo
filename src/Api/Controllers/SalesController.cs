@@ -50,6 +50,7 @@ namespace Api.Controllers
 
         [HttpPost]
         [Route("SaveCustomer")]
+        [RequirePermission(Core.Domain.Security.SystemPermissions.SalesCustomersManage)]
         public IActionResult SaveCustomer([FromBody] Dto.Sales.Customer customerDto)
         {
             bool isNew = customerDto.Id == 0;
@@ -236,6 +237,7 @@ namespace Api.Controllers
                 .AsEnumerable()
                 .Select(c => ToClient(c))
                 .ToList();
+            AddBalances(clients, customerId: null);
             return Ok(clients);
         }
 
@@ -250,7 +252,33 @@ namespace Api.Controllers
 
             var client = ToClient(customer);
             client.CanDelete = !ClientHasRecords(id);
+            AddBalances(new[] { client }, customerId: id);
             return Ok(client);
+        }
+
+        /// <summary>
+        /// What each client owes, from the same invoice totals and statuses the invoice pages show. Drafts and voided
+        /// invoices are not owed.
+        /// </summary>
+        private void AddBalances(IEnumerable<Dto.Sales.Client> clients, int? customerId)
+        {
+            var byId = clients.ToDictionary(c => c.Id);
+            var terms = _adminService.GetPaymentTerms().ToList();
+            foreach (var invoice in _salesService.GetSalesInvoices().Where(i => customerId == null || i.CustomerId == customerId))
+            {
+                if (!byId.TryGetValue(invoice.CustomerId, out var client))
+                    continue;
+                var summary = Summarize(invoice, invoice.ResolveDueDate(terms.FirstOrDefault(t => t.Id == invoice.PaymentTermId)));
+                if (summary.Status is "Draft" or "Void")
+                    continue;
+
+                client.Outstanding += summary.BalanceDue;
+                if (summary.Status == "Overdue")
+                    client.Overdue += summary.BalanceDue;
+                client.PaidToDate += summary.Allocated;
+                if (client.LastInvoiceDate == null || invoice.Date > client.LastInvoiceDate)
+                    client.LastInvoiceDate = invoice.Date;
+            }
         }
 
         [HttpPost]
@@ -311,6 +339,8 @@ namespace Api.Controllers
 
             var saved = ToClient(customer);
             saved.CanDelete = isNew || !ClientHasRecords(customer.Id);
+            if (!isNew)
+                AddBalances(new[] { saved }, customer.Id);
             return Ok(saved);
         }
 
@@ -327,6 +357,7 @@ namespace Api.Controllers
 
             var client = ToClient(customer);
             client.CanDelete = !ClientHasRecords(id);
+            AddBalances(new[] { client }, id);
             return Ok(client);
         }
 
@@ -714,6 +745,65 @@ namespace Api.Controllers
                 invoice.CaptureBillToIfIssued(_db.Customers.Where(c => c.Id == invoice.CustomerId).Select(c => c.Party).FirstOrDefault());
         }
 
+        /// <summary>An invoice's totals, balance and status, the same in every view of it.</summary>
+        private sealed record InvoiceSummary(decimal TotalTax, decimal GrandTotal, decimal Allocated, decimal BalanceDue,
+            string Status, Core.Domain.SalesInvoiceStatus StatusId);
+
+        /// <summary>Quantity times price, less the line's discount; not rounded.</summary>
+        private static decimal LineSubtotal(Core.Domain.Sales.SalesInvoiceLine line)
+        {
+            var gross = line.Quantity * line.Amount;
+            return gross - (line.Discount > 0 ? gross * (line.Discount / 100m) : 0);
+        }
+
+        /// <summary>The line's tax, rounded to cents; zero when it can't be worked out.</summary>
+        private decimal LineTax(Core.Domain.Sales.SalesInvoiceHeader invoice, Core.Domain.Sales.SalesInvoiceLine line)
+        {
+            if (_taxService == null || line.ItemId <= 0 || invoice.Customer?.Party == null)
+                return 0;
+            try
+            {
+                var taxes = _taxService.GetIntersectionTaxes(line.ItemId, invoice.CustomerId, invoice.Customer.Party.PartyType);
+                return Math.Round(_taxService.GetSalesLineTaxAmount(line.Quantity, line.Amount, line.Discount, taxes), 2, MidpointRounding.AwayFromZero);
+            }
+            catch
+            {
+                return 0; // Ignore tax calc errors
+            }
+        }
+
+        /// <param name="lineTaxes">Each line's tax when the caller has already worked it out; otherwise it is worked out here.</param>
+        private InvoiceSummary Summarize(Core.Domain.Sales.SalesInvoiceHeader invoice, DateTime dueDate, IEnumerable<decimal>? lineTaxes = null)
+        {
+            var subtotal = invoice.SalesInvoiceLines.Sum(LineSubtotal);
+            var tax = Math.Round((lineTaxes ?? invoice.SalesInvoiceLines.Select(l => LineTax(invoice, l))).Sum(), 2, MidpointRounding.AwayFromZero);
+            var grandTotal = Math.Round(subtotal + tax + invoice.ShippingHandlingCharge, 2, MidpointRounding.AwayFromZero);
+            var allocated = Math.Round(invoice.CustomerAllocations?.Sum(a => a.Amount) ?? 0, 2, MidpointRounding.AwayFromZero);
+            var balanceDue = Math.Round(Math.Max(0, grandTotal - allocated), 2, MidpointRounding.AwayFromZero);
+
+            // Status follows the lifecycle: void, paid, partly paid, draft, overdue, then open.
+            var (status, statusId) =
+                invoice.Status == Core.Domain.SalesInvoiceStatus.Void ? ("Void", Core.Domain.SalesInvoiceStatus.Void)
+                : invoice.Status == Core.Domain.SalesInvoiceStatus.Closed || (balanceDue <= 0.005m && allocated > 0) ? ("Paid", Core.Domain.SalesInvoiceStatus.Closed)
+                : allocated > 0 && balanceDue > 0.005m ? ("Partially Paid", Core.Domain.SalesInvoiceStatus.Open)
+                : invoice.Status == Core.Domain.SalesInvoiceStatus.Draft && allocated == 0 ? ("Draft", Core.Domain.SalesInvoiceStatus.Draft)
+                : dueDate.Date < DateTime.UtcNow.Date && balanceDue > 0.005m ? ("Overdue", Core.Domain.SalesInvoiceStatus.Overdue)
+                : ("Open", Core.Domain.SalesInvoiceStatus.Open);
+
+            return new InvoiceSummary(tax, grandTotal, allocated, balanceDue, status, statusId);
+        }
+
+        private static void ApplySummary(Dto.Sales.SalesInvoice dto, InvoiceSummary summary)
+        {
+            dto.TotalTax = summary.TotalTax;
+            dto.TotalAmountAfterTax = summary.GrandTotal;
+            dto.TotalAllocatedAmount = summary.Allocated;
+            dto.PaidAmount = summary.Allocated;
+            dto.BalanceDue = summary.BalanceDue;
+            dto.Status = summary.Status;
+            dto.StatusId = (int)summary.StatusId;
+        }
+
         /// <summary>Shapes an invoice with its computed totals and status; null when it is not in this workspace.</summary>
         private Dto.Sales.SalesInvoice? BuildSalesInvoiceDto(int id)
         {
@@ -795,10 +885,9 @@ namespace Api.Controllers
                 .Select(ToEmailItem)
                 .ToList();
 
-            decimal totalTax = 0;
             foreach (var line in salesInvoice.SalesInvoiceLines)
             {
-                var lineDto = new Dto.Sales.SalesInvoiceLine
+                salesInvoiceDto.SalesInvoiceLines.Add(new Dto.Sales.SalesInvoiceLine
                 {
                     Id = line.Id,
                     Amount = line.Amount,
@@ -807,67 +896,12 @@ namespace Api.Controllers
                     ItemId = line.ItemId,
                     MeasurementId = line.MeasurementId,
                     ItemDescription = line.DisplayDescription,
-                    MeasurementDescription = line.Measurement?.Description ?? "EA"
-                };
-
-                decimal lineAmount = Math.Round((line.Quantity * line.Amount) - ((line.Discount / 100m) * (line.Quantity * line.Amount)), 2, MidpointRounding.AwayFromZero);
-                lineDto.LineTotal = lineAmount;
-
-                if (_taxService != null && line.ItemId > 0 && salesInvoice.Customer?.Party != null)
-                {
-                    try
-                    {
-                        var taxes = _taxService.GetIntersectionTaxes(line.ItemId, salesInvoice.CustomerId, salesInvoice.Customer.Party.PartyType);
-                        var taxAmount = Math.Round(_taxService.GetSalesLineTaxAmount(line.Quantity, line.Amount, line.Discount, taxes), 2, MidpointRounding.AwayFromZero);
-                        lineDto.TaxAmount = taxAmount;
-                        totalTax += taxAmount;
-                    }
-                    catch { /* Ignore tax calc errors */ }
-                }
-
-                salesInvoiceDto.SalesInvoiceLines.Add(lineDto);
+                    MeasurementDescription = line.Measurement?.Description ?? "EA",
+                    LineTotal = Math.Round(LineSubtotal(line), 2, MidpointRounding.AwayFromZero),
+                    TaxAmount = LineTax(salesInvoice, line)
+                });
             }
-
-            salesInvoiceDto.TotalTax = Math.Round(totalTax, 2, MidpointRounding.AwayFromZero);
-            decimal grandTotal = Math.Round(salesInvoiceDto.Amount + totalTax + salesInvoice.ShippingHandlingCharge, 2, MidpointRounding.AwayFromZero);
-            salesInvoiceDto.TotalAmountAfterTax = grandTotal;
-
-            decimal allocated = salesInvoice.CustomerAllocations != null ? Math.Round(salesInvoice.CustomerAllocations.Sum(a => a.Amount), 2, MidpointRounding.AwayFromZero) : 0;
-            salesInvoiceDto.TotalAllocatedAmount = allocated;
-            salesInvoiceDto.PaidAmount = allocated;
-            salesInvoiceDto.BalanceDue = Math.Round(Math.Max(0, grandTotal - allocated), 2, MidpointRounding.AwayFromZero);
-
-            // Compute calculated status following lifecycle rules:
-            if (salesInvoice.Status == Core.Domain.SalesInvoiceStatus.Void)
-            {
-                salesInvoiceDto.Status = "Void";
-                salesInvoiceDto.StatusId = (int)Core.Domain.SalesInvoiceStatus.Void;
-            }
-            else if (salesInvoice.Status == Core.Domain.SalesInvoiceStatus.Closed || (salesInvoiceDto.BalanceDue <= 0.005m && allocated > 0))
-            {
-                salesInvoiceDto.Status = "Paid";
-                salesInvoiceDto.StatusId = (int)Core.Domain.SalesInvoiceStatus.Closed;
-            }
-            else if (allocated > 0 && salesInvoiceDto.BalanceDue > 0.005m)
-            {
-                salesInvoiceDto.Status = "Partially Paid";
-                salesInvoiceDto.StatusId = (int)Core.Domain.SalesInvoiceStatus.Open;
-            }
-            else if (salesInvoice.Status == Core.Domain.SalesInvoiceStatus.Draft && allocated == 0)
-            {
-                salesInvoiceDto.Status = "Draft";
-                salesInvoiceDto.StatusId = (int)Core.Domain.SalesInvoiceStatus.Draft;
-            }
-            else if (dueDate.Date < DateTime.UtcNow.Date && salesInvoiceDto.BalanceDue > 0.005m)
-            {
-                salesInvoiceDto.Status = "Overdue";
-                salesInvoiceDto.StatusId = (int)Core.Domain.SalesInvoiceStatus.Overdue;
-            }
-            else
-            {
-                salesInvoiceDto.Status = "Open";
-                salesInvoiceDto.StatusId = (int)Core.Domain.SalesInvoiceStatus.Open;
-            }
+            ApplySummary(salesInvoiceDto, Summarize(salesInvoice, dueDate, salesInvoiceDto.SalesInvoiceLines.Select(l => l.TaxAmount ?? 0)));
 
             // is this journal entry ready for posting?
             if (!salesInvoiceDto.Posted && salesInvoiceDto.SalesInvoiceLines.Count >= 1)
@@ -880,6 +914,7 @@ namespace Api.Controllers
 
         [HttpPost]
         [Route("addsalesorder")]
+        [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesCreate)]
         public IActionResult AddSalesOrder([FromBody] Dto.Sales.SalesOrder salesorderDto)
         {
             try
@@ -1009,10 +1044,12 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("SalesInvoices")] // api/Sales/SalesInvoices
-        public IActionResult SalesInvoices()
+        [Route("SalesInvoices")] // api/Sales/SalesInvoices, or ?customerId= for one client's
+        public IActionResult SalesInvoices(int? customerId = null)
         {
-            var salesInvoices = _salesService.GetSalesInvoices().OrderByDescending(i => i.Date).ThenByDescending(i => i.Id);
+            var salesInvoices = _salesService.GetSalesInvoices()
+                .Where(i => customerId == null || i.CustomerId == customerId)
+                .OrderByDescending(i => i.Date).ThenByDescending(i => i.Id);
             IList<Dto.Sales.SalesInvoice> salesInvoicesDto = new List<Dto.Sales.SalesInvoice>();
             var paymentTerms = _adminService.GetPaymentTerms();
 
@@ -1020,10 +1057,6 @@ namespace Api.Controllers
             {
                 var term = paymentTerms.FirstOrDefault(t => t.Id == salesInvoice.PaymentTermId);
                 var dueDate = salesInvoice.ResolveDueDate(term);
-
-                decimal allocatedAmount = salesInvoice.CustomerAllocations != null 
-                    ? salesInvoice.CustomerAllocations.Sum(i => i.Amount) 
-                    : 0;
 
                 var salesInvoiceDto = new Dto.Sales.SalesInvoice()
                 {
@@ -1036,16 +1069,12 @@ namespace Api.Controllers
                     DueDate = dueDate,
                     PaymentTermId = salesInvoice.PaymentTermId,
                     ReferenceNo = salesInvoice.ReferenceNo,
-                    TotalAllocatedAmount = allocatedAmount,
-                    PaidAmount = allocatedAmount,
                     Posted = salesInvoice.GeneralLedgerHeaderId != null
                 };
 
-                decimal totalTax = 0;
-                // Populate line items - Amount will be calculated automatically by the DTO
                 foreach (var line in salesInvoice.SalesInvoiceLines)
                 {
-                    var lineDto = new Dto.Sales.SalesInvoiceLine()
+                    salesInvoiceDto.SalesInvoiceLines!.Add(new Dto.Sales.SalesInvoiceLine()
                     {
                         Id = line.Id,
                         ItemId = line.ItemId,
@@ -1054,63 +1083,12 @@ namespace Api.Controllers
                         Amount = line.Amount,
                         Discount = line.Discount,
                         ItemDescription = line.DisplayDescription,
-                        MeasurementDescription = line.Measurement?.Description ?? "EA"
-                    };
-
-                    decimal lineAmount = Math.Round((line.Quantity * line.Amount) - ((line.Discount / 100m) * (line.Quantity * line.Amount)), 2, MidpointRounding.AwayFromZero);
-                    lineDto.LineTotal = lineAmount;
-
-                    if (_taxService != null && line.ItemId > 0 && salesInvoice.Customer?.Party != null)
-                    {
-                        try
-                        {
-                            var taxes = _taxService.GetIntersectionTaxes(line.ItemId, salesInvoice.CustomerId, salesInvoice.Customer.Party.PartyType);
-                            var taxAmount = Math.Round(_taxService.GetSalesLineTaxAmount(line.Quantity, line.Amount, line.Discount, taxes), 2, MidpointRounding.AwayFromZero);
-                            lineDto.TaxAmount = taxAmount;
-                            totalTax += taxAmount;
-                        }
-                        catch { /* Ignore tax calc errors on listing */ }
-                    }
-
-                    salesInvoiceDto.SalesInvoiceLines!.Add(lineDto);
+                        MeasurementDescription = line.Measurement?.Description ?? "EA",
+                        LineTotal = Math.Round(LineSubtotal(line), 2, MidpointRounding.AwayFromZero),
+                        TaxAmount = LineTax(salesInvoice, line)
+                    });
                 }
-
-                salesInvoiceDto.TotalTax = Math.Round(totalTax, 2, MidpointRounding.AwayFromZero);
-                decimal grandTotal = Math.Round(salesInvoiceDto.Amount + totalTax + salesInvoice.ShippingHandlingCharge, 2, MidpointRounding.AwayFromZero);
-                salesInvoiceDto.TotalAmountAfterTax = grandTotal;
-                salesInvoiceDto.BalanceDue = Math.Round(Math.Max(0, grandTotal - allocatedAmount), 2, MidpointRounding.AwayFromZero);
-
-                // Compute calculated status following lifecycle rules:
-                if (salesInvoice.Status == Core.Domain.SalesInvoiceStatus.Void)
-                {
-                    salesInvoiceDto.Status = "Void";
-                    salesInvoiceDto.StatusId = (int)Core.Domain.SalesInvoiceStatus.Void;
-                }
-                else if (salesInvoice.Status == Core.Domain.SalesInvoiceStatus.Closed || (salesInvoiceDto.BalanceDue <= 0.005m && allocatedAmount > 0))
-                {
-                    salesInvoiceDto.Status = "Paid";
-                    salesInvoiceDto.StatusId = (int)Core.Domain.SalesInvoiceStatus.Closed;
-                }
-                else if (allocatedAmount > 0 && salesInvoiceDto.BalanceDue > 0.005m)
-                {
-                    salesInvoiceDto.Status = "Partially Paid";
-                    salesInvoiceDto.StatusId = (int)Core.Domain.SalesInvoiceStatus.Open;
-                }
-                else if (salesInvoice.Status == Core.Domain.SalesInvoiceStatus.Draft && allocatedAmount == 0)
-                {
-                    salesInvoiceDto.Status = "Draft";
-                    salesInvoiceDto.StatusId = (int)Core.Domain.SalesInvoiceStatus.Draft;
-                }
-                else if (dueDate.Date < DateTime.UtcNow.Date && salesInvoiceDto.BalanceDue > 0.005m)
-                {
-                    salesInvoiceDto.Status = "Overdue";
-                    salesInvoiceDto.StatusId = (int)Core.Domain.SalesInvoiceStatus.Overdue;
-                }
-                else
-                {
-                    salesInvoiceDto.Status = "Open";
-                    salesInvoiceDto.StatusId = (int)Core.Domain.SalesInvoiceStatus.Open;
-                }
+                ApplySummary(salesInvoiceDto, Summarize(salesInvoice, dueDate, salesInvoiceDto.SalesInvoiceLines!.Select(l => l.TaxAmount ?? 0)));
 
                 salesInvoicesDto.Add(salesInvoiceDto);
             }
@@ -1224,6 +1202,7 @@ namespace Api.Controllers
 
         [HttpPost]
         [Route("SaveSalesOrder")]
+        [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesCreate)]
         public IActionResult SaveSalesOrder([FromBody] Dto.Sales.SalesOrder salesOrderDto)
         {
             string[]? errors = null;
@@ -1348,6 +1327,7 @@ namespace Api.Controllers
 
         [HttpPost]
         [Route("PostSalesInvoice")]
+        [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesPost)]
         public IActionResult PostSalesInvoice([FromBody] Dto.Sales.SalesInvoice salesInvoiceDto)
         {
             string[]? errors = null;
@@ -1404,6 +1384,11 @@ namespace Api.Controllers
                 }
 
                 bool isNew = salesInvoiceDto.Id == 0;
+                // Saving as anything but a draft issues the invoice, which takes the same permission as issuing it.
+                bool issuing = isNew ? salesInvoiceDto.Status != "Draft" : !string.IsNullOrWhiteSpace(salesInvoiceDto.Status) && salesInvoiceDto.Status != "Draft";
+                if (issuing && !_tenantContext.Permissions.Contains(Core.Domain.Security.SystemPermissions.SalesInvoicesPost))
+                    return RequirePermissionAttribute.Denied(Core.Domain.Security.SystemPermissions.SalesInvoicesPost);
+
                 Core.Domain.Sales.SalesInvoiceHeader? salesInvoice = null;
                 Core.Domain.Sales.SalesOrderHeader? salesOrder = null;
 
@@ -1793,16 +1778,48 @@ namespace Api.Controllers
         [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesCreate)]
         public async Task<IActionResult> DeleteSalesInvoice(int id)
         {
+            // Saving an invoice records a sales order behind it; a deleted draft takes the order with it, so the
+            // client isn't left with a record that keeps it from being deleted.
+            using var tx = _db.Database.BeginTransaction();
+            var orderIds = _db.SalesInvoiceLines
+                .Where(l => l.SalesInvoiceHeaderId == id && l.SalesOrderLineId != null)
+                .Select(l => l.SalesOrderLine.SalesOrderHeaderId)
+                .Distinct()
+                .ToList();
+
             var result = await _salesService.DeleteSalesInvoiceAsync(id);
 
             if (result.IsFailure)
                 return BadRequest(result.Error.Message);
 
+            DeleteUninvoicedOrders(orderIds);
+            tx.Commit();
             return NoContent();
+        }
+
+        /// <summary>
+        /// Deletes the orders none of whose lines are on an invoice any more. Lines are saved before their order, the
+        /// order D1 replays them in, since it enforces foreign keys.
+        /// </summary>
+        private void DeleteUninvoicedOrders(List<int> orderIds)
+        {
+            var orders = _db.SalesOrderHeaders
+                .Where(o => orderIds.Contains(o.Id)
+                    && !_db.SalesInvoiceLines.Any(l => l.SalesOrderLine != null && l.SalesOrderLine.SalesOrderHeaderId == o.Id))
+                .ToList();
+            if (orders.Count == 0)
+                return;
+
+            var ids = orders.Select(o => o.Id).ToList();
+            _db.SalesOrderLines.RemoveRange(_db.SalesOrderLines.Where(l => ids.Contains(l.SalesOrderHeaderId)));
+            _db.SaveChanges();
+            _db.SalesOrderHeaders.RemoveRange(orders);
+            _db.SaveChanges();
         }
 
         [HttpPost]
         [Route("RecordPayment")]
+        [RequirePermission(Core.Domain.Security.SystemPermissions.SalesReceiptsCreate)]
         public IActionResult RecordPayment([FromBody] RecordInvoicePaymentDto paymentDto)
         {
             try
@@ -1928,6 +1945,7 @@ namespace Api.Controllers
 
         [HttpPost]
         [Route("VoidSalesInvoice")]
+        [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesPost)]
         public IActionResult VoidSalesInvoice(int id)
         {
             try
@@ -1956,6 +1974,7 @@ namespace Api.Controllers
 
         [HttpPost]
         [Route("IssueSalesInvoice")]
+        [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesPost)]
         public IActionResult IssueSalesInvoice(int id, string? expectedNo = null)
         {
             try
@@ -2007,6 +2026,7 @@ namespace Api.Controllers
 
         [HttpPost]
         [Route("SaveQuotation")]
+        [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesCreate)]
         public IActionResult SaveQuotation([FromBody] Dto.Sales.SalesQuotation quotationDto)
         {
             string[]? errors = null;
@@ -2122,6 +2142,7 @@ namespace Api.Controllers
 
         [HttpPost]
         [Route("SaveReceipt")]
+        [RequirePermission(Core.Domain.Security.SystemPermissions.SalesReceiptsCreate)]
         public IActionResult SaveReceipt([FromBody] dynamic receiptDto)
         {
             string[]? errors = null;
@@ -2176,6 +2197,7 @@ namespace Api.Controllers
 
         [HttpPost]
         [Route("UpdateReceipt")]
+        [RequirePermission(Core.Domain.Security.SystemPermissions.SalesReceiptsCreate)]
         public IActionResult UpdateReceipt([FromBody] dynamic receiptDto)
         {
             string[]? errors = null;
@@ -2237,6 +2259,7 @@ namespace Api.Controllers
 
         [HttpPost]
         [Route("SaveAllocation")]
+        [RequirePermission(Core.Domain.Security.SystemPermissions.SalesReceiptsCreate)]
         public IActionResult SaveAllocation([FromBody] dynamic allocationDto)
         {
             string[]? errors = null;
@@ -2388,6 +2411,7 @@ namespace Api.Controllers
 
         [HttpPost]
         [Route("BookQuotation")]
+        [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesCreate)]
         public IActionResult BookQuotation(int id)
         {
             try

@@ -16,6 +16,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { PageHeader, HeaderButton } from '../components/PageHeader';
+import { usePermissions } from '../components/Gating';
 import { InvoiceStatusBadge } from '../components/InvoiceStatusBadge';
 import { SalesTabs } from '../components/SalesTabs';
 import { TenantContextType, Invoice, InvoicingKPIs, RecordPaymentPayload } from '../types';
@@ -27,6 +28,10 @@ export const Invoices: React.FC = () => {
   const { currentOrg } = useOutletContext<TenantContextType>();
   const { authFetch } = useAuth();
   const navigate = useNavigate();
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('sales.invoices.create');
+  const canRecordPayments = hasPermission('sales.receipts.create');
+  const canVoidInvoices = hasPermission('sales.invoices.post');
 
   // State
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -280,7 +285,7 @@ export const Invoices: React.FC = () => {
               busy={isRefreshing}
               onClick={() => fetchInvoices(true)}
             />
-            <HeaderButton label="New invoice" icon={Plus} variant="primary" to={`/org/${currentOrg.slug}/sales/new`} />
+            {canCreate && <HeaderButton label="New invoice" icon={Plus} variant="primary" to={`/org/${currentOrg.slug}/sales/new`} />}
           </>
         }
       />
@@ -546,7 +551,7 @@ export const Invoices: React.FC = () => {
                           </Link>
 
                           {/* Record Payment (issued with a balance due; drafts are issued first) */}
-                          {inv.balanceDue > 0 && inv.status !== 'Void' && inv.status !== 'Draft' && (
+                          {canRecordPayments && inv.balanceDue > 0 && inv.status !== 'Void' && inv.status !== 'Draft' && (
                             <button
                               onClick={() => handleOpenPayment(inv)}
                               className="p-1.5 rounded-lg text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 transition-colors"
@@ -558,7 +563,7 @@ export const Invoices: React.FC = () => {
                           )}
 
                           {/* Void Action */}
-                          {inv.status !== 'Void' && inv.status !== 'Paid' && (
+                          {canVoidInvoices && inv.status !== 'Void' && inv.status !== 'Paid' && (
                             <button
                               onClick={() => handleOpenVoid(inv)}
                               className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 transition-colors"

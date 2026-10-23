@@ -5,10 +5,9 @@ import { PageHeader, HeaderButton } from '../components/PageHeader';
 import { SalesTabs } from '../components/SalesTabs';
 import { ClientFormDialog } from '../components/ClientFormDialog';
 import { usePermissions } from '../components/Gating';
-import { Client, Invoice, PaymentTermOption, TenantContextType } from '../types';
+import { Client, PaymentTermOption, TenantContextType } from '../types';
 import { useAuth } from '../auth/AuthContext';
 import { currencySymbol as getCurrencySymbol } from '../lib/currency';
-import { clientBalances } from '../lib/clientBalances';
 
 /** The clients a workspace invoices, with what each one owes. */
 export const Clients: React.FC = () => {
@@ -19,7 +18,6 @@ export const Clients: React.FC = () => {
   const canManage = hasPermission('sales.customers.manage');
 
   const [clients, setClients] = useState<Client[]>([]);
-  const [invoices, setInvoices] = useState<Invoice[] | null>(null);
   const [paymentTerms, setPaymentTerms] = useState<PaymentTermOption[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -37,15 +35,9 @@ export const Clients: React.FC = () => {
     setIsLoading(true);
     setError(null);
     try {
-      const [clientsRes, invoicesRes, termsRes] = await Promise.all([
-        authFetch('/api/Sales/Clients'),
-        authFetch('/api/Sales/SalesInvoices'),
-        authFetch('/api/Common/PaymentTerms'),
-      ]);
+      const [clientsRes, termsRes] = await Promise.all([authFetch('/api/Sales/Clients'), authFetch('/api/Common/PaymentTerms')]);
       if (!clientsRes.ok) throw new Error(`Clients could not be loaded (${clientsRes.status}).`);
       setClients(await clientsRes.json());
-      // Balances are extra: without access to invoices the list still shows the clients.
-      setInvoices(invoicesRes.ok ? await invoicesRes.json() : null);
       if (termsRes.ok) setPaymentTerms(await termsRes.json());
     } catch (err: any) {
       setError(err.message || 'Clients could not be loaded.');
@@ -58,7 +50,6 @@ export const Clients: React.FC = () => {
     load();
   }, [load]);
 
-  const balances = useMemo(() => clientBalances(invoices ?? []), [invoices]);
   const counts = useMemo(
     () => ({ active: clients.filter((c) => !c.archived).length, archived: clients.filter((c) => c.archived).length }),
     [clients]
@@ -172,15 +163,14 @@ export const Clients: React.FC = () => {
               <thead>
                 <tr className="border-b border-[var(--border-subtle)] bg-[var(--bg-muted)]/50 text-[var(--text-secondary)] font-medium">
                   <th className="py-3 px-4">Client</th>
-                  <th className="py-3 px-4">Phone</th>
-                  <th className="py-3 px-4">Last invoice</th>
+                  <th className="hidden sm:table-cell py-3 px-4">Phone</th>
+                  <th className="hidden sm:table-cell py-3 px-4">Last invoice</th>
                   <th className="py-3 px-4 text-right">Outstanding</th>
                   <th className="py-3 px-4 text-right">Overdue</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--border-subtle)]">
                 {shown.map((c) => {
-                  const balance = balances.get(c.id);
                   const to = `/org/${currentOrg.slug}/sales/clients/${c.id}`;
                   return (
                     <tr key={c.id} className="hover:bg-[var(--bg-muted)]/30 transition-colors cursor-pointer" onClick={() => navigate(to)}>
@@ -195,13 +185,13 @@ export const Clients: React.FC = () => {
                           </div>
                         )}
                       </td>
-                      <td className="py-3.5 px-4 text-[var(--text-secondary)] whitespace-nowrap">{c.phone || '—'}</td>
-                      <td className="py-3.5 px-4 text-[var(--text-secondary)] whitespace-nowrap">{formatDate(balance?.lastInvoiceDate)}</td>
+                      <td className="hidden sm:table-cell py-3.5 px-4 text-[var(--text-secondary)] whitespace-nowrap">{c.phone || '—'}</td>
+                      <td className="hidden sm:table-cell py-3.5 px-4 text-[var(--text-secondary)] whitespace-nowrap">{formatDate(c.lastInvoiceDate ?? undefined)}</td>
                       <td className="py-3.5 px-4 text-right font-medium text-[var(--text-primary)] whitespace-nowrap">
-                        {invoices ? formatCurrency(balance?.outstanding ?? 0) : '—'}
+                        {formatCurrency(c.outstanding)}
                       </td>
-                      <td className={`py-3.5 px-4 text-right whitespace-nowrap ${balance?.overdue ? 'font-semibold text-rose-600 dark:text-rose-400' : 'text-[var(--text-secondary)]'}`}>
-                        {invoices ? formatCurrency(balance?.overdue ?? 0) : '—'}
+                      <td className={`py-3.5 px-4 text-right whitespace-nowrap ${c.overdue ? 'font-semibold text-rose-600 dark:text-rose-400' : 'text-[var(--text-secondary)]'}`}>
+                        {formatCurrency(c.overdue)}
                       </td>
                     </tr>
                   );

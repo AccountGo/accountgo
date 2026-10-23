@@ -91,24 +91,30 @@ namespace Api.Filters
             var tenantContext = context.HttpContext.RequestServices.GetRequiredService<ITenantContext>();
             if (!tenantContext.IsResolved || !tenantContext.Permissions.Contains(_permission))
             {
-                var problem = new ProblemDetails
-                {
-                    Type = "https://accountgo.ph/errors/permission-denied",
-                    Title = "Access Denied",
-                    Detail = $"You do not have the required permission '{_permission}' to perform this action.",
-                    Status = StatusCodes.Status403Forbidden
-                };
-                problem.Extensions["code"] = "PERMISSION_DENIED";
-                problem.Extensions["requiredPermission"] = _permission;
-
-                context.Result = new ObjectResult(problem)
-                {
-                    StatusCode = StatusCodes.Status403Forbidden
-                };
+                context.Result = Denied(_permission);
                 return;
             }
 
             await next();
+        }
+
+        /// <summary>The 403 for a missing permission; also for actions that need a permission only in some cases.</summary>
+        public static ObjectResult Denied(string permission)
+        {
+            var problem = new ProblemDetails
+            {
+                Type = "https://accountgo.ph/errors/permission-denied",
+                Title = "Access Denied",
+                Detail = $"You do not have the required permission '{permission}' to perform this action.",
+                Status = StatusCodes.Status403Forbidden
+            };
+            problem.Extensions["code"] = "PERMISSION_DENIED";
+            problem.Extensions["requiredPermission"] = permission;
+
+            return new ObjectResult(problem)
+            {
+                StatusCode = StatusCodes.Status403Forbidden
+            };
         }
     }
 
