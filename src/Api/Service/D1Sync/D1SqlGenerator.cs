@@ -28,7 +28,7 @@ namespace Api.Service.D1Sync
                     case EntityState.Deleted:
                         try
                         {
-                            pending.AddDelete(GenerateSql(entry, EntityState.Deleted));
+                            pending.AddDelete(GenerateSql(entry, EntityState.Deleted), IsSharedRowDependent(entry));
                         }
                         catch (Exception ex)
                         {
@@ -37,7 +37,7 @@ namespace Api.Service.D1Sync
                         break;
                     case EntityState.Added:
                     case EntityState.Modified:
-                        pending.AddUpsert(entry);
+                        pending.AddUpsert(entry, IsSharedRowDependent(entry));
                         break;
                 }
             }
@@ -55,6 +55,14 @@ namespace Api.Service.D1Sync
             if (string.IsNullOrEmpty(tableName))
                 return null;
 
+            // Column names must be resolved for the table: an owned type's properties map to prefixed
+            // columns (e.g. BusinessAddress_City) and its key to the owner's key column.
+            var table = StoreObjectIdentifier.Table(tableName, entityType.GetSchema());
+            string Column(IProperty prop) => $"\"{prop.GetColumnName(table) ?? prop.Name}\"";
+
+            if (IsSharedRowDependent(entry))
+                return GenerateSharedRowSql(entry, state, table, Column);
+
             if (state == EntityState.Deleted)
             {
                 var pk = entityType.FindPrimaryKey();
@@ -64,9 +72,8 @@ namespace Api.Service.D1Sync
                 var whereClauses = new List<string>();
                 foreach (var prop in pk.Properties)
                 {
-                    var colName = prop.GetColumnName() ?? prop.Name;
                     var val = FormatValue(prop, entry.Property(prop.Name).OriginalValue);
-                    whereClauses.Add($"\"{colName}\" = {val}");
+                    whereClauses.Add($"{Column(prop)} = {val}");
                 }
 
                 return $"DELETE FROM \"{tableName}\" WHERE {string.Join(" AND ", whereClauses)};";
@@ -85,19 +92,50 @@ namespace Api.Service.D1Sync
 
             foreach (var prop in entityType.GetProperties())
             {
-                var colName = $"\"{prop.GetColumnName() ?? prop.Name}\"";
+                var colName = Column(prop);
                 columns.Add(colName);
                 values.Add(FormatValue(prop, entry.Property(prop.Name).CurrentValue));
                 if (!keyProps.Contains(prop))
                     updates.Add($"{colName} = excluded.{colName}");
             }
 
-            var keyColumns = string.Join(", ", keyProps.Select(p => $"\"{p.GetColumnName() ?? p.Name}\""));
+            var keyColumns = string.Join(", ", keyProps.Select(Column));
             var onConflict = updates.Count > 0
                 ? $"ON CONFLICT ({keyColumns}) DO UPDATE SET {string.Join(", ", updates)}"
                 : $"ON CONFLICT ({keyColumns}) DO NOTHING";
 
             return $"INSERT INTO \"{tableName}\" ({string.Join(", ", columns)}) VALUES ({string.Join(", ", values)}) {onConflict};";
+        }
+
+        /// <summary>
+        /// True for an entity stored in its principal's row (an owned type such as CompanySetting.BusinessAddress).
+        /// EF tracks it as its own entry, but in the table it is only some of the principal row's columns.
+        /// </summary>
+        internal static bool IsSharedRowDependent(EntityEntry entry)
+        {
+            var entityType = entry.Metadata;
+            var tableName = entityType.GetTableName();
+            return !string.IsNullOrEmpty(tableName)
+                && entityType.FindRowInternalForeignKeys(StoreObjectIdentifier.Table(tableName, entityType.GetSchema())).Any();
+        }
+
+        // A shared-row dependent never inserts or deletes the row, which belongs to its principal: saving it
+        // updates its columns, removing it clears them.
+        private static string? GenerateSharedRowSql(EntityEntry entry, EntityState state, StoreObjectIdentifier table, Func<IProperty, string> column)
+        {
+            var keyProps = entry.Metadata.FindPrimaryKey()?.Properties;
+            if (keyProps == null || keyProps.Count == 0)
+                return null;
+
+            var assignments = entry.Metadata.GetProperties()
+                .Where(p => !keyProps.Contains(p))
+                .Select(p => $"{column(p)} = {(state == EntityState.Deleted ? "NULL" : FormatValue(p, entry.Property(p.Name).CurrentValue))}")
+                .ToList();
+            if (assignments.Count == 0)
+                return null;
+
+            var where = keyProps.Select(p => $"{column(p)} = {FormatValue(p, state == EntityState.Deleted ? entry.Property(p.Name).OriginalValue : entry.Property(p.Name).CurrentValue)}");
+            return $"UPDATE \"{table.Name}\" SET {string.Join(", ", assignments)} WHERE {string.Join(" AND ", where)};";
         }
 
         private static string FormatValue(IProperty prop, object? val)
@@ -144,17 +182,23 @@ namespace Api.Service.D1Sync
     /// </summary>
     public sealed class D1PendingChanges
     {
-        private readonly List<(string? Sql, EntityEntry? Entry, EntityState State)> _items = new();
+        private readonly List<(string? Sql, EntityEntry? Entry, EntityState State, int Order)> _items = new();
 
-        internal void AddDelete(string? sql) => _items.Add((sql, null, EntityState.Deleted));
+        // Rows first, in tracker order. Then shared-row dependents, which only touch columns of rows that must
+        // already exist: cleared before set, so replacing an owned instance (delete + add) ends with the new values.
+        private const int RowOrder = 0, ClearDependentOrder = 1, SetDependentOrder = 2;
 
-        internal void AddUpsert(EntityEntry entry) => _items.Add((null, entry, entry.State));
+        internal void AddDelete(string? sql, bool sharedRowDependent = false) =>
+            _items.Add((sql, null, EntityState.Deleted, sharedRowDependent ? ClearDependentOrder : RowOrder));
+
+        internal void AddUpsert(EntityEntry entry, bool sharedRowDependent = false) =>
+            _items.Add((null, entry, entry.State, sharedRowDependent ? SetDependentOrder : RowOrder));
 
         public bool IsEmpty => _items.Count == 0;
 
         public void FlushTo(ID1SyncContext syncContext)
         {
-            foreach (var item in _items)
+            foreach (var item in _items.OrderBy(i => i.Order))
             {
                 try
                 {
