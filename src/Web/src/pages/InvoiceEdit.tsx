@@ -11,8 +11,10 @@ import {
   AlertTriangle,
   CheckCircle2,
   Loader2,
+  Package,
 } from 'lucide-react';
 import { PageHeader, HeaderButton } from '../components/PageHeader';
+import { CatalogPickerDialog } from '../components/CatalogPickerDialog';
 import {
   TenantContextType,
   Invoice,
@@ -49,6 +51,8 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
   const [customers, setCustomers] = useState<CustomerOption[]>([]);
   const [paymentTerms, setPaymentTerms] = useState<PaymentTermOption[]>([]);
   const [catalogItems, setCatalogItems] = useState<ItemOption[]>([]);
+  // Line whose catalog picker is open.
+  const [pickerLine, setPickerLine] = useState<number | null>(null);
   const [isLoadingRefs, setIsLoadingRefs] = useState<boolean>(true);
 
   // Form State
@@ -231,23 +235,18 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
     });
   };
 
-  const handleSelectItem = (index: number, itemIdStr: string) => {
-    const itemId = Number(itemIdStr);
-    const catalogItem = catalogItems.find((i) => i.id === itemId);
-    if (catalogItem) {
-      setLines((prev) => {
-        const updated = [...prev];
-        updated[index] = {
-          ...updated[index],
-          itemId: catalogItem.id,
-          itemDescription: catalogItem.description,
-          amount: catalogItem.price ?? updated[index].amount,
-        };
-        return updated;
-      });
-    } else {
-      handleLineChange(index, 'itemId', null);
-    }
+  const handlePickItem = (index: number, catalogItem: ItemOption) => {
+    setLines((prev) => {
+      const updated = [...prev];
+      updated[index] = {
+        ...updated[index],
+        itemId: catalogItem.id,
+        itemDescription: catalogItem.description,
+        amount: catalogItem.price ?? updated[index].amount,
+      };
+      return updated;
+    });
+    setPickerLine(null);
   };
 
   const handleAddLine = () => {
@@ -646,7 +645,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
             </h3>
             {catalogItems.length > 0 && (
               <span className="text-xs text-[var(--text-muted)]">
-                Type freeform or pick from catalog
+                Type a description, or pick an item with <Package className="inline w-3.5 h-3.5 -mt-0.5" />
               </span>
             )}
           </div>
@@ -655,12 +654,12 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-[var(--bg-subtle)] text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider border-b border-[var(--border-subtle)]">
-                  <th className="py-3 px-4 min-w-[220px]">Item & Description</th>
-                  <th className="py-3 px-3 w-24 text-right">Qty</th>
-                  <th className="py-3 px-3 w-32 text-right">Unit Price</th>
-                  <th className="py-3 px-3 w-24 text-right">Disc %</th>
-                  <th className="py-3 px-3 w-28 text-right">Tax %</th>
-                  <th className="py-3 px-4 w-32 text-right">Line Total</th>
+                  <th className="py-3 px-4 min-w-[260px]">Item & Description</th>
+                  <th className="py-3 px-3 w-20 text-right">Qty</th>
+                  <th className="py-3 px-3 w-28 text-right">Unit Price</th>
+                  <th className="py-3 px-3 w-20 text-right">Disc %</th>
+                  <th className="py-3 px-3 w-24 text-right">Tax %</th>
+                  <th className="py-3 px-4 w-28 text-right">Line Total</th>
                   <th className="py-3 px-2 w-12 text-center"></th>
                 </tr>
               </thead>
@@ -671,34 +670,51 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
                   const gross = qty * rate;
                   const disc = (gross * (Number(line.discount) || 0)) / 100;
                   const lineTotal = Math.max(0, gross - disc);
+                  const linked = line.itemId ? catalogItems.find((ci) => ci.id === line.itemId) : undefined;
 
                   return (
                     <tr key={idx} className="hover:bg-[var(--bg-surface-hover)]/40 transition">
-                      <td className="py-2.5 px-4 space-y-1.5">
-                        <input
-                          type="text"
-                          placeholder="Description (e.g. Consulting, Design, Software license)"
-                          value={line.itemDescription}
-                          onChange={(e) =>
-                            handleLineChange(idx, 'itemDescription', e.target.value)
-                          }
-                          className="w-full px-3 py-1.5 text-sm bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-lg focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] placeholder-[var(--text-muted)] transition"
-                        />
-                        {catalogItems.length > 0 && (
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-[11px] text-[var(--text-muted)]">or pick:</span>
-                            <select
-                              value={line.itemId || ''}
-                              onChange={(e) => handleSelectItem(idx, e.target.value)}
-                              className="text-[11px] py-0.5 px-2 bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded text-[var(--text-secondary)] focus:outline-none"
+                      <td className="py-2.5 px-4">
+                        <div className="relative">
+                          <input
+                            type="text"
+                            aria-label={`Line ${idx + 1} description`}
+                            placeholder="Description (e.g. Consulting, Design, Software license)"
+                            value={line.itemDescription}
+                            onChange={(e) =>
+                              handleLineChange(idx, 'itemDescription', e.target.value)
+                            }
+                            className={`w-full py-1.5 pl-3 ${catalogItems.length > 0 ? 'pr-10' : 'pr-3'} text-sm bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-lg focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] placeholder-[var(--text-muted)] transition`}
+                          />
+                          {catalogItems.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => setPickerLine(idx)}
+                              title="Pick from catalog"
+                              aria-label={`Pick line ${idx + 1} from catalog`}
+                              className={`absolute right-1 top-1/2 -translate-y-1/2 inline-flex h-7 w-7 items-center justify-center rounded-md transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] ${
+                                line.itemId
+                                  ? 'text-[var(--brand-primary)] hover:bg-[var(--brand-subtle)]'
+                                  : 'text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-surface-hover)]'
+                              }`}
                             >
-                              <option value="">Catalog Item...</option>
-                              {catalogItems.map((ci) => (
-                                <option key={ci.id} value={ci.id}>
-                                  {ci.description} ({formatCurrency(ci.price ?? 0)})
-                                </option>
-                              ))}
-                            </select>
+                              <Package className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                        {linked && (
+                          <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-[var(--text-muted)]">
+                            <span className="inline-flex items-center gap-1 rounded-full bg-[var(--brand-subtle)] px-2 py-0.5 font-medium text-[var(--brand-primary)]">
+                              <Package className="w-3 h-3" />
+                              {linked.code || 'Catalog item'}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleLineChange(idx, 'itemId', null)}
+                              className="rounded px-1 hover:text-[var(--text-main)] hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)]"
+                            >
+                              Unlink
+                            </button>
                           </div>
                         )}
                       </td>
@@ -1026,6 +1042,16 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
             </form>
           </div>
         </div>
+      )}
+
+      {pickerLine !== null && lines[pickerLine] && (
+        <CatalogPickerDialog
+          items={catalogItems}
+          selectedId={lines[pickerLine].itemId}
+          formatPrice={formatCurrency}
+          onPick={(item) => handlePickItem(pickerLine, item)}
+          onClose={() => setPickerLine(null)}
+        />
       )}
     </div>
   );
