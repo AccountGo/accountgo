@@ -1473,7 +1473,7 @@ namespace Api.Controllers
 
                         if (lineItemId == 0)
                         {
-                            var lineItem = ResolveFreeTextItem(items, line.ItemDescription, line.Amount.GetValueOrDefault(), defaultMeasurement.Value);
+                            var lineItem = ResolveFreeTextItem(items, line.ItemDescription);
                             lineItemId = lineItem.Id;
                             lineMeasurementId = lineItem.SellMeasurementId ?? lineItem.SmallestMeasurementId ?? defaultMeasurement.Value;
                         }
@@ -1559,7 +1559,7 @@ namespace Api.Controllers
 
                         if (lineItemId == 0)
                         {
-                            var lineItem = ResolveFreeTextItem(items, line.ItemDescription, line.Amount.GetValueOrDefault(), defaultMeasurement.Value);
+                            var lineItem = ResolveFreeTextItem(items, line.ItemDescription);
                             lineItemId = lineItem.Id;
                             lineMeasurementId = lineItem.SellMeasurementId ?? lineItem.SmallestMeasurementId ?? defaultMeasurement.Value;
                         }
@@ -1748,46 +1748,27 @@ namespace Api.Controllers
         }
 
         // A new workspace has no items, so a typed line must not fall back to a missing or foreign item id.
-        private Core.Domain.Items.Item ResolveFreeTextItem(List<Core.Domain.Items.Item> items, string? description, decimal price, int measurementId)
+        /// <summary>
+        /// The item a line typed without picking from the catalog is booked to: an active catalog item named exactly as
+        /// typed, or else the workspace's general item. The line keeps its own text either way, so typing doesn't add
+        /// an item to the catalog.
+        /// </summary>
+        private Core.Domain.Items.Item ResolveFreeTextItem(List<Core.Domain.Items.Item> items, string? description)
         {
-            var text = string.IsNullOrWhiteSpace(description) ? "Service / Product" : description.Trim();
-            var item = items.FirstOrDefault(i => string.Equals(i.Description, text, StringComparison.OrdinalIgnoreCase));
+            var text = description?.Trim();
+            var item = string.IsNullOrEmpty(text) ? null
+                : items.FirstOrDefault(i => i.ArchivedAt == null && string.Equals(i.Description, text, StringComparison.OrdinalIgnoreCase));
+            item ??= items.FirstOrDefault(i => string.Equals(i.Description, Api.Service.CatalogDefaults.GeneralItemName, StringComparison.OrdinalIgnoreCase));
             if (item != null)
                 return item;
 
-            var category = _inventoryService.GetItemCategories().FirstOrDefault(c => c.ItemType == ItemTypes.Service);
-            if (category == null)
-            {
-                category = new Core.Domain.Items.ItemCategory
-                {
-                    Name = "Services",
-                    ItemType = ItemTypes.Service,
-                    MeasurementId = measurementId,
-                    SalesAccountId = _financialService.GetAccounts().FirstOrDefault(a => a.AccountCode == "40100")?.Id
-                };
-                _inventoryService.SaveItemCategory(category);
-            }
-
-            item = new Core.Domain.Items.Item
-            {
-                ItemCategoryId = category.Id,
-                Description = text,
-                SellDescription = text,
-                Price = price,
-                SmallestMeasurementId = measurementId,
-                SellMeasurementId = measurementId
-            };
+            item = Api.Service.CatalogDefaults.NewItem(_inventoryService, _financialService, Api.Service.CatalogDefaults.GeneralItemName);
             _inventoryService.AddItem(item);
             items.Add(item);
             return item;
         }
 
-        private int DefaultMeasurementId()
-        {
-            var measurements = _inventoryService.GetMeasurements().ToList();
-            var measurement = measurements.FirstOrDefault(m => m.Code == "EA") ?? measurements.FirstOrDefault();
-            return measurement?.Id ?? throw new Exception("No unit of measure is set up for this workspace.");
-        }
+        private int DefaultMeasurementId() => Api.Service.CatalogDefaults.MeasurementId(_inventoryService);
 
         // SalesService maps these ids straight onto entities, so each must belong to the current workspace first.
         private void EnsureSalesInvoiceReferencesOwned(Dto.Sales.SalesInvoice dto)

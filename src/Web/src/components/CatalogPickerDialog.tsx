@@ -1,5 +1,5 @@
 import React from 'react';
-import { Package } from 'lucide-react';
+import { Package, Plus } from 'lucide-react';
 import { ItemOption } from '../types';
 import { PickerColumn, PickerDialog } from './PickerDialog';
 
@@ -9,8 +9,10 @@ export const CatalogPickerDialog: React.FC<{
   selectedId?: number | null;
   formatPrice: (value: number) => string;
   onPick: (item: ItemOption) => void;
+  /** Omitted when the user can't add items. */
+  onAddNew?: () => void;
   onClose: () => void;
-}> = ({ items, selectedId, formatPrice, onPick, onClose }) => {
+}> = ({ items, selectedId, formatPrice, onPick, onAddNew, onClose }) => {
   const columns: PickerColumn<ItemOption>[] = [
     {
       header: 'Item',
@@ -46,6 +48,7 @@ export const CatalogPickerDialog: React.FC<{
       selectedId={selectedId}
       selectedLabel="On this line"
       noun={['item', 'items']}
+      footerAction={onAddNew && { label: 'New item', icon: Plus, onClick: onAddNew }}
       onPick={onPick}
       onClose={onClose}
     />

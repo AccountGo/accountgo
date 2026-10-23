@@ -253,6 +253,8 @@ namespace Services.Security
                     SystemPermissions.PurchasesBillsView,
                     SystemPermissions.PurchasesBillsCreate,
                     SystemPermissions.PurchasesBillsPost,
+                    SystemPermissions.InventoryItemsView,
+                    SystemPermissions.InventoryItemsManage,
                     SystemPermissions.ReportsView
                 }),
                 ("Sales Representative", "Sales Representative", false, new[]
@@ -262,7 +264,8 @@ namespace Services.Security
                     SystemPermissions.SalesQuotationsView,
                     SystemPermissions.SalesInvoicesView,
                     SystemPermissions.SalesInvoicesCreate,
-                    SystemPermissions.SalesReceiptsCreate
+                    SystemPermissions.SalesReceiptsCreate,
+                    SystemPermissions.InventoryItemsView
                 }),
                 ("Purchasing Agent", "Purchasing Agent", false, new[]
                 {
@@ -270,7 +273,8 @@ namespace Services.Security
                     SystemPermissions.PurchasesVendorsManage,
                     SystemPermissions.PurchasesOrdersView,
                     SystemPermissions.PurchasesBillsView,
-                    SystemPermissions.PurchasesBillsCreate
+                    SystemPermissions.PurchasesBillsCreate,
+                    SystemPermissions.InventoryItemsView
                 }),
                 ("Auditor / Viewer", "Auditor / Viewer", false, new[]
                 {
@@ -282,7 +286,8 @@ namespace Services.Security
                     SystemPermissions.PurchasesVendorsView,
                     SystemPermissions.PurchasesBillsView,
                     SystemPermissions.ReportsView,
-                    SystemPermissions.AuditLogsView
+                    SystemPermissions.AuditLogsView,
+                    SystemPermissions.InventoryItemsView
                 }),
                 ("GeneralUsers", "General Users", false, new[]
                 {

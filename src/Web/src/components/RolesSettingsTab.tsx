@@ -32,7 +32,8 @@ interface WorkspaceSecurityRole {
 }
 
 // `module` marks permissions that only mean something when that module is on; the rest always apply.
-const PERMISSION_GROUPS: Array<{ group: string; module?: ModuleKey; permissions: Array<{ key: string; label: string; module?: ModuleKey }> }> = [
+// A group's `module` may list several modules; any one of them shows it.
+const PERMISSION_GROUPS: Array<{ group: string; module?: ModuleKey | ModuleKey[]; permissions: Array<{ key: string; label: string; module?: ModuleKey }> }> = [
   {
     group: 'Sales & Invoicing',
     module: 'sales',
@@ -71,6 +72,14 @@ const PERMISSION_GROUPS: Array<{ group: string; module?: ModuleKey; permissions:
     ],
   },
   {
+    group: 'Products & Services',
+    module: ['sales', 'purchases'],
+    permissions: [
+      { key: 'inventory.items.view', label: 'View Products & Services' },
+      { key: 'inventory.items.manage', label: 'Create & Edit Products & Services' },
+    ],
+  },
+  {
     group: 'Governance & Administration',
     permissions: [
       { key: 'reports.view', label: 'View Financial Reports', module: 'reports' },
@@ -84,8 +93,9 @@ const PERMISSION_GROUPS: Array<{ group: string; module?: ModuleKey; permissions:
 
 export const RolesSettingsTab: React.FC<RolesSettingsTabProps> = ({ tenantContext }) => {
   const { hasModule } = tenantContext;
+  const groupShown = (module?: ModuleKey | ModuleKey[]) => !module || (Array.isArray(module) ? module : [module]).some(hasModule);
   const shownKeys = new Set(
-    PERMISSION_GROUPS.filter((g) => !g.module || hasModule(g.module)).flatMap((g) =>
+    PERMISSION_GROUPS.filter((g) => groupShown(g.module)).flatMap((g) =>
       g.permissions.filter((p) => !p.module || hasModule(p.module)).map((p) => p.key),
     ),
   );
@@ -243,7 +253,7 @@ export const RolesSettingsTab: React.FC<RolesSettingsTabProps> = ({ tenantContex
         </div>
 
         <div className="space-y-5 pt-1">
-          {PERMISSION_GROUPS.filter((group) => !group.module || hasModule(group.module)).map((group) => {
+          {PERMISSION_GROUPS.filter((group) => groupShown(group.module)).map((group) => {
             const filteredPermissions = group.permissions.filter((p) =>
               (!p.module || hasModule(p.module)) && (p.label.toLowerCase().includes(searchQuery.toLowerCase()) ||
               p.key.toLowerCase().includes(searchQuery.toLowerCase()))

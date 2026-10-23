@@ -168,4 +168,20 @@ export interface ItemOption {
   description: string;
   price?: number;
   sellMeasurementId?: number;
+  /** Archived items are left out when picking an item for a line. */
+  archived?: boolean;
+}
+
+/** A product or service as the Products & services page shows and edits it (api/Catalog/Item). */
+export interface CatalogItem {
+  id: number;
+  name: string;
+  code?: string | null;
+  /** Default selling price; null when there is none. */
+  price?: number | null;
+  /** Default purchase cost; null when there is none. */
+  cost?: number | null;
+  archived: boolean;
+  /** No document uses it yet, so it can be deleted rather than archived. */
+  canDelete?: boolean;
 }

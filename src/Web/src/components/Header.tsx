@@ -51,8 +51,10 @@ export const Header: React.FC<HeaderProps> = ({
   // Extract current section from URL path (e.g., /org/acme-corp/dashboard -> "Dashboard")
   const pathParts = location.pathname.split('/').filter(Boolean);
   const currentSection = pathParts.length > 2 ? pathParts[2] : 'dashboard';
+  // Sections whose path segment doesn't read as their name.
+  const sectionNames: Record<string, string> = { items: 'Products & services' };
   const sectionTitle =
-    currentSection.charAt(0).toUpperCase() + currentSection.slice(1);
+    sectionNames[currentSection] ?? currentSection.charAt(0).toUpperCase() + currentSection.slice(1);
 
   return (
     <header className="no-print h-16 px-3 sm:px-4 md:px-6 bg-[var(--bg-header)] backdrop-blur-xl flex items-center justify-between gap-2 md:gap-4 z-10 flex-shrink-0 safe-top transition-colors duration-200">

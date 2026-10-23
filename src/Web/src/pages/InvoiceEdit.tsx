@@ -20,6 +20,7 @@ import { PageHeader, HeaderButton } from '../components/PageHeader';
 import { CatalogPickerDialog } from '../components/CatalogPickerDialog';
 import { CustomerPickerDialog } from '../components/CustomerPickerDialog';
 import { ClientFormDialog } from '../components/ClientFormDialog';
+import { ItemFormDialog } from '../components/ItemFormDialog';
 import { usePermissions } from '../components/Gating';
 import {
   TenantContextType,
@@ -107,6 +108,8 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
   const [clientDialog, setClientDialog] = useState<{ client?: Client } | null>(null);
   const [isLoadingClient, setIsLoadingClient] = useState(false);
   const canManageClients = hasPermission('sales.customers.manage');
+  // The line a new catalog item is being added for, from the item picker.
+  const [newItemLine, setNewItemLine] = useState<number | null>(null);
 
   // Currency
   const currencySymbol = getCurrencySymbol(currentOrg.currency);
@@ -998,6 +1001,21 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
         </div>
       </div>
 
+      {newItemLine !== null && (
+        <ItemFormDialog
+          showPrice
+          showCost={false}
+          currencySymbol={currencySymbol}
+          onSaved={(item) => {
+            const option: ItemOption = { id: item.id, code: item.code ?? undefined, description: item.name, price: item.price ?? undefined };
+            setCatalogItems((prev) => [...prev, option].sort((a, b) => a.description.localeCompare(b.description)));
+            if (lines[newItemLine]) handlePickItem(newItemLine, option);
+            setNewItemLine(null);
+          }}
+          onClose={() => setNewItemLine(null)}
+        />
+      )}
+
       {clientDialog && (
         <ClientFormDialog
           client={clientDialog.client}
@@ -1026,10 +1044,18 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
 
       {pickerLine !== null && lines[pickerLine] && (
         <CatalogPickerDialog
-          items={catalogItems}
+          items={catalogItems.filter((i) => !i.archived || i.id === lines[pickerLine].itemId)}
           selectedId={lines[pickerLine].itemId}
           formatPrice={formatCurrency}
           onPick={(item) => handlePickItem(pickerLine, item)}
+          onAddNew={
+            hasPermission('inventory.items.manage')
+              ? () => {
+                  setNewItemLine(pickerLine);
+                  setPickerLine(null);
+                }
+              : undefined
+          }
           onClose={() => setPickerLine(null)}
         />
       )}
