@@ -290,6 +290,60 @@ namespace AccountGo.BackendTests
         }
 
         [Fact]
+        public async Task SendSalesInvoiceEmail_AttachesPdf_BlindCopiesSender_OnlyForIssuedInvoices()
+        {
+            var invoice = await NewInvoice("billing@customer.example");
+            invoice.Status = "Draft";
+            var saved = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
+            Assert.True(saved.IsSuccessStatusCode, await saved.Content.ReadAsStringAsync());
+            var invoiceId = (await saved.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt32();
+            var path = $"/api/Sales/SendSalesInvoiceEmail?id={invoiceId}";
+
+            Assert.Equal(HttpStatusCode.BadRequest, (await Send(HttpMethod.Post, path)).StatusCode);
+            Assert.True((await Send(HttpMethod.Post, $"/api/Sales/IssueSalesInvoice?id={invoiceId}")).IsSuccessStatusCode);
+
+            var sent = await Send(HttpMethod.Post, path);
+            Assert.True(sent.IsSuccessStatusCode, await sent.Content.ReadAsStringAsync());
+            var message = _emails.Messages.Last().Raw;
+            Assert.Equal("billing@customer.example", message.To);
+            Assert.Equal(new[] { "phase3-owner@example.com" }, message.Bcc);
+            Assert.Equal("phase3-owner@example.com", message.ReplyTo);
+            Assert.EndsWith("via AccountGo", message.FromName);
+            Assert.StartsWith("Invoice ", message.Subject);
+            var attachment = Assert.Single(message.Attachments);
+            Assert.Matches(@"^Invoice-[A-Za-z0-9_-]+\.pdf$", attachment.FileName);
+            Assert.Equal("%PDF", Encoding.ASCII.GetString(attachment.Content, 0, 4));
+            Assert.Contains("Real customer", message.Html);
+            Assert.False(string.IsNullOrWhiteSpace(message.Text));
+
+            // Not a member of the workspace: no email goes out.
+            var count = _emails.Messages.Count;
+            Assert.False((await Send(HttpMethod.Post, path, token: _otherToken)).IsSuccessStatusCode);
+            Assert.Equal(count, _emails.Messages.Count);
+
+            // A provider failure is reported, and the invoice stays issued.
+            _emails.Fail = true;
+            Assert.Equal(HttpStatusCode.BadGateway, (await Send(HttpMethod.Post, path)).StatusCode);
+            _emails.Fail = false;
+            var reloaded = await Send(HttpMethod.Get, $"/api/Sales/SalesInvoice?id={invoiceId}");
+            Assert.Equal("Open", (await reloaded.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("status").GetString());
+        }
+
+        [Fact]
+        public async Task SendSalesInvoiceEmail_RequiresCustomerEmail()
+        {
+            var invoice = await NewInvoice();
+            invoice.Status = "Open";
+            var saved = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
+            Assert.True(saved.IsSuccessStatusCode, await saved.Content.ReadAsStringAsync());
+            var invoiceId = (await saved.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt32();
+
+            var response = await Send(HttpMethod.Post, $"/api/Sales/SendSalesInvoiceEmail?id={invoiceId}");
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            Assert.Contains("no valid email", await response.Content.ReadAsStringAsync());
+        }
+
+        [Fact]
         public async Task BusinessProfile_FirstSave_TrimsAndValidates_AndIsAdminOnly()
         {
             var empty = await Json(await Send(HttpMethod.Get, Current + "/business-profile"));
@@ -1004,7 +1058,7 @@ namespace AccountGo.BackendTests
                 return scope.ServiceProvider.GetRequiredService<ApiDbContext>().CompanyMembers.Single(m => m.UserId == userId && m.CompanyId == _companyId).Id;
         }
 
-        private async Task<Dto.Sales.SalesInvoice> NewInvoice()
+        private async Task<Dto.Sales.SalesInvoice> NewInvoice(string customerEmail = null)
         {
             using (var scope = _factory.Services.CreateScope())
             {
@@ -1013,7 +1067,7 @@ namespace AccountGo.BackendTests
                 {
                     var customer = new Customer
                     {
-                        No = Guid.NewGuid().ToString("N"), Party = new Party { Name = "Real customer", PartyType = PartyTypes.Customer },
+                        No = Guid.NewGuid().ToString("N"), Party = new Party { Name = "Real customer", PartyType = PartyTypes.Customer, Email = customerEmail },
                         PrimaryContact = new Contact { FirstName = "Customer", LastName = "Contact", Party = new Party { Name = "Contact", PartyType = PartyTypes.Contact } },
                         AccountsReceivableAccount = db.Accounts.Single(a => a.AccountCode == "10120"),
                         SalesAccount = db.Accounts.Single(a => a.AccountCode == "40100")
@@ -1088,11 +1142,11 @@ namespace AccountGo.BackendTests
         {
             public bool Fail { get; set; }
             public List<Message> Messages { get; } = new List<Message>();
-            public Task SendAsync(string to, string subject, string htmlBody, CancellationToken ct = default(CancellationToken))
+            public Task<string> SendAsync(EmailMessage message, CancellationToken ct = default(CancellationToken))
             {
                 if (Fail) throw new HttpRequestException("Simulated email delivery failure");
-                Messages.Add(new Message { To = to, Subject = subject, Html = htmlBody });
-                return Task.CompletedTask;
+                Messages.Add(new Message { To = message.To, Subject = message.Subject, Html = message.Html, Raw = message });
+                return Task.FromResult("fake-" + Messages.Count);
             }
         }
 
@@ -1101,6 +1155,7 @@ namespace AccountGo.BackendTests
             public string To { get; set; }
             public string Subject { get; set; }
             public string Html { get; set; }
+            public EmailMessage Raw { get; set; }
         }
     }
 }

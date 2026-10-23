@@ -26,10 +26,11 @@ import {
 } from '../types';
 import { useAuth } from '../auth/AuthContext';
 import { currencySymbol as getCurrencySymbol } from '../lib/currency';
+import { SendInvoiceDialog } from '../components/SendInvoiceDialog';
 
 export const InvoiceDetail: React.FC = () => {
   const { currentOrg } = useOutletContext<TenantContextType>();
-  const { authFetch } = useAuth();
+  const { authFetch, user } = useAuth();
   const { orgSlug, invoiceId } = useParams<{ orgSlug: string; invoiceId: string }>();
 
   // State
@@ -207,29 +208,97 @@ export const InvoiceDetail: React.FC = () => {
     }
   };
 
-  // Issue Draft Invoice
+  // Issue Draft Invoice, optionally emailing it (and emailing issued invoices again later)
   const [isSubmittingIssue, setIsSubmittingIssue] = useState<boolean>(false);
-  const handleIssueInvoice = async () => {
+  const [sendDialogMode, setSendDialogMode] = useState<'issue' | 'send' | null>(null);
+  const [isSendingEmail, setIsSendingEmail] = useState<boolean>(false);
+  const [sendError, setSendError] = useState<string | null>(null);
+
+  const issueInvoice = async (): Promise<boolean> => {
+    if (!invoice) return false;
+    const res = await authFetch(`/api/Sales/IssueSalesInvoice?id=${invoice.id}`, {
+      method: 'POST',
+    });
+
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => null);
+      throw new Error(errorData?.message || 'Failed to issue invoice.');
+    }
+    return true;
+  };
+
+  const emailInvoice = async (): Promise<string> => {
+    if (!invoice) return '';
+    const res = await authFetch(`/api/Sales/SendSalesInvoiceEmail?id=${invoice.id}`, {
+      method: 'POST',
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) {
+      throw new Error(data?.message || 'The email could not be sent.');
+    }
+    return data?.to || invoice.customerEmail || '';
+  };
+
+  const handleIssueClick = () => {
+    if (!invoice) return;
+    if (invoice.customerEmail) {
+      setSendError(null);
+      setSendDialogMode('issue');
+      return;
+    }
+    void handleIssueOnly();
+  };
+
+  const handleIssueOnly = async () => {
     if (!invoice) return;
     setIsSubmittingIssue(true);
     setErrorBanner(null);
 
     try {
-      const res = await authFetch(`/api/Sales/IssueSalesInvoice?id=${invoice.id}`, {
-        method: 'POST',
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => null);
-        throw new Error(errorData?.message || 'Failed to issue invoice.');
-      }
-
+      await issueInvoice();
+      setSendDialogMode(null);
       setSuccessBanner(`Invoice #${invoice.no || invoice.id} has been issued successfully!`);
       await fetchInvoice();
     } catch (err: any) {
-      setErrorBanner(err.message || 'An error occurred while issuing the invoice.');
+      if (sendDialogMode) setSendError(err.message || 'An error occurred while issuing the invoice.');
+      else setErrorBanner(err.message || 'An error occurred while issuing the invoice.');
     } finally {
       setIsSubmittingIssue(false);
+    }
+  };
+
+  const handleSendEmail = async () => {
+    if (!invoice || !sendDialogMode) return;
+    const issuing = sendDialogMode === 'issue';
+    const label = `Invoice #${invoice.no || invoice.id}`;
+    setIsSendingEmail(true);
+    setSendError(null);
+    setErrorBanner(null);
+
+    try {
+      if (issuing) await issueInvoice();
+    } catch (err: any) {
+      // Nothing happened yet; keep the dialog open so the user can retry or cancel.
+      setSendError(err.message || 'An error occurred while issuing the invoice.');
+      setIsSendingEmail(false);
+      return;
+    }
+
+    try {
+      const to = await emailInvoice();
+      setSuccessBanner(issuing ? `${label} has been issued and emailed to ${to}.` : `${label} has been emailed to ${to}.`);
+      setSendDialogMode(null);
+    } catch (err: any) {
+      if (issuing) {
+        // The invoice is issued either way; the email can be sent again from the invoice.
+        setSendDialogMode(null);
+        setErrorBanner(`${label} was issued, but the email was not sent: ${err.message} Use "Email invoice" to try again.`);
+      } else {
+        setSendError(err.message);
+      }
+    } finally {
+      setIsSendingEmail(false);
+      if (issuing) await fetchInvoice();
     }
   };
 
@@ -382,7 +451,7 @@ export const InvoiceDetail: React.FC = () => {
           {invoice.status === 'Draft' && (
             <button
               type="button"
-              onClick={handleIssueInvoice}
+              onClick={handleIssueClick}
               disabled={isSubmittingIssue}
               className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-[var(--brand-text)] bg-[var(--brand-primary)] rounded-xl hover:bg-[var(--brand-hover)] shadow-sm transition disabled:opacity-50"
             >
@@ -392,6 +461,21 @@ export const InvoiceDetail: React.FC = () => {
                 <Send className="w-4 h-4" />
               )}
               Issue Invoice
+            </button>
+          )}
+
+          {/* Email Button (issued invoices whose customer has an email address) */}
+          {invoice.status !== 'Draft' && invoice.status !== 'Void' && invoice.customerEmail && (
+            <button
+              type="button"
+              onClick={() => {
+                setSendError(null);
+                setSendDialogMode('send');
+              }}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium text-[var(--text-secondary)] bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-xl hover:bg-[var(--bg-surface-hover)] hover:text-[var(--text-main)] shadow-sm transition"
+            >
+              <Mail className="w-4 h-4 text-[var(--text-muted)]" />
+              Email invoice
             </button>
           )}
 
@@ -865,6 +949,21 @@ export const InvoiceDetail: React.FC = () => {
             </form>
           </div>
         </div>
+      )}
+
+      {/* Issue / Email Invoice Modal */}
+      {sendDialogMode && invoice.customerEmail && (
+        <SendInvoiceDialog
+          mode={sendDialogMode}
+          invoiceNumber={invoice.no || String(invoice.id)}
+          to={invoice.customerEmail}
+          bcc={user?.email && user.email.toLowerCase() !== invoice.customerEmail.toLowerCase() ? user.email : undefined}
+          busy={isSendingEmail || isSubmittingIssue}
+          error={sendError}
+          onIssueOnly={handleIssueOnly}
+          onSend={handleSendEmail}
+          onCancel={() => setSendDialogMode(null)}
+        />
       )}
 
       {/* Void Invoice Confirmation Modal */}
