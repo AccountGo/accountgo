@@ -27,5 +27,6 @@ namespace Dto.Inventory
         public int? InventoryAdjustmentAccountId { get; set; }
         public string? ItemTaxGroupName { get; set; }
         public string? Measurement { get; set; }
+        public bool Archived { get; set; }
     }
 }

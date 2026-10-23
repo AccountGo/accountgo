@@ -5,6 +5,7 @@ import {
   BookOpen,
   Receipt,
   ShoppingBag,
+  Package,
   BarChart3,
   Settings,
   Users,
@@ -44,7 +45,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
     name: string;
     path: string;
     icon: React.ComponentType<{ className?: string }>;
-    module: ModuleKey;
+    /** With several modules, any one of them shows the link. */
+    module: ModuleKey | ModuleKey[];
     permission?: string;
     badge?: string;
   }> = [
@@ -77,6 +79,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
       permission: 'purchases.bills.view',
     },
     {
+      // Items are shared by sales and purchases, so they live here rather than under either.
+      name: 'Products & services',
+      path: `/org/${currentOrg.slug}/items`,
+      icon: Package,
+      module: ['sales', 'purchases'],
+      permission: 'inventory.items.view',
+    },
+    {
       name: 'Reports',
       path: `/org/${currentOrg.slug}/reports`,
       icon: BarChart3,
@@ -86,7 +96,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   ];
 
   const visibleMainLinks = mainLinks.filter((link) => {
-    if (hasModule && !hasModule(link.module)) return false;
+    if (hasModule && !(Array.isArray(link.module) ? link.module : [link.module]).some(hasModule)) return false;
     if (hasPermission && link.permission && !hasPermission(link.permission)) return false;
     return true;
   });

@@ -164,7 +164,8 @@ namespace Api.Data.Schema
                     new[] { "SalesInvoiceHeader", "DueDate", "TEXT NULL" },
                     new[] { "SalesInvoiceHeader", "BillToJson", "TEXT NULL" },
                     new[] { "SalesInvoiceLine", "Description", "TEXT NULL" },
-                    new[] { "Customer", "ArchivedAt", "TEXT NULL" }
+                    new[] { "Customer", "ArchivedAt", "TEXT NULL" },
+                    new[] { "Item", "ArchivedAt", "TEXT NULL" }
                 };
                 var added = new HashSet<string>();
                 foreach (var column in columns)

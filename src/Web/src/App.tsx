@@ -13,6 +13,7 @@ import { InvoiceEdit } from './pages/InvoiceEdit';
 import { InvoiceDetail } from './pages/InvoiceDetail';
 import { Clients } from './pages/Clients';
 import { ClientDetail } from './pages/ClientDetail';
+import { ProductsServices } from './pages/ProductsServices';
 import PlaceholderView from './pages/PlaceholderView';
 import ChartOfAccounts from './pages/ChartOfAccounts';
 import NotFound from './pages/NotFound';
@@ -163,6 +164,14 @@ const router = createBrowserRouter([
             element: (
               <RequiresModule module="sales">
                 <InvoiceEdit isEdit={true} />
+              </RequiresModule>
+            ),
+          },
+          {
+            path: 'items',
+            element: (
+              <RequiresModule module={['sales', 'purchases']}>
+                <ProductsServices />
               </RequiresModule>
             ),
           },

@@ -10,14 +10,17 @@ using Services.Administration;
 
 namespace Api.Filters
 {
+    /// <summary>Requires the workspace's plan to include the module, or with several keys, any one of them.</summary>
     [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = false, Inherited = true)]
     public class RequireModuleAttribute : Attribute, IAsyncActionFilter
     {
-        private readonly string _moduleKey;
+        private readonly string[] _moduleKeys;
 
-        public RequireModuleAttribute(string moduleKey)
+        public RequireModuleAttribute(params string[] moduleKeys)
         {
-            _moduleKey = moduleKey ?? throw new ArgumentNullException(nameof(moduleKey));
+            if (moduleKeys == null || moduleKeys.Length == 0)
+                throw new ArgumentNullException(nameof(moduleKeys));
+            _moduleKeys = moduleKeys;
         }
 
         public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
@@ -40,17 +43,19 @@ namespace Api.Filters
 
             var adminService = context.HttpContext.RequestServices.GetRequiredService<IAdministrationService>();
 
-            if (!adminService.IsModuleEnabled(_moduleKey))
+            if (!Array.Exists(_moduleKeys, adminService.IsModuleEnabled))
             {
                 var problem = new ProblemDetails
                 {
                     Type = "https://accountgo.ph/errors/module-not-subscribed",
                     Title = "Module Not Subscribed",
-                    Detail = $"The '{_moduleKey}' module is not included in this organization's active plan.",
+                    Detail = _moduleKeys.Length == 1
+                        ? $"The '{_moduleKeys[0]}' module is not included in this organization's active plan."
+                        : $"None of the '{string.Join("', '", _moduleKeys)}' modules is included in this organization's active plan.",
                     Status = StatusCodes.Status403Forbidden
                 };
                 problem.Extensions["code"] = "MODULE_NOT_SUBSCRIBED";
-                problem.Extensions["requiredModule"] = _moduleKey;
+                problem.Extensions["requiredModule"] = _moduleKeys[0];
                 problem.Extensions["upgradeAvailable"] = true;
 
                 context.Result = new ObjectResult(problem)

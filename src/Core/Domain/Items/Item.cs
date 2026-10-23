@@ -47,6 +47,8 @@ namespace Core.Domain.Items
         public string SellDescription { get; set; }
         public decimal? Cost { get; set; }
         public decimal? Price { get; set; }
+        /// <summary>When it was archived: hidden when picking an item for a line, past lines untouched. Null while active.</summary>
+        public DateTime? ArchivedAt { get; set; }
         public virtual ItemCategory ItemCategory { get; set; }
         public virtual ItemTaxGroup ItemTaxGroup { get; set; }
         public virtual Vendor PreferredVendor { get; set; }

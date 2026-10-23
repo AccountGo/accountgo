@@ -129,13 +129,9 @@ namespace AccountGo.BackendTests
         }
 
         [Fact]
-        public async Task SaveSalesInvoice_FreeTextLine_InNewWorkspace_CreatesItemAndPosts()
+        public async Task SaveSalesInvoice_FreeTextLines_UseTheGeneralItem_KeepTheirText_AndPost()
         {
             var invoice = await NewInvoice();
-            var line = invoice.SalesInvoiceLines.Single();
-            line.ItemId = null;
-            line.MeasurementId = null;
-            line.ItemDescription = "Website design";
             invoice.Status = "Open";
             using (var scope = _factory.Services.CreateScope())
             {
@@ -148,8 +144,12 @@ namespace AccountGo.BackendTests
                 }
             }
 
-            for (var i = 0; i < 2; i++)
+            foreach (var text in new[] { "Website design", "Logo design" })
             {
+                var line = invoice.SalesInvoiceLines.Single();
+                line.ItemId = null;
+                line.MeasurementId = null;
+                line.ItemDescription = text;
                 var response = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
                 Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
             }
@@ -159,12 +159,84 @@ namespace AccountGo.BackendTests
                 var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
                 using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
                 {
-                    var item = db.Items.Single(i => i.Description == "Website design");
+                    // Typing doesn't add to the catalog: both lines are booked to the one general item.
+                    var item = db.Items.Single();
+                    Assert.Equal(Api.Service.CatalogDefaults.GeneralItemName, item.Description);
                     var lines = db.SalesInvoiceLines.Include(l => l.SalesInvoiceHeader).Where(l => l.ItemId == item.Id).ToList();
-                    Assert.Equal(2, lines.Count);
+                    Assert.Equal(new[] { "Logo design", "Website design" }, lines.Select(l => l.Description).OrderBy(d => d));
                     Assert.All(lines, l => Assert.NotNull(l.SalesInvoiceHeader.GeneralLedgerHeaderId));
                 }
             }
+        }
+
+        [Fact]
+        public async Task SaveSalesInvoice_FreeTextLine_NamedLikeAnActiveItem_UsesThatItem()
+        {
+            var hosting = await SaveItem(new Dto.Inventory.CatalogItem { Name = "Hosting", Price = 15 });
+            var archived = await SaveItem(new Dto.Inventory.CatalogItem { Name = "Old plan", Price = 9 });
+            Assert.True((await Send(HttpMethod.Post, $"/api/Catalog/ArchiveItem?id={archived.Id}")).IsSuccessStatusCode);
+
+            var invoice = await NewInvoice();
+            invoice.Status = "Draft";
+            invoice.SalesInvoiceLines = new List<Dto.Sales.SalesInvoiceLine>
+            {
+                new() { ItemDescription = "hosting", Quantity = 1, Amount = 15 },
+                new() { ItemDescription = "Old plan", Quantity = 1, Amount = 9 },
+            };
+            var saved = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
+            Assert.True(saved.IsSuccessStatusCode, await saved.Content.ReadAsStringAsync());
+            var lines = (await GetInvoice((await Json(saved)).GetProperty("id").GetInt32())).SalesInvoiceLines;
+            Assert.Equal(hosting.Id, lines.Single(l => l.ItemDescription == "hosting").ItemId);
+            // An archived item isn't matched; the line goes to the general item.
+            Assert.NotEqual(archived.Id, lines.Single(l => l.ItemDescription == "Old plan").ItemId);
+        }
+
+        [Fact]
+        public async Task Catalog_CreateEditArchiveAndDelete()
+        {
+            var created = await SaveItem(new Dto.Inventory.CatalogItem { Name = "  Annual support ", Code = "SUP-1", Price = 1200, Cost = 300 });
+            Assert.Equal("Annual support", created.Name);
+            Assert.True(created.CanDelete);
+            var listed = await (await Send(HttpMethod.Get, "/api/Catalog/Items")).Content.ReadFromJsonAsync<List<Dto.Inventory.CatalogItem>>();
+            Assert.Contains(listed, i => i.Id == created.Id && i.Code == "SUP-1" && i.Price == 1200 && i.Cost == 300);
+
+            Assert.Equal(HttpStatusCode.Conflict, (await Send(HttpMethod.Post, "/api/Catalog/SaveItem", new Dto.Inventory.CatalogItem { Name = "Other", Code = "sup-1" })).StatusCode);
+            Assert.Equal(HttpStatusCode.BadRequest, (await Send(HttpMethod.Post, "/api/Catalog/SaveItem", new Dto.Inventory.CatalogItem { Name = " " })).StatusCode);
+            Assert.Equal(HttpStatusCode.BadRequest, (await Send(HttpMethod.Post, "/api/Catalog/SaveItem", new Dto.Inventory.CatalogItem { Name = "Refund", Price = -1 })).StatusCode);
+            Assert.Equal(HttpStatusCode.NotFound, (await Send(HttpMethod.Get, "/api/Catalog/Item?id=999999")).StatusCode);
+
+            // Used on an invoice, then renamed: the invoice line keeps its text, and the item can only be archived.
+            var invoice = await NewInvoice();
+            invoice.SalesInvoiceLines.Single().ItemId = created.Id;
+            invoice.SalesInvoiceLines.Single().ItemDescription = "Annual support";
+            var saved = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
+            Assert.True(saved.IsSuccessStatusCode, await saved.Content.ReadAsStringAsync());
+            var invoiceId = (await Json(saved)).GetProperty("id").GetInt32();
+
+            created.Name = "Premium support";
+            created.Price = 1500;
+            var edited = await SaveItem(created);
+            Assert.Equal("Premium support", edited.Name);
+            Assert.False(edited.CanDelete);
+            Assert.Equal("Annual support", (await GetInvoice(invoiceId)).SalesInvoiceLines.Single().ItemDescription);
+
+            var refused = await Send(HttpMethod.Delete, $"/api/Catalog/DeleteItem?id={created.Id}");
+            Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
+            Assert.Contains("Archive it instead", await refused.Content.ReadAsStringAsync());
+
+            Assert.True((await Send(HttpMethod.Post, $"/api/Catalog/ArchiveItem?id={created.Id}")).IsSuccessStatusCode);
+            var picker = await Json(await Send(HttpMethod.Get, "/api/Common/Items"));
+            Assert.True(picker.EnumerateArray().Single(i => i.GetProperty("id").GetInt32() == created.Id).GetProperty("archived").GetBoolean());
+            Assert.True((await Send(HttpMethod.Post, $"/api/Catalog/ArchiveItem?id={created.Id}&archived=false")).IsSuccessStatusCode);
+
+            var unused = await SaveItem(new Dto.Inventory.CatalogItem { Name = "Typo item" });
+            Assert.Equal(HttpStatusCode.NoContent, (await Send(HttpMethod.Delete, $"/api/Catalog/DeleteItem?id={unused.Id}")).StatusCode);
+            Assert.Equal(HttpStatusCode.NotFound, (await Send(HttpMethod.Get, $"/api/Catalog/Item?id={unused.Id}")).StatusCode);
+
+            // Members without "Manage Items" can't change the catalog.
+            await JoinOther();
+            Assert.Equal(HttpStatusCode.Forbidden, (await Send(HttpMethod.Post, "/api/Catalog/SaveItem", created, _otherToken)).StatusCode);
+            Assert.Equal(HttpStatusCode.Forbidden, (await Send(HttpMethod.Delete, $"/api/Catalog/DeleteItem?id={created.Id}", token: _otherToken)).StatusCode);
         }
 
         [Fact]
@@ -1594,6 +1666,13 @@ namespace AccountGo.BackendTests
             var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
             using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
                 Assert.DoesNotContain(db.Parties, p => p.Name == "Added by mistake");
+        }
+
+        private async Task<Dto.Inventory.CatalogItem> SaveItem(Dto.Inventory.CatalogItem item)
+        {
+            var response = await Send(HttpMethod.Post, "/api/Catalog/SaveItem", item);
+            Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
+            return await response.Content.ReadFromJsonAsync<Dto.Inventory.CatalogItem>();
         }
 
         private async Task<Dto.Sales.Client> SaveClient(Dto.Sales.Client client)

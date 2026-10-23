@@ -28,7 +28,8 @@ export function usePermissions() {
 }
 
 interface RequiresModuleProps {
-  module: ModuleKey;
+  /** With several modules, any one of them unlocks the page. */
+  module: ModuleKey | ModuleKey[];
   fallback?: React.ReactNode;
   children: React.ReactNode;
 }
@@ -39,8 +40,9 @@ export const RequiresModule: React.FC<RequiresModuleProps> = ({
   children,
 }) => {
   const { hasModule, currentOrg } = useTenantContext();
+  const modules = Array.isArray(module) ? module : [module];
 
-  if (hasModule(module)) {
+  if (modules.some(hasModule)) {
     return <>{children}</>;
   }
 
@@ -48,7 +50,7 @@ export const RequiresModule: React.FC<RequiresModuleProps> = ({
     return <>{fallback}</>;
   }
 
-  return <ModuleLockedCard module={module} orgSlug={currentOrg.slug} />;
+  return <ModuleLockedCard module={modules[0]} orgSlug={currentOrg.slug} />;
 };
 
 interface HasPermissionProps {
