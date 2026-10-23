@@ -130,13 +130,14 @@ export interface RecordPaymentPayload {
   notes?: string;
 }
 
+/** A client or vendor as a picker lists it. */
 export interface CustomerOption {
   id: number;
   name: string;
   email?: string;
   phone?: string;
   paymentTermId?: number;
-  /** Archived clients are left out when picking a client for an invoice. */
+  /** Archived parties are left out when picking one for a new document. */
   archived?: boolean;
 }
 

@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { PageHeader, HeaderButton } from '../components/PageHeader';
 import { CatalogPickerDialog } from '../components/CatalogPickerDialog';
-import { CustomerPickerDialog } from '../components/CustomerPickerDialog';
+import { PartyPickerDialog } from '../components/PartyPickerDialog';
 import { PartyFormDialog } from '../components/PartyFormDialog';
 import { ItemFormDialog } from '../components/ItemFormDialog';
 import { usePermissions } from '../components/Gating';
@@ -1030,8 +1030,9 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
       )}
 
       {isCustomerPickerOpen && (
-        <CustomerPickerDialog
-          customers={customers.filter((c) => !c.archived || c.id === Number(selectedCustomerId))}
+        <PartyPickerDialog
+          role="client"
+          parties={customers.filter((c) => !c.archived || c.id === Number(selectedCustomerId))}
           selectedId={selectedCustomerId || null}
           onPick={handlePickCustomer}
           onAddNew={
