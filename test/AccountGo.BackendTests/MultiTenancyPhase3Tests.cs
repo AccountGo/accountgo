@@ -168,6 +168,34 @@ namespace AccountGo.BackendTests
         }
 
         [Fact]
+        public async Task RecordPayment_OnlyOnIssuedInvoices()
+        {
+            var invoice = await NewInvoice();
+            invoice.Status = "Draft";
+            var saved = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
+            Assert.True(saved.IsSuccessStatusCode, await saved.Content.ReadAsStringAsync());
+            var invoiceId = (await saved.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt32();
+            var payment = new Dto.Sales.RecordInvoicePaymentDto { InvoiceId = invoiceId, Amount = 100, PaymentDate = DateTime.UtcNow };
+
+            var onDraft = await Send(HttpMethod.Post, "/api/Sales/RecordPayment", payment);
+            Assert.Equal(HttpStatusCode.BadRequest, onDraft.StatusCode);
+            Assert.Equal("Draft", (await GetInvoice(invoiceId)).Status);
+            Assert.Equal(0m, await DashboardKpi("moneyInBank"));
+
+            Assert.True((await Send(HttpMethod.Post, $"/api/Sales/IssueSalesInvoice?id={invoiceId}")).IsSuccessStatusCode);
+            var onIssued = await Send(HttpMethod.Post, "/api/Sales/RecordPayment", payment);
+            Assert.True(onIssued.IsSuccessStatusCode, await onIssued.Content.ReadAsStringAsync());
+            Assert.Equal("Paid", (await GetInvoice(invoiceId)).Status);
+
+            var voided = await NewInvoice();
+            voided.Status = "Draft";
+            var voidedId = (await (await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", voided)).Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt32();
+            Assert.True((await Send(HttpMethod.Post, $"/api/Sales/VoidSalesInvoice?id={voidedId}")).IsSuccessStatusCode);
+            Assert.Equal(HttpStatusCode.BadRequest, (await Send(HttpMethod.Post, "/api/Sales/RecordPayment",
+                new Dto.Sales.RecordInvoicePaymentDto { InvoiceId = voidedId, Amount = 100, PaymentDate = DateTime.UtcNow })).StatusCode);
+        }
+
+        [Fact]
         public async Task RecordPayment_InNewWorkspace_DebitsPostableCashAccount()
         {
             var invoice = await NewInvoice();

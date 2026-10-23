@@ -92,7 +92,9 @@ namespace Api.Service
                 {
                     column.Item().AlignRight().Text("INVOICE").FontSize(22).ExtraBold().LetterSpacing(0.04f);
                     column.Item().AlignRight().Text($"#{InvoiceNumber}").FontSize(11).SemiBold().FontColor(Brand);
-                    column.Item().PaddingTop(6).AlignRight().Element(ComposeStatusBadge);
+                    // The PDF is what the customer receives, so it only marks statuses that change what the document is.
+                    if (_invoice.Status is "Paid" or "Void" or "Draft")
+                        column.Item().PaddingTop(6).AlignRight().Element(ComposeStatusBadge);
                 });
             });
         }
@@ -102,11 +104,8 @@ namespace Api.Service
             var (label, color) = _invoice.Status switch
             {
                 "Paid" => ("PAID", "#059669"),
-                "Partially Paid" => ("PARTIALLY PAID", "#D97706"),
-                "Overdue" => ("OVERDUE", "#E11D48"),
                 "Void" => ("VOID", "#64748B"),
-                "Draft" => ("DRAFT", "#64748B"),
-                _ => ("OPEN", "#2563EB"),
+                _ => ("DRAFT", "#64748B"),
             };
 
             container.Border(1).BorderColor(color).CornerRadius(4).PaddingVertical(2).PaddingHorizontal(8)

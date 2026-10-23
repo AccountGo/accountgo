@@ -395,8 +395,8 @@ export const InvoiceDetail: React.FC = () => {
             </button>
           )}
 
-          {/* Record Payment Button (if balance due and not void) */}
-          {invoice.status !== 'Void' && invoice.balanceDue > 0 && (
+          {/* Record Payment Button (issued with a balance due; drafts are issued first) */}
+          {invoice.status !== 'Void' && invoice.status !== 'Draft' && invoice.balanceDue > 0 && (
             <button
               type="button"
               onClick={() => {

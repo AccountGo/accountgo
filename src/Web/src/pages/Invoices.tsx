@@ -598,8 +598,8 @@ export const Invoices: React.FC = () => {
                             <Eye className="w-4 h-4" />
                           </Link>
 
-                          {/* Record Payment (only if balance > 0 and not void) */}
-                          {inv.balanceDue > 0 && inv.status !== 'Void' && (
+                          {/* Record Payment (issued with a balance due; drafts are issued first) */}
+                          {inv.balanceDue > 0 && inv.status !== 'Void' && inv.status !== 'Draft' && (
                             <button
                               onClick={() => handleOpenPayment(inv)}
                               className="p-1.5 rounded-lg text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 transition-colors"
