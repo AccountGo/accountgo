@@ -1,5 +1,5 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
-import { Loader2, Mail, Paperclip, Send } from 'lucide-react';
+import { AlertTriangle, Loader2, Mail, Paperclip, Send } from 'lucide-react';
 
 interface SendInvoiceDialogProps {
   /** 'issue' asks whether to email while issuing a draft; 'send' emails an invoice that is already issued. */
@@ -8,6 +8,8 @@ interface SendInvoiceDialogProps {
   to: string;
   /** The signed-in user, who receives a blind copy. */
   bcc?: string;
+  /** When the invoice was already emailed, so a second send is a deliberate choice. */
+  lastSent?: { to: string; sentAt: string } | null;
   busy: boolean;
   error: string | null;
   onIssueOnly: () => void;
@@ -27,6 +29,7 @@ export const SendInvoiceDialog: React.FC<SendInvoiceDialogProps> = ({
   invoiceNumber,
   to,
   bcc,
+  lastSent,
   busy,
   error,
   onIssueOnly,
@@ -97,6 +100,17 @@ export const SendInvoiceDialog: React.FC<SendInvoiceDialogProps> = ({
               </p>
             </div>
           </div>
+
+          {lastSent && (
+            <div className="flex items-start gap-2.5 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-600 dark:text-amber-400">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-px" />
+              <span>
+                Already emailed to <strong className="font-semibold">{lastSent.to}</strong> on{' '}
+                {new Date(lastSent.sentAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}.
+                Sending again gives the customer a second copy.
+              </span>
+            </div>
+          )}
 
           <dl className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-subtle)] divide-y divide-[var(--border-subtle)] text-sm">
             <div className="flex gap-3 px-4 py-2.5">

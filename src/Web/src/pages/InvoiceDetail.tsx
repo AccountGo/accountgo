@@ -28,6 +28,9 @@ import { useAuth } from '../auth/AuthContext';
 import { currencySymbol as getCurrencySymbol } from '../lib/currency';
 import { SendInvoiceDialog } from '../components/SendInvoiceDialog';
 
+const formatDateTime = (iso: string) =>
+  new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+
 export const InvoiceDetail: React.FC = () => {
   const { currentOrg } = useOutletContext<TenantContextType>();
   const { authFetch, user } = useAuth();
@@ -288,6 +291,7 @@ export const InvoiceDetail: React.FC = () => {
       const to = await emailInvoice();
       setSuccessBanner(issuing ? `${label} has been issued and emailed to ${to}.` : `${label} has been emailed to ${to}.`);
       setSendDialogMode(null);
+      if (!issuing) await fetchInvoice();
     } catch (err: any) {
       if (issuing) {
         // The invoice is issued either way; the email can be sent again from the invoice.
@@ -386,6 +390,7 @@ export const InvoiceDetail: React.FC = () => {
   const showCustomerEmail = invoice.display?.showCustomerEmail ?? true;
   const showNotes = invoice.display?.showNotes ?? true;
   const showPaymentInstructions = invoice.display?.showPaymentInstructions ?? true;
+  const lastEmail = invoice.emails?.[0] ?? null;
 
   return (
     <div className="print-page max-w-5xl mx-auto px-4 sm:px-6 py-6 pb-24 text-[var(--text-main)]">
@@ -405,6 +410,15 @@ export const InvoiceDetail: React.FC = () => {
               Invoice {invoice.no ? `#${invoice.no}` : `#${invoice.id}`}
             </h1>
             {getStatusBadge(invoice.status)}
+            {lastEmail && (
+              <span
+                title={`Emailed to ${lastEmail.to} on ${formatDateTime(lastEmail.sentAt)}`}
+                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-full text-sky-600 dark:text-sky-400 bg-sky-500/10 border border-sky-500/20"
+              >
+                <Mail className="w-3.5 h-3.5" />
+                Emailed
+              </span>
+            )}
           </div>
         </div>
 
@@ -820,6 +834,42 @@ export const InvoiceDetail: React.FC = () => {
         )}
       </div>
 
+      {/* Email History Section (Hidden on Print) */}
+      {invoice.status !== 'Draft' && (
+        <div className="no-print mt-6 bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl shadow-sm p-6 sm:p-8">
+          <div className="flex items-center gap-2 mb-4">
+            <Mail className="w-5 h-5 text-[var(--brand-primary)]" />
+            <h3 className="font-bold text-[var(--text-main)] text-base">Email History</h3>
+          </div>
+
+          {invoice.emails && invoice.emails.length > 0 ? (
+            <ol className="divide-y divide-[var(--border-subtle)] rounded-xl border border-[var(--border-subtle)]">
+              {invoice.emails.map((email) => (
+                <li key={email.id} className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 px-4 py-3 text-sm">
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <Send className="w-3.5 h-3.5 shrink-0 text-[var(--text-muted)]" />
+                    <span className="text-[var(--text-secondary)]">
+                      {email.kind === 'Invoice' ? 'Invoice sent to' : `${email.kind} sent to`}
+                    </span>
+                    <span className="font-medium text-[var(--text-main)] truncate">{email.to}</span>
+                  </div>
+                  <div className="text-xs text-[var(--text-muted)] sm:text-right">
+                    {formatDateTime(email.sentAt)}
+                    {email.sentBy && <span> · by {email.sentBy}</span>}
+                  </div>
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <div className="text-center py-6 text-sm text-[var(--text-muted)] bg-[var(--bg-subtle)]/50 rounded-xl border border-dashed border-[var(--border-subtle)]">
+              {invoice.customerEmail
+                ? 'This invoice has not been emailed to the customer yet.'
+                : 'Add an email address to the customer to send invoices by email.'}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Record Payment Modal */}
       {isPaymentModalOpen && (
         <div className="no-print fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
@@ -958,6 +1008,7 @@ export const InvoiceDetail: React.FC = () => {
           invoiceNumber={invoice.no || String(invoice.id)}
           to={invoice.customerEmail}
           bcc={user?.email && user.email.toLowerCase() !== invoice.customerEmail.toLowerCase() ? user.email : undefined}
+          lastSent={sendDialogMode === 'send' ? lastEmail : null}
           busy={isSendingEmail || isSubmittingIssue}
           error={sendError}
           onIssueOnly={handleIssueOnly}

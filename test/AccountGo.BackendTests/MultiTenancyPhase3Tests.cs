@@ -325,8 +325,58 @@ namespace AccountGo.BackendTests
             _emails.Fail = true;
             Assert.Equal(HttpStatusCode.BadGateway, (await Send(HttpMethod.Post, path)).StatusCode);
             _emails.Fail = false;
-            var reloaded = await Send(HttpMethod.Get, $"/api/Sales/SalesInvoice?id={invoiceId}");
-            Assert.Equal("Open", (await reloaded.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("status").GetString());
+            var reloaded = await (await Send(HttpMethod.Get, $"/api/Sales/SalesInvoice?id={invoiceId}")).Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal("Open", reloaded.GetProperty("status").GetString());
+
+            // Only the send the provider accepted is on record, and the invoice shows it.
+            var emails = reloaded.GetProperty("emails");
+            Assert.Equal(1, emails.GetArrayLength());
+            Assert.Equal("billing@customer.example", emails[0].GetProperty("to").GetString());
+            Assert.Equal("phase3-owner@example.com", emails[0].GetProperty("sentBy").GetString());
+            Assert.Equal("Invoice", emails[0].GetProperty("kind").GetString());
+            Assert.EndsWith("Z", emails[0].GetProperty("sentAt").GetString());
+            using (var scope = _factory.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+                using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
+                {
+                    var record = db.SalesInvoiceEmails.Single(e => e.SalesInvoiceHeaderId == invoiceId);
+                    Assert.Equal(_companyId, record.CompanyId);
+                    Assert.Equal(_ownerId, record.SentByUserId);
+                    Assert.Equal("phase3-owner@example.com", record.BccEmail);
+                    Assert.Equal(message.Subject, record.Subject);
+                    Assert.StartsWith("fake-", record.ProviderMessageId);
+                }
+            }
+        }
+
+        [Fact]
+        public async Task SendSalesInvoiceEmail_CapsSendsPerWorkspaceHour()
+        {
+            var invoice = await NewInvoice("billing@customer.example");
+            invoice.Status = "Open";
+            var saved = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
+            Assert.True(saved.IsSuccessStatusCode, await saved.Content.ReadAsStringAsync());
+            var invoiceId = (await saved.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt32();
+
+            using (var scope = _factory.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+                using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
+                {
+                    // An old send no longer counts; 29 in the last hour leave room for one more.
+                    db.SalesInvoiceEmails.Add(new SalesInvoiceEmail { SalesInvoiceHeaderId = invoiceId, ToEmail = "x@example.com", Subject = "old", SentAt = DateTime.UtcNow.AddHours(-2) });
+                    for (var i = 0; i < 29; i++)
+                        db.SalesInvoiceEmails.Add(new SalesInvoiceEmail { SalesInvoiceHeaderId = invoiceId, ToEmail = "x@example.com", Subject = "recent", SentAt = DateTime.UtcNow.AddMinutes(-5) });
+                    db.SaveChanges();
+                }
+            }
+
+            var path = $"/api/Sales/SendSalesInvoiceEmail?id={invoiceId}";
+            Assert.True((await Send(HttpMethod.Post, path)).IsSuccessStatusCode);
+            var count = _emails.Messages.Count;
+            Assert.Equal((HttpStatusCode)429, (await Send(HttpMethod.Post, path)).StatusCode);
+            Assert.Equal(count, _emails.Messages.Count);
         }
 
         [Fact]

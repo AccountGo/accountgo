@@ -399,6 +399,16 @@ namespace Api.Data
                     .OnDelete(DeleteBehavior.Cascade);
             });
 
+            builder.Entity<SalesInvoiceEmail>(entity =>
+            {
+                entity.HasIndex(e => new { e.CompanyId, e.SentAt });
+                entity.HasIndex(e => e.SalesInvoiceHeaderId);
+                entity.HasOne<SalesInvoiceHeader>()
+                    .WithMany()
+                    .HasForeignKey(e => e.SalesInvoiceHeaderId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+
             builder.Entity<Account>()
                 .HasIndex(e => new { e.CompanyId, e.AccountCode })
                 .IsUnique();
@@ -467,6 +477,7 @@ namespace Api.Data
         public virtual DbSet<SalesDeliveryHeader> SalesDeliveryHeaders { get; set; }
         public virtual DbSet<SalesDeliveryLine> SalesDeliveryLines { get; set; }
         public virtual DbSet<SalesInvoiceHeader> SalesInvoiceHeaders { get; set; }
+        public virtual DbSet<SalesInvoiceEmail> SalesInvoiceEmails { get; set; }
         public virtual DbSet<SalesInvoiceLine> SalesInvoiceLines { get; set; }
         public virtual DbSet<SalesOrderHeader> SalesOrderHeaders { get; set; }
         public virtual DbSet<SalesOrderLine> SalesOrderLines { get; set; }
