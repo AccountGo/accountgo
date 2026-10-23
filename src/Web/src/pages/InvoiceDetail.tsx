@@ -5,6 +5,7 @@ import {
   Printer,
   CreditCard,
   FileEdit,
+  Copy,
   Ban,
   Clock,
   CheckCircle2,
@@ -438,6 +439,8 @@ export const InvoiceDetail: React.FC = () => {
             <HeaderButton label="Download PDF" icon={FileDown} compact busy={isDownloadingPdf} onClick={handleDownloadPdf} />
             <HeaderMenu
               items={[
+                // Opens a new invoice prefilled from this one; nothing is saved until the user saves it.
+                { label: 'Duplicate invoice', icon: Copy, to: `/org/${orgSlug}/sales/new?from=${invoice.id}` },
                 canEdit && { label: 'Edit invoice', icon: FileEdit, to: `/org/${orgSlug}/sales/${invoice.id}/edit` },
                 { label: 'Print', icon: Printer, onSelect: () => window.print() },
                 canVoid && 'separator',

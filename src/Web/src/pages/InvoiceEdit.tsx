@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { useOutletContext, useParams, useNavigate } from 'react-router-dom';
+import { useOutletContext, useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Plus,
   Trash2,
@@ -51,6 +51,10 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
   const { authFetch } = useAuth();
   const { orgSlug, invoiceId } = useParams<{ orgSlug: string; invoiceId?: string }>();
   const navigate = useNavigate();
+  // "Duplicate invoice" opens a new invoice prefilled from another one (?from=<id>).
+  const [searchParams] = useSearchParams();
+  const duplicateOf = isEdit ? null : searchParams.get('from');
+  const [duplicatedTitle, setDuplicatedTitle] = useState<string | null>(null);
 
   // Reference data
   const [customers, setCustomers] = useState<CustomerOption[]>([]);
@@ -181,7 +185,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
 
   // Prefill a new invoice with the workspace's default notes and payment instructions
   useEffect(() => {
-    if (isEdit) return;
+    if (isEdit || duplicateOf) return;
     let cancelled = false;
     (async () => {
       try {
@@ -196,7 +200,51 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
       }
     })();
     return () => { cancelled = true; };
-  }, [isEdit, authFetch]);
+  }, [isEdit, duplicateOf, authFetch]);
+
+  // Duplicate: copy the client, terms, lines, reference and texts. The copy is a new draft dated today, without a
+  // number, and keeps the original's gap between issue and due date in business days.
+  useEffect(() => {
+    if (!duplicateOf) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await authFetch(`/api/Sales/SalesInvoice?id=${encodeURIComponent(duplicateOf)}`);
+        if (!res.ok) throw new Error('The invoice to duplicate could not be loaded.');
+        const data: Invoice = await res.json();
+        if (cancelled) return;
+
+        const today = new Date().toISOString().split('T')[0];
+        const sourceIssue = data.invoiceDate?.split('T')[0] ?? '';
+        const sourceDue = data.dueDate?.split('T')[0] ?? '';
+        const gap = isValidDate(sourceIssue) && isValidDate(sourceDue) ? businessDaysBetween(sourceIssue, sourceDue) : null;
+
+        setSelectedCustomerId(data.customerId);
+        setReferenceNo(data.referenceNo || '');
+        setInvoiceDate(today);
+        setPaymentTermId(data.paymentTermId || '');
+        setDueDate(gap !== null ? addBusinessDays(today, gap) : '');
+        setNotes(data.notes ?? '');
+        setPaymentInstructions(data.paymentInstructions ?? '');
+        if (data.salesInvoiceLines && data.salesInvoiceLines.length > 0) {
+          setLines(
+            data.salesInvoiceLines.map((l: InvoiceLineItem) => ({
+              itemId: l.itemId,
+              itemDescription: l.itemDescription || '',
+              quantity: l.quantity || 1,
+              amount: l.amount || 0,
+              discount: l.discount || 0,
+              taxRate: l.taxRate || 0,
+            }))
+          );
+        }
+        setDuplicatedTitle(data.no ? `invoice #${data.no}` : 'a draft invoice');
+      } catch (err: any) {
+        if (!cancelled) setErrorBanner(err.message || 'The invoice to duplicate could not be loaded.');
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [duplicateOf, authFetch]);
 
   // Load existing invoice if edit mode
   useEffect(() => {
@@ -517,7 +565,11 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
         className="mb-6"
         back={{ to: `/org/${orgSlug}/sales`, label: 'Back to invoices' }}
         title={isEdit ? (invoiceNo && isIssued ? `Edit invoice #${invoiceNo}` : 'Edit draft') : 'New invoice'}
-        subtitle="Save a draft to finish later, or issue it to post it to your books."
+        subtitle={
+          duplicatedTitle
+            ? `A copy of ${duplicatedTitle}, dated today. Nothing is saved until you save it.`
+            : 'Save a draft to finish later, or issue it to post it to your books.'
+        }
         actions={
           <>
             <HeaderButton label="Cancel" to={`/org/${orgSlug}/sales`} />
