@@ -506,6 +506,22 @@ namespace Api.Controllers
                 : null;
         }
 
+        /// <summary>
+        /// The due date sent with the invoice, or else the term's business days after the invoice date. A due date before
+        /// the invoice date is refused.
+        /// </summary>
+        private DateTime DueDateForSave(DateTime invoiceDate, DateTime? requested, int? paymentTermId)
+        {
+            if (requested.HasValue)
+            {
+                if (requested.Value.Date < invoiceDate.Date)
+                    throw new ArgumentException("The due date can't be before the invoice date.");
+                return requested.Value.Date;
+            }
+            var term = paymentTermId.HasValue ? _adminService.GetPaymentTerms().FirstOrDefault(t => t.Id == paymentTermId) : null;
+            return Core.Domain.BusinessDays.Add(invoiceDate, term?.DueAfterDays ?? 0);
+        }
+
         private Core.Domain.Company? CurrentCompany() =>
             (!string.IsNullOrWhiteSpace(_tenantContext.CompanySlug) ? _adminService.GetCompanyBySlug(_tenantContext.CompanySlug) : null)
             ?? _adminService.GetCompanies().FirstOrDefault(c => c.Id == _tenantContext.CompanyId);
@@ -521,8 +537,7 @@ namespace Api.Controllers
                 return null;
 
             var paymentTerm = _adminService.GetPaymentTerms().FirstOrDefault(t => t.Id == salesInvoice.PaymentTermId);
-            var dueDays = paymentTerm?.DueAfterDays ?? 30;
-            var dueDate = salesInvoice.Date.AddDays(dueDays);
+            var dueDate = salesInvoice.ResolveDueDate(paymentTerm);
 
             var defaultCompany = CurrentCompany();
             var setting = _db.CompanySettings.FirstOrDefault();
@@ -821,8 +836,7 @@ namespace Api.Controllers
             foreach (var salesInvoice in salesInvoices)
             {
                 var term = paymentTerms.FirstOrDefault(t => t.Id == salesInvoice.PaymentTermId);
-                var dueDays = term?.DueAfterDays ?? 30;
-                var dueDate = salesInvoice.Date.AddDays(dueDays);
+                var dueDate = salesInvoice.ResolveDueDate(term);
 
                 decimal allocatedAmount = salesInvoice.CustomerAllocations != null 
                     ? salesInvoice.CustomerAllocations.Sum(i => i.Amount) 
@@ -1212,9 +1226,10 @@ namespace Api.Controllers
                 if (isNew)
                 {
                     var defaultPaymentTerm = _adminService.GetPaymentTerms().FirstOrDefault();
+                    // No term with a due date means custom terms; with neither, the workspace default applies.
                     int? paymentTermId = (salesInvoiceDto.PaymentTermId.HasValue && salesInvoiceDto.PaymentTermId.Value > 0)
                         ? salesInvoiceDto.PaymentTermId.Value
-                        : defaultPaymentTerm?.Id;
+                        : salesInvoiceDto.DueDate.HasValue ? null : defaultPaymentTerm?.Id;
 
                     if (!salesInvoiceDto.FromSalesOrderId.HasValue)
                     {
@@ -1236,6 +1251,7 @@ namespace Api.Controllers
                     salesInvoice.CustomerId = salesInvoiceDto.CustomerId;
                     salesInvoice.Date = salesInvoiceDto.InvoiceDate;
                     salesInvoice.PaymentTermId = paymentTermId;
+                    salesInvoice.DueDate = DueDateForSave(salesInvoice.Date, salesInvoiceDto.DueDate, paymentTermId);
                     salesInvoice.ReferenceNo = salesInvoiceDto.ReferenceNo;
                     salesInvoice.Notes = string.IsNullOrWhiteSpace(salesInvoiceDto.Notes) ? null : salesInvoiceDto.Notes.Trim();
                     salesInvoice.PaymentInstructions = string.IsNullOrWhiteSpace(salesInvoiceDto.PaymentInstructions) ? null : salesInvoiceDto.PaymentInstructions.Trim();
@@ -1314,7 +1330,8 @@ namespace Api.Controllers
                     salesInvoice.Date = salesInvoiceDto.InvoiceDate;
                     salesInvoice.PaymentTermId = (salesInvoiceDto.PaymentTermId.HasValue && salesInvoiceDto.PaymentTermId.Value > 0)
                         ? salesInvoiceDto.PaymentTermId.Value
-                        : (salesInvoice.PaymentTermId ?? defaultPaymentTerm?.Id);
+                        : salesInvoiceDto.DueDate.HasValue ? null : (salesInvoice.PaymentTermId ?? defaultPaymentTerm?.Id);
+                    salesInvoice.DueDate = DueDateForSave(salesInvoice.Date, salesInvoiceDto.DueDate, salesInvoice.PaymentTermId);
                     salesInvoice.ReferenceNo = salesInvoiceDto.ReferenceNo;
                     salesInvoice.Notes = string.IsNullOrWhiteSpace(salesInvoiceDto.Notes) ? null : salesInvoiceDto.Notes.Trim();
                     salesInvoice.PaymentInstructions = string.IsNullOrWhiteSpace(salesInvoiceDto.PaymentInstructions) ? null : salesInvoiceDto.PaymentInstructions.Trim();

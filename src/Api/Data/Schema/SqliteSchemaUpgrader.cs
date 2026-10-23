@@ -160,7 +160,8 @@ namespace Api.Data.Schema
                     new[] { "CompanySetting", "BusinessAddress_CountryCode", "TEXT NULL" },
                     new[] { "SalesInvoiceHeader", "Notes", "TEXT NULL" },
                     new[] { "SalesInvoiceHeader", "PaymentInstructions", "TEXT NULL" },
-                    new[] { "SalesInvoiceHeader", "SellerJson", "TEXT NULL" }
+                    new[] { "SalesInvoiceHeader", "SellerJson", "TEXT NULL" },
+                    new[] { "SalesInvoiceHeader", "DueDate", "TEXT NULL" }
                 };
                 foreach (var column in columns)
                 {
