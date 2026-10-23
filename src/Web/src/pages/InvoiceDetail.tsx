@@ -27,6 +27,7 @@ import {
 import { useAuth } from '../auth/AuthContext';
 import { currencySymbol as getCurrencySymbol } from '../lib/currency';
 import { SendInvoiceDialog } from '../components/SendInvoiceDialog';
+import { invoiceTitle } from '../lib/invoiceNumber';
 import { PageHeader, HeaderButton, HeaderMenu, StatusPill } from '../components/PageHeader';
 
 const formatDateTime = (iso: string) =>
@@ -115,7 +116,7 @@ export const InvoiceDetail: React.FC = () => {
       const blob = await res.blob();
       const fileName =
         res.headers.get('Content-Disposition')?.match(/filename="?([^";]+)"?/)?.[1] ||
-        `Invoice-${invoice.no || invoice.id}.pdf`;
+        `Invoice-${invoice.no || 'Draft'}.pdf`;
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -202,7 +203,7 @@ export const InvoiceDetail: React.FC = () => {
         throw new Error(errorData?.message || 'Failed to void invoice.');
       }
 
-      setSuccessBanner(`Invoice #${invoice.no || invoice.id} has been voided.`);
+      setSuccessBanner(`${invoiceTitle(invoice)} has been voided.`);
       setIsVoidModalOpen(false);
       await fetchInvoice();
     } catch (err: any) {
@@ -217,18 +218,31 @@ export const InvoiceDetail: React.FC = () => {
   const [sendDialogMode, setSendDialogMode] = useState<'issue' | 'send' | null>(null);
   const [isSendingEmail, setIsSendingEmail] = useState<boolean>(false);
   const [sendError, setSendError] = useState<string | null>(null);
+  // The number an unnumbered draft takes when issued, as shown in the issue dialog.
+  const [issueNumber, setIssueNumber] = useState<string | null>(null);
 
-  const issueInvoice = async (): Promise<boolean> => {
-    if (!invoice) return false;
-    const res = await authFetch(`/api/Sales/IssueSalesInvoice?id=${invoice.id}`, {
+  const fetchNextNumber = async (): Promise<string | null> => {
+    const res = await authFetch('/api/Sales/NextSalesInvoiceNumber');
+    if (!res.ok) return null;
+    const data = await res.json().catch(() => null);
+    return data?.next ?? null;
+  };
+
+  /** Issues the draft and returns the number it was given. */
+  const issueInvoice = async (): Promise<string> => {
+    if (!invoice) return '';
+    // The dialog asked the user to confirm a number; the server refuses if another invoice took it meanwhile.
+    const expected = sendDialogMode === 'issue' && !invoice.no && issueNumber ? `&expectedNo=${encodeURIComponent(issueNumber)}` : '';
+    const res = await authFetch(`/api/Sales/IssueSalesInvoice?id=${invoice.id}${expected}`, {
       method: 'POST',
     });
 
+    const data = await res.json().catch(() => null);
     if (!res.ok) {
-      const errorData = await res.json().catch(() => null);
-      throw new Error(errorData?.message || 'Failed to issue invoice.');
+      if (data?.code === 'number_changed' && data?.next) setIssueNumber(data.next);
+      throw new Error(data?.message || 'Failed to issue invoice.');
     }
-    return true;
+    return data?.no || invoice.no || '';
   };
 
   const emailInvoice = async (): Promise<string> => {
@@ -243,10 +257,16 @@ export const InvoiceDetail: React.FC = () => {
     return data?.to || invoice.customerEmail || '';
   };
 
-  const handleIssueClick = () => {
+  const handleIssueClick = async () => {
     if (!invoice) return;
     if (invoice.customerEmail) {
       setSendError(null);
+      const next = invoice.no ? null : await fetchNextNumber();
+      if (!invoice.no && !next) {
+        setErrorBanner("Couldn't get the next invoice number. Please try again.");
+        return;
+      }
+      setIssueNumber(next);
       setSendDialogMode('issue');
       return;
     }
@@ -259,9 +279,9 @@ export const InvoiceDetail: React.FC = () => {
     setErrorBanner(null);
 
     try {
-      await issueInvoice();
+      const no = await issueInvoice();
       setSendDialogMode(null);
-      setSuccessBanner(`Invoice #${invoice.no || invoice.id} has been issued successfully!`);
+      setSuccessBanner(`Invoice #${no} has been issued.`);
       await fetchInvoice();
     } catch (err: any) {
       if (sendDialogMode) setSendError(err.message || 'An error occurred while issuing the invoice.');
@@ -274,13 +294,13 @@ export const InvoiceDetail: React.FC = () => {
   const handleSendEmail = async () => {
     if (!invoice || !sendDialogMode) return;
     const issuing = sendDialogMode === 'issue';
-    const label = `Invoice #${invoice.no || invoice.id}`;
+    let label = invoiceTitle(invoice);
     setIsSendingEmail(true);
     setSendError(null);
     setErrorBanner(null);
 
     try {
-      if (issuing) await issueInvoice();
+      if (issuing) label = `Invoice #${await issueInvoice()}`;
     } catch (err: any) {
       // Nothing happened yet; keep the dialog open so the user can retry or cancel.
       setSendError(err.message || 'An error occurred while issuing the invoice.');
@@ -390,7 +410,7 @@ export const InvoiceDetail: React.FC = () => {
       <PageHeader
         className="no-print mb-6"
         back={{ to: `/org/${orgSlug}/sales`, label: 'Back to invoices' }}
-        title={`Invoice #${invoice.no || invoice.id}`}
+        title={invoiceTitle(invoice)}
         badges={
           <>
             {getStatusBadge(invoice.status)}
@@ -507,9 +527,11 @@ export const InvoiceDetail: React.FC = () => {
             <h3 className="text-3xl font-extrabold tracking-tight text-[var(--text-main)] uppercase mb-1">
               INVOICE
             </h3>
-            <p className="text-base font-bold font-mono text-[var(--brand-primary)]">
-              #{invoice.no || invoice.id}
-            </p>
+            {invoice.no ? (
+              <p className="text-base font-bold font-mono text-[var(--brand-primary)]">#{invoice.no}</p>
+            ) : (
+              <p className="text-xs text-[var(--text-muted)]">Numbered when issued</p>
+            )}
             <div className="mt-2 flex sm:justify-end">{getStatusBadge(invoice.status)}</div>
           </div>
         </div>
@@ -931,7 +953,8 @@ export const InvoiceDetail: React.FC = () => {
       {sendDialogMode && invoice.customerEmail && (
         <SendInvoiceDialog
           mode={sendDialogMode}
-          invoiceNumber={invoice.no || String(invoice.id)}
+          invoiceNumber={invoice.no || issueNumber || ''}
+          numberOnIssue={sendDialogMode === 'issue' && !invoice.no}
           to={invoice.customerEmail}
           bcc={user?.email && user.email.toLowerCase() !== invoice.customerEmail.toLowerCase() ? user.email : undefined}
           lastSent={sendDialogMode === 'send' ? lastEmail : null}
@@ -950,7 +973,7 @@ export const InvoiceDetail: React.FC = () => {
             <div className="flex items-center gap-3 text-rose-500">
               <Ban className="w-6 h-6 shrink-0" />
               <h3 className="font-bold text-lg text-[var(--text-main)]">
-                Void Invoice #{invoice.no || invoice.id}?
+                Void {invoice.no ? `invoice #${invoice.no}` : 'this draft'}?
               </h3>
             </div>
 

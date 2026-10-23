@@ -305,6 +305,12 @@ namespace Api.Data
                 .Property(p => p.ShippingHandlingCharge)
                 .HasColumnType("decimal(18, 2)");
 
+            // Invoice numbers are unique per workspace; drafts without a number (NULL) don't clash.
+            builder.Entity<SalesInvoiceHeader>()
+                .HasIndex(e => new { e.CompanyId, e.No })
+                .IsUnique()
+                .HasDatabaseName("IX_SalesInvoiceHeader_CompanyId_No");
+
             builder.Entity<SalesInvoiceLine>()
                 .Property(p => p.Amount)
                 .HasColumnType("decimal(18, 2)");

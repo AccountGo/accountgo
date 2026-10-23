@@ -22,8 +22,14 @@ namespace Api.Service
         public static string CurrencyCode(string? code) =>
             string.IsNullOrWhiteSpace(code) ? "USD" : code.Trim().ToUpperInvariant();
 
+        // A draft is numbered when it is issued; until then it reads "Draft", never its internal id, which would pass
+        // for a real invoice number.
         public static string Number(Dto.Sales.SalesInvoice invoice) =>
-            string.IsNullOrWhiteSpace(invoice.No) ? invoice.Id.ToString(CultureInfo.InvariantCulture) : invoice.No!;
+            string.IsNullOrWhiteSpace(invoice.No) ? "Draft" : invoice.No!;
+
+        /// <summary>"#1043", or "Draft" for a draft that has no number yet.</summary>
+        public static string Label(Dto.Sales.SalesInvoice invoice) =>
+            string.IsNullOrWhiteSpace(invoice.No) ? "Draft" : "#" + invoice.No;
 
         public static string Money(decimal amount, string currencyCode)
         {

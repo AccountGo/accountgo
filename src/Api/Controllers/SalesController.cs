@@ -1183,13 +1183,19 @@ namespace Api.Controllers
                     return new BadRequestObjectResult(errors);
                 }
 
-                _salesService.PostSalesInvoice(salesInvoiceDto.Id);
+                using (var tx = BeginInvoiceNumberingTransaction())
+                {
+                    _salesService.PostSalesInvoice(salesInvoiceDto.Id);
+                    tx.Commit();
+                }
 
                 return new ObjectResult(Ok());
             }
             catch (Exception ex)
             {
                 if (ex is Core.Tenancy.TenantException) throw;
+                if (InvoiceNumberProblem(ex) is { } numberProblem)
+                    return StatusCode(numberProblem.Status, new[] { numberProblem.Message });
                 errors = new string[1] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
                 return new BadRequestObjectResult(errors);
             }
@@ -1217,6 +1223,8 @@ namespace Api.Controllers
                 bool isNew = salesInvoiceDto.Id == 0;
                 Core.Domain.Sales.SalesInvoiceHeader? salesInvoice = null;
                 Core.Domain.Sales.SalesOrderHeader? salesOrder = null;
+
+                using var tx = BeginInvoiceNumberingTransaction();
 
                 _tenantGuard.EnsureOwned<Core.Domain.Sales.Customer>(salesInvoiceDto.CustomerId, nameof(salesInvoiceDto.CustomerId));
                 if (salesInvoiceDto.PaymentTermId.HasValue && salesInvoiceDto.PaymentTermId.Value > 0)
@@ -1248,6 +1256,7 @@ namespace Api.Controllers
 
                     // populate invoice header
                     salesInvoice = new Core.Domain.Sales.SalesInvoiceHeader();
+                    salesInvoice.No = Core.Domain.Sales.InvoiceNumber.ForSave(null, null, exists: false, salesInvoiceDto.No);
                     salesInvoice.CustomerId = salesInvoiceDto.CustomerId;
                     salesInvoice.Date = salesInvoiceDto.InvoiceDate;
                     salesInvoice.PaymentTermId = paymentTermId;
@@ -1325,6 +1334,9 @@ namespace Api.Controllers
 
                     if (salesInvoice.GeneralLedgerHeaderId.HasValue)
                         throw new Exception("Invoice is already posted. Update is not allowed.");
+
+                    // Before the status changes: whether the number may still change depends on the stored status.
+                    salesInvoice.No = Core.Domain.Sales.InvoiceNumber.ForSave(salesInvoice.No, salesInvoice.Status, exists: true, salesInvoiceDto.No);
 
                     var defaultPaymentTerm = _adminService.GetPaymentTerms().FirstOrDefault();
                     salesInvoice.Date = salesInvoiceDto.InvoiceDate;
@@ -1427,6 +1439,7 @@ namespace Api.Controllers
 
                 CaptureSellerIfIssued(salesInvoice);
                 _salesService.SaveSalesInvoice(salesInvoice, salesOrder);
+                tx.Commit();
 
                 // Auto-post to GL if issued (not draft) and not already posted
                 if (salesInvoiceDto.Status != "Draft" && salesInvoice.Id > 0 && !salesInvoice.GeneralLedgerHeaderId.HasValue)
@@ -1446,9 +1459,51 @@ namespace Api.Controllers
             catch (Exception ex)
             {
                 if (ex is Core.Tenancy.TenantException) throw;
+                if (InvoiceNumberProblem(ex) is { } numberProblem)
+                    return StatusCode(numberProblem.Status, new[] { numberProblem.Message });
                 errors = new string[1] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
                 return new BadRequestObjectResult(errors);
             }
+        }
+
+        [HttpGet]
+        [Route("NextSalesInvoiceNumber")]
+        [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesCreate)]
+        public IActionResult NextSalesInvoiceNumber()
+        {
+            // A preview only: the number is taken when an invoice is issued, and may have moved on by then.
+            return Ok(new { next = _salesService.PeekNextInvoiceNumber() });
+        }
+
+        // On SQLite, Serializable is BEGIN IMMEDIATE: the write lock is taken up front, so concurrent saves that
+        // number invoices queue behind each other instead of both reading the same next number.
+        private Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction BeginInvoiceNumberingTransaction() =>
+            Microsoft.EntityFrameworkCore.RelationalDatabaseFacadeExtensions.BeginTransaction(_db.Database, System.Data.IsolationLevel.Serializable);
+
+        private sealed record NumberProblem(int Status, string Message, string Code);
+
+        // Our own number checks, or the unique index on (CompanyId, No) if a save got past them.
+        private static NumberProblem? InvoiceNumberProblem(Exception ex)
+        {
+            if (ex is Core.Domain.Sales.InvoiceNumberException numberEx)
+            {
+                return numberEx.Error switch
+                {
+                    Core.Domain.Sales.InvoiceNumberError.Taken => new NumberProblem(StatusCodes.Status409Conflict, numberEx.Message, "number_taken"),
+                    Core.Domain.Sales.InvoiceNumberError.Changed => new NumberProblem(StatusCodes.Status409Conflict, numberEx.Message, "number_changed"),
+                    _ => new NumberProblem(StatusCodes.Status400BadRequest, numberEx.Message, "number_invalid"),
+                };
+            }
+
+            var detail = ex.InnerException?.Message ?? string.Empty;
+            if (ex is Microsoft.EntityFrameworkCore.DbUpdateException
+                && (detail.Contains("SalesInvoiceHeader.No", StringComparison.Ordinal)
+                    || detail.Contains("IX_SalesInvoiceHeader_CompanyId_No", StringComparison.Ordinal)))
+            {
+                return new NumberProblem(StatusCodes.Status409Conflict,
+                    "That invoice number was just taken by another invoice. Please try again.", "number_taken");
+            }
+            return null;
         }
 
         [HttpPost("CreateSalesInvoice")]
@@ -1457,7 +1512,17 @@ namespace Api.Controllers
         public IActionResult CreateSalesInvoice([FromBody] Dto.Sales.SalesInvoice salesInvoiceDto)
         {
             EnsureSalesInvoiceReferencesOwned(salesInvoiceDto);
-            var result = _salesService.CreateSalesInvoice(salesInvoiceDto);
+            Core.Domain.Error.Result<Dto.Sales.SalesInvoice> result;
+            try
+            {
+                using var tx = BeginInvoiceNumberingTransaction();
+                result = _salesService.CreateSalesInvoice(salesInvoiceDto);
+                if (result.IsSuccess) tx.Commit();
+            }
+            catch (Exception ex) when (InvoiceNumberProblem(ex) is { } numberProblem)
+            {
+                return StatusCode(numberProblem.Status, numberProblem.Message);
+            }
 
             if (result.IsFailure)
                 return BadRequest(result.Error.Message);
@@ -1473,7 +1538,17 @@ namespace Api.Controllers
         public IActionResult UpdateSalesInvoice([FromBody] Dto.Sales.SalesInvoice salesInvoiceDto)
         {
             EnsureSalesInvoiceReferencesOwned(salesInvoiceDto);
-            var result = _salesService.UpdateSalesInvoice(salesInvoiceDto);
+            Core.Domain.Error.Result<Dto.Sales.SalesInvoice> result;
+            try
+            {
+                using var tx = BeginInvoiceNumberingTransaction();
+                result = _salesService.UpdateSalesInvoice(salesInvoiceDto);
+                if (result.IsSuccess) tx.Commit();
+            }
+            catch (Exception ex) when (InvoiceNumberProblem(ex) is { } numberProblem)
+            {
+                return StatusCode(numberProblem.Status, numberProblem.Message);
+            }
 
             if (result.IsFailure)
                 return BadRequest(result.Error.Message);
@@ -1545,6 +1620,7 @@ namespace Api.Controllers
         }
 
         [HttpDelete("DeleteSalesInvoice")]
+        [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesCreate)]
         public async Task<IActionResult> DeleteSalesInvoice(int id)
         {
             var result = await _salesService.DeleteSalesInvoiceAsync(id);
@@ -1710,10 +1786,11 @@ namespace Api.Controllers
 
         [HttpPost]
         [Route("IssueSalesInvoice")]
-        public IActionResult IssueSalesInvoice(int id)
+        public IActionResult IssueSalesInvoice(int id, string? expectedNo = null)
         {
             try
             {
+                using var tx = BeginInvoiceNumberingTransaction();
                 var invoice = _salesService.GetSalesInvoiceById(id);
                 if (invoice == null)
                     return NotFound(new { message = $"Invoice #{id} not found." });
@@ -1721,9 +1798,19 @@ namespace Api.Controllers
                 if (invoice.Status == Core.Domain.SalesInvoiceStatus.Void)
                     return BadRequest(new { message = "Cannot issue a void invoice." });
 
+                // The user confirmed the number they were shown; refuse rather than issue under a different one.
+                var expected = Core.Domain.Sales.InvoiceNumber.Normalize(expectedNo);
+                if (expected != null && Core.Domain.Sales.InvoiceNumber.Normalize(invoice.No) == null)
+                {
+                    var next = _salesService.PeekNextInvoiceNumber();
+                    if (!string.Equals(next, expected, StringComparison.OrdinalIgnoreCase))
+                        return Conflict(new { message = $"Another invoice just took #{expected}. This one will be #{next}.", code = "number_changed", next });
+                }
+
                 invoice.Status = Core.Domain.SalesInvoiceStatus.Open;
                 CaptureSellerIfIssued(invoice);
                 _salesService.UpdateSalesInvoice(invoice);
+                tx.Commit();
 
                 if (!invoice.GeneralLedgerHeaderId.HasValue)
                 {
@@ -1737,10 +1824,12 @@ namespace Api.Controllers
                     }
                 }
 
-                return Ok(new { success = true, invoiceId = invoice.Id, status = "Open" });
+                return Ok(new { success = true, invoiceId = invoice.Id, no = invoice.No, status = "Open" });
             }
             catch (Exception ex)
             {
+                if (InvoiceNumberProblem(ex) is { } numberProblem)
+                    return StatusCode(numberProblem.Status, new { message = numberProblem.Message, code = numberProblem.Code });
                 _logger.LogError(ex, "Failed to issue invoice {InvoiceId}", id);
                 return BadRequest(new { message = ex.Message });
             }
