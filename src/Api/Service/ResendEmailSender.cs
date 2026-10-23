@@ -59,12 +59,7 @@ namespace Api.Service
 
             var formattedFrom = string.IsNullOrWhiteSpace(fromName) ? fromEmail : $"{fromName} <{fromEmail}>";
 
-            var id = await DispatchEmailAsync(apiKey, formattedFrom, message, ct);
-
-            if (id == null)
-                throw new HttpRequestException("Resend failed to deliver the email. See server logs for the provider response.");
-
-            return id;
+            return await DispatchEmailAsync(apiKey, formattedFrom, message, ct);
         }
 
         /// <summary>
@@ -97,48 +92,71 @@ namespace Api.Service
                     : null
             }, PayloadOptions);
 
-        private async Task<string?> DispatchEmailAsync(
+        private async Task<string> DispatchEmailAsync(
             string apiKey,
             string from,
             EmailMessage message,
             CancellationToken ct)
         {
+            HttpResponseMessage response;
+            string responseContent;
             try
             {
                 using var request = new HttpRequestMessage(HttpMethod.Post, ResendApiEndpoint);
                 request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
                 request.Content = new StringContent(BuildPayload(from, message), Encoding.UTF8, "application/json");
 
-                var response = await _httpClient.SendAsync(request, ct);
-                var responseContent = await response.Content.ReadAsStringAsync(ct);
-
-                if (response.IsSuccessStatusCode)
-                {
-                    var result = JsonSerializer.Deserialize<ResendSuccessResponse>(responseContent, new JsonSerializerOptions
-                    {
-                        PropertyNameCaseInsensitive = true
-                    });
-
-                    _logger.LogInformation("✓ Email dispatched successfully via Resend. ID: {EmailId}, To: {To}, Subject: '{Subject}', Attachments: {AttachmentCount}",
-                        result?.Id, message.To, message.Subject, message.Attachments.Count);
-                    return result?.Id ?? string.Empty;
-                }
-
-                _logger.LogWarning("Resend API rejected email dispatch. StatusCode: {StatusCode}, Response: {Response}",
-                    response.StatusCode, responseContent);
-
-                if (responseContent.Contains("domain is not verified", StringComparison.OrdinalIgnoreCase))
-                {
-                    _logger.LogWarning("To send from '{From}', add and verify your domain at https://resend.com/domains.", from);
-                }
-
-                return null;
+                response = await _httpClient.SendAsync(request, ct);
+                responseContent = await response.Content.ReadAsStringAsync(ct);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Exception encountered while dispatching email via Resend to {To}", message.To);
-                return null;
+                throw new EmailDeliveryException($"The email service could not be reached ({ex.GetType().Name}).", ex);
             }
+
+            if (response.IsSuccessStatusCode)
+            {
+                var result = JsonSerializer.Deserialize<ResendSuccessResponse>(responseContent, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+
+                _logger.LogInformation("✓ Email dispatched successfully via Resend. ID: {EmailId}, To: {To}, Subject: '{Subject}', Attachments: {AttachmentCount}",
+                    result?.Id, message.To, message.Subject, message.Attachments.Count);
+                return result?.Id ?? string.Empty;
+            }
+
+            _logger.LogWarning("Resend API rejected email dispatch. StatusCode: {StatusCode}, Response: {Response}",
+                response.StatusCode, responseContent);
+
+            if (responseContent.Contains("domain is not verified", StringComparison.OrdinalIgnoreCase))
+            {
+                _logger.LogWarning("To send from '{From}', add and verify your domain at https://resend.com/domains.", from);
+            }
+
+            throw new EmailDeliveryException($"The email service refused it: {ProviderReason(responseContent, (int)response.StatusCode)}");
+        }
+
+        /// <summary>Resend's own explanation ({"message": "..."}), or the status code when the body isn't one.</summary>
+        public static string ProviderReason(string responseContent, int statusCode)
+        {
+            try
+            {
+                using var json = JsonDocument.Parse(responseContent);
+                if (json.RootElement.ValueKind == JsonValueKind.Object
+                    && json.RootElement.TryGetProperty("message", out var message)
+                    && message.ValueKind == JsonValueKind.String
+                    && !string.IsNullOrWhiteSpace(message.GetString()))
+                {
+                    var text = message.GetString()!.Trim();
+                    return text.Length > 300 ? text[..300] : text;
+                }
+            }
+            catch (JsonException)
+            {
+            }
+            return $"HTTP {statusCode}";
         }
 
         private class ResendEmailRequest

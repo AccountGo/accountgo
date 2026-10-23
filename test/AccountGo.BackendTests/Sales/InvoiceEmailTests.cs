@@ -1,7 +1,13 @@
 using System;
 using System.Collections.Generic;
+using System.Net;
+using System.Net.Http;
 using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
 using Api.Service;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace AccountGo.BackendTests.Sales;
@@ -139,5 +145,61 @@ public class InvoiceEmailTests
         Assert.False(json.RootElement.TryGetProperty("reply_to", out _));
         Assert.False(json.RootElement.TryGetProperty("attachments", out _));
         Assert.False(json.RootElement.TryGetProperty("text", out _));
+    }
+
+    [Fact]
+    public async Task ResendSender_Rejection_ReportsResendsReason()
+    {
+        var sender = Sender(_ => new HttpResponseMessage(HttpStatusCode.Forbidden)
+        {
+            Content = new StringContent("{\"statusCode\":403,\"name\":\"validation_error\",\"message\":\"The example.com domain is not verified.\"}")
+        });
+
+        var error = await Assert.ThrowsAsync<EmailDeliveryException>(() => sender.SendAsync(new EmailMessage { To = "a@example.com", Subject = "s", Html = "h" }));
+
+        Assert.Equal("The email service refused it: The example.com domain is not verified.", error.Message);
+    }
+
+    [Fact]
+    public async Task ResendSender_Unreachable_SaysSo()
+    {
+        var sender = Sender(_ => throw new TaskCanceledException("timed out"));
+
+        var error = await Assert.ThrowsAsync<EmailDeliveryException>(() => sender.SendAsync(new EmailMessage { To = "a@example.com", Subject = "s", Html = "h" }));
+
+        Assert.Equal("The email service could not be reached (TaskCanceledException).", error.Message);
+    }
+
+    [Fact]
+    public async Task ResendSender_Accepted_ReturnsMessageId()
+    {
+        var sender = Sender(_ => new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{\"id\":\"abc-123\"}") });
+
+        Assert.Equal("abc-123", await sender.SendAsync(new EmailMessage { To = "a@example.com", Subject = "s", Html = "h" }));
+    }
+
+    [Theory]
+    [InlineData("not json", 500, "HTTP 500")]
+    [InlineData("{\"message\":\"  \"}", 422, "HTTP 422")]
+    [InlineData("[]", 400, "HTTP 400")]
+    public void ProviderReason_FallsBackToStatus(string body, int status, string expected)
+    {
+        Assert.Equal(expected, ResendEmailSender.ProviderReason(body, status));
+    }
+
+    private static ResendEmailSender Sender(Func<HttpRequestMessage, HttpResponseMessage> respond)
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["RESEND_API_KEY"] = "test-key", ["RESEND_EMAIL_FROM"] = "noreply@example.com" })
+            .Build();
+        return new ResendEmailSender(new HttpClient(new StubHandler(respond)), configuration, NullLogger<ResendEmailSender>.Instance);
+    }
+
+    private sealed class StubHandler : HttpMessageHandler
+    {
+        private readonly Func<HttpRequestMessage, HttpResponseMessage> _respond;
+        public StubHandler(Func<HttpRequestMessage, HttpResponseMessage> respond) => _respond = respond;
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+            Task.FromResult(_respond(request));
     }
 }
