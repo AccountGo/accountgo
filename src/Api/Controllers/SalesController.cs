@@ -401,6 +401,9 @@ namespace Api.Controllers
             (!string.IsNullOrWhiteSpace(_tenantContext.CompanySlug) ? _adminService.GetCompanyBySlug(_tenantContext.CompanySlug) : null)
             ?? _adminService.GetCompanies().FirstOrDefault(c => c.Id == _tenantContext.CompanyId);
 
+        private void CaptureSellerIfIssued(Core.Domain.Sales.SalesInvoiceHeader invoice) =>
+            invoice.CaptureSellerIfIssued(CurrentCompany(), _db.CompanySettings.FirstOrDefault());
+
         /// <summary>Shapes an invoice with its computed totals and status; null when it is not in this workspace.</summary>
         private Dto.Sales.SalesInvoice? BuildSalesInvoiceDto(int id)
         {
@@ -415,7 +418,10 @@ namespace Api.Controllers
             var defaultCompany = CurrentCompany();
             var setting = _db.CompanySettings.FirstOrDefault();
             var invoiceSettings = setting?.GetSalesInvoiceSettings() ?? new Core.Domain.SalesInvoiceSettings();
-            var useLegalName = invoiceSettings.SellerName == Core.Domain.SalesInvoiceSettings.LegalName && !string.IsNullOrWhiteSpace(setting?.LegalName);
+            // Issued invoices print the seller recorded when they were issued; drafts, and invoices issued before that
+            // was recorded, follow the current business details.
+            var seller = Core.Domain.Sales.InvoiceSeller.FromJson(salesInvoice.SellerJson)
+                ?? Core.Domain.Sales.InvoiceSeller.FromWorkspace(defaultCompany, setting);
 
             var party = salesInvoice.Customer?.Party;
             var addressParts = new List<string>();
@@ -445,13 +451,11 @@ namespace Api.Controllers
                 CompanyName = defaultCompany?.Name,
                 Seller = new Dto.Sales.SellerInfo
                 {
-                    Name = useLegalName ? setting!.LegalName!.Trim() : defaultCompany?.Name ?? "AccountGo",
-                    TaxId = defaultCompany?.CRA,
-                    AddressLines = invoiceSettings.ShowSellerAddress && setting?.BusinessAddress != null
-                        ? setting.BusinessAddress.ToLines()
-                        : new List<string>(),
-                    Email = setting?.BusinessEmail,
-                    Phone = setting?.BusinessPhone
+                    Name = seller.Name,
+                    TaxId = seller.TaxId,
+                    AddressLines = invoiceSettings.ShowSellerAddress ? seller.AddressLines : new List<string>(),
+                    Email = seller.Email,
+                    Phone = seller.Phone
                 },
                 Display = new Dto.Sales.DisplayFlags
                 {
@@ -1288,6 +1292,7 @@ namespace Api.Controllers
 
                 _logger.LogInformation("SaveSalesInvoice API " + salesInvoice.CustomerId);
 
+                CaptureSellerIfIssued(salesInvoice);
                 _salesService.SaveSalesInvoice(salesInvoice, salesOrder);
 
                 // Auto-post to GL if issued (not draft) and not already posted
@@ -1517,6 +1522,7 @@ namespace Api.Controllers
                 {
                     invoice.Status = Core.Domain.SalesInvoiceStatus.Open;
                 }
+                CaptureSellerIfIssued(invoice);
                 _salesService.UpdateSalesInvoice(invoice);
 
                 return Ok(new
@@ -1579,6 +1585,7 @@ namespace Api.Controllers
                     return BadRequest(new { message = "Cannot issue a void invoice." });
 
                 invoice.Status = Core.Domain.SalesInvoiceStatus.Open;
+                CaptureSellerIfIssued(invoice);
                 _salesService.UpdateSalesInvoice(invoice);
 
                 if (!invoice.GeneralLedgerHeaderId.HasValue)

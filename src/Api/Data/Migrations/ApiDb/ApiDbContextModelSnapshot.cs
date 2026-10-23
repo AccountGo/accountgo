@@ -1933,6 +1933,9 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<string>("ReferenceNo")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("SellerJson")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<decimal>("ShippingHandlingCharge")
                         .HasColumnType("decimal(18, 2)");
 

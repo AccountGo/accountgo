@@ -84,7 +84,7 @@ export const BusinessDetailsCard: React.FC<BusinessDetailsCardProps> = ({ canEdi
           <div>
             <h2 className="text-sm sm:text-base font-bold text-[var(--text-main)]">Business Details</h2>
             <p className="text-xs text-[var(--text-muted)]">
-              Who your invoices come from. The address and contact details print in the invoice header.
+              Who your invoices come from. Changes apply to drafts and new invoices; issued invoices keep the details they were sent with.
             </p>
           </div>
         </div>
