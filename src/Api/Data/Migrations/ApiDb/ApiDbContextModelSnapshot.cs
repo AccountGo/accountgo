@@ -1909,6 +1909,12 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<string>("No")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("Notes")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("PaymentInstructions")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<int?>("PaymentTermId")
                         .HasColumnType("int");
 

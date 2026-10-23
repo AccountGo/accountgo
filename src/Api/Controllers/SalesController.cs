@@ -439,6 +439,8 @@ namespace Api.Controllers
                 SalesInvoiceLines = new List<Dto.Sales.SalesInvoiceLine>(),
                 PaymentTermId = salesInvoice.PaymentTermId,
                 ReferenceNo = salesInvoice.ReferenceNo,
+                Notes = salesInvoice.Notes,
+                PaymentInstructions = salesInvoice.PaymentInstructions,
                 Posted = salesInvoice.GeneralLedgerHeaderId != null,
                 CompanyName = defaultCompany?.Name
             };
@@ -1099,6 +1101,8 @@ namespace Api.Controllers
                     salesInvoice.Date = salesInvoiceDto.InvoiceDate;
                     salesInvoice.PaymentTermId = paymentTermId;
                     salesInvoice.ReferenceNo = salesInvoiceDto.ReferenceNo;
+                    salesInvoice.Notes = string.IsNullOrWhiteSpace(salesInvoiceDto.Notes) ? null : salesInvoiceDto.Notes.Trim();
+                    salesInvoice.PaymentInstructions = string.IsNullOrWhiteSpace(salesInvoiceDto.PaymentInstructions) ? null : salesInvoiceDto.PaymentInstructions.Trim();
                     salesInvoice.Status = salesInvoiceDto.Status == "Draft" 
                         ? Core.Domain.SalesInvoiceStatus.Draft 
                         : Core.Domain.SalesInvoiceStatus.Open;
@@ -1163,7 +1167,9 @@ namespace Api.Controllers
                 else
                 {
                     // if you reach here, you are updating existing invoice.
-                    salesInvoice = _tenantGuard.EnsureOwned<Core.Domain.Sales.SalesInvoiceHeader>(salesInvoiceDto.Id, nameof(salesInvoiceDto.Id));
+                    // EnsureOwned does not load the lines; reload with them so existing lines are matched, not duplicated.
+                    _tenantGuard.EnsureOwned<Core.Domain.Sales.SalesInvoiceHeader>(salesInvoiceDto.Id, nameof(salesInvoiceDto.Id));
+                    salesInvoice = _salesService.GetSalesInvoiceById(salesInvoiceDto.Id);
 
                     if (salesInvoice.GeneralLedgerHeaderId.HasValue)
                         throw new Exception("Invoice is already posted. Update is not allowed.");
@@ -1174,6 +1180,8 @@ namespace Api.Controllers
                         ? salesInvoiceDto.PaymentTermId.Value
                         : (salesInvoice.PaymentTermId ?? defaultPaymentTerm?.Id);
                     salesInvoice.ReferenceNo = salesInvoiceDto.ReferenceNo;
+                    salesInvoice.Notes = string.IsNullOrWhiteSpace(salesInvoiceDto.Notes) ? null : salesInvoiceDto.Notes.Trim();
+                    salesInvoice.PaymentInstructions = string.IsNullOrWhiteSpace(salesInvoiceDto.PaymentInstructions) ? null : salesInvoiceDto.PaymentInstructions.Trim();
                     salesInvoice.CustomerId = salesInvoiceDto.CustomerId;
                     if (!string.IsNullOrWhiteSpace(salesInvoiceDto.Status))
                     {

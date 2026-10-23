@@ -120,6 +120,12 @@ namespace Api.Service
 
                 if (_invoice.Payments is { Count: > 0 })
                     column.Item().ShowEntire().Element(ComposePayments);
+
+                if (!string.IsNullOrWhiteSpace(_invoice.Notes))
+                    column.Item().ShowEntire().Element(c => ComposeNote(c, "NOTES", _invoice.Notes!));
+
+                if (!string.IsNullOrWhiteSpace(_invoice.PaymentInstructions))
+                    column.Item().ShowEntire().Element(c => ComposeNote(c, "PAYMENT INSTRUCTIONS", _invoice.PaymentInstructions!));
             });
         }
 
@@ -270,6 +276,16 @@ namespace Api.Service
                         row.AutoItem().Text(Money(payment.Amount)).SemiBold();
                     });
                 }
+            });
+        }
+
+        private void ComposeNote(IContainer container, string heading, string text)
+        {
+            container.Column(column =>
+            {
+                column.Item().BorderBottom(0.75f).BorderColor(Rule).PaddingBottom(6)
+                    .Text(heading).FontSize(7.5f).SemiBold().FontColor(Muted).LetterSpacing(0.08f);
+                column.Item().PaddingTop(6).Text(text).FontColor(Ink);
             });
         }
 
