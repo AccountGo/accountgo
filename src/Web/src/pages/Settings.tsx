@@ -61,13 +61,13 @@ interface LiveCashBank {
 
 export const Settings: React.FC = () => {
   const tenantContext = useOutletContext<TenantContextType>();
-  const { currentOrg, user, updateCurrentOrg, updateOrgWhitelabel } = tenantContext;
+  const { currentOrg, user, updateCurrentOrg, updateOrgWhitelabel, hasModule, subscription } = tenantContext;
+  const hasFinancials = hasModule('financials');
   const { authFetch } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
   type TabKey = 'general' | 'invoices' | 'financials' | 'whitelabel' | 'subscription' | 'roles';
-  const currentTab = (searchParams.get('tab') as TabKey) || 'general';
 
   const handleTabChange = (tab: TabKey) => {
     setSearchParams(tab === 'general' ? {} : { tab });
@@ -85,10 +85,10 @@ export const Settings: React.FC = () => {
       label: 'Sales',
       items: [{ key: 'invoices', label: 'Invoices', icon: FileText }],
     },
-    {
-      label: 'Accounting',
-      items: [{ key: 'financials', label: 'Financial Rules & Banking', icon: Coins }],
-    },
+    // Only sections for modules this workspace has; an invoicing-only workspace has no ledger to configure.
+    ...(hasFinancials
+      ? [{ label: 'Accounting', items: [{ key: 'financials' as const, label: 'Financial Rules & Banking', icon: Coins }] }]
+      : []),
     {
       label: 'Access & Billing',
       items: [
@@ -97,6 +97,12 @@ export const Settings: React.FC = () => {
       ],
     },
   ];
+
+  // A tab the workspace doesn't have (an old link, or a module switched off) falls back to General.
+  const requestedTab = searchParams.get('tab') as TabKey | null;
+  const currentTab: TabKey = settingsSections.some((g) => g.items.some((i) => i.key === requestedTab))
+    ? (requestedTab as TabKey)
+    : 'general';
 
   const { setTheme, setScheme, resolvedScheme } = useTheme();
   const isWorkspaceAdmin = currentOrg.role === 'Owner' || currentOrg.role === 'Admin';
@@ -160,23 +166,32 @@ export const Settings: React.FC = () => {
     }
   }, [authFetch, currentOrg.slug]);
 
-  // Load Financials Rules (Fiscal years, payment terms, cash banks)
+  // Payment terms belong to invoicing, so every workspace loads them.
+  const fetchPaymentTerms = useCallback(async () => {
+    try {
+      const res = await authFetch('/api/Administration/paymentterms');
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data)) setPaymentTerms(data);
+      }
+    } catch (err) {
+      console.error('Failed to load payment terms:', err);
+    }
+  }, [authFetch]);
+
+  // Load Financials Rules (Fiscal years, cash banks); the banking API is only open to the accounting module.
   const fetchFinancialRules = useCallback(async () => {
+    if (!hasFinancials) return;
     try {
       setIsLoadingFinancials(true);
-      const [fyRes, ptRes, cbRes] = await Promise.all([
+      const [fyRes, cbRes] = await Promise.all([
         authFetch('/api/Administration/financialyears'),
-        authFetch('/api/Administration/paymentterms'),
         authFetch('/api/Financials/CashBanks'),
       ]);
 
       if (fyRes.ok) {
         const fyData = await fyRes.json();
         if (Array.isArray(fyData)) setFiscalYears(fyData);
-      }
-      if (ptRes.ok) {
-        const ptData = await ptRes.json();
-        if (Array.isArray(ptData)) setPaymentTerms(ptData);
       }
       if (cbRes.ok) {
         const cbData = await cbRes.json();
@@ -187,7 +202,7 @@ export const Settings: React.FC = () => {
     } finally {
       setIsLoadingFinancials(false);
     }
-  }, [authFetch]);
+  }, [authFetch, hasFinancials]);
 
   // Load live team members summary
   const fetchMembers = useCallback(async () => {
@@ -202,9 +217,10 @@ export const Settings: React.FC = () => {
 
   useEffect(() => {
     fetchCompanyDetails();
+    fetchPaymentTerms();
     fetchFinancialRules();
     fetchMembers();
-  }, [fetchCompanyDetails, fetchFinancialRules, fetchMembers]);
+  }, [fetchCompanyDetails, fetchPaymentTerms, fetchFinancialRules, fetchMembers]);
 
   useEffect(() => {
     if (!deleteDialogOpen) return;
@@ -346,7 +362,7 @@ export const Settings: React.FC = () => {
             Organization Settings
           </h1>
           <p className="text-xs text-[var(--text-muted)]">
-            Manage legal registration, financial rules, whitelabeling, and role-based permissions for{' '}
+            Manage legal registration, {hasFinancials ? 'financial rules' : 'invoicing'}, whitelabeling, and role-based permissions for{' '}
             <span className="text-[var(--text-main)] font-semibold">{currentOrg.name}</span>.
           </p>
         </div>
@@ -366,7 +382,7 @@ export const Settings: React.FC = () => {
             <code className="text-[var(--brand-primary)] font-mono font-medium">/org/{currentOrg.slug}</code>
           </div>
           <div className="px-3 py-1.5 rounded-xl bg-[var(--brand-subtle)] text-xs text-[var(--brand-primary)] font-medium">
-            Plan: {(currentOrg.plan || 'accounting').toUpperCase()}
+            Plan: {subscription.planId.toUpperCase()}
           </div>
         </div>
       </div>
@@ -479,7 +495,9 @@ export const Settings: React.FC = () => {
                         className="w-full h-11 px-3.5 rounded-xl bg-[var(--bg-subtle)] shadow-inner text-sm font-mono text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--brand-ring)]"
                       />
                       <p className="text-[11px] text-[var(--text-muted)] mt-1">
-                        Unique identifier used in ERP general ledger journal sequences.
+                        {hasFinancials
+                          ? 'Unique identifier used in ERP general ledger journal sequences.'
+                          : 'Your own reference for this company.'}
                       </p>
                     </div>
 
@@ -758,9 +776,45 @@ export const Settings: React.FC = () => {
               id="panel-invoices"
               aria-labelledby="tab-invoices"
               tabIndex={0}
-              className="focus:outline-none"
+              className="space-y-6 focus:outline-none"
             >
               <InvoiceSettingsTab tradingName={currentOrg.name} canEdit={isWorkspaceAdmin} />
+
+              {/* Payment Terms */}
+              <div className="p-4 sm:p-6 rounded-2xl bg-[var(--bg-surface)] backdrop-blur-md shadow-md space-y-4">
+                <div className="flex items-center gap-2.5 pb-2 border-b border-[var(--border-subtle)]">
+                  <Clock className="w-5 h-5 text-amber-400" />
+                  <div>
+                    <h2 className="text-sm sm:text-base font-bold text-[var(--text-main)]">
+                      Payment Terms
+                    </h2>
+                    <p className="text-xs text-[var(--text-muted)]">
+                      Offered when you set an invoice's due date, counted in business days
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {paymentTerms.map((pt) => (
+                    <div
+                      key={pt.id}
+                      className="p-3.5 rounded-xl bg-[var(--bg-subtle)] flex items-center justify-between border border-[var(--border-subtle)]"
+                    >
+                      <div>
+                        <div className="text-xs font-semibold text-[var(--text-main)]">
+                          {pt.description}
+                        </div>
+                        <div className="text-[10px] text-[var(--text-muted)] font-mono mt-0.5">
+                          Net {pt.dueAfterDays || 0} business days
+                        </div>
+                      </div>
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-400">
+                        Active
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           )}
 
@@ -894,41 +948,6 @@ export const Settings: React.FC = () => {
                 </div>
               </div>
 
-              {/* Payment Terms */}
-              <div className="p-4 sm:p-6 rounded-2xl bg-[var(--bg-surface)] backdrop-blur-md shadow-md space-y-4">
-                <div className="flex items-center gap-2.5 pb-2 border-b border-[var(--border-subtle)]">
-                  <Clock className="w-5 h-5 text-amber-400" />
-                  <div>
-                    <h2 className="text-sm sm:text-base font-bold text-[var(--text-main)]">
-                      Standard Customer & Vendor Payment Terms
-                    </h2>
-                    <p className="text-xs text-[var(--text-muted)]">
-                      Payment scheduling rules loaded from the PaymentTerm database table
-                    </p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {paymentTerms.map((pt) => (
-                    <div
-                      key={pt.id}
-                      className="p-3.5 rounded-xl bg-[var(--bg-subtle)] flex items-center justify-between border border-[var(--border-subtle)]"
-                    >
-                      <div>
-                        <div className="text-xs font-semibold text-[var(--text-main)]">
-                          {pt.description}
-                        </div>
-                        <div className="text-[10px] text-[var(--text-muted)] font-mono mt-0.5">
-                          Net {pt.dueAfterDays || 0} days
-                        </div>
-                      </div>
-                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-400">
-                        Active
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
             </div>
           )}
 

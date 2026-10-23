@@ -7,7 +7,7 @@ import {
   Search,
   RefreshCw,
 } from 'lucide-react';
-import { TenantContextType } from '../types';
+import { ModuleKey, TenantContextType } from '../types';
 import { useAuth } from '../auth/AuthContext';
 
 interface RolesSettingsTabProps {
@@ -31,9 +31,11 @@ interface WorkspaceSecurityRole {
   memberCount: number;
 }
 
-const PERMISSION_GROUPS = [
+// `module` marks permissions that only mean something when that module is on; the rest always apply.
+const PERMISSION_GROUPS: Array<{ group: string; module?: ModuleKey; permissions: Array<{ key: string; label: string; module?: ModuleKey }> }> = [
   {
     group: 'Sales & Invoicing',
+    module: 'sales',
     permissions: [
       { key: 'sales.customers.view', label: 'View Customers' },
       { key: 'sales.customers.manage', label: 'Create & Edit Customers' },
@@ -46,6 +48,7 @@ const PERMISSION_GROUPS = [
   },
   {
     group: 'General Ledger & Banking',
+    module: 'financials',
     permissions: [
       { key: 'financials.accounts.view', label: 'View Chart of Accounts' },
       { key: 'financials.accounts.manage', label: 'Manage Accounts' },
@@ -57,6 +60,7 @@ const PERMISSION_GROUPS = [
   },
   {
     group: 'Purchases & Bills',
+    module: 'purchases',
     permissions: [
       { key: 'purchases.vendors.view', label: 'View Vendors' },
       { key: 'purchases.vendors.manage', label: 'Create & Edit Vendors' },
@@ -69,8 +73,8 @@ const PERMISSION_GROUPS = [
   {
     group: 'Governance & Administration',
     permissions: [
-      { key: 'reports.view', label: 'View Financial Reports' },
-      { key: 'audit.logs.view', label: 'View Audit Logs' },
+      { key: 'reports.view', label: 'View Financial Reports', module: 'reports' },
+      { key: 'audit.logs.view', label: 'View Audit Logs', module: 'audit' },
       { key: 'admin.members.manage', label: 'Manage Team Members' },
       { key: 'admin.roles.manage', label: 'Manage Roles & Permissions' },
       { key: 'admin.subscription.manage', label: 'Manage Subscription & Plan' },
@@ -78,7 +82,14 @@ const PERMISSION_GROUPS = [
   },
 ];
 
-export const RolesSettingsTab: React.FC<RolesSettingsTabProps> = () => {
+export const RolesSettingsTab: React.FC<RolesSettingsTabProps> = ({ tenantContext }) => {
+  const { hasModule } = tenantContext;
+  const shownKeys = new Set(
+    PERMISSION_GROUPS.filter((g) => !g.module || hasModule(g.module)).flatMap((g) =>
+      g.permissions.filter((p) => !p.module || hasModule(p.module)).map((p) => p.key),
+    ),
+  );
+  const shownCount = (role: RoleDefinition) => role.permissions.filter((key) => shownKeys.has(key)).length;
   const { authFetch } = useAuth();
   const [roles, setRoles] = useState<RoleDefinition[]>([]);
   const [selectedRoleId, setSelectedRoleId] = useState<string>('');
@@ -196,7 +207,9 @@ export const RolesSettingsTab: React.FC<RolesSettingsTabProps> = () => {
                     <Users className="w-3 h-3" />
                     {role.userCount} member{role.userCount !== 1 ? 's' : ''}
                   </span>
-                  <span>{role.permissions.length} permissions</span>
+                  <span>
+                    {shownCount(role)} permission{shownCount(role) !== 1 ? 's' : ''}
+                  </span>
                 </div>
               </button>
             );
@@ -230,10 +243,10 @@ export const RolesSettingsTab: React.FC<RolesSettingsTabProps> = () => {
         </div>
 
         <div className="space-y-5 pt-1">
-          {PERMISSION_GROUPS.map((group) => {
+          {PERMISSION_GROUPS.filter((group) => !group.module || hasModule(group.module)).map((group) => {
             const filteredPermissions = group.permissions.filter((p) =>
-              p.label.toLowerCase().includes(searchQuery.toLowerCase()) ||
-              p.key.toLowerCase().includes(searchQuery.toLowerCase())
+              (!p.module || hasModule(p.module)) && (p.label.toLowerCase().includes(searchQuery.toLowerCase()) ||
+              p.key.toLowerCase().includes(searchQuery.toLowerCase()))
             );
 
             if (filteredPermissions.length === 0) return null;
