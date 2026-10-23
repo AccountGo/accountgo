@@ -389,11 +389,8 @@ namespace Api.Controllers
             if (salesInvoiceDto == null)
                 return NotFound(new { message = $"Invoice #{id} not found." });
 
-            var company = CurrentCompany();
             var document = new Api.Service.InvoicePdfDocument(
                 salesInvoiceDto,
-                company?.Name ?? salesInvoiceDto.CompanyName ?? "AccountGo",
-                company?.CRA,
                 _db.CompanySettings.Select(s => s.Currency).FirstOrDefault());
 
             var bytes = QuestPDF.Fluent.GenerateExtensions.GeneratePdf(document);
@@ -416,6 +413,9 @@ namespace Api.Controllers
             var dueDate = salesInvoice.Date.AddDays(dueDays);
 
             var defaultCompany = CurrentCompany();
+            var setting = _db.CompanySettings.FirstOrDefault();
+            var invoiceSettings = setting?.GetSalesInvoiceSettings() ?? new Core.Domain.SalesInvoiceSettings();
+            var useLegalName = invoiceSettings.SellerName == Core.Domain.SalesInvoiceSettings.LegalName && !string.IsNullOrWhiteSpace(setting?.LegalName);
 
             var party = salesInvoice.Customer?.Party;
             var addressParts = new List<string>();
@@ -442,7 +442,23 @@ namespace Api.Controllers
                 Notes = salesInvoice.Notes,
                 PaymentInstructions = salesInvoice.PaymentInstructions,
                 Posted = salesInvoice.GeneralLedgerHeaderId != null,
-                CompanyName = defaultCompany?.Name
+                CompanyName = defaultCompany?.Name,
+                Seller = new Dto.Sales.SellerInfo
+                {
+                    Name = useLegalName ? setting!.LegalName!.Trim() : defaultCompany?.Name ?? "AccountGo",
+                    TaxId = defaultCompany?.CRA,
+                    AddressLines = invoiceSettings.ShowSellerAddress && setting?.BusinessAddress != null
+                        ? setting.BusinessAddress.ToLines()
+                        : new List<string>(),
+                    Email = setting?.BusinessEmail,
+                    Phone = setting?.BusinessPhone
+                },
+                Display = new Dto.Sales.DisplayFlags
+                {
+                    ShowCustomerEmail = invoiceSettings.ShowCustomerEmail,
+                    ShowNotes = invoiceSettings.ShowNotes,
+                    ShowPaymentInstructions = invoiceSettings.ShowPaymentInstructions
+                }
             };
 
             if (salesInvoice.CustomerAllocations != null)

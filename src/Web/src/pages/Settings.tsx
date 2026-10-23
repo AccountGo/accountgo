@@ -20,6 +20,7 @@ import {
   CheckCircle2,
   AlertCircle,
   RefreshCw,
+  FileText,
 } from 'lucide-react';
 import { TenantContextType, WorkspaceMember } from '../types';
 import { DEFAULT_CURRENCY } from '../lib/currency';
@@ -29,6 +30,8 @@ import { useAuth } from '../auth/AuthContext';
 import { clearPersistedOrgSlug, setPersistedOrgSlug } from '../lib/storage';
 import { SubscriptionSettingsTab } from '../components/SubscriptionSettingsTab';
 import { RolesSettingsTab } from '../components/RolesSettingsTab';
+import { BusinessDetailsCard } from '../components/BusinessDetailsCard';
+import { InvoiceSettingsTab } from '../components/InvoiceSettingsTab';
 
 interface LiveFinancialYear {
   id: number;
@@ -62,7 +65,7 @@ export const Settings: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  type TabKey = 'general' | 'financials' | 'whitelabel' | 'subscription' | 'roles';
+  type TabKey = 'general' | 'invoices' | 'financials' | 'whitelabel' | 'subscription' | 'roles';
   const currentTab = (searchParams.get('tab') as TabKey) || 'general';
 
   const handleTabChange = (tab: TabKey) => {
@@ -70,6 +73,7 @@ export const Settings: React.FC = () => {
   };
 
   const { setTheme, setScheme, resolvedScheme } = useTheme();
+  const isWorkspaceAdmin = currentOrg.role === 'Owner' || currentOrg.role === 'Admin';
 
   // 1. General Profile State (bound to live database Company table)
   const [companyId, setCompanyId] = useState<number>(Number(currentOrg.id) || 0);
@@ -367,6 +371,23 @@ export const Settings: React.FC = () => {
         <button
           type="button"
           role="tab"
+          id="tab-invoices"
+          aria-controls="panel-invoices"
+          aria-selected={currentTab === 'invoices'}
+          onClick={() => handleTabChange('invoices')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
+            currentTab === 'invoices'
+              ? 'bg-[var(--brand-primary)] text-white shadow-sm'
+              : 'text-[var(--text-secondary)] hover:text-[var(--text-main)] hover:bg-[var(--bg-surface-hover)]'
+          }`}
+        >
+          <FileText className="w-3.5 h-3.5" />
+          <span>Invoices</span>
+        </button>
+
+        <button
+          type="button"
+          role="tab"
           id="tab-financials"
           aria-controls="panel-financials"
           aria-selected={currentTab === 'financials'}
@@ -489,7 +510,7 @@ export const Settings: React.FC = () => {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label htmlFor="org-name-input" className="block text-xs font-semibold text-[var(--text-secondary)] mb-1.5">
-                    Organization Legal Name
+                    Organization / Trading Name
                   </label>
                   <input
                     id="org-name-input"
@@ -501,7 +522,7 @@ export const Settings: React.FC = () => {
                     className="w-full h-11 px-3.5 rounded-xl bg-[var(--bg-subtle)] shadow-inner text-sm text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--brand-ring)]"
                   />
                   <p className="text-[11px] text-[var(--text-muted)] mt-1">
-                    Official business name printed on sales invoices and tax receipts.
+                    The name you trade under. Invoices print it unless you choose your legal name under Invoices.
                   </p>
                 </div>
 
@@ -621,6 +642,8 @@ export const Settings: React.FC = () => {
               </div>
             </div>
           </form>
+
+          <BusinessDetailsCard canEdit={isWorkspaceAdmin} />
 
           {/* Authorized Members Card (Border-Less) */}
           <div className="p-4 sm:p-6 rounded-2xl bg-[var(--bg-surface)] backdrop-blur-md shadow-md space-y-4">
@@ -803,6 +826,18 @@ export const Settings: React.FC = () => {
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {currentTab === 'invoices' && (
+        <div
+          role="tabpanel"
+          id="panel-invoices"
+          aria-labelledby="tab-invoices"
+          tabIndex={0}
+          className="focus:outline-none"
+        >
+          <InvoiceSettingsTab tradingName={currentOrg.name} canEdit={isWorkspaceAdmin} />
         </div>
       )}
 

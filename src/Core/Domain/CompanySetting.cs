@@ -6,7 +6,7 @@
 // </copyright>
 //-----------------------------------------------------------------------
 
-using System;
+#nullable enable
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Core.Domain
@@ -15,7 +15,19 @@ namespace Core.Domain
     public partial class CompanySetting : BaseEntity, ICompanyOwned
     {
         public int CompanyId { get; set; }
-        public Company Company { get; set; }
+        public Company Company { get; set; } = null!;
         public string Currency { get; set; } = "USD";
+
+        /// <summary>Registered or personal name; Company.Name is the trading name.</summary>
+        public string? LegalName { get; set; }
+        public string? BusinessEmail { get; set; }
+        public string? BusinessPhone { get; set; }
+        public PostalAddress? BusinessAddress { get; set; }
+
+        public string? SalesInvoiceSettingsJson { get; set; }
+
+        public SalesInvoiceSettings GetSalesInvoiceSettings() => SalesInvoiceSettings.FromJson(SalesInvoiceSettingsJson);
+
+        public void SetSalesInvoiceSettings(SalesInvoiceSettings settings) => SalesInvoiceSettingsJson = settings.ToJson();
     }
 }

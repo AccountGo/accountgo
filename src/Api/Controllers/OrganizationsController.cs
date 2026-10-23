@@ -156,6 +156,163 @@ namespace Api.Controllers
             return NoContent();
         }
 
+        public class PostalAddressModel
+        {
+            public string Line1 { get; set; }
+            public string Line2 { get; set; }
+            public string City { get; set; }
+            public string Region { get; set; }
+            public string PostalCode { get; set; }
+            public string CountryCode { get; set; }
+        }
+
+        public class BusinessProfileModel
+        {
+            public string LegalName { get; set; }
+            public string BusinessEmail { get; set; }
+            public string BusinessPhone { get; set; }
+            public PostalAddressModel Address { get; set; }
+        }
+
+        public class SalesInvoiceSettingsModel
+        {
+            public string SellerName { get; set; } = SalesInvoiceSettings.TradingName;
+            public bool ShowSellerAddress { get; set; } = true;
+            public bool ShowCustomerEmail { get; set; } = true;
+            public bool ShowNotes { get; set; } = true;
+            public bool ShowPaymentInstructions { get; set; } = true;
+            public string DefaultNotes { get; set; }
+            public string DefaultPaymentInstructions { get; set; }
+        }
+
+        [TenantScoped]
+        [HttpGet("current/business-profile")]
+        public IActionResult GetBusinessProfile()
+        {
+            return Ok(ToBusinessProfileModel(_db.CompanySettings.FirstOrDefault()));
+        }
+
+        [TenantScoped]
+        [RequireWorkspaceRole(CompanyMemberRole.Admin)]
+        [HttpPut("current/business-profile")]
+        public IActionResult UpdateBusinessProfile([FromBody] BusinessProfileModel request)
+        {
+            if (request == null)
+                return Problem(statusCode: 400, title: "Business profile required");
+
+            var email = Clean(request.BusinessEmail);
+            if (email != null && !new System.ComponentModel.DataAnnotations.EmailAddressAttribute().IsValid(email))
+                return Problem(statusCode: 400, title: "Invalid business email");
+
+            var address = new PostalAddress
+            {
+                Line1 = Clean(request.Address?.Line1),
+                Line2 = Clean(request.Address?.Line2),
+                City = Clean(request.Address?.City),
+                Region = Clean(request.Address?.Region),
+                PostalCode = Clean(request.Address?.PostalCode),
+                CountryCode = Clean(request.Address?.CountryCode),
+            };
+
+            var setting = GetOrCreateSetting();
+            setting.LegalName = Clean(request.LegalName);
+            setting.BusinessEmail = email;
+            setting.BusinessPhone = Clean(request.BusinessPhone);
+            setting.BusinessAddress = address.IsEmpty ? null : address;
+            _db.SaveChanges();
+
+            return Ok(ToBusinessProfileModel(setting));
+        }
+
+        // Read by every member: the invoice editor prefills new invoices from the default texts.
+        [TenantScoped]
+        [HttpGet("current/sales-invoice-settings")]
+        public IActionResult GetSalesInvoiceSettings()
+        {
+            var settings = _db.CompanySettings.FirstOrDefault()?.GetSalesInvoiceSettings() ?? new SalesInvoiceSettings();
+            return Ok(ToSalesInvoiceSettingsModel(settings));
+        }
+
+        [TenantScoped]
+        [RequireWorkspaceRole(CompanyMemberRole.Admin)]
+        [HttpPut("current/sales-invoice-settings")]
+        public IActionResult UpdateSalesInvoiceSettings([FromBody] SalesInvoiceSettingsModel request)
+        {
+            if (request == null)
+                return Problem(statusCode: 400, title: "Sales invoice settings required");
+            if (!SalesInvoiceSettings.IsValidSellerName(request.SellerName))
+                return Problem(statusCode: 400, title: "Invalid seller name",
+                    detail: $"Seller name must be '{SalesInvoiceSettings.TradingName}' or '{SalesInvoiceSettings.LegalName}'.");
+
+            var defaultNotes = Clean(request.DefaultNotes);
+            var defaultPaymentInstructions = Clean(request.DefaultPaymentInstructions);
+            if (defaultNotes?.Length > SalesInvoiceSettings.MaxDefaultTextLength
+                || defaultPaymentInstructions?.Length > SalesInvoiceSettings.MaxDefaultTextLength)
+                return Problem(statusCode: 400, title: "Default text too long",
+                    detail: $"Default notes and payment instructions are limited to {SalesInvoiceSettings.MaxDefaultTextLength} characters.");
+
+            var settings = new SalesInvoiceSettings
+            {
+                SellerName = request.SellerName,
+                ShowSellerAddress = request.ShowSellerAddress,
+                ShowCustomerEmail = request.ShowCustomerEmail,
+                ShowNotes = request.ShowNotes,
+                ShowPaymentInstructions = request.ShowPaymentInstructions,
+                DefaultNotes = defaultNotes,
+                DefaultPaymentInstructions = defaultPaymentInstructions,
+            };
+
+            var setting = GetOrCreateSetting();
+            setting.SetSalesInvoiceSettings(settings);
+            _db.SaveChanges();
+
+            return Ok(ToSalesInvoiceSettingsModel(settings));
+        }
+
+        private CompanySetting GetOrCreateSetting()
+        {
+            var setting = _db.CompanySettings.FirstOrDefault();
+            if (setting == null)
+            {
+                setting = new CompanySetting { CompanyId = _tenant.RequireCompanyId() };
+                _db.CompanySettings.Add(setting);
+            }
+            return setting;
+        }
+
+        private static string Clean(string value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+        private static BusinessProfileModel ToBusinessProfileModel(CompanySetting setting)
+        {
+            var address = setting?.BusinessAddress;
+            return new BusinessProfileModel
+            {
+                LegalName = setting?.LegalName,
+                BusinessEmail = setting?.BusinessEmail,
+                BusinessPhone = setting?.BusinessPhone,
+                Address = new PostalAddressModel
+                {
+                    Line1 = address?.Line1,
+                    Line2 = address?.Line2,
+                    City = address?.City,
+                    Region = address?.Region,
+                    PostalCode = address?.PostalCode,
+                    CountryCode = address?.CountryCode,
+                },
+            };
+        }
+
+        private static SalesInvoiceSettingsModel ToSalesInvoiceSettingsModel(SalesInvoiceSettings settings) => new()
+        {
+            SellerName = settings.SellerName,
+            ShowSellerAddress = settings.ShowSellerAddress,
+            ShowCustomerEmail = settings.ShowCustomerEmail,
+            ShowNotes = settings.ShowNotes,
+            ShowPaymentInstructions = settings.ShowPaymentInstructions,
+            DefaultNotes = settings.DefaultNotes,
+            DefaultPaymentInstructions = settings.DefaultPaymentInstructions,
+        };
+
         private static object Summary(Company company, CompanyMemberRole role)
         {
             return new

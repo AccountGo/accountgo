@@ -147,6 +147,16 @@ namespace Api.Data.Schema
                     new[] { "CompanySetting", "Currency", "TEXT NOT NULL DEFAULT 'PHP'" },
                     new[] { "CompanyInvitation", "ResendWindowStart", "TEXT NULL" },
                     new[] { "CompanyInvitation", "ResendCount", "INTEGER NOT NULL DEFAULT 0" },
+                    new[] { "CompanySetting", "LegalName", "TEXT NULL" },
+                    new[] { "CompanySetting", "BusinessEmail", "TEXT NULL" },
+                    new[] { "CompanySetting", "BusinessPhone", "TEXT NULL" },
+                    new[] { "CompanySetting", "SalesInvoiceSettingsJson", "TEXT NULL" },
+                    new[] { "CompanySetting", "BusinessAddress_Line1", "TEXT NULL" },
+                    new[] { "CompanySetting", "BusinessAddress_Line2", "TEXT NULL" },
+                    new[] { "CompanySetting", "BusinessAddress_City", "TEXT NULL" },
+                    new[] { "CompanySetting", "BusinessAddress_Region", "TEXT NULL" },
+                    new[] { "CompanySetting", "BusinessAddress_PostalCode", "TEXT NULL" },
+                    new[] { "CompanySetting", "BusinessAddress_CountryCode", "TEXT NULL" },
                     new[] { "SalesInvoiceHeader", "Notes", "TEXT NULL" },
                     new[] { "SalesInvoiceHeader", "PaymentInstructions", "TEXT NULL" }
                 };

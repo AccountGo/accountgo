@@ -127,6 +127,9 @@ namespace Api.Data
             builder.Entity<Company>().HasIndex(c => c.Slug).IsUnique();
             builder.Entity<CompanySetting>().Property(s => s.Currency).IsRequired().HasMaxLength(3).HasDefaultValue("PHP");
 
+            // Stored as BusinessAddress_* columns on CompanySetting; the SQLite upgrader and D1 0004 use the same names.
+            builder.Entity<CompanySetting>().OwnsOne(s => s.BusinessAddress);
+
             foreach (var entityType in builder.Model.GetEntityTypes())
             {
                 if (typeof(ICompanyOwned).IsAssignableFrom(entityType.ClrType))

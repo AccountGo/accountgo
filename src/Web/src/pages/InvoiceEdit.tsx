@@ -20,6 +20,7 @@ import {
   CustomerOption,
   PaymentTermOption,
   ItemOption,
+  SalesInvoiceSettings,
 } from '../types';
 import { useAuth } from '../auth/AuthContext';
 import { currencySymbol as getCurrencySymbol } from '../lib/currency';
@@ -59,10 +60,9 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
   );
   const [paymentTermId, setPaymentTermId] = useState<number | ''>('');
   const [dueDate, setDueDate] = useState<string>('');
-  const [notes, setNotes] = useState<string>('Thank you for your business!');
-  const [paymentInstructions, setPaymentInstructions] = useState<string>(
-    'Please send payment via bank transfer or check upon receipt.'
-  );
+  // New invoices start from the workspace's default texts (Settings → Invoices); edits keep the invoice's own values.
+  const [notes, setNotes] = useState<string>('');
+  const [paymentInstructions, setPaymentInstructions] = useState<string>('');
 
   // Line items state
   const [lines, setLines] = useState<FormLineItem[]>([
@@ -146,6 +146,25 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
     loadReferenceData();
   }, [loadReferenceData]);
 
+  // Prefill a new invoice with the workspace's default notes and payment instructions
+  useEffect(() => {
+    if (isEdit) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await authFetch('/api/organizations/current/sales-invoice-settings');
+        if (!res.ok || cancelled) return;
+        const settings: SalesInvoiceSettings = await res.json();
+        // Only fill fields the user has not started typing in.
+        setNotes((current) => current || settings.defaultNotes || '');
+        setPaymentInstructions((current) => current || settings.defaultPaymentInstructions || '');
+      } catch (err) {
+        console.error('Error loading invoice defaults:', err);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [isEdit, authFetch]);
+
   // Load existing invoice if edit mode
   useEffect(() => {
     if (isEdit && invoiceId) {
@@ -167,8 +186,8 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
           if (data.paymentTermId) {
             setPaymentTermId(data.paymentTermId);
           }
-          if (data.notes) setNotes(data.notes);
-          if (data.paymentInstructions) setPaymentInstructions(data.paymentInstructions);
+          setNotes(data.notes ?? '');
+          setPaymentInstructions(data.paymentInstructions ?? '');
 
           if (data.salesInvoiceLines && data.salesInvoiceLines.length > 0) {
             setLines(

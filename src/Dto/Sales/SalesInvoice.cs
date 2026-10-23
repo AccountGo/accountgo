@@ -37,6 +37,8 @@ namespace Dto.Sales
         public string? PaymentInstructions { get; set; }
         public string? CustomerAddress { get; set; }
         public string? CustomerPhone { get; set; }
+        public SellerInfo Seller { get; set; } = new SellerInfo();
+        public DisplayFlags Display { get; set; } = new DisplayFlags();
         public List<InvoicePaymentItemDto>? Payments { get; set; }
 
         public SalesInvoice()
@@ -98,5 +100,21 @@ namespace Dto.Sales
         public string? PaymentMethod { get; set; }
         public string? ReferenceNo { get; set; }
         public string? Notes { get; set; }
+    }
+
+    public class SellerInfo
+    {
+        public string Name { get; set; } = "";
+        public string? TaxId { get; set; }
+        public List<string> AddressLines { get; set; } = new List<string>();
+        public string? Email { get; set; }
+        public string? Phone { get; set; }
+    }
+
+    public class DisplayFlags
+    {
+        public bool ShowCustomerEmail { get; set; } = true;
+        public bool ShowNotes { get; set; } = true;
+        public bool ShowPaymentInstructions { get; set; } = true;
     }
 }

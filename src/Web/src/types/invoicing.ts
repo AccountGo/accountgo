@@ -48,8 +48,53 @@ export interface Invoice {
   notes?: string;
   paymentInstructions?: string;
   companyName?: string;
+  seller?: InvoiceSeller;
+  display?: InvoiceDisplay;
   salesInvoiceLines: InvoiceLineItem[];
   payments?: InvoicePaymentItem[];
+}
+
+/** The invoicing party as it should print, already resolved from the workspace settings. */
+export interface InvoiceSeller {
+  name: string;
+  taxId?: string | null;
+  addressLines: string[];
+  email?: string | null;
+  phone?: string | null;
+}
+
+export interface InvoiceDisplay {
+  showCustomerEmail: boolean;
+  showNotes: boolean;
+  showPaymentInstructions: boolean;
+}
+
+export type SellerNameSource = 'TradingName' | 'LegalName';
+
+export interface SalesInvoiceSettings {
+  sellerName: SellerNameSource;
+  showSellerAddress: boolean;
+  showCustomerEmail: boolean;
+  showNotes: boolean;
+  showPaymentInstructions: boolean;
+  defaultNotes: string | null;
+  defaultPaymentInstructions: string | null;
+}
+
+export interface PostalAddress {
+  line1: string | null;
+  line2: string | null;
+  city: string | null;
+  region: string | null;
+  postalCode: string | null;
+  countryCode: string | null;
+}
+
+export interface BusinessProfile {
+  legalName: string | null;
+  businessEmail: string | null;
+  businessPhone: string | null;
+  address: PostalAddress;
 }
 
 export interface InvoicingKPIs {
