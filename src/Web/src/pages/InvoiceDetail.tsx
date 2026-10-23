@@ -27,6 +27,7 @@ import {
 import { useAuth } from '../auth/AuthContext';
 import { currencySymbol as getCurrencySymbol } from '../lib/currency';
 import { SendInvoiceDialog } from '../components/SendInvoiceDialog';
+import { PageHeader, HeaderButton, HeaderMenu, StatusPill } from '../components/PageHeader';
 
 const formatDateTime = (iso: string) =>
   new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
@@ -310,42 +311,18 @@ export const InvoiceDetail: React.FC = () => {
   const getStatusBadge = (status: InvoiceStatus) => {
     switch (status) {
       case 'Paid':
-        return (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
-            <CheckCircle2 className="w-3.5 h-3.5" /> Paid
-          </span>
-        );
+        return <StatusPill tone="green" icon={CheckCircle2}>Paid</StatusPill>;
       case 'Partially Paid':
-        return (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20">
-            <Clock className="w-3.5 h-3.5" /> Partially Paid
-          </span>
-        );
+        return <StatusPill tone="amber" icon={Clock}>Partially paid</StatusPill>;
       case 'Overdue':
-        return (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-full bg-rose-500/10 text-rose-500 border border-rose-500/20">
-            <AlertTriangle className="w-3.5 h-3.5" /> Overdue
-          </span>
-        );
+        return <StatusPill tone="red" icon={AlertTriangle}>Overdue</StatusPill>;
       case 'Draft':
-        return (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-full bg-slate-500/10 text-slate-400 border border-slate-500/20">
-            <FileEdit className="w-3.5 h-3.5" /> Draft
-          </span>
-        );
+        return <StatusPill tone="slate" icon={FileEdit}>Draft</StatusPill>;
       case 'Void':
-        return (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-full bg-neutral-500/10 text-neutral-400 border border-neutral-500/20 line-through">
-            <Ban className="w-3.5 h-3.5" /> Void
-          </span>
-        );
+        return <StatusPill tone="slate" icon={Ban} strike>Void</StatusPill>;
       case 'Open':
       default:
-        return (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">
-            <Clock className="w-3.5 h-3.5" /> Open / Unpaid
-          </span>
-        );
+        return <StatusPill tone="blue" icon={Clock}>Open</StatusPill>;
     }
   };
 
@@ -391,140 +368,89 @@ export const InvoiceDetail: React.FC = () => {
   const showNotes = invoice.display?.showNotes ?? true;
   const showPaymentInstructions = invoice.display?.showPaymentInstructions ?? true;
   const lastEmail = invoice.emails?.[0] ?? null;
+  // Edit and void are only offered before any payment; drafts are issued before taking payments or emails.
+  const canEdit = invoice.status !== 'Void' && invoice.paidAmount === 0;
+  const canVoid = canEdit;
+  const canEmail = invoice.status !== 'Draft' && invoice.status !== 'Void' && !!invoice.customerEmail;
+  const canRecordPayment = invoice.status !== 'Void' && invoice.status !== 'Draft' && invoice.balanceDue > 0;
+  const dueOn = invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString(undefined, { dateStyle: 'medium' }) : null;
+  const balanceSummary =
+    invoice.status === 'Void'
+      ? null
+      : invoice.balanceDue > 0
+        ? `${formatCurrency(invoice.balanceDue)} ${isOverdue && dueOn ? `overdue since ${dueOn}` : dueOn ? `due ${dueOn}` : 'due'}`
+        : invoice.status === 'Paid'
+          ? 'Paid in full'
+          : null;
 
   return (
     <div className="print-page max-w-5xl mx-auto px-4 sm:px-6 py-6 pb-24 text-[var(--text-main)]">
 
-      {/* Top Navigation & Action Bar (Hidden on Print) */}
-      <div className="no-print flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-        <div className="flex items-center gap-3">
-          <Link
-            to={`/org/${orgSlug}/sales`}
-            className="p-2 text-[var(--text-secondary)] hover:text-[var(--text-main)] rounded-xl hover:bg-[var(--bg-surface-hover)] border border-[var(--border-subtle)] transition"
-            title="Back to Invoices"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </Link>
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold tracking-tight text-[var(--text-main)]">
-              Invoice {invoice.no ? `#${invoice.no}` : `#${invoice.id}`}
-            </h1>
+      {/* Header & actions (hidden on print) */}
+      <PageHeader
+        className="no-print mb-6"
+        back={{ to: `/org/${orgSlug}/sales`, label: 'Back to invoices' }}
+        title={`Invoice #${invoice.no || invoice.id}`}
+        badges={
+          <>
             {getStatusBadge(invoice.status)}
             {lastEmail && (
-              <span
-                title={`Emailed to ${lastEmail.to} on ${formatDateTime(lastEmail.sentAt)}`}
-                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-full text-sky-600 dark:text-sky-400 bg-sky-500/10 border border-sky-500/20"
-              >
-                <Mail className="w-3.5 h-3.5" />
+              <StatusPill tone="sky" icon={Mail} title={`Emailed to ${lastEmail.to} on ${formatDateTime(lastEmail.sentAt)}`}>
                 Emailed
-              </span>
+              </StatusPill>
             )}
-          </div>
-        </div>
-
-        {/* Action Buttons */}
-        <div className="flex items-center flex-wrap gap-2.5">
-          {/* Download PDF Button */}
-          <button
-            type="button"
-            onClick={handleDownloadPdf}
-            disabled={isDownloadingPdf}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium text-[var(--text-secondary)] bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-xl hover:bg-[var(--bg-surface-hover)] hover:text-[var(--text-main)] shadow-sm transition disabled:opacity-50"
-          >
-            {isDownloadingPdf ? (
-              <Loader2 className="w-4 h-4 animate-spin text-[var(--text-muted)]" />
+          </>
+        }
+        subtitle={[invoice.customerName, balanceSummary].filter(Boolean).join(' · ')}
+        actions={
+          <>
+            {canEmail && (
+              <HeaderButton
+                label="Email"
+                icon={Mail}
+                compact
+                onClick={() => {
+                  setSendError(null);
+                  setSendDialogMode('send');
+                }}
+              />
+            )}
+            <HeaderButton label="Download PDF" icon={FileDown} compact busy={isDownloadingPdf} onClick={handleDownloadPdf} />
+            <HeaderMenu
+              items={[
+                canEdit && { label: 'Edit invoice', icon: FileEdit, to: `/org/${orgSlug}/sales/${invoice.id}/edit` },
+                { label: 'Print', icon: Printer, onSelect: () => window.print() },
+                canVoid && 'separator',
+                canVoid && {
+                  label: 'Void invoice',
+                  icon: Ban,
+                  danger: true,
+                  onSelect: () => {
+                    setVoidError(null);
+                    setIsVoidModalOpen(true);
+                  },
+                },
+              ]}
+            />
+            {invoice.status === 'Draft' ? (
+              <HeaderButton label="Issue invoice" icon={Send} variant="primary" busy={isSubmittingIssue} onClick={handleIssueClick} />
             ) : (
-              <FileDown className="w-4 h-4 text-[var(--text-muted)]" />
+              canRecordPayment && (
+                <HeaderButton
+                  label="Record payment"
+                  icon={CreditCard}
+                  variant="primary"
+                  onClick={() => {
+                    setPaymentAmount(invoice.balanceDue.toFixed(2));
+                    setPaymentError(null);
+                    setIsPaymentModalOpen(true);
+                  }}
+                />
+              )
             )}
-            Download PDF
-          </button>
-
-          {/* Print Button */}
-          <button
-            type="button"
-            onClick={() => window.print()}
-            title="Print"
-            aria-label="Print invoice"
-            className="inline-flex items-center gap-1.5 px-2.5 py-2 text-sm font-medium text-[var(--text-secondary)] bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-xl hover:bg-[var(--bg-surface-hover)] hover:text-[var(--text-main)] shadow-sm transition"
-          >
-            <Printer className="w-4 h-4 text-[var(--text-muted)]" />
-          </button>
-
-          {/* Edit Button (if unposted draft or open with no payments) */}
-          {invoice.status !== 'Void' && invoice.paidAmount === 0 && (
-            <Link
-              to={`/org/${orgSlug}/sales/${invoice.id}/edit`}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium text-[var(--text-secondary)] bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-xl hover:bg-[var(--bg-surface-hover)] hover:text-[var(--text-main)] shadow-sm transition"
-            >
-              <FileEdit className="w-4 h-4 text-[var(--text-muted)]" />
-              Edit
-            </Link>
-          )}
-
-          {/* Issue Invoice Button (if Draft) */}
-          {invoice.status === 'Draft' && (
-            <button
-              type="button"
-              onClick={handleIssueClick}
-              disabled={isSubmittingIssue}
-              className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-[var(--brand-text)] bg-[var(--brand-primary)] rounded-xl hover:bg-[var(--brand-hover)] shadow-sm transition disabled:opacity-50"
-            >
-              {isSubmittingIssue ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Send className="w-4 h-4" />
-              )}
-              Issue Invoice
-            </button>
-          )}
-
-          {/* Email Button (issued invoices whose customer has an email address) */}
-          {invoice.status !== 'Draft' && invoice.status !== 'Void' && invoice.customerEmail && (
-            <button
-              type="button"
-              onClick={() => {
-                setSendError(null);
-                setSendDialogMode('send');
-              }}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium text-[var(--text-secondary)] bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-xl hover:bg-[var(--bg-surface-hover)] hover:text-[var(--text-main)] shadow-sm transition"
-            >
-              <Mail className="w-4 h-4 text-[var(--text-muted)]" />
-              Email invoice
-            </button>
-          )}
-
-          {/* Record Payment Button (issued with a balance due; drafts are issued first) */}
-          {invoice.status !== 'Void' && invoice.status !== 'Draft' && invoice.balanceDue > 0 && (
-            <button
-              type="button"
-              onClick={() => {
-                setPaymentAmount(invoice.balanceDue.toFixed(2));
-                setPaymentError(null);
-                setIsPaymentModalOpen(true);
-              }}
-              className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-emerald-600 rounded-xl hover:bg-emerald-700 shadow-sm transition"
-            >
-              <CreditCard className="w-4 h-4" />
-              Record Payment
-            </button>
-          )}
-
-          {/* Void Button (if not void and no payments) */}
-          {invoice.status !== 'Void' && invoice.paidAmount === 0 && (
-            <button
-              type="button"
-              onClick={() => {
-                setVoidError(null);
-                setIsVoidModalOpen(true);
-              }}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium text-rose-500 hover:bg-rose-500/10 rounded-xl transition"
-            >
-              <Ban className="w-4 h-4" />
-              Void
-            </button>
-          )}
-        </div>
-      </div>
+          </>
+        }
+      />
 
       {/* Notifications */}
       {errorBanner && (

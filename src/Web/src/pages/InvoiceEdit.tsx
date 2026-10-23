@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { useOutletContext, useParams, useNavigate, Link } from 'react-router-dom';
+import { useOutletContext, useParams, useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft,
   Plus,
   Trash2,
   Save,
@@ -13,6 +12,7 @@ import {
   CheckCircle2,
   Loader2,
 } from 'lucide-react';
+import { PageHeader, HeaderButton } from '../components/PageHeader';
 import {
   TenantContextType,
   Invoice,
@@ -457,64 +457,33 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 pb-24 text-[var(--text-main)]">
-      {/* Top Breadcrumb & Action Bar */}
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
-        <div className="flex items-center gap-3">
-          <Link
-            to={`/org/${orgSlug}/sales`}
-            className="p-2 text-[var(--text-secondary)] hover:text-[var(--text-main)] rounded-xl hover:bg-[var(--bg-surface-hover)] border border-[var(--border-subtle)] transition"
-            title="Back to Invoices"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </Link>
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight text-[var(--text-main)]">
-              {isEdit ? `Edit Invoice ${invoiceNo || ''}` : 'New Invoice'}
-            </h1>
-            <p className="text-sm text-[var(--text-secondary)] mt-0.5">
-              Create and issue standard invoices to your clients with automated bookkeeping.
-            </p>
-          </div>
-        </div>
-
-        {/* Action Buttons: one row at every width; labels never wrap */}
-        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-          <Link
-            to={`/org/${orgSlug}/sales`}
-            className="shrink-0 whitespace-nowrap px-3 sm:px-4 py-2.5 text-sm font-medium text-[var(--text-secondary)] bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-xl hover:bg-[var(--bg-surface-hover)] hover:text-[var(--text-main)] transition"
-          >
-            Cancel
-          </Link>
-
-          <button
-            type="button"
-            onClick={() => handleSaveInvoice(true)}
-            disabled={isSavingDraft || isSavingIssue}
-            className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 whitespace-nowrap px-3 sm:px-4 py-2.5 text-sm font-medium text-[var(--text-main)] bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-xl hover:bg-[var(--bg-surface-hover)] transition disabled:opacity-50 shadow-sm"
-          >
-            {isSavingDraft ? (
-              <Loader2 className="w-4 h-4 animate-spin text-[var(--brand-primary)]" />
-            ) : (
-              <Save className="max-sm:hidden w-4 h-4 text-[var(--text-secondary)]" />
-            )}
-            Save as Draft
-          </button>
-
-          <button
-            type="button"
-            onClick={() => handleSaveInvoice(false)}
-            disabled={isSavingDraft || isSavingIssue}
-            className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 whitespace-nowrap px-3 sm:px-5 py-2.5 text-sm font-semibold text-[var(--brand-text)] bg-[var(--brand-primary)] border border-transparent rounded-xl hover:bg-[var(--brand-hover)] shadow-sm transition disabled:opacity-50"
-          >
-            {isSavingIssue ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Send className="max-sm:hidden w-4 h-4" />
-            )}
-            Save & Issue
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        className="mb-6"
+        back={{ to: `/org/${orgSlug}/sales`, label: 'Back to invoices' }}
+        title={isEdit ? `Edit invoice${invoiceNo ? ` #${invoiceNo}` : ''}` : 'New invoice'}
+        subtitle="Save a draft to finish later, or issue it to post it to your books."
+        actions={
+          <>
+            <HeaderButton label="Cancel" to={`/org/${orgSlug}/sales`} />
+            <HeaderButton
+              label="Save draft"
+              icon={Save}
+              compact
+              busy={isSavingDraft}
+              disabled={isSavingIssue}
+              onClick={() => handleSaveInvoice(true)}
+            />
+            <HeaderButton
+              label="Save & issue"
+              icon={Send}
+              variant="primary"
+              busy={isSavingIssue}
+              disabled={isSavingDraft}
+              onClick={() => handleSaveInvoice(false)}
+            />
+          </>
+        }
+      />
 
       {/* Notifications */}
       {errorBanner && (

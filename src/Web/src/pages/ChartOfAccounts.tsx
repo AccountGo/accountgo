@@ -5,6 +5,7 @@ import { TenantContextType } from '../types';
 import { useAuth } from '../auth/AuthContext';
 import { PermissionDeniedCard, useTenantContext } from '../components/Gating';
 import { currencySymbol as getCurrencySymbol } from '../lib/currency';
+import { PageHeader, HeaderButton } from '../components/PageHeader';
 
 interface ApiAccount {
   id: number;
@@ -190,39 +191,23 @@ export const ChartOfAccounts: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <nav aria-label="Breadcrumb" className="text-xs text-[var(--text-muted)] mb-1">
+      <PageHeader
+        eyebrow={
+          <nav aria-label="Breadcrumb">
             <Link to={`/org/${currentOrg.slug}/financials`} className="hover:underline">Financials</Link>
             <span aria-hidden="true"> / </span>
             <span>Chart of Accounts</span>
           </nav>
-          <h1 className="text-2xl font-bold tracking-tight text-[var(--text-primary)]">Chart of Accounts</h1>
-          <p className="text-sm text-[var(--text-secondary)] mt-1">
-            Accounts in financial statement order. Group rows show the total of their sub-accounts.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={load}
-            disabled={loading}
-            aria-label="Refresh accounts"
-            className="p-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-muted)] transition-colors cursor-pointer"
-          >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-[var(--brand-primary)]' : ''}`} />
-          </button>
-          <button
-            type="button"
-            onClick={exportCsv}
-            disabled={allRows.length === 0}
-            className="h-9 px-3 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-xs font-semibold text-[var(--text-main)] hover:bg-[var(--bg-muted)] transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-          >
-            <Download className="w-3.5 h-3.5" />
-            Export CSV
-          </button>
-        </div>
-      </div>
+        }
+        title="Chart of Accounts"
+        subtitle="Accounts in financial statement order. Group rows show the total of their sub-accounts."
+        actions={
+          <>
+            <HeaderButton label="Refresh accounts" icon={RefreshCw} iconOnly busy={loading} onClick={load} />
+            <HeaderButton label="Export CSV" icon={Download} compact disabled={allRows.length === 0} onClick={exportCsv} />
+          </>
+        }
+      />
 
       <div className="p-4 rounded-2xl bg-[var(--bg-surface)] shadow-md space-y-3">
         <div className="flex flex-col md:flex-row md:items-center gap-3">

@@ -17,6 +17,7 @@ import {
   Building2,
   Laptop,
 } from 'lucide-react';
+import { HeaderButton } from '../components/PageHeader';
 import { TenantContextType } from '../types';
 import { useAuth } from '../auth/AuthContext';
 import { UserSession } from '../types/auth';
@@ -233,18 +234,14 @@ export const Profile: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2">
-          <button
-            type="button"
+          <HeaderButton
+            label="Sync"
+            icon={RefreshCw}
             onClick={() => {
               if (refreshUser) refreshUser();
               loadSessions();
             }}
-            className="h-10 px-3.5 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-surface-hover)] text-xs font-semibold text-[var(--text-main)] transition-all shadow-sm active:scale-[0.98] flex items-center gap-2 cursor-pointer"
-            title="Reload latest user data from database"
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-            <span>Sync</span>
-          </button>
+          />
         </div>
       </div>
 
