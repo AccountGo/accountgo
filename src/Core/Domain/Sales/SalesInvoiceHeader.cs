@@ -40,6 +40,8 @@ namespace Core.Domain.Sales
         public string? PaymentInstructions { get; set; }
         /// <summary>The seller as printed when the invoice was issued (<see cref="InvoiceSeller"/> JSON); null while a draft.</summary>
         public string? SellerJson { get; set; }
+        /// <summary>The customer as printed when the invoice was issued (<see cref="InvoiceBillTo"/> JSON); null while a draft.</summary>
+        public string? BillToJson { get; set; }
         public SalesInvoiceStatus? Status { get; set; }
         public virtual Customer Customer { get; set; }
         public virtual GeneralLedgerHeader GeneralLedgerHeader { get; set; }
@@ -54,6 +56,14 @@ namespace Core.Domain.Sales
             if (Status is null or SalesInvoiceStatus.Draft or SalesInvoiceStatus.Void || SellerJson != null)
                 return;
             SellerJson = InvoiceSeller.FromWorkspace(company, setting).ToJson();
+        }
+
+        /// <summary>Records the customer once, when the invoice is first issued; drafts keep following the customer.</summary>
+        public void CaptureBillToIfIssued(Party? customerParty)
+        {
+            if (Status is null or SalesInvoiceStatus.Draft or SalesInvoiceStatus.Void || BillToJson != null)
+                return;
+            BillToJson = InvoiceBillTo.FromParty(customerParty).ToJson();
         }
 
         /// <summary>

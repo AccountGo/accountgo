@@ -255,12 +255,12 @@ export const InvoiceDetail: React.FC = () => {
     if (!res.ok) {
       throw new Error(data?.message || 'The email could not be sent.');
     }
-    return data?.to || invoice.customerEmail || '';
+    return data?.to || invoice.recipientEmail || '';
   };
 
   const handleIssueClick = async () => {
     if (!invoice) return;
-    if (invoice.customerEmail) {
+    if (invoice.recipientEmail) {
       setSendError(null);
       const next = invoice.no ? null : await fetchNextNumber();
       if (!invoice.no && !next) {
@@ -392,7 +392,7 @@ export const InvoiceDetail: React.FC = () => {
   // Edit and void are only offered before any payment; drafts are issued before taking payments or emails.
   const canEdit = invoice.status !== 'Void' && invoice.paidAmount === 0;
   const canVoid = canEdit;
-  const canEmail = invoice.status !== 'Draft' && invoice.status !== 'Void' && !!invoice.customerEmail;
+  const canEmail = invoice.status !== 'Draft' && invoice.status !== 'Void' && !!invoice.recipientEmail;
   const canRecordPayment = invoice.status !== 'Void' && invoice.status !== 'Draft' && invoice.balanceDue > 0;
   const dueOn = invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString(undefined, { dateStyle: 'medium' }) : null;
   const balanceSummary =
@@ -813,7 +813,7 @@ export const InvoiceDetail: React.FC = () => {
             </ol>
           ) : (
             <div className="text-center py-6 text-sm text-[var(--text-muted)] bg-[var(--bg-subtle)]/50 rounded-xl border border-dashed border-[var(--border-subtle)]">
-              {invoice.customerEmail
+              {invoice.recipientEmail
                 ? 'This invoice has not been emailed to the customer yet.'
                 : 'Add an email address to the customer to send invoices by email.'}
             </div>
@@ -953,13 +953,13 @@ export const InvoiceDetail: React.FC = () => {
       )}
 
       {/* Issue / Email Invoice Modal */}
-      {sendDialogMode && invoice.customerEmail && (
+      {sendDialogMode && invoice.recipientEmail && (
         <SendInvoiceDialog
           mode={sendDialogMode}
           invoiceNumber={invoice.no || issueNumber || ''}
           numberOnIssue={sendDialogMode === 'issue' && !invoice.no}
-          to={invoice.customerEmail}
-          bcc={user?.email && user.email.toLowerCase() !== invoice.customerEmail.toLowerCase() ? user.email : undefined}
+          to={invoice.recipientEmail}
+          bcc={user?.email && user.email.toLowerCase() !== invoice.recipientEmail.toLowerCase() ? user.email : undefined}
           lastSent={sendDialogMode === 'send' ? lastEmail : null}
           busy={isSendingEmail || isSubmittingIssue}
           error={sendError}

@@ -15,7 +15,10 @@ namespace Dto.Sales
         public int? FromSalesOrderId { get; set; }
         public int? FromSalesDeliveryId { get; set; }
         public string? CustomerName { get; set; }
+        /// <summary>The customer's email as printed on the invoice.</summary>
         public string? CustomerEmail { get; set; }
+        /// <summary>Where the invoice is emailed: the customer's email on file now.</summary>
+        public string? RecipientEmail { get; set; }
         public decimal Amount { get { return GetTotalAmount(); } }
         public decimal TotalAllocatedAmount { get; set; }
         public string? ReferenceNo { get; set; }

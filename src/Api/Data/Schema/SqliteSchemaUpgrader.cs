@@ -161,8 +161,11 @@ namespace Api.Data.Schema
                     new[] { "SalesInvoiceHeader", "Notes", "TEXT NULL" },
                     new[] { "SalesInvoiceHeader", "PaymentInstructions", "TEXT NULL" },
                     new[] { "SalesInvoiceHeader", "SellerJson", "TEXT NULL" },
-                    new[] { "SalesInvoiceHeader", "DueDate", "TEXT NULL" }
+                    new[] { "SalesInvoiceHeader", "DueDate", "TEXT NULL" },
+                    new[] { "SalesInvoiceHeader", "BillToJson", "TEXT NULL" },
+                    new[] { "SalesInvoiceLine", "Description", "TEXT NULL" }
                 };
+                var added = new HashSet<string>();
                 foreach (var column in columns)
                 {
                     if (TableExists(connection, column[0], tx) && !ColumnExists(connection, column[0], column[1], tx))
@@ -173,11 +176,38 @@ namespace Api.Data.Schema
                             cmd.CommandText = $"ALTER TABLE \"{column[0]}\" ADD COLUMN \"{column[1]}\" {column[2]};";
                             cmd.ExecuteNonQuery();
                         }
+                        added.Add($"{column[0]}.{column[1]}");
                     }
+                }
+                // Filled once, when the column arrives, so later invoices only ever get what was recorded at the time.
+                if (added.Contains("SalesInvoiceHeader.BillToJson") && added.Contains("SalesInvoiceLine.Description"))
+                {
+                    using var cmd = connection.CreateCommand();
+                    cmd.Transaction = tx;
+                    cmd.CommandText = InvoiceHistoryBackfillSql;
+                    cmd.ExecuteNonQuery();
                 }
                 tx.Commit();
             }
         }
+
+        // D1 0009_invoice_history.sql. Customers and items could not be edited before these columns existed, so what they
+        // say now is what the existing invoices were issued with. Issued invoices (Open, Overdue, Closed, and posted ones
+        // that were voided or predate statuses) get a bill-to; drafts keep following the customer.
+        private const string InvoiceHistoryBackfillSql = @"
+            UPDATE ""SalesInvoiceLine"" SET ""Description"" = (
+                SELECT ""Item"".""Description"" FROM ""Item"" WHERE ""Item"".""Id"" = ""SalesInvoiceLine"".""ItemId"")
+            WHERE ""Description"" IS NULL;
+            UPDATE ""SalesInvoiceHeader"" SET ""BillToJson"" = (
+                SELECT json_object(
+                    'name', COALESCE(""Party"".""Name"", 'Unknown'),
+                    'email', ""Party"".""Email"",
+                    'phone', ""Party"".""Phone"",
+                    'addressLines', json_array(""Party"".""CompanyStreet"", ""Party"".""CompanyProvince"", ""Party"".""CompanyPostalCode"", ""Party"".""CompanyCountry""))
+                FROM ""Customer"" JOIN ""Party"" ON ""Party"".""Id"" = ""Customer"".""PartyId""
+                WHERE ""Customer"".""Id"" = ""SalesInvoiceHeader"".""CustomerId"")
+            WHERE ""BillToJson"" IS NULL
+              AND (""Status"" IN (1, 2, 3) OR ((""Status"" IS NULL OR ""Status"" = 4) AND ""GeneralLedgerHeaderId"" IS NOT NULL));";
 
         // Tables added after the first release; the same statements are in the D1 migrations.
         private static void EnsureTables(DbConnection connection)
