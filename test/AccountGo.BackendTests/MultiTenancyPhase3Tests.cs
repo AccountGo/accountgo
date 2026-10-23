@@ -1378,6 +1378,155 @@ namespace AccountGo.BackendTests
                 return scope.ServiceProvider.GetRequiredService<ApiDbContext>().CompanyMembers.Single(m => m.UserId == userId && m.CompanyId == _companyId).Id;
         }
 
+        [Fact]
+        public async Task IssuedInvoice_KeepsTheCustomerAndLineTextItWasIssuedWith()
+        {
+            var issuedDto = await NewInvoice("old@example.com");
+            await EditCustomer(issuedDto.CustomerId, "Old Name Ltd", "old@example.com", "1 Old St");
+            // A catalog line keeps the text typed over it, not just the item's description.
+            issuedDto.SalesInvoiceLines[0].ItemDescription = "Consulting, March";
+            var issuedResponse = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", issuedDto);
+            Assert.True(issuedResponse.IsSuccessStatusCode, await issuedResponse.Content.ReadAsStringAsync());
+            Assert.Contains(AllSyncStatements(issuedResponse), sql => sql.Contains("BillToJson") && sql.Contains("Old Name Ltd"));
+            var issuedId = (await Json(issuedResponse)).GetProperty("id").GetInt32();
+
+            // A draft for the same customer, its line left blank: it takes the item's description as it is now.
+            var draftDto = new Dto.Sales.SalesInvoice
+            {
+                CustomerId = issuedDto.CustomerId, InvoiceDate = DateTime.UtcNow, Status = "Draft",
+                SalesInvoiceLines = new List<Dto.Sales.SalesInvoiceLine> { new Dto.Sales.SalesInvoiceLine
+                {
+                    ItemId = issuedDto.SalesInvoiceLines[0].ItemId, Quantity = 1, Amount = 100, MeasurementId = issuedDto.SalesInvoiceLines[0].MeasurementId
+                } }
+            };
+            var draftResponse = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", draftDto);
+            Assert.True(draftResponse.IsSuccessStatusCode, await draftResponse.Content.ReadAsStringAsync());
+            var draftId = (await Json(draftResponse)).GetProperty("id").GetInt32();
+
+            await EditCustomer(issuedDto.CustomerId, "New Name Inc", "new@example.com", "9 New St");
+            await EditItem(issuedDto.SalesInvoiceLines[0].ItemId.Value, "Advisory");
+
+            var issued = await GetInvoice(issuedId);
+            Assert.Equal("Old Name Ltd", issued.CustomerName);
+            Assert.Equal("old@example.com", issued.CustomerEmail);
+            Assert.Equal("1 Old St, Makati", issued.CustomerAddress);
+            Assert.Equal("Consulting, March", issued.SalesInvoiceLines.Single().ItemDescription);
+            // Emails go to the address on file now.
+            Assert.Equal("new@example.com", issued.RecipientEmail);
+            var listed = (await (await Send(HttpMethod.Get, "/api/Sales/SalesInvoices")).Content.ReadFromJsonAsync<List<Dto.Sales.SalesInvoice>>())
+                .Single(i => i.Id == issuedId);
+            Assert.Equal("Consulting, March", listed.SalesInvoiceLines.Single().ItemDescription);
+
+            // A draft follows the customer until it is issued; its line text is what was saved.
+            var draft = await GetInvoice(draftId);
+            Assert.Equal("New Name Inc", draft.CustomerName);
+            Assert.Equal("9 New St, Makati", draft.CustomerAddress);
+            Assert.Equal("Consulting", draft.SalesInvoiceLines.Single().ItemDescription);
+
+            Assert.True((await Send(HttpMethod.Post, $"/api/Sales/IssueSalesInvoice?id={draftId}")).IsSuccessStatusCode);
+            await EditCustomer(issuedDto.CustomerId, "Newest Name Co", "newest@example.com", "5 Later St");
+            draft = await GetInvoice(draftId);
+            Assert.Equal("New Name Inc", draft.CustomerName);
+            Assert.Equal("new@example.com", draft.CustomerEmail);
+
+            // Editing an issued invoice keeps its bill-to.
+            var edit = await GetInvoice(issuedId);
+            edit.ReferenceNo = "PO-1";
+            Assert.True((await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", edit)).IsSuccessStatusCode);
+            Assert.Equal("Old Name Ltd", (await GetInvoice(issuedId)).CustomerName);
+        }
+
+        [Fact]
+        public async Task InvoiceHistoryMigration_BackfillsIssuedInvoices_AndLineText()
+        {
+            var issuedDto = await NewInvoice("billing@example.com");
+            await EditCustomer(issuedDto.CustomerId, "Backfilled Co", "billing@example.com", null);
+            var issuedResponse = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", issuedDto);
+            Assert.True(issuedResponse.IsSuccessStatusCode, await issuedResponse.Content.ReadAsStringAsync());
+            var issuedId = (await Json(issuedResponse)).GetProperty("id").GetInt32();
+            var draftId = await SaveDraft();
+
+            using (var source = new SqliteConnection("Data Source=" + _path))
+            using (var replica = new SqliteConnection("Data Source=:memory:"))
+            {
+                source.Open();
+                replica.Open();
+                source.BackupDatabase(replica);
+                using (var command = replica.CreateCommand())
+                {
+                    // D1 as it is before the migration.
+                    command.CommandText = @"ALTER TABLE ""SalesInvoiceLine"" DROP COLUMN ""Description"";
+                                            ALTER TABLE ""SalesInvoiceHeader"" DROP COLUMN ""BillToJson"";";
+                    command.ExecuteNonQuery();
+                    command.CommandText = File.ReadAllText(Path.Combine(RepoRoot(), "src/Api/d1/migrations/0009_invoice_history.sql"));
+                    command.ExecuteNonQuery();
+
+                    command.CommandText = $@"SELECT ""BillToJson"" FROM ""SalesInvoiceHeader"" WHERE ""Id"" = {issuedId}";
+                    var billTo = InvoiceBillTo.FromJson(command.ExecuteScalar() as string);
+                    Assert.NotNull(billTo);
+                    Assert.Equal("Backfilled Co", billTo.Name);
+                    Assert.Equal("billing@example.com", billTo.Email);
+                    Assert.Empty(billTo.AddressLines);
+
+                    command.CommandText = $@"SELECT ""BillToJson"" FROM ""SalesInvoiceHeader"" WHERE ""Id"" = {draftId}";
+                    Assert.IsType<DBNull>(command.ExecuteScalar());
+
+                    command.CommandText = $@"SELECT ""Description"" FROM ""SalesInvoiceLine"" WHERE ""SalesInvoiceHeaderId"" = {issuedId}";
+                    Assert.Equal("Consulting", command.ExecuteScalar());
+                }
+            }
+        }
+
+        [Fact]
+        public void InvoiceBillTo_ReadsTheBackfillFormat_AndIsCapturedOnlyWhenIssued()
+        {
+            var backfilled = InvoiceBillTo.FromJson(@"{""name"":""Acme"",""email"":null,""phone"":null,""addressLines"":[""1 Main St"",null,"" "",""PH""]}");
+            Assert.Equal(new[] { "1 Main St", "PH" }, backfilled.AddressLines);
+            Assert.Equal("1 Main St, PH", backfilled.AddressText);
+            Assert.DoesNotContain("addressText", backfilled.ToJson());
+            Assert.Null(InvoiceBillTo.FromJson("{not json"));
+
+            var party = new Party { Name = "Acme", CompanyStreet = "1 Main St" };
+            foreach (var (status, captured) in new (SalesInvoiceStatus?, bool)[]
+                { (SalesInvoiceStatus.Draft, false), (SalesInvoiceStatus.Void, false), (null, false), (SalesInvoiceStatus.Open, true) })
+            {
+                var invoice = new SalesInvoiceHeader { Status = status };
+                invoice.CaptureBillToIfIssued(party);
+                Assert.Equal(captured, invoice.BillToJson != null);
+            }
+
+            var once = new SalesInvoiceHeader { Status = SalesInvoiceStatus.Open };
+            once.CaptureBillToIfIssued(party);
+            once.CaptureBillToIfIssued(new Party { Name = "Renamed" });
+            Assert.Equal("Acme", InvoiceBillTo.FromJson(once.BillToJson).Name);
+        }
+
+        private async Task EditCustomer(int customerId, string name, string email, string street)
+        {
+            using var scope = _factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
+            {
+                var party = db.Customers.Where(c => c.Id == customerId).Select(c => c.Party).Single();
+                party.Name = name;
+                party.Email = email;
+                party.CompanyStreet = street;
+                party.CompanyProvince = street == null ? null : "Makati";
+                await db.SaveChangesAsync();
+            }
+        }
+
+        private async Task EditItem(int itemId, string description)
+        {
+            using var scope = _factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
+            {
+                db.Items.Single(i => i.Id == itemId).Description = description;
+                await db.SaveChangesAsync();
+            }
+        }
+
         private async Task<Dto.Sales.SalesInvoice> NewInvoice(string customerEmail = null)
         {
             using (var scope = _factory.Services.CreateScope())

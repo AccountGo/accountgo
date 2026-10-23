@@ -414,7 +414,8 @@ namespace Api.Controllers
             if (invoice.Status is "Draft" or "Void")
                 return BadRequest(new { message = $"Only issued invoices can be emailed; this one is {invoice.Status!.ToLowerInvariant()}." });
 
-            var to = ValidEmail(invoice.CustomerEmail);
+            // Sent to the customer's address on file now, which may have changed since the invoice was issued.
+            var to = ValidEmail(invoice.RecipientEmail);
             if (to == null)
                 return BadRequest(new { message = "This customer has no valid email address on record." });
 
@@ -526,8 +527,13 @@ namespace Api.Controllers
             (!string.IsNullOrWhiteSpace(_tenantContext.CompanySlug) ? _adminService.GetCompanyBySlug(_tenantContext.CompanySlug) : null)
             ?? _adminService.GetCompanies().FirstOrDefault(c => c.Id == _tenantContext.CompanyId);
 
-        private void CaptureSellerIfIssued(Core.Domain.Sales.SalesInvoiceHeader invoice) =>
+        /// <summary>Records the seller and the customer as they print, once the invoice is issued.</summary>
+        private void CaptureIfIssued(Core.Domain.Sales.SalesInvoiceHeader invoice)
+        {
             invoice.CaptureSellerIfIssued(CurrentCompany(), _db.CompanySettings.FirstOrDefault());
+            if (invoice.BillToJson == null)
+                invoice.CaptureBillToIfIssued(_db.Customers.Where(c => c.Id == invoice.CustomerId).Select(c => c.Party).FirstOrDefault());
+        }
 
         /// <summary>Shapes an invoice with its computed totals and status; null when it is not in this workspace.</summary>
         private Dto.Sales.SalesInvoice? BuildSalesInvoiceDto(int id)
@@ -547,22 +553,20 @@ namespace Api.Controllers
             var seller = Core.Domain.Sales.InvoiceSeller.FromJson(salesInvoice.SellerJson)
                 ?? Core.Domain.Sales.InvoiceSeller.FromWorkspace(defaultCompany, setting);
 
+            // Likewise the customer: as recorded at issue, or as it is now for drafts.
             var party = salesInvoice.Customer?.Party;
-            var addressParts = new List<string>();
-            if (!string.IsNullOrWhiteSpace(party?.CompanyStreet)) addressParts.Add(party.CompanyStreet);
-            if (!string.IsNullOrWhiteSpace(party?.CompanyProvince)) addressParts.Add(party.CompanyProvince);
-            if (!string.IsNullOrWhiteSpace(party?.CompanyPostalCode)) addressParts.Add(party.CompanyPostalCode);
-            if (!string.IsNullOrWhiteSpace(party?.CompanyCountry)) addressParts.Add(party.CompanyCountry);
-            var customerAddress = addressParts.Count > 0 ? string.Join(", ", addressParts) : null;
+            var billTo = Core.Domain.Sales.InvoiceBillTo.FromJson(salesInvoice.BillToJson)
+                ?? Core.Domain.Sales.InvoiceBillTo.FromParty(party);
 
             var salesInvoiceDto = new Dto.Sales.SalesInvoice()
             {
                 Id = salesInvoice.Id,
                 CustomerId = salesInvoice.CustomerId,
-                CustomerName = party?.Name ?? "Unknown",
-                CustomerEmail = party?.Email,
-                CustomerPhone = party?.Phone,
-                CustomerAddress = customerAddress,
+                CustomerName = billTo.Name,
+                CustomerEmail = billTo.Email,
+                CustomerPhone = billTo.Phone,
+                CustomerAddress = billTo.AddressText,
+                RecipientEmail = party?.Email,
                 No = salesInvoice.No,
                 InvoiceDate = salesInvoice.Date,
                 DueDate = dueDate,
@@ -623,7 +627,7 @@ namespace Api.Controllers
                     Quantity = line.Quantity,
                     ItemId = line.ItemId,
                     MeasurementId = line.MeasurementId,
-                    ItemDescription = line.Item?.Description ?? "Item",
+                    ItemDescription = line.DisplayDescription,
                     MeasurementDescription = line.Measurement?.Description ?? "EA"
                 };
 
@@ -870,7 +874,7 @@ namespace Api.Controllers
                         Quantity = line.Quantity,
                         Amount = line.Amount,
                         Discount = line.Discount,
-                        ItemDescription = line.Item?.Description ?? "Item",
+                        ItemDescription = line.DisplayDescription,
                         MeasurementDescription = line.Measurement?.Description ?? "EA"
                     };
 
@@ -1301,6 +1305,7 @@ namespace Api.Controllers
 
                         salesInvoiceLine.ItemId = lineItemId;
                         salesInvoiceLine.MeasurementId = lineMeasurementId;
+                        salesInvoiceLine.Description = Core.Domain.Sales.SalesInvoiceLine.DescriptionFor(line.ItemDescription, items.FirstOrDefault(i => i.Id == lineItemId));
                         salesInvoice.SalesInvoiceLines.Add(salesInvoiceLine);
 
                         // line.Id here is referring to SalesOrderLineId. It is pre-populated when you create a new sales invoice from sales order.
@@ -1347,6 +1352,9 @@ namespace Api.Controllers
                     salesInvoice.ReferenceNo = salesInvoiceDto.ReferenceNo;
                     salesInvoice.Notes = string.IsNullOrWhiteSpace(salesInvoiceDto.Notes) ? null : salesInvoiceDto.Notes.Trim();
                     salesInvoice.PaymentInstructions = string.IsNullOrWhiteSpace(salesInvoiceDto.PaymentInstructions) ? null : salesInvoiceDto.PaymentInstructions.Trim();
+                    // A different customer means a different "Bill to"; it is recorded again below.
+                    if (salesInvoice.CustomerId != salesInvoiceDto.CustomerId)
+                        salesInvoice.BillToJson = null;
                     salesInvoice.CustomerId = salesInvoiceDto.CustomerId;
                     if (!string.IsNullOrWhiteSpace(salesInvoiceDto.Status))
                     {
@@ -1388,6 +1396,7 @@ namespace Api.Controllers
                             existingLine.Quantity = line.Quantity.GetValueOrDefault(1);
                             existingLine.ItemId = lineItemId;
                             existingLine.MeasurementId = lineMeasurementId;
+                            existingLine.Description = Core.Domain.Sales.SalesInvoiceLine.DescriptionFor(line.ItemDescription, items.FirstOrDefault(i => i.Id == lineItemId));
                         }
                         else
                         {
@@ -1398,6 +1407,7 @@ namespace Api.Controllers
                             salesInvoiceLine.Quantity = line.Quantity.GetValueOrDefault(1);
                             salesInvoiceLine.ItemId = lineItemId;
                             salesInvoiceLine.MeasurementId = lineMeasurementId;
+                            salesInvoiceLine.Description = Core.Domain.Sales.SalesInvoiceLine.DescriptionFor(line.ItemDescription, items.FirstOrDefault(i => i.Id == lineItemId));
                             salesInvoice.SalesInvoiceLines.Add(salesInvoiceLine);
 
                             // add a new order line.
@@ -1437,7 +1447,7 @@ namespace Api.Controllers
 
                 _logger.LogInformation("SaveSalesInvoice API " + salesInvoice.CustomerId);
 
-                CaptureSellerIfIssued(salesInvoice);
+                CaptureIfIssued(salesInvoice);
                 _salesService.SaveSalesInvoice(salesInvoice, salesOrder);
                 tx.Commit();
 
@@ -1735,7 +1745,7 @@ namespace Api.Controllers
                 {
                     invoice.Status = Core.Domain.SalesInvoiceStatus.Open;
                 }
-                CaptureSellerIfIssued(invoice);
+                CaptureIfIssued(invoice);
                 _salesService.UpdateSalesInvoice(invoice);
 
                 return Ok(new
@@ -1808,7 +1818,7 @@ namespace Api.Controllers
                 }
 
                 invoice.Status = Core.Domain.SalesInvoiceStatus.Open;
-                CaptureSellerIfIssued(invoice);
+                CaptureIfIssued(invoice);
                 _salesService.UpdateSalesInvoice(invoice);
                 tx.Commit();
 
@@ -2191,7 +2201,7 @@ namespace Api.Controllers
                     lineDto.ItemId = line.ItemId;
                     lineDto.MeasurementId = line.MeasurementId;
 
-                    lineDto.ItemDescription = _inventoryService.GetItemById(line.ItemId).Description;
+                    lineDto.ItemDescription = line.Description ?? _inventoryService.GetItemById(line.ItemId).Description;
                     lineDto.MeasurementDescription = _inventoryService.GetMeasurementById(line.MeasurementId).Description;
 
                     if (_taxService != null)

@@ -31,12 +31,25 @@ namespace Core.Domain.Sales
         public decimal Quantity { get; set; }
         public decimal Discount { get; set; }
         public decimal Amount { get; set; }
+        /// <summary>
+        /// The line's text as typed on the invoice, so later edits to the item don't rewrite it. Null only on lines
+        /// saved before it was stored whose item had no description.
+        /// </summary>
+        public string? Description { get; set; }
         public virtual SalesInvoiceHeader SalesInvoiceHeader { get; set; }
         public virtual Item Item { get; set; }
         public virtual Measurement Measurement { get; set; }
         public virtual InventoryControlJournal InventoryControlJournal { get; set; }
         public virtual SalesOrderLine SalesOrderLine { get; set; }
         public virtual ICollection<SalesReceiptLine> SalesReceiptLines { get; set; }
+
+        /// <summary>The text to store for a line: what was typed, or else the item's description.</summary>
+        public static string? DescriptionFor(string? typed, Item? item) =>
+            string.IsNullOrWhiteSpace(typed) ? item?.Description : typed.Trim();
+
+        /// <summary>The line's text as it prints.</summary>
+        [NotMapped]
+        public string DisplayDescription => Description ?? Item?.Description ?? "Item";
 
         public decimal ComputeLineTaxAmount()
         {

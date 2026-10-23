@@ -30,7 +30,10 @@ export interface Invoice {
   no: string | null;
   customerId: number;
   customerName: string;
+  /** As printed on the invoice: recorded when it was issued. */
   customerEmail?: string;
+  /** Where emails go: the client's email on file now. */
+  recipientEmail?: string;
   customerPhone?: string;
   customerAddress?: string;
   invoiceDate: string;
