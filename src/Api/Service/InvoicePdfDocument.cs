@@ -18,32 +18,18 @@ namespace Api.Service
         private const string Shade = "#F1F5F9";
         private const string Brand = "#059669";
 
-        // Matches the web app's display symbols (src/Web/src/lib/currency.ts).
-        private static readonly Dictionary<string, string> CurrencySymbols = new(StringComparer.OrdinalIgnoreCase)
-        {
-            ["USD"] = "$",
-            ["PHP"] = "₱",
-            ["CAD"] = "CA$",
-            ["EUR"] = "€",
-            ["GBP"] = "£",
-            ["AUD"] = "AU$",
-            ["SGD"] = "S$",
-        };
-
         private readonly Dto.Sales.SalesInvoice _invoice;
         private readonly string _currencyCode;
-        private readonly string _currencySymbol;
 
         public InvoicePdfDocument(Dto.Sales.SalesInvoice invoice, string? currencyCode)
         {
             _invoice = invoice;
-            _currencyCode = string.IsNullOrWhiteSpace(currencyCode) ? "USD" : currencyCode.ToUpperInvariant();
-            _currencySymbol = CurrencySymbols.TryGetValue(_currencyCode, out var symbol) ? symbol : "$";
+            _currencyCode = InvoiceFormat.CurrencyCode(currencyCode);
         }
 
         private string SellerName => string.IsNullOrWhiteSpace(_invoice.Seller.Name) ? "AccountGo" : _invoice.Seller.Name;
 
-        public string InvoiceNumber =>string.IsNullOrWhiteSpace(_invoice.No) ? _invoice.Id.ToString(CultureInfo.InvariantCulture) : _invoice.No!;
+        public string InvoiceNumber => InvoiceFormat.Number(_invoice);
 
         public DocumentMetadata GetMetadata() => new()
         {
@@ -308,12 +294,8 @@ namespace Api.Service
             });
         }
 
-        private string Money(decimal amount)
-        {
-            var sign = amount < 0 ? "−" : string.Empty;
-            return $"{sign}{_currencySymbol}{Math.Abs(amount).ToString("#,##0.00", CultureInfo.InvariantCulture)}";
-        }
+        private string Money(decimal amount) => InvoiceFormat.Money(amount, _currencyCode);
 
-        private static string FormatDate(DateTime date) => date.ToString("MMM d, yyyy", CultureInfo.InvariantCulture);
+        private static string FormatDate(DateTime date) => InvoiceFormat.Date(date);
     }
 }

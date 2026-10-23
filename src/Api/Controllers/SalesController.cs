@@ -397,6 +397,76 @@ namespace Api.Controllers
             return File(bytes, "application/pdf", $"Invoice-{document.InvoiceNumber}.pdf");
         }
 
+        /// <summary>
+        /// Emails an issued invoice to the customer with its PDF attached, and a blind copy to the person sending it.
+        /// Separate from issuing: a failed send never un-issues the invoice, and the same call resends later.
+        /// </summary>
+        [HttpPost]
+        [Route("SendSalesInvoiceEmail")]
+        [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesCreate)]
+        public async Task<IActionResult> SendSalesInvoiceEmail(int id,
+            [FromServices] Api.Service.IEmailSender emailSender,
+            [FromServices] Api.Service.InvoiceEmailLimiter limiter,
+            CancellationToken ct)
+        {
+            var invoice = BuildSalesInvoiceDto(id);
+            if (invoice == null)
+                return NotFound(new { message = $"Invoice #{id} not found." });
+
+            if (invoice.Status is "Draft" or "Void")
+                return BadRequest(new { message = $"Only issued invoices can be emailed; this one is {invoice.Status!.ToLowerInvariant()}." });
+
+            var to = ValidEmail(invoice.CustomerEmail);
+            if (to == null)
+                return BadRequest(new { message = "This customer has no valid email address on record." });
+
+            if (!limiter.TryAcquire(_tenantContext.RequireCompanyId()))
+                return StatusCode(StatusCodes.Status429TooManyRequests,
+                    new { message = $"This workspace has reached its limit of {Api.Service.InvoiceEmailLimiter.PermitsPerHour} invoice emails an hour. Please try again later." });
+
+            var senderEmail = ValidEmail(HttpContext.User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value);
+            var replyTo = ValidEmail(invoice.Seller.Email) ?? senderEmail;
+            var currency = _db.CompanySettings.Select(s => s.Currency).FirstOrDefault();
+
+            var content = Api.Service.InvoiceEmailTemplate.Build(invoice, currency, canReply: replyTo != null);
+            var pdf = QuestPDF.Fluent.GenerateExtensions.GeneratePdf(new Api.Service.InvoicePdfDocument(invoice, currency));
+            var number = Api.Service.InvoiceFormat.Number(invoice);
+
+            var message = new Api.Service.EmailMessage
+            {
+                To = to,
+                Subject = content.Subject,
+                Html = content.Html,
+                Text = content.Text,
+                FromName = $"{(string.IsNullOrWhiteSpace(invoice.Seller.Name) ? "AccountGo" : invoice.Seller.Name)} via AccountGo",
+                ReplyTo = replyTo,
+                Attachments = { new Api.Service.EmailAttachment { FileName = Api.Service.InvoiceEmailTemplate.PdfFileName(number), Content = pdf } },
+            };
+            if (senderEmail != null && !string.Equals(senderEmail, to, StringComparison.OrdinalIgnoreCase))
+                message.Bcc.Add(senderEmail);
+
+            try
+            {
+                await emailSender.SendAsync(message, ct);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogError(ex, "Invoice {InvoiceId} email to the customer could not be sent", id);
+                return StatusCode(StatusCodes.Status502BadGateway, new { message = "The email could not be sent. Please try again in a few minutes." });
+            }
+
+            _logger.LogInformation("Invoice {InvoiceId} emailed by {Sender} for workspace {CompanyId}", id, senderEmail, _tenantContext.CompanyId);
+            return Ok(new { success = true, to, bcc = message.Bcc });
+        }
+
+        private static string? ValidEmail(string? value)
+        {
+            var trimmed = value?.Trim();
+            return !string.IsNullOrEmpty(trimmed) && System.Net.Mail.MailAddress.TryCreate(trimmed, out var address) && address.Address == trimmed
+                ? trimmed
+                : null;
+        }
+
         private Core.Domain.Company? CurrentCompany() =>
             (!string.IsNullOrWhiteSpace(_tenantContext.CompanySlug) ? _adminService.GetCompanyBySlug(_tenantContext.CompanySlug) : null)
             ?? _adminService.GetCompanies().FirstOrDefault(c => c.Id == _tenantContext.CompanyId);

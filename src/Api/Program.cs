@@ -79,6 +79,7 @@ else
 }
 
 builder.Services.AddScoped<IEmailOtpService, EmailOtpService>();
+builder.Services.AddSingleton<InvoiceEmailLimiter>();
 builder.Services.AddScoped<CompanyProvisioningService>();
 builder.Services.AddScoped<WorkspaceService>();
 builder.Services.AddScoped<WorkspaceInvitationService>();
