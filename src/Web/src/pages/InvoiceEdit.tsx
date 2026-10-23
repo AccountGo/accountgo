@@ -13,9 +13,12 @@ import {
   Loader2,
   Package,
   Unlink,
+  Users,
+  ChevronsUpDown,
 } from 'lucide-react';
 import { PageHeader, HeaderButton } from '../components/PageHeader';
 import { CatalogPickerDialog } from '../components/CatalogPickerDialog';
+import { CustomerPickerDialog } from '../components/CustomerPickerDialog';
 import {
   TenantContextType,
   Invoice,
@@ -88,6 +91,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
 
   // Add Customer Modal State
   const [isAddCustomerOpen, setIsAddCustomerOpen] = useState<boolean>(false);
+  const [isCustomerPickerOpen, setIsCustomerPickerOpen] = useState<boolean>(false);
   const [newCustomerName, setNewCustomerName] = useState('');
   const [newCustomerEmail, setNewCustomerEmail] = useState('');
   const [newCustomerPhone, setNewCustomerPhone] = useState('');
@@ -234,6 +238,14 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
       updated[index] = { ...updated[index], [field]: val };
       return updated;
     });
+  };
+
+  const selectedCustomer = customers.find((c) => c.id === Number(selectedCustomerId));
+
+  const handlePickCustomer = (customer: CustomerOption) => {
+    setSelectedCustomerId(customer.id);
+    if (customer.paymentTermId) setPaymentTermId(customer.paymentTermId);
+    setIsCustomerPickerOpen(false);
   };
 
   const handlePickItem = (index: number, catalogItem: ItemOption) => {
@@ -524,54 +536,40 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
                 className="inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--brand-primary)] hover:opacity-80 transition"
               >
                 <UserPlus className="w-3.5 h-3.5" />
-                + Add Client
+                New client
               </button>
             </div>
 
-            <div className="relative">
-              <select
-                value={selectedCustomerId}
-                onChange={(e) => {
-                  const val = e.target.value ? Number(e.target.value) : '';
-                  setSelectedCustomerId(val);
-                  if (val) {
-                    const cust = customers.find((c) => c.id === val);
-                    if (cust?.paymentTermId) {
-                      setPaymentTermId(cust.paymentTermId);
-                    }
-                  }
-                }}
-                className="w-full px-4 py-2.5 text-sm bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xl focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] transition"
+            {selectedCustomer ? (
+              <button
+                type="button"
+                onClick={() => setIsCustomerPickerOpen(true)}
+                title="Change client"
+                className="group flex w-full items-center gap-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-subtle)] p-3 text-left transition hover:border-[var(--brand-ring)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)]"
               >
-                <option value="">-- Select a Client --</option>
-                {customers.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name} {c.email ? `(${c.email})` : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {selectedCustomerId && (
-              <div className="p-4 bg-[var(--bg-subtle)] rounded-xl border border-[var(--border-subtle)] text-xs space-y-1">
-                {(() => {
-                  const cust = customers.find((c) => c.id === Number(selectedCustomerId));
-                  if (!cust) return null;
-                  return (
-                    <>
-                      <div className="font-semibold text-[var(--text-main)] text-sm">
-                        {cust.name}
-                      </div>
-                      {cust.email && (
-                        <div className="text-[var(--text-secondary)]">{cust.email}</div>
-                      )}
-                      {cust.phone && (
-                        <div className="text-[var(--text-secondary)]">{cust.phone}</div>
-                      )}
-                    </>
-                  );
-                })()}
-              </div>
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--brand-subtle)] text-sm font-bold text-[var(--brand-primary)]">
+                  {selectedCustomer.name.trim().charAt(0).toUpperCase() || '?'}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-semibold text-[var(--text-main)]">{selectedCustomer.name}</span>
+                  <span className="block truncate text-xs text-[var(--text-secondary)]">
+                    {[selectedCustomer.email, selectedCustomer.phone].filter(Boolean).join(' · ') || 'No email or phone on record'}
+                  </span>
+                </span>
+                <span className="shrink-0 text-xs font-semibold text-[var(--text-muted)] transition group-hover:text-[var(--brand-primary)]">
+                  Change
+                </span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setIsCustomerPickerOpen(true)}
+                className="flex h-11 w-full items-center gap-2.5 rounded-xl border border-dashed border-[var(--border-subtle)] bg-[var(--bg-subtle)] px-4 text-left text-sm text-[var(--text-muted)] transition hover:border-[var(--brand-ring)] hover:text-[var(--text-main)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)]"
+              >
+                <Users className="h-4 w-4" />
+                <span className="flex-1">Select a client</span>
+                <ChevronsUpDown className="h-4 w-4" />
+              </button>
             )}
           </div>
 
@@ -1042,6 +1040,19 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
             </form>
           </div>
         </div>
+      )}
+
+      {isCustomerPickerOpen && (
+        <CustomerPickerDialog
+          customers={customers}
+          selectedId={selectedCustomerId || null}
+          onPick={handlePickCustomer}
+          onAddNew={() => {
+            setIsCustomerPickerOpen(false);
+            setIsAddCustomerOpen(true);
+          }}
+          onClose={() => setIsCustomerPickerOpen(false)}
+        />
       )}
 
       {pickerLine !== null && lines[pickerLine] && (
