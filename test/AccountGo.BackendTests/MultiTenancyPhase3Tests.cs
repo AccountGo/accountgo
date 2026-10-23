@@ -300,6 +300,78 @@ namespace AccountGo.BackendTests
         }
 
         [Fact]
+        public async Task BusinessProfileAndInvoiceSettings_SyncToD1_ReplaysToTheSameRow()
+        {
+            // A copy of the database stands in for D1; every response's sync SQL is replayed on it like the worker does.
+            var mirror = _path + ".mirror";
+            using (var source = new SqliteConnection("Data Source=" + _path))
+            {
+                source.Open();
+                using var vacuum = source.CreateCommand();
+                vacuum.CommandText = $"VACUUM INTO '{mirror}'";
+                vacuum.ExecuteNonQuery();
+            }
+
+            try
+            {
+                var saves = new (string Path, object Body)[]
+                {
+                    (Current + "/business-profile", new { legalName = "Marvin Perez", address = new { line1 = "1 First St", city = "Makati" } }),
+                    // Replacing the address: EF deletes the old owned instance and adds a new one.
+                    (Current + "/business-profile", new { legalName = "Marvin Perez", businessEmail = "m@example.com",
+                        address = new { line1 = "2 Second St", city = "Makati", postalCode = "1200", countryCode = "Philippines" } }),
+                    (Current + "/sales-invoice-settings", new { sellerName = "LegalName", showNotes = true, showPaymentInstructions = true }),
+                };
+                foreach (var (path, body) in saves)
+                {
+                    var response = await Send(HttpMethod.Put, path, body);
+                    Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
+                    ReplayOnMirror(mirror, AllSyncStatements(response));
+                }
+                Assert.Equal(CompanySettingRow(_path), CompanySettingRow(mirror));
+                Assert.Contains("2 Second St", CompanySettingRow(mirror));
+
+                var cleared = await Send(HttpMethod.Put, Current + "/business-profile", new { legalName = "Marvin Perez" });
+                Assert.True(cleared.IsSuccessStatusCode);
+                ReplayOnMirror(mirror, AllSyncStatements(cleared));
+                Assert.Equal(CompanySettingRow(_path), CompanySettingRow(mirror));
+                Assert.DoesNotContain("2 Second St", CompanySettingRow(mirror));
+                Assert.Contains("USD", CompanySettingRow(mirror));
+            }
+            finally
+            {
+                SqliteConnection.ClearAllPools();
+                if (File.Exists(mirror)) File.Delete(mirror);
+            }
+        }
+
+        private static void ReplayOnMirror(string mirror, List<string> statements)
+        {
+            using var connection = new SqliteConnection("Data Source=" + mirror);
+            connection.Open();
+            using var tx = connection.BeginTransaction();
+            foreach (var sql in new[] { "PRAGMA defer_foreign_keys = on" }.Concat(statements))
+            {
+                using var command = connection.CreateCommand();
+                command.Transaction = tx;
+                command.CommandText = sql;
+                command.ExecuteNonQuery();
+            }
+            tx.Commit();
+        }
+
+        private string CompanySettingRow(string path)
+        {
+            using var connection = new SqliteConnection("Data Source=" + path);
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = "SELECT * FROM \"CompanySetting\" WHERE \"CompanyId\" = " + _companyId;
+            using var reader = command.ExecuteReader();
+            Assert.True(reader.Read(), "CompanySetting row missing in " + path);
+            return string.Join("|", Enumerable.Range(0, reader.FieldCount).Select(i => reader.GetName(i) + "=" + (reader.IsDBNull(i) ? "NULL" : reader.GetValue(i))));
+        }
+
+        [Fact]
         public async Task SalesInvoiceSettings_RoundTrip_Validate_AdminOnly_AndStayInTheirWorkspace()
         {
             var defaults = await Json(await Send(HttpMethod.Get, Current + "/sales-invoice-settings"));
