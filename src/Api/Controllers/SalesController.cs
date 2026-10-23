@@ -1167,7 +1167,9 @@ namespace Api.Controllers
                 else
                 {
                     // if you reach here, you are updating existing invoice.
-                    salesInvoice = _tenantGuard.EnsureOwned<Core.Domain.Sales.SalesInvoiceHeader>(salesInvoiceDto.Id, nameof(salesInvoiceDto.Id));
+                    // EnsureOwned does not load the lines; reload with them so existing lines are matched, not duplicated.
+                    _tenantGuard.EnsureOwned<Core.Domain.Sales.SalesInvoiceHeader>(salesInvoiceDto.Id, nameof(salesInvoiceDto.Id));
+                    salesInvoice = _salesService.GetSalesInvoiceById(salesInvoiceDto.Id);
 
                     if (salesInvoice.GeneralLedgerHeaderId.HasValue)
                         throw new Exception("Invoice is already posted. Update is not allowed.");

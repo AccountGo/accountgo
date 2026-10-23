@@ -195,6 +195,50 @@ namespace AccountGo.BackendTests
         }
 
         [Fact]
+        public async Task SaveSalesInvoice_PersistsNotesAndPaymentInstructions()
+        {
+            var invoice = await NewInvoice();
+            invoice.Status = "Draft";
+            invoice.Notes = "  Thank you!\nSee you next month.  ";
+            invoice.PaymentInstructions = "Bank: Example Bank\nAccount: 0001-2345";
+            var saved = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
+            Assert.True(saved.IsSuccessStatusCode, await saved.Content.ReadAsStringAsync());
+            invoice.Id = (await saved.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt32();
+
+            var created = await GetInvoice(invoice.Id);
+            Assert.Equal("Thank you!\nSee you next month.", created.Notes);
+            Assert.Equal("Bank: Example Bank\nAccount: 0001-2345", created.PaymentInstructions);
+
+            // Re-send what the edit page sends: the loaded invoice, lines keep their ids.
+            var lineCount = created.SalesInvoiceLines.Count;
+            invoice = created;
+            invoice.Status = "Draft";
+            invoice.Notes = "Updated note";
+            invoice.PaymentInstructions = "Pay by check";
+            var updated = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
+            Assert.True(updated.IsSuccessStatusCode, await updated.Content.ReadAsStringAsync());
+            var afterUpdate = await GetInvoice(invoice.Id);
+            Assert.Equal("Updated note", afterUpdate.Notes);
+            Assert.Equal("Pay by check", afterUpdate.PaymentInstructions);
+            Assert.Equal(lineCount, afterUpdate.SalesInvoiceLines.Count);
+
+            invoice.Notes = "";
+            invoice.PaymentInstructions = "   ";
+            var cleared = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
+            Assert.True(cleared.IsSuccessStatusCode, await cleared.Content.ReadAsStringAsync());
+            var afterClear = await GetInvoice(invoice.Id);
+            Assert.Null(afterClear.Notes);
+            Assert.Null(afterClear.PaymentInstructions);
+        }
+
+        private async Task<Dto.Sales.SalesInvoice> GetInvoice(int id)
+        {
+            var response = await Send(HttpMethod.Get, $"/api/Sales/SalesInvoice?id={id}");
+            Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
+            return await response.Content.ReadFromJsonAsync<Dto.Sales.SalesInvoice>();
+        }
+
+        [Fact]
         public async Task SalesInvoicePdf_ReturnsPdf_OnlyInsideTheWorkspace()
         {
             var invoice = await NewInvoice();
@@ -760,76 +804,7 @@ namespace AccountGo.BackendTests
             }
         }
 
-        
-        [Fact]
-        public async Task NotesAndPaymentInstructions_RoundTrip_AndUpdate()
-        {
-            // Create an invoice with Notes and PaymentInstructions
-            var invoice = await NewInvoice();
-            invoice.Notes = "Client note";
-            invoice.PaymentInstructions = "Pay by check";
-            invoice.Status = "Open";
-            var saved = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
-            Assert.True(saved.IsSuccessStatusCode, await saved.Content.ReadAsStringAsync());
-            var invoiceId = (await saved.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt32();
-
-            // GET it back and assert both round-trip
-            var got = await Send(HttpMethod.Get, $"/api/Sales/SalesInvoice?id={invoiceId}");
-            Assert.True(got.IsSuccessStatusCode);
-            var gotDto = await got.Content.ReadFromJsonAsync<Dto.Sales.SalesInvoice>();
-            Assert.NotNull(gotDto);
-            Assert.Equal("Client note", gotDto.Notes);
-            Assert.Equal("Pay by check", gotDto.PaymentInstructions);
-
-            // Update the invoice Notes and PaymentInstructions via SaveSalesInvoice
-            // First, get a fresh copy of the invoice from the database
-            using (var scope = _factory.Services.CreateScope())
-            {
-                var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
-                using (var tenantCtx = scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
-                {
-                    var updatedInvoice = db.SalesInvoiceHeaders.FirstOrDefault(i => i.Id == invoiceId);
-                    if (updatedInvoice != null)
-                    {
-                        updatedInvoice.Notes = "Updated notes";
-                        updatedInvoice.PaymentInstructions = "Updated instructions";
-                        db.SaveChanges();
-                    }
-                }
-            }
-
-            // GET it back and assert updated values
-            var gotAgain = await Send(HttpMethod.Get, $"/api/Sales/SalesInvoice?id={invoiceId}");
-            Assert.True(gotAgain.IsSuccessStatusCode);
-            var gotAgainDto = await gotAgain.Content.ReadFromJsonAsync<Dto.Sales.SalesInvoice>();
-            Assert.Equal("Updated notes", gotAgainDto.Notes);
-            Assert.Equal("Updated instructions", gotAgainDto.PaymentInstructions);
-
-            // Update with empty strings and assert they come back null
-            using (var scope = _factory.Services.CreateScope())
-            {
-                var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
-                using (var tenantCtx = scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
-                {
-                    var clearedInvoice = db.SalesInvoiceHeaders.FirstOrDefault(i => i.Id == invoiceId);
-                    if (clearedInvoice != null)
-                    {
-                        clearedInvoice.Notes = null;
-                        clearedInvoice.PaymentInstructions = null;
-                        db.SaveChanges();
-                    }
-                }
-            }
-
-            // GET it back and assert null values
-            var gotCleared = await Send(HttpMethod.Get, $"/api/Sales/SalesInvoice?id={invoiceId}");
-            Assert.True(gotCleared.IsSuccessStatusCode);
-            var gotClearedDto = await gotCleared.Content.ReadFromJsonAsync<Dto.Sales.SalesInvoice>();
-            Assert.Null(gotClearedDto.Notes);
-            Assert.Null(gotClearedDto.PaymentInstructions);
-        }
-
-private class Message
+        private class Message
         {
             public string To { get; set; }
             public string Subject { get; set; }

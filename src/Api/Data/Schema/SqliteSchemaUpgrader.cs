@@ -146,9 +146,9 @@ namespace Api.Data.Schema
                     new[] { "Company", "DeletedAt", "TEXT NULL" },
                     new[] { "CompanySetting", "Currency", "TEXT NOT NULL DEFAULT 'PHP'" },
                     new[] { "CompanyInvitation", "ResendWindowStart", "TEXT NULL" },
+                    new[] { "CompanyInvitation", "ResendCount", "INTEGER NOT NULL DEFAULT 0" },
                     new[] { "SalesInvoiceHeader", "Notes", "TEXT NULL" },
-                    new[] { "SalesInvoiceHeader", "PaymentInstructions", "TEXT NULL" },
-                    new[] { "CompanyInvitation", "ResendCount", "INTEGER NOT NULL DEFAULT 0" }
+                    new[] { "SalesInvoiceHeader", "PaymentInstructions", "TEXT NULL" }
                 };
                 foreach (var column in columns)
                 {
