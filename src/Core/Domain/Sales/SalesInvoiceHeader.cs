@@ -31,7 +31,10 @@ namespace Core.Domain.Sales
         public string No { get; set; }
         public DateTime Date { get; set; }
         public decimal ShippingHandlingCharge{ get; set; }
+        /// <summary>Null means custom terms: the due date was set by hand.</summary>
         public int? PaymentTermId { get; set; }
+        /// <summary>Stored since due dates could be set by hand; null on invoices saved before that (see <see cref="ResolveDueDate"/>).</summary>
+        public DateTime? DueDate { get; set; }
         public string ReferenceNo { get; set; }
         public string? Notes { get; set; }
         public string? PaymentInstructions { get; set; }
@@ -52,6 +55,13 @@ namespace Core.Domain.Sales
                 return;
             SellerJson = InvoiceSeller.FromWorkspace(company, setting).ToJson();
         }
+
+        /// <summary>
+        /// The stored due date, or for invoices saved before due dates were stored, the date they have always shown:
+        /// the term's days as calendar days after the invoice date (30 without a term).
+        /// </summary>
+        public DateTime ResolveDueDate(PaymentTerm? term) =>
+            DueDate ?? Date.AddDays(term?.DueAfterDays ?? 30);
 
         public decimal ComputeTotalTax()
         {

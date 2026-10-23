@@ -30,6 +30,7 @@ import {
 } from '../types';
 import { useAuth } from '../auth/AuthContext';
 import { currencySymbol as getCurrencySymbol } from '../lib/currency';
+import { addBusinessDays, businessDaysBetween, isValidDate } from '../lib/businessDays';
 
 interface InvoiceEditProps {
   isEdit?: boolean;
@@ -135,8 +136,11 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
         const termsList = await termsRes.json();
         const termsArr: PaymentTermOption[] = Array.isArray(termsList) ? termsList : [];
         setPaymentTerms(termsArr);
-        if (!paymentTermId && termsArr.length > 0) {
-          setPaymentTermId(termsArr[0].id);
+        // New invoices start on the first term; edits keep the invoice's own term, or custom terms.
+        if (!isEdit && termsArr.length > 0) {
+          const first = termsArr[0];
+          setPaymentTermId((current) => current || first.id);
+          setDueDate((current) => current || addBusinessDays(invoiceDate, first.dueAfterDays ?? 0));
         }
       }
 
@@ -149,7 +153,8 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
     } finally {
       setIsLoadingRefs(false);
     }
-  }, [authFetch, paymentTermId]);
+    // Runs once per page; the dates it reads are only the starting values of a new invoice.
+  }, [authFetch, isEdit]);
 
   useEffect(() => {
     loadReferenceData();
@@ -219,17 +224,29 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
     }
   }, [isEdit, invoiceId, authFetch]);
 
-  // Recalculate Due Date when invoiceDate or paymentTermId changes
-  useEffect(() => {
-    if (!invoiceDate) return;
-    const term = paymentTerms.find((t) => t.id === Number(paymentTermId));
-    const dueDays = term?.dueAfterDays ?? 30;
-    const baseDate = new Date(invoiceDate);
-    if (!isNaN(baseDate.getTime())) {
-      baseDate.setDate(baseDate.getDate() + dueDays);
-      setDueDate(baseDate.toISOString().split('T')[0]);
+  // Payment terms count business days (lib/businessDays). Choosing a term sets the due date; editing either date by
+  // hand keeps both dates and selects the term they match, or Custom when none does.
+  const applyTerm = (id: number | '') => {
+    setPaymentTermId(id);
+    const term = paymentTerms.find((t) => t.id === id);
+    if (term && isValidDate(invoiceDate)) setDueDate(addBusinessDays(invoiceDate, term.dueAfterDays ?? 0));
+  };
+
+  const matchTerm = (issue: string, due: string) => {
+    if (!isValidDate(issue) || !isValidDate(due)) {
+      setPaymentTermId('');
+      return;
     }
-  }, [invoiceDate, paymentTermId, paymentTerms]);
+    const fits = (t: PaymentTermOption) => addBusinessDays(issue, t.dueAfterDays ?? 0) === due;
+    setPaymentTermId((current) => {
+      const kept = paymentTerms.find((t) => t.id === current);
+      if (kept && fits(kept)) return current;
+      return paymentTerms.find(fits)?.id ?? '';
+    });
+  };
+
+  const dueInBusinessDays =
+    isValidDate(invoiceDate) && isValidDate(dueDate) ? businessDaysBetween(invoiceDate, dueDate) : undefined;
 
   // Line item helpers
   const handleLineChange = (index: number, field: keyof FormLineItem, val: any) => {
@@ -244,7 +261,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
 
   const handlePickCustomer = (customer: CustomerOption) => {
     setSelectedCustomerId(customer.id);
-    if (customer.paymentTermId) setPaymentTermId(customer.paymentTermId);
+    if (customer.paymentTermId) applyTerm(customer.paymentTermId);
     setIsCustomerPickerOpen(false);
   };
 
@@ -323,6 +340,11 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
     // Validation
     if (!selectedCustomerId) {
       setErrorBanner('Please select or add a client for this invoice.');
+      return;
+    }
+
+    if (dueInBusinessDays === null) {
+      setErrorBanner("The due date can't be before the issue date.");
       return;
     }
 
@@ -447,7 +469,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
       setCustomers((prev) => [newOption, ...prev]);
       setSelectedCustomerId(created.id);
       if (newCustomerTermId) {
-        setPaymentTermId(newCustomerTermId);
+        applyTerm(newCustomerTermId);
       }
 
       // Reset modal fields and close
@@ -583,7 +605,10 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
                 <input
                   type="date"
                   value={invoiceDate}
-                  onChange={(e) => setInvoiceDate(e.target.value)}
+                  onChange={(e) => {
+                    setInvoiceDate(e.target.value);
+                    matchTerm(e.target.value, dueDate);
+                  }}
                   className="w-full px-3.5 py-2.5 text-sm bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xl focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] transition"
                 />
               </div>
@@ -595,12 +620,10 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
               </label>
               <select
                 value={paymentTermId}
-                onChange={(e) =>
-                  setPaymentTermId(e.target.value ? Number(e.target.value) : '')
-                }
+                onChange={(e) => applyTerm(e.target.value ? Number(e.target.value) : '')}
                 className="w-full px-3.5 py-2.5 text-sm bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xl focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] transition"
               >
-                <option value="">Custom / Default</option>
+                <option value="">Custom</option>
                 {paymentTerms.map((t) => (
                   <option key={t.id} value={t.id}>
                     {t.description}
@@ -616,9 +639,28 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
               <input
                 type="date"
                 value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-                className="w-full px-3.5 py-2.5 text-sm bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xl focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] transition"
+                min={invoiceDate || undefined}
+                aria-describedby="due-date-hint"
+                onChange={(e) => {
+                  setDueDate(e.target.value);
+                  matchTerm(invoiceDate, e.target.value);
+                }}
+                className={`w-full px-3.5 py-2.5 text-sm bg-[var(--bg-subtle)] border rounded-xl focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] transition ${
+                  dueInBusinessDays === null ? 'border-rose-500/60' : 'border-[var(--border-subtle)]'
+                }`}
               />
+              {dueInBusinessDays !== undefined && (
+                <p
+                  id="due-date-hint"
+                  className={`mt-1.5 text-xs ${dueInBusinessDays === null ? 'text-rose-500' : 'text-[var(--text-muted)]'}`}
+                >
+                  {dueInBusinessDays === null
+                    ? 'The due date is before the issue date.'
+                    : dueInBusinessDays === 0
+                      ? 'Due on the issue date'
+                      : `${dueInBusinessDays} business day${dueInBusinessDays === 1 ? '' : 's'} after the issue date`}
+                </p>
+              )}
             </div>
 
             <div>

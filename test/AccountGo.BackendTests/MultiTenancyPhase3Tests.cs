@@ -259,6 +259,61 @@ namespace AccountGo.BackendTests
             Assert.Null(afterClear.PaymentInstructions);
         }
 
+        [Fact]
+        public async Task SaveSalesInvoice_DueDate_FollowsTermInBusinessDays_OrIsKeptAsCustom()
+        {
+            int termId, termDays;
+            using (var scope = _factory.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+                using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(_companyId, _slug, CompanyMemberRole.Owner))
+                {
+                    var term = db.PaymentTerms.Where(t => t.DueAfterDays > 0).OrderBy(t => t.Id).First();
+                    termId = term.Id;
+                    termDays = term.DueAfterDays.GetValueOrDefault();
+                }
+            }
+            var friday = new DateTime(2026, 10, 23);
+
+            // A term and no due date: the due date is the term's business days after the invoice date.
+            var withTerm = await NewInvoice();
+            withTerm.Status = "Draft";
+            withTerm.InvoiceDate = friday;
+            withTerm.PaymentTermId = termId;
+            var saved = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", withTerm);
+            Assert.True(saved.IsSuccessStatusCode, await saved.Content.ReadAsStringAsync());
+            var created = await GetInvoice((await saved.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt32());
+            Assert.Equal(BusinessDays.Add(friday, termDays), created.DueDate!.Value.Date);
+            Assert.Equal(termId, created.PaymentTermId);
+
+            // No term and a due date: custom terms, kept as sent, also on later edits.
+            created.Status = "Draft";
+            created.PaymentTermId = null;
+            created.DueDate = friday.AddDays(3);
+            var custom = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", created);
+            Assert.True(custom.IsSuccessStatusCode, await custom.Content.ReadAsStringAsync());
+            var afterCustom = await GetInvoice(created.Id);
+            Assert.Null(afterCustom.PaymentTermId);
+            Assert.Equal(friday.AddDays(3), afterCustom.DueDate!.Value.Date);
+
+            // A due date before the invoice date is refused.
+            afterCustom.Status = "Draft";
+            afterCustom.DueDate = friday.AddDays(-1);
+            var early = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", afterCustom);
+            Assert.Equal(HttpStatusCode.BadRequest, early.StatusCode);
+            Assert.Contains("due date", await early.Content.ReadAsStringAsync());
+        }
+
+        [Theory]
+        [InlineData("2026-10-23", 0, "2026-10-23")] // Friday, due on receipt
+        [InlineData("2026-10-23", 1, "2026-10-26")] // Friday + 1 is Monday
+        [InlineData("2026-10-21", 10, "2026-11-04")] // Wednesday + 10 is two weeks later
+        [InlineData("2026-10-24", 1, "2026-10-26")] // Saturday + 1 is Monday
+        [InlineData("2026-10-23", 30, "2026-12-04")]
+        public void BusinessDays_SkipWeekends(string start, int days, string expected) =>
+            Assert.Equal(DateTime.Parse(expected, System.Globalization.CultureInfo.InvariantCulture),
+                BusinessDays.Add(DateTime.Parse(start, System.Globalization.CultureInfo.InvariantCulture), days));
+
         private async Task<Dto.Sales.SalesInvoice> GetInvoice(int id)
         {
             var response = await Send(HttpMethod.Get, $"/api/Sales/SalesInvoice?id={id}");

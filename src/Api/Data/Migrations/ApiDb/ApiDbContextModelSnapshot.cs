@@ -1972,6 +1972,9 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<DateTime>("Date")
                         .HasColumnType("datetime2");
 
+                    b.Property<DateTime?>("DueDate")
+                        .HasColumnType("datetime2");
+
                     b.Property<int?>("GeneralLedgerHeaderId")
                         .HasColumnType("int");
 
