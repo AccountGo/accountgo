@@ -52,6 +52,16 @@ export interface Invoice {
   display?: InvoiceDisplay;
   salesInvoiceLines: InvoiceLineItem[];
   payments?: InvoicePaymentItem[];
+  /** Emails sent to the customer about this invoice, newest first. */
+  emails?: InvoiceEmailItem[];
+}
+
+export interface InvoiceEmailItem {
+  id: number;
+  kind: 'Invoice' | string;
+  to: string;
+  sentAt: string;
+  sentBy?: string | null;
 }
 
 /** The invoicing party as it should print, already resolved from the workspace settings. */

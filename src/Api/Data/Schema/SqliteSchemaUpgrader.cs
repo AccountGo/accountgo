@@ -127,6 +127,7 @@ namespace Api.Data.Schema
                 // Ensure all indexes exist idempotently even if v1 was previously applied
                 EnsureAllIndexes(connection, logger);
                 EnsureLifecycleColumns(connection);
+                EnsureTables(connection);
             }
             finally
             {
@@ -176,6 +177,36 @@ namespace Api.Data.Schema
                 tx.Commit();
             }
         }
+
+        // Tables added after the first release; the same statements are in the D1 migrations.
+        private static void EnsureTables(DbConnection connection)
+        {
+            if (!TableExists(connection, "SalesInvoiceHeader"))
+                return;
+
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = SalesInvoiceEmailTableSql;
+            cmd.ExecuteNonQuery();
+        }
+
+        // D1 0006_invoice_emails.sql
+        private const string SalesInvoiceEmailTableSql = @"
+            CREATE TABLE IF NOT EXISTS ""SalesInvoiceEmail"" (
+                ""Id"" INTEGER NOT NULL CONSTRAINT ""PK_SalesInvoiceEmail"" PRIMARY KEY AUTOINCREMENT,
+                ""CompanyId"" INTEGER NOT NULL,
+                ""SalesInvoiceHeaderId"" INTEGER NOT NULL,
+                ""Kind"" TEXT NOT NULL,
+                ""ToEmail"" TEXT NOT NULL,
+                ""BccEmail"" TEXT NULL,
+                ""Subject"" TEXT NOT NULL,
+                ""SentAt"" TEXT NOT NULL,
+                ""SentByUserId"" TEXT NULL,
+                ""SentByEmail"" TEXT NULL,
+                ""ProviderMessageId"" TEXT NULL,
+                CONSTRAINT ""FK_SalesInvoiceEmail_SalesInvoiceHeader_SalesInvoiceHeaderId"" FOREIGN KEY (""SalesInvoiceHeaderId"") REFERENCES ""SalesInvoiceHeader"" (""Id"") ON DELETE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS ""IX_SalesInvoiceEmail_CompanyId_SentAt"" ON ""SalesInvoiceEmail"" (""CompanyId"", ""SentAt"");
+            CREATE INDEX IF NOT EXISTS ""IX_SalesInvoiceEmail_SalesInvoiceHeaderId"" ON ""SalesInvoiceEmail"" (""SalesInvoiceHeaderId"");";
 
         public static void UpgradePostSeed(DbConnection connection, ILogger? logger = null)
         {

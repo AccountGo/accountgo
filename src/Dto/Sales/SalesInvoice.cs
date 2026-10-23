@@ -40,6 +40,8 @@ namespace Dto.Sales
         public SellerInfo Seller { get; set; } = new SellerInfo();
         public DisplayFlags Display { get; set; } = new DisplayFlags();
         public List<InvoicePaymentItemDto>? Payments { get; set; }
+        /// <summary>Emails sent to the customer about this invoice, newest first.</summary>
+        public List<InvoiceEmailItemDto> Emails { get; set; } = new();
 
         public SalesInvoice()
         {
@@ -89,6 +91,15 @@ namespace Dto.Sales
         public decimal? LineTotal { get; set; }
         public decimal? TaxRate { get; set; }
         public decimal? TaxAmount { get; set; }
+    }
+
+    public class InvoiceEmailItemDto
+    {
+        public int Id { get; set; }
+        public string Kind { get; set; } = "Invoice";
+        public string To { get; set; } = string.Empty;
+        public DateTime SentAt { get; set; }
+        public string? SentBy { get; set; }
     }
 
     public class InvoicePaymentItemDto
