@@ -19,7 +19,7 @@ import {
 import { PageHeader, HeaderButton } from '../components/PageHeader';
 import { CatalogPickerDialog } from '../components/CatalogPickerDialog';
 import { CustomerPickerDialog } from '../components/CustomerPickerDialog';
-import { ClientFormDialog } from '../components/ClientFormDialog';
+import { PartyFormDialog } from '../components/PartyFormDialog';
 import { ItemFormDialog } from '../components/ItemFormDialog';
 import { usePermissions } from '../components/Gating';
 import {
@@ -1020,8 +1020,9 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
       )}
 
       {clientDialog && (
-        <ClientFormDialog
-          client={clientDialog.client}
+        <PartyFormDialog
+          role="client"
+          party={clientDialog.client}
           paymentTerms={paymentTerms}
           onSaved={handleClientSaved}
           onClose={() => setClientDialog(null)}

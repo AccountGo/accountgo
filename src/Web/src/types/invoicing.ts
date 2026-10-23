@@ -1,3 +1,5 @@
+import type { PartyBase } from './parties';
+
 export type InvoiceStatus = 'Draft' | 'Open' | 'Partially Paid' | 'Paid' | 'Overdue' | 'Void';
 
 export interface InvoiceLineItem {
@@ -139,27 +141,8 @@ export interface CustomerOption {
 }
 
 /** A client as the Clients pages show and edit it (api/Sales/Client). */
-export interface Client {
-  id: number;
-  name: string;
-  email?: string | null;
-  phone?: string | null;
-  street?: string | null;
-  /** City and state or province, one field as the invoice prints it. */
-  city?: string | null;
-  postalCode?: string | null;
-  country?: string | null;
-  /** Null: new invoices use the workspace's default terms. */
-  paymentTermId?: number | null;
-  archived: boolean;
-  /** Nothing recorded for it yet, so it can be deleted rather than archived. */
-  canDelete?: boolean;
-  /** Unpaid on its issued invoices. */
-  outstanding: number;
-  /** The part of it past due. */
-  overdue: number;
-  /** Payments recorded against its invoices. */
-  paidToDate: number;
+/** A client: the party an invoice is billed to. */
+export interface Client extends PartyBase {
   /** Date of its latest issued invoice. */
   lastInvoiceDate?: string | null;
 }
