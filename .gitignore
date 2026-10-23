@@ -234,3 +234,5 @@ dist/
 src/Api/BUILD_SHA
 
 scratch/
+
+.vscode/
