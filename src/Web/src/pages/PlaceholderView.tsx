@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { PurchasesTabs } from '../components/PurchasesTabs';
 import { useOutletContext, useLocation } from 'react-router-dom';
 import {
   Layers,
@@ -573,6 +574,8 @@ export const PlaceholderView: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {currentSection === 'purchases' && <PurchasesTabs orgSlug={currentOrg.slug} />}
 
       {/* Module Metrics Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">

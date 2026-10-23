@@ -1,37 +1,47 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
 import { Building2, Loader2, X } from 'lucide-react';
-import { Client, PaymentTermOption } from '../types';
+import { PartyBase, PaymentTermOption } from '../types';
 import { useAuth } from '../auth/AuthContext';
+import { PartyRole, partyRoles } from '../lib/partyRoles';
 
 const inputClass =
   'w-full px-3.5 py-2.5 text-sm bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xl focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] placeholder-[var(--text-muted)] transition';
 const labelClass = 'block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1';
 
 /**
- * Adds a client, or edits one. Used from the Clients pages and from the invoice editor. Saving changes the client
- * for new invoices and drafts; invoices already issued keep the details they were issued with.
+ * Adds a client or vendor, or edits one. Used from the Clients and Vendors pages and from the invoice editor. Saving
+ * changes the party for new documents and drafts; invoices already issued and bills already approved keep the
+ * details they were issued or approved with.
  */
-export const ClientFormDialog: React.FC<{
-  /** The client to edit; omitted to add one. */
-  client?: Client;
+export function PartyFormDialog<T extends PartyBase>({
+  role,
+  party,
+  paymentTerms,
+  onSaved,
+  onClose,
+}: {
+  role: PartyRole;
+  /** The client or vendor to edit; omitted to add one. */
+  party?: T;
   paymentTerms: PaymentTermOption[];
-  onSaved: (client: Client) => void;
+  onSaved: (party: T) => void;
   onClose: () => void;
-}> = ({ client, paymentTerms, onSaved, onClose }) => {
+}) {
   const { authFetch } = useAuth();
-  const [name, setName] = useState(client?.name ?? '');
-  const [email, setEmail] = useState(client?.email ?? '');
-  const [phone, setPhone] = useState(client?.phone ?? '');
-  const [street, setStreet] = useState(client?.street ?? '');
-  const [city, setCity] = useState(client?.city ?? '');
-  const [postalCode, setPostalCode] = useState(client?.postalCode ?? '');
-  const [country, setCountry] = useState(client?.country ?? '');
-  const [paymentTermId, setPaymentTermId] = useState<number | ''>(client?.paymentTermId ?? '');
+  const config = partyRoles[role];
+  const [name, setName] = useState(party?.name ?? '');
+  const [email, setEmail] = useState(party?.email ?? '');
+  const [phone, setPhone] = useState(party?.phone ?? '');
+  const [street, setStreet] = useState(party?.street ?? '');
+  const [city, setCity] = useState(party?.city ?? '');
+  const [postalCode, setPostalCode] = useState(party?.postalCode ?? '');
+  const [country, setCountry] = useState(party?.country ?? '');
+  const [paymentTermId, setPaymentTermId] = useState<number | ''>(party?.paymentTermId ?? '');
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const nameRef = useRef<HTMLInputElement>(null);
   const titleId = useId();
-  const isEdit = !!client;
+  const isEdit = !!party;
 
   useEffect(() => {
     const trigger = document.activeElement as HTMLElement | null;
@@ -43,17 +53,17 @@ export const ClientFormDialog: React.FC<{
     e.preventDefault();
     setError(null);
     if (!name.trim()) {
-      setError("Enter the client's name.");
+      setError(`Enter the ${config.noun}'s name.`);
       return;
     }
 
     setIsSaving(true);
     try {
-      const res = await authFetch('/api/Sales/SaveClient', {
+      const res = await authFetch(config.api.save, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          id: client?.id ?? 0,
+          id: party?.id ?? 0,
           name: name.trim(),
           email: email.trim() || null,
           phone: phone.trim() || null,
@@ -68,11 +78,11 @@ export const ClientFormDialog: React.FC<{
       if (!res.ok) {
         throw new Error(
           res.status === 403
-            ? "You don't have permission to manage clients."
-            : data?.message || (isEdit ? 'The client could not be saved.' : 'The client could not be added.')
+            ? `You don't have permission to manage ${config.plural}.`
+            : data?.message || (isEdit ? `The ${config.noun} could not be saved.` : `The ${config.noun} could not be added.`)
         );
       }
-      onSaved(data as Client);
+      onSaved(data as T);
     } catch (err: any) {
       setError(err.message);
       setIsSaving(false);
@@ -99,7 +109,7 @@ export const ClientFormDialog: React.FC<{
           <div className="flex items-center gap-2">
             <Building2 className="w-5 h-5 text-[var(--brand-primary)]" />
             <h3 id={titleId} className="font-bold text-[var(--text-main)] text-base">
-              {isEdit ? 'Edit client' : 'New client'}
+              {isEdit ? `Edit ${config.noun}` : `New ${config.noun}`}
             </h3>
           </div>
           <button
@@ -122,7 +132,7 @@ export const ClientFormDialog: React.FC<{
 
           <div>
             <label htmlFor={`${titleId}-name`} className={labelClass}>
-              Client / company name <span className="text-rose-500">*</span>
+              {config.Noun} / company name <span className="text-rose-500">*</span>
             </label>
             <input
               id={`${titleId}-name`}
@@ -130,7 +140,7 @@ export const ClientFormDialog: React.FC<{
               type="text"
               required
               maxLength={200}
-              placeholder="e.g. Acme Corporation"
+              placeholder={config.copy.namePlaceholder}
               value={name}
               onChange={(e) => setName(e.target.value)}
               className={inputClass}
@@ -145,7 +155,7 @@ export const ClientFormDialog: React.FC<{
               <input
                 id={`${titleId}-email`}
                 type="email"
-                placeholder="billing@acme.com"
+                placeholder={config.copy.emailPlaceholder}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className={inputClass}
@@ -243,7 +253,7 @@ export const ClientFormDialog: React.FC<{
 
           {isEdit && (
             <p className="text-xs text-[var(--text-secondary)]">
-              Changes apply to new invoices and drafts. Invoices already issued keep the details they were issued with.
+              {config.copy.editNotice}
             </p>
           )}
 
@@ -262,11 +272,11 @@ export const ClientFormDialog: React.FC<{
               className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-[var(--brand-text)] bg-[var(--brand-primary)] rounded-xl hover:bg-[var(--brand-hover)] transition disabled:opacity-50 shadow-sm"
             >
               {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}
-              {isEdit ? 'Save client' : 'Add client'}
+              {isEdit ? `Save ${config.noun}` : `Add ${config.noun}`}
             </button>
           </div>
         </form>
       </div>
     </div>
   );
-};
+}

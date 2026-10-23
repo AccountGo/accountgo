@@ -2,22 +2,27 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useOutletContext } from 'react-router-dom';
 import { AlertTriangle, Loader2, Mail, Search, UserPlus, Users, X } from 'lucide-react';
 import { PageHeader, HeaderButton } from '../components/PageHeader';
-import { SalesTabs } from '../components/SalesTabs';
-import { ClientFormDialog } from '../components/ClientFormDialog';
+import { PartyFormDialog } from '../components/PartyFormDialog';
 import { usePermissions } from '../components/Gating';
-import { Client, PaymentTermOption, TenantContextType } from '../types';
+import { PartyBase, PaymentTermOption, TenantContextType } from '../types';
 import { useAuth } from '../auth/AuthContext';
 import { currencySymbol as getCurrencySymbol } from '../lib/currency';
+import { PartyRole, partyRoles } from '../lib/partyRoles';
 
-/** The clients a workspace invoices, with what each one owes. */
-export const Clients: React.FC = () => {
+/**
+ * The clients a workspace invoices, with what each one owes, or the vendors it buys from, with what it owes each one.
+ * One page for both: they are parties, worded for Sales or Purchases.
+ */
+export const Parties: React.FC<{ role: PartyRole }> = ({ role }) => {
+  const config = partyRoles[role];
   const { currentOrg } = useOutletContext<TenantContextType>();
   const { authFetch } = useAuth();
   const { hasPermission } = usePermissions();
   const navigate = useNavigate();
-  const canManage = hasPermission('sales.customers.manage');
+  const canManage = hasPermission(config.managePermission);
+  const { Tabs } = config;
 
-  const [clients, setClients] = useState<Client[]>([]);
+  const [parties, setParties] = useState<PartyBase[]>([]);
   const [paymentTerms, setPaymentTerms] = useState<PaymentTermOption[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -35,33 +40,33 @@ export const Clients: React.FC = () => {
     setIsLoading(true);
     setError(null);
     try {
-      const [clientsRes, termsRes] = await Promise.all([authFetch('/api/Sales/Clients'), authFetch('/api/Common/PaymentTerms')]);
-      if (!clientsRes.ok) throw new Error(`Clients could not be loaded (${clientsRes.status}).`);
-      setClients(await clientsRes.json());
+      const [partiesRes, termsRes] = await Promise.all([authFetch(config.api.list), authFetch('/api/Common/PaymentTerms')]);
+      if (!partiesRes.ok) throw new Error(`${config.Plural} could not be loaded (${partiesRes.status}).`);
+      setParties(await partiesRes.json());
       if (termsRes.ok) setPaymentTerms(await termsRes.json());
     } catch (err: any) {
-      setError(err.message || 'Clients could not be loaded.');
+      setError(err.message || `${config.Plural} could not be loaded.`);
     } finally {
       setIsLoading(false);
     }
-  }, [authFetch]);
+  }, [authFetch, config]);
 
   useEffect(() => {
     load();
   }, [load]);
 
   const counts = useMemo(
-    () => ({ active: clients.filter((c) => !c.archived).length, archived: clients.filter((c) => c.archived).length }),
-    [clients]
+    () => ({ active: parties.filter((c) => !c.archived).length, archived: parties.filter((c) => c.archived).length }),
+    [parties]
   );
   const shown = useMemo(() => {
     const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
-    return clients.filter((c) => {
+    return parties.filter((c) => {
       if (c.archived !== (view === 'archived')) return false;
       const haystack = `${c.name} ${c.email ?? ''} ${c.phone ?? ''} ${c.city ?? ''}`.toLowerCase();
       return terms.every((t) => haystack.includes(t));
     });
-  }, [clients, query, view]);
+  }, [parties, query, view]);
 
   const formatDate = (value?: string) =>
     value ? new Date(value).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
@@ -69,11 +74,11 @@ export const Clients: React.FC = () => {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Clients"
-        subtitle="The people and businesses you invoice, and what each one owes you."
-        actions={canManage && <HeaderButton label="New client" icon={UserPlus} variant="primary" onClick={() => setIsAdding(true)} />}
+        title={config.Plural}
+        subtitle={config.copy.listSubtitle}
+        actions={canManage && <HeaderButton label={`New ${config.noun}`} icon={UserPlus} variant="primary" onClick={() => setIsAdding(true)} />}
       />
-      <SalesTabs orgSlug={currentOrg.slug} />
+      <Tabs orgSlug={currentOrg.slug} />
 
       {error && (
         <div role="alert" className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 text-sm flex items-center justify-between">
@@ -117,7 +122,7 @@ export const Clients: React.FC = () => {
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-secondary)] pointer-events-none" />
           <input
             type="search"
-            aria-label="Search clients"
+            aria-label={`Search ${config.plural}`}
             placeholder="Search by name, email or phone"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -130,7 +135,7 @@ export const Clients: React.FC = () => {
         {isLoading ? (
           <div className="py-20 flex flex-col items-center justify-center text-[var(--text-secondary)] gap-3">
             <Loader2 className="w-8 h-8 animate-spin text-[var(--brand-primary)]" />
-            <p className="text-sm">Loading clients...</p>
+            <p className="text-sm">Loading {config.plural}...</p>
           </div>
         ) : shown.length === 0 ? (
           <div className="py-16 px-4 text-center">
@@ -138,14 +143,14 @@ export const Clients: React.FC = () => {
               <Users className="w-6 h-6" />
             </div>
             <h3 className="text-base font-semibold text-[var(--text-primary)]">
-              {query ? 'No matching clients' : view === 'archived' ? 'No archived clients' : 'No clients yet'}
+              {query ? `No matching ${config.plural}` : view === 'archived' ? `No archived ${config.plural}` : `No ${config.plural} yet`}
             </h3>
             <p className="text-xs text-[var(--text-secondary)] max-w-sm mx-auto mt-1">
               {query
-                ? `No ${view} clients match "${query}".`
+                ? `No ${view} ${config.plural} match "${query}".`
                 : view === 'archived'
-                  ? 'Clients you archive are kept here with their invoices, out of the way when you pick a client.'
-                  : 'Add the people and businesses you invoice. You can also add one while writing an invoice.'}
+                  ? config.copy.archivedEmptyHint
+                  : config.copy.emptyHint}
             </p>
             {!query && view === 'active' && canManage && (
               <button
@@ -153,7 +158,7 @@ export const Clients: React.FC = () => {
                 className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[var(--brand-primary)] text-white text-xs font-semibold hover:opacity-90"
               >
                 <UserPlus className="w-3.5 h-3.5" />
-                Add a client
+                Add a {config.noun}
               </button>
             )}
           </div>
@@ -162,16 +167,16 @@ export const Clients: React.FC = () => {
             <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="border-b border-[var(--border-subtle)] bg-[var(--bg-muted)]/50 text-[var(--text-secondary)] font-medium">
-                  <th className="py-3 px-4">Client</th>
+                  <th className="py-3 px-4">{config.Noun}</th>
                   <th className="hidden sm:table-cell py-3 px-4">Phone</th>
-                  <th className="hidden sm:table-cell py-3 px-4">Last invoice</th>
+                  <th className="hidden sm:table-cell py-3 px-4">Last {config.document}</th>
                   <th className="py-3 px-4 text-right">Outstanding</th>
                   <th className="py-3 px-4 text-right">Overdue</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--border-subtle)]">
                 {shown.map((c) => {
-                  const to = `/org/${currentOrg.slug}/sales/clients/${c.id}`;
+                  const to = config.detailPath(currentOrg.slug, c.id);
                   return (
                     <tr key={c.id} className="hover:bg-[var(--bg-muted)]/30 transition-colors cursor-pointer" onClick={() => navigate(to)}>
                       <td className="py-3.5 px-4 max-w-[260px]">
@@ -186,7 +191,7 @@ export const Clients: React.FC = () => {
                         )}
                       </td>
                       <td className="hidden sm:table-cell py-3.5 px-4 text-[var(--text-secondary)] whitespace-nowrap">{c.phone || '—'}</td>
-                      <td className="hidden sm:table-cell py-3.5 px-4 text-[var(--text-secondary)] whitespace-nowrap">{formatDate(c.lastInvoiceDate ?? undefined)}</td>
+                      <td className="hidden sm:table-cell py-3.5 px-4 text-[var(--text-secondary)] whitespace-nowrap">{formatDate(config.lastDocumentDate(c) ?? undefined)}</td>
                       <td className="py-3.5 px-4 text-right font-medium text-[var(--text-primary)] whitespace-nowrap">
                         {formatCurrency(c.outstanding)}
                       </td>
@@ -203,10 +208,11 @@ export const Clients: React.FC = () => {
       </div>
 
       {isAdding && (
-        <ClientFormDialog
+        <PartyFormDialog
+          role={role}
           paymentTerms={paymentTerms}
           onClose={() => setIsAdding(false)}
-          onSaved={(client) => navigate(`/org/${currentOrg.slug}/sales/clients/${client.id}`)}
+          onSaved={(party) => navigate(config.detailPath(currentOrg.slug, party.id))}
         />
       )}
     </div>

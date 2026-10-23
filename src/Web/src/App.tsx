@@ -11,8 +11,8 @@ import Invitation from './pages/Invitation';
 import { Invoices } from './pages/Invoices';
 import { InvoiceEdit } from './pages/InvoiceEdit';
 import { InvoiceDetail } from './pages/InvoiceDetail';
-import { Clients } from './pages/Clients';
-import { ClientDetail } from './pages/ClientDetail';
+import { Parties } from './pages/Parties';
+import { PartyDetail } from './pages/PartyDetail';
 import { ProductsServices } from './pages/ProductsServices';
 import PlaceholderView from './pages/PlaceholderView';
 import ChartOfAccounts from './pages/ChartOfAccounts';
@@ -139,15 +139,15 @@ const router = createBrowserRouter([
             path: 'sales/clients',
             element: (
               <RequiresModule module="sales">
-                <Clients />
+                <Parties role="client" />
               </RequiresModule>
             ),
           },
           {
-            path: 'sales/clients/:clientId',
+            path: 'sales/clients/:partyId',
             element: (
               <RequiresModule module="sales">
-                <ClientDetail />
+                <PartyDetail role="client" />
               </RequiresModule>
             ),
           },
@@ -180,6 +180,22 @@ const router = createBrowserRouter([
             element: (
               <RequiresModule module="purchases">
                 <PlaceholderView />
+              </RequiresModule>
+            ),
+          },
+          {
+            path: 'purchases/vendors',
+            element: (
+              <RequiresModule module="purchases">
+                <Parties role="vendor" />
+              </RequiresModule>
+            ),
+          },
+          {
+            path: 'purchases/vendors/:partyId',
+            element: (
+              <RequiresModule module="purchases">
+                <PartyDetail role="vendor" />
               </RequiresModule>
             ),
           },

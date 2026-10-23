@@ -2,27 +2,29 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useOutletContext, useParams } from 'react-router-dom';
 import { AlertTriangle, Archive, ArchiveRestore, FilePlus, Loader2, Pencil, Receipt, Trash2, X } from 'lucide-react';
 import { PageHeader, HeaderButton, HeaderMenu, StatusPill } from '../components/PageHeader';
-import { ClientFormDialog } from '../components/ClientFormDialog';
+import { PartyFormDialog } from '../components/PartyFormDialog';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { InvoiceStatusBadge } from '../components/InvoiceStatusBadge';
 import { usePermissions } from '../components/Gating';
-import { Client, Invoice, PaymentTermOption, TenantContextType } from '../types';
+import { PartyBase, PaymentTermOption, TenantContextType } from '../types';
 import { useAuth } from '../auth/AuthContext';
 import { currencySymbol as getCurrencySymbol } from '../lib/currency';
+import { PartyDocumentRow, PartyRole, partyRoles } from '../lib/partyRoles';
 
-/** One client: its details, what it owes, and its invoices. */
-export const ClientDetail: React.FC = () => {
+/** One client or vendor: its details, what it owes or is owed, and its invoices or bills. */
+export const PartyDetail: React.FC<{ role: PartyRole }> = ({ role }) => {
+  const config = partyRoles[role];
   const { currentOrg } = useOutletContext<TenantContextType>();
-  const { clientId } = useParams<{ clientId: string }>();
+  const { partyId } = useParams<{ partyId: string }>();
   const { authFetch } = useAuth();
   const { hasPermission } = usePermissions();
   const navigate = useNavigate();
-  const canManage = hasPermission('sales.customers.manage');
-  const canInvoice = hasPermission('sales.invoices.create');
-  const listPath = `/org/${currentOrg.slug}/sales/clients`;
+  const canManage = hasPermission(config.managePermission);
+  const canCreateDocument = hasPermission(config.createDocumentPermission);
+  const listPath = config.listPath(currentOrg.slug);
 
-  const [client, setClient] = useState<Client | null>(null);
-  const [invoices, setInvoices] = useState<Invoice[] | null>(null);
+  const [party, setParty] = useState<PartyBase | null>(null);
+  const [documentRows, setDocuments] = useState<PartyDocumentRow[] | null>(null);
   const [paymentTerms, setPaymentTerms] = useState<PaymentTermOption[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -44,22 +46,22 @@ export const ClientDetail: React.FC = () => {
     (async () => {
       setIsLoading(true);
       try {
-        const [clientRes, invoicesRes, termsRes] = await Promise.all([
-          authFetch(`/api/Sales/Client?id=${encodeURIComponent(clientId ?? '')}`),
-          authFetch(`/api/Sales/SalesInvoices?customerId=${encodeURIComponent(clientId ?? '')}`),
+        const [partyRes, documentsRes, termsRes] = await Promise.all([
+          authFetch(config.api.get(partyId ?? '')),
+          authFetch(config.api.documents(partyId ?? '')),
           authFetch('/api/Common/PaymentTerms'),
         ]);
         if (cancelled) return;
-        if (clientRes.status === 404) {
+        if (partyRes.status === 404) {
           setNotFound(true);
           return;
         }
-        if (!clientRes.ok) throw new Error(`The client could not be loaded (${clientRes.status}).`);
-        setClient(await clientRes.json());
-        setInvoices(invoicesRes.ok ? await invoicesRes.json() : null);
+        if (!partyRes.ok) throw new Error(`The ${config.noun} could not be loaded (${partyRes.status}).`);
+        setParty(await partyRes.json());
+        setDocuments(documentsRes.ok ? ((await documentsRes.json()) as unknown[]).map(config.toDocumentRow) : null);
         if (termsRes.ok) setPaymentTerms(await termsRes.json());
       } catch (err: any) {
-        if (!cancelled) setError(err.message || 'The client could not be loaded.');
+        if (!cancelled) setError(err.message || `The ${config.noun} could not be loaded.`);
       } finally {
         if (!cancelled) setIsLoading(false);
       }
@@ -67,20 +69,20 @@ export const ClientDetail: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [authFetch, clientId]);
+  }, [authFetch, partyId, config]);
 
   // Newest first, as the API returns them.
-  const clientInvoices = invoices ?? [];
+  const documents = documentRows ?? [];
 
   const setArchived = async (archived: boolean) => {
-    if (!client) return;
+    if (!party) return;
     setBusy(true);
     setError(null);
     try {
-      const res = await authFetch(`/api/Sales/ArchiveClient?id=${client.id}&archived=${archived}`, { method: 'POST' });
+      const res = await authFetch(config.api.archive(party.id, archived), { method: 'POST' });
       const data = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(data?.message || (archived ? 'The client could not be archived.' : 'The client could not be restored.'));
-      setClient(data);
+      if (!res.ok) throw new Error(data?.message || (archived ? `The ${config.noun} could not be archived.` : `The ${config.noun} could not be restored.`));
+      setParty(data);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -89,14 +91,14 @@ export const ClientDetail: React.FC = () => {
   };
 
   const handleDelete = async () => {
-    if (!client) return;
+    if (!party) return;
     setBusy(true);
     setError(null);
     try {
-      const res = await authFetch(`/api/Sales/DeleteClient?id=${client.id}`, { method: 'DELETE' });
+      const res = await authFetch(config.api.remove(party.id), { method: 'DELETE' });
       if (!res.ok) {
         const data = await res.json().catch(() => null);
-        throw new Error(data?.message || 'The client could not be deleted.');
+        throw new Error(data?.message || `The ${config.noun} could not be deleted.`);
       }
       navigate(listPath, { replace: true });
     } catch (err: any) {
@@ -110,54 +112,55 @@ export const ClientDetail: React.FC = () => {
     return (
       <div className="py-24 flex flex-col items-center justify-center text-[var(--text-secondary)] gap-3">
         <Loader2 className="w-8 h-8 animate-spin text-[var(--brand-primary)]" />
-        <p className="text-sm">Loading client...</p>
+        <p className="text-sm">Loading {config.noun}...</p>
       </div>
     );
   }
 
-  if (notFound || !client) {
+  if (notFound || !party) {
     return (
       <div className="space-y-6">
-        <PageHeader title="Client not found" back={{ to: listPath, label: 'Back to clients' }} />
+        <PageHeader title={`${config.Noun} not found`} back={{ to: listPath, label: `Back to ${config.plural}` }} />
         <p className="text-sm text-[var(--text-secondary)]">
-          {error || 'This client does not exist in this workspace, or it was deleted.'}{' '}
+          {error || `This ${config.noun} does not exist in this workspace, or it was deleted.`}{' '}
           <Link to={listPath} className="font-medium text-[var(--brand-primary)] hover:underline">
-            See all clients
+            See all {config.plural}
           </Link>
         </p>
       </div>
     );
   }
 
-  const term = paymentTerms.find((t) => t.id === client.paymentTermId);
-  const address = [client.street, [client.city, client.postalCode].filter(Boolean).join(' '), client.country].filter(Boolean);
-  const newInvoicePath = `/org/${currentOrg.slug}/sales/new?client=${client.id}`;
+  const term = paymentTerms.find((t) => t.id === party.paymentTermId);
+  const address = [party.street, [party.city, party.postalCode].filter(Boolean).join(' '), party.country].filter(Boolean);
+  const newDocumentPath = config.newDocumentPath?.(currentOrg.slug, party.id);
+  const canStartDocument = canCreateDocument && !!newDocumentPath;
 
   return (
     <div className="space-y-6">
       <PageHeader
-        back={{ to: listPath, label: 'Back to clients' }}
-        eyebrow="Client"
-        title={client.name}
-        badges={client.archived && <StatusPill tone="slate" icon={Archive}>Archived</StatusPill>}
-        subtitle={client.outstanding ? `Owes ${formatCurrency(client.outstanding)}` : undefined}
+        back={{ to: listPath, label: `Back to ${config.plural}` }}
+        eyebrow={config.Noun}
+        title={party.name}
+        badges={party.archived && <StatusPill tone="slate" icon={Archive}>Archived</StatusPill>}
+        subtitle={party.outstanding ? config.copy.owes(formatCurrency(party.outstanding)) : undefined}
         actions={
           <>
             {canManage && <HeaderButton label="Edit" icon={Pencil} compact onClick={() => setIsEditing(true)} />}
             {canManage && (
               <HeaderMenu
                 items={[
-                  client.archived
-                    ? { label: 'Restore client', icon: ArchiveRestore, onSelect: () => setArchived(false) }
-                    : { label: 'Archive client', icon: Archive, onSelect: () => setArchived(true) },
-                  client.canDelete && 'separator',
-                  client.canDelete && { label: 'Delete client', icon: Trash2, danger: true, onSelect: () => setIsConfirmingDelete(true) },
+                  party.archived
+                    ? { label: `Restore ${config.noun}`, icon: ArchiveRestore, onSelect: () => setArchived(false) }
+                    : { label: `Archive ${config.noun}`, icon: Archive, onSelect: () => setArchived(true) },
+                  party.canDelete && 'separator',
+                  party.canDelete && { label: `Delete ${config.noun}`, icon: Trash2, danger: true, onSelect: () => setIsConfirmingDelete(true) },
                 ]}
               />
             )}
-            {client.archived
-              ? canManage && <HeaderButton label="Restore client" icon={ArchiveRestore} variant="primary" busy={busy} onClick={() => setArchived(false)} />
-              : canInvoice && <HeaderButton label="New invoice" icon={FilePlus} variant="primary" to={newInvoicePath} />}
+            {party.archived
+              ? canManage && <HeaderButton label={`Restore ${config.noun}`} icon={ArchiveRestore} variant="primary" busy={busy} onClick={() => setArchived(false)} />
+              : canStartDocument && <HeaderButton label={`New ${config.document}`} icon={FilePlus} variant="primary" to={newDocumentPath} />}
           </>
         }
       />
@@ -174,25 +177,25 @@ export const ClientDetail: React.FC = () => {
         </div>
       )}
 
-      {client.archived && (
+      {party.archived && (
         <p className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-subtle)] px-4 py-3 text-sm text-[var(--text-secondary)]">
-          This client is archived: it isn't offered when you pick a client for an invoice. Its invoices are unchanged.
+          {config.copy.archivedNotice}
         </p>
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <section aria-label="Client details" className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-5 shadow-sm">
+        <section aria-label={`${config.Noun} details`} className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-5 shadow-sm">
           <h2 className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">Details</h2>
           <dl className="mt-3 space-y-3 text-sm">
             <div>
               <dt className="text-xs text-[var(--text-muted)]">Email</dt>
               <dd className="mt-0.5 break-words text-[var(--text-main)]">
-                {client.email ? <a href={`mailto:${client.email}`} className="hover:underline">{client.email}</a> : <span className="text-[var(--text-muted)]">None, so invoices can't be emailed</span>}
+                {party.email ? <a href={`mailto:${party.email}`} className="hover:underline">{party.email}</a> : <span className="text-[var(--text-muted)]">{config.copy.noEmail}</span>}
               </dd>
             </div>
             <div>
               <dt className="text-xs text-[var(--text-muted)]">Phone</dt>
-              <dd className="mt-0.5 text-[var(--text-main)]">{client.phone || <span className="text-[var(--text-muted)]">—</span>}</dd>
+              <dd className="mt-0.5 text-[var(--text-main)]">{party.phone || <span className="text-[var(--text-muted)]">—</span>}</dd>
             </div>
             <div>
               <dt className="text-xs text-[var(--text-muted)]">Address</dt>
@@ -209,9 +212,9 @@ export const ClientDetail: React.FC = () => {
 
         <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-4 content-start">
           {[
-            { label: 'Outstanding', value: client.outstanding, note: 'Unpaid on issued invoices', tone: 'text-[var(--text-primary)]' },
-            { label: 'Overdue', value: client.overdue, note: 'Past the due date', tone: client.overdue ? 'text-rose-600 dark:text-rose-400' : 'text-[var(--text-primary)]' },
-            { label: 'Paid to date', value: client.paidToDate, note: 'Payments recorded', tone: 'text-emerald-600 dark:text-emerald-400' },
+            { label: 'Outstanding', value: party.outstanding, note: config.copy.outstandingNote, tone: 'text-[var(--text-primary)]' },
+            { label: 'Overdue', value: party.overdue, note: 'Past the due date', tone: party.overdue ? 'text-rose-600 dark:text-rose-400' : 'text-[var(--text-primary)]' },
+            { label: 'Paid to date', value: party.paidToDate, note: config.copy.paidNote, tone: 'text-emerald-600 dark:text-emerald-400' },
           ].map((tile) => (
             <div key={tile.label} className="p-5 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] shadow-sm">
               <div className="text-xs font-semibold uppercase tracking-wider text-[var(--text-secondary)]">{tile.label}</div>
@@ -222,19 +225,19 @@ export const ClientDetail: React.FC = () => {
         </div>
       </div>
 
-      {invoices && (
-        <section aria-label="Invoices" className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] overflow-hidden shadow-sm">
-          <h2 className="px-5 pt-4 pb-3 text-sm font-semibold text-[var(--text-main)]">Invoices</h2>
-          {clientInvoices.length === 0 ? (
+      {documentRows && (
+        <section aria-label={`${config.Document}s`} className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] overflow-hidden shadow-sm">
+          <h2 className="px-5 pt-4 pb-3 text-sm font-semibold text-[var(--text-main)]">{config.Document}s</h2>
+          {documents.length === 0 ? (
             <div className="px-5 pb-8 pt-2 text-center">
               <div className="w-10 h-10 rounded-full bg-[var(--bg-muted)] text-[var(--text-secondary)] mx-auto flex items-center justify-center mb-2">
                 <Receipt className="w-5 h-5" />
               </div>
-              <p className="text-xs text-[var(--text-secondary)]">No invoices for this client yet.</p>
-              {canInvoice && !client.archived && (
-                <Link to={newInvoicePath} className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--brand-primary)] hover:underline">
+              <p className="text-xs text-[var(--text-secondary)]">No {config.documents} for this {config.noun} yet.</p>
+              {canStartDocument && !party.archived && (
+                <Link to={newDocumentPath!} className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--brand-primary)] hover:underline">
                   <FilePlus className="w-3.5 h-3.5" />
-                  Create an invoice
+                  Create {config.document === 'invoice' ? 'an' : 'a'} {config.document}
                 </Link>
               )}
             </div>
@@ -244,7 +247,7 @@ export const ClientDetail: React.FC = () => {
                 <thead>
                   <tr className="border-y border-[var(--border-subtle)] bg-[var(--bg-muted)]/50 text-[var(--text-secondary)] font-medium">
                     <th className="py-3 px-4">Status</th>
-                    <th className="py-3 px-4">Invoice #</th>
+                    <th className="py-3 px-4">{config.Document} #</th>
                     <th className="py-3 px-4">Date</th>
                     <th className="hidden sm:table-cell py-3 px-4">Due date</th>
                     <th className="hidden sm:table-cell py-3 px-4 text-right">Total</th>
@@ -252,25 +255,34 @@ export const ClientDetail: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--border-subtle)]">
-                  {clientInvoices.map((inv) => {
-                    const to = `/org/${currentOrg.slug}/sales/${inv.id}`;
+                  {documents.map((doc) => {
+                    const to = config.documentPath?.(currentOrg.slug, doc.id);
+                    const number = doc.number ?? <span className="font-medium italic text-[var(--text-muted)]">Draft</span>;
                     return (
-                      <tr key={inv.id} className="hover:bg-[var(--bg-muted)]/30 transition-colors cursor-pointer" onClick={() => navigate(to)}>
+                      <tr
+                        key={doc.id}
+                        className={`transition-colors ${to ? 'hover:bg-[var(--bg-muted)]/30 cursor-pointer' : ''}`}
+                        onClick={to ? () => navigate(to) : undefined}
+                      >
                         <td className="py-3 px-4 whitespace-nowrap">
-                          <InvoiceStatusBadge status={inv.status} />
+                          <InvoiceStatusBadge status={doc.status} />
                         </td>
                         <td className="py-3 px-4 font-semibold text-[var(--brand-primary)] whitespace-nowrap">
-                          <Link to={to} onClick={(e) => e.stopPropagation()} className="hover:underline">
-                            {inv.no ? `#${inv.no}` : <span className="font-medium italic text-[var(--text-muted)]">Draft</span>}
-                          </Link>
+                          {to ? (
+                            <Link to={to} onClick={(e) => e.stopPropagation()} className="hover:underline">
+                              {number}
+                            </Link>
+                          ) : (
+                            number
+                          )}
                         </td>
-                        <td className="py-3 px-4 text-[var(--text-secondary)] whitespace-nowrap">{formatDate(inv.invoiceDate)}</td>
-                        <td className="hidden sm:table-cell py-3 px-4 text-[var(--text-secondary)] whitespace-nowrap">{formatDate(inv.dueDate)}</td>
+                        <td className="py-3 px-4 text-[var(--text-secondary)] whitespace-nowrap">{formatDate(doc.date)}</td>
+                        <td className="hidden sm:table-cell py-3 px-4 text-[var(--text-secondary)] whitespace-nowrap">{formatDate(doc.dueDate ?? undefined)}</td>
                         <td className="hidden sm:table-cell py-3 px-4 text-right text-[var(--text-primary)] whitespace-nowrap">
-                          {formatCurrency(inv.totalAmountAfterTax ?? inv.amount)}
+                          {formatCurrency(doc.total)}
                         </td>
                         <td className="py-3 px-4 text-right font-medium text-[var(--text-primary)] whitespace-nowrap">
-                          {inv.status === 'Draft' || inv.status === 'Void' ? '—' : formatCurrency(inv.balanceDue)}
+                          {doc.status === 'Draft' || doc.status === 'Void' ? '—' : formatCurrency(doc.balanceDue)}
                         </td>
                       </tr>
                     );
@@ -283,12 +295,13 @@ export const ClientDetail: React.FC = () => {
       )}
 
       {isEditing && (
-        <ClientFormDialog
-          client={client}
+        <PartyFormDialog
+          role={role}
+          party={party}
           paymentTerms={paymentTerms}
           onClose={() => setIsEditing(false)}
           onSaved={(saved) => {
-            setClient(saved);
+            setParty(saved);
             setIsEditing(false);
           }}
         />
@@ -296,9 +309,9 @@ export const ClientDetail: React.FC = () => {
 
       {isConfirmingDelete && (
         <ConfirmDialog
-          title={`Delete ${client.name}?`}
-          message="Nothing has been recorded for this client yet, so it can be deleted. This can't be undone."
-          confirmLabel="Delete client"
+          title={`Delete ${party.name}?`}
+          message={`Nothing has been recorded for this ${config.noun} yet, so it can be deleted. This can't be undone.`}
+          confirmLabel={`Delete ${config.noun}`}
           destructive
           busy={busy}
           onConfirm={handleDelete}
