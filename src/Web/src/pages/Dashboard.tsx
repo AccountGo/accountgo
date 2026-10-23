@@ -403,9 +403,10 @@ export const Dashboard: React.FC = () => {
               </h3>
               <div className="space-y-2">
                 {upcomingPayables.map((item) => (
-                  <div
+                  <Link
                     key={item.purchaseInvoiceId}
-                    className="p-3 rounded-xl bg-[var(--bg-subtle)] flex items-center justify-between text-xs"
+                    to={`/org/${currentOrg.slug}/purchases/${item.purchaseInvoiceId}`}
+                    className="p-3 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-surface-hover)] transition flex items-center justify-between text-xs"
                   >
                     <div>
                       <div className="font-semibold text-[var(--text-main)]">{item.vendorName}</div>
@@ -414,7 +415,7 @@ export const Dashboard: React.FC = () => {
                     <div className="font-mono font-bold text-amber-400">
                       {currencySymbol}{formatAmount(item.remainingAmount)}
                     </div>
-                  </div>
+                  </Link>
                 ))}
               </div>
             </div>

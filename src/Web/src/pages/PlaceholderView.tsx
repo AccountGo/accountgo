@@ -1,12 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { PurchasesTabs } from '../components/PurchasesTabs';
 import { useOutletContext, useLocation } from 'react-router-dom';
 import {
   Layers,
   Sparkles,
   BookOpen,
   Receipt,
-  ShoppingBag,
   BarChart3,
   Plus,
   Search,
@@ -131,53 +129,6 @@ export const PlaceholderView: React.FC = () => {
               col5: `${currencySymbol}${formatAmount(inv.amount)}`,
               status: inv.posted ? 'Posted' : 'Draft',
               raw: inv,
-            }));
-            setRows(tableRows);
-          }
-        } else if (currentSection === 'purchases') {
-          const [billsRes, vendorsRes] = await Promise.all([
-            authFetch('/api/Purchasing/Bills'),
-            authFetch('/api/Purchasing/Vendors'),
-          ]);
-
-          const bills = billsRes.ok ? await billsRes.json() : [];
-          const vendors = vendorsRes.ok ? await vendorsRes.json() : [];
-
-          if (mounted) {
-            const totalBilled = bills.reduce((acc: number, b: any) => acc + (b.status === 'Void' ? 0 : b.total || 0), 0);
-            const totalPayable = vendors.reduce((acc: number, v: any) => acc + (v.outstanding || 0), 0);
-
-            setMetrics([
-              {
-                label: 'Total Vendor Bills',
-                value: `${currencySymbol}${formatAmount(totalBilled)}`,
-                change: `${bills.length} bills in database`,
-              },
-              {
-                label: 'Accounts Payable (A/P)',
-                value: `${currencySymbol}${formatAmount(totalPayable)}`,
-                change: 'Outstanding vendor balance',
-              },
-              {
-                label: 'Registered Vendors',
-                value: `${vendors.length} Vendors`,
-                change: 'Active suppliers in DB',
-              },
-              {
-                label: 'Settlement Status',
-                value: bills.every((b: any) => b.approved || b.status === 'Void') ? 'Reconciled' : 'Pending',
-                change: 'GL ledger verified',
-              },
-            ]);
-
-            const tableRows: LiveRow[] = bills.map((bill: any) => ({
-              col1: `BILL-${bill.no || bill.id}`,
-              col2: bill.vendorName || `Vendor #${bill.vendorId}`,
-              col3: formatDate(bill.date),
-              col4: bill.vendorInvoiceNo || bill.referenceNo || '—',
-              col5: `${currencySymbol}${formatAmount(bill.total)}`,
-              status: bill.status,
-              raw: bill,
             }));
             setRows(tableRows);
           }
@@ -474,14 +425,6 @@ export const PlaceholderView: React.FC = () => {
       primaryAction: 'Create Sales Invoice',
       tableHeaders: ['Invoice No', 'Customer Name', 'Issue Date', 'Reference', 'Amount', 'Status', 'Action'],
     },
-    purchases: {
-      name: 'Purchases & Vendor Bills',
-      badge: 'Payables',
-      description: 'Vendor directory, purchase orders, incoming bills, and vendor payments.',
-      icon: ShoppingBag,
-      primaryAction: 'Record Vendor Bill',
-      tableHeaders: ['Bill No', 'Vendor Name', 'Bill Date', 'Reference', 'Total Amount', 'Status', 'Action'],
-    },
     reports: {
       name: 'Financial Reports & Analytics',
       badge: 'Reporting Suite',
@@ -574,8 +517,6 @@ export const PlaceholderView: React.FC = () => {
           </div>
         </div>
       </div>
-
-      {currentSection === 'purchases' && <PurchasesTabs orgSlug={currentOrg.slug} />}
 
       {/* Module Metrics Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">

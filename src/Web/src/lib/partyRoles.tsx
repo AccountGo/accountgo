@@ -136,9 +136,8 @@ export const partyRoles: Record<PartyRole, PartyRoleConfig> = {
     createDocumentPermission: 'purchases.bills.create',
     listPath: (orgSlug) => `/org/${orgSlug}/purchases/vendors`,
     detailPath: (orgSlug, id) => `/org/${orgSlug}/purchases/vendors/${id}`,
-    // The Bills pages come next; until then a vendor's bills are listed without links.
-    newDocumentPath: null,
-    documentPath: null,
+    newDocumentPath: (orgSlug, id) => `/org/${orgSlug}/purchases/new?vendor=${id}`,
+    documentPath: (orgSlug, documentId) => `/org/${orgSlug}/purchases/${documentId}`,
     lastDocumentDate: (party) => (party as Vendor).lastBillDate,
     toDocumentRow: (bill: Bill) => ({
       id: bill.id,

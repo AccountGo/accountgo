@@ -13,6 +13,9 @@ import { InvoiceEdit } from './pages/InvoiceEdit';
 import { InvoiceDetail } from './pages/InvoiceDetail';
 import { Parties } from './pages/Parties';
 import { PartyDetail } from './pages/PartyDetail';
+import { Bills } from './pages/Bills';
+import { BillEdit } from './pages/BillEdit';
+import { BillDetail } from './pages/BillDetail';
 import { ProductsServices } from './pages/ProductsServices';
 import PlaceholderView from './pages/PlaceholderView';
 import ChartOfAccounts from './pages/ChartOfAccounts';
@@ -179,7 +182,31 @@ const router = createBrowserRouter([
             path: 'purchases',
             element: (
               <RequiresModule module="purchases">
-                <PlaceholderView />
+                <Bills />
+              </RequiresModule>
+            ),
+          },
+          {
+            path: 'purchases/new',
+            element: (
+              <RequiresModule module="purchases">
+                <BillEdit />
+              </RequiresModule>
+            ),
+          },
+          {
+            path: 'purchases/:billId',
+            element: (
+              <RequiresModule module="purchases">
+                <BillDetail />
+              </RequiresModule>
+            ),
+          },
+          {
+            path: 'purchases/:billId/edit',
+            element: (
+              <RequiresModule module="purchases">
+                <BillEdit isEdit={true} />
               </RequiresModule>
             ),
           },

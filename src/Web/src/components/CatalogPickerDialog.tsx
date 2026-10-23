@@ -3,16 +3,18 @@ import { Package, Plus } from 'lucide-react';
 import { ItemOption } from '../types';
 import { PickerColumn, PickerDialog } from './PickerDialog';
 
-/** Picks a catalog item for an invoice line. */
+/** Picks a catalog item for an invoice or bill line. */
 export const CatalogPickerDialog: React.FC<{
   items: ItemOption[];
+  /** The amount column's heading: the selling price on invoices, the cost on bills. */
+  priceLabel?: string;
   selectedId?: number | null;
   formatPrice: (value: number) => string;
   onPick: (item: ItemOption) => void;
   /** Omitted when the user can't add items. */
   onAddNew?: () => void;
   onClose: () => void;
-}> = ({ items, selectedId, formatPrice, onPick, onAddNew, onClose }) => {
+}> = ({ items, priceLabel = 'Price', selectedId, formatPrice, onPick, onAddNew, onClose }) => {
   const columns: PickerColumn<ItemOption>[] = [
     {
       header: 'Item',
@@ -20,7 +22,7 @@ export const CatalogPickerDialog: React.FC<{
       render: (item) => <span className="block truncate text-[var(--text-main)]">{item.description}</span>,
     },
     {
-      header: 'Price',
+      header: priceLabel,
       width: 'auto',
       align: 'right',
       render: (item) => (
