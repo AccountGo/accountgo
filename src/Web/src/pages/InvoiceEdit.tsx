@@ -12,6 +12,7 @@ import {
   CheckCircle2,
   Loader2,
   Package,
+  Unlink,
 } from 'lucide-react';
 import { PageHeader, HeaderButton } from '../components/PageHeader';
 import { CatalogPickerDialog } from '../components/CatalogPickerDialog';
@@ -673,7 +674,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
                   const linked = line.itemId ? catalogItems.find((ci) => ci.id === line.itemId) : undefined;
 
                   return (
-                    <tr key={idx} className="hover:bg-[var(--bg-surface-hover)]/40 transition">
+                    <tr key={idx} className="align-middle hover:bg-[var(--bg-surface-hover)]/40 transition">
                       <td className="py-2.5 px-4">
                         <div className="relative">
                           <input
@@ -684,39 +685,38 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
                             onChange={(e) =>
                               handleLineChange(idx, 'itemDescription', e.target.value)
                             }
-                            className={`w-full py-1.5 pl-3 ${catalogItems.length > 0 ? 'pr-10' : 'pr-3'} text-sm bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-lg focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] placeholder-[var(--text-muted)] transition`}
+                            className={`w-full h-9 pl-3 ${linked ? 'pr-[4.25rem]' : catalogItems.length > 0 ? 'pr-10' : 'pr-3'} text-sm bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-lg focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] placeholder-[var(--text-muted)] transition`}
                           />
                           {catalogItems.length > 0 && (
-                            <button
-                              type="button"
-                              onClick={() => setPickerLine(idx)}
-                              title="Pick from catalog"
-                              aria-label={`Pick line ${idx + 1} from catalog`}
-                              className={`absolute right-1 top-1/2 -translate-y-1/2 inline-flex h-7 w-7 items-center justify-center rounded-md transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] ${
-                                line.itemId
-                                  ? 'text-[var(--brand-primary)] hover:bg-[var(--brand-subtle)]'
-                                  : 'text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-surface-hover)]'
-                              }`}
-                            >
-                              <Package className="w-4 h-4" />
-                            </button>
+                            <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center">
+                              {/* Linked lines: the package icon reads as "catalog item" and reopens the picker. */}
+                              <button
+                                type="button"
+                                onClick={() => setPickerLine(idx)}
+                                title={linked ? `Catalog item: ${linked.code ? `${linked.code} · ` : ''}${linked.description}` : 'Pick from catalog'}
+                                aria-label={linked ? `Line ${idx + 1} is catalog item ${linked.description}; change it` : `Pick line ${idx + 1} from catalog`}
+                                className={`inline-flex h-7 w-7 items-center justify-center rounded-md transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] ${
+                                  linked
+                                    ? 'text-[var(--brand-primary)] hover:bg-[var(--brand-subtle)]'
+                                    : 'text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-surface-hover)]'
+                                }`}
+                              >
+                                <Package className="w-4 h-4" />
+                              </button>
+                              {linked && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleLineChange(idx, 'itemId', null)}
+                                  title="Unlink from catalog"
+                                  aria-label={`Unlink line ${idx + 1} from the catalog`}
+                                  className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--text-muted)] transition hover:text-[var(--text-main)] hover:bg-[var(--bg-surface-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)]"
+                                >
+                                  <Unlink className="w-4 h-4" />
+                                </button>
+                              )}
+                            </div>
                           )}
                         </div>
-                        {linked && (
-                          <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-[var(--text-muted)]">
-                            <span className="inline-flex items-center gap-1 rounded-full bg-[var(--brand-subtle)] px-2 py-0.5 font-medium text-[var(--brand-primary)]">
-                              <Package className="w-3 h-3" />
-                              {linked.code || 'Catalog item'}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => handleLineChange(idx, 'itemId', null)}
-                              className="rounded px-1 hover:text-[var(--text-main)] hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)]"
-                            >
-                              Unlink
-                            </button>
-                          </div>
-                        )}
                       </td>
 
                       <td className="py-2.5 px-3 text-right">
@@ -728,7 +728,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
                           onChange={(e) =>
                             handleLineChange(idx, 'quantity', parseFloat(e.target.value) || 0)
                           }
-                          className="w-full px-2.5 py-1.5 text-sm text-right bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-lg focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] transition"
+                          className="w-full h-9 px-2.5 text-sm text-right bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-lg focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] transition"
                         />
                       </td>
 
@@ -741,7 +741,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
                           onChange={(e) =>
                             handleLineChange(idx, 'amount', parseFloat(e.target.value) || 0)
                           }
-                          className="w-full px-2.5 py-1.5 text-sm text-right bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-lg focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] transition"
+                          className="w-full h-9 px-2.5 text-sm text-right bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-lg focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] transition"
                         />
                       </td>
 
@@ -755,7 +755,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
                           onChange={(e) =>
                             handleLineChange(idx, 'discount', parseFloat(e.target.value) || 0)
                           }
-                          className="w-full px-2 py-1.5 text-sm text-right bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-lg focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] transition"
+                          className="w-full h-9 px-2 text-sm text-right bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-lg focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] transition"
                         />
                       </td>
 
@@ -765,7 +765,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
                           onChange={(e) =>
                             handleLineChange(idx, 'taxRate', parseFloat(e.target.value) || 0)
                           }
-                          className="w-full px-2 py-1.5 text-xs text-right bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-lg focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] transition"
+                          className="w-full h-9 px-2 text-sm text-right bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-lg focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] transition"
                         >
                           <option value="0">0%</option>
                           <option value="5">5%</option>
