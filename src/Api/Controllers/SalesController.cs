@@ -1432,6 +1432,10 @@ namespace Api.Controllers
                     return BadRequest(ModelState);
 
                 var invoice = _tenantGuard.EnsureOwned<Core.Domain.Sales.SalesInvoiceHeader>(paymentDto.InvoiceId, nameof(paymentDto.InvoiceId));
+                if (invoice.Status == Core.Domain.SalesInvoiceStatus.Draft)
+                    return BadRequest(new { message = "Issue the invoice before recording a payment." });
+                if (invoice.Status == Core.Domain.SalesInvoiceStatus.Void)
+                    return BadRequest(new { message = "Cannot record a payment on a void invoice." });
 
                 // Summary accounts such as 10110 can't take postings, so only postable cash accounts qualify.
                 var postable = _financialService.GetAccounts().Where(a => a.CanPost()).ToList();
