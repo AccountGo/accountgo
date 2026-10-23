@@ -1733,25 +1733,8 @@ namespace Api.Controllers
         }
 
         // A new workspace has no items, so a typed line must not fall back to a missing or foreign item id.
-        /// <summary>
-        /// The item a line typed without picking from the catalog is booked to: an active catalog item named exactly as
-        /// typed, or else the workspace's general item. The line keeps its own text either way, so typing doesn't add
-        /// an item to the catalog.
-        /// </summary>
-        private Core.Domain.Items.Item ResolveFreeTextItem(List<Core.Domain.Items.Item> items, string? description)
-        {
-            var text = description?.Trim();
-            var item = string.IsNullOrEmpty(text) ? null
-                : items.FirstOrDefault(i => i.ArchivedAt == null && string.Equals(i.Description, text, StringComparison.OrdinalIgnoreCase));
-            item ??= items.FirstOrDefault(i => string.Equals(i.Description, Api.Service.CatalogDefaults.GeneralItemName, StringComparison.OrdinalIgnoreCase));
-            if (item != null)
-                return item;
-
-            item = Api.Service.CatalogDefaults.NewItem(_inventoryService, _financialService, Api.Service.CatalogDefaults.GeneralItemName);
-            _inventoryService.AddItem(item);
-            items.Add(item);
-            return item;
-        }
+        private Core.Domain.Items.Item ResolveFreeTextItem(List<Core.Domain.Items.Item> items, string? description) =>
+            Api.Service.CatalogDefaults.ResolveFreeTextItem(_inventoryService, _financialService, items, description);
 
         private int DefaultMeasurementId() => Api.Service.CatalogDefaults.MeasurementId(_inventoryService);
 
@@ -1960,6 +1943,9 @@ namespace Api.Controllers
                     return BadRequest(new { message = "Cannot void an invoice with recorded payments. Please unallocate or refund payments first." });
                 }
 
+                // Issuing posted the invoice to receivables and sales; voiding reverses that, so it no longer counts.
+                if (invoice.GeneralLedgerHeaderId.HasValue && !invoice.VoidGeneralLedgerHeaderId.HasValue)
+                    invoice.VoidGeneralLedgerHeader = _financialService.CreateReversingEntry(invoice.GeneralLedgerHeaderId.Value, $"Void of invoice {invoice.No ?? invoice.Id.ToString()}");
                 invoice.Status = Core.Domain.SalesInvoiceStatus.Void;
                 _salesService.UpdateSalesInvoice(invoice);
 

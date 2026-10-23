@@ -195,6 +195,7 @@ namespace Services.Security
                 ("Purchasing", SystemPermissions.PurchasesBillsView, "View Bills"),
                 ("Purchasing", SystemPermissions.PurchasesBillsCreate, "Create Bills"),
                 ("Purchasing", SystemPermissions.PurchasesBillsPost, "Post Bills"),
+                ("Purchasing", SystemPermissions.PurchasesPaymentsCreate, "Pay Bills"),
 
                 ("Inventory", SystemPermissions.InventoryItemsView, "View Items"),
                 ("Inventory", SystemPermissions.InventoryItemsManage, "Manage Items"),
@@ -253,6 +254,7 @@ namespace Services.Security
                     SystemPermissions.PurchasesBillsView,
                     SystemPermissions.PurchasesBillsCreate,
                     SystemPermissions.PurchasesBillsPost,
+                    SystemPermissions.PurchasesPaymentsCreate,
                     SystemPermissions.InventoryItemsView,
                     SystemPermissions.InventoryItemsManage,
                     SystemPermissions.ReportsView

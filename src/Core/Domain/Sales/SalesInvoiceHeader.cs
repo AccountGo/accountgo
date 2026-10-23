@@ -28,6 +28,8 @@ namespace Core.Domain.Sales
 
         public int CustomerId { get; set; }
         public int? GeneralLedgerHeaderId { get; set; }
+        /// <summary>The entry that reversed the invoice's posting when it was voided.</summary>
+        public int? VoidGeneralLedgerHeaderId { get; set; }
         public string No { get; set; }
         public DateTime Date { get; set; }
         public decimal ShippingHandlingCharge{ get; set; }
@@ -45,6 +47,7 @@ namespace Core.Domain.Sales
         public SalesInvoiceStatus? Status { get; set; }
         public virtual Customer Customer { get; set; }
         public virtual GeneralLedgerHeader GeneralLedgerHeader { get; set; }
+        public virtual GeneralLedgerHeader? VoidGeneralLedgerHeader { get; set; }
 
         public virtual ICollection<SalesInvoiceLine> SalesInvoiceLines { get; set; }
         [NotMapped]

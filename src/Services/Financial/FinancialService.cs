@@ -727,6 +727,34 @@ namespace Services.Financial
             return _generalLedgerRepository.Table.Where(gl => gl.Id == id).FirstOrDefault();
         }
 
+        public IEnumerable<GeneralLedgerLine> GetGeneralLedgerLines(int generalLedgerHeaderId) =>
+            _generalLedgerRepository.GetAllIncluding(gl => gl.GeneralLedgerLines)
+                .Where(gl => gl.Id == generalLedgerHeaderId)
+                .SelectMany(gl => gl.GeneralLedgerLines)
+                .ToList();
+
+        /// <summary>
+        /// An entry that undoes another, not yet saved: the same lines with debits and credits swapped, dated as the
+        /// original so a voided document nets to nothing in its own period. When that period's financial year is no
+        /// longer open, it is dated today instead.
+        /// </summary>
+        public GeneralLedgerHeader CreateReversingEntry(int generalLedgerHeaderId, string description)
+        {
+            var original = _generalLedgerRepository.GetAllIncluding(gl => gl.GeneralLedgerLines)
+                .FirstOrDefault(gl => gl.Id == generalLedgerHeaderId)
+                ?? throw new InvalidOperationException($"Journal entry {generalLedgerHeaderId} was not found.");
+
+            var date = _fiscalYearRepo.Table.Any(fy => fy.IsActive && original.Date >= fy.StartDate && original.Date <= fy.EndDate)
+                ? original.Date
+                : DateTime.UtcNow.Date;
+            var reversal = CreateGeneralLedgerHeader(original.DocumentType, date, description);
+            foreach (var line in original.GeneralLedgerLines)
+                reversal.GeneralLedgerLines.Add(CreateGeneralLedgerLine(line.DrCr == DrOrCrSide.Dr ? DrOrCrSide.Cr : DrOrCrSide.Dr, line.AccountId, line.Amount));
+
+            ValidateGeneralLedgerEntry(reversal);
+            return reversal;
+        }
+
         public JournalEntryHeader CloseAccountingPeriod()
         {
             /*

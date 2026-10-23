@@ -135,7 +135,7 @@ export const PlaceholderView: React.FC = () => {
           }
         } else if (currentSection === 'purchases') {
           const [billsRes, vendorsRes] = await Promise.all([
-            authFetch('/api/Purchasing/PurchaseInvoices'),
+            authFetch('/api/Purchasing/Bills'),
             authFetch('/api/Purchasing/Vendors'),
           ]);
 
@@ -143,8 +143,8 @@ export const PlaceholderView: React.FC = () => {
           const vendors = vendorsRes.ok ? await vendorsRes.json() : [];
 
           if (mounted) {
-            const totalBilled = bills.reduce((acc: number, b: any) => acc + (b.amount || 0), 0);
-            const totalPayable = vendors.reduce((acc: number, v: any) => acc + (v.balance || 0), 0);
+            const totalBilled = bills.reduce((acc: number, b: any) => acc + (b.status === 'Void' ? 0 : b.total || 0), 0);
+            const totalPayable = vendors.reduce((acc: number, v: any) => acc + (v.outstanding || 0), 0);
 
             setMetrics([
               {
@@ -164,7 +164,7 @@ export const PlaceholderView: React.FC = () => {
               },
               {
                 label: 'Settlement Status',
-                value: bills.every((b: any) => b.posted) ? 'Reconciled' : 'Pending',
+                value: bills.every((b: any) => b.approved || b.status === 'Void') ? 'Reconciled' : 'Pending',
                 change: 'GL ledger verified',
               },
             ]);
@@ -172,10 +172,10 @@ export const PlaceholderView: React.FC = () => {
             const tableRows: LiveRow[] = bills.map((bill: any) => ({
               col1: `BILL-${bill.no || bill.id}`,
               col2: bill.vendorName || `Vendor #${bill.vendorId}`,
-              col3: formatDate(bill.invoiceDate),
-              col4: bill.referenceNo || '—',
-              col5: `${currencySymbol}${formatAmount(bill.amount)}`,
-              status: bill.posted ? 'Posted' : 'Pending',
+              col3: formatDate(bill.date),
+              col4: bill.vendorInvoiceNo || bill.referenceNo || '—',
+              col5: `${currencySymbol}${formatAmount(bill.total)}`,
+              status: bill.status,
               raw: bill,
             }));
             setRows(tableRows);

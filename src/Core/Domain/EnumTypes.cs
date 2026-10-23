@@ -89,7 +89,9 @@ namespace Core.Domain
     {
         Draft = 0,
         Open = 1,
-        Paid = 2
+        Paid = 2,
+        Overdue = 3,
+        Void = 4
     }
 
     public enum SequenceNumberTypes

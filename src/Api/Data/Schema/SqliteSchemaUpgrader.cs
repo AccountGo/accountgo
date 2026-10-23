@@ -165,7 +165,21 @@ namespace Api.Data.Schema
                     new[] { "SalesInvoiceHeader", "BillToJson", "TEXT NULL" },
                     new[] { "SalesInvoiceLine", "Description", "TEXT NULL" },
                     new[] { "Customer", "ArchivedAt", "TEXT NULL" },
-                    new[] { "Item", "ArchivedAt", "TEXT NULL" }
+                    new[] { "Item", "ArchivedAt", "TEXT NULL" },
+                    new[] { "PurchaseInvoiceHeader", "DueDate", "TEXT NULL" },
+                    new[] { "PurchaseInvoiceHeader", "Notes", "TEXT NULL" },
+                    new[] { "PurchaseInvoiceHeader", "BillFromJson", "TEXT NULL" },
+                    new[] { "PurchaseInvoiceHeader", "VoidGeneralLedgerHeaderId", "INTEGER NULL" },
+                    new[] { "PurchaseInvoiceLine", "Description", "TEXT NULL" },
+                    new[] { "PurchaseInvoiceLine", "AccountId", "INTEGER NULL" },
+                    new[] { "PurchaseInvoiceLine", "TaxId", "INTEGER NULL" },
+                    new[] { "PurchaseInvoiceLine", "TaxAmount", "decimal(18, 2) NOT NULL DEFAULT 0" },
+                    new[] { "Vendor", "ArchivedAt", "TEXT NULL" },
+                    new[] { "VendorPayment", "AccountId", "INTEGER NULL" },
+                    new[] { "VendorPayment", "PaymentMethod", "TEXT NULL" },
+                    new[] { "VendorPayment", "ReferenceNo", "TEXT NULL" },
+                    new[] { "VendorPayment", "Memo", "TEXT NULL" },
+                    new[] { "SalesInvoiceHeader", "VoidGeneralLedgerHeaderId", "INTEGER NULL" }
                 };
                 var added = new HashSet<string>();
                 foreach (var column in columns)
@@ -189,9 +203,44 @@ namespace Api.Data.Schema
                     cmd.CommandText = InvoiceHistoryBackfillSql;
                     cmd.ExecuteNonQuery();
                 }
+                if (added.Contains("PurchaseInvoiceLine.TaxAmount") && added.Contains("SalesInvoiceHeader.VoidGeneralLedgerHeaderId"))
+                {
+                    using var cmd = connection.CreateCommand();
+                    cmd.Transaction = tx;
+                    cmd.CommandText = BillsBackfillSql;
+                    cmd.ExecuteNonQuery();
+                }
                 tx.Commit();
             }
         }
+
+        // D1 0012_bills.sql, without the permission rows that startup adds. Bills saved before then: posted ones are
+        // approved, the rest drafts; lines keep the item's text and posted lines their inventory account. Invoices voided
+        // before then get the entry reversing their posting, dated as the original.
+        private const string BillsBackfillSql = @"
+            UPDATE ""PurchaseInvoiceHeader"" SET ""Status"" = CASE WHEN ""GeneralLedgerHeaderId"" IS NULL THEN 0 ELSE 1 END
+            WHERE ""Status"" IS NULL;
+            UPDATE ""PurchaseInvoiceLine"" SET ""Description"" = (
+                SELECT ""Item"".""Description"" FROM ""Item"" WHERE ""Item"".""Id"" = ""PurchaseInvoiceLine"".""ItemId"")
+            WHERE ""Description"" IS NULL;
+            UPDATE ""PurchaseInvoiceLine"" SET ""AccountId"" = (
+                SELECT ""Item"".""InventoryAccountId"" FROM ""Item"" WHERE ""Item"".""Id"" = ""PurchaseInvoiceLine"".""ItemId"")
+            WHERE ""AccountId"" IS NULL
+              AND ""PurchaseInvoiceHeaderId"" IN (SELECT ""Id"" FROM ""PurchaseInvoiceHeader"" WHERE ""GeneralLedgerHeaderId"" IS NOT NULL);
+            INSERT INTO ""GeneralLedgerHeader"" (""CompanyId"", ""Date"", ""DocumentType"", ""Description"")
+            SELECT i.""CompanyId"", g.""Date"", g.""DocumentType"", 'Void of invoice ' || COALESCE(i.""No"", i.""Id"")
+            FROM ""SalesInvoiceHeader"" i JOIN ""GeneralLedgerHeader"" g ON g.""Id"" = i.""GeneralLedgerHeaderId""
+            WHERE i.""Status"" = 4 AND i.""VoidGeneralLedgerHeaderId"" IS NULL;
+            UPDATE ""SalesInvoiceHeader"" SET ""VoidGeneralLedgerHeaderId"" = (
+                SELECT MAX(g.""Id"") FROM ""GeneralLedgerHeader"" g
+                WHERE g.""CompanyId"" = ""SalesInvoiceHeader"".""CompanyId""
+                  AND g.""Description"" = 'Void of invoice ' || COALESCE(""SalesInvoiceHeader"".""No"", ""SalesInvoiceHeader"".""Id""))
+            WHERE ""Status"" = 4 AND ""GeneralLedgerHeaderId"" IS NOT NULL AND ""VoidGeneralLedgerHeaderId"" IS NULL;
+            INSERT INTO ""GeneralLedgerLine"" (""CompanyId"", ""GeneralLedgerHeaderId"", ""AccountId"", ""DrCr"", ""Amount"")
+            SELECT l.""CompanyId"", i.""VoidGeneralLedgerHeaderId"", l.""AccountId"", CASE l.""DrCr"" WHEN 1 THEN 2 ELSE 1 END, l.""Amount""
+            FROM ""SalesInvoiceHeader"" i JOIN ""GeneralLedgerLine"" l ON l.""GeneralLedgerHeaderId"" = i.""GeneralLedgerHeaderId""
+            WHERE i.""VoidGeneralLedgerHeaderId"" IS NOT NULL
+              AND NOT EXISTS (SELECT 1 FROM ""GeneralLedgerLine"" x WHERE x.""GeneralLedgerHeaderId"" = i.""VoidGeneralLedgerHeaderId"");";
 
         // D1 0009_invoice_history.sql. Customers and items could not be edited before these columns existed, so what they
         // say now is what the existing invoices were issued with. Issued invoices (Open, Overdue, Closed, and posted ones

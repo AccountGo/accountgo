@@ -1158,7 +1158,7 @@ namespace Api.Data
             DateTime paymentDate,
             decimal amount)
         {
-            _purchasingService.SavePayment(invoice.Id, vendor.Id, bankAccountId, amount, paymentDate);
+            _purchasingService.PayBill(invoice.Id, bankAccountId, amount, paymentDate);
         }
 
         private static string[,] LoadCsv(string filename)

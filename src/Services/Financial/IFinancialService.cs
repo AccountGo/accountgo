@@ -42,6 +42,8 @@ namespace Services.Financial
         JournalEntryHeader GetJournalEntry(int id, bool fromGL = false);
         void UpdateJournalEntry(JournalEntryHeader journalEntry, bool posted = false);
         GeneralLedgerHeader GetGeneralLedgerHeader(int id);
+        GeneralLedgerHeader CreateReversingEntry(int generalLedgerHeaderId, string description);
+        IEnumerable<GeneralLedgerLine> GetGeneralLedgerLines(int generalLedgerHeaderId);
         Account GetAccountByAccountCode(string accountcode);
         Account GetAccount(int id);
         void AddAccount(Account account);
