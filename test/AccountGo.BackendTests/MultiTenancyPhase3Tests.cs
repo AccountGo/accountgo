@@ -262,6 +262,146 @@ namespace AccountGo.BackendTests
         }
 
         [Fact]
+        public async Task BusinessProfile_FirstSave_TrimsAndValidates_AndIsAdminOnly()
+        {
+            var empty = await Json(await Send(HttpMethod.Get, Current + "/business-profile"));
+            Assert.Equal(JsonValueKind.Null, empty.GetProperty("legalName").ValueKind);
+
+            // A new workspace has no address yet; the first save must create it.
+            var saved = await Send(HttpMethod.Put, Current + "/business-profile", new
+            {
+                legalName = "  Juan Dela Cruz ",
+                businessEmail = " juan@example.com ",
+                businessPhone = "",
+                address = new { line1 = "12 Main St", line2 = "  ", city = "Makati", region = "Metro Manila", postalCode = "1200", countryCode = "Philippines" }
+            });
+            Assert.True(saved.IsSuccessStatusCode, await saved.Content.ReadAsStringAsync());
+            var profile = await Json(await Send(HttpMethod.Get, Current + "/business-profile"));
+            Assert.Equal("Juan Dela Cruz", profile.GetProperty("legalName").GetString());
+            Assert.Equal("juan@example.com", profile.GetProperty("businessEmail").GetString());
+            Assert.Equal(JsonValueKind.Null, profile.GetProperty("businessPhone").ValueKind);
+            Assert.Equal("Makati", profile.GetProperty("address").GetProperty("city").GetString());
+            Assert.Equal(JsonValueKind.Null, profile.GetProperty("address").GetProperty("line2").ValueKind);
+
+            Assert.Equal(HttpStatusCode.BadRequest, (await Send(HttpMethod.Put, Current + "/business-profile",
+                new { legalName = "Juan", businessEmail = "not-an-email" })).StatusCode);
+
+            // Clearing every address field removes the address.
+            Assert.True((await Send(HttpMethod.Put, Current + "/business-profile", new { legalName = "Juan Dela Cruz" })).IsSuccessStatusCode);
+            var cleared = await Json(await Send(HttpMethod.Get, Current + "/business-profile"));
+            Assert.Equal(JsonValueKind.Null, cleared.GetProperty("address").GetProperty("line1").ValueKind);
+            Assert.Equal(JsonValueKind.Null, cleared.GetProperty("businessEmail").ValueKind);
+
+            await JoinOther();
+            Assert.Equal(HttpStatusCode.OK, (await Send(HttpMethod.Get, Current + "/business-profile", token: _otherToken)).StatusCode);
+            Assert.Equal(HttpStatusCode.Forbidden, (await Send(HttpMethod.Put, Current + "/business-profile",
+                new { legalName = "Hijacked" }, token: _otherToken)).StatusCode);
+            Assert.Equal("Juan Dela Cruz", (await Json(await Send(HttpMethod.Get, Current + "/business-profile"))).GetProperty("legalName").GetString());
+        }
+
+        [Fact]
+        public async Task SalesInvoiceSettings_RoundTrip_Validate_AdminOnly_AndStayInTheirWorkspace()
+        {
+            var defaults = await Json(await Send(HttpMethod.Get, Current + "/sales-invoice-settings"));
+            Assert.Equal("TradingName", defaults.GetProperty("sellerName").GetString());
+            Assert.True(defaults.GetProperty("showNotes").GetBoolean());
+
+            var settings = new
+            {
+                sellerName = "LegalName", showSellerAddress = false, showCustomerEmail = false, showNotes = false,
+                showPaymentInstructions = true, defaultNotes = "  Thanks!  ", defaultPaymentInstructions = " "
+            };
+            var saved = await Send(HttpMethod.Put, Current + "/sales-invoice-settings", settings);
+            Assert.True(saved.IsSuccessStatusCode, await saved.Content.ReadAsStringAsync());
+            var read = await Json(await Send(HttpMethod.Get, Current + "/sales-invoice-settings"));
+            Assert.Equal("LegalName", read.GetProperty("sellerName").GetString());
+            Assert.False(read.GetProperty("showSellerAddress").GetBoolean());
+            Assert.False(read.GetProperty("showCustomerEmail").GetBoolean());
+            Assert.False(read.GetProperty("showNotes").GetBoolean());
+            Assert.True(read.GetProperty("showPaymentInstructions").GetBoolean());
+            Assert.Equal("Thanks!", read.GetProperty("defaultNotes").GetString());
+            Assert.Equal(JsonValueKind.Null, read.GetProperty("defaultPaymentInstructions").ValueKind);
+
+            Assert.Equal(HttpStatusCode.BadRequest, (await Send(HttpMethod.Put, Current + "/sales-invoice-settings",
+                new { sellerName = "Nickname" })).StatusCode);
+            Assert.Equal(HttpStatusCode.BadRequest, (await Send(HttpMethod.Put, Current + "/sales-invoice-settings",
+                new { sellerName = "TradingName", defaultNotes = new string('x', 2001) })).StatusCode);
+
+            await JoinOther();
+            Assert.Equal("Thanks!", (await Json(await Send(HttpMethod.Get, Current + "/sales-invoice-settings", token: _otherToken)))
+                .GetProperty("defaultNotes").GetString());
+            Assert.Equal(HttpStatusCode.Forbidden, (await Send(HttpMethod.Put, Current + "/sales-invoice-settings",
+                new { sellerName = "TradingName" }, token: _otherToken)).StatusCode);
+
+            // The other user's own workspace starts from defaults and cannot see this one's settings.
+            var ownerSlug = _slug;
+            Assert.Equal(HttpStatusCode.Created, (await Send(HttpMethod.Post, "/api/organizations",
+                new { name = "Other Books", slug = "other-books" }, token: _otherToken, scoped: false)).StatusCode);
+            _slug = "other-books";
+            var otherSettings = await Json(await Send(HttpMethod.Get, Current + "/sales-invoice-settings", token: _otherToken));
+            Assert.Equal("TradingName", otherSettings.GetProperty("sellerName").GetString());
+            Assert.Equal(JsonValueKind.Null, otherSettings.GetProperty("defaultNotes").ValueKind);
+            _slug = ownerSlug;
+            Assert.Equal("LegalName", (await Json(await Send(HttpMethod.Get, Current + "/sales-invoice-settings"))).GetProperty("sellerName").GetString());
+        }
+
+        [Fact]
+        public async Task SalesInvoice_ResolvesSellerAndDisplayFromSettings_AndPdfStillRenders()
+        {
+            var invoice = await NewInvoice();
+            invoice.Notes = "Note";
+            invoice.PaymentInstructions = "Pay";
+            var saved = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
+            Assert.True(saved.IsSuccessStatusCode, await saved.Content.ReadAsStringAsync());
+            var invoiceId = (await saved.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt32();
+
+            // No settings yet: same output as before the feature.
+            var before = await GetInvoice(invoiceId);
+            Assert.Equal("Phase Three", before.Seller.Name);
+            Assert.Empty(before.Seller.AddressLines);
+            Assert.True(before.Display.ShowCustomerEmail && before.Display.ShowNotes && before.Display.ShowPaymentInstructions);
+
+            using (var scope = _factory.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+                db.Companies.Single(c => c.Id == _companyId).CRA = "123-456-789";
+                db.SaveChanges();
+            }
+            Assert.True((await Send(HttpMethod.Put, Current + "/business-profile", new
+            {
+                legalName = "Juan Dela Cruz", businessEmail = "juan@example.com", businessPhone = "+63 917 000 0000",
+                address = new { line1 = "12 Main St", city = "Makati", postalCode = "1200", countryCode = "Philippines" }
+            })).IsSuccessStatusCode);
+            Assert.True((await Send(HttpMethod.Put, Current + "/sales-invoice-settings", new
+            {
+                sellerName = "LegalName", showSellerAddress = true, showCustomerEmail = false, showNotes = false, showPaymentInstructions = true
+            })).IsSuccessStatusCode);
+
+            var after = await GetInvoice(invoiceId);
+            Assert.Equal("Juan Dela Cruz", after.Seller.Name);
+            Assert.Equal("123-456-789", after.Seller.TaxId);
+            Assert.Equal("juan@example.com", after.Seller.Email);
+            Assert.Equal("+63 917 000 0000", after.Seller.Phone);
+            Assert.Equal(new[] { "12 Main St", "Makati 1200", "Philippines" }, after.Seller.AddressLines);
+            Assert.False(after.Display.ShowCustomerEmail);
+            Assert.False(after.Display.ShowNotes);
+            Assert.True(after.Display.ShowPaymentInstructions);
+            // The flags only affect rendering; the editor still receives the invoice's own values.
+            Assert.Equal("Note", after.Notes);
+
+            var pdf = await Send(HttpMethod.Get, $"/api/Sales/SalesInvoicePdf?id={invoiceId}");
+            Assert.Equal(HttpStatusCode.OK, pdf.StatusCode);
+            Assert.Equal("%PDF", System.Text.Encoding.ASCII.GetString(await pdf.Content.ReadAsByteArrayAsync(), 0, 4));
+
+            // Legal name selected but cleared: fall back to the trading name rather than print a blank heading.
+            Assert.True((await Send(HttpMethod.Put, Current + "/sales-invoice-settings", new { sellerName = "LegalName", showSellerAddress = false })).IsSuccessStatusCode);
+            Assert.True((await Send(HttpMethod.Put, Current + "/business-profile", new { legalName = "  " })).IsSuccessStatusCode);
+            var noLegalName = await GetInvoice(invoiceId);
+            Assert.Equal("Phase Three", noLegalName.Seller.Name);
+            Assert.Empty(noLegalName.Seller.AddressLines);
+        }
+
+        [Fact]
         public async Task DashboardReceivables_ExcludeDraftInvoices()
         {
             var invoice = await NewInvoice();

@@ -389,10 +389,9 @@ namespace Api.Controllers
             if (salesInvoiceDto == null)
                 return NotFound(new { message = $"Invoice #{id} not found." });
 
-            var defaultCompany = CurrentCompany();
-            var currencyCode = defaultCompany != null ? _db.CompanySettings.FirstOrDefault(s => s.CompanyId == defaultCompany.Id)?.Currency ?? "USD" : "USD";
-
-            var document = new Api.Service.InvoicePdfDocument(salesInvoiceDto, currencyCode);
+            var document = new Api.Service.InvoicePdfDocument(
+                salesInvoiceDto,
+                _db.CompanySettings.Select(s => s.Currency).FirstOrDefault());
 
             var bytes = QuestPDF.Fluent.GenerateExtensions.GeneratePdf(document);
             return File(bytes, "application/pdf", $"Invoice-{document.InvoiceNumber}.pdf");
@@ -414,7 +413,9 @@ namespace Api.Controllers
             var dueDate = salesInvoice.Date.AddDays(dueDays);
 
             var defaultCompany = CurrentCompany();
-            var setting = defaultCompany != null ? _db.CompanySettings.FirstOrDefault(s => s.CompanyId == defaultCompany.Id) : null;
+            var setting = _db.CompanySettings.FirstOrDefault();
+            var invoiceSettings = setting?.GetSalesInvoiceSettings() ?? new Core.Domain.SalesInvoiceSettings();
+            var useLegalName = invoiceSettings.SellerName == Core.Domain.SalesInvoiceSettings.LegalName && !string.IsNullOrWhiteSpace(setting?.LegalName);
 
             var party = salesInvoice.Customer?.Party;
             var addressParts = new List<string>();
@@ -423,28 +424,6 @@ namespace Api.Controllers
             if (!string.IsNullOrWhiteSpace(party?.CompanyPostalCode)) addressParts.Add(party.CompanyPostalCode);
             if (!string.IsNullOrWhiteSpace(party?.CompanyCountry)) addressParts.Add(party.CompanyCountry);
             var customerAddress = addressParts.Count > 0 ? string.Join(", ", addressParts) : null;
-
-            // Compute Seller info from company settings
-            var sellerName = setting?.GetSalesInvoiceSettings().SellerName ?? "TradingName";
-            var legalName = setting?.LegalName;
-            var effectiveSellerName = (!string.IsNullOrWhiteSpace(legalName) && setting?.GetSalesInvoiceSettings().SellerName == "LegalName") 
-                ? legalName : (defaultCompany?.Name ?? "AccountGo");
-            // Tax ID / CRA: use the company's CRA number (from Company table), fall back to BusinessEmail if CRA is not set
-            var cra = defaultCompany?.CRA ?? setting?.BusinessEmail;
-            
-            // Compute AddressLines when ShowSellerAddress is true
-            var addressLines = new List<string>();
-            if (setting?.GetSalesInvoiceSettings().ShowSellerAddress == true && setting?.BusinessAddress != null)
-            {
-                var addr = setting.BusinessAddress;
-                if (addr != null)
-                {
-                    if (!string.IsNullOrWhiteSpace(addr.Line1)) addressLines.Add(addr.Line1);
-                    if (!string.IsNullOrWhiteSpace(addr.Line2)) addressLines.Add(addr.Line2);
-                    if (!string.IsNullOrWhiteSpace(addr.City)) addressLines.Add($"{addr.City}, {addr.Region ?? null} {addr.PostalCode ?? null}".Trim(',', ' '));
-                    if (!string.IsNullOrWhiteSpace(addr.CountryCode)) addressLines.Add(addr.CountryCode);
-                }
-            }
 
             var salesInvoiceDto = new Dto.Sales.SalesInvoice()
             {
@@ -466,17 +445,19 @@ namespace Api.Controllers
                 CompanyName = defaultCompany?.Name,
                 Seller = new Dto.Sales.SellerInfo
                 {
-                    Name = effectiveSellerName,
-                    TaxId = setting?.BusinessEmail ?? defaultCompany?.CRA,
-                    AddressLines = addressLines,
+                    Name = useLegalName ? setting!.LegalName!.Trim() : defaultCompany?.Name ?? "AccountGo",
+                    TaxId = defaultCompany?.CRA,
+                    AddressLines = invoiceSettings.ShowSellerAddress && setting?.BusinessAddress != null
+                        ? setting.BusinessAddress.ToLines()
+                        : new List<string>(),
                     Email = setting?.BusinessEmail,
                     Phone = setting?.BusinessPhone
                 },
                 Display = new Dto.Sales.DisplayFlags
                 {
-                    ShowCustomerEmail = setting?.GetSalesInvoiceSettings().ShowCustomerEmail ?? true,
-                    ShowNotes = setting?.GetSalesInvoiceSettings().ShowNotes ?? true,
-                    ShowPaymentInstructions = setting?.GetSalesInvoiceSettings().ShowPaymentInstructions ?? true
+                    ShowCustomerEmail = invoiceSettings.ShowCustomerEmail,
+                    ShowNotes = invoiceSettings.ShowNotes,
+                    ShowPaymentInstructions = invoiceSettings.ShowPaymentInstructions
                 }
             };
 

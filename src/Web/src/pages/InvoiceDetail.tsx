@@ -311,6 +311,13 @@ export const InvoiceDetail: React.FC = () => {
       new Date(invoice.dueDate).getTime() < new Date().setHours(0, 0, 0, 0) &&
       invoice.balanceDue > 0);
 
+  // Seller and display flags are resolved by the API from the workspace's invoice settings, same as the PDF.
+  const sellerName = invoice.seller?.name || currentOrg.name || invoice.companyName || 'AccountGo Organization';
+  const sellerContact = [invoice.seller?.email, invoice.seller?.phone].filter(Boolean).join(' · ');
+  const showCustomerEmail = invoice.display?.showCustomerEmail ?? true;
+  const showNotes = invoice.display?.showNotes ?? true;
+  const showPaymentInstructions = invoice.display?.showPaymentInstructions ?? true;
+
   return (
     <div className="print-page max-w-5xl mx-auto px-4 sm:px-6 py-6 pb-24 text-[var(--text-main)]">
 
@@ -455,14 +462,20 @@ export const InvoiceDetail: React.FC = () => {
           <div>
             <div className="flex items-center gap-2.5 mb-2">
               <div className="w-10 h-10 rounded-xl bg-[var(--brand-primary)] text-[var(--brand-text)] flex items-center justify-center font-bold text-lg shadow-sm">
-                {currentOrg.name?.substring(0, 1) || 'A'}
+                {sellerName.substring(0, 1)}
               </div>
               <h2 className="text-2xl font-bold tracking-tight text-[var(--text-main)]">
-                {currentOrg.name || invoice.companyName || 'AccountGo Organization'}
+                {sellerName}
               </h2>
             </div>
-            <p className="text-xs text-[var(--text-muted)]">
-              Tax ID / CRA: {currentOrg.cra || 'N/A'}
+            <div className="space-y-0.5 text-xs text-[var(--text-secondary)]">
+              {invoice.seller?.addressLines.map((line) => (
+                <p key={line}>{line}</p>
+              ))}
+              {sellerContact && <p>{sellerContact}</p>}
+            </div>
+            <p className="mt-1 text-xs text-[var(--text-muted)]">
+              Tax ID / CRA: {(invoice.seller ? invoice.seller.taxId : currentOrg.cra) || 'N/A'}
             </p>
           </div>
 
@@ -487,7 +500,7 @@ export const InvoiceDetail: React.FC = () => {
             <div className="font-bold text-[var(--text-main)] text-base">
               {invoice.customerName}
             </div>
-            {invoice.customerEmail && (
+            {showCustomerEmail && invoice.customerEmail && (
               <div className="flex items-center gap-1.5 text-[var(--text-secondary)]">
                 <Mail className="w-3.5 h-3.5 text-[var(--text-muted)]" />
                 {invoice.customerEmail}
@@ -602,7 +615,7 @@ export const InvoiceDetail: React.FC = () => {
         <div className="flex flex-col sm:flex-row justify-between gap-8 border-t border-[var(--border-subtle)] pt-6">
           {/* Notes & Payment Instructions */}
           <div className="sm:max-w-md space-y-4 text-xs text-[var(--text-secondary)]">
-            {invoice.notes && (
+            {showNotes && invoice.notes && (
               <div>
                 <span className="font-semibold uppercase tracking-wider text-[var(--text-muted)] block mb-1">
                   Notes
@@ -611,7 +624,7 @@ export const InvoiceDetail: React.FC = () => {
               </div>
             )}
 
-            {invoice.paymentInstructions && (
+            {showPaymentInstructions && invoice.paymentInstructions && (
               <div>
                 <span className="font-semibold uppercase tracking-wider text-[var(--text-muted)] block mb-1">
                   Payment Instructions

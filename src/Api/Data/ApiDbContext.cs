@@ -127,10 +127,8 @@ namespace Api.Data
             builder.Entity<Company>().HasIndex(c => c.Slug).IsUnique();
             builder.Entity<CompanySetting>().Property(s => s.Currency).IsRequired().HasMaxLength(3).HasDefaultValue("PHP");
 
-            // Owned type: BusinessAddress (PostalAddress) on CompanySetting
-            // EF Core will use default column naming: BusinessAddress_Line1, BusinessAddress_Line2, etc.
-            builder.Entity<CompanySetting>()
-                .OwnsOne(s => s.BusinessAddress);
+            // Stored as BusinessAddress_* columns on CompanySetting; the SQLite upgrader and D1 0004 use the same names.
+            builder.Entity<CompanySetting>().OwnsOne(s => s.BusinessAddress);
 
             foreach (var entityType in builder.Model.GetEntityTypes())
             {
