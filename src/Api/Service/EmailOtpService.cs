@@ -301,9 +301,21 @@ namespace Api.Service
             if (session == null)
                 return (false, null, null, "Invalid session token.");
 
-            // REUSE DETECTION (Compromise protection): If already revoked, revoke the ENTIRE chain for this user
+            var now = DateTime.UtcNow;
             if (session.IsRevoked)
             {
+                // A token rotated moments ago comes back when the response carrying its replacement never reached the
+                // browser (a timeout while the API was starting) or when two tabs refreshed at once. That is not theft:
+                // within the grace period the session carries on from it, and the replacement nobody received is revoked.
+                if (session.ReplacedByTokenHash != null && session.RevokedAt > now - RotationGracePeriod)
+                {
+                    var replacement = await _identityContext.RefreshTokens.FirstOrDefaultAsync(t => t.TokenHash == session.ReplacedByTokenHash);
+                    if (replacement is { RevokedAt: null })
+                        replacement.RevokedAt = now;
+                    return await RotateAsync(session, ipAddress, userAgent, now);
+                }
+
+                // REUSE DETECTION (Compromise protection): an older revoked token revokes the ENTIRE chain for this user
                 _logger.LogWarning("SECURITY ALERT: Revoked refresh token reuse detected for User {UserId}! Revoking all sessions.", session.UserId);
                 var activeSessions = await _identityContext.RefreshTokens
                     .Where(t => t.UserId == session.UserId && t.RevokedAt == null)
@@ -323,23 +335,39 @@ namespace Api.Service
                 return (false, null, null, "Session has expired. Please sign in again.");
             }
 
+            return await RotateAsync(session, ipAddress, userAgent, now);
+        }
+
+        /// <summary>
+        /// How long after a refresh token is rotated it is still accepted once more: long enough for a browser to retry
+        /// a refresh whose response was lost while the API was starting.
+        /// </summary>
+        private static readonly TimeSpan RotationGracePeriod = TimeSpan.FromMinutes(5);
+
+        /// <summary>Replaces a session's refresh token with a new one and mints a fresh access token.</summary>
+        private async Task<(bool Success, AuthResponse? Response, string? NewRawRefreshToken, string? Error)> RotateAsync(
+            RefreshTokenSession session, string? ipAddress, string? userAgent, DateTime now)
+        {
+            if (session.IsExpired)
+                return (false, null, null, "Session has expired. Please sign in again.");
+
             var user = await _userManager.FindByIdAsync(session.UserId);
             if (user == null)
                 return (false, null, null, "User account no longer exists.");
 
-            // Rotate refresh token
             var newRawToken = GenerateSecureToken();
             var newTokenHash = ComputeSha256(newRawToken);
 
-            session.RevokedAt = DateTime.UtcNow;
+            // A token already rotated keeps its first rotation time, so the grace period runs from then.
+            session.RevokedAt ??= now;
             session.ReplacedByTokenHash = newTokenHash;
 
             var newSession = new RefreshTokenSession
             {
                 UserId = user.Id,
                 TokenHash = newTokenHash,
-                CreatedAt = DateTime.UtcNow,
-                ExpiresAt = DateTime.UtcNow.AddDays(7),
+                CreatedAt = now,
+                ExpiresAt = now.AddDays(7),
                 CreatedByIp = ipAddress,
                 UserAgent = userAgent
             };

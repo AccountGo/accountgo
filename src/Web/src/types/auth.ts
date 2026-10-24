@@ -55,6 +55,8 @@ export interface AuthContextType {
   accessToken: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  /** The API is starting up (after an update or a quiet spell); the session is kept while it does. */
+  isStarting: boolean;
   sendOtp: (email: string) => Promise<OtpSendResponse>;
   signUp: (payload: SignUpPayload) => Promise<SignUpResponse>;
   verifyOtp: (email: string, otp: string) => Promise<void>;

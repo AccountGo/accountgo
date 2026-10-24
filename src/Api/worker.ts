@@ -34,6 +34,8 @@ export class AccountGoApiContainer extends Container<Env> {
       ASPNETCORE_URLS: `http://+:${CONTAINER_PORT}`,
       ASPNETCORE_ENVIRONMENT: "Production",
       DatabaseProvider: "Sqlite",
+      // The data is restored from D1 once the container is up, so it must not seed its own demo data first.
+      RESTORE_FROM_D1: "true",
     };
     for (const [key, value] of Object.entries(this.env)) {
       if (typeof value === "string") {

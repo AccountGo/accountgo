@@ -4,7 +4,7 @@ import { useAuth } from '../auth/AuthContext';
 import { Loader2 } from 'lucide-react';
 
 export const ProtectedRoute: React.FC = () => {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, isStarting } = useAuth();
   const location = useLocation();
 
   if (isLoading) {
@@ -25,10 +25,12 @@ export const ProtectedRoute: React.FC = () => {
           </div>
           <div className="flex flex-col items-center gap-1">
             <span className="text-sm font-semibold text-[var(--text-main)]">
-              Verifying Session
+              {isStarting ? 'AccountGo is starting up' : 'Verifying Session'}
             </span>
-            <span className="text-xs text-[var(--text-muted)]">
-              Authenticating with AccountGo Cloud...
+            <span className="text-xs text-[var(--text-muted)] text-center max-w-xs" role="status">
+              {isStarting
+                ? "This can take a few minutes after an update. You'll stay signed in."
+                : 'Authenticating with AccountGo Cloud...'}
             </span>
           </div>
         </div>
