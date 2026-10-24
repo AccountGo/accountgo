@@ -36,7 +36,8 @@ namespace Core.Domain
         PurchaseCreditMemo,
         PurchaseInvoicePayment,
         JournalEntry,
-        CustomerAllocation
+        CustomerAllocation,
+        InventoryAdjustment
     }
 
     public enum AccountTypes
@@ -110,7 +111,8 @@ namespace Core.Domain
         Customer,
         Vendor,
         Contact,
-        DonationInvoice
+        DonationInvoice,
+        InventoryAdjustment
     }
 
     public enum AddressTypes

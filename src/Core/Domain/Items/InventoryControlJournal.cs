@@ -18,11 +18,14 @@ namespace Core.Domain.Items
         public int ItemId { get; set; }
         public int MeasurementId { get; set; }
         public DocumentTypes DocumentType { get; set; }
+        public int? DocumentId { get; set; }
         public decimal? INQty { get; set; }
         public decimal? OUTQty { get; set; }
         public DateTime Date { get; set; }
         public decimal? TotalCost { get; set; }
+        public decimal? UnitCost { get; set; }
         public decimal? TotalAmount { get; set; }
+        public string Memo { get; set; }
         public bool IsReverse { get; set; }
 
         public virtual Item Item { get; set; }

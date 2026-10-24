@@ -136,6 +136,7 @@ builder.Services.AddScoped(typeof(Services.Donations.IDonationsService), typeof(
 builder.Services.AddScoped(typeof(Services.Dashboard.IDashboardService), typeof(Services.Dashboard.DashboardService));
 builder.Services.AddScoped(typeof(Services.Financial.IFinancialService), typeof(Services.Financial.FinancialService));
 builder.Services.AddScoped(typeof(Services.Inventory.IInventoryService), typeof(Services.Inventory.InventoryService));
+builder.Services.AddScoped(typeof(Services.Inventory.IStockService), typeof(Services.Inventory.StockService));
 builder.Services.AddScoped(typeof(Services.Purchasing.IPurchasingService), typeof(Services.Purchasing.PurchasingService));
 builder.Services.AddScoped(typeof(Services.Administration.IAdministrationService), typeof(Services.Administration.AdministrationService));
 builder.Services.AddScoped(typeof(Services.Security.ISecurityService), typeof(Services.Security.SecurityService));

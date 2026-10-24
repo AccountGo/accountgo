@@ -191,11 +191,15 @@ namespace Api.Data
 
             builder.Entity<InventoryControlJournal>()
                 .Property(p => p.INQty)
-                .HasColumnType("decimal(18, 2)");
+                .HasColumnType("decimal(18, 4)");
 
             builder.Entity<InventoryControlJournal>()
                 .Property(p => p.OUTQty)
-                .HasColumnType("decimal(18, 2)");
+                .HasColumnType("decimal(18, 4)");
+
+            builder.Entity<InventoryControlJournal>()
+                .Property(p => p.UnitCost)
+                .HasColumnType("decimal(18, 4)");
 
             builder.Entity<InventoryControlJournal>()
                 .Property(p => p.TotalAmount)
@@ -204,6 +208,24 @@ namespace Api.Data
             builder.Entity<InventoryControlJournal>()
                 .Property(p => p.TotalCost)
                 .HasColumnType("decimal(18, 2)");
+
+            builder.Entity<Item>()
+                .Property(p => p.QuantityOnHand)
+                .HasColumnType("decimal(18, 4)")
+                .HasDefaultValue(0m);
+
+            builder.Entity<Item>()
+                .Property(p => p.AverageCost)
+                .HasColumnType("decimal(18, 4)")
+                .HasDefaultValue(0m);
+
+            builder.Entity<InventoryAdjustment>()
+                .Property(p => p.QuantityChange)
+                .HasColumnType("decimal(18, 4)");
+
+            builder.Entity<InventoryAdjustment>()
+                .Property(p => p.UnitCost)
+                .HasColumnType("decimal(18, 4)");
 
             builder.Entity<Item>()
                 .Property(p => p.Cost)
@@ -468,6 +490,7 @@ namespace Api.Data
         public virtual DbSet<GeneralLedgerLine> GeneralLedgerLines { get; set; }
         public virtual DbSet<GeneralLedgerSetting> GeneralLedgerSettings { get; set; }
         public virtual DbSet<InventoryControlJournal> InventoryControlJournals { get; set; }
+        public virtual DbSet<InventoryAdjustment> InventoryAdjustments { get; set; }
         public virtual DbSet<Item> Items { get; set; }
         public virtual DbSet<ItemCategory> ItemCategories { get; set; }
         public virtual DbSet<ItemTaxGroup> ItemTaxGroups { get; set; }

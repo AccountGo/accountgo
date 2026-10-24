@@ -26,6 +26,7 @@ namespace Services.Purchasing
     {
         private readonly IFinancialService _financialService;
         private readonly IInventoryService _inventoryService;
+        private readonly IStockService _stockService;
 
         private readonly ILogger<PurchasingService> _logger;
 
@@ -47,6 +48,7 @@ namespace Services.Purchasing
 
         public PurchasingService(IFinancialService financialService,
             IInventoryService inventoryService,
+            IStockService stockService,
             IRepository<PurchaseOrderHeader> purchaseOrderRepo,
             IRepository<PurchaseOrderLine> purchaseOrderLineRepo,
             IRepository<PurchaseInvoiceHeader> purchaseInvoiceRepo,
@@ -68,6 +70,7 @@ namespace Services.Purchasing
         {
             _financialService = financialService;
             _inventoryService = inventoryService;
+            _stockService = stockService;
             _purchaseOrderRepo = purchaseOrderRepo;
             _purchaseOrderLineRepo = purchaseOrderLineRepo;
             _purchaseInvoiceRepo = purchaseInvoiceRepo;
@@ -367,6 +370,8 @@ namespace Services.Purchasing
             var debits = new Dictionary<int, decimal>();
             void Debit(int accountId, decimal amount) => debits[accountId] = debits.GetValueOrDefault(accountId) + amount;
 
+            var vendorName = vendor.Party?.Name ?? "vendor";
+            bill.No ??= GetNextNumber(SequenceNumberTypes.PurchaseInvoice).ToString();
             foreach (var line in bill.PurchaseInvoiceLines)
             {
                 var accountId = line.AccountId ?? DefaultLineAccountId(line.ItemId, vendor);
@@ -381,17 +386,21 @@ namespace Services.Purchasing
                 var item = _inventoryService.GetItemById(line.ItemId);
                 if (item?.ItemCategory?.ItemType == ItemTypes.Purchased && accountId == item.InventoryAccountId)
                 {
-                    line.InventoryControlJournal = _inventoryService.CreateInventoryControlJournal(line.ItemId,
-                        item.PurchaseMeasurementId ?? item.SmallestMeasurementId ?? 1,
-                        DocumentTypes.PurchaseInvoice,
-                        line.Quantity,
-                        null,
-                        line.Subtotal,
-                        null);
+                    if (line.Quantity > 0)
+                    {
+                        var nonClaimableTax = taxAccountId.HasValue ? 0m : line.TaxAmount;
+                        var unitCost = (line.Subtotal + nonClaimableTax) / line.Quantity;
+                        line.InventoryControlJournal = _stockService.Receive(item, line.Quantity, unitCost,
+                            DocumentTypes.PurchaseInvoice, bill.Id, bill.Date, $"Bill {bill.No} from {vendorName}");
+                    }
+                    else if (line.Quantity < 0)
+                    {
+                        line.InventoryControlJournal = _stockService.Issue(item, Math.Abs(line.Quantity),
+                            DocumentTypes.PurchaseInvoice, bill.Id, bill.Date, $"Return to {vendorName} on bill {bill.No}");
+                    }
                 }
             }
 
-            var vendorName = vendor.Party?.Name ?? "vendor";
             var description = string.IsNullOrWhiteSpace(bill.VendorInvoiceNo) ? $"Bill from {vendorName}" : $"Bill {bill.VendorInvoiceNo} from {vendorName}";
             var glHeader = _financialService.CreateGeneralLedgerHeader(DocumentTypes.PurchaseInvoice, bill.Date, description);
             foreach (var debit in debits.Where(d => d.Value != 0))
@@ -404,7 +413,6 @@ namespace Services.Purchasing
             _financialService.ValidateGeneralLedgerEntry(glHeader);
 
             bill.GeneralLedgerHeader = glHeader;
-            bill.No ??= GetNextNumber(SequenceNumberTypes.PurchaseInvoice).ToString();
             bill.Status = PurchaseInvoiceStatus.Open;
             bill.CaptureBillFromIfApproved(vendor.Party);
             _purchaseInvoiceRepo.Update(bill);
@@ -425,6 +433,17 @@ namespace Services.Purchasing
 
             if (bill.GeneralLedgerHeaderId.HasValue && !bill.VoidGeneralLedgerHeaderId.HasValue)
                 bill.VoidGeneralLedgerHeader = _financialService.CreateReversingEntry(bill.GeneralLedgerHeaderId.Value, $"Void of bill {bill.No ?? bill.Id.ToString()}");
+            foreach (var line in bill.PurchaseInvoiceLines.Where(l => l.InventoryControlJournalId.HasValue))
+            {
+                var item = _inventoryService.GetItemById(line.ItemId);
+                var original = item?.InventoryControlJournals.FirstOrDefault(j => j.Id == line.InventoryControlJournalId.Value);
+                if (original == null || item.InventoryControlJournals.Any(j =>
+                    j.IsReverse && j.DocumentType == original.DocumentType && j.DocumentId == original.DocumentId && j.ItemId == original.ItemId))
+                    continue;
+
+                _stockService.Reverse(original, bill.VoidGeneralLedgerHeader?.Date ?? bill.Date,
+                    $"Void of bill {bill.No ?? bill.Id.ToString()}");
+            }
             bill.Status = PurchaseInvoiceStatus.Void;
             _purchaseInvoiceRepo.Update(bill);
         }

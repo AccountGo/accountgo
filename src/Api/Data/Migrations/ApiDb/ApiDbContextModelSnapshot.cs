@@ -967,6 +967,57 @@ namespace Api.Data.Migrations.ApiDb
                     b.ToTable("MainContraAccount");
                 });
 
+            modelBuilder.Entity("Core.Domain.Items.InventoryAdjustment", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("Date")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("GeneralLedgerHeaderId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("InventoryControlJournalId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ItemId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Memo")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("No")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal>("QuantityChange")
+                        .HasColumnType("decimal(18, 4)");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal?>("UnitCost")
+                        .HasColumnType("decimal(18, 4)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GeneralLedgerHeaderId");
+
+                    b.HasIndex("InventoryControlJournalId");
+
+                    b.HasIndex("ItemId");
+
+                    b.ToTable("InventoryAdjustment");
+                });
+
             modelBuilder.Entity("Core.Domain.Items.InventoryControlJournal", b =>
                 {
                     b.Property<int>("Id")
@@ -981,11 +1032,14 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<DateTime>("Date")
                         .HasColumnType("datetime2");
 
+                    b.Property<int?>("DocumentId")
+                        .HasColumnType("int");
+
                     b.Property<int>("DocumentType")
                         .HasColumnType("int");
 
                     b.Property<decimal?>("INQty")
-                        .HasColumnType("decimal(18, 2)");
+                        .HasColumnType("decimal(18, 4)");
 
                     b.Property<bool>("IsReverse")
                         .HasColumnType("bit");
@@ -996,14 +1050,20 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<int>("MeasurementId")
                         .HasColumnType("int");
 
+                    b.Property<string>("Memo")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<decimal?>("OUTQty")
-                        .HasColumnType("decimal(18, 2)");
+                        .HasColumnType("decimal(18, 4)");
 
                     b.Property<decimal?>("TotalAmount")
                         .HasColumnType("decimal(18, 2)");
 
                     b.Property<decimal?>("TotalCost")
                         .HasColumnType("decimal(18, 2)");
+
+                    b.Property<decimal?>("UnitCost")
+                        .HasColumnType("decimal(18, 4)");
 
                     b.HasKey("Id");
 
@@ -1024,6 +1084,11 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.Property<DateTime?>("ArchivedAt")
                         .HasColumnType("datetime2");
+
+                    b.Property<decimal>("AverageCost")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("decimal(18, 4)")
+                        .HasDefaultValue(0m);
 
                     b.Property<string>("Code")
                         .HasColumnType("nvarchar(max)");
@@ -1066,6 +1131,11 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.Property<int?>("PurchaseMeasurementId")
                         .HasColumnType("int");
+
+                    b.Property<decimal>("QuantityOnHand")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("decimal(18, 4)")
+                        .HasDefaultValue(0m);
 
                     b.Property<int?>("SalesAccountId")
                         .HasColumnType("int");
@@ -3062,6 +3132,29 @@ namespace Api.Data.Migrations.ApiDb
                     b.Navigation("RelatedContraAccount");
                 });
 
+            modelBuilder.Entity("Core.Domain.Items.InventoryAdjustment", b =>
+                {
+                    b.HasOne("Core.Domain.Financials.GeneralLedgerHeader", "GeneralLedgerHeader")
+                        .WithMany()
+                        .HasForeignKey("GeneralLedgerHeaderId");
+
+                    b.HasOne("Core.Domain.Items.InventoryControlJournal", "InventoryControlJournal")
+                        .WithMany()
+                        .HasForeignKey("InventoryControlJournalId");
+
+                    b.HasOne("Core.Domain.Items.Item", "Item")
+                        .WithMany("InventoryAdjustments")
+                        .HasForeignKey("ItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("GeneralLedgerHeader");
+
+                    b.Navigation("InventoryControlJournal");
+
+                    b.Navigation("Item");
+                });
+
             modelBuilder.Entity("Core.Domain.Items.InventoryControlJournal", b =>
                 {
                     b.HasOne("Core.Domain.Items.Item", "Item")
@@ -3916,6 +4009,8 @@ namespace Api.Data.Migrations.ApiDb
 
             modelBuilder.Entity("Core.Domain.Items.Item", b =>
                 {
+                    b.Navigation("InventoryAdjustments");
+
                     b.Navigation("InventoryControlJournals");
 
                     b.Navigation("PurchaseInvoiceLines");
