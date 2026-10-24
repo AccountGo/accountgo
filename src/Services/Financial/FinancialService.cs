@@ -105,6 +105,58 @@ namespace Services.Financial
             _vendorPaymentRepo = vendorPaymentRepo;
         }
 
+        /// <inheritdoc />
+        public ICollection<Dto.Financial.GeneralLedgerTransaction> GetGeneralLedgerTransactions(
+            DateTime? from = null, DateTime? to = null, string accountCode = null,
+            int? transactionNo = null, DocumentTypes? documentType = null)
+        {
+            if (from.HasValue && to.HasValue && from.Value > to.Value)
+                throw new ArgumentException("The start date must not be after the end date.");
+
+            var query = _generalLedgerRepository.Table;
+            if (from.HasValue) query = query.Where(h => h.Date >= from.Value);
+            if (to.HasValue) query = query.Where(h => h.Date <= to.Value);
+            if (!string.IsNullOrWhiteSpace(accountCode))
+                query = query.Where(h => h.GeneralLedgerLines.Any(l => l.Account.AccountCode == accountCode));
+            if (transactionNo.HasValue) query = query.Where(h => h.Id == transactionNo.Value);
+            if (documentType.HasValue) query = query.Where(h => h.DocumentType == documentType.Value);
+
+            var transactions = query.OrderByDescending(h => h.Date).ThenByDescending(h => h.Id)
+                .Select(h => new Dto.Financial.GeneralLedgerTransaction
+                {
+                    Id = h.Id, Date = h.Date, DocumentType = h.DocumentType.ToString(),
+                    Description = h.Description, SourceDocumentId = h.SourceDocumentId,
+                    ReversedGeneralLedgerHeaderId = h.ReversedGeneralLedgerHeaderId,
+                    Lines = h.GeneralLedgerLines.OrderBy(l => l.Id).Select(l => new Dto.Financial.GeneralLedgerTransactionLine
+                    {
+                        Id = l.Id, AccountId = l.AccountId,
+                        AccountCode = l.Account.AccountCode, AccountName = l.Account.AccountName,
+                        Debit = l.DrCr == DrOrCrSide.Dr ? l.Amount : 0,
+                        Credit = l.DrCr == DrOrCrSide.Cr ? l.Amount : 0
+                    }).ToList()
+                }).ToList();
+
+            foreach (var transaction in transactions)
+            {
+                transaction.DocumentTypeLabel = System.Text.RegularExpressions.Regex.Replace(transaction.DocumentType, "([a-z])([A-Z])", "$1 $2");
+                transaction.TotalDebit = transaction.Lines.Sum(l => l.Debit);
+                transaction.TotalCredit = transaction.Lines.Sum(l => l.Credit);
+                if (!transaction.SourceDocumentId.HasValue) continue;
+                var id = transaction.SourceDocumentId.Value;
+                switch (transaction.DocumentType)
+                {
+                    case nameof(DocumentTypes.SalesInvoice): transaction.SourcePath = "/sales/" + id; break;
+                    case nameof(DocumentTypes.PurchaseInvoice):
+                    // PayBill records the bill ID, not the vendor payment ID, as its source.
+                    case nameof(DocumentTypes.PurchaseInvoicePayment):
+                        transaction.SourcePath = "/purchases/" + id; break;
+                    case nameof(DocumentTypes.JournalEntry): transaction.SourcePath = "/financials/journals?id=" + id; break;
+                    case nameof(DocumentTypes.InventoryAdjustment): transaction.SourcePath = "/items/inventory"; break;
+                }
+            }
+            return transactions;
+        }
+
         public FinancialYear CurrentFiscalYear()
         {
             var query = (from fy in _fiscalYearRepo.Table
@@ -1001,15 +1053,23 @@ namespace Services.Financial
 
         public void UpdateJournalEntry(JournalEntryHeader journalEntry, bool posted = false)
         {
+            if (journalEntry == null)
+                throw new ArgumentNullException(nameof(journalEntry));
+            if (journalEntry.Posted == true || journalEntry.GeneralLedgerHeaderId.HasValue)
+                throw new InvalidOperationException("Posted journal entries cannot be edited or posted again.");
+
             if (posted)
             {
-                journalEntry.Posted = posted;
+                if (journalEntry.JournalEntryLines.Count < 2
+                    || journalEntry.JournalEntryLines.Any(l => l.Amount <= 0
+                        || (l.DrCr != DrOrCrSide.Dr && l.DrCr != DrOrCrSide.Cr)))
+                    throw new InvalidOperationException("Posting requires at least two positive debit or credit lines.");
 
                 if (journalEntry.GeneralLedgerHeaderId == null || journalEntry.GeneralLedgerHeaderId == 0)
                 {
                     var glEntry = new GeneralLedgerHeader()
                     {
-                        Date = DateTime.Now,
+                        Date = journalEntry.Date,
                         DocumentType = DocumentTypes.JournalEntry,
                         Description = journalEntry.Memo,
                         SourceDocumentId = journalEntry.Id > 0 ? journalEntry.Id : null,
@@ -1029,6 +1089,7 @@ namespace Services.Financial
                     if (ValidateGeneralLedgerEntry(glEntry))
                     {
                         journalEntry.GeneralLedgerHeader = glEntry;
+                        journalEntry.Posted = true;
                     }
                 }
             }
