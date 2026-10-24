@@ -274,9 +274,26 @@ namespace Services.Administration
             }
 
             company.Plan = dto.Plan?.ToLowerInvariant() ?? "invoicing";
+            var planModules = Company.ModulesForPlan(company.Plan);
             if (dto.ActiveModules != null && dto.ActiveModules.Count > 0)
             {
-                company.ActiveModulesJson = System.Text.Json.JsonSerializer.Serialize(dto.ActiveModules);
+                var requested = dto.ActiveModules
+                    .Where(m => !string.IsNullOrWhiteSpace(m))
+                    .Select(m => m.Trim().ToLowerInvariant())
+                    .Distinct()
+                    .ToList();
+                var disallowed = requested.Where(m => !planModules.Contains(m, StringComparer.OrdinalIgnoreCase)).ToList();
+                if (disallowed.Count > 0)
+                    throw new ArgumentException(
+                        $"Module(s) not included in the {company.Plan} plan: {string.Join(", ", disallowed)}.");
+
+                // Keep plan order; sales is always required for every tier.
+                var sanitized = planModules.Where(m =>
+                    string.Equals(m, "sales", StringComparison.OrdinalIgnoreCase)
+                    || requested.Contains(m, StringComparer.OrdinalIgnoreCase)).ToList();
+                if (sanitized.Count == 0)
+                    sanitized = new List<string> { "sales" };
+                company.ActiveModulesJson = System.Text.Json.JsonSerializer.Serialize(sanitized);
             }
             else
             {
@@ -306,7 +323,7 @@ namespace Services.Administration
                     Key = "invoicing",
                     Name = "Invoicing",
                     Description = "Everything you need to create quotes, bill clients, and track payments.",
-                    IncludedModules = new List<string> { "sales" },
+                    IncludedModules = Company.ModulesForPlan("invoicing"),
                     MonthlyPrice = 15m
                 },
                 new PlanDefinitionDto
@@ -314,7 +331,7 @@ namespace Services.Administration
                     Key = "accounting",
                     Name = "Accounting",
                     Description = "Full double-entry bookkeeping, banking, purchase bills, and financial statements.",
-                    IncludedModules = new List<string> { "sales", "financials", "purchases", "reports" },
+                    IncludedModules = Company.ModulesForPlan("accounting"),
                     MonthlyPrice = 39m
                 },
                 new PlanDefinitionDto
@@ -322,7 +339,7 @@ namespace Services.Administration
                     Key = "enterprise",
                     Name = "Enterprise",
                     Description = "Complete ERP suite with inventory management, non-profit donations, audit trails, and whitelabeling.",
-                    IncludedModules = new List<string> { "sales", "financials", "purchases", "inventory", "reports", "donations", "audit" },
+                    IncludedModules = Company.ModulesForPlan("enterprise"),
                     MonthlyPrice = 99m
                 }
             };
@@ -330,6 +347,7 @@ namespace Services.Administration
 
         public List<ModuleDefinitionDto> GetModuleDefinitions()
         {
+            // Ordered by subscription tier: Invoicing → Accounting → Enterprise.
             return new List<ModuleDefinitionDto>
             {
                 new ModuleDefinitionDto
@@ -358,18 +376,18 @@ namespace Services.Administration
                 },
                 new ModuleDefinitionDto
                 {
-                    Key = "inventory",
-                    Name = "Inventory & Items",
-                    Description = "Product catalog, warehouse stock items, and inventory control journals.",
-                    Icon = "Boxes",
-                    IsCore = false
-                },
-                new ModuleDefinitionDto
-                {
                     Key = "reports",
                     Name = "Financial Reports",
                     Description = "Income statements, balance sheets, customer/vendor aging, and tax summaries.",
                     Icon = "BarChart3",
+                    IsCore = false
+                },
+                new ModuleDefinitionDto
+                {
+                    Key = "inventory",
+                    Name = "Inventory & Items",
+                    Description = "Product catalog, warehouse stock items, and inventory control journals.",
+                    Icon = "Boxes",
                     IsCore = false
                 },
                 new ModuleDefinitionDto

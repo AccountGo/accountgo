@@ -12,6 +12,7 @@ import {
   BarChart3,
   HeartHandshake,
   Calendar,
+  Lock,
 } from 'lucide-react';
 import { ModuleKey, PlanKey, TenantContextType } from '../types';
 
@@ -19,11 +20,28 @@ interface SubscriptionSettingsTabProps {
   tenantContext: TenantContextType;
 }
 
+/** First subscription tier that includes the module (Invoicing → Accounting → Enterprise). */
+export type ModuleTier = 'invoicing' | 'accounting' | 'enterprise';
+
+export const PLAN_INCLUDED_MODULES: Record<PlanKey, ModuleKey[]> = {
+  invoicing: ['sales'],
+  accounting: ['sales', 'financials', 'purchases', 'reports'],
+  enterprise: ['sales', 'financials', 'purchases', 'reports', 'inventory', 'donations', 'audit'],
+};
+
+const TIER_LABEL: Record<ModuleTier, string> = {
+  invoicing: 'Invoicing',
+  accounting: 'Accounting',
+  enterprise: 'Enterprise',
+};
+
 const MODULES_CATALOG: Array<{
   key: ModuleKey;
   name: string;
   description: string;
   icon: React.ComponentType<{ className?: string }>;
+  /** Lowest plan that includes this module. */
+  minPlan: ModuleTier;
   isCore?: boolean;
 }> = [
   {
@@ -31,6 +49,7 @@ const MODULES_CATALOG: Array<{
     name: 'Invoicing & Sales',
     description: 'Customers, quotations, sales orders, invoices, and payment receipts.',
     icon: Receipt,
+    minPlan: 'invoicing',
     isCore: true,
   },
   {
@@ -38,36 +57,42 @@ const MODULES_CATALOG: Array<{
     name: 'General Ledger & Banking',
     description: 'Chart of accounts, cash & bank accounts, journal entries, and trial balance.',
     icon: BookOpen,
+    minPlan: 'accounting',
   },
   {
     key: 'purchases',
     name: 'Purchases & Bills',
     description: 'Vendors, purchase orders, vendor invoices, and bill payments.',
     icon: ShoppingBag,
-  },
-  {
-    key: 'inventory',
-    name: 'Inventory & Items',
-    description: 'Track stock on hand and its cost: bills add stock, invoices use it up, adjustments record counts and write-offs.',
-    icon: Boxes,
+    minPlan: 'accounting',
   },
   {
     key: 'reports',
     name: 'Financial Reports',
     description: 'Income statements, balance sheets, customer/vendor aging, and tax summaries.',
     icon: BarChart3,
+    minPlan: 'accounting',
+  },
+  {
+    key: 'inventory',
+    name: 'Inventory & Items',
+    description: 'Track stock on hand and its cost: bills add stock, invoices use it up, adjustments record counts and write-offs.',
+    icon: Boxes,
+    minPlan: 'enterprise',
   },
   {
     key: 'donations',
     name: 'Donations & Non-Profit',
     description: 'Donor management, donation invoices, pledges, and tax receipts.',
     icon: HeartHandshake,
+    minPlan: 'enterprise',
   },
   {
     key: 'audit',
     name: 'Audit Trail & Compliance',
     description: 'Comprehensive mutation auditing, field-level diffs, and security events.',
     icon: ShieldCheck,
+    minPlan: 'enterprise',
   },
 ];
 
@@ -76,7 +101,6 @@ const PLANS: Array<{
   name: string;
   price: string;
   description: string;
-  includedModules: ModuleKey[];
   badge?: string;
 }> = [
   {
@@ -84,14 +108,12 @@ const PLANS: Array<{
     name: 'Invoicing',
     price: '$15',
     description: 'Simple, streamlined invoicing and billing for freelancers and solopreneurs.',
-    includedModules: ['sales'],
   },
   {
     key: 'accounting',
     name: 'Accounting',
     price: '$39',
     description: 'Full double-entry bookkeeping, bank reconciliation, bills, and tax reports.',
-    includedModules: ['sales', 'financials', 'purchases', 'reports'],
     badge: 'Most Popular',
   },
   {
@@ -99,36 +121,55 @@ const PLANS: Array<{
     name: 'Enterprise',
     price: '$99',
     description: 'Complete ERP suite with inventory, non-profit tools, audit logs, and whitelabeling.',
-    includedModules: ['sales', 'financials', 'purchases', 'inventory', 'reports', 'donations', 'audit'],
   },
 ];
+
+export function isModuleIncludedInPlan(plan: PlanKey, moduleKey: ModuleKey): boolean {
+  return PLAN_INCLUDED_MODULES[plan]?.includes(moduleKey) ?? false;
+}
+
+export function sanitizeModulesForPlan(plan: PlanKey, modules: ModuleKey[]): ModuleKey[] {
+  const allowed = new Set(PLAN_INCLUDED_MODULES[plan] || PLAN_INCLUDED_MODULES.accounting);
+  const next = PLAN_INCLUDED_MODULES[plan].filter(
+    (key) => key === 'sales' || modules.includes(key),
+  ).filter((key) => allowed.has(key));
+  return next.length ? next : ['sales'];
+}
 
 export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = ({
   tenantContext,
 }) => {
   const { subscription, updateSubscription } = tenantContext;
   const currentPlan = subscription?.planId || 'accounting';
-  const activeModules = subscription?.activeModules || ['sales'];
+  const planModules = PLAN_INCLUDED_MODULES[currentPlan] || PLAN_INCLUDED_MODULES.accounting;
+  const activeModules = (subscription?.activeModules || ['sales']).filter((m) =>
+    isModuleIncludedInPlan(currentPlan, m),
+  );
 
   const [saving, setSaving] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleToggleModule = async (moduleKey: ModuleKey) => {
-    if (moduleKey === 'sales') return; // Core invoicing cannot be toggled off
+    if (moduleKey === 'sales') return;
+    if (!isModuleIncludedInPlan(currentPlan, moduleKey)) return;
     if (!updateSubscription) return;
 
     setSaving(true);
-    let newModules: ModuleKey[];
-    if (activeModules.includes(moduleKey)) {
-      newModules = activeModules.filter((m) => m !== moduleKey);
-    } else {
-      newModules = [...activeModules, moduleKey];
-    }
+    setErrorMessage(null);
+    const newModules = sanitizeModulesForPlan(
+      currentPlan,
+      activeModules.includes(moduleKey)
+        ? activeModules.filter((m) => m !== moduleKey)
+        : [...activeModules, moduleKey],
+    );
 
     try {
       await updateSubscription(currentPlan, newModules);
       setSuccessMessage(`Module "${moduleKey}" updated successfully.`);
       setTimeout(() => setSuccessMessage(null), 2500);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Unable to update modules.');
     } finally {
       setSaving(false);
     }
@@ -137,11 +178,15 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
   const handleSelectPlan = async (planKey: PlanKey) => {
     if (!updateSubscription) return;
     setSaving(true);
+    setErrorMessage(null);
 
     try {
-      await updateSubscription(planKey);
+      // Switching plans resets to that tier's included modules.
+      await updateSubscription(planKey, [...PLAN_INCLUDED_MODULES[planKey]]);
       setSuccessMessage(`Switched to the ${planKey.toUpperCase()} plan.`);
       setTimeout(() => setSuccessMessage(null), 2500);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Unable to switch plan.');
     } finally {
       setSaving(false);
     }
@@ -149,7 +194,6 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
 
   return (
     <div className="space-y-6">
-      {/* Current Plan Overview Card */}
       <div className="p-6 rounded-2xl bg-[var(--bg-surface)] backdrop-blur-md shadow-md space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
@@ -175,7 +219,7 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
             <div className="flex items-center gap-1.5">
               <Layers className="w-4 h-4 text-[var(--brand-primary)]" />
               <span>
-                <strong>{activeModules.length}</strong> of 7 Modules Active
+                <strong>{activeModules.length}</strong> of {planModules.length} plan modules active
               </span>
             </div>
             <div className="flex items-center gap-1.5">
@@ -191,29 +235,39 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
             <span>{successMessage}</span>
           </div>
         )}
+        {errorMessage && (
+          <div role="alert" className="p-3 rounded-xl bg-red-500/10 text-red-400 text-xs font-semibold">
+            {errorMessage}
+          </div>
+        )}
       </div>
 
-      {/* Module Catalog & Interactive Switches */}
       <div className="p-6 rounded-2xl bg-[var(--bg-surface)] backdrop-blur-md shadow-md space-y-4">
         <div>
           <h3 className="text-base font-bold text-[var(--text-main)]">Subscribed Modules &amp; Add-ons</h3>
           <p className="text-xs text-[var(--text-muted)] mt-0.5">
-            Modules enabled below appear directly in your sidebar navigation and unlock corresponding API routes.
+            Modules are listed by plan tier. Only modules included in your current plan can be toggled;
+            others stay locked until you upgrade.
           </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
           {MODULES_CATALOG.map((mod) => {
             const Icon = mod.icon;
-            const isEnabled = activeModules.includes(mod.key);
+            const inPlan = isModuleIncludedInPlan(currentPlan, mod.key);
+            const isEnabled = inPlan && activeModules.includes(mod.key);
+            const locked = !inPlan;
+            const toggleDisabled = locked || mod.isCore || saving;
 
             return (
               <div
                 key={mod.key}
                 className={`p-4 rounded-xl transition-all flex items-start justify-between gap-3 ${
-                  isEnabled
-                    ? 'bg-[var(--bg-subtle)] border border-[var(--brand-ring)]/20 shadow-sm'
-                    : 'bg-[var(--bg-subtle)]/50 opacity-70 hover:opacity-100'
+                  locked
+                    ? 'bg-[var(--bg-subtle)]/40 opacity-60'
+                    : isEnabled
+                      ? 'bg-[var(--bg-subtle)] border border-[var(--brand-ring)]/20 shadow-sm'
+                      : 'bg-[var(--bg-subtle)]/50'
                 }`}
               >
                 <div className="flex items-start gap-3 min-w-0">
@@ -227,13 +281,22 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
                     <Icon className="w-4 h-4" />
                   </div>
                   <div className="min-w-0">
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span className="text-xs font-bold text-[var(--text-main)] truncate">
                         {mod.name}
                       </span>
                       {mod.isCore && (
                         <span className="text-[9px] px-1.5 py-0.5 rounded bg-[var(--brand-subtle)] text-[var(--brand-primary)] font-mono font-bold uppercase">
                           Core
+                        </span>
+                      )}
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-[var(--bg-surface-hover)] text-[var(--text-muted)] font-mono font-bold uppercase">
+                        {TIER_LABEL[mod.minPlan]}+
+                      </span>
+                      {locked && (
+                        <span className="inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500 font-mono font-bold uppercase">
+                          <Lock className="w-2.5 h-2.5" aria-hidden="true" />
+                          Upgrade
                         </span>
                       )}
                     </div>
@@ -243,18 +306,30 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
                   </div>
                 </div>
 
-                {/* Toggle switch */}
                 <button
                   type="button"
                   role="switch"
                   aria-checked={isEnabled}
-                  aria-label={`Toggle ${mod.name} module`}
-                  disabled={mod.isCore || saving}
+                  aria-disabled={toggleDisabled}
+                  aria-label={
+                    locked
+                      ? `${mod.name} requires the ${TIER_LABEL[mod.minPlan]} plan or higher`
+                      : mod.isCore
+                        ? `${mod.name} is always on`
+                        : `Toggle ${mod.name} module`
+                  }
+                  disabled={toggleDisabled}
                   onClick={() => handleToggleModule(mod.key)}
-                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out focus:outline-none ${
-                    mod.isCore ? 'opacity-40 cursor-not-allowed' : ''
+                  className={`relative inline-flex h-6 w-11 shrink-0 rounded-full transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] ${
+                    toggleDisabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'
                   } ${isEnabled ? 'bg-[var(--brand-primary)]' : 'bg-slate-700'}`}
-                  title={mod.isCore ? 'Core feature cannot be disabled' : `Toggle ${mod.name}`}
+                  title={
+                    locked
+                      ? `Included from ${TIER_LABEL[mod.minPlan]} plan — upgrade to enable`
+                      : mod.isCore
+                        ? 'Core feature cannot be disabled'
+                        : `Toggle ${mod.name}`
+                  }
                 >
                   <span
                     className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
@@ -268,18 +343,18 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
         </div>
       </div>
 
-      {/* Plan Tier Comparison & Instant Upgrade */}
       <div className="p-6 rounded-2xl bg-[var(--bg-surface)] backdrop-blur-md shadow-md space-y-4">
         <div>
           <h3 className="text-base font-bold text-[var(--text-main)]">Compare Plans &amp; Upgrade</h3>
           <p className="text-xs text-[var(--text-muted)] mt-0.5">
-            Switch plans anytime. Upgrading instantly provisions additional modules.
+            Switch plans anytime. Upgrading instantly provisions that tier&apos;s modules; modules outside the plan stay locked.
           </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
           {PLANS.map((plan) => {
             const isCurrent = currentPlan === plan.key;
+            const includedModules = PLAN_INCLUDED_MODULES[plan.key];
 
             return (
               <div
@@ -313,7 +388,7 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
                     <div className="font-semibold text-[10px] uppercase text-[var(--text-muted)] tracking-wider mb-1">
                       Included Modules:
                     </div>
-                    {plan.includedModules.map((m) => (
+                    {includedModules.map((m) => (
                       <div key={m} className="flex items-center gap-1.5 text-xs text-[var(--text-secondary)]">
                         <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
                         <span className="capitalize">{m}</span>

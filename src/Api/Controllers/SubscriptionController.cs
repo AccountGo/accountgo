@@ -43,8 +43,15 @@ namespace Api.Controllers
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
-            var updated = _adminService.UpdateSubscription(dto);
-            return Ok(updated);
+            try
+            {
+                var updated = _adminService.UpdateSubscription(dto);
+                return Ok(updated);
+            }
+            catch (System.ArgumentException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
         }
 
         [TenantFree]
