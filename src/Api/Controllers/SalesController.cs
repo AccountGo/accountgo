@@ -1623,14 +1623,7 @@ namespace Api.Controllers
                 // Auto-post to GL if issued (not draft) and not already posted
                 if (salesInvoiceDto.Status != "Draft" && salesInvoice.Id > 0 && !salesInvoice.GeneralLedgerHeaderId.HasValue)
                 {
-                    try
-                    {
-                        _salesService.PostSalesInvoice(salesInvoice.Id);
-                    }
-                    catch (Exception postEx)
-                    {
-                        _logger.LogWarning(postEx, "Invoice {InvoiceId} saved but GL auto-posting failed: {Error}", salesInvoice.Id, postEx.Message);
-                    }
+                    TryPostSalesInvoice(salesInvoice.Id);
                 }
 
                 return Ok(new { id = salesInvoice.Id, no = salesInvoice.No, customerId = salesInvoice.CustomerId, warnings = stockWarnings });
@@ -1658,6 +1651,30 @@ namespace Api.Controllers
         // number invoices queue behind each other instead of both reading the same next number.
         private Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction BeginInvoiceNumberingTransaction() =>
             Microsoft.EntityFrameworkCore.RelationalDatabaseFacadeExtensions.BeginTransaction(_db.Database, System.Data.IsolationLevel.Serializable);
+
+        // These callers deliberately keep an issued invoice even when posting fails. Roll back and discard tracked
+        // changes before a later receipt or allocation can accidentally persist part of that failed attempt.
+        private void TryPostSalesInvoice(int invoiceId)
+        {
+            var sync = HttpContext.RequestServices.GetRequiredService<Api.Service.D1Sync.ID1SyncContext>();
+            var savedStatements = sync.GetStatements().ToList();
+            try
+            {
+                using (var tx = BeginInvoiceNumberingTransaction())
+                {
+                    _salesService.PostSalesInvoice(invoiceId);
+                    tx.Commit();
+                }
+            }
+            catch (Exception ex)
+            {
+                _db.ChangeTracker.Clear();
+                sync.Clear();
+                foreach (var statement in savedStatements)
+                    sync.AddStatement(statement);
+                _logger.LogWarning(ex, "Invoice {InvoiceId} remains unposted: {Error}", invoiceId, ex.Message);
+            }
+        }
 
         private sealed record NumberProblem(int Status, string Message, string Code);
 
@@ -1840,15 +1857,8 @@ namespace Api.Controllers
                 // Auto-post invoice first if unposted, guaranteeing double-entry integrity (DR AR, CR Revenue)
                 if (!invoice.GeneralLedgerHeaderId.HasValue)
                 {
-                    try
-                    {
-                        _salesService.PostSalesInvoice(invoice.Id);
-                        invoice = _salesService.GetSalesInvoiceById(invoice.Id);
-                    }
-                    catch (Exception postEx)
-                    {
-                        _logger.LogWarning(postEx, "Invoice {InvoiceId} unposted before payment; auto-posting warning: {Error}", invoice.Id, postEx.Message);
-                    }
+                    TryPostSalesInvoice(invoice.Id);
+                    invoice = _salesService.GetSalesInvoiceById(invoice.Id);
                 }
 
                 var paymentDate = paymentDto.PaymentDate == default ? DateTime.UtcNow : paymentDto.PaymentDate;
@@ -1938,9 +1948,12 @@ namespace Api.Controllers
         {
             try
             {
+                using var tx = BeginInvoiceNumberingTransaction();
                 var invoice = _salesService.GetSalesInvoiceById(id);
                 if (invoice == null)
                     return NotFound(new { message = $"Invoice #{id} not found." });
+                if (invoice.Status == Core.Domain.SalesInvoiceStatus.Void)
+                    return Ok(new { success = true, invoiceId = invoice.Id, status = "Void" });
 
                 decimal allocated = invoice.CustomerAllocations != null ? invoice.CustomerAllocations.Sum(a => a.Amount) : 0;
                 if (allocated > 0)
@@ -1954,6 +1967,7 @@ namespace Api.Controllers
                 _salesService.VoidSalesInvoiceStock(invoice);
                 invoice.Status = Core.Domain.SalesInvoiceStatus.Void;
                 _salesService.UpdateSalesInvoice(invoice);
+                tx.Commit();
 
                 return Ok(new { success = true, invoiceId = invoice.Id, status = "Void" });
             }
@@ -1999,14 +2013,7 @@ namespace Api.Controllers
 
                 if (!invoice.GeneralLedgerHeaderId.HasValue)
                 {
-                    try
-                    {
-                        _salesService.PostSalesInvoice(invoice.Id);
-                    }
-                    catch (Exception postEx)
-                    {
-                        _logger.LogWarning(postEx, "Invoice {InvoiceId} issued but GL auto-posting warning: {Error}", invoice.Id, postEx.Message);
-                    }
+                    TryPostSalesInvoice(invoice.Id);
                 }
 
                 return Ok(new { success = true, invoiceId = invoice.Id, no = invoice.No, status = "Open", warnings = stockWarnings });

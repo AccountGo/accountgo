@@ -87,6 +87,19 @@ $$\text{Debit (Total)} = \text{Credit (Subtotal)} + \text{Credit (Tax)}$$
 | `Cost of Goods Sold (5000)` | **Debit** | Total Item Cost | Expense recognized at point of delivery |
 | `Inventory (1300)` | **Credit** | Total Item Cost | Asset reduction from stock on hand |
 
+### Stock-tracked catalog items
+
+Issued invoices post COGS (50300) against Inventory (10800) at moving-average cost.
+Stock and COGS are planned together and persisted only after the complete invoice entry passes validation.
+Zero-quantity lines have no stock movement; payment retries cannot issue stock again.
+Voids reverse every original line, including repeated lines for the same item.
+
+`Item.StockValue` retains the exact cent value of the inventory ledger. Average cost is
+derived from value and quantity at four decimal places; the final issue takes the remaining
+value rather than leaving rounded cents behind. The Inventory page reconciles this exact value,
+not quantity multiplied by a rounded display average. Back-dated documents do not re-cost
+later movements: costing follows posting order.
+
 ---
 
 ### 4. Vendor Bill / Purchase Invoice (`DocumentTypes.PurchaseInvoice`)

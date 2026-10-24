@@ -97,7 +97,7 @@ namespace AccountGo.BackendTests
                 warning => warning.GetString() == "Only 11 of Test stock in stock.");
             var oversoldId = oversoldJson.GetProperty("id").GetInt32();
             WithDb(db => Assert.NotNull(db.SalesInvoiceHeaders.Single(i => i.Id == oversoldId).GeneralLedgerHeaderId));
-            AssertStockState(itemId, -1m, 4.7273m);
+            AssertStockState(itemId, -1m, 4.73m);
             AssertStockInvariant(itemId);
 
             SetInventoryModuleEnabled(true);
@@ -321,6 +321,7 @@ namespace AccountGo.BackendTests
                 DROP TABLE ""InventoryAdjustment"";
                 ALTER TABLE ""Item"" DROP COLUMN ""QuantityOnHand"";
                 ALTER TABLE ""Item"" DROP COLUMN ""AverageCost"";
+                ALTER TABLE ""Item"" DROP COLUMN ""StockValue"";
                 ALTER TABLE ""InventoryControlJournal"" DROP COLUMN ""DocumentId"";
                 ALTER TABLE ""InventoryControlJournal"" DROP COLUMN ""UnitCost"";
                 ALTER TABLE ""InventoryControlJournal"" DROP COLUMN ""Memo"";";
@@ -333,14 +334,16 @@ namespace AccountGo.BackendTests
 
             Assert.True(ColumnExists(command, "Item", "QuantityOnHand"));
             Assert.True(ColumnExists(command, "Item", "AverageCost"));
+            Assert.True(ColumnExists(command, "Item", "StockValue"));
             Assert.True(ColumnExists(command, "InventoryControlJournal", "DocumentId"));
             Assert.True(TableExists(command, "InventoryAdjustment"));
-            command.CommandText = @"SELECT ""QuantityOnHand"", ""AverageCost"" FROM ""Item"" WHERE ""Id"" = " + itemId;
+            command.CommandText = @"SELECT ""QuantityOnHand"", ""AverageCost"", ""StockValue"" FROM ""Item"" WHERE ""Id"" = " + itemId;
             using (var reader = command.ExecuteReader())
             {
                 Assert.True(reader.Read());
                 Assert.Equal(10m, reader.GetDecimal(0));
                 Assert.Equal(7.5m, reader.GetDecimal(1));
+                Assert.Equal(75m, reader.GetDecimal(2));
             }
 
             command.CommandText = @"SELECT ""Id"" FROM ""Company"" ORDER BY ""Id""";
@@ -455,11 +458,11 @@ namespace AccountGo.BackendTests
                 var item = db.Items.Include(i => i.InventoryControlJournals).Single(i => i.Id == itemId);
                 Assert.Equal(item.ComputeQuantityOnHand(), item.QuantityOnHand);
 
-                var stockValue = db.Items.ToList().Sum(i => i.QuantityOnHand * i.AverageCost);
+                var stockValue = db.Items.ToList().Sum(i => i.StockValue);
                 var inventoryAccountId = AccountIdIn(db, "10800");
                 var lines = db.GeneralLedgerLines.Where(line => line.AccountId == inventoryAccountId).ToList();
                 var inventoryBalance = lines.Sum(line => line.DrCr == DrOrCrSide.Dr ? line.Amount : -line.Amount);
-                Assert.InRange(Math.Abs(inventoryBalance - stockValue), 0m, 0.01m);
+                Assert.Equal(inventoryBalance, stockValue);
 
                 var allLines = db.GeneralLedgerLines.ToList();
                 var debits = allLines.Where(line => line.DrCr == DrOrCrSide.Dr).Sum(line => line.Amount);
