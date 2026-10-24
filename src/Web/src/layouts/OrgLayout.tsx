@@ -234,7 +234,7 @@ export const OrgLayout: React.FC = () => {
   const updateSubscription = async (newPlan: PlanKey, newActiveModules?: ModuleKey[]) => {
     if (!currentOrg) return;
     const planDefaults: Record<PlanKey, ModuleKey[]> = {
-      invoicing: ['sales'],
+      invoicing: ['sales', 'purchases'],
       accounting: ['sales', 'financials', 'purchases', 'reports'],
       enterprise: ['sales', 'financials', 'purchases', 'reports', 'inventory', 'donations', 'audit'],
     };
@@ -242,6 +242,10 @@ export const OrgLayout: React.FC = () => {
     const resolvedModules: ModuleKey[] = (newActiveModules || planDefaults[newPlan] || planDefaults.accounting)
       .filter((moduleKey) => allowed.has(moduleKey));
     if (!resolvedModules.includes('sales')) resolvedModules.unshift('sales');
+    // Invoicing always includes purchases (invoice + expense loop).
+    if (newPlan === 'invoicing' && !resolvedModules.includes('purchases')) {
+      resolvedModules.push('purchases');
+    }
     const newSub: SubscriptionInfo = {
       planId: newPlan,
       planName: newPlan.charAt(0).toUpperCase() + newPlan.slice(1),

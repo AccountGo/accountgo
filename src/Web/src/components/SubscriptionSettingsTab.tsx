@@ -24,10 +24,17 @@ interface SubscriptionSettingsTabProps {
 export type ModuleTier = 'invoicing' | 'accounting' | 'enterprise';
 
 export const PLAN_INCLUDED_MODULES: Record<PlanKey, ModuleKey[]> = {
-  invoicing: ['sales'],
+  invoicing: ['sales', 'purchases'],
   accounting: ['sales', 'financials', 'purchases', 'reports'],
   enterprise: ['sales', 'financials', 'purchases', 'reports', 'inventory', 'donations', 'audit'],
 };
+
+/** Modules that cannot be turned off for a given plan (mirrors Company.IsRequiredModule). */
+export function isRequiredModuleForPlan(plan: PlanKey, moduleKey: ModuleKey): boolean {
+  if (moduleKey === 'sales') return true;
+  if (moduleKey === 'purchases' && plan === 'invoicing') return true;
+  return false;
+}
 
 const TIER_LABEL: Record<ModuleTier, string> = {
   invoicing: 'Invoicing',
@@ -64,7 +71,7 @@ const MODULES_CATALOG: Array<{
     name: 'Purchases & Bills',
     description: 'Vendors, purchase orders, vendor invoices, and bill payments.',
     icon: ShoppingBag,
-    minPlan: 'accounting',
+    minPlan: 'invoicing',
   },
   {
     key: 'reports',
@@ -107,13 +114,13 @@ const PLANS: Array<{
     key: 'invoicing',
     name: 'Invoicing',
     price: '$15',
-    description: 'Simple, streamlined invoicing and billing for freelancers and solopreneurs.',
+    description: 'Invoices and expense bills for freelancers and solopreneurs — without full accounting.',
   },
   {
     key: 'accounting',
     name: 'Accounting',
     price: '$39',
-    description: 'Full double-entry bookkeeping, bank reconciliation, bills, and tax reports.',
+    description: 'Full double-entry bookkeeping, bank reconciliation, and tax reports.',
     badge: 'Most Popular',
   },
   {
@@ -131,9 +138,9 @@ export function isModuleIncludedInPlan(plan: PlanKey, moduleKey: ModuleKey): boo
 export function sanitizeModulesForPlan(plan: PlanKey, modules: ModuleKey[]): ModuleKey[] {
   const allowed = new Set(PLAN_INCLUDED_MODULES[plan] || PLAN_INCLUDED_MODULES.accounting);
   const next = PLAN_INCLUDED_MODULES[plan].filter(
-    (key) => key === 'sales' || modules.includes(key),
+    (key) => isRequiredModuleForPlan(plan, key) || modules.includes(key),
   ).filter((key) => allowed.has(key));
-  return next.length ? next : ['sales'];
+  return next.length ? next : PLAN_INCLUDED_MODULES[plan].filter((key) => isRequiredModuleForPlan(plan, key));
 }
 
 export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = ({
@@ -142,8 +149,10 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
   const { subscription, updateSubscription } = tenantContext;
   const currentPlan = subscription?.planId || 'accounting';
   const planModules = PLAN_INCLUDED_MODULES[currentPlan] || PLAN_INCLUDED_MODULES.accounting;
-  const activeModules = (subscription?.activeModules || ['sales']).filter((m) =>
-    isModuleIncludedInPlan(currentPlan, m),
+  // Always surface plan-required cores (sales; purchases on Invoicing) even if client state lags.
+  const activeModules = sanitizeModulesForPlan(
+    currentPlan,
+    (subscription?.activeModules || []).filter((m) => isModuleIncludedInPlan(currentPlan, m)),
   );
 
   const [saving, setSaving] = useState(false);
@@ -151,7 +160,7 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleToggleModule = async (moduleKey: ModuleKey) => {
-    if (moduleKey === 'sales') return;
+    if (isRequiredModuleForPlan(currentPlan, moduleKey)) return;
     if (!isModuleIncludedInPlan(currentPlan, moduleKey)) return;
     if (!updateSubscription) return;
 
@@ -255,9 +264,10 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
           {MODULES_CATALOG.map((mod) => {
             const Icon = mod.icon;
             const inPlan = isModuleIncludedInPlan(currentPlan, mod.key);
-            const isEnabled = inPlan && activeModules.includes(mod.key);
             const locked = !inPlan;
-            const toggleDisabled = locked || mod.isCore || saving;
+            const required = isRequiredModuleForPlan(currentPlan, mod.key);
+            const isEnabled = inPlan && (activeModules.includes(mod.key) || required);
+            const toggleDisabled = locked || mod.isCore || required || saving;
 
             return (
               <div
@@ -285,7 +295,7 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
                       <span className="text-xs font-bold text-[var(--text-main)] truncate">
                         {mod.name}
                       </span>
-                      {mod.isCore && (
+                      {(mod.isCore || required) && (
                         <span className="text-[9px] px-1.5 py-0.5 rounded bg-[var(--brand-subtle)] text-[var(--brand-primary)] font-mono font-bold uppercase">
                           Core
                         </span>
@@ -314,7 +324,7 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
                   aria-label={
                     locked
                       ? `${mod.name} requires the ${TIER_LABEL[mod.minPlan]} plan or higher`
-                      : mod.isCore
+                      : mod.isCore || required
                         ? `${mod.name} is always on`
                         : `Toggle ${mod.name} module`
                   }
@@ -326,7 +336,7 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
                   title={
                     locked
                       ? `Included from ${TIER_LABEL[mod.minPlan]} plan — upgrade to enable`
-                      : mod.isCore
+                      : mod.isCore || required
                         ? 'Core feature cannot be disabled'
                         : `Toggle ${mod.name}`
                   }
