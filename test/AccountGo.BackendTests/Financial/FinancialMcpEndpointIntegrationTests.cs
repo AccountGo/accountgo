@@ -95,7 +95,7 @@ namespace AccountGo.BackendTests.Financial
         }
 
         [Fact]
-        public async Task McpEndpoint_WithAuthenticationAndTenant_RespondsToToolsList()
+        public async Task McpEndpoint_WithAuthenticationAndTenant_RespondsToToolsList_WithAllPhase1And2Tools()
         {
             using var req = new HttpRequestMessage(HttpMethod.Post, "/mcp");
             req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _token);
@@ -116,6 +116,10 @@ namespace AccountGo.BackendTests.Financial
 
             var body = await response.Content.ReadAsStringAsync();
             Assert.Contains("get_chart_of_accounts", body);
+            Assert.Contains("get_trial_balance", body);
+            Assert.Contains("get_balance_sheet", body);
+            Assert.Contains("get_income_statement", body);
+            Assert.Contains("get_general_ledger_transactions", body);
         }
 
         [Fact]
@@ -159,6 +163,106 @@ namespace AccountGo.BackendTests.Financial
             var body = await response.Content.ReadAsStringAsync();
             Assert.Contains(_slug, body);
             Assert.Contains("totalAccounts", body, StringComparison.OrdinalIgnoreCase);
+        }
+
+        [Fact]
+        public async Task McpEndpoint_ToolsCall_ReturnsTrialBalance()
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Post, "/mcp");
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _token);
+            req.Headers.Add("X-AccountGo-Org", _slug);
+            req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/event-stream"));
+            req.Content = new StringContent(
+                "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"get_trial_balance\",\"arguments\":{\"accountingBasis\":\"Accrual\"}}}",
+                Encoding.UTF8,
+                "application/json");
+
+            var response = await _client.SendAsync(req);
+
+            Assert.True(
+                response.StatusCode == HttpStatusCode.OK ||
+                response.StatusCode == HttpStatusCode.Accepted,
+                $"Expected 200/202 but got {response.StatusCode}");
+
+            var body = await response.Content.ReadAsStringAsync();
+            Assert.Contains(_slug, body);
+            Assert.Contains("totalDebit", body, StringComparison.OrdinalIgnoreCase);
+        }
+
+        [Fact]
+        public async Task McpEndpoint_ToolsCall_ReturnsBalanceSheet()
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Post, "/mcp");
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _token);
+            req.Headers.Add("X-AccountGo-Org", _slug);
+            req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/event-stream"));
+            req.Content = new StringContent(
+                "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"get_balance_sheet\",\"arguments\":{}}}",
+                Encoding.UTF8,
+                "application/json");
+
+            var response = await _client.SendAsync(req);
+
+            Assert.True(
+                response.StatusCode == HttpStatusCode.OK ||
+                response.StatusCode == HttpStatusCode.Accepted,
+                $"Expected 200/202 but got {response.StatusCode}");
+
+            var body = await response.Content.ReadAsStringAsync();
+            Assert.Contains(_slug, body);
+            Assert.Contains("totalAssets", body, StringComparison.OrdinalIgnoreCase);
+        }
+
+        [Fact]
+        public async Task McpEndpoint_ToolsCall_ReturnsIncomeStatement()
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Post, "/mcp");
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _token);
+            req.Headers.Add("X-AccountGo-Org", _slug);
+            req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/event-stream"));
+            req.Content = new StringContent(
+                "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"tools/call\",\"params\":{\"name\":\"get_income_statement\",\"arguments\":{}}}",
+                Encoding.UTF8,
+                "application/json");
+
+            var response = await _client.SendAsync(req);
+
+            Assert.True(
+                response.StatusCode == HttpStatusCode.OK ||
+                response.StatusCode == HttpStatusCode.Accepted,
+                $"Expected 200/202 but got {response.StatusCode}");
+
+            var body = await response.Content.ReadAsStringAsync();
+            Assert.Contains(_slug, body);
+            Assert.Contains("netIncome", body, StringComparison.OrdinalIgnoreCase);
+        }
+
+        [Fact]
+        public async Task McpEndpoint_ToolsCall_ReturnsGeneralLedgerTransactions()
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Post, "/mcp");
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _token);
+            req.Headers.Add("X-AccountGo-Org", _slug);
+            req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/event-stream"));
+            req.Content = new StringContent(
+                "{\"jsonrpc\":\"2.0\",\"id\":6,\"method\":\"tools/call\",\"params\":{\"name\":\"get_general_ledger_transactions\",\"arguments\":{\"take\":20}}}",
+                Encoding.UTF8,
+                "application/json");
+
+            var response = await _client.SendAsync(req);
+
+            Assert.True(
+                response.StatusCode == HttpStatusCode.OK ||
+                response.StatusCode == HttpStatusCode.Accepted,
+                $"Expected 200/202 but got {response.StatusCode}");
+
+            var body = await response.Content.ReadAsStringAsync();
+            Assert.Contains(_slug, body);
+            Assert.Contains("totalCount", body, StringComparison.OrdinalIgnoreCase);
         }
     }
 }

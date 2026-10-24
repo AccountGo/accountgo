@@ -6,11 +6,14 @@ using System.Threading.Tasks;
 using Api.Mcp.Tools;
 using Core.Domain;
 using Core.Domain.Financials;
+using Core.Domain.Security;
 using Core.Tenancy;
+using Dto.Financial;
 using Moq;
 using Services.Administration;
 using Services.Financial;
 using Xunit;
+using AccountClass = Core.Domain.Financials.AccountClass;
 
 namespace AccountGo.BackendTests.Financial
 {
@@ -25,10 +28,13 @@ namespace AccountGo.BackendTests.Financial
             _mockTenant.Setup(t => t.IsResolved).Returns(true);
             _mockTenant.Setup(t => t.CompanyId).Returns(1);
             _mockTenant.Setup(t => t.CompanySlug).Returns("ph-financials");
+            _mockTenant.Setup(t => t.Role).Returns(CompanyMemberRole.Owner);
 
             _mockAdmin.Setup(a => a.IsModuleEnabled("financials")).Returns(true);
             _mockAdmin.Setup(a => a.IsModuleEnabled("reports")).Returns(true);
         }
+
+        #region Phase 1: Chart of Accounts Tests
 
         [Fact]
         public async Task GetChartOfAccounts_ThrowsWhenTenantNotResolved()
@@ -64,9 +70,9 @@ namespace AccountGo.BackendTests.Financial
             var assetClass = new AccountClass { Id = 1, Name = "Assets", NormalBalance = "Dr" };
             var liabilityClass = new AccountClass { Id = 2, Name = "Liabilities", NormalBalance = "Cr" };
 
-            var accounts = new List<Account>
+            var accounts = new List<Core.Domain.Financials.Account>
             {
-                new Account
+                new Core.Domain.Financials.Account
                 {
                     Id = 1,
                     AccountCode = "1010",
@@ -75,7 +81,7 @@ namespace AccountGo.BackendTests.Financial
                     DrOrCrSide = DrOrCrSide.Dr,
                     IsCash = true
                 },
-                new Account
+                new Core.Domain.Financials.Account
                 {
                     Id = 2,
                     AccountCode = "1090",
@@ -84,7 +90,7 @@ namespace AccountGo.BackendTests.Financial
                     DrOrCrSide = DrOrCrSide.Cr, // Contra Asset has Cr normal balance
                     IsContraAccount = true
                 },
-                new Account
+                new Core.Domain.Financials.Account
                 {
                     Id = 3,
                     AccountCode = "2010",
@@ -123,11 +129,11 @@ namespace AccountGo.BackendTests.Financial
         {
             var assetClass = new AccountClass { Id = 1, Name = "Assets", NormalBalance = "Dr" };
 
-            var accounts = new List<Account>
+            var accounts = new List<Core.Domain.Financials.Account>
             {
-                new Account { Id = 1, AccountCode = "1010", AccountName = "Cash on Hand", AccountClass = assetClass },
-                new Account { Id = 2, AccountCode = "1020", AccountName = "Petty Cash", AccountClass = assetClass },
-                new Account { Id = 3, AccountCode = "1050", AccountName = "Accounts Receivable", AccountClass = assetClass }
+                new Core.Domain.Financials.Account { Id = 1, AccountCode = "1010", AccountName = "Cash on Hand", AccountClass = assetClass },
+                new Core.Domain.Financials.Account { Id = 2, AccountCode = "1020", AccountName = "Petty Cash", AccountClass = assetClass },
+                new Core.Domain.Financials.Account { Id = 3, AccountCode = "1050", AccountName = "Accounts Receivable", AccountClass = assetClass }
             };
 
             _mockFinancial.Setup(s => s.GetAccounts()).Returns(accounts);
@@ -141,7 +147,6 @@ namespace AccountGo.BackendTests.Financial
             Assert.Equal(3, filtered.TotalUnfilteredAccounts);
             Assert.Equal("1020", filtered.Accounts[0].Code);
             Assert.Equal("Petty Cash", filtered.Accounts[0].Name);
-            // Summary count matches filtered count
             Assert.Equal(1, filtered.ClassificationCounts["Assets"]);
         }
 
@@ -151,10 +156,10 @@ namespace AccountGo.BackendTests.Financial
             var assetClass = new AccountClass { Id = 1, Name = "Assets", NormalBalance = "Dr" };
             var expenseClass = new AccountClass { Id = 5, Name = "Expenses", NormalBalance = "Dr" };
 
-            var accounts = new List<Account>
+            var accounts = new List<Core.Domain.Financials.Account>
             {
-                new Account { Id = 1, AccountCode = "1010", AccountName = "Cash", AccountClass = assetClass },
-                new Account { Id = 2, AccountCode = "5010", AccountName = "Rent Expense", AccountClass = expenseClass }
+                new Core.Domain.Financials.Account { Id = 1, AccountCode = "1010", AccountName = "Cash", AccountClass = assetClass },
+                new Core.Domain.Financials.Account { Id = 2, AccountCode = "5010", AccountName = "Rent Expense", AccountClass = expenseClass }
             };
 
             _mockFinancial.Setup(s => s.GetAccounts()).Returns(accounts);
@@ -175,8 +180,7 @@ namespace AccountGo.BackendTests.Financial
         {
             var assetClass = new AccountClass { Id = 1, Name = "Assets", NormalBalance = "Dr" };
 
-            // Account 1 has a GL line (non-zero balance), Account 2 has no GL line (zero balance)
-            var accountWithBalance = new Account
+            var accountWithBalance = new Core.Domain.Financials.Account
             {
                 Id = 1,
                 AccountCode = "1010",
@@ -189,7 +193,7 @@ namespace AccountGo.BackendTests.Financial
                 }
             };
 
-            var accountZeroBalance = new Account
+            var accountZeroBalance = new Core.Domain.Financials.Account
             {
                 Id = 2,
                 AccountCode = "1020",
@@ -199,7 +203,7 @@ namespace AccountGo.BackendTests.Financial
                 GeneralLedgerLines = new List<GeneralLedgerLine>()
             };
 
-            _mockFinancial.Setup(s => s.GetAccounts()).Returns(new List<Account> { accountWithBalance, accountZeroBalance });
+            _mockFinancial.Setup(s => s.GetAccounts()).Returns(new List<Core.Domain.Financials.Account> { accountWithBalance, accountZeroBalance });
 
             var tools = new FinancialMcpTools(_mockFinancial.Object, _mockAdmin.Object, _mockTenant.Object);
 
@@ -215,7 +219,7 @@ namespace AccountGo.BackendTests.Financial
         [Fact]
         public async Task GetChartOfAccounts_HandlesNullAccountClassSafely()
         {
-            var accountWithoutClass = new Account
+            var accountWithoutClass = new Core.Domain.Financials.Account
             {
                 Id = 1,
                 AccountCode = "9999",
@@ -228,7 +232,7 @@ namespace AccountGo.BackendTests.Financial
                 }
             };
 
-            _mockFinancial.Setup(s => s.GetAccounts()).Returns(new List<Account> { accountWithoutClass });
+            _mockFinancial.Setup(s => s.GetAccounts()).Returns(new List<Core.Domain.Financials.Account> { accountWithoutClass });
 
             var tools = new FinancialMcpTools(_mockFinancial.Object, _mockAdmin.Object, _mockTenant.Object);
 
@@ -239,5 +243,163 @@ namespace AccountGo.BackendTests.Financial
             Assert.Equal("Dr", result.Accounts[0].NormalBalance);
             Assert.Equal(100m, result.Accounts[0].Balance);
         }
+
+        #endregion
+
+        #region Phase 2: Financial Reports & Ledger Drilldown Tests
+
+        [Fact]
+        public async Task GetTrialBalance_ReturnsBalancedReport()
+        {
+            var tbItems = new List<Services.Financial.TrialBalance>
+            {
+                new Services.Financial.TrialBalance { AccountId = 1, AccountCode = "1010", AccountName = "Cash", Debit = 1000m, Credit = 0m },
+                new Services.Financial.TrialBalance { AccountId = 2, AccountCode = "2010", AccountName = "Accounts Payable", Debit = 0m, Credit = 1000m }
+            };
+
+            _mockFinancial.Setup(s => s.TrialBalance(It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), Core.Domain.AccountingBasis.Accrual))
+                .Returns(tbItems);
+
+            var tools = new FinancialMcpTools(_mockFinancial.Object, _mockAdmin.Object, _mockTenant.Object);
+
+            var response = await tools.GetTrialBalance(fromDate: "2026-01-01", toDate: "2026-12-31", accountingBasis: "Accrual");
+
+            Assert.NotNull(response);
+            Assert.Equal("ph-financials", response.Organization);
+            Assert.Equal(1000m, response.TotalDebit);
+            Assert.Equal(1000m, response.TotalCredit);
+            Assert.True(response.IsBalanced);
+            Assert.Equal(0m, response.Difference);
+            Assert.Equal(2, response.AccountCount);
+        }
+
+        [Fact]
+        public async Task GetTrialBalance_ThrowsWhenPermissionDenied()
+        {
+            _mockTenant.Setup(t => t.Role).Returns(CompanyMemberRole.Member);
+            _mockTenant.Setup(t => t.Permissions).Returns(new HashSet<string>());
+
+            var tools = new FinancialMcpTools(_mockFinancial.Object, _mockAdmin.Object, _mockTenant.Object);
+
+            var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                tools.GetTrialBalance());
+
+            Assert.Contains("Access denied", ex.Message);
+        }
+
+        [Fact]
+        public async Task GetBalanceSheet_CalculatesTotalsAndNetAssetsCorrectly()
+        {
+            var bsItems = new List<Services.Financial.BalanceSheet>
+            {
+                new Services.Financial.BalanceSheet { AccountId = 1, AccountClassId = 1, AccountCode = "1010", AccountName = "Cash", Amount = 5000m },
+                new Services.Financial.BalanceSheet { AccountId = 2, AccountClassId = 2, AccountCode = "2010", AccountName = "Payables", Amount = 2000m },
+                new Services.Financial.BalanceSheet { AccountId = 3, AccountClassId = 3, AccountCode = "3010", AccountName = "Retained Earnings", Amount = 3000m }
+            };
+
+            _mockFinancial.Setup(s => s.BalanceSheet(It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), Core.Domain.AccountingBasis.Accrual))
+                .Returns(bsItems);
+
+            var tools = new FinancialMcpTools(_mockFinancial.Object, _mockAdmin.Object, _mockTenant.Object);
+
+            var response = await tools.GetBalanceSheet(asOfDate: "2026-12-31");
+
+            Assert.NotNull(response);
+            Assert.Equal(5000m, response.TotalAssets);
+            Assert.Equal(2000m, response.TotalLiabilities);
+            Assert.Equal(3000m, response.TotalEquity);
+            Assert.Equal(3000m, response.NetAssets); // Assets - Liabilities
+            Assert.True(response.IsBalanced);
+            Assert.Equal(3, response.Items.Count);
+        }
+
+        [Fact]
+        public async Task GetIncomeStatement_CalculatesRevenuesExpensesAndNetIncome()
+        {
+            var incomeItems = new List<Services.Financial.IncomeStatement>
+            {
+                new Services.Financial.IncomeStatement { AccountId = 1, IsExpense = false, AccountCode = "4010", AccountName = "Consulting Revenue", Amount = 10000m },
+                new Services.Financial.IncomeStatement { AccountId = 2, IsExpense = true, AccountCode = "5010", AccountName = "Rent Expense", Amount = 3000m },
+                new Services.Financial.IncomeStatement { AccountId = 3, IsExpense = true, AccountCode = "5020", AccountName = "Utilities", Amount = 1000m }
+            };
+
+            _mockFinancial.Setup(s => s.IncomeStatement(It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), Core.Domain.AccountingBasis.Accrual))
+                .Returns(incomeItems);
+
+            var tools = new FinancialMcpTools(_mockFinancial.Object, _mockAdmin.Object, _mockTenant.Object);
+
+            var response = await tools.GetIncomeStatement(fromDate: "2026-01-01", toDate: "2026-06-30");
+
+            Assert.NotNull(response);
+            Assert.Equal(10000m, response.TotalRevenue);
+            Assert.Equal(4000m, response.TotalExpense);
+            Assert.Equal(6000m, response.NetIncome);
+            Assert.Equal(3, response.Items.Count);
+        }
+
+        [Fact]
+        public async Task GetGeneralLedgerTransactions_ValidatesPaginationAndReturnsPagedResults()
+        {
+            var page = new GeneralLedgerTransactionPage
+            {
+                TotalCount = 100,
+                Skip = 10,
+                Take = 20,
+                Items = new List<GeneralLedgerTransaction>
+                {
+                    new GeneralLedgerTransaction
+                    {
+                        Id = 1,
+                        Date = DateTime.UtcNow,
+                        DocumentType = "SalesInvoice",
+                        DocumentTypeLabel = "Sales Invoice",
+                        Description = "Test invoice journal",
+                        TotalDebit = 500m,
+                        TotalCredit = 500m
+                    }
+                }
+            };
+
+            _mockFinancial.Setup(s => s.GetGeneralLedgerTransactions(
+                It.IsAny<DateTime?>(), It.IsAny<DateTime?>(),
+                It.IsAny<string?>(), It.IsAny<int?>(), It.IsAny<DocumentTypes?>(),
+                10, 20))
+                .Returns(page);
+
+            var tools = new FinancialMcpTools(_mockFinancial.Object, _mockAdmin.Object, _mockTenant.Object);
+
+            var response = await tools.GetGeneralLedgerTransactions(skip: 10, take: 20);
+
+            Assert.NotNull(response);
+            Assert.Equal(100, response.TotalCount);
+            Assert.Equal(10, response.Skip);
+            Assert.Equal(20, response.Take);
+            Assert.Single(response.Transactions);
+            Assert.Equal("SalesInvoice", response.Transactions[0].DocumentType);
+        }
+
+        [Fact]
+        public async Task DateValidation_ThrowsWhenStartAfterEnd()
+        {
+            var tools = new FinancialMcpTools(_mockFinancial.Object, _mockAdmin.Object, _mockTenant.Object);
+
+            var ex = await Assert.ThrowsAsync<ArgumentException>(() =>
+                tools.GetTrialBalance(fromDate: "2026-12-31", toDate: "2026-01-01"));
+
+            Assert.Contains("Start date must not be after end date", ex.Message);
+        }
+
+        [Fact]
+        public async Task GetGeneralLedgerTransactions_ThrowsOnInvalidTake()
+        {
+            var tools = new FinancialMcpTools(_mockFinancial.Object, _mockAdmin.Object, _mockTenant.Object);
+
+            var ex = await Assert.ThrowsAsync<ArgumentException>(() =>
+                tools.GetGeneralLedgerTransactions(take: 501));
+
+            Assert.Contains("Take must be between 1 and 500", ex.Message);
+        }
+
+        #endregion
     }
 }
