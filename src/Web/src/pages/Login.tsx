@@ -339,6 +339,12 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
               </div>
             </div>
 
+            {typeof location.state?.notice === 'string' && (
+              <p role="status" className="p-3 rounded-xl bg-amber-500/10 text-amber-300 text-sm">
+                {location.state.notice}
+              </p>
+            )}
+
             {/* Segmented Mode Selector: Sign In vs Create Account */}
             <div className="grid grid-cols-2 p-1 rounded-xl bg-[var(--bg-canvas)] shadow-inner ring-1 ring-white/10">
               <button

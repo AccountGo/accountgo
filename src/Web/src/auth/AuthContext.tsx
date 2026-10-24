@@ -232,6 +232,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   // Logout session
+  const clearSession = useCallback(() => {
+    tokenRef.current = null;
+    setAccessToken(null);
+    setUser(null);
+  }, []);
+
   const logout = useCallback(async (): Promise<void> => {
     try {
       const currentToken = tokenRef.current;
@@ -314,6 +320,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     signUp,
     verifyOtp,
     logout,
+    clearSession,
     authFetch,
     refreshUser,
   };

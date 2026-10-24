@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate, useOutletContext } from 'react-router-dom';
 import {
   User,
   Shield,
@@ -21,11 +21,18 @@ import { HeaderButton } from '../components/PageHeader';
 import { TenantContextType } from '../types';
 import { useAuth } from '../auth/AuthContext';
 import { UserSession } from '../types/auth';
+import { clearPersistedOrgSlug } from '../lib/storage';
+
+type DeletionBlockers = {
+  workspaces: { name: string; slug: string }[];
+  platformAdministrator: boolean;
+};
 
 export const Profile: React.FC = () => {
   const tenantContext = useOutletContext<TenantContextType>();
   const { currentOrg, availableOrgs, switchOrg, userPermissions } = tenantContext;
-  const { user, authFetch, refreshUser } = useAuth();
+  const navigate = useNavigate();
+  const { user, authFetch, refreshUser, clearSession } = useAuth();
 
   // Profile fields state
   const [firstName, setFirstName] = useState(user?.firstName || '');
@@ -48,6 +55,15 @@ export const Profile: React.FC = () => {
   const [isLoadingSessions, setIsLoadingSessions] = useState(false);
   const [sessionError, setSessionError] = useState<string | null>(null);
   const [isRevokingAll, setIsRevokingAll] = useState(false);
+
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteEmail, setDeleteEmail] = useState('');
+  const [deleteError, setDeleteError] = useState('');
+  const [deletingAccount, setDeletingAccount] = useState(false);
+  const [loadingBlockers, setLoadingBlockers] = useState(false);
+  const [blockers, setBlockers] = useState<DeletionBlockers>({ workspaces: [], platformAdministrator: false });
+  const deleteDialogRef = useRef<HTMLFormElement>(null);
+  const deleteConfirmRef = useRef<HTMLInputElement>(null);
 
   // Sync state if user changes
   useEffect(() => {
@@ -190,6 +206,60 @@ export const Profile: React.FC = () => {
       }
     } catch {} finally {
       setIsRevokingAll(false);
+    }
+  };
+
+  const openDeleteDialog = async () => {
+    setDeleteEmail('');
+    setDeleteError('');
+    setBlockers({ workspaces: [], platformAdministrator: false });
+    setDeleteDialogOpen(true);
+    setLoadingBlockers(true);
+    try {
+      const res = await authFetch('/api/auth/account/deletion-blockers');
+      if (!res.ok) {
+        setDeleteError('Could not check whether this account can be deleted.');
+        return;
+      }
+      setBlockers(await res.json());
+    } catch {
+      setDeleteError('Could not check whether this account can be deleted.');
+    } finally {
+      setLoadingBlockers(false);
+    }
+  };
+
+  const accountDeletionBlocked = blockers.platformAdministrator || blockers.workspaces.length > 0;
+
+  useEffect(() => {
+    if (deleteDialogOpen && !loadingBlockers && !accountDeletionBlocked) {
+      deleteConfirmRef.current?.focus();
+    }
+  }, [deleteDialogOpen, loadingBlockers, accountDeletionBlocked]);
+
+  const handleDeleteAccount = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (deletingAccount || accountDeletionBlocked || deleteEmail.trim().toLowerCase() !== (user?.email || '').toLowerCase()) return;
+    setDeletingAccount(true);
+    setDeleteError('');
+    try {
+      const res = await authFetch('/api/auth/account', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirmEmail: deleteEmail.trim() }),
+      });
+      if (!res.ok) {
+        const problem = await res.json().catch(() => null) as { title?: string; detail?: string } | null;
+        setDeleteError(problem?.title || problem?.detail || 'Account could not be deleted.');
+        return;
+      }
+      clearPersistedOrgSlug();
+      clearSession();
+      navigate('/login', { replace: true, state: { notice: 'Account deleted.' } });
+    } catch {
+      setDeleteError('Account could not be deleted. Please try again.');
+    } finally {
+      setDeletingAccount(false);
     }
   };
 
@@ -670,6 +740,117 @@ export const Profile: React.FC = () => {
           </div>
         </div>
       </div>
+
+      <section className="p-4 sm:p-6 rounded-2xl border border-rose-500/30 bg-rose-500/5 space-y-3">
+        <div>
+          <h2 className="text-sm font-bold text-rose-400">Danger zone</h2>
+          <p className="mt-1 text-xs text-[var(--text-secondary)]">
+            Deleting your account signs you out and removes you from every workspace. Companies you solely own must be transferred or deleted first. Your past invoices and ledger entries stay on those companies.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={openDeleteDialog}
+          className="h-10 px-4 rounded-xl border border-rose-500/40 text-rose-400 text-xs font-semibold hover:bg-rose-500/10"
+        >
+          Delete account
+        </button>
+      </section>
+
+      {deleteDialogOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <form
+            ref={deleteDialogRef}
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="delete-account-title"
+            aria-describedby="delete-account-description"
+            onSubmit={handleDeleteAccount}
+            onKeyDown={(event) => {
+              if (event.key === 'Escape' && !deletingAccount) {
+                event.preventDefault();
+                setDeleteDialogOpen(false);
+                return;
+              }
+              if (event.key !== 'Tab') return;
+              const focusable = deleteDialogRef.current?.querySelectorAll<HTMLElement>(
+                'input:not(:disabled), button:not(:disabled)',
+              );
+              if (!focusable?.length) return;
+              const first = focusable[0];
+              const last = focusable[focusable.length - 1];
+              if (event.shiftKey && document.activeElement === first) {
+                event.preventDefault();
+                last.focus();
+              } else if (!event.shiftKey && document.activeElement === last) {
+                event.preventDefault();
+                first.focus();
+              }
+            }}
+            className="w-full max-w-md rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-6 shadow-2xl space-y-4"
+          >
+            <div>
+              <h2 id="delete-account-title" className="text-base font-bold text-[var(--text-main)]">
+                Delete your account?
+              </h2>
+              <p id="delete-account-description" className="mt-2 text-sm text-[var(--text-secondary)]">
+                This closes your login. Type <strong>{user?.email}</strong> to confirm.
+              </p>
+            </div>
+            {loadingBlockers ? (
+              <p className="text-xs text-[var(--text-muted)]">Checking workspaces…</p>
+            ) : accountDeletionBlocked ? (
+              <div className="space-y-2 text-sm text-rose-300">
+                {blockers.platformAdministrator && (
+                  <p>The last platform administrator cannot delete their account.</p>
+                )}
+                {blockers.workspaces.length > 0 && (
+                  <div>
+                    <p>Transfer ownership or delete these workspaces first:</p>
+                    <ul className="mt-1 list-disc pl-5">
+                      {blockers.workspaces.map((workspace) => (
+                        <li key={workspace.slug}>{workspace.name} ({workspace.slug})</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <>
+                <label htmlFor="confirm-account-email" className="block text-xs font-semibold text-[var(--text-secondary)]">
+                  Email address
+                </label>
+                <input
+                  id="confirm-account-email"
+                  ref={deleteConfirmRef}
+                  value={deleteEmail}
+                  onChange={(event) => setDeleteEmail(event.target.value)}
+                  autoComplete="off"
+                  className="w-full h-11 px-3 rounded-xl bg-[var(--bg-subtle)] text-sm text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-rose-500"
+                />
+              </>
+            )}
+            {deleteError && <p role="alert" className="text-sm text-rose-400">{deleteError}</p>}
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={deletingAccount}
+                onClick={() => setDeleteDialogOpen(false)}
+                className="h-10 px-4 rounded-xl text-xs font-semibold text-[var(--text-secondary)] hover:bg-[var(--bg-surface-hover)]"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={deletingAccount || loadingBlockers || accountDeletionBlocked || deleteEmail.trim().toLowerCase() !== (user?.email || '').toLowerCase()}
+                className="h-10 px-4 rounded-xl bg-rose-500 text-white text-xs font-semibold disabled:opacity-40"
+              >
+                {deletingAccount ? 'Deleting…' : 'Delete account'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 };

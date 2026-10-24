@@ -84,6 +84,8 @@ namespace Api.Controllers
             var user = _identity.Users.SingleOrDefault(u => u.Id == UserId && u.EmailConfirmed);
             if (user == null)
                 return Problem(statusCode: 403, title: "Verify your email before accepting invitations");
+            if (user.DeletedAt != null)
+                return Problem(statusCode: 403, title: "This account has been closed");
             using (var tx = _db.Database.BeginTransaction(System.Data.IsolationLevel.Serializable))
             {
                 var invitation = find();
