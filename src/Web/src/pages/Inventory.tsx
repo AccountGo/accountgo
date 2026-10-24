@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ArrowDown, ArrowUp, Loader2, Package, Plus, X } from 'lucide-react';
 import { HeaderButton, PageHeader } from '../components/PageHeader';
 import { PermissionDeniedCard, useTenantContext } from '../components/Gating';
+import { ItemsTabs } from '../components/ItemsTabs';
 import { useAuth } from '../auth/AuthContext';
 import { localToday } from '../lib/businessDays';
 import { currencySymbol } from '../lib/currency';
@@ -134,12 +135,13 @@ export const Inventory: React.FC = () => {
     <div className="space-y-6 pb-10">
       <PageHeader
         title="Inventory"
-        back={selectedItem ? { to: `/org/${currentOrg.slug}/inventory`, label: 'Back to inventory' } : undefined}
+        back={selectedItem ? { to: `/org/${currentOrg.slug}/items/inventory`, label: 'Back to inventory' } : undefined}
         subtitle="Stock on hand, moving-average cost, and the inventory ledger."
         actions={canAdjust ? (
           <HeaderButton label="Adjust stock" icon={Plus} variant="primary" onClick={() => { setSuccess(''); setShowAdjust(true); }} />
         ) : undefined}
       />
+      <ItemsTabs orgSlug={currentOrg.slug} />
 
       {error && (
         <div role="alert" className="rounded-xl border border-rose-500/20 bg-rose-500/10 p-3 text-sm text-rose-600 dark:text-rose-400">
@@ -177,7 +179,7 @@ export const Inventory: React.FC = () => {
                       <td className="px-5 py-3">
                         <button
                           type="button"
-                          onClick={() => navigate(`/org/${currentOrg.slug}/inventory/${item.id}`)}
+                          onClick={() => navigate(`/org/${currentOrg.slug}/items/inventory/${item.id}`)}
                           className="text-left font-medium text-[var(--text-main)] hover:text-[var(--brand-primary)]"
                         >
                           {item.name}
