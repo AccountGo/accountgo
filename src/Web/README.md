@@ -35,7 +35,9 @@ src/Web/
 │   │   ├── SelectOrg.tsx       # Root workspace selection & organization creation modal
 │   │   ├── Dashboard.tsx       # /org/:orgSlug/dashboard with real-time financial metrics skeleton
 │   │   ├── Settings.tsx        # /org/:orgSlug/settings with tenant profile, currency, fiscal year, danger zone
-│   │   ├── PlaceholderView.tsx # General skeleton for Financials, Sales, Purchases, Donors, Reports
+│   │   ├── GeneralLedger.tsx   # /org/:orgSlug/financials posted journal register
+│   │   ├── JournalEntries.tsx  # /org/:orgSlug/financials/journals manual drafts / post
+│   │   ├── Reports.tsx         # /org/:orgSlug/reports TB / P&L / Balance Sheet
 │   │   └── NotFound.tsx        # Polished 404 handler with return links
 │   ├── lib/
 │   │   └── storage.ts          # Tenant resolution and localStorage persistence

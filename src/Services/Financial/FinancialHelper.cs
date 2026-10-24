@@ -35,7 +35,7 @@ namespace Services.Financial
 
         public static bool NoDuplicateAccountInLines(GeneralLedgerHeader glHeader)
         {
-            //TODO: implement logic. Do not allow duplicate account in gl lines
+            // Split lines to the same account (different memos) are valid in both auto-postings and manual journals.
             return true;
         }
 

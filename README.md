@@ -189,6 +189,7 @@ Comprehensive architecture, development, and operational guides are available in
 - 💻 [Development Guide](docs/DEVELOPMENT.md) — Local workstation setup, running services, debugging, and testing.
 - 🚀 [Deployment Guide](docs/DEPLOYMENT.md) — Production deployment to Cloudflare Workers and Containers.
 - 📒 [Chart of Accounts & Posting Rules](docs/accounting/coa-register.md) — COA register, posting rules, and GAAP/IFRS controls.
+- 🧾 [General Ledger Redesign](docs/accounting/general-ledger-redesign.md) — Financials page as posted journal register (implementation brief).
 - 🧪 [Double-Entry Accounting Tests](docs/accounting/double-entry-tests.md) — 7 Accuracy Guarantees and automated ledger verification suite.
 - 📋 [Changelog](docs/CHANGELOG.md) — Version history and release notes.
 

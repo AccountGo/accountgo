@@ -96,6 +96,7 @@ namespace Api.Controllers
 
         [HttpGet]
         [Route("JournalEntries")] // api/Financials/JournalEntries
+        [RequirePermission(SystemPermissions.FinancialsJournalView)]
         public IActionResult JournalEntries()
         {
             var journalEntries = _financialService.GetJournalEntries();
@@ -110,7 +111,7 @@ namespace Api.Controllers
                     Memo = je.Memo,
                     ReferenceNo = je.ReferenceNo,
                     VoucherType = (int)je.VoucherType.GetValueOrDefault(),
-                    Posted = je.Posted
+                    Posted = je.Posted == true || je.GeneralLedgerHeaderId.HasValue
                 };
 
                 foreach (var line in je.JournalEntryLines)
@@ -135,6 +136,7 @@ namespace Api.Controllers
 
         [HttpGet]
         [Route("JournalEntry")]
+        [RequirePermission(SystemPermissions.FinancialsJournalView)]
         public IActionResult JournalEntry(int id)
         {
             var je = _financialService.GetJournalEntry(id);
@@ -148,7 +150,7 @@ namespace Api.Controllers
                 Memo = je.Memo,
                 ReferenceNo = je.ReferenceNo,
                 VoucherType = (int)je.VoucherType.GetValueOrDefault(),
-                Posted = je.Posted
+                Posted = je.Posted == true || je.GeneralLedgerHeaderId.HasValue
             };
 
             foreach (var line in je.JournalEntryLines)
@@ -179,6 +181,7 @@ namespace Api.Controllers
         [HttpPost]
         [Route("PostJournalEntry")]
         [RequireModule("financials")]
+        [RequirePermission(SystemPermissions.FinancialsJournalPost)]
         public IActionResult PostJournalEntry([FromBody] JournalEntry journalEntryDto)
         {
             string[]? errors = null;
@@ -196,6 +199,8 @@ namespace Api.Controllers
                 }
 
                 var je = _financialService.GetJournalEntry(journalEntryDto.Id, false);
+                if (je == null)
+                    return NotFound(new { message = "Journal entry not found." });
 
                 _financialService.UpdateJournalEntry(je, true);
 
@@ -212,6 +217,7 @@ namespace Api.Controllers
         [HttpPost]
         [Route("SaveJournalEntry")]
         [RequireModule("financials")]
+        [RequirePermission(SystemPermissions.FinancialsJournalCreate)]
         public IActionResult SaveJournalEntry([FromBody] JournalEntry journalEntryDto)
         {
             string[]? errors = null;
@@ -237,9 +243,12 @@ namespace Api.Controllers
                     return new BadRequestObjectResult(errors);
                 }
 
-                var anyDuplicate = journalEntryDto.JournalEntryLines.GroupBy(x => x.AccountId).Any(g => g.Count() > 1);
-                if (anyDuplicate)
-                    throw new Exception("One or more journal entry lines has duplicate account.");
+                // Split lines to the same account (different memos) are allowed; Dr/Cr balance is enforced on post.
+                if (journalEntryDto.JournalEntryLines.Count < 2
+                    || journalEntryDto.JournalEntryLines.Any(l => !l.AccountId.HasValue || l.Amount.GetValueOrDefault() <= 0
+                        || (l.DrCr != 1 && l.DrCr != 2))
+                    || !Enum.IsDefined(typeof(Core.Domain.JournalVoucherTypes), journalEntryDto.VoucherType.GetValueOrDefault()))
+                    return BadRequest(new { message = "Provide a voucher type and at least two positive debit or credit lines with valid accounts." });
 
                 bool isNew = journalEntryDto.Id == 0;
                 Core.Domain.Financials.JournalEntryHeader? journalEntry = null;
@@ -250,7 +259,11 @@ namespace Api.Controllers
                 }
                 else
                 {
-                    journalEntry = _tenantGuard.EnsureOwned<Core.Domain.Financials.JournalEntryHeader>(journalEntryDto.Id, nameof(journalEntryDto.Id));
+                    journalEntry = _financialService.GetJournalEntry(journalEntryDto.Id);
+                    if (journalEntry == null)
+                        return NotFound(new { message = "Journal entry not found." });
+                    if (journalEntry.Posted == true || journalEntry.GeneralLedgerHeaderId.HasValue)
+                        return BadRequest(new { message = "Posted journal entries cannot be edited." });
 
                     var dtoLineIds = journalEntryDto.JournalEntryLines
                         .Where(l => l.Id != 0)
@@ -319,7 +332,7 @@ namespace Api.Controllers
                     _financialService.UpdateJournalEntry(journalEntry, false);
                 }
 
-                return new OkObjectResult(Ok());
+                return Ok(new { id = journalEntry.Id });
             }
             catch (Exception ex)
             {
@@ -331,18 +344,29 @@ namespace Api.Controllers
 
         [HttpGet]
         [Route("GeneralLedger")]
+        [RequirePermission(SystemPermissions.FinancialsJournalView)]
         public ActionResult GeneralLedger(DateTime? from = default(DateTime?),
             DateTime? to = default(DateTime?),
             string? accountCode = null,
-            int? transactionNo = null)
+            int? transactionNo = null,
+            Core.Domain.DocumentTypes? documentType = null,
+            int skip = 0,
+            int take = Services.Financial.FinancialService.GeneralLedgerDefaultPageSize)
         {
-            var Dto = _financialService.MasterGeneralLedger(from, to, accountCode, transactionNo);
-
-            //goi
-            var generalLedgerTree = BuildMasterGeneralLedger(Dto);
-
-            return new ObjectResult(generalLedgerTree);
-
+            if (!ModelState.IsValid || (from.HasValue && to.HasValue && from.Value > to.Value))
+                return BadRequest(new { message = "Provide a valid date range and filters: from must not be after to." });
+            if (documentType.HasValue && !Enum.IsDefined(typeof(Core.Domain.DocumentTypes), documentType.Value))
+                return BadRequest(new { message = "Provide a valid document type." });
+            if (skip < 0 || take < 1 || take > Services.Financial.FinancialService.GeneralLedgerMaxPageSize)
+                return BadRequest(new { message = $"Provide skip >= 0 and take between 1 and {Services.Financial.FinancialService.GeneralLedgerMaxPageSize}." });
+            try
+            {
+                return Ok(_financialService.GetGeneralLedgerTransactions(from, to, accountCode, transactionNo, documentType, skip, take));
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
         }
 
         [HttpGet]
@@ -545,49 +569,6 @@ namespace Api.Controllers
             }
 
             return accountTree;
-        }
-
-
-        private IList<Dto.Financial.MasterGeneralLedger> BuildMasterGeneralLedger(ICollection<Services.Financial.MasterGeneralLedger> allLedger)
-        {
-            var ledgerTree = new List<Dto.Financial.MasterGeneralLedger>();
-
-
-            var parentLedger = allLedger.Select(a => a.TransactionNo).Distinct();
-            var childLedgers = new List<Dto.Financial.MasterGeneralLedger>();
-            parentLedger.ToList().ForEach(a =>
-            {
-                var childrenLedger = allLedger.Where(x => x.TransactionNo == a);
-
-                var secondChild = new Dto.Financial.MasterGeneralLedger();
-                var thirdChildren = new List<Dto.Financial.MasterGeneralLedger>();
-                secondChild.GroupId = a;
-                secondChild.TransactionNo = null;
-                secondChild.Credit = null;
-                secondChild.Debit = null;
-                secondChild.Date = null;
-                foreach (var ledger in childrenLedger)
-                {
-                    var thirdChild = new Dto.Financial.MasterGeneralLedger();
-                    thirdChild.Id = ledger.Id;
-                    thirdChild.TransactionNo = ledger.TransactionNo;
-                    thirdChild.AccountId = ledger.AccountId;
-                    thirdChild.AccountName = ledger.AccountName;
-                    thirdChild.AccountCode = ledger.AccountCode;
-                    thirdChild.CurrencyId = ledger.CurrencyId;
-                    thirdChild.Date = ledger.Date;
-                    thirdChild.Debit = ledger.Debit;
-                    thirdChild.Credit = ledger.Credit;
-                    thirdChildren.Add(thirdChild);
-                    secondChild.ChildMasterGeneralLedger = thirdChildren;
-                }
-
-                childLedgers.Add(secondChild);
-
-
-            });
-
-            return childLedgers;
         }
         #endregion
 

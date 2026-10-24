@@ -57,7 +57,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
       path: `/org/${currentOrg.slug}/financials`,
       icon: BookOpen,
       module: 'financials',
-      permission: 'financials.accounts.view',
+      permission: 'financials.journal.view',
     },
     {
       name: 'Settings',

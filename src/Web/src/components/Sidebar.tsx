@@ -68,7 +68,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       path: `/org/${currentOrg.slug}/financials`,
       icon: BookOpen,
       module: 'financials',
-      permission: 'financials.accounts.view',
+      permission: 'financials.journal.view',
       badge: 'Ledger',
     },
     {
