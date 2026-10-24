@@ -272,9 +272,12 @@ export const InvoiceDetail: React.FC = () => {
     return data?.no || invoice.no || '';
   };
 
-  const emailInvoice = async (): Promise<string> => {
+  const emailInvoice = async (followUp = false): Promise<string> => {
     if (!invoice) return '';
-    const res = await authFetch(`/api/Sales/SendSalesInvoiceEmail?id=${invoice.id}`, {
+    const path = followUp
+      ? `/api/Sales/SendSalesInvoiceFollowUpEmail?id=${invoice.id}`
+      : `/api/Sales/SendSalesInvoiceEmail?id=${invoice.id}`;
+    const res = await authFetch(path, {
       method: 'POST',
     });
     const data = await res.json().catch(() => null);
@@ -318,9 +321,11 @@ export const InvoiceDetail: React.FC = () => {
     }
   };
 
-  const handleSendEmail = async () => {
+  const handleSendEmail = async (followUp: boolean) => {
     if (!invoice || !sendDialogMode) return;
     const issuing = sendDialogMode === 'issue';
+    // Issuing always sends the first invoice email, never a follow-up.
+    const sendAsFollowUp = !issuing && followUp;
     let label = invoiceTitle(invoice);
     setIsSendingEmail(true);
     setSendError(null);
@@ -336,8 +341,14 @@ export const InvoiceDetail: React.FC = () => {
     }
 
     try {
-      const to = await emailInvoice();
-      setSuccessBanner(issuing ? `${label} has been issued and emailed to ${to}.` : `${label} has been emailed to ${to}.`);
+      const to = await emailInvoice(sendAsFollowUp);
+      setSuccessBanner(
+        issuing
+          ? `${label} has been issued and emailed to ${to}.`
+          : sendAsFollowUp
+            ? `Follow-up for ${label} has been emailed to ${to}.`
+            : `${label} has been emailed to ${to}.`,
+      );
       setSendDialogMode(null);
       if (!issuing) await fetchInvoice();
     } catch (err: any) {
@@ -422,6 +433,8 @@ export const InvoiceDetail: React.FC = () => {
   const canEdit = canCreate && invoice.status !== 'Void' && invoice.paidAmount === 0;
   const canVoid = canIssue && invoice.status !== 'Void' && invoice.paidAmount === 0;
   const canEmail = canCreate && invoice.status !== 'Draft' && invoice.status !== 'Void' && !!invoice.recipientEmail;
+  // Follow-up copy for unpaid issued invoices (Open / Overdue / Partially Paid). API enforces the same.
+  const followUpEligible = canEmail && invoice.balanceDue > 0;
   const canRecordPayment =
     hasPermission('sales.receipts.create') && invoice.status !== 'Void' && invoice.status !== 'Draft' && invoice.balanceDue > 0;
   const dueOn = invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString(undefined, { dateStyle: 'medium' }) : null;
@@ -866,7 +879,11 @@ export const InvoiceDetail: React.FC = () => {
                   <div className="flex items-center gap-2 min-w-0 flex-1">
                     <Send className="w-3.5 h-3.5 shrink-0 text-[var(--text-muted)]" />
                     <span className="text-[var(--text-secondary)]">
-                      {email.kind === 'Invoice' ? 'Invoice sent to' : `${email.kind} sent to`}
+                      {email.kind === 'Invoice'
+                        ? 'Invoice sent to'
+                        : email.kind === 'FollowUp'
+                          ? 'Follow-up sent to'
+                          : `${email.kind} sent to`}
                     </span>
                     <span className="font-medium text-[var(--text-main)] truncate">{email.to}</span>
                   </div>
@@ -1034,6 +1051,7 @@ export const InvoiceDetail: React.FC = () => {
           to={invoice.recipientEmail}
           bcc={user?.email && user.email.toLowerCase() !== invoice.recipientEmail.toLowerCase() ? user.email : undefined}
           lastSent={sendDialogMode === 'send' ? lastEmail : null}
+          followUpEligible={sendDialogMode === 'send' && followUpEligible}
           busy={isSendingEmail || isSubmittingIssue}
           error={sendError}
           onIssueOnly={handleIssueOnly}

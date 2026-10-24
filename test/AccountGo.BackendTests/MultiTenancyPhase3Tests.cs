@@ -736,6 +736,36 @@ namespace AccountGo.BackendTests
         }
 
         [Fact]
+        public async Task SendSalesInvoiceFollowUpEmail_AttachesPdf_BlindCopiesSender_OnlyForUnpaidIssued()
+        {
+            var invoice = await NewInvoice("billing@customer.example");
+            invoice.Status = "Draft";
+            var saved = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
+            Assert.True(saved.IsSuccessStatusCode, await saved.Content.ReadAsStringAsync());
+            var invoiceId = (await saved.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt32();
+            var path = $"/api/Sales/SendSalesInvoiceFollowUpEmail?id={invoiceId}";
+
+            Assert.Equal(HttpStatusCode.BadRequest, (await Send(HttpMethod.Post, path)).StatusCode);
+            Assert.True((await Send(HttpMethod.Post, $"/api/Sales/IssueSalesInvoice?id={invoiceId}")).IsSuccessStatusCode);
+
+            var sent = await Send(HttpMethod.Post, path);
+            Assert.True(sent.IsSuccessStatusCode, await sent.Content.ReadAsStringAsync());
+            var message = _emails.Messages.Last().Raw;
+            Assert.Equal("billing@customer.example", message.To);
+            Assert.Equal(new[] { "phase3-owner@example.com" }, message.Bcc);
+            Assert.StartsWith("Following up on Invoice ", message.Subject);
+            var attachment = Assert.Single(message.Attachments);
+            Assert.Matches(@"^Invoice-[A-Za-z0-9_-]+\.pdf$", attachment.FileName);
+            Assert.Equal("%PDF", Encoding.ASCII.GetString(attachment.Content, 0, 4));
+
+            var reloaded = await (await Send(HttpMethod.Get, $"/api/Sales/SalesInvoice?id={invoiceId}")).Content.ReadFromJsonAsync<JsonElement>();
+            var emails = reloaded.GetProperty("emails");
+            Assert.Equal(1, emails.GetArrayLength());
+            Assert.Equal("FollowUp", emails[0].GetProperty("kind").GetString());
+            Assert.Equal("billing@customer.example", emails[0].GetProperty("to").GetString());
+        }
+
+        [Fact]
         public async Task BusinessProfile_FirstSave_TrimsAndValidates_AndIsAdminOnly()
         {
             var empty = await Json(await Send(HttpMethod.Get, Current + "/business-profile"));
