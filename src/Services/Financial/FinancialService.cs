@@ -105,23 +105,35 @@ namespace Services.Financial
             _vendorPaymentRepo = vendorPaymentRepo;
         }
 
+        public const int GeneralLedgerDefaultPageSize = 100;
+        public const int GeneralLedgerMaxPageSize = 500;
+
         /// <inheritdoc />
-        public ICollection<Dto.Financial.GeneralLedgerTransaction> GetGeneralLedgerTransactions(
+        public Dto.Financial.GeneralLedgerTransactionPage GetGeneralLedgerTransactions(
             DateTime? from = null, DateTime? to = null, string accountCode = null,
-            int? transactionNo = null, DocumentTypes? documentType = null)
+            int? transactionNo = null, DocumentTypes? documentType = null, int skip = 0, int take = GeneralLedgerDefaultPageSize)
         {
-            if (from.HasValue && to.HasValue && from.Value > to.Value)
+            if (skip < 0) throw new ArgumentOutOfRangeException(nameof(skip), "Skip must be zero or greater.");
+            if (take < 1 || take > GeneralLedgerMaxPageSize)
+                throw new ArgumentOutOfRangeException(nameof(take), $"Take must be between 1 and {GeneralLedgerMaxPageSize}.");
+
+            // Date-only / midnight "to" values mean the whole calendar day (same idea as the SPA's T23:59:59.9999999).
+            var fromBound = from.HasValue ? DateTime.SpecifyKind(from.Value, DateTimeKind.Unspecified) : (DateTime?)null;
+            var toBound = to.HasValue ? InclusiveLedgerEnd(DateTime.SpecifyKind(to.Value, DateTimeKind.Unspecified)) : (DateTime?)null;
+            if (fromBound.HasValue && toBound.HasValue && fromBound.Value > toBound.Value)
                 throw new ArgumentException("The start date must not be after the end date.");
 
             var query = _generalLedgerRepository.Table;
-            if (from.HasValue) query = query.Where(h => h.Date >= from.Value);
-            if (to.HasValue) query = query.Where(h => h.Date <= to.Value);
+            if (fromBound.HasValue) query = query.Where(h => h.Date >= fromBound.Value);
+            if (toBound.HasValue) query = query.Where(h => h.Date <= toBound.Value);
             if (!string.IsNullOrWhiteSpace(accountCode))
                 query = query.Where(h => h.GeneralLedgerLines.Any(l => l.Account.AccountCode == accountCode));
             if (transactionNo.HasValue) query = query.Where(h => h.Id == transactionNo.Value);
             if (documentType.HasValue) query = query.Where(h => h.DocumentType == documentType.Value);
 
+            var totalCount = query.Count();
             var transactions = query.OrderByDescending(h => h.Date).ThenByDescending(h => h.Id)
+                .Skip(skip).Take(take)
                 .Select(h => new Dto.Financial.GeneralLedgerTransaction
                 {
                     Id = h.Id, Date = h.Date, DocumentType = h.DocumentType.ToString(),
@@ -154,8 +166,19 @@ namespace Services.Financial
                     case nameof(DocumentTypes.InventoryAdjustment): transaction.SourcePath = "/items/inventory"; break;
                 }
             }
-            return transactions;
+
+            return new Dto.Financial.GeneralLedgerTransactionPage
+            {
+                Items = transactions,
+                TotalCount = totalCount,
+                Skip = skip,
+                Take = take
+            };
         }
+
+        /// <summary>Keeps an explicit end-of-day timestamp; expands midnight/date-only bounds to the last tick of that day.</summary>
+        private static DateTime InclusiveLedgerEnd(DateTime to) =>
+            to.TimeOfDay == TimeSpan.Zero ? to.Date.AddDays(1).AddTicks(-1) : to;
 
         public FinancialYear CurrentFiscalYear()
         {

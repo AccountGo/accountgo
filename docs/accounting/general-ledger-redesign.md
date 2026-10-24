@@ -158,42 +158,49 @@ Dead buttons are forbidden: do not show “New Journal Entry” until Phase 3 wi
 - Module: `financials` (already on controller; keep write endpoints financials-only)
 - Permission: `[RequirePermission(SystemPermissions.FinancialsJournalView)]`
 
-**Response:** JSON array of transaction DTOs (flat list, not nested GroupId tree).
+**Response:** Paged JSON object (not the legacy GroupId tree). Default `take=100`, maximum `take=500`, `skip>=0`.
 
 ```json
-[
-  {
-    "id": 42,
-    "date": "2026-03-15T00:00:00",
-    "documentType": "SalesInvoice",
-    "documentTypeLabel": "Sales Invoice",
-    "description": "Invoice INV-5",
-    "sourceDocumentId": 5,
-    "sourcePath": "/sales/5",
-    "reversedGeneralLedgerHeaderId": null,
-    "totalDebit": 10000.00,
-    "totalCredit": 10000.00,
-    "lines": [
-      {
-        "id": 101,
-        "accountId": 12,
-        "accountCode": "10120",
-        "accountName": "Accounts Receivable",
-        "debit": 10000.00,
-        "credit": 0
-      },
-      {
-        "id": 102,
-        "accountId": 40,
-        "accountCode": "40100",
-        "accountName": "Sales A/C",
-        "debit": 0,
-        "credit": 10000.00
-      }
-    ]
-  }
-]
+{
+  "items": [
+    {
+      "id": 42,
+      "date": "2026-03-15T00:00:00",
+      "documentType": "SalesInvoice",
+      "documentTypeLabel": "Sales Invoice",
+      "description": "Invoice INV-5",
+      "sourceDocumentId": 5,
+      "sourcePath": "/sales/5",
+      "reversedGeneralLedgerHeaderId": null,
+      "totalDebit": 10000.00,
+      "totalCredit": 10000.00,
+      "lines": [
+        {
+          "id": 101,
+          "accountId": 12,
+          "accountCode": "10120",
+          "accountName": "Accounts Receivable",
+          "debit": 10000.00,
+          "credit": 0
+        },
+        {
+          "id": 102,
+          "accountId": 40,
+          "accountCode": "40100",
+          "accountName": "Sales A/C",
+          "debit": 0,
+          "credit": 10000.00
+        }
+      ]
+    }
+  ],
+  "totalCount": 1,
+  "skip": 0,
+  "take": 100
+}
 ```
+
+Date filters: inclusive. A date-only / midnight `to` expands to the last tick of that calendar day (same intent as the SPA’s `T23:59:59.9999999`). Manual journal drafts may split multiple lines to the same account.
 
 **Implementation notes**
 

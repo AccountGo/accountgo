@@ -47,4 +47,17 @@ namespace Dto.Financial
         /// <summary>Gets or sets the credit amount.</summary>
         public decimal Credit { get; set; }
     }
+
+    /// <summary>Paged posted-journal register for the General Ledger API.</summary>
+    public class GeneralLedgerTransactionPage
+    {
+        /// <summary>Gets or sets the page of transactions.</summary>
+        public List<GeneralLedgerTransaction> Items { get; set; } = new List<GeneralLedgerTransaction>();
+        /// <summary>Gets or sets how many headers match the filters before paging.</summary>
+        public int TotalCount { get; set; }
+        /// <summary>Gets or sets how many matching headers were skipped.</summary>
+        public int Skip { get; set; }
+        /// <summary>Gets or sets the page size applied.</summary>
+        public int Take { get; set; }
+    }
 }

@@ -7,6 +7,9 @@ import { HeaderButton, PageHeader } from '../components/PageHeader';
 import { currencySymbol } from '../lib/currency';
 import { getDateRange, reportQuery, type FinancialYear } from './Reports';
 
+export const LEDGER_DEFAULT_PAGE_SIZE = 100;
+export const LEDGER_MAX_PAGE_SIZE = 500;
+
 export interface GlLine {
   id: number;
   accountId: number;
@@ -28,23 +31,36 @@ export interface GlTransaction {
   totalCredit: number;
   lines: GlLine[];
 }
+export interface GlTransactionPage {
+  items: GlTransaction[];
+  totalCount: number;
+  skip: number;
+  take: number;
+}
 
 export function ledgerFilters(params: URLSearchParams, today = new Date()) {
   const defaults = getDateRange('month', today);
   const explicitPeriod = params.has('from') || params.has('to');
+  const rawTake = Number(params.get('take') || LEDGER_DEFAULT_PAGE_SIZE);
+  const rawSkip = Number(params.get('skip') || 0);
   return {
     from: explicitPeriod ? (params.get('from') || '').slice(0, 10) : defaults.from,
     to: explicitPeriod ? (params.get('to') || '').slice(0, 10) : defaults.to,
     accountCode: params.get('accountCode') || '',
     transactionNo: params.get('transactionNo') || '',
     documentType: params.get('documentType') || '',
+    skip: Number.isInteger(rawSkip) && rawSkip >= 0 ? rawSkip : 0,
+    take: Number.isInteger(rawTake) && rawTake >= 1 && rawTake <= LEDGER_MAX_PAGE_SIZE
+      ? rawTake : LEDGER_DEFAULT_PAGE_SIZE,
   };
 }
 
 export function ledgerQuery(filters: ReturnType<typeof ledgerFilters>) {
-  const query = new URLSearchParams(reportQuery(filters));
+  const query = new URLSearchParams(reportQuery({ from: filters.from, to: filters.to }));
   for (const name of ['accountCode', 'transactionNo', 'documentType'] as const)
     if (filters[name]) query.set(name, filters[name]);
+  if (filters.skip > 0) query.set('skip', String(filters.skip));
+  if (filters.take !== LEDGER_DEFAULT_PAGE_SIZE) query.set('take', String(filters.take));
   return `?${query}`;
 }
 
@@ -75,6 +91,19 @@ export function isLedgerBalanced(entry: GlTransaction) {
   return entry.lines.length >= 2 && cents(entry.totalDebit) === cents(entry.totalCredit)
     && cents(entry.lines.reduce((sum, l) => sum + l.debit, 0)) === cents(entry.totalDebit)
     && cents(entry.lines.reduce((sum, l) => sum + l.credit, 0)) === cents(entry.totalCredit);
+}
+
+export function parseLedgerPage(payload: unknown): GlTransactionPage {
+  if (!payload || typeof payload !== 'object') throw new Error('The ledger API returned an invalid response.');
+  const page = payload as Partial<GlTransactionPage>;
+  if (!Array.isArray(page.items) || typeof page.totalCount !== 'number')
+    throw new Error('The ledger API returned an invalid response.');
+  return {
+    items: page.items,
+    totalCount: page.totalCount,
+    skip: typeof page.skip === 'number' ? page.skip : 0,
+    take: typeof page.take === 'number' ? page.take : LEDGER_DEFAULT_PAGE_SIZE,
+  };
 }
 
 export function LedgerRows({ entries, slug, formatAmount }: {
@@ -137,7 +166,7 @@ export default function GeneralLedger() {
   const preset = params.get('period') || (params.has('from') || params.has('to') ? 'custom' : 'month');
   const [search, setSearch] = useState('');
   const [revision, setRevision] = useState(0);
-  const [result, setResult] = useState<{ key: string; entries: GlTransaction[]; years: FinancialYear[] } | null>(null);
+  const [result, setResult] = useState<{ key: string; page: GlTransactionPage; years: FinancialYear[] } | null>(null);
   const [failure, setFailure] = useState<{ key: string; message: string } | null>(null);
   const allowed = hasPermission('financials.journal.view');
   const valid = (!filters.from || /^\d{4}-\d{2}-\d{2}$/.test(filters.from))
@@ -157,10 +186,10 @@ export default function GeneralLedger() {
         authFetch(`/api/Financials/GeneralLedger${query}`), authFetch('/api/Administration/financialyears'),
       ]);
       if (!response.ok || !yearsResponse.ok) throw new Error(`Unable to load General Ledger (HTTP ${!response.ok ? response.status : yearsResponse.status}).`);
-      const entries: GlTransaction[] = await response.json();
+      const page = parseLedgerPage(await response.json());
       const years: FinancialYear[] = await yearsResponse.json();
-      if (!Array.isArray(entries) || !Array.isArray(years)) throw new Error('The ledger API returned an invalid response.');
-      if (!cancelled) setResult({ key, entries, years });
+      if (!Array.isArray(years)) throw new Error('The ledger API returned an invalid response.');
+      if (!cancelled) setResult({ key, page, years });
     }
     load().catch(error => { if (!cancelled) setFailure({ key, message: error instanceof Error ? error.message : 'Unable to load General Ledger.' }); });
     return () => { cancelled = true; };
@@ -170,10 +199,16 @@ export default function GeneralLedger() {
     const next = new URLSearchParams(params);
     // Persist the default dates too, so a shared link always describes the same period.
     next.set('from', filters.from); next.set('to', filters.to);
-    for (const [name, value] of Object.entries(values)) next.set(name, value);
+    for (const [name, value] of Object.entries(values)) {
+      if (value === '') next.delete(name);
+      else next.set(name, value);
+    }
+    // Filter changes reset paging unless skip/take are explicitly updated.
+    if (!('skip' in values)) next.delete('skip');
     setParams(next, { replace: true });
   };
-  const entries = searchLedger(data?.entries || [], search);
+  const entries = searchLedger(data?.page.items || [], search);
+  const totalCount = data?.page.totalCount ?? 0;
   const formatAmount = (amount: number) => `${currencySymbol(currentOrg.currency)}${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   const today = getDateRange('all', new Date()).to;
   const activeYear = data?.years.find(y => y.isActive && y.startDate.slice(0, 10) <= today && y.endDate.slice(0, 10) >= today);
@@ -187,6 +222,10 @@ export default function GeneralLedger() {
     document.body.appendChild(link); link.click(); link.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
+  const pageStart = totalCount === 0 ? 0 : filters.skip + 1;
+  const pageEnd = Math.min(filters.skip + (data?.page.items.length || 0), totalCount);
+  const canPrev = filters.skip > 0;
+  const canNext = filters.skip + filters.take < totalCount;
   return <div className="space-y-6 text-[var(--text-main)]">
     <PageHeader title="General Ledger" subtitle="Journal register / posted transactions"
       actions={<>
@@ -202,8 +241,19 @@ export default function GeneralLedger() {
     <div className="flex flex-wrap items-end gap-4 rounded-2xl bg-[var(--bg-surface)] p-4">
       <label className="grid gap-1 text-xs">Period<select className={inputClass} value={preset} onChange={event => {
         const value = event.target.value;
-        if (value === 'month' || value === 'quarter' || value === 'year' || value === 'all') update({ ...getDateRange(value, new Date(), activeYear), period: value });
-        else update({ period: 'custom' });
+        if (value === 'month' || value === 'quarter' || value === 'all') {
+          update({ ...getDateRange(value, new Date(), activeYear), period: value });
+          return;
+        }
+        if (value === 'year') {
+          try {
+            update({ ...getDateRange('year', new Date(), activeYear), period: 'year' });
+          } catch (error) {
+            setFailure({ key, message: error instanceof Error ? error.message : 'No active financial year covers today.' });
+          }
+          return;
+        }
+        update({ period: 'custom' });
       }}>
         <option value="month">This Month</option><option value="quarter">Quarter-to-Date</option>
         <option value="year" disabled={!activeYear}>Year-to-Date</option><option value="all">All Time</option><option value="custom">Custom Range</option>
@@ -218,12 +268,24 @@ export default function GeneralLedger() {
       <label className="grid gap-1 text-xs">Transaction #<input type="number" min="1" step="1" className={inputClass} value={filters.transactionNo} onChange={event => update({ transactionNo: event.target.value })} /></label>
       <label className="grid gap-1 text-xs">Search<input type="search" className={inputClass} placeholder="Transaction, description, account" value={search} onChange={event => setSearch(event.target.value)} /></label>
     </div>
+    {!filters.from && !filters.to && <p role="status" className="text-sm text-[var(--text-secondary)]">All-time view is paged ({filters.take} transactions per page). Narrow the period when possible.</p>}
     {!valid ? <p role="alert" className="text-red-500">Select a valid date range (from must not be after to) and positive transaction number.</p>
       : error ? <p role="alert" className="text-red-500">{error} Use Refresh to retry.</p>
       : loading ? <p role="status">Loading posted transactions...</p>
-      : <section aria-label="Posted transactions" className="overflow-x-auto rounded-2xl bg-[var(--bg-surface)]">
+      : <section aria-label="Posted transactions" className="space-y-3 overflow-x-auto rounded-2xl bg-[var(--bg-surface)] p-2 sm:p-0">
         {!entries.length ? <p role="status" className="p-6">No posted transactions for the selected dates and filters.</p>
-          : <LedgerRows key={currentOrg.slug} entries={entries} slug={currentOrg.slug} formatAmount={formatAmount} />}
+          : <>
+            <LedgerRows key={currentOrg.slug} entries={entries} slug={currentOrg.slug} formatAmount={formatAmount} />
+            <div className="flex flex-wrap items-center justify-between gap-3 p-4 text-sm text-[var(--text-secondary)]">
+              <p role="status">Showing {pageStart}-{pageEnd} of {totalCount} posted transactions{search.trim() ? ' (search filters this page)' : ''}.</p>
+              <div className="flex gap-2">
+                <button type="button" className="rounded-lg border border-[var(--border-subtle)] px-3 py-2 disabled:opacity-50" disabled={!canPrev}
+                  onClick={() => update({ skip: String(Math.max(0, filters.skip - filters.take)) })}>Previous</button>
+                <button type="button" className="rounded-lg border border-[var(--border-subtle)] px-3 py-2 disabled:opacity-50" disabled={!canNext}
+                  onClick={() => update({ skip: String(filters.skip + filters.take) })}>Next</button>
+              </div>
+            </div>
+          </>}
       </section>}
   </div>;
 }

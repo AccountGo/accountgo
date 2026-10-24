@@ -8,7 +8,7 @@ import { MemoryRouter, Outlet, Route, Routes } from 'react-router-dom';
 
 const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false }, appType: 'custom' });
 after(() => server.close());
-const { default: GeneralLedger, LedgerRows, ledgerFilters, ledgerQuery, searchLedger, ledgerCsv, isLedgerBalanced } =
+const { default: GeneralLedger, LedgerRows, ledgerFilters, ledgerQuery, searchLedger, ledgerCsv, isLedgerBalanced, parseLedgerPage, LEDGER_DEFAULT_PAGE_SIZE } =
   await server.ssrLoadModule('/src/pages/GeneralLedger.tsx');
 const { default: JournalEntries, JournalEditor, journalTotals, canPostJournal } =
   await server.ssrLoadModule('/src/pages/JournalEntries.tsx');
@@ -49,6 +49,7 @@ test('financials mounts the ledger, keeps the module gate, and uses journal-view
   assert.match(app, /path: 'financials',[\s\S]*?<RequiresModule module="financials">\s*<GeneralLedger/);
   assert.ok(!app.includes('PlaceholderView'));
   assert.match(app, /path: 'financials\/journals'/);
+  await assert.rejects(() => readFile(new URL('../src/pages/PlaceholderView.tsx', import.meta.url)));
   for (const name of ['Sidebar', 'MobileBottomNav']) {
     const source = await readFile(new URL(`../src/components/${name}.tsx`, import.meta.url), 'utf8');
     assert.match(source, /path: `\/org\/\$\{currentOrg.slug\}\/financials`[\s\S]*?permission: 'financials.journal.view'/);
@@ -86,6 +87,17 @@ test('period and deep-link filters preserve local full-day bounds without cash-b
   assert.equal(original.has('from'), false);
   assert.equal(original.has('to'), false);
   assert.equal(original.get('transactionNo'), '1');
+  const paged = ledgerFilters(new URLSearchParams({ from: '2026-04-01', to: '2026-04-30', skip: '100', take: '50' }));
+  assert.equal(paged.skip, 100);
+  assert.equal(paged.take, 50);
+  const pagedQuery = new URLSearchParams(ledgerQuery(paged));
+  assert.equal(pagedQuery.get('skip'), '100');
+  assert.equal(pagedQuery.get('take'), '50');
+  assert.equal(ledgerFilters(new URLSearchParams()).take, LEDGER_DEFAULT_PAGE_SIZE);
+  assert.deepEqual(parseLedgerPage({ items: [entry()], totalCount: 1, skip: 0, take: 100 }), {
+    items: [entry()], totalCount: 1, skip: 0, take: 100,
+  });
+  assert.throws(() => parseLedgerPage([]), /invalid response/);
   const invalid = renderPage(GeneralLedger, ['financials.journal.view'], '/org/ws-one/financials?from=2026-05-01&to=2026-04-01');
   assert.ok(invalid.includes('role="alert"'));
   assert.ok(invalid.includes('from must not be after to'));

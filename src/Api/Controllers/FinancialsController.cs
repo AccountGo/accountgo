@@ -243,9 +243,7 @@ namespace Api.Controllers
                     return new BadRequestObjectResult(errors);
                 }
 
-                var anyDuplicate = journalEntryDto.JournalEntryLines.GroupBy(x => x.AccountId).Any(g => g.Count() > 1);
-                if (anyDuplicate)
-                    throw new Exception("One or more journal entry lines has duplicate account.");
+                // Split lines to the same account (different memos) are allowed; Dr/Cr balance is enforced on post.
                 if (journalEntryDto.JournalEntryLines.Count < 2
                     || journalEntryDto.JournalEntryLines.Any(l => !l.AccountId.HasValue || l.Amount.GetValueOrDefault() <= 0
                         || (l.DrCr != 1 && l.DrCr != 2))
@@ -351,13 +349,24 @@ namespace Api.Controllers
             DateTime? to = default(DateTime?),
             string? accountCode = null,
             int? transactionNo = null,
-            Core.Domain.DocumentTypes? documentType = null)
+            Core.Domain.DocumentTypes? documentType = null,
+            int skip = 0,
+            int take = Services.Financial.FinancialService.GeneralLedgerDefaultPageSize)
         {
             if (!ModelState.IsValid || (from.HasValue && to.HasValue && from.Value > to.Value))
                 return BadRequest(new { message = "Provide a valid date range and filters: from must not be after to." });
             if (documentType.HasValue && !Enum.IsDefined(typeof(Core.Domain.DocumentTypes), documentType.Value))
                 return BadRequest(new { message = "Provide a valid document type." });
-            return Ok(_financialService.GetGeneralLedgerTransactions(from, to, accountCode, transactionNo, documentType));
+            if (skip < 0 || take < 1 || take > Services.Financial.FinancialService.GeneralLedgerMaxPageSize)
+                return BadRequest(new { message = $"Provide skip >= 0 and take between 1 and {Services.Financial.FinancialService.GeneralLedgerMaxPageSize}." });
+            try
+            {
+                return Ok(_financialService.GetGeneralLedgerTransactions(from, to, accountCode, transactionNo, documentType, skip, take));
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
         }
 
         [HttpGet]
@@ -560,49 +569,6 @@ namespace Api.Controllers
             }
 
             return accountTree;
-        }
-
-
-        private IList<Dto.Financial.MasterGeneralLedger> BuildMasterGeneralLedger(ICollection<Services.Financial.MasterGeneralLedger> allLedger)
-        {
-            var ledgerTree = new List<Dto.Financial.MasterGeneralLedger>();
-
-
-            var parentLedger = allLedger.Select(a => a.TransactionNo).Distinct();
-            var childLedgers = new List<Dto.Financial.MasterGeneralLedger>();
-            parentLedger.ToList().ForEach(a =>
-            {
-                var childrenLedger = allLedger.Where(x => x.TransactionNo == a);
-
-                var secondChild = new Dto.Financial.MasterGeneralLedger();
-                var thirdChildren = new List<Dto.Financial.MasterGeneralLedger>();
-                secondChild.GroupId = a;
-                secondChild.TransactionNo = null;
-                secondChild.Credit = null;
-                secondChild.Debit = null;
-                secondChild.Date = null;
-                foreach (var ledger in childrenLedger)
-                {
-                    var thirdChild = new Dto.Financial.MasterGeneralLedger();
-                    thirdChild.Id = ledger.Id;
-                    thirdChild.TransactionNo = ledger.TransactionNo;
-                    thirdChild.AccountId = ledger.AccountId;
-                    thirdChild.AccountName = ledger.AccountName;
-                    thirdChild.AccountCode = ledger.AccountCode;
-                    thirdChild.CurrencyId = ledger.CurrencyId;
-                    thirdChild.Date = ledger.Date;
-                    thirdChild.Debit = ledger.Debit;
-                    thirdChild.Credit = ledger.Credit;
-                    thirdChildren.Add(thirdChild);
-                    secondChild.ChildMasterGeneralLedger = thirdChildren;
-                }
-
-                childLedgers.Add(secondChild);
-
-
-            });
-
-            return childLedgers;
         }
         #endregion
 
