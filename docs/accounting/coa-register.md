@@ -100,6 +100,12 @@ value rather than leaving rounded cents behind. The Inventory page reconciles th
 not quantity multiplied by a rounded display average. Back-dated documents do not re-cost
 later movements: costing follows posting order.
 
+Stock adjustments use `inventory.adjustments.post`, shared by the API and role editor.
+D1 migration `0016_stock_value.sql` backfills exact valued movements (or the legacy
+quantity/cost cache for unvalued history). `0017_stock_permission_cleanup.sql` preserves
+existing custom-role adjustment grants while removing the duplicate permission.
+Local SQLite upgrades and default-role seeding perform the equivalent conversions.
+
 ---
 
 ### 4. Vendor Bill / Purchase Invoice (`DocumentTypes.PurchaseInvoice`)

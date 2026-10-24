@@ -59,13 +59,14 @@ namespace Api.Controllers
                 name = item.Description,
                 quantityOnHand = item.QuantityOnHand,
                 averageCost = item.AverageCost,
-                value = item.QuantityOnHand * item.AverageCost,
+                value = item.StockValue,
                 archived = item.ArchivedAt.HasValue,
                 hasMovements = itemsWithMovements.Contains(item.Id)
             }).ToList();
 
-            var inventoryAccount = _db.Accounts.SingleOrDefault(account => account.AccountCode == "10800")
-                ?? throw new InvalidOperationException("This workspace has no Inventory account (10800).");
+            var inventoryAccount = _db.Accounts.SingleOrDefault(account => account.AccountCode == "10800");
+            if (inventoryAccount == null)
+                return BadRequest(new { message = "This workspace has no Inventory account (10800). Add it to the chart of accounts before viewing inventory." });
             var inventoryAccountBalance = _db.GeneralLedgerLines
                 .Where(line => line.AccountId == inventoryAccount.Id)
                 .Sum(line => line.DrCr == DrOrCrSide.Dr ? line.Amount : -line.Amount);
@@ -191,7 +192,7 @@ namespace Api.Controllers
 
         /// <summary>Posts an immutable stock adjustment and its matching ledger entry.</summary>
         [HttpPost("Adjust")]
-        [RequirePermission(SystemPermissions.InventoryStockAdjust)]
+        [RequirePermission(SystemPermissions.InventoryAdjustmentsPost)]
         public IActionResult Adjust([FromBody] AdjustStockRequest? request)
         {
             if (request == null)

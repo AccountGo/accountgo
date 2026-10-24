@@ -102,11 +102,8 @@ namespace AccountGo.BackendTests
 
             SetInventoryModuleEnabled(true);
             var stockItems = await Json(await Send(HttpMethod.Get, "/api/Stock/Items"));
-            Assert.InRange(
-                Math.Abs(stockItems.GetProperty("totalValue").GetDecimal()
-                    - stockItems.GetProperty("inventoryAccountBalance").GetDecimal()),
-                0m,
-                0.01m);
+            Assert.Equal(stockItems.GetProperty("totalValue").GetDecimal(),
+                stockItems.GetProperty("inventoryAccountBalance").GetDecimal());
 
             var movementResponse = await Json(await Send(HttpMethod.Get, $"/api/Stock/Movements?itemId={itemId}"));
             var movements = movementResponse.EnumerateArray().ToArray();
@@ -183,7 +180,16 @@ namespace AccountGo.BackendTests
             Assert.Equal(HttpStatusCode.Forbidden,
                 (await Send(HttpMethod.Post, "/api/Stock/Adjust", adjustmentRequest, token: _otherToken)).StatusCode);
 
-            var posted = await Send(HttpMethod.Post, "/api/Stock/Adjust", adjustmentRequest);
+            WithDb(db =>
+            {
+                db.SecurityRolePermissions.Add(new Core.Domain.Security.SecurityRolePermission
+                {
+                    SecurityRoleId = db.SecurityRoles.Single(role => role.Name == "Sales Representative").Id,
+                    SecurityPermissionId = db.SecurityPermissions.Single(permission => permission.Name == "inventory.adjustments.post").Id
+                });
+                db.SaveChanges();
+            });
+            var posted = await Send(HttpMethod.Post, "/api/Stock/Adjust", adjustmentRequest, token: _otherToken);
             Assert.Equal(HttpStatusCode.OK, posted.StatusCode);
             var movements = await Json(await Send(HttpMethod.Get, $"/api/Stock/Movements?itemId={item.Id}"));
             var adjustment = Assert.Single(movements.EnumerateArray().ToArray());
@@ -193,6 +199,20 @@ namespace AccountGo.BackendTests
             var stockItems = await Json(await Send(HttpMethod.Get, "/api/Stock/Items"));
             Assert.Equal(6m, stockItems.GetProperty("totalValue").GetDecimal());
             Assert.Equal(6m, stockItems.GetProperty("inventoryAccountBalance").GetDecimal());
+        }
+
+        [Fact]
+        public async Task StockApi_MissingInventoryAccount_ReturnsHelpfulBadRequest()
+        {
+            SetInventoryModuleEnabled(true);
+            WithDb(db =>
+            {
+                db.Accounts.Single(account => account.AccountCode == "10800").AccountCode = "10801";
+                db.SaveChanges();
+            });
+            var response = await Send(HttpMethod.Get, "/api/Stock/Items");
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            Assert.Contains("Inventory account (10800)", (await Json(response)).GetProperty("message").GetString());
         }
 
         [Fact]
@@ -245,6 +265,7 @@ namespace AccountGo.BackendTests
             Assert.Contains(Ledger(BillLedgerId(approved.Id)),
                 line => line.AccountId == AccountId("10800") && line.DrCr == DrOrCrSide.Dr && line.Amount == 10m);
             AssertStockState(created.Id, 6m, 3.8333m);
+            AssertStockInvariant(created.Id);
 
             var invoice = await NewStockInvoice(created.Id, 2m);
             invoice.Status = "Open";
@@ -252,7 +273,8 @@ namespace AccountGo.BackendTests
             Assert.True(issuedResponse.IsSuccessStatusCode, await issuedResponse.Content.ReadAsStringAsync());
             var invoiceId = (await Json(issuedResponse)).GetProperty("id").GetInt32();
             WithDb(db => Assert.NotNull(db.SalesInvoiceHeaders.Single(i => i.Id == invoiceId).GeneralLedgerHeaderId));
-            AssertStockState(created.Id, 4m, 3.8333m);
+            AssertStockState(created.Id, 4m, 3.8325m);
+            AssertStockInvariant(created.Id);
 
             var switchedOff = await Send(HttpMethod.Post, "/api/Catalog/SaveItem",
                 new Dto.Inventory.CatalogItem { Id = created.Id, Name = created.Name, TrackStock = false });
@@ -331,6 +353,9 @@ namespace AccountGo.BackendTests
             var migration = File.ReadAllText(Path.Combine(RepoRoot(), "src/Api/d1/migrations/0014_stock.sql"));
             ApplyStockMigration(command, migration, skipColumnAdds: false);
             ApplyStockMigration(command, migration, skipColumnAdds: true);
+            var valueMigration = File.ReadAllText(Path.Combine(RepoRoot(), "src/Api/d1/migrations/0016_stock_value.sql"));
+            ApplyStockMigration(command, valueMigration, skipColumnAdds: false);
+            ApplyStockMigration(command, valueMigration, skipColumnAdds: true);
 
             Assert.True(ColumnExists(command, "Item", "QuantityOnHand"));
             Assert.True(ColumnExists(command, "Item", "AverageCost"));
@@ -361,6 +386,38 @@ namespace AccountGo.BackendTests
                 command.CommandText = $@"SELECT COUNT(*) FROM ""SequenceNumber"" WHERE ""CompanyId"" = {companyId} AND ""SequenceNumberType"" = 16";
                 Assert.Equal(1L, command.ExecuteScalar());
             }
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void StockValueMigration_BackfillsMovementCentsInsteadOfRoundedAverage(bool localUpgrade)
+        {
+            var itemId = CreateStockItem("Valued migration stock");
+            AdjustStock(itemId, 10000m, 1m, "Count", "First receipt");
+            AdjustStock(itemId, 20000m, 1.01m, "Count", "Second receipt");
+            using var source = new SqliteConnection("Data Source=" + _path);
+            using var replica = new SqliteConnection("Data Source=:memory:");
+            source.Open();
+            replica.Open();
+            source.BackupDatabase(replica);
+            SQLitePCL.raw.sqlite3_limit(replica.Handle, SQLitePCL.raw.SQLITE_LIMIT_COMPOUND_SELECT, 1);
+            using var command = replica.CreateCommand();
+            command.CommandText = @"ALTER TABLE ""Item"" DROP COLUMN ""StockValue"";";
+            command.ExecuteNonQuery();
+            if (localUpgrade)
+            {
+                Api.Data.Schema.SqliteSchemaUpgrader.Upgrade(replica);
+                Api.Data.Schema.SqliteSchemaUpgrader.Upgrade(replica);
+            }
+            else
+            {
+                var migration = File.ReadAllText(Path.Combine(RepoRoot(), "src/Api/d1/migrations/0016_stock_value.sql"));
+                ApplyStockMigration(command, migration, skipColumnAdds: false);
+                ApplyStockMigration(command, migration, skipColumnAdds: true);
+            }
+            command.CommandText = @"SELECT ""StockValue"" FROM ""Item"" WHERE ""Id"" = " + itemId;
+            Assert.Equal(30200m, Convert.ToDecimal(command.ExecuteScalar()));
         }
 
         private int CreateStockItem(string description, decimal cost = 0m)

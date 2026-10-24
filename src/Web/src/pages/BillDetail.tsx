@@ -366,7 +366,7 @@ export const BillDetail: React.FC = () => {
       {confirm === 'void' && (
         <ConfirmDialog
           title={`Void ${billTitle(bill)}?`}
-          message="Voiding reverses what approving it posted, so it no longer counts as owed or spent. It stays listed as void. This can't be undone."
+          message="Voiding reverses what approving it posted, so it no longer counts as owed or spent. Stock received on this bill is removed. It stays listed as void. This can't be undone."
           confirmLabel="Void bill"
           destructive
           busy={busy === 'void'}

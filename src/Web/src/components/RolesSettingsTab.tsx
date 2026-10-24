@@ -84,7 +84,7 @@ const PERMISSION_GROUPS: Array<{ group: string; module?: ModuleKey | ModuleKey[]
     group: 'Inventory',
     module: 'inventory',
     permissions: [
-      { key: 'inventory.stock.adjust', label: 'Adjust stock' },
+      { key: 'inventory.adjustments.post', label: 'Adjust stock' },
     ],
   },
   {

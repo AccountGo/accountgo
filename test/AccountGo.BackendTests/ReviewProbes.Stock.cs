@@ -132,6 +132,31 @@ namespace AccountGo.BackendTests
         }
 
         [Fact]
+        public async Task StockReceipt_DiscountedBill_PreservesExactExtendedCost()
+        {
+            var itemId = CreateStockItem("Discounted stock");
+            var vendor = await SaveVendor(new Dto.Purchasing.Supplier { Name = "Discounted stock vendor" });
+            var bill = NewBill(vendor.Id, ("Discounted stock", 30000m, 1.01m, AccountId("10800")));
+            bill.Lines[0].ItemId = itemId;
+            bill.Lines[0].Discount = 33.33m;
+            bill.Status = "Open";
+            var saved = await SaveBillOk(bill);
+            AssertStockInvariant(itemId);
+            WithDb(db => Assert.Equal(20201.01m, db.Items.Single(i => i.Id == itemId).StockValue));
+            var invoice = await NewStockInvoice(itemId, 30000m);
+            var issued = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
+            Assert.True(issued.IsSuccessStatusCode, await issued.Content.ReadAsStringAsync());
+            WithDb(db => Assert.Equal(0m, db.Items.Single(i => i.Id == itemId).StockValue));
+            AssertStockInvariant(itemId);
+            var id = (await Json(issued)).GetProperty("id").GetInt32();
+            Assert.True((await Send(HttpMethod.Post, $"/api/Sales/VoidSalesInvoice?id={id}")).IsSuccessStatusCode);
+            AssertStockInvariant(itemId);
+            Assert.True((await Send(HttpMethod.Post, $"/api/Purchasing/VoidBill?id={saved.Id}")).IsSuccessStatusCode);
+            AssertStockState(itemId, 0m, 0.6734m);
+            AssertStockInvariant(itemId);
+        }
+
+        [Fact]
         public async Task StockPosting_FinalLedgerValidationFailure_DoesNotIssueStock_AndRetryIssuesOnce()
         {
             var itemId = CreateStockItem("Invalid COGS account");

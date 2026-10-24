@@ -41,10 +41,11 @@ namespace Services.Inventory
             quantity = RoundQuantity(quantity);
             if (quantity <= 0)
                 throw new ArgumentOutOfRangeException(nameof(quantity), "Received stock quantity must be more than zero at four decimal places.");
+            // A bill's extended cost can be exact even when its per-unit rate needs more than four decimals.
+            var totalCost = RoundMoney(quantity * unitCost);
             unitCost = RoundUnitCost(unitCost);
             var quantityBefore = item.QuantityOnHand;
             var quantityAfter = RoundQuantity(quantityBefore + quantity);
-            var totalCost = RoundMoney(quantity * unitCost);
 
             item.StockValue = RoundMoney(item.StockValue + totalCost);
             item.AverageCost = quantityAfter != 0
@@ -173,7 +174,7 @@ namespace Services.Inventory
             var adjustmentDescription = string.IsNullOrWhiteSpace(memo) ? reason : memo;
             if (quantityChange > 0)
             {
-                movement = Receive(item, quantityChange, unitCost.Value, DocumentTypes.InventoryAdjustment, null, date, adjustmentDescription);
+                movement = Receive(item, quantityChange, RoundUnitCost(unitCost.Value), DocumentTypes.InventoryAdjustment, null, date, adjustmentDescription);
             }
             else
             {
