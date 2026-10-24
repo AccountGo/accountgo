@@ -4,6 +4,7 @@ using Core.Domain;
 using Dto.Sales;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Services.Administration;
 using Services.Financial;
 using Services.Inventory;
@@ -26,6 +27,8 @@ namespace Api.Controllers
         private readonly Core.Tenancy.ITenantContext _tenantContext;
         private readonly Core.Tenancy.ITenantGuard _tenantGuard;
         private readonly Api.Data.ApiDbContext _db;
+        private readonly Api.Service.SalesInvoicePresentation _invoicePresentation;
+        private readonly IConfiguration _configuration;
 
         public SalesController(IAdministrationService adminService,
             ISalesService salesService,
@@ -35,7 +38,9 @@ namespace Api.Controllers
             ILogger<SalesController> logger,
             Core.Tenancy.ITenantContext tenantContext,
             Core.Tenancy.ITenantGuard tenantGuard,
-            Api.Data.ApiDbContext db)
+            Api.Data.ApiDbContext db,
+            Api.Service.SalesInvoicePresentation invoicePresentation,
+            IConfiguration configuration)
         {
             _adminService = adminService;
             _salesService = salesService;
@@ -46,6 +51,8 @@ namespace Api.Controllers
             _tenantContext = tenantContext;
             _tenantGuard = tenantGuard;
             _db = db;
+            _invoicePresentation = invoicePresentation;
+            _configuration = configuration;
         }
 
         [HttpPost]
@@ -608,27 +615,25 @@ namespace Api.Controllers
         }
 
         /// <summary>
-        /// Emails an issued invoice to the customer with its PDF attached, and a blind copy to the person sending it.
+        /// Emails an issued invoice to the customer with a signed PDF link (and optional attachment), plus a blind copy to the sender.
         /// Separate from issuing: a failed send never un-issues the invoice, and the same call resends later.
         /// </summary>
         [HttpPost]
         [Route("SendSalesInvoiceEmail")]
         [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesCreate)]
-        public Task<IActionResult> SendSalesInvoiceEmail(int id,
-            [FromServices] Api.Service.IEmailSender emailSender) =>
-            SendInvoiceEmailAsync(id, emailSender, followUp: false);
+        public Task<IActionResult> SendSalesInvoiceEmail(int id, [FromServices] Api.Service.IEmailSender emailSender, bool attachPdf = false) =>
+            SendInvoiceEmailAsync(id, emailSender, followUp: false, attachPdf);
 
         /// <summary>
-        /// Sends a follow-up reminder for an unpaid invoice: same PDF and BCC as the original send, different copy.
+        /// Sends a follow-up reminder for an unpaid invoice: same PDF link/BCC as the original send, different copy.
         /// </summary>
         [HttpPost]
         [Route("SendSalesInvoiceFollowUpEmail")]
         [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesCreate)]
-        public Task<IActionResult> SendSalesInvoiceFollowUpEmail(int id,
-            [FromServices] Api.Service.IEmailSender emailSender) =>
-            SendInvoiceEmailAsync(id, emailSender, followUp: true);
+        public Task<IActionResult> SendSalesInvoiceFollowUpEmail(int id, [FromServices] Api.Service.IEmailSender emailSender, bool attachPdf = false) =>
+            SendInvoiceEmailAsync(id, emailSender, followUp: true, attachPdf);
 
-        private async Task<IActionResult> SendInvoiceEmailAsync(int id, Api.Service.IEmailSender emailSender, bool followUp)
+        private async Task<IActionResult> SendInvoiceEmailAsync(int id, Api.Service.IEmailSender emailSender, bool followUp, bool attachPdf)
         {
             var invoice = BuildSalesInvoiceDto(id);
             if (invoice == null)
@@ -662,10 +667,21 @@ namespace Api.Controllers
             var replyTo = ValidEmail(invoice.Seller.Email) ?? senderEmail;
             var currency = _db.CompanySettings.Select(s => s.Currency).FirstOrDefault();
 
+            string pdfUrl;
+            try
+            {
+                pdfUrl = CreateCustomerPdfUrl(invoice.Id, to);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Invoice {InvoiceId} PDF link could not be created", id);
+                return StatusCode(StatusCodes.Status500InternalServerError,
+                    new { message = "The secure invoice link could not be created. Check PUBLIC_API_URL and SECRET_KEY." });
+            }
+
             var content = followUp
-                ? Api.Service.InvoiceEmailTemplate.BuildFollowUp(invoice, currency, canReply: replyTo != null)
-                : Api.Service.InvoiceEmailTemplate.Build(invoice, currency, canReply: replyTo != null);
-            var pdf = QuestPDF.Fluent.GenerateExtensions.GeneratePdf(new Api.Service.InvoicePdfDocument(invoice, currency));
+                ? Api.Service.InvoiceEmailTemplate.BuildFollowUp(invoice, currency, canReply: replyTo != null, pdfUrl, attachPdf)
+                : Api.Service.InvoiceEmailTemplate.Build(invoice, currency, canReply: replyTo != null, pdfUrl, attachPdf);
             var number = Api.Service.InvoiceFormat.Number(invoice);
 
             var message = new Api.Service.EmailMessage
@@ -676,8 +692,16 @@ namespace Api.Controllers
                 Text = content.Text,
                 FromName = $"{(string.IsNullOrWhiteSpace(invoice.Seller.Name) ? "AccountGo" : invoice.Seller.Name)} via AccountGo",
                 ReplyTo = replyTo,
-                Attachments = { new Api.Service.EmailAttachment { FileName = Api.Service.InvoiceEmailTemplate.PdfFileName(number), Content = pdf } },
             };
+            if (attachPdf)
+            {
+                var pdf = QuestPDF.Fluent.GenerateExtensions.GeneratePdf(new Api.Service.InvoicePdfDocument(invoice, currency));
+                message.Attachments.Add(new Api.Service.EmailAttachment
+                {
+                    FileName = Api.Service.InvoiceEmailTemplate.PdfFileName(number),
+                    Content = pdf
+                });
+            }
             if (senderEmail != null && !string.Equals(senderEmail, to, StringComparison.OrdinalIgnoreCase))
                 message.Bcc.Add(senderEmail);
 
@@ -729,6 +753,26 @@ namespace Api.Controllers
         }
 
         private const int InvoiceEmailsPerHour = 30;
+
+        private string CreateCustomerPdfUrl(int invoiceId, string recipientEmail)
+        {
+            var secret = _configuration["SECRET_KEY"]
+                ?? _configuration["SECRET:key"]
+                ?? _configuration["SECRET__key"]
+                ?? Environment.GetEnvironmentVariable("SECRET_KEY")
+                ?? throw new InvalidOperationException("SECRET_KEY is not configured.");
+            var apiBase = _configuration["PUBLIC_API_URL"]
+                ?? _configuration["JwtSettings:validAudience"]
+                ?? throw new InvalidOperationException("PUBLIC_API_URL is not configured.");
+            var companyId = _tenantContext.RequireCompanyId();
+            return Api.Service.InvoicePdfLinkSigner.CreateUrl(
+                apiBase,
+                companyId,
+                invoiceId,
+                recipientEmail,
+                DateTimeOffset.UtcNow.Add(Api.Service.InvoicePdfLinkSigner.Lifetime),
+                secret);
+        }
 
         private static Dto.Sales.InvoiceEmailItemDto ToEmailItem(Core.Domain.Sales.SalesInvoiceEmail email) => new()
         {
@@ -814,114 +858,7 @@ namespace Api.Controllers
         }
 
         /// <summary>Shapes an invoice with its computed totals and status; null when it is not in this workspace.</summary>
-        private Dto.Sales.SalesInvoice? BuildSalesInvoiceDto(int id)
-        {
-            var salesInvoice = _salesService.GetSalesInvoiceById(id);
-            if (salesInvoice == null)
-                return null;
-
-            var paymentTerm = _adminService.GetPaymentTerms().FirstOrDefault(t => t.Id == salesInvoice.PaymentTermId);
-            var dueDate = salesInvoice.ResolveDueDate(paymentTerm);
-
-            var defaultCompany = CurrentCompany();
-            var setting = _db.CompanySettings.FirstOrDefault();
-            var invoiceSettings = setting?.GetSalesInvoiceSettings() ?? new Core.Domain.SalesInvoiceSettings();
-            // Issued invoices print the seller recorded when they were issued; drafts, and invoices issued before that
-            // was recorded, follow the current business details.
-            var seller = Core.Domain.Sales.InvoiceSeller.FromJson(salesInvoice.SellerJson)
-                ?? Core.Domain.Sales.InvoiceSeller.FromWorkspace(defaultCompany, setting);
-
-            // Likewise the customer: as recorded at issue, or as it is now for drafts.
-            var party = salesInvoice.Customer?.Party;
-            var billTo = Core.Domain.Sales.InvoiceBillTo.FromJson(salesInvoice.BillToJson)
-                ?? Core.Domain.Sales.InvoiceBillTo.FromParty(party);
-
-            var salesInvoiceDto = new Dto.Sales.SalesInvoice()
-            {
-                Id = salesInvoice.Id,
-                CustomerId = salesInvoice.CustomerId,
-                CustomerName = billTo.Name,
-                CustomerEmail = billTo.Email,
-                CustomerPhone = billTo.Phone,
-                CustomerAddress = billTo.AddressText,
-                RecipientEmail = party?.Email,
-                No = salesInvoice.No,
-                InvoiceDate = salesInvoice.Date,
-                DueDate = dueDate,
-                SalesInvoiceLines = new List<Dto.Sales.SalesInvoiceLine>(),
-                PaymentTermId = salesInvoice.PaymentTermId,
-                ReferenceNo = salesInvoice.ReferenceNo,
-                ShippingHandlingCharge = salesInvoice.ShippingHandlingCharge,
-                Notes = salesInvoice.Notes,
-                PaymentInstructions = salesInvoice.PaymentInstructions,
-                Posted = salesInvoice.GeneralLedgerHeaderId != null,
-                CompanyName = defaultCompany?.Name,
-                Seller = new Dto.Sales.SellerInfo
-                {
-                    Name = seller.Name,
-                    TaxId = seller.TaxId,
-                    AddressLines = invoiceSettings.ShowSellerAddress ? seller.AddressLines : new List<string>(),
-                    Email = seller.Email,
-                    Phone = seller.Phone
-                },
-                Display = new Dto.Sales.DisplayFlags
-                {
-                    ShowCustomerEmail = invoiceSettings.ShowCustomerEmail,
-                    ShowNotes = invoiceSettings.ShowNotes,
-                    ShowPaymentInstructions = invoiceSettings.ShowPaymentInstructions
-                }
-            };
-
-            if (salesInvoice.CustomerAllocations != null)
-            {
-                salesInvoiceDto.Payments = salesInvoice.CustomerAllocations
-                    .OrderByDescending(a => a.Date)
-                    .Select(a => new Dto.Sales.InvoicePaymentItemDto
-                    {
-                        Id = a.Id,
-                        ReceiptNo = a.SalesReceiptHeader?.No,
-                        Date = a.Date,
-                        Amount = a.Amount,
-                        PaymentMethod = a.SalesReceiptHeader?.PaymentMethod ?? "Payment",
-                        ReferenceNo = a.SalesReceiptHeader?.ReferenceNo,
-                        Notes = a.SalesReceiptHeader?.Memo
-                    }).ToList();
-            }
-
-            salesInvoiceDto.Emails = _db.SalesInvoiceEmails
-                .Where(e => e.SalesInvoiceHeaderId == salesInvoice.Id)
-                .OrderByDescending(e => e.SentAt)
-                .AsEnumerable()
-                .Select(ToEmailItem)
-                .ToList();
-
-            foreach (var line in salesInvoice.SalesInvoiceLines)
-            {
-                salesInvoiceDto.SalesInvoiceLines.Add(new Dto.Sales.SalesInvoiceLine
-                {
-                    Id = line.Id,
-                    Amount = line.Amount,
-                    Discount = line.Discount,
-                    Quantity = line.Quantity,
-                    ItemId = line.ItemId,
-                    MeasurementId = line.MeasurementId,
-                    ItemDescription = line.DisplayDescription,
-                    MeasurementDescription = line.Measurement?.Description ?? "EA",
-                    LineTotal = line.Subtotal,
-                    TaxId = line.TaxId,
-                    TaxAmount = line.TaxAmount
-                });
-            }
-            ApplySummary(salesInvoiceDto, Summarize(salesInvoice, dueDate));
-
-            // is this journal entry ready for posting?
-            if (!salesInvoiceDto.Posted && salesInvoiceDto.SalesInvoiceLines.Count >= 1)
-            {
-                salesInvoiceDto.ReadyForPosting = true;
-            }
-
-            return salesInvoiceDto;
-        }
+        private Dto.Sales.SalesInvoice? BuildSalesInvoiceDto(int id) => _invoicePresentation.Get(id);
 
         [HttpPost]
         [Route("addsalesorder")]

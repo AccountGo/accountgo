@@ -98,6 +98,7 @@ builder.Services.AddAuthorization(options =>
 
 builder.Services.AddScoped<IFinancialService, FinancialService>();
 builder.Services.AddScoped<IAccountService, AccountService>();
+builder.Services.AddScoped<Api.Service.SalesInvoicePresentation>();
 builder.Services.AddScoped<Api.Service.D1Sync.ID1SyncContext, Api.Service.D1Sync.D1SyncContext>();
 builder.Services.AddScoped<Core.Tenancy.ITenantContext, Api.Tenancy.TenantContext>();
 builder.Services.AddScoped<Core.Tenancy.ITenantGuard, Services.Tenancy.TenantGuard>();
@@ -188,6 +189,10 @@ builder.Services.AddRateLimiter(options =>
     options.AddPolicy("invitation-preview", context =>
         RateLimitPartition.GetFixedWindowLimiter(context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
             _ => new FixedWindowRateLimiterOptions { PermitLimit = 30, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
+
+    options.AddPolicy("invoice-pdf-link", context =>
+        RateLimitPartition.GetFixedWindowLimiter(context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions { PermitLimit = 60, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
 
     // Chained Limiter Level 1: Global IP limiter for auth endpoints (loosened to 30 req/15 min)
     options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(ctx =>

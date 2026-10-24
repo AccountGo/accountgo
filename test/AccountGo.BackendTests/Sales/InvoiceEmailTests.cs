@@ -31,16 +31,20 @@ public class InvoiceEmailTests
         SalesInvoiceLines = new List<Dto.Sales.SalesInvoiceLine> { new() { Amount = 1250m, Quantity = 1 } },
     };
 
+    private const string SamplePdfUrl = "https://api.example.com/api/public/invoices/pdf?c=1&i=7&e=a%40b.com&exp=1&sig=x";
+
     [Fact]
     public void Build_ShowsAmountDueAndDetails_AndEncodesWhatTheWorkspaceTyped()
     {
-        var email = InvoiceEmailTemplate.Build(Invoice(), "PHP", canReply: true);
+        var email = InvoiceEmailTemplate.Build(Invoice(), "PHP", canReply: true, pdfUrl: SamplePdfUrl);
 
         Assert.Equal("Invoice INV-0042 from Acme \"Studio\": ₱1,250.00 due Nov 22, 2026", email.Subject);
         Assert.Contains("₱1,250.00", email.Html);
         Assert.Contains("Nov 22, 2026", email.Html);
         Assert.Contains("PO-9", email.Html);
-        Assert.Contains("Invoice-INV-0042.pdf", email.Html);
+        Assert.Contains("View invoice PDF", email.Html);
+        Assert.Contains(WebUtility.HtmlEncode(SamplePdfUrl), email.Html);
+        Assert.DoesNotContain("is attached", email.Html);
         Assert.Contains("reply to this email", email.Html);
         Assert.Contains("Thank you!<br>See you again", email.Html);
         Assert.Contains("BDO 1234 &amp; GCash", email.Html);
@@ -48,6 +52,18 @@ public class InvoiceEmailTests
         Assert.Contains("Juan &lt;script&gt;", email.Html);
         Assert.Contains("Due date: Nov 22, 2026", email.Text);
         Assert.Contains("HOW TO PAY", email.Text);
+        Assert.Contains(SamplePdfUrl, email.Text);
+    }
+
+    [Fact]
+    public void Build_AttachPdf_ShowsAttachmentChip_AlongsideLink()
+    {
+        var email = InvoiceEmailTemplate.Build(Invoice(), "USD", canReply: true, pdfUrl: SamplePdfUrl, attachPdf: true);
+
+        Assert.Contains("View invoice PDF", email.Html);
+        Assert.Contains("Invoice-INV-0042.pdf", email.Html);
+        Assert.Contains("is attached", email.Html);
+        Assert.Contains("Attached: Invoice-INV-0042.pdf", email.Text);
     }
 
     [Fact]
@@ -95,13 +111,15 @@ public class InvoiceEmailTests
     [Fact]
     public void BuildFollowUp_SubjectAndIntro_RemindAboutOutstandingBalance()
     {
-        var email = InvoiceEmailTemplate.BuildFollowUp(Invoice(), "PHP", canReply: true);
+        var email = InvoiceEmailTemplate.BuildFollowUp(Invoice(), "PHP", canReply: true, pdfUrl: SamplePdfUrl);
 
         Assert.Equal("Following up on Invoice INV-0042 from Acme \"Studio\"", email.Subject);
         Assert.Contains("following up", email.Html, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("₱1,250.00", email.Html);
         Assert.Contains("Nov 22, 2026", email.Html);
-        Assert.Contains("Invoice-INV-0042.pdf", email.Html);
+        Assert.Contains("View invoice PDF", email.Html);
+        Assert.Contains(WebUtility.HtmlEncode(SamplePdfUrl), email.Html);
+        Assert.DoesNotContain("is attached", email.Html);
         Assert.Contains("reply to this email", email.Html);
         Assert.DoesNotContain("<script>", email.Html);
         Assert.Contains("Due date: Nov 22, 2026", email.Text);
