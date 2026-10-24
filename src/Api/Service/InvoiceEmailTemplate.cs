@@ -55,6 +55,14 @@ namespace Api.Service
                 facts.Add(("Due date", due));
             if (!string.IsNullOrWhiteSpace(invoice.ReferenceNo))
                 facts.Add(("Reference / PO", invoice.ReferenceNo.Trim()));
+            foreach (var line in invoice.SalesInvoiceLines ?? new List<Dto.Sales.SalesInvoiceLine>())
+                facts.Add((line.ItemDescription ?? "Item",
+                    $"{InvoiceFormat.Money(line.LineTotal ?? 0, currency)} + tax {InvoiceFormat.Money(line.TaxAmount ?? 0, currency)}"));
+            facts.Add(("Subtotal", InvoiceFormat.Money(invoice.Amount, currency)));
+            facts.Add(("Tax", InvoiceFormat.Money(invoice.TotalTax ?? 0, currency)));
+            if (invoice.ShippingHandlingCharge != 0)
+                facts.Add(("Shipping", InvoiceFormat.Money(invoice.ShippingHandlingCharge, currency)));
+            facts.Add(("Total", InvoiceFormat.Money(total, currency)));
             if (invoice.PaidAmount > 0 && !paidInFull)
             {
                 facts.Add(("Invoice total", InvoiceFormat.Money(total, currency)));
