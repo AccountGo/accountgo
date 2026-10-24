@@ -35,6 +35,7 @@ import {
 import { useAuth } from '../auth/AuthContext';
 import { currencySymbol as getCurrencySymbol } from '../lib/currency';
 import { addBusinessDays, businessDaysBetween, isValidDate, localToday } from '../lib/businessDays';
+import { invoiceLineAmounts } from '../lib/invoiceTax';
 
 interface InvoiceEditProps {
   isEdit?: boolean;
@@ -47,8 +48,17 @@ interface FormLineItem {
   quantity: number;
   amount: number;
   discount: number;
-  taxRate: number;
+  taxId: number | '';
 }
+
+interface TaxOption {
+  id: number;
+  taxName: string;
+  rate: number;
+  isActive: boolean;
+}
+
+const round2 = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
 
 export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
   const { currentOrg, hasModule } = useOutletContext<TenantContextType>();
@@ -65,6 +75,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
   const [customers, setCustomers] = useState<CustomerOption[]>([]);
   const [paymentTerms, setPaymentTerms] = useState<PaymentTermOption[]>([]);
   const [catalogItems, setCatalogItems] = useState<ItemOption[]>([]);
+  const [taxes, setTaxes] = useState<TaxOption[]>([]);
   // Line whose catalog picker is open.
   const [pickerLine, setPickerLine] = useState<number | null>(null);
   const [isLoadingRefs, setIsLoadingRefs] = useState<boolean>(true);
@@ -77,6 +88,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
   // Shown as the placeholder: the number the invoice takes when issued, if none is typed.
   const [nextNumber, setNextNumber] = useState<string | null>(null);
   const [referenceNo, setReferenceNo] = useState<string>('');
+  const [shippingHandlingCharge, setShippingHandlingCharge] = useState(0);
   const [invoiceDate, setInvoiceDate] = useState<string>(localToday);
   const [paymentTermId, setPaymentTermId] = useState<number | ''>('');
   const [dueDate, setDueDate] = useState<string>('');
@@ -91,7 +103,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
       quantity: 1,
       amount: 0,
       discount: 0,
-      taxRate: 0,
+      taxId: '',
     },
   ]);
 
@@ -127,10 +139,11 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
   const loadReferenceData = useCallback(async () => {
     setIsLoadingRefs(true);
     try {
-      const [custRes, termsRes, itemsRes] = await Promise.all([
+      const [custRes, termsRes, itemsRes, taxesRes] = await Promise.all([
         authFetch('/api/Sales/Customers'),
         authFetch('/api/Common/PaymentTerms'),
         authFetch('/api/Common/Items'),
+        authFetch('/api/Tax/Taxes'),
       ]);
 
       if (custRes.ok) {
@@ -154,8 +167,12 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
         const itemsList = await itemsRes.json();
         setCatalogItems(Array.isArray(itemsList) ? itemsList : []);
       }
+      if (!taxesRes.ok) throw new Error('The invoice taxes could not be loaded.');
+      const taxData = await taxesRes.json();
+      setTaxes(((taxData?.taxes ?? []) as TaxOption[]).filter(t => t.isActive && t.rate > 0));
     } catch (err: any) {
       console.error('Error loading reference data:', err);
+      setErrorBanner(err.message || 'The invoice form could not be loaded.');
     } finally {
       setIsLoadingRefs(false);
     }
@@ -219,6 +236,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
 
         setSelectedCustomerId(data.customerId);
         setReferenceNo(data.referenceNo || '');
+        setShippingHandlingCharge(data.shippingHandlingCharge ?? 0);
         setInvoiceDate(today);
         setPaymentTermId(data.paymentTermId || '');
         setDueDate(gap !== null ? addBusinessDays(today, gap) : '');
@@ -229,10 +247,10 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
             data.salesInvoiceLines.map((l: InvoiceLineItem) => ({
               itemId: l.itemId,
               itemDescription: l.itemDescription || '',
-              quantity: l.quantity || 1,
+              quantity: l.quantity ?? 1,
               amount: l.amount || 0,
               discount: l.discount || 0,
-              taxRate: l.taxRate || 0,
+              taxId: l.taxId ?? '',
             }))
           );
         }
@@ -257,6 +275,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
           setInvoiceNo(data.no || '');
           setIsIssued(data.status !== 'Draft');
           setReferenceNo(data.referenceNo || '');
+          setShippingHandlingCharge(data.shippingHandlingCharge ?? 0);
           if (data.invoiceDate) {
             setInvoiceDate(data.invoiceDate.split('T')[0]);
           }
@@ -275,10 +294,10 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
                 id: l.id,
                 itemId: l.itemId,
                 itemDescription: l.itemDescription || '',
-                quantity: l.quantity || 1,
+                quantity: l.quantity ?? 1,
                 amount: l.amount || 0,
                 discount: l.discount || 0,
-                taxRate: l.taxRate || 0,
+                taxId: l.taxId ?? '',
               }))
             );
           }
@@ -366,7 +385,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
         quantity: 1,
         amount: 0,
         discount: 0,
-        taxRate: 0,
+        taxId: '',
       },
     ]);
   };
@@ -383,25 +402,17 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
     let totalTax = 0;
 
     lines.forEach((l) => {
-      const qty = Number(l.quantity) || 0;
-      const rate = Number(l.amount) || 0;
-      const gross = Math.round(qty * rate * 100) / 100;
-      const discPercent = Number(l.discount) || 0;
-      const discAmount = Math.round(((gross * discPercent) / 100) * 100) / 100;
-      const net = Math.max(0, Math.round((gross - discAmount) * 100) / 100);
-
-      const taxPercent = Number(l.taxRate) || 0;
-      const taxAmount = Math.round(((net * taxPercent) / 100) * 100) / 100;
-
-      subtotal += net;
-      totalDiscount += discAmount;
-      totalTax += taxAmount;
+      const taxPercent = taxes.find(t => t.id === l.taxId)?.rate ?? 0;
+      const amounts = invoiceLineAmounts(l.quantity, l.amount, l.discount, taxPercent);
+      subtotal += amounts.subtotal;
+      totalDiscount += amounts.discount;
+      totalTax += amounts.tax;
     });
 
     subtotal = Math.round(subtotal * 100) / 100;
     totalDiscount = Math.round(totalDiscount * 100) / 100;
     totalTax = Math.round(totalTax * 100) / 100;
-    const grandTotal = Math.round((subtotal + totalTax) * 100) / 100;
+    const grandTotal = round2(subtotal + totalTax + shippingHandlingCharge);
 
     return {
       subtotal,
@@ -409,7 +420,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
       totalTax,
       grandTotal,
     };
-  }, [lines]);
+  }, [lines, taxes, shippingHandlingCharge]);
 
   // Submit Handler
   const handleSaveInvoice = async (asDraft: boolean) => {
@@ -432,6 +443,10 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
       setErrorBanner('Please provide at least one line item with a description or rate.');
       return;
     }
+    if (validLines.some(l => l.taxId !== '' && !taxes.some(t => t.id === l.taxId))) {
+      setErrorBanner('A selected tax is no longer available. Pick an active tax or No tax.');
+      return;
+    }
 
     if (asDraft) setIsSavingDraft(true);
     else setIsSavingIssue(true);
@@ -446,6 +461,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
         dueDate: dueDate || invoiceDate,
         paymentTermId: paymentTermId ? Number(paymentTermId) : null,
         referenceNo: referenceNo.trim() || undefined,
+        shippingHandlingCharge,
         status: asDraft ? 'Draft' : 'Open',
         notes: notes.trim() || undefined,
         paymentInstructions: paymentInstructions.trim() || undefined,
@@ -453,10 +469,10 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
           id: l.id || 0,
           itemId: l.itemId || null,
           itemDescription: l.itemDescription.trim() || 'Service / Product',
-          quantity: Number(l.quantity) || 1,
+          quantity: Number(l.quantity),
           amount: Number(l.amount) || 0,
           discount: Number(l.discount) || 0,
-          taxRate: Number(l.taxRate) || 0,
+          taxId: l.taxId || null,
         })),
       };
 
@@ -477,7 +493,9 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
       const savedData = await res.json();
       const targetId = savedData.id || invoiceId;
       const warnings = Array.isArray(savedData.warnings) ? savedData.warnings.filter((warning: unknown): warning is string => typeof warning === 'string') : [];
+      const postingError = typeof savedData.postingError === 'string' ? savedData.postingError : null;
       setStockWarnings(warnings);
+      if (postingError) setErrorBanner(`Issued, but not posted to the ledger: ${postingError}`);
 
       setSuccessBanner(
         asDraft
@@ -487,8 +505,8 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
 
       // Navigate to detail view
       setTimeout(() => {
-        navigate(`/org/${orgSlug}/sales/${targetId}`, { state: { stockWarnings: warnings } });
-      }, warnings.length > 0 ? 3500 : 700);
+        navigate(`/org/${orgSlug}/sales/${targetId}`, { state: { stockWarnings: warnings, postingError } });
+      }, warnings.length > 0 || postingError ? 3500 : 700);
     } catch (err: any) {
       console.error('Save invoice error:', err);
       setErrorBanner(err.message || 'An error occurred while saving the invoice.');
@@ -800,18 +818,14 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
                   <th className="py-3 px-3 w-20 text-right">Qty</th>
                   <th className="py-3 px-3 w-28 text-right">Unit Price</th>
                   <th className="py-3 px-3 w-20 text-right">Disc %</th>
-                  <th className="py-3 px-3 w-24 text-right">Tax %</th>
+                  <th className="py-3 px-3 w-40 text-right">Tax</th>
                   <th className="py-3 px-4 w-28 text-right">Line Total</th>
                   <th className="py-3 px-2 w-12 text-center"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--border-subtle)] text-sm">
                 {lines.map((line, idx) => {
-                  const qty = Number(line.quantity) || 0;
-                  const rate = Number(line.amount) || 0;
-                  const gross = qty * rate;
-                  const disc = (gross * (Number(line.discount) || 0)) / 100;
-                  const lineTotal = Math.max(0, gross - disc);
+                  const lineTotal = invoiceLineAmounts(line.quantity, line.amount, line.discount, 0).subtotal;
                   const linked = line.itemId ? catalogItems.find((ci) => ci.id === line.itemId) : undefined;
                   const requestedQuantity = lines.filter(other => other.itemId === line.itemId)
                     .reduce((total, other) => total + (Number(other.quantity) || 0), 0);
@@ -910,20 +924,17 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
 
                       <td className="py-2.5 px-3 text-right">
                         <select
-                          value={line.taxRate}
+                          aria-label={`Line ${idx + 1} tax`}
+                          value={line.taxId}
                           onChange={(e) =>
-                            handleLineChange(idx, 'taxRate', parseFloat(e.target.value) || 0)
+                            handleLineChange(idx, 'taxId', e.target.value ? Number(e.target.value) : '')
                           }
                           className="w-full h-9 px-2 text-sm text-right bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-lg focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] transition"
                         >
-                          <option value="0">0%</option>
-                          <option value="5">5%</option>
-                          <option value="7">7%</option>
-                          <option value="10">10%</option>
-                          <option value="12">12%</option>
-                          <option value="13">13%</option>
-                          <option value="15">15%</option>
-                          <option value="20">20%</option>
+                          <option value="">No tax</option>
+                          {taxes.map(t => (
+                            <option key={t.id} value={t.id}>{t.taxName} ({t.rate}%)</option>
+                          ))}
                         </select>
                       </td>
 
@@ -1009,11 +1020,18 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
             )}
 
             <div className="flex items-center justify-between text-sm text-[var(--text-secondary)]">
-              <span>Estimated Tax</span>
+              <span>Tax</span>
               <span className="font-medium font-mono text-[var(--text-main)]">
                 {formatCurrency(calculatedTotals.totalTax)}
               </span>
             </div>
+
+            {shippingHandlingCharge > 0 && (
+              <div className="flex items-center justify-between text-sm text-[var(--text-secondary)]">
+                <span>Shipping</span>
+                <span className="font-mono">{formatCurrency(shippingHandlingCharge)}</span>
+              </div>
+            )}
 
             <div className="border-t border-[var(--border-subtle)] pt-3 flex items-center justify-between">
               <span className="text-base font-bold text-[var(--text-main)]">

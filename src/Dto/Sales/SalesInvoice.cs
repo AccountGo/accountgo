@@ -29,6 +29,11 @@ namespace Dto.Sales
         public decimal? TotalAmountAfterTax { get; set; }
         public IList<SalesInvoiceLine>? SalesInvoiceLines { get; set; }
         public decimal? TotalTax { get; set; }
+        public decimal ShippingHandlingCharge { get; set; }
+        /// <summary>Stock warnings from saving or issuing; the invoice was still saved.</summary>
+        public List<string> Warnings { get; set; } = new();
+        /// <summary>Why an issued invoice couldn't be posted to the ledger; null when it was posted or is a draft.</summary>
+        public string? PostingError { get; set; }
 
         // Standard Invoicing attributes
         public DateTime? DueDate { get; set; }
@@ -72,7 +77,7 @@ namespace Dto.Sales
                 decimal discount = 0;
                 if (line.Discount.HasValue)
                     discount = (line.Discount.Value / 100) > 0 ? (quantityXamount * (line.Discount.Value / 100)) : 0;
-                total += ((line.Amount.Value * line.Quantity.Value) - discount);
+                total += Math.Round(quantityXamount - discount, 2, MidpointRounding.AwayFromZero);
             }
             return total;
         }
@@ -93,6 +98,7 @@ namespace Dto.Sales
         public string? ItemDescription { get; set; }
         public decimal? LineTotal { get; set; }
         public decimal? TaxRate { get; set; }
+        public int? TaxId { get; set; }
         public decimal? TaxAmount { get; set; }
     }
 

@@ -50,17 +50,24 @@ export const InvoiceDetail: React.FC = () => {
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
   const [successBanner, setSuccessBanner] = useState<string | null>(null);
   const [stockWarnings, setStockWarnings] = useState<string[]>([]);
+  // Why an issued invoice couldn't be posted to the ledger, from the save or issue that just happened.
+  const [postingError, setPostingError] = useState<string | null>(null);
 
   useEffect(() => {
     setStockWarnings([]);
+    setPostingError(null);
   }, [invoiceId]);
 
-  // Warnings handed over by the invoice editor are shown once: clearing them from history keeps a refresh from
-  // bringing them back.
+  // Warnings and posting errors handed over by the invoice editor are shown once: clearing them from history keeps a
+  // refresh from bringing them back.
   useEffect(() => {
     const warnings = location.state?.stockWarnings;
-    if (!Array.isArray(warnings)) return;
-    setStockWarnings(warnings.filter((warning: unknown): warning is string => typeof warning === 'string'));
+    const handedPostingError = location.state?.postingError;
+    if (!Array.isArray(warnings) && typeof handedPostingError !== 'string') return;
+    if (Array.isArray(warnings))
+      setStockWarnings(warnings.filter((warning: unknown): warning is string => typeof warning === 'string'));
+    if (typeof handedPostingError === 'string')
+      setPostingError(handedPostingError);
     navigate(`${location.pathname}${location.search}`, { replace: true, state: null });
   }, [location.state, location.pathname, location.search, navigate]);
 
@@ -261,6 +268,7 @@ export const InvoiceDetail: React.FC = () => {
       throw new Error(data?.message || 'Failed to issue invoice.');
     }
     setStockWarnings(Array.isArray(data?.warnings) ? data.warnings.filter((warning: unknown): warning is string => typeof warning === 'string') : []);
+    setPostingError(typeof data?.postingError === 'string' ? data.postingError : null);
     return data?.no || invoice.no || '';
   };
 
@@ -426,6 +434,9 @@ export const InvoiceDetail: React.FC = () => {
           ? 'Paid in full'
           : null;
 
+  // Like the PDF, the tax column shows only when a line has tax.
+  const showTax = invoice.salesInvoiceLines?.some((line) => (line.taxAmount ?? 0) !== 0) ?? false;
+
   return (
     <div className="print-page max-w-5xl mx-auto px-4 sm:px-6 py-6 pb-24 text-[var(--text-main)]">
 
@@ -521,6 +532,16 @@ export const InvoiceDetail: React.FC = () => {
           >
             <X className="w-4 h-4" />
           </button>
+        </div>
+      )}
+
+      {postingError && (
+        <div role="alert" className="no-print mb-6 p-4 bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 rounded-xl flex items-start gap-3">
+          <AlertTriangle className="w-5 h-5 shrink-0" />
+          <div className="text-sm">
+            <p className="font-semibold">Issued, but not posted to the ledger</p>
+            <p>{postingError}</p>
+          </div>
         </div>
       )}
 
@@ -654,12 +675,13 @@ export const InvoiceDetail: React.FC = () => {
                 <th className="py-3 px-3 text-right w-24 print:w-16">Qty</th>
                 <th className="py-3 px-3 text-right w-28">Unit Price</th>
                 <th className="py-3 px-3 text-right w-24 print:w-20">Disc %</th>
+                {showTax && <th className="py-3 px-3 text-right w-24">Tax</th>}
                 <th className="py-3 px-4 text-right w-32">Total</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--border-subtle)] text-sm">
               {invoice.salesInvoiceLines?.map((line, idx) => {
-                const qty = line.quantity || 1;
+                const qty = line.quantity ?? 1;
                 const price = line.amount || 0;
                 const gross = qty * price;
                 const disc = (gross * (line.discount || 0)) / 100;
@@ -682,6 +704,11 @@ export const InvoiceDetail: React.FC = () => {
                     <td className="py-3.5 px-3 text-right text-[var(--text-secondary)]">
                       {line.discount ? `${line.discount}%` : '—'}
                     </td>
+                    {showTax && (
+                      <td className="py-3.5 px-3 text-right font-mono text-[var(--text-secondary)]">
+                        {line.taxAmount ? formatCurrency(line.taxAmount) : '—'}
+                      </td>
+                    )}
                     <td className="py-3.5 px-4 text-right font-semibold font-mono text-[var(--text-main)]">
                       {formatCurrency(net)}
                     </td>
@@ -735,9 +762,16 @@ export const InvoiceDetail: React.FC = () => {
               </div>
             )}
 
+            {(invoice.shippingHandlingCharge ?? 0) > 0 && (
+              <div className="flex justify-between text-[var(--text-secondary)]">
+                <span>Shipping:</span>
+                <span className="font-mono">{formatCurrency(invoice.shippingHandlingCharge ?? 0)}</span>
+              </div>
+            )}
+
             <div className="flex justify-between font-bold text-base text-[var(--text-main)] border-t border-[var(--border-subtle)] pt-2.5">
               <span>Total Amount:</span>
-              <span className="font-mono">{formatCurrency(invoice.totalAmountAfterTax || invoice.amount)}</span>
+              <span className="font-mono">{formatCurrency(invoice.totalAmountAfterTax ?? invoice.amount)}</span>
             </div>
 
             {invoice.paidAmount > 0 && (

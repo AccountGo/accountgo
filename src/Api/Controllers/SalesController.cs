@@ -749,35 +749,10 @@ namespace Api.Controllers
         private sealed record InvoiceSummary(decimal TotalTax, decimal GrandTotal, decimal Allocated, decimal BalanceDue,
             string Status, Core.Domain.SalesInvoiceStatus StatusId);
 
-        /// <summary>Quantity times price, less the line's discount; not rounded.</summary>
-        private static decimal LineSubtotal(Core.Domain.Sales.SalesInvoiceLine line)
+        private InvoiceSummary Summarize(Core.Domain.Sales.SalesInvoiceHeader invoice, DateTime dueDate)
         {
-            var gross = line.Quantity * line.Amount;
-            return gross - (line.Discount > 0 ? gross * (line.Discount / 100m) : 0);
-        }
-
-        /// <summary>The line's tax, rounded to cents; zero when it can't be worked out.</summary>
-        private decimal LineTax(Core.Domain.Sales.SalesInvoiceHeader invoice, Core.Domain.Sales.SalesInvoiceLine line)
-        {
-            if (_taxService == null || line.ItemId <= 0 || invoice.Customer?.Party == null)
-                return 0;
-            try
-            {
-                var taxes = _taxService.GetIntersectionTaxes(line.ItemId, invoice.CustomerId, invoice.Customer.Party.PartyType);
-                return Math.Round(_taxService.GetSalesLineTaxAmount(line.Quantity, line.Amount, line.Discount, taxes), 2, MidpointRounding.AwayFromZero);
-            }
-            catch
-            {
-                return 0; // Ignore tax calc errors
-            }
-        }
-
-        /// <param name="lineTaxes">Each line's tax when the caller has already worked it out; otherwise it is worked out here.</param>
-        private InvoiceSummary Summarize(Core.Domain.Sales.SalesInvoiceHeader invoice, DateTime dueDate, IEnumerable<decimal>? lineTaxes = null)
-        {
-            var subtotal = invoice.SalesInvoiceLines.Sum(LineSubtotal);
-            var tax = Math.Round((lineTaxes ?? invoice.SalesInvoiceLines.Select(l => LineTax(invoice, l))).Sum(), 2, MidpointRounding.AwayFromZero);
-            var grandTotal = Math.Round(subtotal + tax + invoice.ShippingHandlingCharge, 2, MidpointRounding.AwayFromZero);
+            var tax = invoice.ComputeTotalTax();
+            var grandTotal = invoice.GrandTotal();
             var allocated = Math.Round(invoice.CustomerAllocations?.Sum(a => a.Amount) ?? 0, 2, MidpointRounding.AwayFromZero);
             var balanceDue = Math.Round(Math.Max(0, grandTotal - allocated), 2, MidpointRounding.AwayFromZero);
 
@@ -846,6 +821,7 @@ namespace Api.Controllers
                 SalesInvoiceLines = new List<Dto.Sales.SalesInvoiceLine>(),
                 PaymentTermId = salesInvoice.PaymentTermId,
                 ReferenceNo = salesInvoice.ReferenceNo,
+                ShippingHandlingCharge = salesInvoice.ShippingHandlingCharge,
                 Notes = salesInvoice.Notes,
                 PaymentInstructions = salesInvoice.PaymentInstructions,
                 Posted = salesInvoice.GeneralLedgerHeaderId != null,
@@ -901,11 +877,12 @@ namespace Api.Controllers
                     MeasurementId = line.MeasurementId,
                     ItemDescription = line.DisplayDescription,
                     MeasurementDescription = line.Measurement?.Description ?? "EA",
-                    LineTotal = Math.Round(LineSubtotal(line), 2, MidpointRounding.AwayFromZero),
-                    TaxAmount = LineTax(salesInvoice, line)
+                    LineTotal = line.Subtotal,
+                    TaxId = line.TaxId,
+                    TaxAmount = line.TaxAmount
                 });
             }
-            ApplySummary(salesInvoiceDto, Summarize(salesInvoice, dueDate, salesInvoiceDto.SalesInvoiceLines.Select(l => l.TaxAmount ?? 0)));
+            ApplySummary(salesInvoiceDto, Summarize(salesInvoice, dueDate));
 
             // is this journal entry ready for posting?
             if (!salesInvoiceDto.Posted && salesInvoiceDto.SalesInvoiceLines.Count >= 1)
@@ -1073,6 +1050,7 @@ namespace Api.Controllers
                     DueDate = dueDate,
                     PaymentTermId = salesInvoice.PaymentTermId,
                     ReferenceNo = salesInvoice.ReferenceNo,
+                    ShippingHandlingCharge = salesInvoice.ShippingHandlingCharge,
                     Posted = salesInvoice.GeneralLedgerHeaderId != null
                 };
 
@@ -1088,11 +1066,12 @@ namespace Api.Controllers
                         Discount = line.Discount,
                         ItemDescription = line.DisplayDescription,
                         MeasurementDescription = line.Measurement?.Description ?? "EA",
-                        LineTotal = Math.Round(LineSubtotal(line), 2, MidpointRounding.AwayFromZero),
-                        TaxAmount = LineTax(salesInvoice, line)
+                        LineTotal = line.Subtotal,
+                        TaxId = line.TaxId,
+                        TaxAmount = line.TaxAmount
                     });
                 }
-                ApplySummary(salesInvoiceDto, Summarize(salesInvoice, dueDate, salesInvoiceDto.SalesInvoiceLines!.Select(l => l.TaxAmount ?? 0)));
+                ApplySummary(salesInvoiceDto, Summarize(salesInvoice, dueDate));
 
                 salesInvoicesDto.Add(salesInvoiceDto);
             }
@@ -1176,6 +1155,7 @@ namespace Api.Controllers
                         Id = invoice.Id,
                         InvoiceDate = invoice.Date,
                         CustomerId = invoice.CustomerId,
+                        ShippingHandlingCharge = invoice.ShippingHandlingCharge,
                         TotalAllocatedAmount = (decimal)invoice.CustomerAllocations.Sum(i => i.Amount),
                         Posted = invoice.GeneralLedgerHeaderId.HasValue
                     };
@@ -1189,10 +1169,15 @@ namespace Api.Controllers
                         lineDto.Quantity = line.Quantity;
                         lineDto.ItemId = line.ItemId;
                         lineDto.MeasurementId = line.MeasurementId;
+                        lineDto.LineTotal = line.Subtotal;
+                        lineDto.TaxId = line.TaxId;
+                        lineDto.TaxAmount = line.TaxAmount;
 
                         invoiceDto.SalesInvoiceLines!.Add(lineDto);
                     }
 
+                    ApplySummary(invoiceDto, Summarize(invoice, invoice.ResolveDueDate(
+                        _adminService.GetPaymentTerms().FirstOrDefault(t => t.Id == invoice.PaymentTermId))));
                     invoicesDto.Add(invoiceDto);
                 }
 
@@ -1401,6 +1386,8 @@ namespace Api.Controllers
                 _tenantGuard.EnsureOwned<Core.Domain.Sales.Customer>(salesInvoiceDto.CustomerId, nameof(salesInvoiceDto.CustomerId));
                 if (salesInvoiceDto.PaymentTermId.HasValue && salesInvoiceDto.PaymentTermId.Value > 0)
                     _tenantGuard.EnsureOwned<Core.Domain.PaymentTerm>(salesInvoiceDto.PaymentTermId.Value, nameof(salesInvoiceDto.PaymentTermId));
+                foreach (var line in salesInvoiceDto.SalesInvoiceLines!)
+                    _tenantGuard.EnsureOwned<Core.Domain.TaxSystem.Tax>(line.TaxId, nameof(line.TaxId));
 
                 // Creating a new invoice
                 if (isNew)
@@ -1456,6 +1443,7 @@ namespace Api.Controllers
                         salesInvoiceLine.Amount = line.Amount.GetValueOrDefault();
                         salesInvoiceLine.Discount = line.Discount.GetValueOrDefault();
                         salesInvoiceLine.Quantity = line.Quantity.GetValueOrDefault(1);
+                        salesInvoiceLine.TaxId = line.TaxId;
 
                         int lineItemId = line.ItemId.GetValueOrDefault();
                         int lineMeasurementId = line.MeasurementId.GetValueOrDefault();
@@ -1562,6 +1550,7 @@ namespace Api.Controllers
                             existingLine.Amount = line.Amount.GetValueOrDefault();
                             existingLine.Discount = line.Discount.GetValueOrDefault();
                             existingLine.Quantity = line.Quantity.GetValueOrDefault(1);
+                            existingLine.TaxId = line.TaxId;
                             existingLine.ItemId = lineItemId;
                             existingLine.MeasurementId = lineMeasurementId;
                             existingLine.Description = Core.Domain.Sales.SalesInvoiceLine.DescriptionFor(line.ItemDescription, items.FirstOrDefault(i => i.Id == lineItemId));
@@ -1573,6 +1562,7 @@ namespace Api.Controllers
                             salesInvoiceLine.Amount = line.Amount.GetValueOrDefault();
                             salesInvoiceLine.Discount = line.Discount.GetValueOrDefault();
                             salesInvoiceLine.Quantity = line.Quantity.GetValueOrDefault(1);
+                            salesInvoiceLine.TaxId = line.TaxId;
                             salesInvoiceLine.ItemId = lineItemId;
                             salesInvoiceLine.MeasurementId = lineMeasurementId;
                             salesInvoiceLine.Description = Core.Domain.Sales.SalesInvoiceLine.DescriptionFor(line.ItemDescription, items.FirstOrDefault(i => i.Id == lineItemId));
@@ -1615,18 +1605,21 @@ namespace Api.Controllers
 
                 _logger.LogInformation("SaveSalesInvoice API " + salesInvoice.CustomerId);
 
+                salesInvoice.ShippingHandlingCharge = Math.Round(salesInvoiceDto.ShippingHandlingCharge, 2, MidpointRounding.AwayFromZero);
                 var stockWarnings = _salesService.GetSalesInvoiceStockWarnings(salesInvoice);
                 CaptureIfIssued(salesInvoice);
                 _salesService.SaveSalesInvoice(salesInvoice, salesOrder);
                 tx.Commit();
 
                 // Auto-post to GL if issued (not draft) and not already posted
+                string? postingError = null;
                 if (salesInvoiceDto.Status != "Draft" && salesInvoice.Id > 0 && !salesInvoice.GeneralLedgerHeaderId.HasValue)
-                {
-                    TryPostSalesInvoice(salesInvoice.Id);
-                }
+                    postingError = TryPostSalesInvoice(salesInvoice.Id);
 
-                return Ok(new { id = salesInvoice.Id, no = salesInvoice.No, customerId = salesInvoice.CustomerId, warnings = stockWarnings });
+                var saved = BuildSalesInvoiceDto(salesInvoice.Id)!;
+                saved.Warnings = stockWarnings;
+                saved.PostingError = postingError;
+                return Ok(saved);
             }
             catch (Exception ex)
             {
@@ -1654,7 +1647,7 @@ namespace Api.Controllers
 
         // These callers deliberately keep an issued invoice even when posting fails. Roll back and discard tracked
         // changes before a later receipt or allocation can accidentally persist part of that failed attempt.
-        private void TryPostSalesInvoice(int invoiceId)
+        private string? TryPostSalesInvoice(int invoiceId)
         {
             var sync = HttpContext.RequestServices.GetRequiredService<Api.Service.D1Sync.ID1SyncContext>();
             var savedStatements = sync.GetStatements().ToList();
@@ -1665,6 +1658,7 @@ namespace Api.Controllers
                     _salesService.PostSalesInvoice(invoiceId);
                     tx.Commit();
                 }
+                return null;
             }
             catch (Exception ex)
             {
@@ -1673,6 +1667,7 @@ namespace Api.Controllers
                 foreach (var statement in savedStatements)
                     sync.AddStatement(statement);
                 _logger.LogWarning(ex, "Invoice {InvoiceId} remains unposted: {Error}", invoiceId, ex.Message);
+                return ex.Message;
             }
         }
 
@@ -1723,9 +1718,7 @@ namespace Api.Controllers
             if (result.IsFailure)
                 return BadRequest(result.Error.Message);
 
-            var salesInvoiceToReturn = result.Value;
-
-            return Ok(salesInvoiceToReturn);
+            return Ok(BuildSalesInvoiceDto(result.Value.Id));
         }
 
         [HttpPost("UpdateSalesInvoice")]
@@ -1749,9 +1742,7 @@ namespace Api.Controllers
             if (result.IsFailure)
                 return BadRequest(result.Error.Message);
 
-            var salesInvoiceToReturn = result.Value;
-
-            return Ok(salesInvoiceToReturn);
+            return Ok(BuildSalesInvoiceDto(salesInvoiceDto.Id));
         }
 
         // A new workspace has no items, so a typed line must not fall back to a missing or foreign item id.
@@ -1776,6 +1767,7 @@ namespace Api.Controllers
                     _tenantGuard.EnsureOwned<Core.Domain.Sales.SalesInvoiceLine>(line.Id, nameof(line.Id));
                 _tenantGuard.EnsureOwned<Core.Domain.Items.Item>(line.ItemId, nameof(line.ItemId));
                 _tenantGuard.EnsureOwned<Core.Domain.Items.Measurement>(line.MeasurementId, nameof(line.MeasurementId));
+                _tenantGuard.EnsureOwned<Core.Domain.TaxSystem.Tax>(line.TaxId, nameof(line.TaxId));
             }
         }
 
@@ -1833,6 +1825,7 @@ namespace Api.Controllers
                     return BadRequest(ModelState);
 
                 var invoice = _tenantGuard.EnsureOwned<Core.Domain.Sales.SalesInvoiceHeader>(paymentDto.InvoiceId, nameof(paymentDto.InvoiceId));
+                invoice = _salesService.GetSalesInvoiceById(invoice.Id);
                 if (invoice.Status == Core.Domain.SalesInvoiceStatus.Draft)
                     return BadRequest(new { message = "Issue the invoice before recording a payment." });
                 if (invoice.Status == Core.Domain.SalesInvoiceStatus.Void)
@@ -1898,21 +1891,8 @@ namespace Api.Controllers
 
                 // Update invoice status based on total allocations including taxes and shipping
                 decimal totalAllocated = invoice.CustomerAllocations != null ? Math.Round(invoice.CustomerAllocations.Sum(a => a.Amount), 2, MidpointRounding.AwayFromZero) : 0;
-                decimal invoiceTax = 0;
-                if (_taxService != null && invoice.Customer?.Party != null)
-                {
-                    try
-                    {
-                        foreach (var line in invoice.SalesInvoiceLines)
-                        {
-                            var taxes = _taxService.GetIntersectionTaxes(line.ItemId, invoice.CustomerId, invoice.Customer.Party.PartyType);
-                            invoiceTax += _taxService.GetSalesLineTaxAmount(line.Quantity, line.Amount, line.Discount, taxes);
-                        }
-                    }
-                    catch { }
-                }
-                decimal grandTotal = Math.Round(invoice.ComputeTotalAmount() + invoiceTax + invoice.ShippingHandlingCharge, 2, MidpointRounding.AwayFromZero);
-                if (totalAllocated >= grandTotal - 0.005m || invoice.IsFullPaid())
+                decimal grandTotal = invoice.GrandTotal();
+                if (totalAllocated >= grandTotal - 0.005m)
                 {
                     invoice.Status = Core.Domain.SalesInvoiceStatus.Closed;
                 }
@@ -2011,12 +1991,11 @@ namespace Api.Controllers
                 _salesService.UpdateSalesInvoice(invoice);
                 tx.Commit();
 
+                string? postingError = null;
                 if (!invoice.GeneralLedgerHeaderId.HasValue)
-                {
-                    TryPostSalesInvoice(invoice.Id);
-                }
+                    postingError = TryPostSalesInvoice(invoice.Id);
 
-                return Ok(new { success = true, invoiceId = invoice.Id, no = invoice.No, status = "Open", warnings = stockWarnings });
+                return Ok(new { success = true, invoiceId = invoice.Id, no = invoice.No, status = "Open", warnings = stockWarnings, postingError });
             }
             catch (Exception ex)
             {
@@ -2352,64 +2331,10 @@ namespace Api.Controllers
         [Route("SalesInvoiceForPrinting")]
         public IActionResult SalesInvoiceForPrinting(int id)
         {
-            try
-            {
-                var salesInvoice = _salesService.GetSalesInvoiceById(id);
-                if (salesInvoice == null)
-                    return NotFound(new { message = $"Invoice #{id} not found." });
-
-                //var items = _salesService.Ge
-                var salesInvoiceDto = new Dto.Sales.SalesInvoice()
-                {
-                    Id = salesInvoice.Id,
-                    CustomerId = salesInvoice.CustomerId,
-                    CustomerName = salesInvoice.Customer.Party.Name,
-                    CustomerEmail = salesInvoice.Customer.Party.Email,
-                    InvoiceDate = salesInvoice.Date,
-                    SalesInvoiceLines = new List<Dto.Sales.SalesInvoiceLine>(),
-                    PaymentTermId = salesInvoice.PaymentTermId,
-                    ReferenceNo = salesInvoice.ReferenceNo,
-                    Posted = salesInvoice.GeneralLedgerHeaderId != null,
-                    CompanyName = ((!string.IsNullOrWhiteSpace(_tenantContext.CompanySlug) ? _adminService.GetCompanyBySlug(_tenantContext.CompanySlug) : null)
-                        ?? _adminService.GetCompanies().FirstOrDefault(c => c.Id == _tenantContext.CompanyId))?.Name ?? "AccountGo"
-
-                };
-
-                decimal? totalTax = 0;
-                foreach (var line in salesInvoice.SalesInvoiceLines)
-                {
-                    var lineDto = new Dto.Sales.SalesInvoiceLine();
-
-                    lineDto.Id = line.Id;
-                    lineDto.Amount = line.Amount;
-                    lineDto.Discount = line.Discount;
-                    lineDto.Quantity = line.Quantity;
-                    lineDto.ItemId = line.ItemId;
-                    lineDto.MeasurementId = line.MeasurementId;
-
-                    lineDto.ItemDescription = line.Description ?? _inventoryService.GetItemById(line.ItemId).Description;
-                    lineDto.MeasurementDescription = _inventoryService.GetMeasurementById(line.MeasurementId).Description;
-
-                    if (_taxService != null)
-                    {
-                        var taxes = _taxService.GetIntersectionTaxes(line.ItemId, salesInvoice.CustomerId,
-                            salesInvoice.Customer.Party.PartyType);
-
-                        totalTax += _taxService.GetSalesLineTaxAmount(line.Quantity, line.Amount, line.Discount, taxes);
-
-                    }
-                    salesInvoiceDto.SalesInvoiceLines.Add(lineDto);
-                }
-                salesInvoiceDto.TotalTax = totalTax;
-                salesInvoiceDto.TotalAmountAfterTax = (salesInvoiceDto.Amount + salesInvoiceDto.TotalTax);
-
-
-                return new ObjectResult(salesInvoiceDto);
-            }
-            catch (Exception ex)
-            {
-                return new ObjectResult(ex);
-            }
+            var invoice = BuildSalesInvoiceDto(id);
+            return invoice == null
+                ? NotFound(new { message = $"Invoice #{id} not found." })
+                : Ok(invoice);
         }
 
         [HttpPost]

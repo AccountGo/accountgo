@@ -165,6 +165,8 @@ namespace Api.Data.Schema
                     new[] { "SalesInvoiceHeader", "DueDate", "TEXT NULL" },
                     new[] { "SalesInvoiceHeader", "BillToJson", "TEXT NULL" },
                     new[] { "SalesInvoiceLine", "Description", "TEXT NULL" },
+                    new[] { "SalesInvoiceLine", "TaxId", "INTEGER NULL REFERENCES \"Tax\" (\"Id\")" },
+                    new[] { "SalesInvoiceLine", "TaxAmount", "decimal(18, 2) NOT NULL DEFAULT 0" },
                     new[] { "Customer", "ArchivedAt", "TEXT NULL" },
                     new[] { "Item", "ArchivedAt", "TEXT NULL" },
                     new[] { "Item", "QuantityOnHand", "decimal(18, 4) NOT NULL DEFAULT 0" },

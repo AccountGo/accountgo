@@ -78,8 +78,7 @@ namespace Core.Domain.Sales
 
         public decimal ComputeTotalTax()
         {
-            decimal totalTax = 0;
-            return totalTax;
+            return SalesInvoiceLines.Sum(line => line.TaxAmount);
         }
 
         public decimal ComputeTotalDiscount()
@@ -90,7 +89,7 @@ namespace Core.Domain.Sales
 
         public bool IsFullPaid()
         {
-            decimal totalInvoiceAmount = SalesInvoiceLines.Sum(a => a.Amount);
+            decimal totalInvoiceAmount = GrandTotal();
             decimal totalPaidAmount = 0;
             decimal totalAllocation = CustomerAllocations.Sum(a => a.Amount);
             foreach (var line in SalesInvoiceLines)
@@ -102,12 +101,10 @@ namespace Core.Domain.Sales
 
         public decimal ComputeTotalAmount()
         {
-            decimal totalInvoiceAmount = 0;
-            foreach (var line in SalesInvoiceLines)
-            {
-                totalInvoiceAmount += line.Quantity * line.Amount;
-            }
-            return totalInvoiceAmount;
+            return SalesInvoiceLines.Sum(line => line.Subtotal);
         }
+
+        public decimal GrandTotal() =>
+            Math.Round(ComputeTotalAmount() + ComputeTotalTax() + ShippingHandlingCharge, 2, MidpointRounding.AwayFromZero);
     }
 }

@@ -370,7 +370,8 @@ namespace Services.TaxSystem
         public decimal GetSalesLineTaxAmount(decimal quantity, decimal amount, decimal discount, IEnumerable<Tax> taxes)
         {
             decimal lineTaxTotal = 0;
-            amount = (amount * quantity) - discount;
+            var gross = amount * quantity;
+            amount = gross - (discount > 0 ? gross * discount / 100m : 0);
             foreach (var tax in taxes)
             {
                 lineTaxTotal = lineTaxTotal + (amount - (amount / (1 + (tax.Rate / 100))));

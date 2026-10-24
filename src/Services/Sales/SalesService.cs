@@ -839,6 +839,7 @@ namespace Services.Sales
 
             SaveSalesInvoice(salesInvoice, salesOrder);
 
+            salesInvoiceDto.Id = salesInvoice.Id;
             return Result<Dto.Sales.SalesInvoice>.Success(salesInvoiceDto);
         }
 
@@ -923,6 +924,19 @@ namespace Services.Sales
 
         public void SaveSalesInvoice(SalesInvoiceHeader salesInvoice, SalesOrderHeader salesOrder)
         {
+            if (salesInvoice.GeneralLedgerHeaderId.HasValue)
+                throw new InvalidOperationException("Invoice is already posted. Update is not allowed.");
+
+            var taxes = _financialService.GetTaxes().ToList();
+            foreach (var line in salesInvoice.SalesInvoiceLines)
+            {
+                var tax = line.TaxId.HasValue
+                    ? taxes.SingleOrDefault(t => t.Id == line.TaxId.Value)
+                        ?? throw new InvalidOperationException("The selected tax was not found in this workspace.")
+                    : null;
+                line.TaxAmount = Core.Domain.Purchases.PurchaseInvoiceLine.TaxOf(line.Subtotal, tax?.Rate);
+            }
+
             // This method should be in a single transaction. when one fails, roll back all changes.
             try
             {
@@ -994,10 +1008,12 @@ namespace Services.Sales
             if (salesInvoice.GeneralLedgerHeaderId.HasValue)
                 throw new Exception("Invoice is already posted. Update is not allowed.");
 
-            decimal totalAmount = 0, totalDiscount = 0;
-
             var taxes = new List<KeyValuePair<int, decimal>>();
             var sales = new List<KeyValuePair<int, decimal>>();
+            var availableTaxes = _financialService.GetTaxes().ToList();
+            // Discounts post to their own account so sales report before them; without one, sales post net.
+            var salesDiscountAccountId = base.GetGeneralLedgerSetting()?.SalesDiscountAccountId;
+            decimal totalDiscount = 0;
             var projectedItems = new Dictionary<int, Item>();
             var stockIssues = new List<(SalesInvoiceLine Line, Item Item, InventoryControlJournal Movement)>();
 
@@ -1011,22 +1027,22 @@ namespace Services.Sales
                 if (!item.GLAccountsValidated())
                     throw new Exception("Item is not correctly setup for financial transaction. Please check if GL accounts are all set.");
 
-                var lineAmount = lineItem.Quantity * lineItem.Amount;
-
-                var lineDiscountAmount = (lineItem.Discount / 100) * lineAmount;
-                totalDiscount += lineDiscountAmount;
-
-                var totalLineAmount = lineAmount - lineDiscountAmount;
-
-                totalAmount += totalLineAmount;
-
-                var lineTaxes = _financialService.ComputeOutputTax(salesInvoice.CustomerId, item.Id, lineItem.Quantity, lineItem.Amount, lineItem.Discount);
-
-                foreach (var t in lineTaxes)
-                    taxes.Add(t);
-
-                var lineTaxAmount = lineTaxes != null && lineTaxes.Count > 0 ? lineTaxes.Sum(t => t.Value) : 0;
-                totalLineAmount = totalLineAmount - lineTaxAmount;
+                var totalLineAmount = lineItem.Subtotal;
+                if (salesDiscountAccountId.HasValue)
+                {
+                    var grossLineAmount = Math.Round(lineItem.Quantity * lineItem.Amount, 2, MidpointRounding.AwayFromZero);
+                    totalDiscount += grossLineAmount - totalLineAmount;
+                    totalLineAmount = grossLineAmount;
+                }
+                if (lineItem.TaxId.HasValue)
+                {
+                    var tax = availableTaxes.SingleOrDefault(t => t.Id == lineItem.TaxId.Value)
+                        ?? throw new InvalidOperationException("The selected tax was not found in this workspace.");
+                    if (!tax.SalesAccountId.HasValue)
+                        throw new InvalidOperationException($"Tax {tax.TaxName} has no sales tax account");
+                    if (lineItem.TaxAmount != 0)
+                        taxes.Add(new KeyValuePair<int, decimal>(tax.SalesAccountId.Value, lineItem.TaxAmount));
+                }
 
                 int salesAccountId = item.SalesAccountId ?? item.SalesAccount?.Id ?? 
                     _financialService.GetAccounts().FirstOrDefault(a => a.AccountCode == "40100")?.Id ?? 
@@ -1071,11 +1087,10 @@ namespace Services.Sales
                 }
             }
 
-            totalAmount += salesInvoice.ShippingHandlingCharge;
             int arAccountId = customer.AccountsReceivableAccountId ?? customer.AccountsReceivableAccount?.Id ??
                 _financialService.GetAccounts().FirstOrDefault(a => a.AccountCode == "10120")?.Id ??
                 _financialService.GetAccounts().FirstOrDefault(a => a.AccountClassId == 1)?.Id ?? 1;
-            var debitCustomerAR = _financialService.CreateGeneralLedgerLine(DrOrCrSide.Dr, arAccountId, Math.Round(totalAmount, 2, MidpointRounding.ToEven));
+            var debitCustomerAR = _financialService.CreateGeneralLedgerLine(DrOrCrSide.Dr, arAccountId, salesInvoice.GrandTotal());
             glHeader.GeneralLedgerLines.Add(debitCustomerAR);
 
             var groupedSalesAccount = from s in sales
@@ -1089,6 +1104,8 @@ namespace Services.Sales
             foreach (var salesAccount in groupedSalesAccount)
             {
                 var salesAmount = salesAccount.Value;
+                if (salesAmount == 0)
+                    continue;
                 var creditSalesAccount = _financialService.CreateGeneralLedgerLine(DrOrCrSide.Cr, salesAccount.Key, Math.Round(salesAmount, 2, MidpointRounding.ToEven));
                 glHeader.GeneralLedgerLines.Add(creditSalesAccount);
             }
@@ -1105,23 +1122,19 @@ namespace Services.Sales
 
                 foreach (var tax in groupedTaxes)
                 {
-                    var tx = _financialService.GetTaxes().Where(t => t.Id == tax.Key).FirstOrDefault();
-                    var creditSalesTaxAccount = _financialService.CreateGeneralLedgerLine(DrOrCrSide.Cr, tx.SalesAccountId.Value, Math.Round(tax.Value, 2, MidpointRounding.ToEven));
+                    var creditSalesTaxAccount = _financialService.CreateGeneralLedgerLine(DrOrCrSide.Cr, tax.Key, tax.Value);
                     glHeader.GeneralLedgerLines.Add(creditSalesTaxAccount);
                 }
             }
 
-            if (totalDiscount > 0)
-            {
-                var salesDiscountAccount = base.GetGeneralLedgerSetting().SalesDiscountAccount;
-                var creditSalesDiscountAccount = _financialService.CreateGeneralLedgerLine(DrOrCrSide.Dr, salesDiscountAccount.Id, Math.Round(totalDiscount, 2, MidpointRounding.ToEven));
-                glHeader.GeneralLedgerLines.Add(creditSalesDiscountAccount);
-            }
+            if (totalDiscount != 0)
+                glHeader.GeneralLedgerLines.Add(_financialService.CreateGeneralLedgerLine(DrOrCrSide.Dr, salesDiscountAccountId!.Value, totalDiscount));
 
             if (salesInvoice.ShippingHandlingCharge > 0)
             {
-                var shippingHandlingAccount = base.GetGeneralLedgerSetting().ShippingChargeAccount;
-                var creditShippingHandlingAccount = _financialService.CreateGeneralLedgerLine(DrOrCrSide.Cr, shippingHandlingAccount.Id, Math.Round(salesInvoice.ShippingHandlingCharge, 2, MidpointRounding.ToEven));
+                var shippingAccountId = base.GetGeneralLedgerSetting().ShippingChargeAccountId
+                    ?? throw new InvalidOperationException("Set up a shipping charge account before posting shipping.");
+                var creditShippingHandlingAccount = _financialService.CreateGeneralLedgerLine(DrOrCrSide.Cr, shippingAccountId, Math.Round(salesInvoice.ShippingHandlingCharge, 2, MidpointRounding.AwayFromZero));
                 glHeader.GeneralLedgerLines.Add(creditShippingHandlingAccount);
             }
 

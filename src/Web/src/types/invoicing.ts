@@ -13,6 +13,7 @@ export interface InvoiceLineItem {
   discount: number;
   lineTotal?: number;
   taxRate?: number;
+  taxId?: number | null;
   taxAmount?: number;
 }
 
@@ -44,6 +45,7 @@ export interface Invoice {
   referenceNo?: string;
   amount: number;
   totalTax?: number;
+  shippingHandlingCharge?: number;
   totalAmountAfterTax?: number;
   totalAllocatedAmount: number;
   paidAmount: number;

@@ -23,6 +23,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
+    "test": "node --experimental-strip-types --test test/*.test.mjs",
     "deploy": "wrangler deploy"
   },
   "dependencies": {
