@@ -1,4 +1,5 @@
 using Api.Filters;
+using Core.Domain.Security;
 using Dto.Financial;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -12,7 +13,7 @@ namespace Api.Controllers
 {
     [Core.Tenancy.TenantScoped]
     [Route("api/[controller]")]
-    [RequireModule("financials")]
+    [RequireModule("financials", "reports")]
     //[Authorize]
     public class FinancialsController : BaseController
     {
@@ -177,6 +178,7 @@ namespace Api.Controllers
 
         [HttpPost]
         [Route("PostJournalEntry")]
+        [RequireModule("financials")]
         public IActionResult PostJournalEntry([FromBody] JournalEntry journalEntryDto)
         {
             string[]? errors = null;
@@ -209,6 +211,7 @@ namespace Api.Controllers
 
         [HttpPost]
         [Route("SaveJournalEntry")]
+        [RequireModule("financials")]
         public IActionResult SaveJournalEntry([FromBody] JournalEntry journalEntryDto)
         {
             string[]? errors = null;
@@ -344,40 +347,34 @@ namespace Api.Controllers
 
         [HttpGet]
         [Route("trialbalance")]
-        public ActionResult TrialBalance()
+        [RequirePermission(SystemPermissions.ReportsView)]
+        public ActionResult TrialBalance(DateTime? from = null, DateTime? to = null)
         {
-            var Dto = _financialService.TrialBalance();
+            if (!ModelState.IsValid || (from.HasValue && to.HasValue && from.Value > to.Value))
+                return BadRequest(new { message = "Provide a valid date range: from must not be after to." });
+            var Dto = _financialService.TrialBalance(from, to);
             return new ObjectResult(Dto);
         }
 
         [HttpGet]
         [Route("BalanceSheet")]
-        public ActionResult BalanceSheet()
+        [RequirePermission(SystemPermissions.ReportsView)]
+        public ActionResult BalanceSheet(DateTime? from = null, DateTime? to = null)
         {
-            var dto = _financialService.BalanceSheet().ToList();
+            if (!ModelState.IsValid || (from.HasValue && to.HasValue && from.Value > to.Value))
+                return BadRequest(new { message = "Provide a valid date range: from must not be after to." });
+            var dto = _financialService.BalanceSheet(from, to).ToList();
             return new ObjectResult(dto);
         }
 
         [HttpGet]
         [Route("IncomeStatement")]
-        public IActionResult IncomeStatement()
+        [RequirePermission(SystemPermissions.ReportsView)]
+        public IActionResult IncomeStatement(DateTime? from = null, DateTime? to = null)
         {
-            try
-            {
-                var incomeStatementData = _financialService.IncomeStatement();
-
-                // Ensure the data is not null
-                if (incomeStatementData == null)
-                {
-                    incomeStatementData = new List<IncomeStatement>();
-                }
-
-                return Ok(incomeStatementData);
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(new { message = "Error fetching income statement", details = ex.Message });
-            }
+            if (!ModelState.IsValid || (from.HasValue && to.HasValue && from.Value > to.Value))
+                return BadRequest(new { message = "Provide a valid date range: from must not be after to." });
+            return Ok(_financialService.IncomeStatement(from, to));
         }
 
         #region CRUD for Accounts
@@ -404,6 +401,7 @@ namespace Api.Controllers
 
         [HttpPost]
         [Route("AddAccount")]
+        [RequireModule("financials")]
         public async Task<IActionResult> AddAccount([FromBody] Account newAccountDto)
         {
             if (!ModelState.IsValid)
@@ -446,6 +444,7 @@ namespace Api.Controllers
 
         [HttpPut]
         [Route("UpdateAccount/{accountCode}")]
+        [RequireModule("financials")]
         public async Task<IActionResult> UpdateAccount(string accountCode, [FromBody] Account updatedAccountDto)
         {
             if (!ModelState.IsValid)
@@ -484,6 +483,7 @@ namespace Api.Controllers
 
         [HttpDelete]
         [Route("DeleteAccount/{accountCode}")]
+        [RequireModule("financials")]
         public async Task<IActionResult> DeleteAccount(string accountCode)
         {
             var (account, errorMessage) = await _accountService.DeleteAccountAsync(accountCode);
@@ -613,6 +613,7 @@ namespace Api.Controllers
 
         [HttpPost]
         [Route("Bank")] // api/Financials/Bank
+        [RequireModule("financials")]
         public IActionResult CreateBank([FromBody] Dto.Financial.Bank bankDto)
         {
             try
@@ -657,6 +658,7 @@ namespace Api.Controllers
 
         [HttpPut]
         [Route("Bank/{id}")] // api/Financials/Bank/1
+        [RequireModule("financials")]
         public IActionResult UpdateBank(int id, [FromBody] Dto.Financial.Bank bankDto)
         {
             try
@@ -698,6 +700,7 @@ namespace Api.Controllers
 
         [HttpDelete]
         [Route("Bank/{id}")] // api/Financials/Bank/1
+        [RequireModule("financials")]
         public IActionResult DeleteBank(int id)
         {
             try

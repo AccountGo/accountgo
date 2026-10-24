@@ -19,6 +19,7 @@ import { BillDetail } from './pages/BillDetail';
 import { ProductsServices } from './pages/ProductsServices';
 import Inventory from './pages/Inventory';
 import PlaceholderView from './pages/PlaceholderView';
+import Reports from './pages/Reports';
 import ChartOfAccounts from './pages/ChartOfAccounts';
 import NotFound from './pages/NotFound';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -262,7 +263,7 @@ const router = createBrowserRouter([
             path: 'reports',
             element: (
               <RequiresModule module="reports">
-                <PlaceholderView />
+                <Reports />
               </RequiresModule>
             ),
           },
