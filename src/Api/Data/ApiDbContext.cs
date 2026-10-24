@@ -354,6 +354,17 @@ namespace Api.Data
                 .Property(p => p.Quantity)
                 .HasColumnType("decimal(18, 2)");
 
+            builder.Entity<SalesInvoiceLine>()
+                .Property(p => p.TaxAmount)
+                .HasColumnType("decimal(18, 2)")
+                .HasDefaultValue(0m);
+
+            builder.Entity<SalesInvoiceLine>()
+                .HasOne(p => p.Tax)
+                .WithMany()
+                .HasForeignKey(p => p.TaxId)
+                .OnDelete(DeleteBehavior.Restrict);
+
             builder.Entity<SalesOrderLine>()
                 .Property(p => p.Amount)
                 .HasColumnType("decimal(18, 2)");

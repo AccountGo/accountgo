@@ -31,6 +31,12 @@ namespace Core.Domain.Sales
         public decimal Quantity { get; set; }
         public decimal Discount { get; set; }
         public decimal Amount { get; set; }
+        public int? TaxId { get; set; }
+        public decimal TaxAmount { get; set; }
+        public virtual Tax? Tax { get; set; }
+
+        [NotMapped]
+        public decimal Subtotal => Purchases.PurchaseInvoiceLine.SubtotalOf(Quantity, Amount, Discount);
         /// <summary>
         /// The line's text as typed on the invoice, so later edits to the item don't rewrite it. Null only on lines
         /// saved before it was stored whose item had no description.
@@ -53,9 +59,7 @@ namespace Core.Domain.Sales
 
         public decimal ComputeLineTaxAmount()
         {
-            decimal taxAmount = 0;
-            
-            return taxAmount;
+            return TaxAmount;
         }
 
         public decimal GetAmountPaid()

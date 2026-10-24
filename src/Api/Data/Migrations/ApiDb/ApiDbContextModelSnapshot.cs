@@ -2190,6 +2190,14 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<int?>("SalesOrderLineId")
                         .HasColumnType("int");
 
+                    b.Property<decimal>("TaxAmount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("decimal(18, 2)")
+                        .HasDefaultValue(0m);
+
+                    b.Property<int?>("TaxId")
+                        .HasColumnType("int");
+
                     b.HasKey("Id");
 
                     b.HasIndex("InventoryControlJournalId");
@@ -2201,6 +2209,8 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasIndex("SalesInvoiceHeaderId");
 
                     b.HasIndex("SalesOrderLineId");
+
+                    b.HasIndex("TaxId");
 
                     b.ToTable("SalesInvoiceLine");
                 });
@@ -3701,6 +3711,11 @@ namespace Api.Data.Migrations.ApiDb
                         .WithMany("SalesInvoiceLines")
                         .HasForeignKey("SalesOrderLineId");
 
+                    b.HasOne("Core.Domain.TaxSystem.Tax", "Tax")
+                        .WithMany()
+                        .HasForeignKey("TaxId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("InventoryControlJournal");
 
                     b.Navigation("Item");
@@ -3710,6 +3725,8 @@ namespace Api.Data.Migrations.ApiDb
                     b.Navigation("SalesInvoiceHeader");
 
                     b.Navigation("SalesOrderLine");
+
+                    b.Navigation("Tax");
                 });
 
             modelBuilder.Entity("Core.Domain.Sales.SalesOrderHeader", b =>
