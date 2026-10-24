@@ -26,6 +26,7 @@ namespace Core.Domain.Items
             PurchaseReceiptLines = new HashSet<PurchaseReceiptLine>();
             PurchaseInvoiceLines = new HashSet<PurchaseInvoiceLine>();
             InventoryControlJournals = new HashSet<InventoryControlJournal>();
+            InventoryAdjustments = new HashSet<InventoryAdjustment>();
         }
 
         public int CompanyId { get; set; }
@@ -47,6 +48,8 @@ namespace Core.Domain.Items
         public string SellDescription { get; set; }
         public decimal? Cost { get; set; }
         public decimal? Price { get; set; }
+        public decimal QuantityOnHand { get; set; }
+        public decimal AverageCost { get; set; }
         /// <summary>When it was archived: hidden when picking an item for a line, past lines untouched. Null while active.</summary>
         public DateTime? ArchivedAt { get; set; }
         public virtual ItemCategory ItemCategory { get; set; }
@@ -65,6 +68,7 @@ namespace Core.Domain.Items
         public virtual ICollection<PurchaseReceiptLine> PurchaseReceiptLines { get; set; }
         public virtual ICollection<PurchaseInvoiceLine> PurchaseInvoiceLines { get; set; }
         public virtual ICollection<InventoryControlJournal> InventoryControlJournals { get; set; }
+        public virtual ICollection<InventoryAdjustment> InventoryAdjustments { get; set; }
 
         #region Not Mapped
         [NotMapped]
@@ -118,7 +122,7 @@ namespace Core.Domain.Items
             var invControlJOurnals = InventoryControlJournals.GetEnumerator();
             while (invControlJOurnals.MoveNext())
             {
-                inQty += (invControlJOurnals.Current.INQty.HasValue && invControlJOurnals.Current.IsReverse == false) ? invControlJOurnals.Current.INQty.Value : 0;
+                inQty += invControlJOurnals.Current.INQty.GetValueOrDefault();
                 outQty += invControlJOurnals.Current.OUTQty.HasValue ? invControlJOurnals.Current.OUTQty.Value : 0;
             }
             return inQty - outQty;

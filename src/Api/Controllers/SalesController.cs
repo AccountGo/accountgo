@@ -1615,6 +1615,7 @@ namespace Api.Controllers
 
                 _logger.LogInformation("SaveSalesInvoice API " + salesInvoice.CustomerId);
 
+                var stockWarnings = _salesService.GetSalesInvoiceStockWarnings(salesInvoice);
                 CaptureIfIssued(salesInvoice);
                 _salesService.SaveSalesInvoice(salesInvoice, salesOrder);
                 tx.Commit();
@@ -1632,7 +1633,7 @@ namespace Api.Controllers
                     }
                 }
 
-                return Ok(new { id = salesInvoice.Id, no = salesInvoice.No, customerId = salesInvoice.CustomerId });
+                return Ok(new { id = salesInvoice.Id, no = salesInvoice.No, customerId = salesInvoice.CustomerId, warnings = stockWarnings });
             }
             catch (Exception ex)
             {
@@ -1950,6 +1951,7 @@ namespace Api.Controllers
                 // Issuing posted the invoice to receivables and sales; voiding reverses that, so it no longer counts.
                 if (invoice.GeneralLedgerHeaderId.HasValue && !invoice.VoidGeneralLedgerHeaderId.HasValue)
                     invoice.VoidGeneralLedgerHeader = _financialService.CreateReversingEntry(invoice.GeneralLedgerHeaderId.Value, $"Void of invoice {invoice.No ?? invoice.Id.ToString()}");
+                _salesService.VoidSalesInvoiceStock(invoice);
                 invoice.Status = Core.Domain.SalesInvoiceStatus.Void;
                 _salesService.UpdateSalesInvoice(invoice);
 
@@ -1977,6 +1979,10 @@ namespace Api.Controllers
                 if (invoice.Status == Core.Domain.SalesInvoiceStatus.Void)
                     return BadRequest(new { message = "Cannot issue a void invoice." });
 
+                var stockWarnings = invoice.GeneralLedgerHeaderId.HasValue
+                    ? new List<string>()
+                    : _salesService.GetSalesInvoiceStockWarnings(invoice);
+
                 // The user confirmed the number they were shown; refuse rather than issue under a different one.
                 var expected = Core.Domain.Sales.InvoiceNumber.Normalize(expectedNo);
                 if (expected != null && Core.Domain.Sales.InvoiceNumber.Normalize(invoice.No) == null)
@@ -2003,7 +2009,7 @@ namespace Api.Controllers
                     }
                 }
 
-                return Ok(new { success = true, invoiceId = invoice.Id, no = invoice.No, status = "Open" });
+                return Ok(new { success = true, invoiceId = invoice.Id, no = invoice.No, status = "Open", warnings = stockWarnings });
             }
             catch (Exception ex)
             {

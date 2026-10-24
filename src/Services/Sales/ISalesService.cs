@@ -56,6 +56,8 @@ namespace Services.Sales
         Result<Dto.Sales.SalesInvoice> UpdateSalesInvoice(Dto.Sales.SalesInvoice salesInvoiceDto);
         Task<Result<Dto.Sales.SalesInvoice>> DeleteSalesInvoiceAsync(int id);
         void PostSalesInvoice(int invoiceId);
+        void VoidSalesInvoiceStock(SalesInvoiceHeader invoice);
+        List<string> GetSalesInvoiceStockWarnings(SalesInvoiceHeader invoice);
         Contact GetContacyById(int id);
         CustomerContact GetCustomerContact(int id);
         void BookQuotation(int id);

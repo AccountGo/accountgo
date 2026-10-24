@@ -27,6 +27,7 @@ namespace Api.Data.Schema
             "GeneralLedgerLine",
             "GeneralLedgerSetting",
             "InventoryControlJournal",
+            "InventoryAdjustment",
             "Item",
             "ItemCategory",
             "ItemTaxGroup",
@@ -166,6 +167,11 @@ namespace Api.Data.Schema
                     new[] { "SalesInvoiceLine", "Description", "TEXT NULL" },
                     new[] { "Customer", "ArchivedAt", "TEXT NULL" },
                     new[] { "Item", "ArchivedAt", "TEXT NULL" },
+                    new[] { "Item", "QuantityOnHand", "decimal(18, 4) NOT NULL DEFAULT 0" },
+                    new[] { "Item", "AverageCost", "decimal(18, 4) NOT NULL DEFAULT 0" },
+                    new[] { "InventoryControlJournal", "DocumentId", "INTEGER NULL" },
+                    new[] { "InventoryControlJournal", "UnitCost", "decimal(18, 4) NULL" },
+                    new[] { "InventoryControlJournal", "Memo", "TEXT NULL" },
                     new[] { "PurchaseInvoiceHeader", "DueDate", "TEXT NULL" },
                     new[] { "PurchaseInvoiceHeader", "Notes", "TEXT NULL" },
                     new[] { "PurchaseInvoiceHeader", "BillFromJson", "TEXT NULL" },
@@ -263,11 +269,16 @@ namespace Api.Data.Schema
         // Tables added after the first release; the same statements are in the D1 migrations.
         private static void EnsureTables(DbConnection connection)
         {
-            if (!TableExists(connection, "SalesInvoiceHeader"))
+            if (!TableExists(connection, "SalesInvoiceHeader")
+                || !TableExists(connection, "Item")
+                || !TableExists(connection, "GeneralLedgerHeader")
+                || !TableExists(connection, "InventoryControlJournal"))
                 return;
 
             using var cmd = connection.CreateCommand();
             cmd.CommandText = SalesInvoiceEmailTableSql;
+            cmd.ExecuteNonQuery();
+            cmd.CommandText = InventoryAdjustmentTableSql;
             cmd.ExecuteNonQuery();
         }
 
@@ -289,6 +300,28 @@ namespace Api.Data.Schema
             );
             CREATE INDEX IF NOT EXISTS ""IX_SalesInvoiceEmail_CompanyId_SentAt"" ON ""SalesInvoiceEmail"" (""CompanyId"", ""SentAt"");
             CREATE INDEX IF NOT EXISTS ""IX_SalesInvoiceEmail_SalesInvoiceHeaderId"" ON ""SalesInvoiceEmail"" (""SalesInvoiceHeaderId"");";
+
+        private const string InventoryAdjustmentTableSql = @"
+            CREATE TABLE IF NOT EXISTS ""InventoryAdjustment"" (
+                ""Id"" INTEGER NOT NULL CONSTRAINT ""PK_InventoryAdjustment"" PRIMARY KEY AUTOINCREMENT,
+                ""CompanyId"" INTEGER NOT NULL,
+                ""No"" TEXT NOT NULL,
+                ""Date"" TEXT NOT NULL,
+                ""ItemId"" INTEGER NOT NULL,
+                ""QuantityChange"" decimal(18, 4) NOT NULL,
+                ""UnitCost"" decimal(18, 4) NULL,
+                ""Reason"" TEXT NOT NULL,
+                ""Memo"" TEXT NULL,
+                ""GeneralLedgerHeaderId"" INTEGER NULL,
+                ""InventoryControlJournalId"" INTEGER NULL,
+                CONSTRAINT ""FK_InventoryAdjustment_Item_ItemId"" FOREIGN KEY (""ItemId"") REFERENCES ""Item"" (""Id""),
+                CONSTRAINT ""FK_InventoryAdjustment_GeneralLedgerHeader_GeneralLedgerHeaderId"" FOREIGN KEY (""GeneralLedgerHeaderId"") REFERENCES ""GeneralLedgerHeader"" (""Id""),
+                CONSTRAINT ""FK_InventoryAdjustment_InventoryControlJournal_InventoryControlJournalId"" FOREIGN KEY (""InventoryControlJournalId"") REFERENCES ""InventoryControlJournal"" (""Id"")
+            );
+            CREATE INDEX IF NOT EXISTS ""IX_InventoryAdjustment_CompanyId"" ON ""InventoryAdjustment"" (""CompanyId"");
+            CREATE INDEX IF NOT EXISTS ""IX_InventoryAdjustment_ItemId"" ON ""InventoryAdjustment"" (""ItemId"");
+            CREATE INDEX IF NOT EXISTS ""IX_InventoryAdjustment_GeneralLedgerHeaderId"" ON ""InventoryAdjustment"" (""GeneralLedgerHeaderId"");
+            CREATE INDEX IF NOT EXISTS ""IX_InventoryAdjustment_InventoryControlJournalId"" ON ""InventoryAdjustment"" (""InventoryControlJournalId"");";
 
         public static void UpgradePostSeed(DbConnection connection, ILogger? logger = null)
         {

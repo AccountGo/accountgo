@@ -29,6 +29,7 @@ namespace Services.Sales
     {
         private readonly IFinancialService _financialService;
         private readonly IInventoryService _inventoryService;
+        private readonly IStockService _stockService;
 
         private readonly IMapper _mapper;
         private readonly ILogger<SalesService> _logger;
@@ -55,6 +56,7 @@ namespace Services.Sales
 
         public SalesService(IFinancialService financialService,
             IInventoryService inventoryService,
+            IStockService stockService,
             IRepository<SalesOrderHeader> salesOrderRepo,
             IRepository<SalesOrderLine> salesOrderLineRepo,
             IRepository<SalesInvoiceHeader> salesInvoiceRepo,
@@ -80,6 +82,7 @@ namespace Services.Sales
         {
             _financialService = financialService;
             _inventoryService = inventoryService;
+            _stockService = stockService;
             _salesOrderRepo = salesOrderRepo;
             _salesInvoiceRepo = salesInvoiceRepo;
             _salesReceiptRepo = salesReceiptRepo;
@@ -1025,13 +1028,9 @@ namespace Services.Sales
 
                 if (item.ItemCategory != null && item.ItemCategory.ItemType == ItemTypes.Purchased)
                 {
-                    lineItem.InventoryControlJournal = _inventoryService.CreateInventoryControlJournal(lineItem.ItemId,
-                        lineItem.MeasurementId,
-                        DocumentTypes.SalesInvoice,
-                        null,
-                        lineItem.Quantity,
-                        lineItem.Quantity * item.Cost,
-                        lineItem.Quantity * item.Price);
+                    lineItem.InventoryControlJournal = _stockService.Issue(item, lineItem.Quantity,
+                        DocumentTypes.SalesInvoice, salesInvoice.Id, salesInvoice.Date,
+                        $"Invoice {salesInvoice.No ?? salesInvoice.Id.ToString()}");
                 }
             }
 
@@ -1105,8 +1104,13 @@ namespace Services.Sales
                     var item = _inventoryService.GetItemById(line.ItemId);
                     if (item.ItemCategory?.ItemType == ItemTypes.Purchased)
                     {
-                        debitAccounts.Add(new KeyValuePair<int, decimal>(item.CostOfGoodsSoldAccountId.Value, item.Cost.Value * line.Quantity));
-                        creditAccounts.Add(new KeyValuePair<int, decimal>(item.InventoryAccountId.Value, item.Cost.Value * line.Quantity));
+                        var movement = line.InventoryControlJournal;
+                        var totalCost = movement?.TotalCost ?? 0m;
+                        if (totalCost > 0)
+                        {
+                            debitAccounts.Add(new KeyValuePair<int, decimal>(item.CostOfGoodsSoldAccountId.Value, totalCost));
+                            creditAccounts.Add(new KeyValuePair<int, decimal>(item.InventoryAccountId.Value, totalCost));
+                        }
                     }
                 }
 
@@ -1132,6 +1136,47 @@ namespace Services.Sales
                     _salesInvoiceRepo.Update(salesInvoice);
                 }
             }
+        }
+
+        /// <summary>Restores stock for an invoice after its general-ledger posting has been reversed.</summary>
+        public void VoidSalesInvoiceStock(SalesInvoiceHeader invoice)
+        {
+            if (invoice == null)
+                throw new ArgumentNullException(nameof(invoice));
+
+            var reversalDate = invoice.VoidGeneralLedgerHeader?.Date ?? invoice.Date;
+            foreach (var line in invoice.SalesInvoiceLines.Where(l => l.InventoryControlJournalId.HasValue))
+            {
+                var item = _inventoryService.GetItemById(line.ItemId);
+                var original = item?.InventoryControlJournals.FirstOrDefault(j => j.Id == line.InventoryControlJournalId.Value);
+                if (original == null || item.InventoryControlJournals.Any(j =>
+                    j.IsReverse && j.DocumentType == original.DocumentType && j.DocumentId == original.DocumentId && j.ItemId == original.ItemId))
+                    continue;
+
+                _stockService.Reverse(original, reversalDate, $"Void of invoice {invoice.No ?? invoice.Id.ToString()}");
+            }
+        }
+
+        /// <summary>Returns a non-blocking warning for each stock item the invoice will leave below zero.</summary>
+        public List<string> GetSalesInvoiceStockWarnings(SalesInvoiceHeader invoice)
+        {
+            if (invoice == null)
+                throw new ArgumentNullException(nameof(invoice));
+
+            var warnings = new List<string>();
+            foreach (var group in invoice.SalesInvoiceLines.GroupBy(line => line.ItemId))
+            {
+                var item = _inventoryService.GetItemById(group.Key);
+                if (item?.ItemCategory?.ItemType != ItemTypes.Purchased)
+                    continue;
+
+                var quantity = group.Sum(line => line.Quantity);
+                if (quantity > item.QuantityOnHand)
+                {
+                    warnings.Add($"Only {item.QuantityOnHand.ToString("0.####", CultureInfo.InvariantCulture)} of {item.Description} in stock.");
+                }
+            }
+            return warnings;
         }
 
         public Contact GetContacyById(int id)
