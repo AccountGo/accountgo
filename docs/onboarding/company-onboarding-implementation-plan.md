@@ -223,7 +223,7 @@ Add `CompanyAccountingPolicyService.IsLedgerFrozen(companyId)` → true if any p
 
 **Status: Done on branch `feat/onboarding-phase-2-provision`, pending merge.**  
 - `POST /api/organizations` accepts the hard-gate payload (enums as strings or numbers). Omitted fields use legacy defaults: IFRS for SMEs, Accrual (Cash when the framework is CashBasis), calendar year, books start = Jan 1 of the current year, no tax, Services, no inventory costing.  
-- Policy is validated by `CompanyAccountingPolicyRules.Validate(CompanyProvisionOptions, today)` (400 `Invalid accounting policy`) and again in `WorkspaceService.Create`. The fiscal year is derived by `FiscalYearCalculator`; `CoaTemplateId` by `CoaTemplates.Resolve` (all ids seed the same CoA until Phase 5).  
+- Policy is validated by `CompanyAccountingPolicyRules.Validate(CompanyProvisionOptions, today)` (400 `Invalid accounting policy`) and again in `WorkspaceService.Create`. The fiscal year is derived by `FiscalYearCalculator`; `CoaTemplateId` by `CoaTemplates.Resolve` (see Phase 5 for the template families).  
 - SalesTax / VatGst seed an inactive zero-rate placeholder tax so the owner must set real rates; None keeps the active NONE tax.  
 - `CompanyAccountingPolicyService.IsLedgerFrozen` is a stub, not enforced until Phase 4.  
 - Signup still creates its workspace with legacy defaults through the shared `WorkspaceService.Create`; policy fields are not yet on the signup DTO (Phase 3 routes signup to the wizard).
@@ -368,10 +368,12 @@ Control account codes in `GeneralLedgerSetting` must exist in the chosen templat
 
 ### 5.2 Acceptance
 
-- [ ] Services template omits unused manufacturing depth (or leaves inactive).  
-- [ ] Provisioning fails clearly if control account codes missing.  
-- [ ] Document templates in `docs/accounting/coa-register.md` (short section).  
-- [ ] Backend tests provision each template id once.
+- [x] Services template omits unused manufacturing depth (`10900`, `50500`).  
+- [x] Provisioning fails clearly if control account codes missing (`InvalidOperationException` listing codes; not covered by an automated test).  
+- [x] Document templates in `docs/accounting/coa-register.md` §6.  
+- [x] Backend tests provision each template id once.
+
+**Status:** Done on branch, pending merge. Chosen option: **C-lite** — one base CSV plus a per-template omit list in `CoaTemplates`. Template ids are now `services-sme`, `trading-wa`, `trading-fifo`, `mixed-sme`, `legacy-default` (Phase 2 ids such as `services-ifrs-smes` are no longer generated; already-created companies keep their stored id, which behaves like the full chart). Unknown explicit ids are rejected by `CompanyAccountingPolicyRules`. Trading templates currently equal the full chart; their inventory/COGS emphasis is a later content change.
 
 ---
 
@@ -438,7 +440,7 @@ Phase 5 may be deferred if product accepts single CoA + stored `CoaTemplateId` f
 - [x] Phase 2 — API + provisioning + tests  
 - [x] Phase 3 — CreateOrg wizard UI  
 - [x] Phase 4 — Checklist + locks + books-start guard  
-- [ ] Phase 5 — CoA template families  
+- [x] Phase 5 — CoA template families  
 - [ ] Phase 6 — Polish + docs  
 
 Mark each phase **Done** in this file with a two-line summary when merged.
@@ -453,4 +455,5 @@ Mark each phase **Done** in this file with a two-line summary when merged.
 | 2026-10-25 | Phase 2 marked done on branch |
 | 2026-10-25 | Phase 3 wizard UI implemented on branch, pending merge and live QA |
 | 2026-10-25 | Phase 4 checklist, policy locks and books-start guard implemented on branch |
+| 2026-10-25 | Phase 5 CoA template families implemented on branch |
 | 2026-10-25 | Phase 1 marked done on branch; LIFO and FY-coherence checks deferred to Phase 2 |

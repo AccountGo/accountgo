@@ -140,6 +140,49 @@ public class CompanyPolicyLocksTests : IDisposable
         Assert.Equal(first, _db.CompanySettings.Single().OnboardingChecklistDismissedAt);
     }
 
+    [Theory]
+    [InlineData(IndustryTemplate.Services, InventoryCostingMethod.None, "services-sme")]
+    [InlineData(IndustryTemplate.ProductRetail, InventoryCostingMethod.WeightedAverage, "trading-wa")]
+    [InlineData(IndustryTemplate.ProductRetail, InventoryCostingMethod.Fifo, "trading-fifo")]
+    [InlineData(IndustryTemplate.Mixed, InventoryCostingMethod.Fifo, "mixed-sme")]
+    public void Resolve_PicksTemplateFamily(IndustryTemplate industry, InventoryCostingMethod costing, string expected)
+    {
+        Assert.Equal(expected, CoaTemplates.Resolve(industry, costing));
+    }
+
+    [Theory]
+    [InlineData("services-sme", false)]
+    [InlineData("trading-wa", true)]
+    [InlineData("trading-fifo", true)]
+    [InlineData("mixed-sme", true)]
+    [InlineData("legacy-default", true)]
+    public void Provision_SeedsEachTemplate(string templateId, bool hasWorkInProgress)
+    {
+        var company = new Company { Name = templateId, Slug = "tpl-" + templateId };
+        _db.Companies.Add(company);
+        _db.SaveChanges();
+
+        new CompanyProvisioningService(_db, _tenant).Provision(company, new CompanyProvisionOptions { CoaTemplateId = templateId });
+        _db.SaveChanges();
+
+        using var _ = _tenant.Impersonate(company.Id, company.Slug, CompanyMemberRole.Owner);
+        var codes = _db.Accounts.Select(a => a.AccountCode).ToList();
+        Assert.Equal(hasWorkInProgress, codes.Contains("10900"));
+        Assert.Equal(hasWorkInProgress, codes.Contains("50500"));
+        foreach (var code in CoaTemplates.RequiredControlAccountCodes)
+            Assert.Contains(code, codes);
+        Assert.Contains("10800", codes);
+        Assert.Equal(templateId, _db.CompanySettings.Single().CoaTemplateId);
+    }
+
+    [Fact]
+    public void Rules_RejectUnknownTemplateId()
+    {
+        var errors = CompanyAccountingPolicyRules.Validate(new CompanyProvisionOptions { CoaTemplateId = "nope" }, DateTime.UtcNow);
+
+        Assert.Contains(errors, e => e.Contains("template"));
+    }
+
     private Services.Financial.FinancialService GuardedFinancialService(DateTime booksStart)
     {
         var settings = new List<CompanySetting> { new() { CompanyId = 1, BooksStartDate = booksStart } };

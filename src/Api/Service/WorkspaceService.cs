@@ -55,7 +55,7 @@ namespace Api.Service
             if (options.BooksStartDate == null)
                 options.BooksStartDate = new DateTime(DateTime.UtcNow.Year, 1, 1, 0, 0, 0, DateTimeKind.Utc);
             if (string.IsNullOrWhiteSpace(options.CoaTemplateId))
-                options.CoaTemplateId = CoaTemplates.Resolve(options.IndustryTemplate, options.ReportingFramework);
+                options.CoaTemplateId = CoaTemplates.Resolve(options.IndustryTemplate, options.InventoryCostingMethod);
 
             var company = new Company
             {

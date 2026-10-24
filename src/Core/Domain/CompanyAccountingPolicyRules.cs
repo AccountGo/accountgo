@@ -15,6 +15,8 @@ namespace Core.Domain
                 errors.Add("Tax regime is not supported.");
             if (!Enum.IsDefined(typeof(IndustryTemplate), options.IndustryTemplate))
                 errors.Add("Industry template is not supported.");
+            if (!string.IsNullOrWhiteSpace(options.CoaTemplateId) && !CoaTemplates.IsKnown(options.CoaTemplateId))
+                errors.Add("Chart of accounts template is not supported.");
 
             if (!Enum.IsDefined(typeof(FiscalYearPattern), options.FiscalYearPattern))
             {

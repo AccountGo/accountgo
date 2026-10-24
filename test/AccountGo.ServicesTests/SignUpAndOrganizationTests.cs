@@ -178,7 +178,7 @@ public class SignUpAndOrganizationTests : IDisposable
         var company = _db.Companies.Single(c => c.Slug == "acme-studio");
         var setting = _db.CompanySettings.IgnoreQueryFilters().Single(s => s.CompanyId == company.Id);
         Assert.Equal(ReportingFramework.UsGaapPrivate, setting.ReportingFramework);
-        Assert.Equal("services-us-gaap", setting.CoaTemplateId);
+        Assert.Equal("services-sme", setting.CoaTemplateId);
         Assert.Equal("Acme Studio LLC", setting.LegalName);
         Assert.False(_db.GeneralLedgerHeaders.IgnoreQueryFilters().Any(h => h.CompanyId == company.Id));
         Assert.False(new CompanyAccountingPolicyService(_db).IsLedgerFrozen(company.Id));

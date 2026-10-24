@@ -41,8 +41,9 @@ namespace Api.Service
             options = options ?? new CompanyProvisionOptions();
             var booksStart = (options.BooksStartDate ?? new DateTime(DateTime.UtcNow.Year, 1, 1)).Date;
             var coaTemplateId = string.IsNullOrWhiteSpace(options.CoaTemplateId)
-                ? CoaTemplates.Resolve(options.IndustryTemplate, options.ReportingFramework)
+                ? CoaTemplates.Resolve(options.IndustryTemplate, options.InventoryCostingMethod)
                 : options.CoaTemplateId;
+            var omitted = CoaTemplates.OmittedAccountCodes(coaTemplateId);
 
             using (_tenant.Impersonate(company.Id, company.Slug, CompanyMemberRole.Owner))
             {
@@ -59,7 +60,7 @@ namespace Api.Service
                     }
                     foreach (var account in template.Accounts)
                     {
-                        if (accounts.ContainsKey(account.AccountCode))
+                        if (accounts.ContainsKey(account.AccountCode) || omitted.Contains(account.AccountCode))
                             continue;
                         var parentCode = account.ParentAccount == null ? null : account.ParentAccount.AccountCode;
                         account.ParentAccount = null;
@@ -75,6 +76,9 @@ namespace Api.Service
                 }
                 foreach (var pair in parents)
                     pair.Key.ParentAccount = accounts[pair.Value];
+                var missing = CoaTemplates.RequiredControlAccountCodes.Where(code => !accounts.ContainsKey(code)).ToList();
+                if (missing.Count > 0)
+                    throw new InvalidOperationException($"Chart of accounts template '{coaTemplateId}' is missing required control accounts: {string.Join(", ", missing)}.");
                 _db.SaveChanges();
 
                 if (!_db.GeneralLedgerSettings.Any())
