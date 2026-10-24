@@ -21,6 +21,7 @@ import {
   AlertCircle,
   RefreshCw,
   FileText,
+  Percent,
 } from 'lucide-react';
 import { TenantContextType, WorkspaceMember } from '../types';
 import { DEFAULT_CURRENCY } from '../lib/currency';
@@ -32,6 +33,7 @@ import { SubscriptionSettingsTab } from '../components/SubscriptionSettingsTab';
 import { RolesSettingsTab } from '../components/RolesSettingsTab';
 import { BusinessDetailsCard } from '../components/BusinessDetailsCard';
 import { InvoiceSettingsTab } from '../components/InvoiceSettingsTab';
+import { TaxSettingsTab } from '../components/TaxSettingsTab';
 import { SettingsNav, SettingsNavGroup } from '../components/SettingsNav';
 
 interface LiveFinancialYear {
@@ -61,13 +63,14 @@ interface LiveCashBank {
 
 export const Settings: React.FC = () => {
   const tenantContext = useOutletContext<TenantContextType>();
-  const { currentOrg, user, updateCurrentOrg, updateOrgWhitelabel, hasModule, subscription } = tenantContext;
+  const { currentOrg, user, updateCurrentOrg, updateOrgWhitelabel, hasModule, hasPermission, subscription } = tenantContext;
   const hasFinancials = hasModule('financials');
+  const hasSalesOrPurchases = hasModule('sales') || hasModule('purchases');
   const { authFetch } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  type TabKey = 'general' | 'invoices' | 'financials' | 'whitelabel' | 'subscription' | 'roles';
+  type TabKey = 'general' | 'invoices' | 'taxes' | 'financials' | 'whitelabel' | 'subscription' | 'roles';
 
   const handleTabChange = (tab: TabKey) => {
     setSearchParams(tab === 'general' ? {} : { tab });
@@ -85,6 +88,9 @@ export const Settings: React.FC = () => {
       label: 'Sales',
       items: [{ key: 'invoices', label: 'Invoices', icon: FileText }],
     },
+    ...(hasSalesOrPurchases
+      ? [{ label: 'Sales & Purchases', items: [{ key: 'taxes' as const, label: 'Taxes', icon: Percent }] }]
+      : []),
     // Only sections for modules this workspace has; an invoicing-only workspace has no ledger to configure.
     ...(hasFinancials
       ? [{ label: 'Accounting', items: [{ key: 'financials' as const, label: 'Financial Rules & Banking', icon: Coins }] }]
@@ -815,6 +821,16 @@ export const Settings: React.FC = () => {
                   ))}
                 </div>
               </div>
+            </div>
+          )}
+
+          {currentTab === 'taxes' && (
+            <div role="tabpanel" id="panel-taxes" aria-labelledby="tab-taxes" tabIndex={0} className="focus:outline-none">
+              <TaxSettingsTab
+                canManage={hasPermission('admin.taxes.manage')}
+                hasFinancials={hasFinancials}
+                currency={currency}
+              />
             </div>
           )}
 

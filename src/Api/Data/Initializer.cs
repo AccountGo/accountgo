@@ -555,7 +555,7 @@ namespace Api.Data
             if (_financialService.GetTaxes().Any(t => t.TaxCode != "NONE")) return;
 
             var salesTaxAccount = _financialService.GetAccountByAccountCode("20300");
-            var purchaseTaxAccount = _financialService.GetAccountByAccountCode("50700");
+            var purchaseTaxAccount = _financialService.GetAccountByAccountCode("10160");
 
             var gst = new Core.Domain.TaxSystem.Tax()
             {

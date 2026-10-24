@@ -21,16 +21,15 @@ namespace Services.Administration
     public interface IAdministrationService
     {
         ICollection<Tax> GetAllTaxes(bool includeInActive);
+        IReadOnlyList<Dto.TaxSystem.TaxSetting> ListTaxSettings();
+        Task<TaxSettingsOutcome> CreateTaxSettingAsync(Dto.TaxSystem.TaxSettingWrite write);
+        Task<TaxSettingsOutcome> UpdateTaxSettingAsync(int id, Dto.TaxSystem.TaxSettingWrite write);
+        Task<TaxSettingsOutcome> DeleteTaxSettingAsync(int id);
         ICollection<ItemTaxGroup> GetItemTaxGroups(bool includeInActive);
         ICollection<TaxGroup> GetTaxGroups(bool includeInActive);
-        Task<Result<Dto.TaxSystem.Tax>> CreateTaxAsync(Dto.TaxSystem.TaxForCreation taxForCreationDto);
         void AddNewTax(Tax tax);
-        Task AddNewTaxAsync(Tax tax);
         TaxGroup AddNewTaxGroup(Dto.TaxSystem.TaxGroup taxGroupDto);
         ItemTaxGroup AddNewItemTaxGroup(Dto.TaxSystem.ItemTaxGroup itemTaxGroupDto);
-        Task<Result<Dto.TaxSystem.Tax>> EditTaxAsync(Dto.TaxSystem.TaxForUpdate taxForUpdateDto);
-        Task UpdateTaxAsync(Tax tax);
-        Task<Result<Dto.TaxSystem.Tax>> DeleteTaxAsync(int id);
         Task<Result<Dto.TaxSystem.TaxGroup>> DeleteTaxGroupAsync(int id);
         Task<Result<Dto.TaxSystem.ItemTaxGroup>> DeleteItemTaxGroupAsync(int id);
         void InitializeCompany();

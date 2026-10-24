@@ -66,5 +66,6 @@ namespace Core.Domain.Security
         public const string AdminMembersManage = "admin.members.manage";
         public const string AdminRolesManage = "admin.roles.manage";
         public const string AdminSubscriptionManage = "admin.subscription.manage";
+        public const string AdminTaxesManage = "admin.taxes.manage";
     }
 }

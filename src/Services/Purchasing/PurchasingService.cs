@@ -313,11 +313,17 @@ namespace Services.Purchasing
             var taxes = _financialService.GetTaxes().ToList();
             foreach (var line in bill.PurchaseInvoiceLines)
             {
+                var tax = line.TaxId.HasValue
+                    ? taxes.SingleOrDefault(t => t.Id == line.TaxId.Value)
+                        ?? throw new InvalidOperationException("The selected tax was not found in this workspace.")
+                    : null;
+                if (tax != null && !tax.IsActive)
+                    throw new InvalidOperationException($"{tax.TaxName} is archived. Pick another tax for this line.");
                 line.AccountId = StockInventoryAccountId(line.ItemId)
                     ?? line.AccountId
                     ?? DefaultLineAccountId(line.ItemId, vendor);
                 line.Cost = line.Amount;
-                line.TaxAmount = PurchaseInvoiceLine.TaxOf(line.Subtotal, taxes.FirstOrDefault(t => t.Id == line.TaxId)?.Rate);
+                line.TaxAmount = PurchaseInvoiceLine.TaxOf(line.Subtotal, tax?.Rate);
             }
 
             bill.VendorInvoiceNo ??= "";

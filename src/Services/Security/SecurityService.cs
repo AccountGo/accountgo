@@ -211,7 +211,8 @@ namespace Services.Security
 
                 ("Admin", SystemPermissions.AdminMembersManage, "Manage Members"),
                 ("Admin", SystemPermissions.AdminRolesManage, "Manage Roles"),
-                ("Admin", SystemPermissions.AdminSubscriptionManage, "Manage Subscription")
+                ("Admin", SystemPermissions.AdminSubscriptionManage, "Manage Subscription"),
+                ("Admin", SystemPermissions.AdminTaxesManage, "Manage Taxes")
             };
 
             foreach (var perm in permissions)
@@ -275,7 +276,8 @@ namespace Services.Security
                     SystemPermissions.InventoryItemsView,
                     SystemPermissions.InventoryItemsManage,
                     SystemPermissions.InventoryAdjustmentsPost,
-                    SystemPermissions.ReportsView
+                    SystemPermissions.ReportsView,
+                    SystemPermissions.AdminTaxesManage
                 }),
                 ("Sales Representative", "Sales Representative", false, new[]
                 {
