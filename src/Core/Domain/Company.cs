@@ -45,13 +45,16 @@ namespace Core.Domain
                 catch { }
             }
 
-            return (Plan?.ToLowerInvariant()) switch
-            {
-                "invoicing" => new List<string> { "sales" },
-                "enterprise" => new List<string> { "sales", "financials", "purchases", "inventory", "reports", "donations", "audit" },
-                _ => new List<string> { "sales", "financials", "purchases", "reports" }
-            };
+            return ModulesForPlan(Plan);
         }
+
+        /// <summary>Modules included by subscription tier, ordered Invoicing → Accounting → Enterprise.</summary>
+        public static List<string> ModulesForPlan(string? plan) => (plan?.ToLowerInvariant()) switch
+        {
+            "invoicing" => new List<string> { "sales" },
+            "enterprise" => new List<string> { "sales", "financials", "purchases", "reports", "inventory", "donations", "audit" },
+            _ => new List<string> { "sales", "financials", "purchases", "reports" }
+        };
 
         public bool HasModule(string moduleKey)
         {
