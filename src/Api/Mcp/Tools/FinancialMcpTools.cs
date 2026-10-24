@@ -6,9 +6,10 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Api.Mcp.Models;
+using Core.Domain;
 using Core.Tenancy;
-using Microsoft.Extensions.DependencyInjection;
 using ModelContextProtocol.Server;
+using Services.Administration;
 using Services.Financial;
 
 namespace Api.Mcp.Tools
@@ -16,16 +17,17 @@ namespace Api.Mcp.Tools
     [McpServerToolType]
     public class FinancialMcpTools
     {
-        private readonly IFinancialService? _financialService;
-        private readonly ITenantContext? _tenantContext;
+        private readonly IFinancialService _financialService;
+        private readonly IAdministrationService _adminService;
+        private readonly ITenantContext _tenantContext;
 
-        public FinancialMcpTools()
-        {
-        }
-
-        public FinancialMcpTools(IFinancialService financialService, ITenantContext tenantContext)
+        public FinancialMcpTools(
+            IFinancialService financialService,
+            IAdministrationService adminService,
+            ITenantContext tenantContext)
         {
             _financialService = financialService ?? throw new ArgumentNullException(nameof(financialService));
+            _adminService = adminService ?? throw new ArgumentNullException(nameof(adminService));
             _tenantContext = tenantContext ?? throw new ArgumentNullException(nameof(tenantContext));
         }
 
@@ -42,20 +44,20 @@ namespace Api.Mcp.Tools
             [Description("Optional search text to filter accounts by code or name.")] string? filter = null,
             [Description("Optional classification filter (e.g., 'Asset', 'Liability', 'Equity', 'Revenue', 'Expense').")] string? accountClass = null,
             [Description("Whether to include accounts with zero balances. Defaults to true.")] bool includeZeroBalances = true,
-            IServiceProvider? serviceProvider = null,
             CancellationToken cancellationToken = default)
         {
-            var tenantContext = _tenantContext ?? serviceProvider?.GetRequiredService<ITenantContext>()
-                ?? throw new InvalidOperationException("Tenant context is required.");
-            var financialService = _financialService ?? serviceProvider?.GetRequiredService<IFinancialService>()
-                ?? throw new InvalidOperationException("Financial service is required.");
-
-            if (!tenantContext.IsResolved || tenantContext.CompanyId == null)
+            if (!_tenantContext.IsResolved || _tenantContext.CompanyId == null)
             {
                 throw new InvalidOperationException("Tenant context is required. Ensure 'X-AccountGo-Org' header is supplied with an authorized organization slug.");
             }
 
-            var allAccounts = financialService.GetAccounts()?.ToList() ?? new List<Core.Domain.Financials.Account>();
+            // Entitlement check: require active subscription to either financials or reports module
+            if (!_adminService.IsModuleEnabled("financials") && !_adminService.IsModuleEnabled("reports"))
+            {
+                throw new InvalidOperationException("The organization's active subscription plan does not include the 'financials' or 'reports' module required to query the chart of accounts.");
+            }
+
+            var allAccounts = _financialService.GetAccounts()?.ToList() ?? new List<Core.Domain.Financials.Account>();
 
             var query = allAccounts.AsEnumerable();
 
@@ -82,8 +84,9 @@ namespace Api.Mcp.Tools
 
             var filteredAccounts = query.OrderBy(a => a.AccountCode).ToList();
 
+            // Compute classification counts over the filtered accounts for internal summary consistency
             var classificationCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-            foreach (var account in allAccounts)
+            foreach (var account in filteredAccounts)
             {
                 var className = account.AccountClass?.Name ?? "Unclassified";
                 classificationCounts[className] = classificationCounts.GetValueOrDefault(className, 0) + 1;
@@ -91,8 +94,9 @@ namespace Api.Mcp.Tools
 
             var response = new ChartOfAccountsMcpResponse
             {
-                Organization = tenantContext.CompanySlug ?? $"Tenant-{tenantContext.CompanyId}",
+                Organization = _tenantContext.CompanySlug ?? $"Tenant-{_tenantContext.CompanyId}",
                 TotalAccounts = filteredAccounts.Count,
+                TotalUnfilteredAccounts = allAccounts.Count,
                 AsOfDateUtc = DateTime.UtcNow,
                 ClassificationCounts = classificationCounts,
                 Accounts = filteredAccounts.Select(a => new AccountMcpSummary
@@ -102,7 +106,10 @@ namespace Api.Mcp.Tools
                     Name = a.AccountName ?? string.Empty,
                     Description = a.Description,
                     AccountClass = a.AccountClass?.Name ?? "Unknown",
-                    NormalBalance = a.AccountClass?.NormalBalance ?? (a.DrOrCrSide == Core.Domain.DrOrCrSide.Cr ? "Cr" : "Dr"),
+                    // For contra accounts and specific account overrides, DrOrCrSide reflects the actual normal side
+                    NormalBalance = a.DrOrCrSide != DrOrCrSide.NA
+                        ? (a.DrOrCrSide == DrOrCrSide.Cr ? "Cr" : "Dr")
+                        : (a.AccountClass?.NormalBalance ?? "Dr"),
                     Balance = a.Balance,
                     DebitBalance = a.DebitBalance,
                     CreditBalance = a.CreditBalance,

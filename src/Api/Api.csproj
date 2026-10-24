@@ -23,7 +23,6 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
-    <PackageReference Include="ModelContextProtocol" Version="1.4.1" />
     <PackageReference Include="OpenTelemetry.Api" Version="1.20.0" />
     <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.20.0" />
     <PackageReference Include="QuestPDF" Version="2026.7.3" />

@@ -328,7 +328,7 @@ app.UseMiddleware<Api.Middleware.TenantResolutionMiddleware>();
 app.UseAuthorization();
 
 app.MapControllers();
-app.MapMcp("/mcp");
+app.MapMcp("/mcp").RequireAuthorization();
 app.MapGet("/health", () => Results.Ok(new { status = "healthy" })).AllowAnonymous();
 
 Api.Filters.TenantEndpointValidator.ValidateAllEndpoints(typeof(Program).Assembly);

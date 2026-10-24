@@ -8,6 +8,7 @@ namespace Api.Mcp.Models
     {
         public string Organization { get; set; } = string.Empty;
         public int TotalAccounts { get; set; }
+        public int TotalUnfilteredAccounts { get; set; }
         public DateTime AsOfDateUtc { get; set; } = DateTime.UtcNow;
         public Dictionary<string, int> ClassificationCounts { get; set; } = new();
         public List<AccountMcpSummary> Accounts { get; set; } = new();

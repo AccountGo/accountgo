@@ -117,5 +117,48 @@ namespace AccountGo.BackendTests.Financial
             var body = await response.Content.ReadAsStringAsync();
             Assert.Contains("get_chart_of_accounts", body);
         }
+
+        [Fact]
+        public async Task McpEndpoint_WithUnauthorizedOrg_ReturnsNotFound()
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Post, "/mcp");
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _token);
+            req.Headers.Add("X-AccountGo-Org", "unauthorized-org-" + Guid.NewGuid().ToString("N")[..6]);
+            req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            req.Content = new StringContent(
+                "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\",\"params\":{}}",
+                Encoding.UTF8,
+                "application/json");
+
+            var response = await _client.SendAsync(req);
+
+            // TenantResolutionMiddleware returns 404 when user is not a member of the requested org
+            Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        }
+
+        [Fact]
+        public async Task McpEndpoint_ToolsCall_ReturnsChartOfAccounts()
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Post, "/mcp");
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _token);
+            req.Headers.Add("X-AccountGo-Org", _slug);
+            req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/event-stream"));
+            req.Content = new StringContent(
+                "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"get_chart_of_accounts\",\"arguments\":{}}}",
+                Encoding.UTF8,
+                "application/json");
+
+            var response = await _client.SendAsync(req);
+
+            Assert.True(
+                response.StatusCode == HttpStatusCode.OK ||
+                response.StatusCode == HttpStatusCode.Accepted,
+                $"Expected 200/202 but got {response.StatusCode}");
+
+            var body = await response.Content.ReadAsStringAsync();
+            Assert.Contains(_slug, body);
+            Assert.Contains("totalAccounts", body, StringComparison.OrdinalIgnoreCase);
+        }
     }
 }
