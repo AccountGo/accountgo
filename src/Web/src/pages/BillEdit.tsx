@@ -11,12 +11,7 @@ import { Bill, BillAccount, CatalogItem, CustomerOption, ItemOption, PaymentTerm
 import { useAuth } from '../auth/AuthContext';
 import { currencySymbol as getCurrencySymbol } from '../lib/currency';
 import { addBusinessDays, businessDaysBetween, isValidDate, localToday as today } from '../lib/businessDays';
-
-interface TaxOption {
-  id: number;
-  taxName: string;
-  rate: number;
-}
+import { archivedTaxMessage, firstArchivedTax, isSelectableTax, lineTaxChoices, taxChoiceLabel, WorkspaceTax } from '../lib/invoiceTax';
 
 interface LineDraft {
   /** Stable React key; ids are 0 until a line is saved. */
@@ -66,7 +61,7 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
   const [vendors, setVendors] = useState<CustomerOption[]>([]);
   const [paymentTerms, setPaymentTerms] = useState<PaymentTermOption[]>([]);
   const [accounts, setAccounts] = useState<BillAccount[]>([]);
-  const [taxes, setTaxes] = useState<TaxOption[]>([]);
+  const [taxes, setTaxes] = useState<WorkspaceTax[]>([]);
   const [catalog, setCatalog] = useState<ItemOption[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -134,7 +129,7 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
         if (termsRes.ok) setPaymentTerms(await termsRes.json());
         if (taxesRes.ok) {
           const data = await taxesRes.json();
-          setTaxes(((data?.taxes ?? []) as (TaxOption & { isActive: boolean })[]).filter((t) => t.isActive && t.rate > 0));
+          setTaxes((data?.taxes ?? []) as WorkspaceTax[]);
         }
         // Without permission to see the catalog, lines are typed.
         if (catalogRes.ok) {
@@ -248,6 +243,11 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
       setError("A bill's total must be more than zero to approve it.");
       return;
     }
+    const archived = firstArchivedTax(taxes, lines.map((line) => line.taxId));
+    if (archived) {
+      setError(archivedTaxMessage(archived.taxName));
+      return;
+    }
 
     setSaving(approve ? 'approve' : 'draft');
     try {
@@ -305,6 +305,11 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
   const pickerItem = pickerLine !== null ? lines[pickerLine] : null;
   const expenseAccounts = accounts.filter((a) => a.group === 'Expense');
   const assetAccounts = accounts.filter((a) => a.group === 'Asset');
+  const selectableTaxCount = taxes.filter(isSelectableTax).length;
+  const showTaxColumn = selectableTaxCount > 0 || lines.some((line) => taxes.some((tax) => tax.id === line.taxId && !tax.isActive));
+  const manageTaxes = selectableTaxCount === 0 && hasPermission('admin.taxes.manage') ? (
+    <Link to={`/org/${orgSlug}/settings?tab=taxes`} className="normal-case tracking-normal font-semibold text-[var(--brand-primary)]">Manage taxes</Link>
+  ) : null;
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 pb-24 text-[var(--text-main)]">
@@ -482,7 +487,9 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
 
         <div>
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">Lines</h3>
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+              <span className="inline-flex items-center gap-2">Lines {!showTaxColumn && manageTaxes}</span>
+            </h3>
             <span className="hidden sm:inline text-xs text-[var(--text-muted)]">Each line is booked to the account you pick: an expense, or an asset such as equipment.</span>
           </div>
 
@@ -495,7 +502,11 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
                   <th className="py-3 px-3 w-20 text-right">Qty</th>
                   <th className="py-3 px-3 w-28 text-right">Unit cost</th>
                   <th className="py-3 px-3 w-20 text-right">Disc %</th>
-                  {taxes.length > 0 && <th className="py-3 px-3 min-w-[130px]">Tax</th>}
+                  {showTaxColumn && (
+                    <th className="py-3 px-3 min-w-[130px]">
+                      <span className="inline-flex items-center gap-2">Tax {manageTaxes}</span>
+                    </th>
+                  )}
                   <th className="py-3 px-4 w-28 text-right">Amount</th>
                   <th className="py-3 px-2 w-12">
                     <span className="sr-only">Remove</span>
@@ -608,7 +619,7 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
                           className={`${cellClass} text-right`}
                         />
                       </td>
-                      {taxes.length > 0 && (
+                      {showTaxColumn && (
                         <td className="py-2.5 px-3">
                           <select
                             aria-label={`Line ${idx + 1} tax`}
@@ -617,9 +628,9 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
                             className={cellClass}
                           >
                             <option value="">No tax</option>
-                            {taxes.map((t) => (
+                            {lineTaxChoices(taxes, line.taxId).map((t) => (
                               <option key={t.id} value={t.id}>
-                                {t.taxName} ({t.rate}%)
+                                {taxChoiceLabel(t)}
                               </option>
                             ))}
                           </select>

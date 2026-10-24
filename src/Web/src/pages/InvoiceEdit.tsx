@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { useOutletContext, useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useOutletContext, useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Plus,
   Trash2,
@@ -35,7 +35,7 @@ import {
 import { useAuth } from '../auth/AuthContext';
 import { currencySymbol as getCurrencySymbol } from '../lib/currency';
 import { addBusinessDays, businessDaysBetween, isValidDate, localToday } from '../lib/businessDays';
-import { invoiceLineAmounts } from '../lib/invoiceTax';
+import { archivedTaxMessage, firstArchivedTax, invoiceLineAmounts, isSelectableTax, lineTaxChoices, taxChoiceLabel, WorkspaceTax } from '../lib/invoiceTax';
 
 interface InvoiceEditProps {
   isEdit?: boolean;
@@ -49,13 +49,6 @@ interface FormLineItem {
   amount: number;
   discount: number;
   taxId: number | '';
-}
-
-interface TaxOption {
-  id: number;
-  taxName: string;
-  rate: number;
-  isActive: boolean;
 }
 
 const round2 = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
@@ -75,7 +68,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
   const [customers, setCustomers] = useState<CustomerOption[]>([]);
   const [paymentTerms, setPaymentTerms] = useState<PaymentTermOption[]>([]);
   const [catalogItems, setCatalogItems] = useState<ItemOption[]>([]);
-  const [taxes, setTaxes] = useState<TaxOption[]>([]);
+  const [taxes, setTaxes] = useState<WorkspaceTax[]>([]);
   // Line whose catalog picker is open.
   const [pickerLine, setPickerLine] = useState<number | null>(null);
   const [isLoadingRefs, setIsLoadingRefs] = useState<boolean>(true);
@@ -169,7 +162,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
       }
       if (!taxesRes.ok) throw new Error('The invoice taxes could not be loaded.');
       const taxData = await taxesRes.json();
-      setTaxes(((taxData?.taxes ?? []) as TaxOption[]).filter(t => t.isActive && t.rate > 0));
+      setTaxes((taxData?.taxes ?? []) as WorkspaceTax[]);
     } catch (err: any) {
       console.error('Error loading reference data:', err);
       setErrorBanner(err.message || 'The invoice form could not be loaded.');
@@ -441,6 +434,11 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
     const validLines = lines.filter((l) => l.itemDescription.trim() !== '' || l.amount > 0);
     if (validLines.length === 0) {
       setErrorBanner('Please provide at least one line item with a description or rate.');
+      return;
+    }
+    const archived = firstArchivedTax(taxes, validLines.map((line) => line.taxId));
+    if (archived) {
+      setErrorBanner(archivedTaxMessage(archived.taxName));
       return;
     }
     if (validLines.some(l => l.taxId !== '' && !taxes.some(t => t.id === l.taxId))) {
@@ -818,7 +816,14 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
                   <th className="py-3 px-3 w-20 text-right">Qty</th>
                   <th className="py-3 px-3 w-28 text-right">Unit Price</th>
                   <th className="py-3 px-3 w-20 text-right">Disc %</th>
-                  <th className="py-3 px-3 w-40 text-right">Tax</th>
+                  <th className="py-3 px-3 w-40 text-right">
+                    <span className="inline-flex items-center justify-end gap-2">
+                      Tax
+                      {taxes.filter(isSelectableTax).length === 0 && hasPermission('admin.taxes.manage') && (
+                        <Link to={`/org/${orgSlug}/settings?tab=taxes`} className="normal-case tracking-normal font-semibold text-[var(--brand-primary)]">Manage taxes</Link>
+                      )}
+                    </span>
+                  </th>
                   <th className="py-3 px-4 w-28 text-right">Line Total</th>
                   <th className="py-3 px-2 w-12 text-center"></th>
                 </tr>
@@ -932,8 +937,8 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
                           className="w-full h-9 px-2 text-sm text-right bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-lg focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] transition"
                         >
                           <option value="">No tax</option>
-                          {taxes.map(t => (
-                            <option key={t.id} value={t.id}>{t.taxName} ({t.rate}%)</option>
+                          {lineTaxChoices(taxes, line.taxId).map(t => (
+                            <option key={t.id} value={t.id}>{taxChoiceLabel(t)}</option>
                           ))}
                         </select>
                       </td>

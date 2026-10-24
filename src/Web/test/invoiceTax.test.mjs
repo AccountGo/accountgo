@@ -1,6 +1,30 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { invoiceLineAmounts } from '../src/lib/invoiceTax.ts';
+import { archivedTaxMessage, firstArchivedTax, invoiceLineAmounts, isSelectableTax, lineTaxChoices, taxChoiceLabel } from '../src/lib/invoiceTax.ts';
+
+test('a tax is selectable when it is active and not the system No tax rate', () => {
+  assert.equal(isSelectableTax({ taxCode: 'VAT0', isActive: true, rate: 0 }), true);
+  assert.equal(isSelectableTax({ taxCode: 'vat', isActive: true }), true);
+  assert.equal(isSelectableTax({ taxCode: 'NONE', isActive: true, rate: 0 }), false);
+  assert.equal(isSelectableTax({ taxCode: ' none ', isActive: true }), false);
+  assert.equal(isSelectableTax({ taxCode: 'VAT', isActive: false, rate: 7 }), false);
+});
+
+test('an archived tax stays on the line that already uses it', () => {
+  const taxes = [
+    { id: 1, taxCode: 'NONE', taxName: 'No tax', rate: 0, isActive: true },
+    { id: 2, taxCode: 'VAT', taxName: 'VAT', rate: 7, isActive: false },
+    { id: 3, taxCode: 'ZR', taxName: 'Zero rated', rate: 0, isActive: true },
+  ];
+  assert.deepEqual(lineTaxChoices(taxes, '').map((tax) => tax.id), [3]);
+  const onTheLine = lineTaxChoices(taxes, 2);
+  assert.deepEqual(onTheLine.map((tax) => tax.id), [3, 2]);
+  assert.equal(taxChoiceLabel(onTheLine[1]), 'VAT (archived)');
+  assert.equal(taxChoiceLabel(onTheLine[0]), 'Zero rated (0%)');
+  assert.equal(archivedTaxMessage('VAT'), 'VAT is archived. Pick another tax for this line.');
+  assert.equal(firstArchivedTax(taxes, [3, 2])?.taxName, 'VAT');
+  assert.equal(firstArchivedTax(taxes, [3, '']), undefined);
+});
 
 test('invoice tax is added on top of each rounded, discounted subtotal', () => {
   assert.deepEqual(invoiceLineAmounts(1, 100, 0, 12), { subtotal: 100, discount: 0, tax: 12 });
