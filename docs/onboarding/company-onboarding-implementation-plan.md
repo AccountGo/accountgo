@@ -130,8 +130,13 @@ Centralize in a small domain or application service, e.g. `CompanyAccountingPoli
 - [x] Unit tests for `CompanyAccountingPolicyRules` matrix.  
 - [x] No UI change required in this PR.
 
-**Status: Done** (`feat/company-accounting-policy`). Added the policy fields, enums, EF migration `CompanyAccountingPolicy`, D1 `0022_company_accounting_policy.sql`, SQLite upgrader columns with `BooksStartDate` backfill, and `CompanyAccountingPolicyRules`.  
-Deferred to Phase 2: LIFO rejection (no LIFO enum value exists yet) and `BooksStartDate`/fiscal-year coherence checks, which need the FY derivation in §2.4.
+**Status: Done on branch `feat/company-accounting-policy`, pending merge.** Added the policy fields, enums, EF migration `CompanyAccountingPolicy`, D1 `0022_company_accounting_policy.sql`, SQLite upgrader columns with `BooksStartDate` backfill, and `CompanyAccountingPolicyRules`.  
+Deferred to Phase 2 (not yet implemented):
+- Wire `CompanyAccountingPolicyRules` into `WorkspaceService.Create` and PATCH; it is currently only unit-tested.
+- Reject LIFO (no LIFO enum value exists yet), undefined `TaxRegime` / `FiscalYearPattern`, and `Custom` without `FiscalYearStartMonth` in 1–12.
+- `BooksStartDate` / fiscal-year coherence, which needs the FY derivation in §2.4.
+
+Interim behaviour: new workspaces default `BooksStartDate` to today (UTC) while the fiscal year is still calendar from Jan 1. Phase 2 must set `BooksStartDate` to the FY start (or wizard value) no later than the Phase 4 posting guard.
 
 ---
 
@@ -410,4 +415,4 @@ Mark each phase **Done** in this file with a two-line summary when merged.
 | Date | Change |
 |---|---|
 | 2026-10-24 | Initial phased implementation plan |
-| 2026-10-25 | Phase 1 marked done; LIFO and FY-coherence checks deferred to Phase 2 |
+| 2026-10-25 | Phase 1 marked done on branch; LIFO and FY-coherence checks deferred to Phase 2 |

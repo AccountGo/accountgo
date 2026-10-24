@@ -105,7 +105,7 @@ namespace AccountGo.ServicesTests
             Assert.Equal(IndustryTemplate.Services, setting.IndustryTemplate);
             Assert.Equal(InventoryCostingMethod.None, setting.InventoryCostingMethod);
             Assert.Equal("legacy-default", setting.CoaTemplateId);
-            Assert.NotEqual(default, setting.BooksStartDate);
+            Assert.Equal(DateTime.UtcNow.Date, setting.BooksStartDate);
         }
     }
 }
