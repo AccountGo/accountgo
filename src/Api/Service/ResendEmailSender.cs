@@ -50,7 +50,7 @@ namespace Api.Service
 
             var fromEmail = _configuration["RESEND_EMAIL_FROM"]
                             ?? _configuration["Email:FromAddress"]
-                            ?? "noreply@marvinperez.com";
+                            ?? "billing@marvinperez.com";
 
             var fromName = SafeDisplayName(message.FromName)
                            ?? _configuration["RESEND_FROM_NAME"]
