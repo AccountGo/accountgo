@@ -40,10 +40,34 @@ namespace Api.Service
             invitation.TokenHash = HashToken(rawToken);
             invitation.ExpiresAt = DateTime.UtcNow.AddDays(7);
             var link = webUrl.TrimEnd('/') + "/invite/" + rawToken;
-            var html = $"<p>{WebUtility.HtmlEncode(inviter)} invited you to {WebUtility.HtmlEncode(company.Name)} on AccountGo.</p>" +
-                $"<p>Workspace role: {WebUtility.HtmlEncode(invitation.Role.ToString())}</p>" +
-                $"<p><a href=\"{WebUtility.HtmlEncode(link)}\">Accept invitation</a></p><p>This link expires in 7 days.</p>";
-            await _email.SendAsync(invitation.Email, $"{inviter} invited you to {company.Name} on AccountGo", html);
+            await _email.SendAsync(
+                invitation.Email,
+                $"{inviter} invited you to {company.Name} on AccountGo",
+                BuildHtml(inviter, company.Name, invitation.Role.ToString(), link));
+        }
+
+        /// <summary>Same card layout as the OTP emails: AccountGo header, body, centered action, expiry note.</summary>
+        public static string BuildHtml(string inviter, string workspaceName, string role, string acceptUrl)
+        {
+            var safeInviter = WebUtility.HtmlEncode(inviter);
+            var safeWorkspace = WebUtility.HtmlEncode(workspaceName);
+            var safeRole = WebUtility.HtmlEncode(role);
+            var safeUrl = WebUtility.HtmlEncode(acceptUrl);
+
+            return $@"
+<div style=""font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 8px; background-color: #ffffff;"">
+  <div style=""text-align: center; margin-bottom: 24px;"">
+    <h2 style=""color: #0f172a; margin: 0; font-size: 24px; font-weight: 700;"">AccountGo</h2>
+    <p style=""color: #64748b; font-size: 14px; margin-top: 4px;"">Workspace invitation</p>
+  </div>
+  <p style=""color: #334155; font-size: 15px; line-height: 1.5;"">Hello,</p>
+  <p style=""color: #334155; font-size: 15px; line-height: 1.5;""><strong>{safeInviter}</strong> invited you to <strong>{safeWorkspace}</strong> on AccountGo.</p>
+  <p style=""color: #334155; font-size: 15px; line-height: 1.5;"">Workspace role: <strong>{safeRole}</strong></p>
+  <div style=""text-align: center; margin: 32px 0;"">
+    <a href=""{safeUrl}"" style=""display: inline-block; font-size: 15px; font-weight: 700; color: #ffffff; background-color: #1e3a8a; padding: 12px 28px; border-radius: 8px; text-decoration: none;"">Accept invitation</a>
+  </div>
+  <p style=""color: #64748b; font-size: 13px; line-height: 1.4;"">This link will expire in <strong>7 days</strong>. If you were not expecting this invitation, you can safely ignore this email.</p>
+</div>";
         }
     }
 }
