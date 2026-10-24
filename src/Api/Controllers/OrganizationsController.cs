@@ -10,6 +10,8 @@ using Core.Tenancy;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Converters;
 
 namespace Api.Controllers
 {
@@ -21,13 +23,19 @@ namespace Api.Controllers
         private readonly ITenantContext _tenant;
         private readonly ApiDbContext _db;
         private readonly WorkspaceService _workspaces;
+        private readonly CompanyAccountingPolicyService _accountingPolicy;
         private string UserId => User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User.FindFirst("sub")?.Value;
 
-        public OrganizationsController(ITenantContext tenant, ApiDbContext db, WorkspaceService workspaces)
+        public OrganizationsController(
+            ITenantContext tenant,
+            ApiDbContext db,
+            WorkspaceService workspaces,
+            CompanyAccountingPolicyService accountingPolicy)
         {
             _tenant = tenant;
             _db = db;
             _workspaces = workspaces;
+            _accountingPolicy = accountingPolicy;
         }
 
         [TenantFree]
@@ -49,6 +57,35 @@ namespace Api.Controllers
             public string Slug { get; set; }
             public string Plan { get; set; } = "accounting";
             public string Currency { get; set; } = "USD";
+            public string LegalName { get; set; }
+            [JsonConverter(typeof(StringEnumConverter))] public ReportingFramework? ReportingFramework { get; set; }
+            [JsonConverter(typeof(StringEnumConverter))] public AccountingBasis? AccountingBasis { get; set; }
+            [JsonConverter(typeof(StringEnumConverter))] public FiscalYearPattern? FiscalYearPattern { get; set; }
+            public int? FiscalYearStartMonth { get; set; }
+            public DateTime? BooksStartDate { get; set; }
+            [JsonConverter(typeof(StringEnumConverter))] public TaxRegime? TaxRegime { get; set; }
+            [JsonConverter(typeof(StringEnumConverter))] public IndustryTemplate? IndustryTemplate { get; set; }
+            [JsonConverter(typeof(StringEnumConverter))] public InventoryCostingMethod? InventoryCostingMethod { get; set; }
+        }
+
+        /// <summary>Omitted policy fields fall back to the legacy defaults documented on <see cref="CompanyProvisionOptions"/>.</summary>
+        private static CompanyProvisionOptions ToOptions(CreateOrganizationRequest request)
+        {
+            var options = new CompanyProvisionOptions
+            {
+                LegalName = request.LegalName,
+                FiscalYearStartMonth = request.FiscalYearStartMonth,
+                BooksStartDate = request.BooksStartDate?.Date
+            };
+            if (request.ReportingFramework is ReportingFramework framework) options.ReportingFramework = framework;
+            // Cash basis framework implies Cash basis; every other framework implies Accrual unless the client says otherwise.
+            options.AccountingBasis = request.AccountingBasis
+                ?? (options.ReportingFramework == ReportingFramework.CashBasis ? AccountingBasis.Cash : AccountingBasis.Accrual);
+            if (request.FiscalYearPattern is FiscalYearPattern pattern) options.FiscalYearPattern = pattern;
+            if (request.TaxRegime is TaxRegime regime) options.TaxRegime = regime;
+            if (request.IndustryTemplate is IndustryTemplate industry) options.IndustryTemplate = industry;
+            if (request.InventoryCostingMethod is InventoryCostingMethod costing) options.InventoryCostingMethod = costing;
+            return options;
         }
 
         [TenantFree]
@@ -66,13 +103,25 @@ namespace Api.Controllers
                 !new[] { "invoicing", "accounting", "enterprise" }.Contains(plan))
                 return Problem(statusCode: 400, title: "Invalid workspace settings");
 
+            var options = ToOptions(request);
+            var policyErrors = CompanyAccountingPolicyRules.Validate(options, DateTime.UtcNow);
+            if (policyErrors.Count > 0)
+                return Problem(statusCode: 400, title: "Invalid accounting policy", detail: string.Join(" ", policyErrors));
+
             using (var tx = _db.Database.BeginTransaction(System.Data.IsolationLevel.Serializable))
             {
                 if (_workspaces.SlugExists(slug))
                     return Problem(statusCode: 409, title: "Workspace Slug Already Taken");
-                var company = _workspaces.Create(UserId, request.Name, slug, plan, currency, request.ShortName);
-                tx.Commit();
-                return StatusCode(201, Summary(company, CompanyMemberRole.Owner));
+                try
+                {
+                    var company = _workspaces.Create(UserId, request.Name, slug, plan, currency, request.ShortName, options);
+                    tx.Commit();
+                    return StatusCode(201, Summary(company, CompanyMemberRole.Owner));
+                }
+                catch (InvalidAccountingPolicyException ex)
+                {
+                    return Problem(statusCode: 400, title: "Invalid accounting policy", detail: string.Join(" ", ex.Errors));
+                }
             }
         }
 
@@ -127,6 +176,9 @@ namespace Api.Controllers
                     if (!System.Text.RegularExpressions.Regex.IsMatch(currency, "^[A-Z]{3}$"))
                         return Problem(statusCode: 400, title: "Invalid currency");
                     var setting = _db.CompanySettings.FirstOrDefault();
+                    if (setting != null && setting.Currency != currency && _accountingPolicy.IsLedgerFrozen(company.Id))
+                        return Problem(statusCode: 409, title: "Currency is locked",
+                            detail: "The workspace currency cannot change after the first journal entry is posted.");
                     if (setting == null)
                         _db.CompanySettings.Add(new CompanySetting { CompanyId = company.Id, Currency = currency });
                     else
@@ -268,6 +320,83 @@ namespace Api.Controllers
 
             return Ok(ToSalesInvoiceSettingsModel(settings));
         }
+
+        public class AccountingPolicyModel
+        {
+            [JsonConverter(typeof(StringEnumConverter))] public ReportingFramework? ReportingFramework { get; set; }
+            [JsonConverter(typeof(StringEnumConverter))] public AccountingBasis? AccountingBasis { get; set; }
+            [JsonConverter(typeof(StringEnumConverter))] public FiscalYearPattern? FiscalYearPattern { get; set; }
+            public int? FiscalYearStartMonth { get; set; }
+            public DateTime? BooksStartDate { get; set; }
+            [JsonConverter(typeof(StringEnumConverter))] public TaxRegime? TaxRegime { get; set; }
+            [JsonConverter(typeof(StringEnumConverter))] public IndustryTemplate? IndustryTemplate { get; set; }
+            [JsonConverter(typeof(StringEnumConverter))] public InventoryCostingMethod? InventoryCostingMethod { get; set; }
+        }
+
+        [TenantScoped]
+        [HttpGet("current/accounting-policy")]
+        public IActionResult GetAccountingPolicy()
+        {
+            return Ok(ToPolicyResponse(_db.CompanySettings.FirstOrDefault() ?? new CompanySetting { CompanyId = _tenant.RequireCompanyId() }));
+        }
+
+        [TenantScoped]
+        [RequireWorkspaceRole(CompanyMemberRole.Admin)]
+        [HttpPut("current/accounting-policy")]
+        public IActionResult UpdateAccountingPolicy([FromBody] AccountingPolicyModel request)
+        {
+            if (request == null)
+                return Problem(statusCode: 400, title: "Accounting policy required");
+
+            var setting = GetOrCreateSetting();
+            var result = _accountingPolicy.Apply(setting, new AccountingPolicyChange
+            {
+                ReportingFramework = request.ReportingFramework,
+                AccountingBasis = request.AccountingBasis,
+                FiscalYearPattern = request.FiscalYearPattern,
+                FiscalYearStartMonth = request.FiscalYearStartMonth,
+                BooksStartDate = request.BooksStartDate,
+                TaxRegime = request.TaxRegime,
+                IndustryTemplate = request.IndustryTemplate,
+                InventoryCostingMethod = request.InventoryCostingMethod,
+            }, DateTime.UtcNow);
+
+            if (result.Frozen)
+                return Problem(statusCode: 409, title: "Accounting policy is locked",
+                    detail: "Reporting framework, basis, fiscal year and books start date cannot change after the first journal entry is posted.");
+            if (result.Errors.Count > 0)
+                return Problem(statusCode: 400, title: "Invalid accounting policy", detail: string.Join(" ", result.Errors));
+
+            _db.SaveChanges();
+            return Ok(ToPolicyResponse(setting));
+        }
+
+        [TenantScoped]
+        [RequireWorkspaceRole(CompanyMemberRole.Admin)]
+        [HttpPost("current/onboarding-checklist/dismiss")]
+        public IActionResult DismissOnboardingChecklist()
+        {
+            var setting = GetOrCreateSetting();
+            setting.OnboardingChecklistDismissedAt ??= DateTime.UtcNow;
+            _db.SaveChanges();
+            return Ok(ToPolicyResponse(setting));
+        }
+
+        private object ToPolicyResponse(CompanySetting s) => new
+        {
+            reportingFramework = s.ReportingFramework.ToString(),
+            accountingBasis = s.AccountingBasis.ToString(),
+            fiscalYearPattern = s.FiscalYearPattern.ToString(),
+            fiscalYearStartMonth = s.FiscalYearStartMonth,
+            booksStartDate = s.BooksStartDate.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture),
+            taxRegime = s.TaxRegime.ToString(),
+            industryTemplate = s.IndustryTemplate.ToString(),
+            inventoryCostingMethod = s.InventoryCostingMethod.ToString(),
+            coaTemplateId = s.CoaTemplateId,
+            currency = s.Currency,
+            isLedgerFrozen = _accountingPolicy.IsLedgerFrozen(s.CompanyId),
+            onboardingChecklistDismissedAt = s.OnboardingChecklistDismissedAt,
+        };
 
         private CompanySetting GetOrCreateSetting()
         {

@@ -213,13 +213,20 @@ Add `CompanyAccountingPolicyService.IsLedgerFrozen(companyId)` → true if any p
 
 ### 2.7 Acceptance
 
-- [ ] `POST /api/organizations` with full payload provisions correct FY dates (test matrix).  
-- [ ] Legacy minimal payload still works with documented defaults.  
-- [ ] Tax regime None vs SalesTax/VatGst seed differs; no PH/US rates forced.  
-- [ ] IFRS* + LIFO rejected (400).  
-- [ ] CashBasis + Accrual rejected; Ifrs + Cash rejected.  
-- [ ] No journal lines after provision.  
-- [ ] Update `SignUpAndOrganizationTests` / backend tests accordingly.
+- [x] `POST /api/organizations` with full payload provisions correct FY dates (test matrix).  
+- [x] Legacy minimal payload still works with documented defaults.  
+- [x] Tax regime None vs SalesTax/VatGst seed differs; no PH/US rates forced.  
+- [x] IFRS* + LIFO rejected (400) — LIFO has no enum value, so any undefined inventory costing value is rejected.  
+- [x] CashBasis + Accrual rejected; Ifrs + Cash rejected.  
+- [x] No journal lines after provision.  
+- [x] Update `SignUpAndOrganizationTests` / backend tests accordingly.
+
+**Status: Done on branch `feat/onboarding-phase-2-provision`, pending merge.**  
+- `POST /api/organizations` accepts the hard-gate payload (enums as strings or numbers). Omitted fields use legacy defaults: IFRS for SMEs, Accrual (Cash when the framework is CashBasis), calendar year, books start = Jan 1 of the current year, no tax, Services, no inventory costing.  
+- Policy is validated by `CompanyAccountingPolicyRules.Validate(CompanyProvisionOptions, today)` (400 `Invalid accounting policy`) and again in `WorkspaceService.Create`. The fiscal year is derived by `FiscalYearCalculator`; `CoaTemplateId` by `CoaTemplates.Resolve` (see Phase 5 for the template families).  
+- SalesTax / VatGst seed an inactive zero-rate placeholder tax so the owner must set real rates; None keeps the active NONE tax.  
+- `CompanyAccountingPolicyService.IsLedgerFrozen` is a stub, not enforced until Phase 4.  
+- Signup still creates its workspace with legacy defaults through the shared `WorkspaceService.Create`; policy fields are not yet on the signup DTO (Phase 3 routes signup to the wizard).
 
 ---
 
@@ -270,11 +277,28 @@ Reuse existing input/button/token classes from `SelectOrg` / Settings. No new UI
 
 ### 3.5 Acceptance
 
-- [ ] Keyboard-accessible step flow; mobile usable.  
-- [ ] Cannot submit without hard gates.  
-- [ ] Visual match with SelectOrg / Settings (tokens, radii, Lucide).  
-- [ ] Signup with org name prefills Identity; Company created only after wizard submit.  
-- [ ] Manual QA script attached to PR (happy path + Apr–Mar + VAT posture + invoicing plan).
+- [x] Keyboard-accessible step flow; mobile usable (native radio/inputs, focus moves to step heading; layout stacks on small screens — not yet checked on a device).  
+- [x] Cannot submit without hard gates (`validateStep`/`validateAll`, unit-tested).  
+- [x] Visual match with SelectOrg / Settings (same tokens, radii, Lucide).  
+- [x] Signup no longer creates a company; after OTP it routes to `/create-org?name=&slug=`, which prefills Identity.  
+- [x] Manual QA script below (to be run against a live API before merge).
+
+**Status:** Done on branch, pending merge. `pnpm build` and `test/createOrg.test.mjs` (7 tests) pass; no browser run yet.
+
+**Implementation notes**
+
+- `SelectOrg` create modal removed; `?action=new` redirects to `/create-org`. `OrgSwitcher` links there.
+- No slug-availability endpoint exists, so slug conflicts surface as a 409 on submit and return the user to the Identity step.
+- Invitation signups are unchanged.
+
+**Manual QA script**
+
+1. Happy path: `/select-org` → Create → pick Accounting → name + slug → USD, books start 1 Jan current year, Calendar FY → IFRS for SMEs, no tax, Services → Create. Expect dashboard at `/org/{slug}/dashboard`.
+2. Apr–Mar: choose Apr–Mar FY with books start 15 Feb; preview chip must read `FY2025-26 … Open`; confirm the created FY via API/Settings.
+3. VAT posture: choose VAT/GST; confirm an inactive zero-rate placeholder tax exists after creation.
+4. Invoicing plan: framework is collapsed under advanced disclosure with defaults; payload uses defaults.
+5. Gates: leave name empty / Custom FY without month / duplicate slug and confirm Next or submit is blocked with a clear message.
+6. Signup: new signup with an org name → OTP → wizard opens with the name prefilled; no company exists before submit.
 
 ---
 
@@ -303,9 +327,20 @@ Reuse existing input/button/token classes from `SelectOrg` / Settings. No new UI
 
 ### 4.4 Acceptance
 
-- [ ] Checklist appears for new orgs; dismiss persists.  
-- [ ] Frozen policy fields cannot PATCH after first JE.  
-- [ ] Books-start enforcement covered by automated tests.
+- [x] Checklist appears for new orgs (admins/owners); dismiss persists (`OnboardingChecklistDismissedAt`).  
+- [x] Frozen policy fields cannot be changed after the first JE (`PUT` returns 409).  
+- [x] Books-start enforcement covered by automated tests.
+
+**Status:** Done on branch, pending merge. 8 new service tests, 4 checklist unit tests; no browser run yet.
+
+**Implementation notes**
+
+- API: `GET/PUT /api/organizations/current/accounting-policy` (PUT is admin-only; implemented as `PUT`, not `PATCH`) and `POST current/onboarding-checklist/dismiss`.
+- Locked after first journal: framework, basis, FY pattern/start month, books start. Always editable: tax regime, inventory method. Currency is not exposed for editing.
+- While the ledger is empty, changing FY or books start deactivates the old fiscal year and activates the derived one.
+- Posting guard: `FinancialService.CreateGeneralLedgerHeader` and manual journal posting throw `BooksStartViolationException` for dates before `BooksStartDate`. It covers every GL header created through the service (sales, purchases, journals). Open-FY enforcement is not added; only the books-start date is checked.
+- Checklist items are links; only "legal name" tracks completion automatically. Opening balances (S6) are omitted.
+- Settings surfacing lives in the Financials tab (`AccountingPolicyCard`); the checklist is `OnboardingChecklist` on the dashboard.
 
 ---
 
@@ -333,10 +368,12 @@ Control account codes in `GeneralLedgerSetting` must exist in the chosen templat
 
 ### 5.2 Acceptance
 
-- [ ] Services template omits unused manufacturing depth (or leaves inactive).  
-- [ ] Provisioning fails clearly if control account codes missing.  
-- [ ] Document templates in `docs/accounting/coa-register.md` (short section).  
-- [ ] Backend tests provision each template id once.
+- [x] Services template omits unused manufacturing depth (`10900`, `50500`).  
+- [x] Provisioning fails clearly if control account codes missing (`InvalidOperationException` listing codes; not covered by an automated test).  
+- [x] Document templates in `docs/accounting/coa-register.md` §6.  
+- [x] Backend tests provision each template id once.
+
+**Status:** Done on branch, pending merge. Chosen option: **C-lite** — one base CSV plus a per-template omit list in `CoaTemplates`. Template ids are now `services-sme`, `trading-wa`, `trading-fifo`, `mixed-sme`, `legacy-default` (Phase 2 ids such as `services-ifrs-smes` are no longer generated; already-created companies keep their stored id, which behaves like the full chart). Unknown explicit ids are rejected by `CompanyAccountingPolicyRules`. Trading templates currently equal the full chart; their inventory/COGS emphasis is a later content change.
 
 ---
 
@@ -352,8 +389,10 @@ Control account codes in `GeneralLedgerSetting` must exist in the chosen templat
 
 ### Acceptance
 
-- [ ] Docs linked and consistent with shipped behavior.  
-- [ ] No open P0 UX bugs from Phase 3 QA list.
+- [x] Docs linked and consistent with shipped behavior.  
+- [ ] No open P0 UX bugs from Phase 3 QA list (the QA script has not been run against a live API yet).
+
+**Status:** Done on branch, pending merge and live QA. Shipped: wizard draft in `localStorage` (cleared on success; a signup-supplied name takes priority), docs cross-links, changelog entry, currency default fixed to **USD**. Not shipped: telemetry events (no analytics stack exists in the repo), and a full a11y audit beyond native radios/labels, focus-to-heading and `role=alert` errors.
 
 ---
 
@@ -400,11 +439,11 @@ Phase 5 may be deferred if product accepts single CoA + stored `CoaTemplateId` f
 ## Implementation checklist (summary)
 
 - [x] Phase 1 — Domain + schema + policy rules  
-- [ ] Phase 2 — API + provisioning + tests  
-- [ ] Phase 3 — CreateOrg wizard UI  
-- [ ] Phase 4 — Checklist + locks + books-start guard  
-- [ ] Phase 5 — CoA template families  
-- [ ] Phase 6 — Polish + docs  
+- [x] Phase 2 — API + provisioning + tests  
+- [x] Phase 3 — CreateOrg wizard UI  
+- [x] Phase 4 — Checklist + locks + books-start guard  
+- [x] Phase 5 — CoA template families  
+- [x] Phase 6 — Polish + docs  
 
 Mark each phase **Done** in this file with a two-line summary when merged.
 
@@ -415,4 +454,10 @@ Mark each phase **Done** in this file with a two-line summary when merged.
 | Date | Change |
 |---|---|
 | 2026-10-24 | Initial phased implementation plan |
+| 2026-10-25 | Phase 2 marked done on branch |
+| 2026-10-25 | Phase 3 wizard UI implemented on branch, pending merge and live QA |
+| 2026-10-25 | Phase 4 checklist, policy locks and books-start guard implemented on branch |
+| 2026-10-25 | Phase 5 CoA template families implemented on branch |
+| 2026-10-25 | Phase 6 polish and docs implemented on branch; telemetry deferred |
 | 2026-10-25 | Phase 1 marked done on branch; LIFO and FY-coherence checks deferred to Phase 2 |
+| 2026-10-26 | Review fixes: currency locks with the ledger (409); tax regime change rewrites the untouched seeded tax; books-start guard repo is required; policy service injected; invalid policy on create maps to 400. Signup API still accepts `OrganizationName` as intentional back-compat (minimal legacy policy; the web UI uses the wizard). |

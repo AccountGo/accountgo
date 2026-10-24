@@ -6,6 +6,7 @@ import Settings from './pages/Settings';
 import Members from './pages/Members';
 import Profile from './pages/Profile';
 import SelectOrg from './pages/SelectOrg';
+import CreateOrgPage from './pages/CreateOrg/CreateOrgPage';
 import Login from './pages/Login';
 import Invitation from './pages/Invitation';
 import { Invoices } from './pages/Invoices';
@@ -99,6 +100,10 @@ const router = createBrowserRouter([
       {
         path: '/select-org',
         element: <SelectOrg />,
+      },
+      {
+        path: '/create-org',
+        element: <CreateOrgPage />,
       },
       {
         path: '/org/:orgSlug',

@@ -164,7 +164,7 @@ Shown as a post-create checklist; does not block workspace creation.
 | Tax | None |
 | Industry | Services |
 | Inventory method | None unless product/mixed industry or inventory module on → Weighted average |
-| Currency | Last-used currency for the user, else product default (resolve PHP vs USD doc mismatch separately) |
+| Currency | Last-used currency for the user, else **USD** (decided in Phase 6; the wizard offers a currency list and the user can change it) |
 
 **Time budgets**
 

@@ -560,3 +560,7 @@ Billing/payment for plans, SSO/SAML, per-workspace custom domains, hard-delete/e
 - [ ] No secrets, `.env`, `accountgo.db-wal/shm`, or backups committed.
 - [ ] No `CompanyId = 1` literals, no `GetDefaultCompany`, no new `[AllowAnonymous]` without justification.
 - [ ] Request review; do not merge or deploy until review says **GO**.
+
+## Related: company onboarding
+
+Workspace creation (policy fields, fiscal year derivation, CoA template, locks after the first journal) is specified in [Company onboarding requirements](./onboarding/company-onboarding-requirements.md) and built per the [implementation plan](./onboarding/company-onboarding-implementation-plan.md).

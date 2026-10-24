@@ -150,3 +150,20 @@ In compliance with professional accounting standards:
 1. **Append-Only Immutability**: Posted `GeneralLedgerLine` entries are never modified, deleted, or purged.
 2. **Reversing Journals**: To void or correct a transaction, a distinct reversal entry is created containing the identical accounts with inverted Dr/Cr sides.
 3. **Net-Zero Audit Trail**: The original entry plus the reversal entry mathematically net to $0.00$, preserving an unbroken historical record for financial auditors.
+
+---
+
+## 6. Chart-of-Accounts Templates
+
+New workspaces store a `CompanySetting.CoaTemplateId`, derived from the industry and inventory costing chosen in the create wizard. Every template is a subset of the single base chart (`src/Api/Data/coa.csv`); a template only lists the base accounts it leaves out (`CoaTemplates.OmittedAccountCodes`).
+
+| `CoaTemplateId` | Chosen when | Accounts |
+| :--- | :--- | :--- |
+| `services-sme` | Industry = Services (also the default for legacy clients) | Base chart without `10900` Stocks of work in progress and `50500` Purchase price variance |
+| `trading-wa` | Industry = Product/Retail, weighted-average costing | Full base chart |
+| `trading-fifo` | Industry = Product/Retail, FIFO costing | Full base chart (costing method is metadata only) |
+| `mixed-sme` | Industry = Mixed | Full base chart |
+| `legacy-default` | Companies that existed before onboarding | Full base chart |
+
+The control accounts referenced by `GeneralLedgerSetting` (`20110`, `10810`, `40400`, `40500`) are required in every template; provisioning throws `InvalidOperationException` naming any missing code. Inventory (`10800`), COGS (`50300`) and Inventory Adjustments (`50310`) stay in every template so a services workspace can still add stock items later.
+

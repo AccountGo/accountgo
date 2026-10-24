@@ -8,10 +8,8 @@ import {
   ShieldCheck,
   CheckCircle2,
   Sparkles,
-  Layers,
   LogOut,
   Loader2,
-  AlertCircle,
 } from 'lucide-react';
 import { setPersistedOrgSlug } from '../lib/storage';
 import { OrgDetails, Organization, PendingInvitation } from '../types';
@@ -21,10 +19,12 @@ export const SelectOrg: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
+
+  // Legacy deep link: creation now lives on its own page.
+  React.useEffect(() => {
+    if (searchParams.get('action') === 'new') navigate('/create-org', { replace: true });
+  }, [searchParams, navigate]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [showCreateModal, setShowCreateModal] = useState(
-    searchParams.get('action') === 'new'
-  );
 
   // Live database organizations
   const [orgsList, setOrgsList] = useState<OrgDetails[]>([]);
@@ -33,13 +33,6 @@ export const SelectOrg: React.FC = () => {
   const [isLoadingInvitations, setIsLoadingInvitations] = useState<boolean>(true);
   const [acceptingInvitation, setAcceptingInvitation] = useState<number | null>(null);
   const [invitationError, setInvitationError] = useState('');
-  const [creating, setCreating] = useState(false);
-  const [createError, setCreateError] = useState<string | null>(null);
-
-  // New org form state
-  const [newOrgName, setNewOrgName] = useState('');
-  const [newOrgSlug, setNewOrgSlug] = useState('');
-  const [newOrgCurrency, setNewOrgCurrency] = useState('USD');
 
   const { user: authUser, logout, authFetch } = useAuth();
   const userName = authUser
@@ -110,23 +103,11 @@ export const SelectOrg: React.FC = () => {
 
   React.useEffect(() => {
     if (location.state?.fromSignIn === true &&
-        !isLoading && !isLoadingInvitations && !showCreateModal && !location.state?.notice &&
+        !isLoading && !isLoadingInvitations && !location.state?.notice &&
         !invitationError && orgsList.length === 1 && pendingInvitations.length === 0) {
       handleSelectOrg(orgsList[0]);
     }
-  }, [isLoading, isLoadingInvitations, showCreateModal, location.state, invitationError, orgsList, pendingInvitations]);
-
-  // Accessibility: close modal on Escape key
-  React.useEffect(() => {
-    if (!showCreateModal) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setShowCreateModal(false);
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [showCreateModal]);
+  }, [isLoading, isLoadingInvitations, location.state, invitationError, orgsList, pendingInvitations]);
 
   const handleLogout = async () => {
     await logout();
@@ -167,80 +148,6 @@ export const SelectOrg: React.FC = () => {
       setInvitationError('Could not accept this invitation. Please try again.');
     } finally {
       setAcceptingInvitation(null);
-    }
-  };
-
-  const handleCreateOrg = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newOrgName.trim()) {
-      setCreateError('Workspace name is required.');
-      return;
-    }
-    const cleanSlug = (newOrgSlug || newOrgName)
-      .toLowerCase()
-      .replace(/[^a-z0-9-]+/g, '-')
-      .replace(/^-+|-+$/g, '');
-
-    if (!cleanSlug) {
-      setCreateError('Please enter a valid URL slug.');
-      return;
-    }
-
-    setCreating(true);
-    setCreateError(null);
-
-    try {
-      // Creates the workspace and makes the caller its Owner.
-      const res = await authFetch('/api/organizations', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: newOrgName.trim(),
-          slug: cleanSlug,
-          plan: 'accounting',
-          currency: newOrgCurrency,
-        }),
-      });
-
-      const data = await res.json().catch(() => null);
-
-      if (!res.ok) {
-        const errorMsg = data?.detail || data?.title || data?.message || 'Failed to create workspace.';
-        setCreateError(errorMsg);
-        setCreating(false);
-        return;
-      }
-
-      const createdCompany = data;
-      const createdOrg: OrgDetails = {
-        id: createdCompany.id?.toString() || cleanSlug,
-        name: createdCompany.name,
-        slug: createdCompany.slug || cleanSlug,
-        role: createdCompany.role || 'Owner',
-        plan: createdCompany.plan || 'accounting',
-        currency: newOrgCurrency,
-        fiscalYearEnd: 'Dec 31',
-        avatarBg: 'bg-gradient-to-br from-emerald-500 to-teal-600',
-        whitelabel: {
-          themeId: 'accountgo',
-          brandName: createdCompany.name,
-        },
-        subscription: {
-          planId: createdCompany.plan || 'accounting',
-          planName: 'Accounting',
-          status: 'active',
-          activeModules: createdCompany.activeModules,
-        },
-      };
-
-      setOrgsList((prev) => [createdOrg, ...prev]);
-      setPersistedOrgSlug(createdOrg.slug);
-      setShowCreateModal(false);
-      navigate(`/org/${createdOrg.slug}/dashboard`);
-    } catch (err: any) {
-      setCreateError(err.message || 'An unexpected error occurred.');
-    } finally {
-      setCreating(false);
     }
   };
 
@@ -355,7 +262,7 @@ export const SelectOrg: React.FC = () => {
 
           <button
             type="button"
-            onClick={() => setShowCreateModal(true)}
+            onClick={() => navigate('/create-org')}
             className="btn-primary !h-11 shrink-0"
           >
             <Plus className="w-4 h-4" />
@@ -440,129 +347,6 @@ export const SelectOrg: React.FC = () => {
           )}
         </div>
       </main>
-
-      {/* Create Organization Modal (Border-Less Floating Surface) */}
-      {showCreateModal && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="create-org-title"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-4"
-        >
-          <div className="w-full max-w-md bg-[var(--bg-surface)] backdrop-blur-2xl rounded-2xl p-5 sm:p-6 shadow-2xl shadow-black/80 animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-[var(--brand-subtle)] text-[var(--brand-primary)] flex items-center justify-center">
-                  <Layers className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 id="create-org-title" className="font-bold text-[var(--text-main)] text-base">New Organization</h3>
-                  <p className="text-xs text-[var(--text-muted)]">Create a dedicated tenant workspace</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowCreateModal(false)}
-                className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-surface-hover)] text-xs transition-colors cursor-pointer"
-                aria-label="Close modal"
-              >
-                ✕
-              </button>
-            </div>
-
-            <form onSubmit={handleCreateOrg} className="space-y-4">
-              {createError && (
-                <div className="flex items-start gap-2 p-3 rounded-xl bg-rose-500/10 text-rose-400 text-xs font-medium ring-1 ring-rose-500/20">
-                  <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                  <span className="flex-1">{createError}</span>
-                </div>
-              )}
-
-              <div>
-                <label htmlFor="new-org-name" className="block text-xs font-semibold text-[var(--text-secondary)] mb-1.5">
-                  Organization Name
-                </label>
-                <input
-                  id="new-org-name"
-                  type="text"
-                  required
-                  placeholder="e.g., Global Freight Inc."
-                  value={newOrgName}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setNewOrgName(val);
-                    setCreateError(null);
-                    setNewOrgSlug(
-                      val
-                        .toLowerCase()
-                        .replace(/[^a-z0-9]+/g, '-')
-                        .replace(/^-+|-+$/g, '')
-                    );
-                  }}
-                  className="w-full h-11 px-3.5 rounded-xl bg-[var(--bg-subtle)] shadow-inner text-sm text-[var(--text-main)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--brand-ring)]"
-                />
-              </div>
-
-              <div>
-                <label htmlFor="new-org-slug" className="block text-xs font-semibold text-[var(--text-secondary)] mb-1.5">
-                  Workspace URL Slug
-                </label>
-                <div className="flex items-center rounded-xl bg-[var(--bg-subtle)] shadow-inner px-3.5 h-11 text-sm focus-within:ring-2 focus-within:ring-[var(--brand-ring)]">
-                  <span className="text-[var(--text-muted)] font-mono text-xs">/org/</span>
-                  <input
-                    id="new-org-slug"
-                    type="text"
-                    required
-                    placeholder="global-freight"
-                    value={newOrgSlug}
-                    onChange={(e) => setNewOrgSlug(e.target.value)}
-                    className="flex-1 bg-transparent text-[var(--text-main)] font-mono text-xs focus:outline-none ml-1"
-                  />
-                </div>
-                <p className="text-[11px] text-[var(--text-muted)] mt-1">
-                  Used in the URL path for tenant isolation and direct deep links.
-                </p>
-              </div>
-
-              <div>
-                <label htmlFor="new-org-currency" className="block text-xs font-semibold text-[var(--text-secondary)] mb-1.5">
-                  Base Accounting Currency
-                </label>
-                <select
-                  id="new-org-currency"
-                  value={newOrgCurrency}
-                  onChange={(e) => setNewOrgCurrency(e.target.value)}
-                  className="w-full h-11 px-3.5 rounded-xl bg-[var(--bg-subtle)] shadow-inner text-sm text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--brand-ring)] cursor-pointer"
-                >
-                  <option value="USD">USD — US Dollar ($)</option>
-                  <option value="PHP">PHP — Philippine Peso (₱)</option>
-                  <option value="CAD">CAD — Canadian Dollar (CA$)</option>
-                  <option value="EUR">EUR — Euro (€)</option>
-                  <option value="GBP">GBP — British Pound (£)</option>
-                  <option value="SGD">SGD — Singapore Dollar (S$)</option>
-                </select>
-              </div>
-
-              <div className="pt-2 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2.5">
-                <button
-                  type="button"
-                  onClick={() => setShowCreateModal(false)}
-                  className="h-11 px-4 rounded-xl text-xs sm:text-sm font-semibold text-[var(--text-secondary)] hover:text-[var(--text-main)] hover:bg-[var(--bg-surface-hover)] transition-colors active:scale-[0.98] cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={creating}
-                  className="btn-primary !h-11"
-                >
-                  {creating ? 'Creating...' : 'Create & Launch'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
       {/* Footer */}
       <footer className="py-4 sm:py-6 px-4 sm:px-6 text-center text-xs text-[var(--text-muted)] flex flex-col sm:flex-row items-center justify-between gap-2 safe-bottom">

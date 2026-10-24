@@ -18,6 +18,7 @@ import {
 import { TenantContextType } from '../types';
 import { useAuth } from '../auth/AuthContext';
 import { currencySymbol as getCurrencySymbol } from '../lib/currency';
+import { OnboardingChecklist } from '../components/OnboardingChecklist';
 
 interface DashboardSummary {
   kpis: {
@@ -153,6 +154,12 @@ export const Dashboard: React.FC = () => {
           </div>
         </div>
       </div>
+
+      <OnboardingChecklist
+        orgSlug={currentOrg.slug}
+        plan={currentOrg.plan}
+        canManage={currentOrg.role === 'Owner' || currentOrg.role === 'Admin'}
+      />
 
       {/* Financial Metric Cards Grid (Border-Less with Ambient Elevation) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">

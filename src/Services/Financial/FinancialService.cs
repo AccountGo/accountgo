@@ -49,6 +49,7 @@ namespace Services.Financial
         private readonly IRepository<CustomerAllocation> _customerAllocationRepo;
         private readonly IRepository<PurchaseInvoiceHeader> _purchaseInvoiceRepo;
         private readonly IRepository<VendorPayment> _vendorPaymentRepo;
+        private readonly IRepository<CompanySetting> _companySettingRepo;
 
         public FinancialService(IInventoryService inventoryService,
             ITaxService taxService,
@@ -66,6 +67,7 @@ namespace Services.Financial
             IRepository<Bank> bankRepo,
             IRepository<Item> itemRepo,
             IRepository<GeneralLedgerSetting> glSettingRepo,
+            IRepository<CompanySetting> companySettingRepo,
             IRepository<MainContraAccount> maincontraAccount = null,
             IRepository<Customer> customerRepo = null,
             IRepository<Vendor> vendorRepo = null,
@@ -80,6 +82,7 @@ namespace Services.Financial
         {
             _inventoryService = inventoryService;
             _taxService = taxService;
+            _companySettingRepo = companySettingRepo ?? throw new ArgumentNullException(nameof(companySettingRepo));
             _generalLedgerRepository = generalLedgerRepository;
             _accountRepo = accountRepo;
             _accountClassRepo = accountClassRepo;
@@ -189,8 +192,17 @@ namespace Services.Financial
             return query;
         }
 
+        /// <summary>Rejects postings dated before the company's books start date (resolved in the current tenant scope).</summary>
+        private void EnsureOnOrAfterBooksStart(DateTime date)
+        {
+            var booksStart = _companySettingRepo.Table.Select(s => (DateTime?)s.BooksStartDate).FirstOrDefault();
+            if (booksStart.HasValue && date.Date < booksStart.Value.Date)
+                throw new BooksStartViolationException(date, booksStart.Value);
+        }
+
         public GeneralLedgerHeader CreateGeneralLedgerHeader(DocumentTypes documentType, DateTime date, string description, int? sourceDocumentId = null, int? reversedGeneralLedgerHeaderId = null)
         {
+            EnsureOnOrAfterBooksStart(date);
             var entry = new GeneralLedgerHeader()
             {
                 DocumentType = documentType,
@@ -1090,6 +1102,7 @@ namespace Services.Financial
 
                 if (journalEntry.GeneralLedgerHeaderId == null || journalEntry.GeneralLedgerHeaderId == 0)
                 {
+                    EnsureOnOrAfterBooksStart(journalEntry.Date);
                     var glEntry = new GeneralLedgerHeader()
                     {
                         Date = journalEntry.Date,
