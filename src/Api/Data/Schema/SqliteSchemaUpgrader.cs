@@ -148,6 +148,16 @@ namespace Api.Data.Schema
                     new[] { "Company", "DeletedAt", "TEXT NULL" },
                     new[] { "AspNetUsers", "DeletedAt", "TEXT NULL" },
                     new[] { "CompanySetting", "Currency", "TEXT NOT NULL DEFAULT 'PHP'" },
+                    new[] { "CompanySetting", "ReportingFramework", "INTEGER NOT NULL DEFAULT 1" },
+                    new[] { "CompanySetting", "TaxRegime", "INTEGER NOT NULL DEFAULT 0" },
+                    new[] { "CompanySetting", "FiscalYearPattern", "INTEGER NOT NULL DEFAULT 1" },
+                    new[] { "CompanySetting", "FiscalYearStartMonth", "INTEGER NULL" },
+                    new[] { "CompanySetting", "BooksStartDate", "TEXT NOT NULL DEFAULT '1970-01-01'" },
+                    new[] { "CompanySetting", "IndustryTemplate", "INTEGER NOT NULL DEFAULT 1" },
+                    new[] { "CompanySetting", "InventoryCostingMethod", "INTEGER NOT NULL DEFAULT 0" },
+                    new[] { "CompanySetting", "CoaTemplateId", "TEXT NOT NULL DEFAULT 'legacy-default'" },
+                    new[] { "CompanySetting", "OnboardingChecklistDismissedAt", "TEXT NULL" },
+                    new[] { "CompanySetting", "OnboardingChecklistJson", "TEXT NULL" },
                     new[] { "CompanyInvitation", "ResendWindowStart", "TEXT NULL" },
                     new[] { "CompanyInvitation", "ResendCount", "INTEGER NOT NULL DEFAULT 0" },
                     new[] { "CompanySetting", "LegalName", "TEXT NULL" },
@@ -249,9 +259,29 @@ namespace Api.Data.Schema
                     cmd.CommandText = CashBasisTraceabilityBackfillSql;
                     cmd.ExecuteNonQuery();
                 }
+                if (added.Contains("CompanySetting.BooksStartDate"))
+                {
+                    using var cmd = connection.CreateCommand();
+                    cmd.Transaction = tx;
+                    cmd.CommandText = CompanyBooksStartDateBackfillSql;
+                    cmd.ExecuteNonQuery();
+                }
                 tx.Commit();
             }
         }
+
+        private const string CompanyBooksStartDateBackfillSql = @"
+            UPDATE ""CompanySetting""
+            SET ""BooksStartDate"" = COALESCE(
+                (SELECT date(f.""StartDate"")
+                 FROM ""FinancialYear"" f
+                 WHERE f.""CompanyId"" = ""CompanySetting"".""CompanyId""
+                 ORDER BY f.""IsActive"" DESC, f.""StartDate""
+                 LIMIT 1),
+                (SELECT date(c.""CreatedAt"")
+                 FROM ""Company"" c
+                 WHERE c.""Id"" = ""CompanySetting"".""CompanyId""),
+                '1970-01-01');";
 
         private const string CashBasisTraceabilityBackfillSql = @"
             UPDATE ""GeneralLedgerHeader"" SET ""SourceDocumentId"" = (

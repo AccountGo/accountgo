@@ -329,11 +329,28 @@ namespace Api.Data.Migrations.ApiDb
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<int>("AccountingBasis")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(1);
+
+                    b.Property<DateTime>("BooksStartDate")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("date")
+                        .HasDefaultValue(new DateTime(1970, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified));
+
                     b.Property<string>("BusinessEmail")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("BusinessPhone")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("CoaTemplateId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)")
+                        .HasDefaultValue("legacy-default");
 
                     b.Property<int>("CompanyId")
                         .HasColumnType("int");
@@ -345,11 +362,45 @@ namespace Api.Data.Migrations.ApiDb
                         .HasColumnType("nvarchar(3)")
                         .HasDefaultValue("PHP");
 
+                    b.Property<int>("FiscalYearPattern")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(1);
+
+                    b.Property<int?>("FiscalYearStartMonth")
+                        .HasColumnType("int");
+
+                    b.Property<int>("IndustryTemplate")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(1);
+
+                    b.Property<int>("InventoryCostingMethod")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
+
                     b.Property<string>("LegalName")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<DateTime?>("OnboardingChecklistDismissedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("OnboardingChecklistJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("ReportingFramework")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(1);
+
                     b.Property<string>("SalesInvoiceSettingsJson")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("TaxRegime")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
 
                     b.HasKey("Id");
 
@@ -772,6 +823,12 @@ namespace Api.Data.Migrations.ApiDb
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<int>("DocumentType")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("ReversedGeneralLedgerHeaderId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("SourceDocumentId")
                         .HasColumnType("int");
 
                     b.HasKey("Id");
@@ -1923,6 +1980,9 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.Property<DateTime>("Date")
                         .HasColumnType("datetime2");
+
+                    b.Property<int?>("GeneralLedgerHeaderId")
+                        .HasColumnType("int");
 
                     b.Property<int>("SalesInvoiceHeaderId")
                         .HasColumnType("int");

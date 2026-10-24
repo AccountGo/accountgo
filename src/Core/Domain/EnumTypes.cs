@@ -196,4 +196,41 @@ namespace Core.Domain
         Accrual = 1,
         Cash = 2
     }
+
+    public enum ReportingFramework
+    {
+        IfrsForSmes = 1,
+        UsGaapPrivate = 2,
+        Ifrs = 3,
+        CashBasis = 4
+    }
+
+    public enum TaxRegime
+    {
+        None = 0,
+        SalesTax = 1,
+        VatGst = 2
+    }
+
+    public enum FiscalYearPattern
+    {
+        Calendar = 1,
+        AprMar = 2,
+        JulJun = 3,
+        Custom = 4
+    }
+
+    public enum IndustryTemplate
+    {
+        Services = 1,
+        ProductRetail = 2,
+        Mixed = 3
+    }
+
+    public enum InventoryCostingMethod
+    {
+        None = 0,
+        Fifo = 1,
+        WeightedAverage = 2
+    }
 }

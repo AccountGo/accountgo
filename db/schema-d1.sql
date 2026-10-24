@@ -312,9 +312,20 @@ INSERT INTO Account VALUES(90,5,65,1,1,'50119','Utilities Expenses',NULL,0,0,NUL
 INSERT INTO Account VALUES(91,5,65,1,1,'50120','Legal and Professional Expenses',NULL,0,0,NULL);
 INSERT INTO Account VALUES(92,5,65,1,1,'50121','Bank Charges',NULL,0,0,NULL);
 INSERT INTO Account VALUES(93,6,NULL,0,1,'99999','Income Summary',NULL,0,0,NULL);
+-- Not the full runtime shape: Currency, AccountingBasis and business-detail columns are added by SqliteSchemaUpgrader.
 CREATE TABLE IF NOT EXISTS "CompanySetting" (
     "Id" INTEGER NOT NULL CONSTRAINT "PK_CompanySetting" PRIMARY KEY AUTOINCREMENT,
     "CompanyId" INTEGER NOT NULL,
+    "ReportingFramework" INTEGER NOT NULL DEFAULT 1,
+    "TaxRegime" INTEGER NOT NULL DEFAULT 0,
+    "FiscalYearPattern" INTEGER NOT NULL DEFAULT 1,
+    "FiscalYearStartMonth" INTEGER NULL,
+    "BooksStartDate" TEXT NOT NULL DEFAULT '1970-01-01',
+    "IndustryTemplate" INTEGER NOT NULL DEFAULT 1,
+    "InventoryCostingMethod" INTEGER NOT NULL DEFAULT 0,
+    "CoaTemplateId" TEXT NOT NULL DEFAULT 'legacy-default',
+    "OnboardingChecklistDismissedAt" TEXT NULL,
+    "OnboardingChecklistJson" TEXT NULL,
     CONSTRAINT "FK_CompanySetting_Company_CompanyId" FOREIGN KEY ("CompanyId") REFERENCES "Company" ("Id") ON DELETE CASCADE
 );
 CREATE TABLE IF NOT EXISTS "Contact" (
