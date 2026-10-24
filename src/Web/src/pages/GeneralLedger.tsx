@@ -112,15 +112,23 @@ export function LedgerRows({ entries, slug, formatAmount }: {
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   return <table className="w-full text-sm">
     <caption className="sr-only">Posted General Ledger transactions with debit and credit totals</caption>
-    <thead><tr>{['Date / Transaction', 'Type', 'Description', 'Source', 'Debit', 'Credit'].map(label =>
-      <th scope="col" key={label} className="p-4 text-left">{label}</th>)}</tr></thead>
+    <thead>
+      <tr className="border-b border-[var(--border-subtle)] text-[var(--text-secondary)] font-medium text-xs">
+        <th scope="col" className="p-4 text-left">Date / Transaction</th>
+        <th scope="col" className="p-4 text-left">Type</th>
+        <th scope="col" className="p-4 text-left">Description</th>
+        <th scope="col" className="p-4 text-left">Source</th>
+        <th scope="col" className="p-4 text-right w-36">Debit</th>
+        <th scope="col" className="p-4 text-right w-36">Credit</th>
+      </tr>
+    </thead>
     <tbody>{entries.map(entry => {
       const open = expanded.has(entry.id);
       const balanced = isLedgerBalanced(entry);
       return <Fragment key={entry.id}>
-        <tr className="border-t border-[var(--border-subtle)]">
+        <tr className="border-t border-[var(--border-subtle)] hover:bg-[var(--bg-surface-hover)]/40 transition-colors">
           <th scope="row" className="p-4 text-left">
-            <button type="button" aria-expanded={open} aria-controls={`gl-${entry.id}`} className="flex min-h-10 items-center gap-2 rounded focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)]"
+            <button type="button" aria-expanded={open} aria-controls={`gl-${entry.id}`} className="flex min-h-10 items-center gap-2 rounded focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] cursor-pointer"
               onClick={() => setExpanded(previous => {
                 const next = new Set(previous);
                 if (next.has(entry.id)) next.delete(entry.id); else next.add(entry.id);
@@ -140,19 +148,58 @@ export function LedgerRows({ entries, slug, formatAmount }: {
           <td className="p-4 text-right tabular-nums">{formatAmount(entry.totalDebit)}</td>
           <td className="p-4 text-right tabular-nums">{formatAmount(entry.totalCredit)}</td>
         </tr>
-        <tr id={`gl-${entry.id}`} hidden={!open}><td colSpan={6} className="bg-[var(--bg-subtle)] p-4">
-          <table className="w-full text-sm">
-            <caption className="pb-3 text-left font-semibold">Transaction #{entry.id} account lines</caption>
-            <thead><tr>{['Account code', 'Account name', 'Debit', 'Credit'].map(label => <th scope="col" key={label} className="p-2 text-left">{label}</th>)}</tr></thead>
-            <tbody>{entry.lines.map(line => <tr key={line.id}>
-              <td className="p-2 font-mono">{line.accountCode}</td><th scope="row" className="p-2 text-left font-normal">{line.accountName}</th>
-              <td className="p-2 text-right tabular-nums">{line.debit ? formatAmount(line.debit) : '\u2014'}</td>
-              <td className="p-2 text-right tabular-nums">{line.credit ? formatAmount(line.credit) : '\u2014'}</td>
-            </tr>)}</tbody>
-            <tfoot><tr className="font-semibold"><th scope="row" colSpan={2} className="p-2 text-left">Totals ({balanced ? 'In balance' : 'Out of balance'})</th>
-              <td className="p-2 text-right">{formatAmount(entry.totalDebit)}</td><td className="p-2 text-right">{formatAmount(entry.totalCredit)}</td></tr></tfoot>
-          </table>
-        </td></tr>
+        <tr id={`gl-${entry.id}`} hidden={!open}>
+          <td colSpan={6} className="bg-[var(--bg-subtle)]/60 px-4 py-5 sm:px-8">
+            <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] shadow-xs overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-subtle)] bg-[var(--bg-subtle)]/40">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-[var(--text-main)]">Transaction #{entry.id} account lines</span>
+                  <span className="text-[11px] text-[var(--text-muted)] font-mono">({entry.lines.length} {entry.lines.length === 1 ? 'line' : 'lines'})</span>
+                </div>
+                <span
+                  className={`shrink-0 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider inline-flex items-center gap-1.5 ${
+                    balanced
+                      ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
+                      : 'bg-red-500/10 text-red-500 border border-red-500/20'
+                  }`}
+                >
+                  <span className={`w-1.5 h-1.5 rounded-full ${balanced ? 'bg-emerald-500' : 'bg-red-500'}`} />
+                  {balanced ? 'In balance' : 'Out of balance'}
+                </span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <caption className="sr-only">Transaction #{entry.id} account lines</caption>
+                  <thead>
+                    <tr className="border-b border-[var(--border-subtle)] bg-[var(--bg-subtle)]/30 text-[var(--text-secondary)] font-medium">
+                      <th scope="col" className="py-2.5 px-4 w-32 font-medium">Account code</th>
+                      <th scope="col" className="py-2.5 px-4 font-medium">Account name</th>
+                      <th scope="col" className="py-2.5 px-4 w-36 text-right font-medium">Debit</th>
+                      <th scope="col" className="py-2.5 px-4 w-36 text-right font-medium">Credit</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {entry.lines.map(line => (
+                      <tr key={line.id} className="border-b border-[var(--border-subtle)] last:border-b-0 hover:bg-[var(--bg-surface-hover)] transition-colors">
+                        <td className="py-2.5 px-4 font-mono text-[var(--text-secondary)] whitespace-nowrap">{line.accountCode}</td>
+                        <th scope="row" className="py-2.5 px-4 text-left font-normal text-[var(--text-main)]">{line.accountName}</th>
+                        <td className="py-2.5 px-4 text-right font-mono tabular-nums text-[var(--text-main)] whitespace-nowrap">{line.debit ? formatAmount(line.debit) : '\u2014'}</td>
+                        <td className="py-2.5 px-4 text-right font-mono tabular-nums text-[var(--text-main)] whitespace-nowrap">{line.credit ? formatAmount(line.credit) : '\u2014'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t-2 border-[var(--border-subtle)] bg-[var(--bg-subtle)]/60 font-semibold text-xs text-[var(--text-main)]">
+                      <th scope="row" colSpan={2} className="py-2.5 px-4 text-left font-semibold">Totals ({balanced ? 'In balance' : 'Out of balance'})</th>
+                      <td className="py-2.5 px-4 text-right font-mono tabular-nums font-semibold whitespace-nowrap">{formatAmount(entry.totalDebit)}</td>
+                      <td className="py-2.5 px-4 text-right font-mono tabular-nums font-semibold whitespace-nowrap">{formatAmount(entry.totalCredit)}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          </td>
+        </tr>
       </Fragment>;
     })}</tbody>
   </table>;

@@ -194,7 +194,7 @@ export const ChartOfAccounts: React.FC = () => {
       <PageHeader
         eyebrow={
           <nav aria-label="Breadcrumb">
-            <Link to={`/org/${currentOrg.slug}/financials`} className="hover:underline">Financials</Link>
+            <Link to={`/org/${currentOrg.slug}/financials`} className="hover:underline">General Ledger</Link>
             <span aria-hidden="true"> / </span>
             <span>Chart of Accounts</span>
           </nav>
