@@ -654,12 +654,13 @@ export const InvoiceDetail: React.FC = () => {
                 <th className="py-3 px-3 text-right w-24 print:w-16">Qty</th>
                 <th className="py-3 px-3 text-right w-28">Unit Price</th>
                 <th className="py-3 px-3 text-right w-24 print:w-20">Disc %</th>
+                <th className="py-3 px-3 text-right w-24">Tax</th>
                 <th className="py-3 px-4 text-right w-32">Total</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--border-subtle)] text-sm">
               {invoice.salesInvoiceLines?.map((line, idx) => {
-                const qty = line.quantity || 1;
+                const qty = line.quantity ?? 1;
                 const price = line.amount || 0;
                 const gross = qty * price;
                 const disc = (gross * (line.discount || 0)) / 100;
@@ -681,6 +682,9 @@ export const InvoiceDetail: React.FC = () => {
                     </td>
                     <td className="py-3.5 px-3 text-right text-[var(--text-secondary)]">
                       {line.discount ? `${line.discount}%` : '—'}
+                    </td>
+                    <td className="py-3.5 px-3 text-right font-mono text-[var(--text-secondary)]">
+                      {formatCurrency(line.taxAmount ?? 0)}
                     </td>
                     <td className="py-3.5 px-4 text-right font-semibold font-mono text-[var(--text-main)]">
                       {formatCurrency(net)}
@@ -735,9 +739,16 @@ export const InvoiceDetail: React.FC = () => {
               </div>
             )}
 
+            {(invoice.shippingHandlingCharge ?? 0) > 0 && (
+              <div className="flex justify-between text-[var(--text-secondary)]">
+                <span>Shipping:</span>
+                <span className="font-mono">{formatCurrency(invoice.shippingHandlingCharge ?? 0)}</span>
+              </div>
+            )}
+
             <div className="flex justify-between font-bold text-base text-[var(--text-main)] border-t border-[var(--border-subtle)] pt-2.5">
               <span>Total Amount:</span>
-              <span className="font-mono">{formatCurrency(invoice.totalAmountAfterTax || invoice.amount)}</span>
+              <span className="font-mono">{formatCurrency(invoice.totalAmountAfterTax ?? invoice.amount)}</span>
             </div>
 
             {invoice.paidAmount > 0 && (
