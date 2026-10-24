@@ -3,105 +3,95 @@
 -- defaults added after the first release never reached D1: the Products & Services permissions are missing from
 -- every built-in role. Only what is missing is added, and running this again changes nothing. Generated from
 -- SecurityService.cs; a later change to the defaults needs its own migration.
+-- One row per statement: D1 refuses compound SELECTs (UNION ALL) with more than a few terms.
 
-INSERT INTO "SecurityGroup" ("Name", "DisplayName")
-SELECT v.name, v.display FROM (
-    SELECT 'Sales' AS name, 'Sales & Invoicing' AS display
-    UNION ALL SELECT 'Financials' AS name, 'General Ledger & Banking' AS display
-    UNION ALL SELECT 'Purchasing' AS name, 'Purchases & Bills' AS display
-    UNION ALL SELECT 'Inventory' AS name, 'Inventory & Items' AS display
-    UNION ALL SELECT 'Reports' AS name, 'Reports & Analytics' AS display
-    UNION ALL SELECT 'Donations' AS name, 'Donations & Non-Profit' AS display
-    UNION ALL SELECT 'Audit' AS name, 'Audit & Compliance' AS display
-    UNION ALL SELECT 'Admin' AS name, 'Administration' AS display
-) v WHERE NOT EXISTS (SELECT 1 FROM "SecurityGroup" g WHERE g."Name" = v.name);
+INSERT INTO "SecurityGroup" ("Name", "DisplayName") SELECT 'Sales', 'Sales & Invoicing' WHERE NOT EXISTS (SELECT 1 FROM "SecurityGroup" WHERE "Name" = 'Sales');
+INSERT INTO "SecurityGroup" ("Name", "DisplayName") SELECT 'Financials', 'General Ledger & Banking' WHERE NOT EXISTS (SELECT 1 FROM "SecurityGroup" WHERE "Name" = 'Financials');
+INSERT INTO "SecurityGroup" ("Name", "DisplayName") SELECT 'Purchasing', 'Purchases & Bills' WHERE NOT EXISTS (SELECT 1 FROM "SecurityGroup" WHERE "Name" = 'Purchasing');
+INSERT INTO "SecurityGroup" ("Name", "DisplayName") SELECT 'Inventory', 'Inventory & Items' WHERE NOT EXISTS (SELECT 1 FROM "SecurityGroup" WHERE "Name" = 'Inventory');
+INSERT INTO "SecurityGroup" ("Name", "DisplayName") SELECT 'Reports', 'Reports & Analytics' WHERE NOT EXISTS (SELECT 1 FROM "SecurityGroup" WHERE "Name" = 'Reports');
+INSERT INTO "SecurityGroup" ("Name", "DisplayName") SELECT 'Donations', 'Donations & Non-Profit' WHERE NOT EXISTS (SELECT 1 FROM "SecurityGroup" WHERE "Name" = 'Donations');
+INSERT INTO "SecurityGroup" ("Name", "DisplayName") SELECT 'Audit', 'Audit & Compliance' WHERE NOT EXISTS (SELECT 1 FROM "SecurityGroup" WHERE "Name" = 'Audit');
+INSERT INTO "SecurityGroup" ("Name", "DisplayName") SELECT 'Admin', 'Administration' WHERE NOT EXISTS (SELECT 1 FROM "SecurityGroup" WHERE "Name" = 'Admin');
 
-INSERT INTO "SecurityPermission" ("Name", "DisplayName", "SecurityGroupId")
-SELECT v.name, v.display, g."Id" FROM (
-    SELECT 'sales.customers.view' AS name, 'View Customers' AS display, 'Sales' AS grp
-    UNION ALL SELECT 'sales.customers.manage' AS name, 'Manage Customers' AS display, 'Sales' AS grp
-    UNION ALL SELECT 'sales.invoices.view' AS name, 'View Invoices' AS display, 'Sales' AS grp
-    UNION ALL SELECT 'sales.invoices.create' AS name, 'Create Invoices' AS display, 'Sales' AS grp
-    UNION ALL SELECT 'sales.invoices.post' AS name, 'Post Invoices' AS display, 'Sales' AS grp
-    UNION ALL SELECT 'sales.receipts.view' AS name, 'View Receipts' AS display, 'Sales' AS grp
-    UNION ALL SELECT 'sales.receipts.create' AS name, 'Create Receipts' AS display, 'Sales' AS grp
-    UNION ALL SELECT 'sales.quotations.view' AS name, 'View Quotations' AS display, 'Sales' AS grp
-    UNION ALL SELECT 'financials.accounts.view' AS name, 'View Accounts' AS display, 'Financials' AS grp
-    UNION ALL SELECT 'financials.accounts.manage' AS name, 'Manage Accounts' AS display, 'Financials' AS grp
-    UNION ALL SELECT 'financials.journal.view' AS name, 'View Journal' AS display, 'Financials' AS grp
-    UNION ALL SELECT 'financials.journal.create' AS name, 'Create Journal Entries' AS display, 'Financials' AS grp
-    UNION ALL SELECT 'financials.journal.post' AS name, 'Post Journal Entries' AS display, 'Financials' AS grp
-    UNION ALL SELECT 'financials.cashbanks.view' AS name, 'View Cash & Banks' AS display, 'Financials' AS grp
-    UNION ALL SELECT 'financials.cashbanks.manage' AS name, 'Manage Cash & Banks' AS display, 'Financials' AS grp
-    UNION ALL SELECT 'purchases.vendors.view' AS name, 'View Vendors' AS display, 'Purchasing' AS grp
-    UNION ALL SELECT 'purchases.vendors.manage' AS name, 'Manage Vendors' AS display, 'Purchasing' AS grp
-    UNION ALL SELECT 'purchases.orders.view' AS name, 'View Orders' AS display, 'Purchasing' AS grp
-    UNION ALL SELECT 'purchases.bills.view' AS name, 'View Bills' AS display, 'Purchasing' AS grp
-    UNION ALL SELECT 'purchases.bills.create' AS name, 'Create Bills' AS display, 'Purchasing' AS grp
-    UNION ALL SELECT 'purchases.bills.post' AS name, 'Post Bills' AS display, 'Purchasing' AS grp
-    UNION ALL SELECT 'purchases.payments.create' AS name, 'Pay Bills' AS display, 'Purchasing' AS grp
-    UNION ALL SELECT 'inventory.items.view' AS name, 'View Items' AS display, 'Inventory' AS grp
-    UNION ALL SELECT 'inventory.items.manage' AS name, 'Manage Items' AS display, 'Inventory' AS grp
-    UNION ALL SELECT 'inventory.adjustments.view' AS name, 'View Adjustments' AS display, 'Inventory' AS grp
-    UNION ALL SELECT 'inventory.adjustments.post' AS name, 'Post Adjustments' AS display, 'Inventory' AS grp
-    UNION ALL SELECT 'reports.view' AS name, 'View Reports' AS display, 'Reports' AS grp
-    UNION ALL SELECT 'donations.view' AS name, 'View Donations' AS display, 'Donations' AS grp
-    UNION ALL SELECT 'donations.manage' AS name, 'Manage Donations' AS display, 'Donations' AS grp
-    UNION ALL SELECT 'audit.logs.view' AS name, 'View Audit Logs' AS display, 'Audit' AS grp
-    UNION ALL SELECT 'admin.members.manage' AS name, 'Manage Members' AS display, 'Admin' AS grp
-    UNION ALL SELECT 'admin.roles.manage' AS name, 'Manage Roles' AS display, 'Admin' AS grp
-    UNION ALL SELECT 'admin.subscription.manage' AS name, 'Manage Subscription' AS display, 'Admin' AS grp
-) v JOIN "SecurityGroup" g ON g."Name" = v.grp
-WHERE NOT EXISTS (SELECT 1 FROM "SecurityPermission" p WHERE p."Name" = v.name);
+INSERT INTO "SecurityPermission" ("Name", "DisplayName", "SecurityGroupId") SELECT 'sales.customers.view', 'View Customers', g."Id" FROM "SecurityGroup" g WHERE g."Name" = 'Sales' AND NOT EXISTS (SELECT 1 FROM "SecurityPermission" WHERE "Name" = 'sales.customers.view');
+INSERT INTO "SecurityPermission" ("Name", "DisplayName", "SecurityGroupId") SELECT 'sales.customers.manage', 'Manage Customers', g."Id" FROM "SecurityGroup" g WHERE g."Name" = 'Sales' AND NOT EXISTS (SELECT 1 FROM "SecurityPermission" WHERE "Name" = 'sales.customers.manage');
+INSERT INTO "SecurityPermission" ("Name", "DisplayName", "SecurityGroupId") SELECT 'sales.invoices.view', 'View Invoices', g."Id" FROM "SecurityGroup" g WHERE g."Name" = 'Sales' AND NOT EXISTS (SELECT 1 FROM "SecurityPermission" WHERE "Name" = 'sales.invoices.view');
+INSERT INTO "SecurityPermission" ("Name", "DisplayName", "SecurityGroupId") SELECT 'sales.invoices.create', 'Create Invoices', g."Id" FROM "SecurityGroup" g WHERE g."Name" = 'Sales' AND NOT EXISTS (SELECT 1 FROM "SecurityPermission" WHERE "Name" = 'sales.invoices.create');
+INSERT INTO "SecurityPermission" ("Name", "DisplayName", "SecurityGroupId") SELECT 'sales.invoices.post', 'Post Invoices', g."Id" FROM "SecurityGroup" g WHERE g."Name" = 'Sales' AND NOT EXISTS (SELECT 1 FROM "SecurityPermission" WHERE "Name" = 'sales.invoices.post');
+INSERT INTO "SecurityPermission" ("Name", "DisplayName", "SecurityGroupId") SELECT 'sales.receipts.view', 'View Receipts', g."Id" FROM "SecurityGroup" g WHERE g."Name" = 'Sales' AND NOT EXISTS (SELECT 1 FROM "SecurityPermission" WHERE "Name" = 'sales.receipts.view');
+INSERT INTO "SecurityPermission" ("Name", "DisplayName", "SecurityGroupId") SELECT 'sales.receipts.create', 'Create Receipts', g."Id" FROM "SecurityGroup" g WHERE g."Name" = 'Sales' AND NOT EXISTS (SELECT 1 FROM "SecurityPermission" WHERE "Name" = 'sales.receipts.create');
+INSERT INTO "SecurityPermission" ("Name", "DisplayName", "SecurityGroupId") SELECT 'sales.quotations.view', 'View Quotations', g."Id" FROM "SecurityGroup" g WHERE g."Name" = 'Sales' AND NOT EXISTS (SELECT 1 FROM "SecurityPermission" WHERE "Name" = 'sales.quotations.view');
+INSERT INTO "SecurityPermission" ("Name", "DisplayName", "SecurityGroupId") SELECT 'financials.accounts.view', 'View Accounts', g."Id" FROM "SecurityGroup" g WHERE g."Name" = 'Financials' AND NOT EXISTS (SELECT 1 FROM "SecurityPermission" WHERE "Name" = 'financials.accounts.view');
+INSERT INTO "SecurityPermission" ("Name", "DisplayName", "SecurityGroupId") SELECT 'financials.accounts.manage', 'Manage Accounts', g."Id" FROM "SecurityGroup" g WHERE g."Name" = 'Financials' AND NOT EXISTS (SELECT 1 FROM "SecurityPermission" WHERE "Name" = 'financials.accounts.manage');
+INSERT INTO "SecurityPermission" ("Name", "DisplayName", "SecurityGroupId") SELECT 'financials.journal.view', 'View Journal', g."Id" FROM "SecurityGroup" g WHERE g."Name" = 'Financials' AND NOT EXISTS (SELECT 1 FROM "SecurityPermission" WHERE "Name" = 'financials.journal.view');
+INSERT INTO "SecurityPermission" ("Name", "DisplayName", "SecurityGroupId") SELECT 'financials.journal.create', 'Create Journal Entries', g."Id" FROM "SecurityGroup" g WHERE g."Name" = 'Financials' AND NOT EXISTS (SELECT 1 FROM "SecurityPermission" WHERE "Name" = 'financials.journal.create');
+INSERT INTO "SecurityPermission" ("Name", "DisplayName", "SecurityGroupId") SELECT 'financials.journal.post', 'Post Journal Entries', g."Id" FROM "SecurityGroup" g WHERE g."Name" = 'Financials' AND NOT EXISTS (SELECT 1 FROM "SecurityPermission" WHERE "Name" = 'financials.journal.post');
+INSERT INTO "SecurityPermission" ("Name", "DisplayName", "SecurityGroupId") SELECT 'financials.cashbanks.view', 'View Cash & Banks', g."Id" FROM "SecurityGroup" g WHERE g."Name" = 'Financials' AND NOT EXISTS (SELECT 1 FROM "SecurityPermission" WHERE "Name" = 'financials.cashbanks.view');
+INSERT INTO "SecurityPermission" ("Name", "DisplayName", "SecurityGroupId") SELECT 'financials.cashbanks.manage', 'Manage Cash & Banks', g."Id" FROM "SecurityGroup" g WHERE g."Name" = 'Financials' AND NOT EXISTS (SELECT 1 FROM "SecurityPermission" WHERE "Name" = 'financials.cashbanks.manage');
+INSERT INTO "SecurityPermission" ("Name", "DisplayName", "SecurityGroupId") SELECT 'purchases.vendors.view', 'View Vendors', g."Id" FROM "SecurityGroup" g WHERE g."Name" = 'Purchasing' AND NOT EXISTS (SELECT 1 FROM "SecurityPermission" WHERE "Name" = 'purchases.vendors.view');
+INSERT INTO "SecurityPermission" ("Name", "DisplayName", "SecurityGroupId") SELECT 'purchases.vendors.manage', 'Manage Vendors', g."Id" FROM "SecurityGroup" g WHERE g."Name" = 'Purchasing' AND NOT EXISTS (SELECT 1 FROM "SecurityPermission" WHERE "Name" = 'purchases.vendors.manage');
+INSERT INTO "SecurityPermission" ("Name", "DisplayName", "SecurityGroupId") SELECT 'purchases.orders.view', 'View Orders', g."Id" FROM "SecurityGroup" g WHERE g."Name" = 'Purchasing' AND NOT EXISTS (SELECT 1 FROM "SecurityPermission" WHERE "Name" = 'purchases.orders.view');
+INSERT INTO "SecurityPermission" ("Name", "DisplayName", "SecurityGroupId") SELECT 'purchases.bills.view', 'View Bills', g."Id" FROM "SecurityGroup" g WHERE g."Name" = 'Purchasing' AND NOT EXISTS (SELECT 1 FROM "SecurityPermission" WHERE "Name" = 'purchases.bills.view');
+INSERT INTO "SecurityPermission" ("Name", "DisplayName", "SecurityGroupId") SELECT 'purchases.bills.create', 'Create Bills', g."Id" FROM "SecurityGroup" g WHERE g."Name" = 'Purchasing' AND NOT EXISTS (SELECT 1 FROM "SecurityPermission" WHERE "Name" = 'purchases.bills.create');
+INSERT INTO "SecurityPermission" ("Name", "DisplayName", "SecurityGroupId") SELECT 'purchases.bills.post', 'Post Bills', g."Id" FROM "SecurityGroup" g WHERE g."Name" = 'Purchasing' AND NOT EXISTS (SELECT 1 FROM "SecurityPermission" WHERE "Name" = 'purchases.bills.post');
+INSERT INTO "SecurityPermission" ("Name", "DisplayName", "SecurityGroupId") SELECT 'purchases.payments.create', 'Pay Bills', g."Id" FROM "SecurityGroup" g WHERE g."Name" = 'Purchasing' AND NOT EXISTS (SELECT 1 FROM "SecurityPermission" WHERE "Name" = 'purchases.payments.create');
+INSERT INTO "SecurityPermission" ("Name", "DisplayName", "SecurityGroupId") SELECT 'inventory.items.view', 'View Items', g."Id" FROM "SecurityGroup" g WHERE g."Name" = 'Inventory' AND NOT EXISTS (SELECT 1 FROM "SecurityPermission" WHERE "Name" = 'inventory.items.view');
+INSERT INTO "SecurityPermission" ("Name", "DisplayName", "SecurityGroupId") SELECT 'inventory.items.manage', 'Manage Items', g."Id" FROM "SecurityGroup" g WHERE g."Name" = 'Inventory' AND NOT EXISTS (SELECT 1 FROM "SecurityPermission" WHERE "Name" = 'inventory.items.manage');
+INSERT INTO "SecurityPermission" ("Name", "DisplayName", "SecurityGroupId") SELECT 'inventory.adjustments.view', 'View Adjustments', g."Id" FROM "SecurityGroup" g WHERE g."Name" = 'Inventory' AND NOT EXISTS (SELECT 1 FROM "SecurityPermission" WHERE "Name" = 'inventory.adjustments.view');
+INSERT INTO "SecurityPermission" ("Name", "DisplayName", "SecurityGroupId") SELECT 'inventory.adjustments.post', 'Post Adjustments', g."Id" FROM "SecurityGroup" g WHERE g."Name" = 'Inventory' AND NOT EXISTS (SELECT 1 FROM "SecurityPermission" WHERE "Name" = 'inventory.adjustments.post');
+INSERT INTO "SecurityPermission" ("Name", "DisplayName", "SecurityGroupId") SELECT 'reports.view', 'View Reports', g."Id" FROM "SecurityGroup" g WHERE g."Name" = 'Reports' AND NOT EXISTS (SELECT 1 FROM "SecurityPermission" WHERE "Name" = 'reports.view');
+INSERT INTO "SecurityPermission" ("Name", "DisplayName", "SecurityGroupId") SELECT 'donations.view', 'View Donations', g."Id" FROM "SecurityGroup" g WHERE g."Name" = 'Donations' AND NOT EXISTS (SELECT 1 FROM "SecurityPermission" WHERE "Name" = 'donations.view');
+INSERT INTO "SecurityPermission" ("Name", "DisplayName", "SecurityGroupId") SELECT 'donations.manage', 'Manage Donations', g."Id" FROM "SecurityGroup" g WHERE g."Name" = 'Donations' AND NOT EXISTS (SELECT 1 FROM "SecurityPermission" WHERE "Name" = 'donations.manage');
+INSERT INTO "SecurityPermission" ("Name", "DisplayName", "SecurityGroupId") SELECT 'audit.logs.view', 'View Audit Logs', g."Id" FROM "SecurityGroup" g WHERE g."Name" = 'Audit' AND NOT EXISTS (SELECT 1 FROM "SecurityPermission" WHERE "Name" = 'audit.logs.view');
+INSERT INTO "SecurityPermission" ("Name", "DisplayName", "SecurityGroupId") SELECT 'admin.members.manage', 'Manage Members', g."Id" FROM "SecurityGroup" g WHERE g."Name" = 'Admin' AND NOT EXISTS (SELECT 1 FROM "SecurityPermission" WHERE "Name" = 'admin.members.manage');
+INSERT INTO "SecurityPermission" ("Name", "DisplayName", "SecurityGroupId") SELECT 'admin.roles.manage', 'Manage Roles', g."Id" FROM "SecurityGroup" g WHERE g."Name" = 'Admin' AND NOT EXISTS (SELECT 1 FROM "SecurityPermission" WHERE "Name" = 'admin.roles.manage');
+INSERT INTO "SecurityPermission" ("Name", "DisplayName", "SecurityGroupId") SELECT 'admin.subscription.manage', 'Manage Subscription', g."Id" FROM "SecurityGroup" g WHERE g."Name" = 'Admin' AND NOT EXISTS (SELECT 1 FROM "SecurityPermission" WHERE "Name" = 'admin.subscription.manage');
 
-INSERT INTO "SecurityRolePermission" ("SecurityRoleId", "SecurityPermissionId")
-SELECT r."Id", p."Id" FROM (
-    SELECT 'Accountant' AS role, 'sales.customers.view' AS perm
-    UNION ALL SELECT 'Accountant' AS role, 'sales.customers.manage' AS perm
-    UNION ALL SELECT 'Accountant' AS role, 'sales.invoices.view' AS perm
-    UNION ALL SELECT 'Accountant' AS role, 'sales.invoices.create' AS perm
-    UNION ALL SELECT 'Accountant' AS role, 'sales.invoices.post' AS perm
-    UNION ALL SELECT 'Accountant' AS role, 'sales.receipts.view' AS perm
-    UNION ALL SELECT 'Accountant' AS role, 'sales.receipts.create' AS perm
-    UNION ALL SELECT 'Accountant' AS role, 'financials.accounts.view' AS perm
-    UNION ALL SELECT 'Accountant' AS role, 'financials.accounts.manage' AS perm
-    UNION ALL SELECT 'Accountant' AS role, 'financials.journal.view' AS perm
-    UNION ALL SELECT 'Accountant' AS role, 'financials.journal.create' AS perm
-    UNION ALL SELECT 'Accountant' AS role, 'financials.journal.post' AS perm
-    UNION ALL SELECT 'Accountant' AS role, 'financials.cashbanks.view' AS perm
-    UNION ALL SELECT 'Accountant' AS role, 'financials.cashbanks.manage' AS perm
-    UNION ALL SELECT 'Accountant' AS role, 'purchases.vendors.view' AS perm
-    UNION ALL SELECT 'Accountant' AS role, 'purchases.vendors.manage' AS perm
-    UNION ALL SELECT 'Accountant' AS role, 'purchases.bills.view' AS perm
-    UNION ALL SELECT 'Accountant' AS role, 'purchases.bills.create' AS perm
-    UNION ALL SELECT 'Accountant' AS role, 'purchases.bills.post' AS perm
-    UNION ALL SELECT 'Accountant' AS role, 'purchases.payments.create' AS perm
-    UNION ALL SELECT 'Accountant' AS role, 'inventory.items.view' AS perm
-    UNION ALL SELECT 'Accountant' AS role, 'inventory.items.manage' AS perm
-    UNION ALL SELECT 'Accountant' AS role, 'reports.view' AS perm
-    UNION ALL SELECT 'Sales Representative' AS role, 'sales.customers.view' AS perm
-    UNION ALL SELECT 'Sales Representative' AS role, 'sales.customers.manage' AS perm
-    UNION ALL SELECT 'Sales Representative' AS role, 'sales.quotations.view' AS perm
-    UNION ALL SELECT 'Sales Representative' AS role, 'sales.invoices.view' AS perm
-    UNION ALL SELECT 'Sales Representative' AS role, 'sales.invoices.create' AS perm
-    UNION ALL SELECT 'Sales Representative' AS role, 'sales.receipts.create' AS perm
-    UNION ALL SELECT 'Sales Representative' AS role, 'inventory.items.view' AS perm
-    UNION ALL SELECT 'Purchasing Agent' AS role, 'purchases.vendors.view' AS perm
-    UNION ALL SELECT 'Purchasing Agent' AS role, 'purchases.vendors.manage' AS perm
-    UNION ALL SELECT 'Purchasing Agent' AS role, 'purchases.orders.view' AS perm
-    UNION ALL SELECT 'Purchasing Agent' AS role, 'purchases.bills.view' AS perm
-    UNION ALL SELECT 'Purchasing Agent' AS role, 'purchases.bills.create' AS perm
-    UNION ALL SELECT 'Purchasing Agent' AS role, 'inventory.items.view' AS perm
-    UNION ALL SELECT 'Auditor / Viewer' AS role, 'sales.customers.view' AS perm
-    UNION ALL SELECT 'Auditor / Viewer' AS role, 'sales.invoices.view' AS perm
-    UNION ALL SELECT 'Auditor / Viewer' AS role, 'financials.accounts.view' AS perm
-    UNION ALL SELECT 'Auditor / Viewer' AS role, 'financials.journal.view' AS perm
-    UNION ALL SELECT 'Auditor / Viewer' AS role, 'financials.cashbanks.view' AS perm
-    UNION ALL SELECT 'Auditor / Viewer' AS role, 'purchases.vendors.view' AS perm
-    UNION ALL SELECT 'Auditor / Viewer' AS role, 'purchases.bills.view' AS perm
-    UNION ALL SELECT 'Auditor / Viewer' AS role, 'reports.view' AS perm
-    UNION ALL SELECT 'Auditor / Viewer' AS role, 'audit.logs.view' AS perm
-    UNION ALL SELECT 'Auditor / Viewer' AS role, 'inventory.items.view' AS perm
-    UNION ALL SELECT 'GeneralUsers' AS role, 'reports.view' AS perm
-) v JOIN "SecurityRole" r ON r."Name" = v.role JOIN "SecurityPermission" p ON p."Name" = v.perm
-WHERE NOT EXISTS (SELECT 1 FROM "SecurityRolePermission" x WHERE x."SecurityRoleId" = r."Id" AND x."SecurityPermissionId" = p."Id");
+INSERT INTO "SecurityRolePermission" ("SecurityRoleId", "SecurityPermissionId") SELECT r."Id", p."Id" FROM "SecurityRole" r, "SecurityPermission" p WHERE r."Name" = 'Accountant' AND p."Name" = 'sales.customers.view' AND NOT EXISTS (SELECT 1 FROM "SecurityRolePermission" x WHERE x."SecurityRoleId" = r."Id" AND x."SecurityPermissionId" = p."Id");
+INSERT INTO "SecurityRolePermission" ("SecurityRoleId", "SecurityPermissionId") SELECT r."Id", p."Id" FROM "SecurityRole" r, "SecurityPermission" p WHERE r."Name" = 'Accountant' AND p."Name" = 'sales.customers.manage' AND NOT EXISTS (SELECT 1 FROM "SecurityRolePermission" x WHERE x."SecurityRoleId" = r."Id" AND x."SecurityPermissionId" = p."Id");
+INSERT INTO "SecurityRolePermission" ("SecurityRoleId", "SecurityPermissionId") SELECT r."Id", p."Id" FROM "SecurityRole" r, "SecurityPermission" p WHERE r."Name" = 'Accountant' AND p."Name" = 'sales.invoices.view' AND NOT EXISTS (SELECT 1 FROM "SecurityRolePermission" x WHERE x."SecurityRoleId" = r."Id" AND x."SecurityPermissionId" = p."Id");
+INSERT INTO "SecurityRolePermission" ("SecurityRoleId", "SecurityPermissionId") SELECT r."Id", p."Id" FROM "SecurityRole" r, "SecurityPermission" p WHERE r."Name" = 'Accountant' AND p."Name" = 'sales.invoices.create' AND NOT EXISTS (SELECT 1 FROM "SecurityRolePermission" x WHERE x."SecurityRoleId" = r."Id" AND x."SecurityPermissionId" = p."Id");
+INSERT INTO "SecurityRolePermission" ("SecurityRoleId", "SecurityPermissionId") SELECT r."Id", p."Id" FROM "SecurityRole" r, "SecurityPermission" p WHERE r."Name" = 'Accountant' AND p."Name" = 'sales.invoices.post' AND NOT EXISTS (SELECT 1 FROM "SecurityRolePermission" x WHERE x."SecurityRoleId" = r."Id" AND x."SecurityPermissionId" = p."Id");
+INSERT INTO "SecurityRolePermission" ("SecurityRoleId", "SecurityPermissionId") SELECT r."Id", p."Id" FROM "SecurityRole" r, "SecurityPermission" p WHERE r."Name" = 'Accountant' AND p."Name" = 'sales.receipts.view' AND NOT EXISTS (SELECT 1 FROM "SecurityRolePermission" x WHERE x."SecurityRoleId" = r."Id" AND x."SecurityPermissionId" = p."Id");
+INSERT INTO "SecurityRolePermission" ("SecurityRoleId", "SecurityPermissionId") SELECT r."Id", p."Id" FROM "SecurityRole" r, "SecurityPermission" p WHERE r."Name" = 'Accountant' AND p."Name" = 'sales.receipts.create' AND NOT EXISTS (SELECT 1 FROM "SecurityRolePermission" x WHERE x."SecurityRoleId" = r."Id" AND x."SecurityPermissionId" = p."Id");
+INSERT INTO "SecurityRolePermission" ("SecurityRoleId", "SecurityPermissionId") SELECT r."Id", p."Id" FROM "SecurityRole" r, "SecurityPermission" p WHERE r."Name" = 'Accountant' AND p."Name" = 'financials.accounts.view' AND NOT EXISTS (SELECT 1 FROM "SecurityRolePermission" x WHERE x."SecurityRoleId" = r."Id" AND x."SecurityPermissionId" = p."Id");
+INSERT INTO "SecurityRolePermission" ("SecurityRoleId", "SecurityPermissionId") SELECT r."Id", p."Id" FROM "SecurityRole" r, "SecurityPermission" p WHERE r."Name" = 'Accountant' AND p."Name" = 'financials.accounts.manage' AND NOT EXISTS (SELECT 1 FROM "SecurityRolePermission" x WHERE x."SecurityRoleId" = r."Id" AND x."SecurityPermissionId" = p."Id");
+INSERT INTO "SecurityRolePermission" ("SecurityRoleId", "SecurityPermissionId") SELECT r."Id", p."Id" FROM "SecurityRole" r, "SecurityPermission" p WHERE r."Name" = 'Accountant' AND p."Name" = 'financials.journal.view' AND NOT EXISTS (SELECT 1 FROM "SecurityRolePermission" x WHERE x."SecurityRoleId" = r."Id" AND x."SecurityPermissionId" = p."Id");
+INSERT INTO "SecurityRolePermission" ("SecurityRoleId", "SecurityPermissionId") SELECT r."Id", p."Id" FROM "SecurityRole" r, "SecurityPermission" p WHERE r."Name" = 'Accountant' AND p."Name" = 'financials.journal.create' AND NOT EXISTS (SELECT 1 FROM "SecurityRolePermission" x WHERE x."SecurityRoleId" = r."Id" AND x."SecurityPermissionId" = p."Id");
+INSERT INTO "SecurityRolePermission" ("SecurityRoleId", "SecurityPermissionId") SELECT r."Id", p."Id" FROM "SecurityRole" r, "SecurityPermission" p WHERE r."Name" = 'Accountant' AND p."Name" = 'financials.journal.post' AND NOT EXISTS (SELECT 1 FROM "SecurityRolePermission" x WHERE x."SecurityRoleId" = r."Id" AND x."SecurityPermissionId" = p."Id");
+INSERT INTO "SecurityRolePermission" ("SecurityRoleId", "SecurityPermissionId") SELECT r."Id", p."Id" FROM "SecurityRole" r, "SecurityPermission" p WHERE r."Name" = 'Accountant' AND p."Name" = 'financials.cashbanks.view' AND NOT EXISTS (SELECT 1 FROM "SecurityRolePermission" x WHERE x."SecurityRoleId" = r."Id" AND x."SecurityPermissionId" = p."Id");
+INSERT INTO "SecurityRolePermission" ("SecurityRoleId", "SecurityPermissionId") SELECT r."Id", p."Id" FROM "SecurityRole" r, "SecurityPermission" p WHERE r."Name" = 'Accountant' AND p."Name" = 'financials.cashbanks.manage' AND NOT EXISTS (SELECT 1 FROM "SecurityRolePermission" x WHERE x."SecurityRoleId" = r."Id" AND x."SecurityPermissionId" = p."Id");
+INSERT INTO "SecurityRolePermission" ("SecurityRoleId", "SecurityPermissionId") SELECT r."Id", p."Id" FROM "SecurityRole" r, "SecurityPermission" p WHERE r."Name" = 'Accountant' AND p."Name" = 'purchases.vendors.view' AND NOT EXISTS (SELECT 1 FROM "SecurityRolePermission" x WHERE x."SecurityRoleId" = r."Id" AND x."SecurityPermissionId" = p."Id");
+INSERT INTO "SecurityRolePermission" ("SecurityRoleId", "SecurityPermissionId") SELECT r."Id", p."Id" FROM "SecurityRole" r, "SecurityPermission" p WHERE r."Name" = 'Accountant' AND p."Name" = 'purchases.vendors.manage' AND NOT EXISTS (SELECT 1 FROM "SecurityRolePermission" x WHERE x."SecurityRoleId" = r."Id" AND x."SecurityPermissionId" = p."Id");
+INSERT INTO "SecurityRolePermission" ("SecurityRoleId", "SecurityPermissionId") SELECT r."Id", p."Id" FROM "SecurityRole" r, "SecurityPermission" p WHERE r."Name" = 'Accountant' AND p."Name" = 'purchases.bills.view' AND NOT EXISTS (SELECT 1 FROM "SecurityRolePermission" x WHERE x."SecurityRoleId" = r."Id" AND x."SecurityPermissionId" = p."Id");
+INSERT INTO "SecurityRolePermission" ("SecurityRoleId", "SecurityPermissionId") SELECT r."Id", p."Id" FROM "SecurityRole" r, "SecurityPermission" p WHERE r."Name" = 'Accountant' AND p."Name" = 'purchases.bills.create' AND NOT EXISTS (SELECT 1 FROM "SecurityRolePermission" x WHERE x."SecurityRoleId" = r."Id" AND x."SecurityPermissionId" = p."Id");
+INSERT INTO "SecurityRolePermission" ("SecurityRoleId", "SecurityPermissionId") SELECT r."Id", p."Id" FROM "SecurityRole" r, "SecurityPermission" p WHERE r."Name" = 'Accountant' AND p."Name" = 'purchases.bills.post' AND NOT EXISTS (SELECT 1 FROM "SecurityRolePermission" x WHERE x."SecurityRoleId" = r."Id" AND x."SecurityPermissionId" = p."Id");
+INSERT INTO "SecurityRolePermission" ("SecurityRoleId", "SecurityPermissionId") SELECT r."Id", p."Id" FROM "SecurityRole" r, "SecurityPermission" p WHERE r."Name" = 'Accountant' AND p."Name" = 'purchases.payments.create' AND NOT EXISTS (SELECT 1 FROM "SecurityRolePermission" x WHERE x."SecurityRoleId" = r."Id" AND x."SecurityPermissionId" = p."Id");
+INSERT INTO "SecurityRolePermission" ("SecurityRoleId", "SecurityPermissionId") SELECT r."Id", p."Id" FROM "SecurityRole" r, "SecurityPermission" p WHERE r."Name" = 'Accountant' AND p."Name" = 'inventory.items.view' AND NOT EXISTS (SELECT 1 FROM "SecurityRolePermission" x WHERE x."SecurityRoleId" = r."Id" AND x."SecurityPermissionId" = p."Id");
+INSERT INTO "SecurityRolePermission" ("SecurityRoleId", "SecurityPermissionId") SELECT r."Id", p."Id" FROM "SecurityRole" r, "SecurityPermission" p WHERE r."Name" = 'Accountant' AND p."Name" = 'inventory.items.manage' AND NOT EXISTS (SELECT 1 FROM "SecurityRolePermission" x WHERE x."SecurityRoleId" = r."Id" AND x."SecurityPermissionId" = p."Id");
+INSERT INTO "SecurityRolePermission" ("SecurityRoleId", "SecurityPermissionId") SELECT r."Id", p."Id" FROM "SecurityRole" r, "SecurityPermission" p WHERE r."Name" = 'Accountant' AND p."Name" = 'reports.view' AND NOT EXISTS (SELECT 1 FROM "SecurityRolePermission" x WHERE x."SecurityRoleId" = r."Id" AND x."SecurityPermissionId" = p."Id");
+INSERT INTO "SecurityRolePermission" ("SecurityRoleId", "SecurityPermissionId") SELECT r."Id", p."Id" FROM "SecurityRole" r, "SecurityPermission" p WHERE r."Name" = 'Sales Representative' AND p."Name" = 'sales.customers.view' AND NOT EXISTS (SELECT 1 FROM "SecurityRolePermission" x WHERE x."SecurityRoleId" = r."Id" AND x."SecurityPermissionId" = p."Id");
+INSERT INTO "SecurityRolePermission" ("SecurityRoleId", "SecurityPermissionId") SELECT r."Id", p."Id" FROM "SecurityRole" r, "SecurityPermission" p WHERE r."Name" = 'Sales Representative' AND p."Name" = 'sales.customers.manage' AND NOT EXISTS (SELECT 1 FROM "SecurityRolePermission" x WHERE x."SecurityRoleId" = r."Id" AND x."SecurityPermissionId" = p."Id");
+INSERT INTO "SecurityRolePermission" ("SecurityRoleId", "SecurityPermissionId") SELECT r."Id", p."Id" FROM "SecurityRole" r, "SecurityPermission" p WHERE r."Name" = 'Sales Representative' AND p."Name" = 'sales.quotations.view' AND NOT EXISTS (SELECT 1 FROM "SecurityRolePermission" x WHERE x."SecurityRoleId" = r."Id" AND x."SecurityPermissionId" = p."Id");
+INSERT INTO "SecurityRolePermission" ("SecurityRoleId", "SecurityPermissionId") SELECT r."Id", p."Id" FROM "SecurityRole" r, "SecurityPermission" p WHERE r."Name" = 'Sales Representative' AND p."Name" = 'sales.invoices.view' AND NOT EXISTS (SELECT 1 FROM "SecurityRolePermission" x WHERE x."SecurityRoleId" = r."Id" AND x."SecurityPermissionId" = p."Id");
+INSERT INTO "SecurityRolePermission" ("SecurityRoleId", "SecurityPermissionId") SELECT r."Id", p."Id" FROM "SecurityRole" r, "SecurityPermission" p WHERE r."Name" = 'Sales Representative' AND p."Name" = 'sales.invoices.create' AND NOT EXISTS (SELECT 1 FROM "SecurityRolePermission" x WHERE x."SecurityRoleId" = r."Id" AND x."SecurityPermissionId" = p."Id");
+INSERT INTO "SecurityRolePermission" ("SecurityRoleId", "SecurityPermissionId") SELECT r."Id", p."Id" FROM "SecurityRole" r, "SecurityPermission" p WHERE r."Name" = 'Sales Representative' AND p."Name" = 'sales.receipts.create' AND NOT EXISTS (SELECT 1 FROM "SecurityRolePermission" x WHERE x."SecurityRoleId" = r."Id" AND x."SecurityPermissionId" = p."Id");
+INSERT INTO "SecurityRolePermission" ("SecurityRoleId", "SecurityPermissionId") SELECT r."Id", p."Id" FROM "SecurityRole" r, "SecurityPermission" p WHERE r."Name" = 'Sales Representative' AND p."Name" = 'inventory.items.view' AND NOT EXISTS (SELECT 1 FROM "SecurityRolePermission" x WHERE x."SecurityRoleId" = r."Id" AND x."SecurityPermissionId" = p."Id");
+INSERT INTO "SecurityRolePermission" ("SecurityRoleId", "SecurityPermissionId") SELECT r."Id", p."Id" FROM "SecurityRole" r, "SecurityPermission" p WHERE r."Name" = 'Purchasing Agent' AND p."Name" = 'purchases.vendors.view' AND NOT EXISTS (SELECT 1 FROM "SecurityRolePermission" x WHERE x."SecurityRoleId" = r."Id" AND x."SecurityPermissionId" = p."Id");
+INSERT INTO "SecurityRolePermission" ("SecurityRoleId", "SecurityPermissionId") SELECT r."Id", p."Id" FROM "SecurityRole" r, "SecurityPermission" p WHERE r."Name" = 'Purchasing Agent' AND p."Name" = 'purchases.vendors.manage' AND NOT EXISTS (SELECT 1 FROM "SecurityRolePermission" x WHERE x."SecurityRoleId" = r."Id" AND x."SecurityPermissionId" = p."Id");
+INSERT INTO "SecurityRolePermission" ("SecurityRoleId", "SecurityPermissionId") SELECT r."Id", p."Id" FROM "SecurityRole" r, "SecurityPermission" p WHERE r."Name" = 'Purchasing Agent' AND p."Name" = 'purchases.orders.view' AND NOT EXISTS (SELECT 1 FROM "SecurityRolePermission" x WHERE x."SecurityRoleId" = r."Id" AND x."SecurityPermissionId" = p."Id");
+INSERT INTO "SecurityRolePermission" ("SecurityRoleId", "SecurityPermissionId") SELECT r."Id", p."Id" FROM "SecurityRole" r, "SecurityPermission" p WHERE r."Name" = 'Purchasing Agent' AND p."Name" = 'purchases.bills.view' AND NOT EXISTS (SELECT 1 FROM "SecurityRolePermission" x WHERE x."SecurityRoleId" = r."Id" AND x."SecurityPermissionId" = p."Id");
+INSERT INTO "SecurityRolePermission" ("SecurityRoleId", "SecurityPermissionId") SELECT r."Id", p."Id" FROM "SecurityRole" r, "SecurityPermission" p WHERE r."Name" = 'Purchasing Agent' AND p."Name" = 'purchases.bills.create' AND NOT EXISTS (SELECT 1 FROM "SecurityRolePermission" x WHERE x."SecurityRoleId" = r."Id" AND x."SecurityPermissionId" = p."Id");
+INSERT INTO "SecurityRolePermission" ("SecurityRoleId", "SecurityPermissionId") SELECT r."Id", p."Id" FROM "SecurityRole" r, "SecurityPermission" p WHERE r."Name" = 'Purchasing Agent' AND p."Name" = 'inventory.items.view' AND NOT EXISTS (SELECT 1 FROM "SecurityRolePermission" x WHERE x."SecurityRoleId" = r."Id" AND x."SecurityPermissionId" = p."Id");
+INSERT INTO "SecurityRolePermission" ("SecurityRoleId", "SecurityPermissionId") SELECT r."Id", p."Id" FROM "SecurityRole" r, "SecurityPermission" p WHERE r."Name" = 'Auditor / Viewer' AND p."Name" = 'sales.customers.view' AND NOT EXISTS (SELECT 1 FROM "SecurityRolePermission" x WHERE x."SecurityRoleId" = r."Id" AND x."SecurityPermissionId" = p."Id");
+INSERT INTO "SecurityRolePermission" ("SecurityRoleId", "SecurityPermissionId") SELECT r."Id", p."Id" FROM "SecurityRole" r, "SecurityPermission" p WHERE r."Name" = 'Auditor / Viewer' AND p."Name" = 'sales.invoices.view' AND NOT EXISTS (SELECT 1 FROM "SecurityRolePermission" x WHERE x."SecurityRoleId" = r."Id" AND x."SecurityPermissionId" = p."Id");
+INSERT INTO "SecurityRolePermission" ("SecurityRoleId", "SecurityPermissionId") SELECT r."Id", p."Id" FROM "SecurityRole" r, "SecurityPermission" p WHERE r."Name" = 'Auditor / Viewer' AND p."Name" = 'financials.accounts.view' AND NOT EXISTS (SELECT 1 FROM "SecurityRolePermission" x WHERE x."SecurityRoleId" = r."Id" AND x."SecurityPermissionId" = p."Id");
+INSERT INTO "SecurityRolePermission" ("SecurityRoleId", "SecurityPermissionId") SELECT r."Id", p."Id" FROM "SecurityRole" r, "SecurityPermission" p WHERE r."Name" = 'Auditor / Viewer' AND p."Name" = 'financials.journal.view' AND NOT EXISTS (SELECT 1 FROM "SecurityRolePermission" x WHERE x."SecurityRoleId" = r."Id" AND x."SecurityPermissionId" = p."Id");
+INSERT INTO "SecurityRolePermission" ("SecurityRoleId", "SecurityPermissionId") SELECT r."Id", p."Id" FROM "SecurityRole" r, "SecurityPermission" p WHERE r."Name" = 'Auditor / Viewer' AND p."Name" = 'financials.cashbanks.view' AND NOT EXISTS (SELECT 1 FROM "SecurityRolePermission" x WHERE x."SecurityRoleId" = r."Id" AND x."SecurityPermissionId" = p."Id");
+INSERT INTO "SecurityRolePermission" ("SecurityRoleId", "SecurityPermissionId") SELECT r."Id", p."Id" FROM "SecurityRole" r, "SecurityPermission" p WHERE r."Name" = 'Auditor / Viewer' AND p."Name" = 'purchases.vendors.view' AND NOT EXISTS (SELECT 1 FROM "SecurityRolePermission" x WHERE x."SecurityRoleId" = r."Id" AND x."SecurityPermissionId" = p."Id");
+INSERT INTO "SecurityRolePermission" ("SecurityRoleId", "SecurityPermissionId") SELECT r."Id", p."Id" FROM "SecurityRole" r, "SecurityPermission" p WHERE r."Name" = 'Auditor / Viewer' AND p."Name" = 'purchases.bills.view' AND NOT EXISTS (SELECT 1 FROM "SecurityRolePermission" x WHERE x."SecurityRoleId" = r."Id" AND x."SecurityPermissionId" = p."Id");
+INSERT INTO "SecurityRolePermission" ("SecurityRoleId", "SecurityPermissionId") SELECT r."Id", p."Id" FROM "SecurityRole" r, "SecurityPermission" p WHERE r."Name" = 'Auditor / Viewer' AND p."Name" = 'reports.view' AND NOT EXISTS (SELECT 1 FROM "SecurityRolePermission" x WHERE x."SecurityRoleId" = r."Id" AND x."SecurityPermissionId" = p."Id");
+INSERT INTO "SecurityRolePermission" ("SecurityRoleId", "SecurityPermissionId") SELECT r."Id", p."Id" FROM "SecurityRole" r, "SecurityPermission" p WHERE r."Name" = 'Auditor / Viewer' AND p."Name" = 'audit.logs.view' AND NOT EXISTS (SELECT 1 FROM "SecurityRolePermission" x WHERE x."SecurityRoleId" = r."Id" AND x."SecurityPermissionId" = p."Id");
+INSERT INTO "SecurityRolePermission" ("SecurityRoleId", "SecurityPermissionId") SELECT r."Id", p."Id" FROM "SecurityRole" r, "SecurityPermission" p WHERE r."Name" = 'Auditor / Viewer' AND p."Name" = 'inventory.items.view' AND NOT EXISTS (SELECT 1 FROM "SecurityRolePermission" x WHERE x."SecurityRoleId" = r."Id" AND x."SecurityPermissionId" = p."Id");
+INSERT INTO "SecurityRolePermission" ("SecurityRoleId", "SecurityPermissionId") SELECT r."Id", p."Id" FROM "SecurityRole" r, "SecurityPermission" p WHERE r."Name" = 'GeneralUsers' AND p."Name" = 'reports.view' AND NOT EXISTS (SELECT 1 FROM "SecurityRolePermission" x WHERE x."SecurityRoleId" = r."Id" AND x."SecurityPermissionId" = p."Id");

@@ -17,6 +17,8 @@ namespace AccountGo.BackendTests
             source.Open();
             replica.Open();
             source.BackupDatabase(replica);
+            // D1 refuses compound SELECTs with more than a few terms (UNION ALL lists); local SQLite allows 500.
+            SQLitePCL.raw.sqlite3_limit(replica.Handle, SQLitePCL.raw.SQLITE_LIMIT_COMPOUND_SELECT, 1);
             using var command = replica.CreateCommand();
 
             // The test database got its defaults at start-up; D1 is missing those added later (Products & Services).
