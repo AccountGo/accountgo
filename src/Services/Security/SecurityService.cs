@@ -200,7 +200,7 @@ namespace Services.Security
                 ("Inventory", SystemPermissions.InventoryItemsView, "View Items"),
                 ("Inventory", SystemPermissions.InventoryItemsManage, "Manage Items"),
                 ("Inventory", SystemPermissions.InventoryAdjustmentsView, "View Adjustments"),
-                ("Inventory", SystemPermissions.InventoryAdjustmentsPost, "Post Adjustments"),
+                ("Inventory", SystemPermissions.InventoryAdjustmentsPost, "Adjust Stock"),
 
                 ("Reports", SystemPermissions.ReportsView, "View Reports"),
 
@@ -227,6 +227,23 @@ namespace Services.Security
                         SecurityGroupId = group.Id
                     });
                 }
+            }
+
+            var legacyStockPermission = _securityPermissionRepo.Table.FirstOrDefault(p => p.Name == "inventory.stock.adjust");
+            if (legacyStockPermission != null)
+            {
+                var adjustmentPermission = _securityPermissionRepo.Table.Single(p => p.Name == SystemPermissions.InventoryAdjustmentsPost);
+                foreach (var grant in _securityRolePermissionRepo.Table.Where(rp => rp.SecurityPermissionId == legacyStockPermission.Id).ToList())
+                {
+                    if (!_securityRolePermissionRepo.Table.Any(rp => rp.SecurityRoleId == grant.SecurityRoleId && rp.SecurityPermissionId == adjustmentPermission.Id))
+                        _securityRolePermissionRepo.Insert(new SecurityRolePermission
+                        {
+                            SecurityRoleId = grant.SecurityRoleId,
+                            SecurityPermissionId = adjustmentPermission.Id
+                        });
+                    _securityRolePermissionRepo.Delete(grant);
+                }
+                _securityPermissionRepo.Delete(legacyStockPermission);
             }
 
             // Ensure standard business roles with permissions
@@ -257,6 +274,7 @@ namespace Services.Security
                     SystemPermissions.PurchasesPaymentsCreate,
                     SystemPermissions.InventoryItemsView,
                     SystemPermissions.InventoryItemsManage,
+                    SystemPermissions.InventoryAdjustmentsPost,
                     SystemPermissions.ReportsView
                 }),
                 ("Sales Representative", "Sales Representative", false, new[]

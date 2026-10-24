@@ -37,6 +37,7 @@ export const ItemFormDialog: React.FC<{
   const [trackStock, setTrackStock] = useState(item?.trackStock ?? false);
   const [openingQuantity, setOpeningQuantity] = useState('');
   const [openingUnitCost, setOpeningUnitCost] = useState('');
+  const [openingCostEdited, setOpeningCostEdited] = useState(false);
   const [busy, setBusy] = useState<'save' | 'archive' | 'delete' | null>(null);
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -88,8 +89,8 @@ export const ItemFormDialog: React.FC<{
           price: showPrice ? amountOrNull(price) : item?.price ?? null,
           cost: showCost ? amountOrNull(cost) : item?.cost ?? null,
           trackStock,
-          openingQuantity: trackStock && !item?.trackStock ? amountOrNull(openingQuantity) : null,
-          openingUnitCost: trackStock && !item?.trackStock ? amountOrNull(openingUnitCost) : null,
+          openingQuantity: trackStock && !item ? amountOrNull(openingQuantity) : null,
+          openingUnitCost: trackStock && !item ? amountOrNull(openingCostEdited ? openingUnitCost : cost) : null,
         }),
       },
       isEdit ? 'The item could not be saved.' : 'The item could not be added.'
@@ -278,14 +279,20 @@ export const ItemFormDialog: React.FC<{
                       inputMode="decimal"
                       min="0"
                       step="0.0001"
-                      placeholder="Required when quantity is entered"
-                      value={openingUnitCost}
-                      onChange={(e) => setOpeningUnitCost(e.target.value)}
+                      placeholder="Required"
+                      value={openingCostEdited ? openingUnitCost : cost}
+                      onChange={(e) => {
+                        setOpeningCostEdited(true);
+                        setOpeningUnitCost(e.target.value);
+                      }}
                       className={`${inputClass} font-mono`}
                     />
                   </div>
                   <p className="sm:col-span-2 text-xs text-[var(--text-muted)]">Opening stock is recorded as an inventory adjustment when you save.</p>
                 </div>
+              )}
+              {trackStock && item && !item.trackStock && (
+                <p className="text-xs text-[var(--text-muted)]">After saving, record opening stock from Inventory &rarr; Adjust stock.</p>
               )}
             </div>
           )}

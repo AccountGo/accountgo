@@ -50,6 +50,8 @@ namespace Core.Domain.Items
         public decimal? Price { get; set; }
         public decimal QuantityOnHand { get; set; }
         public decimal AverageCost { get; set; }
+        /// <summary>The inventory ledger value, retained exactly to the cent across rounded issues.</summary>
+        public decimal StockValue { get; set; }
         /// <summary>When it was archived: hidden when picking an item for a line, past lines untouched. Null while active.</summary>
         public DateTime? ArchivedAt { get; set; }
         public virtual ItemCategory ItemCategory { get; set; }

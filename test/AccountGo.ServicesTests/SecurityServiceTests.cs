@@ -57,6 +57,8 @@ public class SecurityServiceTests
             p.Id = _permissions.Count + 1;
             _permissions.Add(p);
         });
+        _mockSecurityPermissionRepo.Setup(r => r.Delete(It.IsAny<SecurityPermission>()))
+            .Callback<SecurityPermission>(p => _permissions.Remove(p));
 
         _mockSecurityGroupRepo.Setup(r => r.Table).Returns(() => _groups.AsQueryable());
         _mockSecurityGroupRepo.Setup(r => r.Insert(It.IsAny<SecurityGroup>())).Callback<SecurityGroup>(g =>
@@ -82,6 +84,8 @@ public class SecurityServiceTests
             rp.Id = _rolePermissions.Count + 1;
             _rolePermissions.Add(rp);
         });
+        _mockSecurityRolePermissionRepo.Setup(r => r.Delete(It.IsAny<SecurityRolePermission>()))
+            .Callback<SecurityRolePermission>(rp => _rolePermissions.Remove(rp));
 
         _mockSecurityRepo.Setup(r => r.GetUser(It.IsAny<string>()))
             .Returns<string>(u => _users.FirstOrDefault(x => x.UserName == u));
@@ -134,6 +138,25 @@ public class SecurityServiceTests
 
         var generalRole = _roles.FirstOrDefault(r => r.Name == "GeneralUsers");
         Assert.NotNull(generalRole);
+    }
+
+    [Fact]
+    public void EnsureDefaultPermissionsAndRoles_LegacyStockPermission_PreservesCustomGrantsWithoutDuplicate()
+    {
+        _service.EnsureDefaultPermissionsAndRoles();
+        var legacy = new SecurityPermission { Id = _permissions.Count + 1, Name = "inventory.stock.adjust" };
+        _permissions.Add(legacy);
+        var custom = new SecurityRole { Id = _roles.Count + 1, Name = "Custom stock adjuster" };
+        _roles.Add(custom);
+        _rolePermissions.Add(new SecurityRolePermission { Id = _rolePermissions.Count + 1, SecurityRoleId = custom.Id, SecurityPermissionId = legacy.Id });
+
+        _service.EnsureDefaultPermissionsAndRoles();
+        _service.EnsureDefaultPermissionsAndRoles();
+
+        Assert.DoesNotContain(_permissions, p => p.Name == "inventory.stock.adjust");
+        var adjustment = Assert.Single(_permissions, p => p.Name == SystemPermissions.InventoryAdjustmentsPost);
+        Assert.Single(_rolePermissions, rp => rp.SecurityRoleId == custom.Id && rp.SecurityPermissionId == adjustment.Id);
+        Assert.DoesNotContain(_rolePermissions, rp => rp.SecurityPermissionId == legacy.Id);
     }
 
     [Fact]

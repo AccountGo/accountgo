@@ -145,6 +145,7 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
             description: i.name,
             price: i.cost ?? undefined,
             trackStock: i.trackStock,
+            quantityOnHand: i.quantityOnHand,
             inventoryAccountId: i.inventoryAccountId,
           })));
         }
@@ -554,7 +555,7 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
                           value={line.accountId}
                           onChange={(e) => updateLine(idx, { accountId: e.target.value ? Number(e.target.value) : '' })}
                           disabled={line.isStockItem}
-                          className={cellClass}
+                          className={`${cellClass} disabled:opacity-60 disabled:cursor-not-allowed`}
                         >
                           <option value="">Vendor's default</option>
                           <optgroup label="Expenses">
@@ -780,6 +781,7 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
               description: item.name,
               price: item.cost ?? undefined,
               trackStock: item.trackStock,
+              quantityOnHand: item.quantityOnHand,
               inventoryAccountId: item.inventoryAccountId,
             };
             setCatalog((prev) => [...prev, option].sort((a, b) => a.description.localeCompare(b.description)));

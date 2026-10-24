@@ -10,7 +10,6 @@ import {
   Search,
   Filter,
   Loader2,
-  Boxes,
   HeartHandshake,
   ShieldCheck,
   Eye,
@@ -268,58 +267,6 @@ export const PlaceholderView: React.FC = () => {
             }));
             setRows(tableRows);
           }
-        } else if (currentSection === 'inventory') {
-          const [itemsRes, icjRes] = await Promise.all([
-            authFetch('/api/Inventory/items'),
-            authFetch('/api/Inventory/ICJ'),
-          ]);
-
-          const items = itemsRes.ok ? await itemsRes.json() : [];
-          const icjs = icjRes.ok ? await icjRes.json() : [];
-
-          if (mounted) {
-            const totalStockValuation = Array.isArray(items)
-              ? items.reduce(
-                  (acc: number, item: any) => acc + (item.price || 0) * (item.quantityOnHand || 0),
-                  0
-                )
-              : 0;
-            setMetrics([
-              {
-                label: 'Total Catalog Items',
-                value: `${Array.isArray(items) ? items.length : 0} Products`,
-                change: 'Inventory SKU master',
-              },
-              {
-                label: 'Stock Movements (ICJ)',
-                value: `${Array.isArray(icjs) ? icjs.length : 0} Transactions`,
-                change: 'In/Out ledger journals',
-              },
-              {
-                label: 'Inventory Valuation',
-                value: `${currencySymbol}${formatAmount(totalStockValuation)}`,
-                change: 'Real-time stock valuation',
-              },
-              {
-                label: 'Warehouse Status',
-                value: 'Operational',
-                change: 'Stock control active',
-              },
-            ]);
-
-            const tableRows: LiveRow[] = Array.isArray(items)
-              ? items.map((item: any) => ({
-                  col1: item.code || `SKU-${item.id}`,
-                  col2: item.description,
-                  col3: item.itemTaxGroupName || 'Regular',
-                  col4: `${item.quantityOnHand || 0} ${item.measurement || 'Units'}`,
-                  col5: `${currencySymbol}${formatAmount(item.price)}`,
-                  status: (item.quantityOnHand || 0) > 0 ? 'In Stock' : 'Available',
-                  raw: item,
-                }))
-              : [];
-            setRows(tableRows);
-          }
         } else if (currentSection === 'donations') {
           const [donationsRes, donorsRes] = await Promise.all([
             authFetch('/api/Donations/DonationInvoices'),
@@ -432,14 +379,6 @@ export const PlaceholderView: React.FC = () => {
       icon: BarChart3,
       primaryAction: 'Export Statement',
       tableHeaders: ['Account Code', 'Account Name', 'Category', 'Debit Sum', 'Credit Sum', 'Status', 'Action'],
-    },
-    inventory: {
-      name: 'Inventory & Warehousing',
-      badge: 'Stock Control',
-      description: 'Product catalog, item valuations, and warehouse movements.',
-      icon: Boxes,
-      primaryAction: 'Add Product Item',
-      tableHeaders: ['Item Code', 'Item Name', 'Category', 'Quantity', 'Valuation', 'Status', 'Action'],
     },
     donations: {
       name: 'Donations & Non-Profit',

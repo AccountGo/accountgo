@@ -207,8 +207,10 @@ namespace Services.Sales
 
             foreach (var salesAccount in groupedSalesAccount)
             {
-                var salesAmount = salesAccount.Value;
-                var creditSalesAccount = _financialService.CreateGeneralLedgerLine(DrOrCrSide.Cr, salesAccount.Key, Math.Round(salesAmount, 2, MidpointRounding.ToEven));
+                var salesAmount = Math.Round(salesAccount.Value, 2, MidpointRounding.ToEven);
+                if (salesAmount == 0)
+                    continue;
+                var creditSalesAccount = _financialService.CreateGeneralLedgerLine(DrOrCrSide.Cr, salesAccount.Key, salesAmount);
                 glHeader.GeneralLedgerLines.Add(creditSalesAccount);
             }
 
@@ -224,8 +226,11 @@ namespace Services.Sales
 
                 foreach (var tax in groupedTaxes)
                 {
+                    var taxAmount = Math.Round(tax.Value, 2, MidpointRounding.ToEven);
+                    if (taxAmount == 0)
+                        continue;
                     var tx = _financialService.GetTaxes().Where(t => t.Id == tax.Key).FirstOrDefault();
-                    var creditSalesTaxAccount = _financialService.CreateGeneralLedgerLine(DrOrCrSide.Cr, tx.SalesAccountId.Value, Math.Round(tax.Value, 2, MidpointRounding.ToEven));
+                    var creditSalesTaxAccount = _financialService.CreateGeneralLedgerLine(DrOrCrSide.Cr, tx.SalesAccountId.Value, taxAmount);
                     glHeader.GeneralLedgerLines.Add(creditSalesTaxAccount);
                 }
             }
@@ -993,6 +998,8 @@ namespace Services.Sales
 
             var taxes = new List<KeyValuePair<int, decimal>>();
             var sales = new List<KeyValuePair<int, decimal>>();
+            var projectedItems = new Dictionary<int, Item>();
+            var stockIssues = new List<(SalesInvoiceLine Line, Item Item, InventoryControlJournal Movement)>();
 
             var glHeader = _financialService.CreateGeneralLedgerHeader(DocumentTypes.SalesInvoice, salesInvoice.Date, string.Empty);
             var customer = GetCustomerById(salesInvoice.CustomerId);
@@ -1026,11 +1033,41 @@ namespace Services.Sales
                     _financialService.GetAccounts().FirstOrDefault(a => a.AccountClassId == 4)?.Id ?? 1;
                 sales.Add(new KeyValuePair<int, decimal>(salesAccountId, totalLineAmount));
 
-                if (item.ItemCategory != null && item.ItemCategory.ItemType == ItemTypes.Purchased)
+                if (item.ItemCategory != null && item.ItemCategory.ItemType == ItemTypes.Purchased && lineItem.Quantity > 0)
                 {
-                    lineItem.InventoryControlJournal = _stockService.Issue(item, lineItem.Quantity,
-                        DocumentTypes.SalesInvoice, salesInvoice.Id, salesInvoice.Date,
-                        $"Invoice {salesInvoice.No ?? salesInvoice.Id.ToString()}");
+                    InventoryControlJournal movement;
+                    if (lineItem.InventoryControlJournalId.HasValue)
+                    {
+                        movement = item.InventoryControlJournals.Single(j => j.Id == lineItem.InventoryControlJournalId.Value);
+                    }
+                    else
+                    {
+                        if (!projectedItems.TryGetValue(item.Id, out var projected))
+                        {
+                            projected = new Item
+                            {
+                                Id = item.Id,
+                                QuantityOnHand = item.QuantityOnHand,
+                                AverageCost = item.AverageCost,
+                                StockValue = item.StockValue,
+                                PurchaseMeasurementId = item.PurchaseMeasurementId,
+                                SmallestMeasurementId = item.SmallestMeasurementId,
+                                SellMeasurementId = item.SellMeasurementId
+                            };
+                            projectedItems.Add(item.Id, projected);
+                        }
+                        // Cost repeated lines against a detached projection; no tracked stock changes before GL validation.
+                        movement = _stockService.Issue(projected, lineItem.Quantity,
+                            DocumentTypes.SalesInvoice, salesInvoice.Id, salesInvoice.Date,
+                            $"Invoice {salesInvoice.No ?? salesInvoice.Id.ToString()}");
+                        stockIssues.Add((lineItem, item, movement));
+                    }
+                    var totalCost = movement.TotalCost.GetValueOrDefault();
+                    if (totalCost != 0)
+                    {
+                        glHeader.GeneralLedgerLines.Add(_financialService.CreateGeneralLedgerLine(DrOrCrSide.Dr, item.CostOfGoodsSoldAccountId.Value, totalCost));
+                        glHeader.GeneralLedgerLines.Add(_financialService.CreateGeneralLedgerLine(DrOrCrSide.Cr, item.InventoryAccountId.Value, totalCost));
+                    }
                 }
             }
 
@@ -1088,54 +1125,21 @@ namespace Services.Sales
                 glHeader.GeneralLedgerLines.Add(creditShippingHandlingAccount);
             }
 
-            if (_financialService.ValidateGeneralLedgerEntry(glHeader))
+            _financialService.ValidateGeneralLedgerEntry(glHeader);
+            salesInvoice.No = InvoiceNumber.Normalize(salesInvoice.No) ?? AllocateInvoiceNumber(salesInvoice.Id);
+            foreach (var issue in stockIssues)
             {
-                // Issuing normally numbers the invoice first; posting a draft directly numbers it here.
-                salesInvoice.No = InvoiceNumber.Normalize(salesInvoice.No) ?? AllocateInvoiceNumber(salesInvoice.Id);
-                salesInvoice.GeneralLedgerHeader = glHeader;
-                salesInvoice.Status = Core.Domain.SalesInvoiceStatus.Open;
-
-                // Debit = COGS, Credit = Inventory
-                var debitAccounts = new List<KeyValuePair<int, decimal>>();
-                var creditAccounts = new List<KeyValuePair<int, decimal>>();
-
-                foreach (var line in salesInvoice.SalesInvoiceLines)
-                {
-                    var item = _inventoryService.GetItemById(line.ItemId);
-                    if (item.ItemCategory?.ItemType == ItemTypes.Purchased)
-                    {
-                        var movement = line.InventoryControlJournal;
-                        var totalCost = movement?.TotalCost ?? 0m;
-                        if (totalCost > 0)
-                        {
-                            debitAccounts.Add(new KeyValuePair<int, decimal>(item.CostOfGoodsSoldAccountId.Value, totalCost));
-                            creditAccounts.Add(new KeyValuePair<int, decimal>(item.InventoryAccountId.Value, totalCost));
-                        }
-                    }
-                }
-
-                var groupedDebitAccounts = (from kvp in debitAccounts
-                                            group kvp by kvp.Key into g
-                                            select new KeyValuePair<int, decimal>(g.Key, g.Sum(e => e.Value)));
-                var groupedCreditAccounts = (from kvp in creditAccounts
-                                             group kvp by kvp.Key into g
-                                             select new KeyValuePair<int, decimal>(g.Key, g.Sum(e => e.Value)));
-
-                foreach (var account in groupedDebitAccounts)
-                {
-                    glHeader.GeneralLedgerLines.Add(_financialService.CreateGeneralLedgerLine(DrOrCrSide.Dr, account.Key, account.Value));
-                }
-
-                foreach (var account in groupedCreditAccounts)
-                {
-                    glHeader.GeneralLedgerLines.Add(_financialService.CreateGeneralLedgerLine(DrOrCrSide.Cr, account.Key, account.Value));
-                }
-
-                if (_financialService.ValidateGeneralLedgerEntry(glHeader))
-                {
-                    _salesInvoiceRepo.Update(salesInvoice);
-                }
+                var projected = projectedItems[issue.Item.Id];
+                issue.Item.QuantityOnHand = projected.QuantityOnHand;
+                issue.Item.AverageCost = projected.AverageCost;
+                issue.Item.StockValue = projected.StockValue;
+                issue.Movement.Item = issue.Item;
+                issue.Item.InventoryControlJournals.Add(issue.Movement);
+                issue.Line.InventoryControlJournal = issue.Movement;
             }
+            salesInvoice.GeneralLedgerHeader = glHeader;
+            salesInvoice.Status = Core.Domain.SalesInvoiceStatus.Open;
+            _salesInvoiceRepo.Update(salesInvoice);
         }
 
         /// <summary>Restores stock for an invoice after its general-ledger posting has been reversed.</summary>
@@ -1143,14 +1147,15 @@ namespace Services.Sales
         {
             if (invoice == null)
                 throw new ArgumentNullException(nameof(invoice));
+            if (invoice.Status == SalesInvoiceStatus.Void)
+                return;
 
             var reversalDate = invoice.VoidGeneralLedgerHeader?.Date ?? invoice.Date;
             foreach (var line in invoice.SalesInvoiceLines.Where(l => l.InventoryControlJournalId.HasValue))
             {
                 var item = _inventoryService.GetItemById(line.ItemId);
                 var original = item?.InventoryControlJournals.FirstOrDefault(j => j.Id == line.InventoryControlJournalId.Value);
-                if (original == null || item.InventoryControlJournals.Any(j =>
-                    j.IsReverse && j.DocumentType == original.DocumentType && j.DocumentId == original.DocumentId && j.ItemId == original.ItemId))
+                if (original == null)
                     continue;
 
                 _stockService.Reverse(original, reversalDate, $"Void of invoice {invoice.No ?? invoice.Id.ToString()}");

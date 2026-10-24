@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useOutletContext, useParams, Link } from 'react-router-dom';
+import { useOutletContext, useParams, useLocation, useNavigate, Link } from 'react-router-dom';
 import {
   ArrowLeft,
   Printer,
@@ -41,12 +41,28 @@ export const InvoiceDetail: React.FC = () => {
   const { hasPermission } = usePermissions();
   const { authFetch, user } = useAuth();
   const { orgSlug, invoiceId } = useParams<{ orgSlug: string; invoiceId: string }>();
+  const location = useLocation();
+  const navigate = useNavigate();
 
   // State
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
   const [successBanner, setSuccessBanner] = useState<string | null>(null);
+  const [stockWarnings, setStockWarnings] = useState<string[]>([]);
+
+  useEffect(() => {
+    setStockWarnings([]);
+  }, [invoiceId]);
+
+  // Warnings handed over by the invoice editor are shown once: clearing them from history keeps a refresh from
+  // bringing them back.
+  useEffect(() => {
+    const warnings = location.state?.stockWarnings;
+    if (!Array.isArray(warnings)) return;
+    setStockWarnings(warnings.filter((warning: unknown): warning is string => typeof warning === 'string'));
+    navigate(`${location.pathname}${location.search}`, { replace: true, state: null });
+  }, [location.state, location.pathname, location.search, navigate]);
 
   // Payment Modal State
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState<boolean>(false);
@@ -244,6 +260,7 @@ export const InvoiceDetail: React.FC = () => {
       if (data?.code === 'number_changed' && data?.next) setIssueNumber(data.next);
       throw new Error(data?.message || 'Failed to issue invoice.');
     }
+    setStockWarnings(Array.isArray(data?.warnings) ? data.warnings.filter((warning: unknown): warning is string => typeof warning === 'string') : []);
     return data?.no || invoice.no || '';
   };
 
@@ -504,6 +521,16 @@ export const InvoiceDetail: React.FC = () => {
           >
             <X className="w-4 h-4" />
           </button>
+        </div>
+      )}
+
+      {stockWarnings.length > 0 && (
+        <div role="status" className="no-print mb-6 p-4 bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-300 rounded-xl flex items-start gap-3">
+          <AlertTriangle className="w-5 h-5 shrink-0" />
+          <div className="text-sm">
+            <p className="font-semibold">Stock warning</p>
+            {stockWarnings.map((warning, index) => <p key={`${index}-${warning}`}>{warning}</p>)}
+          </div>
         </div>
       )}
 
@@ -995,7 +1022,8 @@ export const InvoiceDetail: React.FC = () => {
             <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
               Are you sure you want to void this invoice? In accordance with standard accounting
               controls, this will mark the invoice as Void and auto-post a reversing journal entry
-              to cancel all receivables and revenues.
+              to cancel all receivables and revenues. Stock issued on this invoice is put back,
+              and its cost of goods sold is reversed.
             </p>
 
             {voidError && (

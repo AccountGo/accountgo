@@ -97,8 +97,123 @@ namespace AccountGo.BackendTests
                 warning => warning.GetString() == "Only 11 of Test stock in stock.");
             var oversoldId = oversoldJson.GetProperty("id").GetInt32();
             WithDb(db => Assert.NotNull(db.SalesInvoiceHeaders.Single(i => i.Id == oversoldId).GeneralLedgerHeaderId));
+            // Selling never changes the average, even past zero.
             AssertStockState(itemId, -1m, 4.7273m);
             AssertStockInvariant(itemId);
+
+            SetInventoryModuleEnabled(true);
+            var stockItems = await Json(await Send(HttpMethod.Get, "/api/Stock/Items"));
+            Assert.Equal(stockItems.GetProperty("totalValue").GetDecimal(),
+                stockItems.GetProperty("inventoryAccountBalance").GetDecimal());
+
+            var movementResponse = await Json(await Send(HttpMethod.Get, $"/api/Stock/Movements?itemId={itemId}"));
+            var movements = movementResponse.EnumerateArray().ToArray();
+            var movementTypes = movements.Select(movement => movement.GetProperty("type").GetString()).ToArray();
+            Assert.Contains("Bill", movementTypes);
+            Assert.Contains("Invoice", movementTypes);
+            Assert.Contains("Void of Invoice", movementTypes);
+            Assert.Contains("Void of Bill", movementTypes);
+            Assert.Contains("Adjustment", movementTypes);
+            Assert.Contains(movements, movement => movement.GetProperty("linkType").GetString() == "bill");
+            Assert.Contains(movements, movement => movement.GetProperty("linkType").GetString() == "invoice");
+
+            decimal runningQuantity = 0;
+            foreach (var movement in movements.Reverse())
+            {
+                runningQuantity += movement.GetProperty("in").GetDecimal() - movement.GetProperty("out").GetDecimal();
+                Assert.Equal(runningQuantity, movement.GetProperty("runningQuantity").GetDecimal());
+            }
+            Assert.Equal(-1m, movements[0].GetProperty("runningQuantity").GetDecimal());
+        }
+
+        [Fact]
+        public async Task StockApi_RequiresInventoryModuleAndAdjustmentPermission()
+        {
+            SetInventoryModuleEnabled(false);
+            Assert.Equal(HttpStatusCode.Forbidden, (await Send(HttpMethod.Get, "/api/Stock/Items")).StatusCode);
+            Assert.Equal(HttpStatusCode.Forbidden, (await Send(HttpMethod.Get, "/api/Stock/Movements")).StatusCode);
+            Assert.Equal(HttpStatusCode.Forbidden, (await Send(HttpMethod.Post, "/api/Stock/Adjust", new
+            {
+                itemId = 1,
+                quantityChange = 1,
+                unitCost = 1,
+                reason = "Count",
+                date = DateTime.UtcNow.Date
+            })).StatusCode);
+
+            SetInventoryModuleEnabled(true);
+            var item = await SaveItem(new Dto.Inventory.CatalogItem
+            {
+                Name = "Adjustment permission stock",
+                TrackStock = true
+            });
+
+            WithDb(db =>
+            {
+                var member = new CompanyMember
+                {
+                    CompanyId = _companyId,
+                    UserId = _otherId,
+                    Role = CompanyMemberRole.Member,
+                    Status = CompanyMemberStatus.Active,
+                    JoinedAt = DateTime.UtcNow
+                };
+                db.CompanyMembers.Add(member);
+                db.SaveChanges();
+                db.CompanyMemberSecurityRoles.Add(new CompanyMemberSecurityRole
+                {
+                    CompanyMemberId = member.Id,
+                    SecurityRoleId = db.SecurityRoles.Single(role => role.Name == "Sales Representative").Id
+                });
+                db.SaveChanges();
+            });
+
+            Assert.Equal(HttpStatusCode.OK, (await Send(HttpMethod.Get, "/api/Stock/Items", token: _otherToken)).StatusCode);
+            var adjustmentRequest = new
+            {
+                itemId = item.Id,
+                quantityChange = 3m,
+                unitCost = 2m,
+                reason = "Count",
+                date = DateTime.UtcNow.Date,
+                memo = "Counted stock"
+            };
+            Assert.Equal(HttpStatusCode.Forbidden,
+                (await Send(HttpMethod.Post, "/api/Stock/Adjust", adjustmentRequest, token: _otherToken)).StatusCode);
+
+            WithDb(db =>
+            {
+                db.SecurityRolePermissions.Add(new Core.Domain.Security.SecurityRolePermission
+                {
+                    SecurityRoleId = db.SecurityRoles.Single(role => role.Name == "Sales Representative").Id,
+                    SecurityPermissionId = db.SecurityPermissions.Single(permission => permission.Name == "inventory.adjustments.post").Id
+                });
+                db.SaveChanges();
+            });
+            var posted = await Send(HttpMethod.Post, "/api/Stock/Adjust", adjustmentRequest, token: _otherToken);
+            Assert.Equal(HttpStatusCode.OK, posted.StatusCode);
+            var movements = await Json(await Send(HttpMethod.Get, $"/api/Stock/Movements?itemId={item.Id}"));
+            var adjustment = Assert.Single(movements.EnumerateArray().ToArray());
+            Assert.Equal("Adjustment", adjustment.GetProperty("type").GetString());
+            Assert.Equal(3m, adjustment.GetProperty("runningQuantity").GetDecimal());
+
+            var stockItems = await Json(await Send(HttpMethod.Get, "/api/Stock/Items"));
+            Assert.Equal(6m, stockItems.GetProperty("totalValue").GetDecimal());
+            Assert.Equal(6m, stockItems.GetProperty("inventoryAccountBalance").GetDecimal());
+        }
+
+        [Fact]
+        public async Task StockApi_MissingInventoryAccount_ReturnsHelpfulBadRequest()
+        {
+            SetInventoryModuleEnabled(true);
+            WithDb(db =>
+            {
+                db.Accounts.Single(account => account.AccountCode == "10800").AccountCode = "10801";
+                db.SaveChanges();
+            });
+            var response = await Send(HttpMethod.Get, "/api/Stock/Items");
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            Assert.Contains("Inventory account (10800)", (await Json(response)).GetProperty("message").GetString());
         }
 
         [Fact]
@@ -151,6 +266,7 @@ namespace AccountGo.BackendTests
             Assert.Contains(Ledger(BillLedgerId(approved.Id)),
                 line => line.AccountId == AccountId("10800") && line.DrCr == DrOrCrSide.Dr && line.Amount == 10m);
             AssertStockState(created.Id, 6m, 3.8333m);
+            AssertStockInvariant(created.Id);
 
             var invoice = await NewStockInvoice(created.Id, 2m);
             invoice.Status = "Open";
@@ -158,7 +274,8 @@ namespace AccountGo.BackendTests
             Assert.True(issuedResponse.IsSuccessStatusCode, await issuedResponse.Content.ReadAsStringAsync());
             var invoiceId = (await Json(issuedResponse)).GetProperty("id").GetInt32();
             WithDb(db => Assert.NotNull(db.SalesInvoiceHeaders.Single(i => i.Id == invoiceId).GeneralLedgerHeaderId));
-            AssertStockState(created.Id, 4m, 3.8333m);
+            AssertStockState(created.Id, 4m, 3.8325m);
+            AssertStockInvariant(created.Id);
 
             var switchedOff = await Send(HttpMethod.Post, "/api/Catalog/SaveItem",
                 new Dto.Inventory.CatalogItem { Id = created.Id, Name = created.Name, TrackStock = false });
@@ -227,6 +344,7 @@ namespace AccountGo.BackendTests
                 DROP TABLE ""InventoryAdjustment"";
                 ALTER TABLE ""Item"" DROP COLUMN ""QuantityOnHand"";
                 ALTER TABLE ""Item"" DROP COLUMN ""AverageCost"";
+                ALTER TABLE ""Item"" DROP COLUMN ""StockValue"";
                 ALTER TABLE ""InventoryControlJournal"" DROP COLUMN ""DocumentId"";
                 ALTER TABLE ""InventoryControlJournal"" DROP COLUMN ""UnitCost"";
                 ALTER TABLE ""InventoryControlJournal"" DROP COLUMN ""Memo"";";
@@ -236,17 +354,22 @@ namespace AccountGo.BackendTests
             var migration = File.ReadAllText(Path.Combine(RepoRoot(), "src/Api/d1/migrations/0014_stock.sql"));
             ApplyStockMigration(command, migration, skipColumnAdds: false);
             ApplyStockMigration(command, migration, skipColumnAdds: true);
+            var valueMigration = File.ReadAllText(Path.Combine(RepoRoot(), "src/Api/d1/migrations/0016_stock_value.sql"));
+            ApplyStockMigration(command, valueMigration, skipColumnAdds: false);
+            ApplyStockMigration(command, valueMigration, skipColumnAdds: true);
 
             Assert.True(ColumnExists(command, "Item", "QuantityOnHand"));
             Assert.True(ColumnExists(command, "Item", "AverageCost"));
+            Assert.True(ColumnExists(command, "Item", "StockValue"));
             Assert.True(ColumnExists(command, "InventoryControlJournal", "DocumentId"));
             Assert.True(TableExists(command, "InventoryAdjustment"));
-            command.CommandText = @"SELECT ""QuantityOnHand"", ""AverageCost"" FROM ""Item"" WHERE ""Id"" = " + itemId;
+            command.CommandText = @"SELECT ""QuantityOnHand"", ""AverageCost"", ""StockValue"" FROM ""Item"" WHERE ""Id"" = " + itemId;
             using (var reader = command.ExecuteReader())
             {
                 Assert.True(reader.Read());
                 Assert.Equal(10m, reader.GetDecimal(0));
                 Assert.Equal(7.5m, reader.GetDecimal(1));
+                Assert.Equal(75m, reader.GetDecimal(2));
             }
 
             command.CommandText = @"SELECT ""Id"" FROM ""Company"" ORDER BY ""Id""";
@@ -264,6 +387,38 @@ namespace AccountGo.BackendTests
                 command.CommandText = $@"SELECT COUNT(*) FROM ""SequenceNumber"" WHERE ""CompanyId"" = {companyId} AND ""SequenceNumberType"" = 16";
                 Assert.Equal(1L, command.ExecuteScalar());
             }
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void StockValueMigration_BackfillsMovementCentsInsteadOfRoundedAverage(bool localUpgrade)
+        {
+            var itemId = CreateStockItem("Valued migration stock");
+            AdjustStock(itemId, 10000m, 1m, "Count", "First receipt");
+            AdjustStock(itemId, 20000m, 1.01m, "Count", "Second receipt");
+            using var source = new SqliteConnection("Data Source=" + _path);
+            using var replica = new SqliteConnection("Data Source=:memory:");
+            source.Open();
+            replica.Open();
+            source.BackupDatabase(replica);
+            SQLitePCL.raw.sqlite3_limit(replica.Handle, SQLitePCL.raw.SQLITE_LIMIT_COMPOUND_SELECT, 1);
+            using var command = replica.CreateCommand();
+            command.CommandText = @"ALTER TABLE ""Item"" DROP COLUMN ""StockValue"";";
+            command.ExecuteNonQuery();
+            if (localUpgrade)
+            {
+                Api.Data.Schema.SqliteSchemaUpgrader.Upgrade(replica);
+                Api.Data.Schema.SqliteSchemaUpgrader.Upgrade(replica);
+            }
+            else
+            {
+                var migration = File.ReadAllText(Path.Combine(RepoRoot(), "src/Api/d1/migrations/0016_stock_value.sql"));
+                ApplyStockMigration(command, migration, skipColumnAdds: false);
+                ApplyStockMigration(command, migration, skipColumnAdds: true);
+            }
+            command.CommandText = @"SELECT ""StockValue"" FROM ""Item"" WHERE ""Id"" = " + itemId;
+            Assert.Equal(30200m, Convert.ToDecimal(command.ExecuteScalar()));
         }
 
         private int CreateStockItem(string description, decimal cost = 0m)
@@ -361,11 +516,11 @@ namespace AccountGo.BackendTests
                 var item = db.Items.Include(i => i.InventoryControlJournals).Single(i => i.Id == itemId);
                 Assert.Equal(item.ComputeQuantityOnHand(), item.QuantityOnHand);
 
-                var stockValue = db.Items.ToList().Sum(i => i.QuantityOnHand * i.AverageCost);
+                var stockValue = db.Items.ToList().Sum(i => i.StockValue);
                 var inventoryAccountId = AccountIdIn(db, "10800");
                 var lines = db.GeneralLedgerLines.Where(line => line.AccountId == inventoryAccountId).ToList();
                 var inventoryBalance = lines.Sum(line => line.DrCr == DrOrCrSide.Dr ? line.Amount : -line.Amount);
-                Assert.InRange(Math.Abs(inventoryBalance - stockValue), 0m, 0.01m);
+                Assert.Equal(inventoryBalance, stockValue);
 
                 var allLines = db.GeneralLedgerLines.ToList();
                 var debits = allLines.Where(line => line.DrCr == DrOrCrSide.Dr).Sum(line => line.Amount);

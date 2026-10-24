@@ -81,6 +81,13 @@ const PERMISSION_GROUPS: Array<{ group: string; module?: ModuleKey | ModuleKey[]
     ],
   },
   {
+    group: 'Inventory',
+    module: 'inventory',
+    permissions: [
+      { key: 'inventory.adjustments.post', label: 'Adjust stock' },
+    ],
+  },
+  {
     group: 'Governance & Administration',
     permissions: [
       { key: 'reports.view', label: 'View Financial Reports', module: 'reports' },

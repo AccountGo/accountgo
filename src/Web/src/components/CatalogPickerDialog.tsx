@@ -19,7 +19,16 @@ export const CatalogPickerDialog: React.FC<{
     {
       header: 'Item',
       width: '1fr',
-      render: (item) => <span className="block truncate text-[var(--text-main)]">{item.description}</span>,
+      render: (item) => (
+        <span>
+          <span className="block truncate text-[var(--text-main)]">{item.description}</span>
+          {item.trackStock && (
+            <span className={`block text-xs ${item.quantityOnHand != null && item.quantityOnHand < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-[var(--text-muted)]'}`}>
+              On hand: {item.quantityOnHand?.toLocaleString(undefined, { maximumFractionDigits: 4 })}
+            </span>
+          )}
+        </span>
+      ),
     },
     {
       header: priceLabel,

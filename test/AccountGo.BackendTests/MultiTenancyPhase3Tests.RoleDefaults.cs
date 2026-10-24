@@ -32,10 +32,74 @@ namespace AccountGo.BackendTests
 
             // When a role default changes, add a migration like this one and run it here too.
             var migration = File.ReadAllText(Path.Combine(RepoRoot(), "src/Api/d1/migrations/0013_role_defaults.sql"));
+            migration += File.ReadAllText(Path.Combine(RepoRoot(), "src/Api/d1/migrations/0015_stock_permission.sql"));
+            migration += File.ReadAllText(Path.Combine(RepoRoot(), "src/Api/d1/migrations/0017_stock_permission_cleanup.sql"));
             command.CommandText = migration;
             command.ExecuteNonQuery();
             Assert.Equal(expected, RolePermissions(command));
 
+            command.CommandText = migration;
+            command.ExecuteNonQuery();
+            Assert.Equal(expected, RolePermissions(command));
+        }
+
+        [Fact]
+        public void StockPermissionMigration_GrantsAdjustToRolesThatManageItems_AndIsIdempotent()
+        {
+            using (var source = new SqliteConnection("Data Source=" + _path))
+            using (var replica = new SqliteConnection("Data Source=:memory:"))
+            {
+                source.Open();
+                replica.Open();
+                source.BackupDatabase(replica);
+                SQLitePCL.raw.sqlite3_limit(replica.Handle, SQLitePCL.raw.SQLITE_LIMIT_COMPOUND_SELECT, 1);
+                using var command = replica.CreateCommand();
+
+                var expected = RolePermissions(command);
+                Assert.Contains("Accountant / inventory.adjustments.post", expected);
+                command.CommandText = @"
+                    DELETE FROM ""SecurityRolePermission"" WHERE ""SecurityPermissionId"" IN
+                        (SELECT ""Id"" FROM ""SecurityPermission"" WHERE ""Name"" = 'inventory.adjustments.post');
+                    DELETE FROM ""SecurityPermission"" WHERE ""Name"" = 'inventory.adjustments.post';";
+                command.ExecuteNonQuery();
+                Assert.NotEqual(expected, RolePermissions(command));
+
+                var migration = File.ReadAllText(Path.Combine(RepoRoot(), "src/Api/d1/migrations/0015_stock_permission.sql"));
+                command.CommandText = migration;
+                command.ExecuteNonQuery();
+                Assert.Equal(expected, RolePermissions(command));
+
+                command.CommandText = migration;
+                command.ExecuteNonQuery();
+                Assert.Equal(expected, RolePermissions(command));
+            }
+        }
+
+        [Fact]
+        public void StockPermissionCleanup_PreservesLegacyCustomRoleGrants_AndRemovesDuplicate()
+        {
+            using var source = new SqliteConnection("Data Source=" + _path);
+            using var replica = new SqliteConnection("Data Source=:memory:");
+            source.Open();
+            replica.Open();
+            source.BackupDatabase(replica);
+            SQLitePCL.raw.sqlite3_limit(replica.Handle, SQLitePCL.raw.SQLITE_LIMIT_COMPOUND_SELECT, 1);
+            using var command = replica.CreateCommand();
+            command.CommandText = @"
+                INSERT INTO ""SecurityPermission"" (""Name"", ""DisplayName"", ""SecurityGroupId"")
+                    SELECT 'inventory.stock.adjust', 'Adjust Stock', ""Id"" FROM ""SecurityGroup"" WHERE ""Name"" = 'Inventory';
+                INSERT INTO ""SecurityRolePermission"" (""SecurityRoleId"", ""SecurityPermissionId"")
+                    SELECT r.""Id"", p.""Id"" FROM ""SecurityRole"" r CROSS JOIN ""SecurityPermission"" p
+                    WHERE r.""Name"" = 'Sales Representative' AND p.""Name"" = 'inventory.stock.adjust';";
+            command.ExecuteNonQuery();
+            var migration = File.ReadAllText(Path.Combine(RepoRoot(), "src/Api/d1/migrations/0017_stock_permission_cleanup.sql"));
+            command.CommandText = migration;
+            command.ExecuteNonQuery();
+            var expected = RolePermissions(command);
+            Assert.Contains("Sales Representative / inventory.adjustments.post", expected);
+            Assert.DoesNotContain(expected, pair => pair.EndsWith(" / inventory.stock.adjust"));
+            command.CommandText = @"SELECT COUNT(*) FROM ""SecurityPermission"" WHERE ""Name"" = 'inventory.stock.adjust'";
+            Assert.Equal(0L, command.ExecuteScalar());
             command.CommandText = migration;
             command.ExecuteNonQuery();
             Assert.Equal(expected, RolePermissions(command));

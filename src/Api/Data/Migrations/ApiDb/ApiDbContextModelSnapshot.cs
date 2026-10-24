@@ -1149,6 +1149,11 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<int?>("SmallestMeasurementId")
                         .HasColumnType("int");
 
+                    b.Property<decimal>("StockValue")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("decimal(18, 2)")
+                        .HasDefaultValue(0m);
+
                     b.HasKey("Id");
 
                     b.HasIndex("CostOfGoodsSoldAccountId");

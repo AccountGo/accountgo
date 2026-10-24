@@ -196,7 +196,7 @@ export const ProductsServices: React.FC = () => {
                   <th className="hidden sm:table-cell py-3 px-4">Code</th>
                   {showPrice && <th className="py-3 px-4 text-right">Selling price</th>}
                   {showCost && <th className="py-3 px-4 text-right">Purchase cost</th>}
-                  {showStock && <th className="hidden sm:table-cell py-3 px-4 text-right">On hand</th>}
+                  {showStock && <th className="py-3 px-4 text-right">On hand</th>}
                   {showStock && <th className="hidden sm:table-cell py-3 px-4 text-right">Avg cost</th>}
                 </tr>
               </thead>
@@ -237,7 +237,7 @@ export const ProductsServices: React.FC = () => {
                     )}
                     {showStock && (
                       <>
-                        <td className={`hidden sm:table-cell py-3.5 px-4 text-right font-mono whitespace-nowrap ${item.trackStock && item.quantityOnHand < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-[var(--text-primary)]'}`}>
+                        <td className={`py-3.5 px-4 text-right font-mono whitespace-nowrap ${item.trackStock && item.quantityOnHand < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-[var(--text-primary)]'}`}>
                           {item.trackStock ? item.quantityOnHand.toLocaleString(undefined, { maximumFractionDigits: 4 }) : '—'}
                         </td>
                         <td className="hidden sm:table-cell py-3.5 px-4 text-right font-mono text-[var(--text-primary)] whitespace-nowrap">

@@ -487,7 +487,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
 
       // Navigate to detail view
       setTimeout(() => {
-        navigate(`/org/${orgSlug}/sales/${targetId}`);
+        navigate(`/org/${orgSlug}/sales/${targetId}`, { state: { stockWarnings: warnings } });
       }, warnings.length > 0 ? 3500 : 700);
     } catch (err: any) {
       console.error('Save invoice error:', err);
@@ -813,6 +813,9 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
                   const disc = (gross * (Number(line.discount) || 0)) / 100;
                   const lineTotal = Math.max(0, gross - disc);
                   const linked = line.itemId ? catalogItems.find((ci) => ci.id === line.itemId) : undefined;
+                  const requestedQuantity = lines.filter(other => other.itemId === line.itemId)
+                    .reduce((total, other) => total + (Number(other.quantity) || 0), 0);
+                  const exceedsStock = linked?.trackStock && linked.quantityOnHand != null && requestedQuantity > linked.quantityOnHand;
 
                   return (
                     <tr key={idx} className="align-middle hover:bg-[var(--bg-surface-hover)]/40 transition">
@@ -858,6 +861,11 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
                             </div>
                           )}
                         </div>
+                        {exceedsStock && (
+                          <p className="mt-1 text-xs text-amber-600 dark:text-amber-400" role="status">
+                            Only {linked.quantityOnHand?.toLocaleString(undefined, { maximumFractionDigits: 4 })} in stock. You can still issue this invoice.
+                          </p>
+                        )}
                       </td>
 
                       <td className="py-2.5 px-3 text-right">
