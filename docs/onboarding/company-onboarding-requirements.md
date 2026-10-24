@@ -1,6 +1,6 @@
 # Company (Workspace) Onboarding — Requirements
 
-**Status:** Draft for product / architecture review  
+**Status:** Approved; open decisions O1–O5 resolved to the proposed defaults (§11)  
 **Owner:** Product + Finance architecture  
 **Related:** [Implementation plan](./company-onboarding-implementation-plan.md) · [Multi-tenancy plan](../MULTI_TENANCY_PLAN.md) · [CoA register](../accounting/coa-register.md)  
 **Standards lens:** IFRS / IFRS for SMEs · US GAAP (private / Non-PBE) · AICPA special purpose frameworks (cash / modified cash) · AccountGo SaaS double-entry engine
@@ -349,9 +349,9 @@ Exact DTO shapes and migration steps: see implementation plan.
 
 ## 11. Open decisions (product)
 
-Resolved defaults are proposed in §5.2; confirm before build:
+Decisions below adopt the defaults proposed in §5.2 and are the basis for implementation:
 
-| # | Question | Proposed default |
+| # | Question | Decision |
 |---|---|---|
 | O1 | Primary market framework when currency does not decide | IFRS for SMEs |
 | O2 | Cash basis: first-class framework vs report-only toggle | First-class OCBOA framework card |
@@ -366,3 +366,4 @@ Resolved defaults are proposed in §5.2; confirm before build:
 | Date | Change |
 |---|---|
 | 2026-10-24 | Initial requirements from CFO / architect / PM / UX planning session |
+| 2026-10-25 | Open decisions O1–O5 resolved to proposed defaults; status set to Approved |

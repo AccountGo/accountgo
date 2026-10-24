@@ -125,10 +125,13 @@ Centralize in a small domain or application service, e.g. `CompanyAccountingPoli
 
 ### 1.4 Acceptance
 
-- [ ] Migration / schema scripts apply cleanly on empty and existing DB.  
-- [ ] Existing companies readable; settings round-trip in tests.  
-- [ ] Unit tests for `CompanyAccountingPolicyRules` matrix.  
-- [ ] No UI change required in this PR.
+- [x] Migration / schema scripts apply cleanly on empty and existing DB.  
+- [x] Existing companies readable; settings round-trip in tests.  
+- [x] Unit tests for `CompanyAccountingPolicyRules` matrix.  
+- [x] No UI change required in this PR.
+
+**Status: Done** (`feat/company-accounting-policy`). Added the policy fields, enums, EF migration `CompanyAccountingPolicy`, D1 `0022_company_accounting_policy.sql`, SQLite upgrader columns with `BooksStartDate` backfill, and `CompanyAccountingPolicyRules`.  
+Deferred to Phase 2: LIFO rejection (no LIFO enum value exists yet) and `BooksStartDate`/fiscal-year coherence checks, which need the FY derivation in §2.4.
 
 ---
 
@@ -391,7 +394,7 @@ Phase 5 may be deferred if product accepts single CoA + stored `CoaTemplateId` f
 
 ## Implementation checklist (summary)
 
-- [ ] Phase 1 — Domain + schema + policy rules  
+- [x] Phase 1 — Domain + schema + policy rules  
 - [ ] Phase 2 — API + provisioning + tests  
 - [ ] Phase 3 — CreateOrg wizard UI  
 - [ ] Phase 4 — Checklist + locks + books-start guard  
@@ -407,3 +410,4 @@ Mark each phase **Done** in this file with a two-line summary when merged.
 | Date | Change |
 |---|---|
 | 2026-10-24 | Initial phased implementation plan |
+| 2026-10-25 | Phase 1 marked done; LIFO and FY-coherence checks deferred to Phase 2 |
