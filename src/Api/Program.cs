@@ -555,6 +555,14 @@ using (var scope = app.Services.CreateScope())
     }
 }
 
+// The Docker build runs the API once with --prepare-schema to create the empty database the image ships with, so a new
+// container on Cloudflare starts with its tables in place instead of creating them on a fraction of a vCPU.
+if (args.Contains("--prepare-schema"))
+{
+    Console.WriteLine("✓ Schema prepared; exiting without serving requests.");
+    return;
+}
+
 app.Run();
 
 public partial class Program { }
