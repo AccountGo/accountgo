@@ -8,7 +8,6 @@ namespace Api.Mcp.Models
     {
         public string Organization { get; set; } = string.Empty;
         public string AccountingBasis { get; set; } = "Accrual";
-        public DateTime? FromDate { get; set; }
         public DateTime? AsOfDate { get; set; }
         public decimal TotalAssets { get; set; }
         public decimal TotalLiabilities { get; set; }

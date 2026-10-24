@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -140,7 +141,7 @@ namespace Api.Mcp.Tools
             EnsurePermission(SystemPermissions.ReportsView);
 
             var from = ParseDate(fromDate, nameof(fromDate));
-            var to = ParseDate(toDate, nameof(toDate));
+            var to = ParseDate(toDate, nameof(toDate), inclusiveEndOfDay: true);
             ValidateDateRange(from, to);
             var basis = ParseBasis(accountingBasis);
 
@@ -181,23 +182,25 @@ namespace Api.Mcp.Tools
             Destructive = false,
             OpenWorld = false
         )]
-        [Description("Generates a Balance Sheet statement (Assets, Liabilities, and Equity) as of a given date and accounting basis (Accrual or Cash).")]
+        [Description("Generates a cumulative Balance Sheet statement (Assets, Liabilities, and Equity) as of a given date and accounting basis (Accrual or Cash).")]
         public Task<BalanceSheetMcpResponse> GetBalanceSheet(
-            [Description("Optional as-of date (e.g., '2026-12-31'). Defaults to current date if omitted.")] string? asOfDate = null,
-            [Description("Optional period start date (e.g., '2026-01-01').")] string? fromDate = null,
+            [Description("Optional cumulative as-of date (e.g., '2026-12-31'). Includes all activity up to and including this date.")] string? asOfDate = null,
             [Description("Accounting basis: 'Accrual' (default) or 'Cash'.")] string? accountingBasis = "Accrual",
+            [Description("Whether to include accounts with zero balances. Defaults to true.")] bool includeZeroBalances = true,
             CancellationToken cancellationToken = default)
         {
             EnsureTenantResolved();
             EnsureModule("financials", "reports");
             EnsurePermission(SystemPermissions.ReportsView);
 
-            var from = ParseDate(fromDate, nameof(fromDate));
-            var to = ParseDate(asOfDate, nameof(asOfDate));
-            ValidateDateRange(from, to);
+            var to = ParseDate(asOfDate, nameof(asOfDate), inclusiveEndOfDay: true);
             var basis = ParseBasis(accountingBasis);
 
-            var rawItems = _financialService.BalanceSheet(from, to, basis)?.ToList() ?? new List<BalanceSheet>();
+            var rawItems = _financialService.BalanceSheet(null, to, basis)?.ToList() ?? new List<BalanceSheet>();
+            if (!includeZeroBalances)
+            {
+                rawItems = rawItems.Where(i => i.Amount != 0m).ToList();
+            }
 
             // AccountClassId 1: Assets, 2: Liabilities, 3: Equity
             var totalAssets = rawItems.Where(i => i.AccountClassId == 1).Sum(i => i.Amount);
@@ -208,7 +211,6 @@ namespace Api.Mcp.Tools
             {
                 Organization = _tenantContext.CompanySlug ?? $"Tenant-{_tenantContext.CompanyId}",
                 AccountingBasis = basis.ToString(),
-                FromDate = from,
                 AsOfDate = to,
                 TotalAssets = totalAssets,
                 TotalLiabilities = totalLiabilities,
@@ -241,6 +243,7 @@ namespace Api.Mcp.Tools
             [Description("Optional period start date (e.g., '2026-01-01').")] string? fromDate = null,
             [Description("Optional period end date (e.g., '2026-12-31').")] string? toDate = null,
             [Description("Accounting basis: 'Accrual' (default) or 'Cash'.")] string? accountingBasis = "Accrual",
+            [Description("Whether to include accounts with zero balances. Defaults to true.")] bool includeZeroBalances = true,
             CancellationToken cancellationToken = default)
         {
             EnsureTenantResolved();
@@ -248,11 +251,15 @@ namespace Api.Mcp.Tools
             EnsurePermission(SystemPermissions.ReportsView);
 
             var from = ParseDate(fromDate, nameof(fromDate));
-            var to = ParseDate(toDate, nameof(toDate));
+            var to = ParseDate(toDate, nameof(toDate), inclusiveEndOfDay: true);
             ValidateDateRange(from, to);
             var basis = ParseBasis(accountingBasis);
 
             var rawItems = _financialService.IncomeStatement(from, to, basis)?.ToList() ?? new List<IncomeStatement>();
+            if (!includeZeroBalances)
+            {
+                rawItems = rawItems.Where(i => i.Amount != 0m).ToList();
+            }
 
             var totalRevenue = rawItems.Where(i => !i.IsExpense).Sum(i => i.Amount);
             var totalExpense = rawItems.Where(i => i.IsExpense).Sum(i => i.Amount);
@@ -293,14 +300,14 @@ namespace Api.Mcp.Tools
             [Description("Optional end date filter (e.g., '2026-12-31').")] string? toDate = null,
             [Description("Optional account code filter to list transactions touching this account.")] string? accountCode = null,
             [Description("Optional exact posted transaction number.")] int? transactionNo = null,
-            [Description("Optional source document type name (e.g., 'SalesInvoice', 'PurchaseInvoice', 'Manual').")] string? documentType = null,
+            [Description("Optional source document type (e.g., 'SalesInvoice', 'SalesReceipt', 'PurchaseInvoice', 'PurchaseInvoicePayment', 'JournalEntry', 'CustomerAllocation', 'InventoryAdjustment').")] string? documentType = null,
             [Description("Number of records to skip for pagination. Defaults to 0.")] int skip = 0,
             [Description("Number of records to take (1 to 500). Defaults to 50.")] int take = 50,
             CancellationToken cancellationToken = default)
         {
             EnsureTenantResolved();
             EnsureModule("financials", "reports");
-            EnsurePermission(SystemPermissions.FinancialsJournalView, SystemPermissions.ReportsView);
+            EnsurePermission(SystemPermissions.FinancialsJournalView);
 
             if (skip < 0)
             {
@@ -313,19 +320,21 @@ namespace Api.Mcp.Tools
             }
 
             var from = ParseDate(fromDate, nameof(fromDate));
-            var to = ParseDate(toDate, nameof(toDate));
+            var to = ParseDate(toDate, nameof(toDate), inclusiveEndOfDay: true);
             ValidateDateRange(from, to);
 
             DocumentTypes? parsedDocType = null;
             if (!string.IsNullOrWhiteSpace(documentType))
             {
-                if (Enum.TryParse<DocumentTypes>(documentType.Trim(), true, out var dt))
+                if (Enum.TryParse<DocumentTypes>(documentType.Trim(), true, out var dt) &&
+                    Enum.IsDefined(typeof(DocumentTypes), dt))
                 {
                     parsedDocType = dt;
                 }
                 else
                 {
-                    throw new ArgumentException($"Invalid document type '{documentType}'.", nameof(documentType));
+                    var validNames = string.Join(", ", Enum.GetNames(typeof(DocumentTypes)));
+                    throw new ArgumentException($"Invalid document type '{documentType}'. Allowed values are: {validNames}.", nameof(documentType));
                 }
             }
 
@@ -389,14 +398,18 @@ namespace Api.Mcp.Tools
             throw new InvalidOperationException($"Access denied. You do not have the required permission ({string.Join(" or ", requiredPermissions)}) to access this resource.");
         }
 
-        private static DateTime? ParseDate(string? dateStr, string paramName)
+        private static DateTime? ParseDate(string? dateStr, string paramName, bool inclusiveEndOfDay = false)
         {
             if (string.IsNullOrWhiteSpace(dateStr)) return null;
-            if (DateTime.TryParse(dateStr.Trim(), out var parsed))
+            if (DateTime.TryParse(dateStr.Trim(), CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed))
             {
+                if (inclusiveEndOfDay && parsed.TimeOfDay == TimeSpan.Zero)
+                {
+                    return parsed.Date.AddDays(1).AddTicks(-1);
+                }
                 return parsed;
             }
-            throw new ArgumentException($"Invalid date format for '{paramName}'. Provide a valid date string (e.g., '2026-01-31').", paramName);
+            throw new ArgumentException($"Invalid date format for '{paramName}'. Provide a valid ISO-8601 date string (e.g., '2026-01-31').", paramName);
         }
 
         private static void ValidateDateRange(DateTime? from, DateTime? to)
@@ -410,7 +423,8 @@ namespace Api.Mcp.Tools
         private static AccountingBasis ParseBasis(string? basisStr)
         {
             if (string.IsNullOrWhiteSpace(basisStr)) return AccountingBasis.Accrual;
-            if (Enum.TryParse<AccountingBasis>(basisStr.Trim(), true, out var basis))
+            if (Enum.TryParse<AccountingBasis>(basisStr.Trim(), true, out var basis) &&
+                Enum.IsDefined(typeof(AccountingBasis), basis))
             {
                 return basis;
             }

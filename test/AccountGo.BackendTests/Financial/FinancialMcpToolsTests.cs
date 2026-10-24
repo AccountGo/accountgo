@@ -400,6 +400,100 @@ namespace AccountGo.BackendTests.Financial
             Assert.Contains("Take must be between 1 and 500", ex.Message);
         }
 
+        [Fact]
+        public async Task GetGeneralLedgerTransactions_ThrowsWhenMemberOnlyHasReportsViewPermission()
+        {
+            _mockTenant.Setup(t => t.Role).Returns(CompanyMemberRole.Member);
+            _mockTenant.Setup(t => t.Permissions).Returns(new HashSet<string> { SystemPermissions.ReportsView });
+
+            var tools = new FinancialMcpTools(_mockFinancial.Object, _mockAdmin.Object, _mockTenant.Object);
+
+            var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                tools.GetGeneralLedgerTransactions());
+
+            Assert.Contains(SystemPermissions.FinancialsJournalView, ex.Message);
+        }
+
+        [Fact]
+        public async Task GetTrialBalance_ExpandsDateOnlyEndDateToEndOfDay()
+        {
+            DateTime? capturedFrom = null;
+            DateTime? capturedTo = null;
+
+            _mockFinancial.Setup(s => s.TrialBalance(It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), Core.Domain.AccountingBasis.Accrual))
+                .Callback<DateTime?, DateTime?, Core.Domain.AccountingBasis>((f, t, _) =>
+                {
+                    capturedFrom = f;
+                    capturedTo = t;
+                })
+                .Returns(new List<Services.Financial.TrialBalance>());
+
+            var tools = new FinancialMcpTools(_mockFinancial.Object, _mockAdmin.Object, _mockTenant.Object);
+
+            await tools.GetTrialBalance(fromDate: "2026-01-01", toDate: "2026-01-01");
+
+            Assert.Equal(new DateTime(2026, 1, 1, 0, 0, 0), capturedFrom);
+            Assert.Equal(new DateTime(2026, 1, 1).AddDays(1).AddTicks(-1), capturedTo);
+        }
+
+        [Fact]
+        public async Task GetTrialBalance_ThrowsOnUndefinedNumericAccountingBasis()
+        {
+            var tools = new FinancialMcpTools(_mockFinancial.Object, _mockAdmin.Object, _mockTenant.Object);
+
+            var ex = await Assert.ThrowsAsync<ArgumentException>(() =>
+                tools.GetTrialBalance(accountingBasis: "999"));
+
+            Assert.Contains("Invalid accounting basis", ex.Message);
+        }
+
+        [Theory]
+        [InlineData("999")]
+        [InlineData("Manual")]
+        public async Task GetGeneralLedgerTransactions_ThrowsOnInvalidOrNumericDocumentType_WithHelpfulMessage(string invalidDocType)
+        {
+            var tools = new FinancialMcpTools(_mockFinancial.Object, _mockAdmin.Object, _mockTenant.Object);
+
+            var ex = await Assert.ThrowsAsync<ArgumentException>(() =>
+                tools.GetGeneralLedgerTransactions(documentType: invalidDocType));
+
+            Assert.Contains("Invalid document type", ex.Message);
+            Assert.Contains(nameof(DocumentTypes.JournalEntry), ex.Message);
+        }
+
+        [Fact]
+        public async Task GetBalanceSheet_And_GetIncomeStatement_FilterZeroBalances_WhenIncludeZeroBalancesFalse()
+        {
+            var bsItems = new List<Services.Financial.BalanceSheet>
+            {
+                new Services.Financial.BalanceSheet { AccountId = 1, AccountClassId = 1, AccountCode = "1010", AccountName = "Cash", Amount = 5000m },
+                new Services.Financial.BalanceSheet { AccountId = 2, AccountClassId = 1, AccountCode = "1020", AccountName = "Petty Cash", Amount = 0m },
+                new Services.Financial.BalanceSheet { AccountId = 3, AccountClassId = 3, AccountCode = "3010", AccountName = "Equity", Amount = 5000m }
+            };
+
+            var incomeItems = new List<Services.Financial.IncomeStatement>
+            {
+                new Services.Financial.IncomeStatement { AccountId = 4, IsExpense = false, AccountCode = "4010", AccountName = "Sales", Amount = 2500m },
+                new Services.Financial.IncomeStatement { AccountId = 5, IsExpense = true, AccountCode = "5010", AccountName = "Unused Expense", Amount = 0m }
+            };
+
+            _mockFinancial.Setup(s => s.BalanceSheet(null, It.IsAny<DateTime?>(), Core.Domain.AccountingBasis.Accrual))
+                .Returns(bsItems);
+            _mockFinancial.Setup(s => s.IncomeStatement(It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), Core.Domain.AccountingBasis.Accrual))
+                .Returns(incomeItems);
+
+            var tools = new FinancialMcpTools(_mockFinancial.Object, _mockAdmin.Object, _mockTenant.Object);
+
+            var bsResponse = await tools.GetBalanceSheet(asOfDate: "2026-12-31", includeZeroBalances: false);
+            var isResponse = await tools.GetIncomeStatement(fromDate: "2026-01-01", toDate: "2026-12-31", includeZeroBalances: false);
+
+            Assert.Equal(2, bsResponse.Items.Count);
+            Assert.DoesNotContain(bsResponse.Items, i => i.AccountCode == "1020");
+
+            Assert.Single(isResponse.Items);
+            Assert.Equal("4010", isResponse.Items[0].AccountCode);
+        }
+
         #endregion
     }
 }
