@@ -298,6 +298,12 @@ namespace AccountGo.BackendTests
             Assert.Equal(100m, await OutstandingReceivables());
 
             Assert.True((await Send(HttpMethod.Post, $"/api/Sales/VoidSalesInvoice?id={id}")).IsSuccessStatusCode);
+            // Nothing is due on a voided invoice, in the invoice and in the list.
+            var voided = await GetInvoice(id);
+            Assert.Equal("Void", voided.Status);
+            Assert.Equal(0m, voided.BalanceDue);
+            var listed = await (await Send(HttpMethod.Get, "/api/Sales/SalesInvoices")).Content.ReadFromJsonAsync<List<Dto.Sales.SalesInvoice>>();
+            Assert.Equal(0m, listed.Single(i => i.Id == id).BalanceDue);
             int posted = 0, reversal = 0;
             WithDb(db =>
             {

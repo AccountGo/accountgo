@@ -34,7 +34,7 @@ import {
 } from '../types';
 import { useAuth } from '../auth/AuthContext';
 import { currencySymbol as getCurrencySymbol } from '../lib/currency';
-import { addBusinessDays, businessDaysBetween, isValidDate } from '../lib/businessDays';
+import { addBusinessDays, businessDaysBetween, isValidDate, localToday } from '../lib/businessDays';
 
 interface InvoiceEditProps {
   isEdit?: boolean;
@@ -77,9 +77,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
   // Shown as the placeholder: the number the invoice takes when issued, if none is typed.
   const [nextNumber, setNextNumber] = useState<string | null>(null);
   const [referenceNo, setReferenceNo] = useState<string>('');
-  const [invoiceDate, setInvoiceDate] = useState<string>(
-    new Date().toISOString().split('T')[0]
-  );
+  const [invoiceDate, setInvoiceDate] = useState<string>(localToday);
   const [paymentTermId, setPaymentTermId] = useState<number | ''>('');
   const [dueDate, setDueDate] = useState<string>('');
   // New invoices start from the workspace's default texts (Settings → Invoices); edits keep the invoice's own values.
@@ -213,7 +211,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
         const data: Invoice = await res.json();
         if (cancelled) return;
 
-        const today = new Date().toISOString().split('T')[0];
+        const today = localToday();
         const sourceIssue = data.invoiceDate?.split('T')[0] ?? '';
         const sourceDue = data.dueDate?.split('T')[0] ?? '';
         const gap = isValidDate(sourceIssue) && isValidDate(sourceDue) ? businessDaysBetween(sourceIssue, sourceDue) : null;

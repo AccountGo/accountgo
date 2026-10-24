@@ -34,3 +34,12 @@ export function businessDaysBetween(start: string, end: string): number | null {
 }
 
 export const isValidDate = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value) && !isNaN(parse(value).getTime());
+
+/**
+ * Today's date where the user is, as 'YYYY-MM-DD': the default for a document or payment date. Not toISOString(),
+ * which is the UTC date and is still yesterday (or already tomorrow) for part of the day in most time zones.
+ */
+export function localToday(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+}

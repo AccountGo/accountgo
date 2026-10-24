@@ -1,4 +1,5 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
+import { localToday } from '../lib/businessDays';
 import { Loader2, Wallet, X } from 'lucide-react';
 import { Bill, BillAccount } from '../types';
 import { useAuth } from '../auth/AuthContext';
@@ -6,8 +7,6 @@ import { useAuth } from '../auth/AuthContext';
 const inputClass =
   'w-full px-3.5 py-2.5 text-sm bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xl focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] placeholder-[var(--text-muted)] transition';
 const labelClass = 'block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1';
-
-const today = () => new Date().toISOString().slice(0, 10);
 
 /**
  * Records a payment on an approved bill, from a cash or bank account. A payment can't be more than what is still
@@ -25,7 +24,7 @@ export const PayBillDialog: React.FC<{
   const [accounts, setAccounts] = useState<BillAccount[] | null>(null);
   const [accountId, setAccountId] = useState<number | ''>('');
   const [amount, setAmount] = useState(bill.balanceDue.toFixed(2));
-  const [date, setDate] = useState(today());
+  const [date, setDate] = useState(localToday);
   const [method, setMethod] = useState('Bank Transfer');
   const [reference, setReference] = useState('');
   const [memo, setMemo] = useState('');
