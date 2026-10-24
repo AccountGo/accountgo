@@ -40,18 +40,68 @@ namespace Api.Service
             return category;
         }
 
-        /// <summary>A new service item with the workspace defaults, not yet saved.</summary>
-        public static Item NewItem(IInventoryService inventoryService, Services.Financial.IFinancialService financialService, string name)
+        /// <summary>The stock category and four ledger accounts used by new stock items.</summary>
+        public static ItemCategory StockCategory(IInventoryService inventoryService, Services.Financial.IFinancialService financialService, int measurementId)
+        {
+            var accounts = financialService.GetAccounts().ToList();
+            int AccountId(string code, string name) =>
+                accounts.FirstOrDefault(a => a.AccountCode == code)?.Id
+                ?? throw new InvalidOperationException($"The workspace has no {name} account ({code}).");
+
+            var category = inventoryService.GetItemCategories()
+                .FirstOrDefault(c => c.ItemType == ItemTypes.Purchased && c.Name == "Stock items");
+            var isNew = category == null;
+            category ??= new ItemCategory { Name = "Stock items", ItemType = ItemTypes.Purchased };
+
+            var salesAccountId = AccountId("40100", "Sales");
+            var inventoryAccountId = AccountId("10800", "Inventory");
+            var cogsAccountId = AccountId("50300", "Cost of Goods Sold");
+            var adjustmentAccountId = AccountId("50310", "Inventory Adjustments");
+            var changed = isNew
+                || category.MeasurementId != measurementId
+                || category.SalesAccountId != salesAccountId
+                || category.InventoryAccountId != inventoryAccountId
+                || category.CostOfGoodsSoldAccountId != cogsAccountId
+                || category.AdjustmentAccountId != adjustmentAccountId;
+
+            category.Name = "Stock items";
+            category.ItemType = ItemTypes.Purchased;
+            category.MeasurementId = measurementId;
+            category.SalesAccountId = salesAccountId;
+            category.InventoryAccountId = inventoryAccountId;
+            category.CostOfGoodsSoldAccountId = cogsAccountId;
+            category.AdjustmentAccountId = adjustmentAccountId;
+            if (changed)
+                inventoryService.SaveItemCategory(category);
+            return category;
+        }
+
+        /// <summary>A new service or stock item with the workspace defaults, not yet saved.</summary>
+        public static Item NewItem(IInventoryService inventoryService, Services.Financial.IFinancialService financialService, string name, bool trackStock = false)
         {
             var measurementId = MeasurementId(inventoryService);
-            return new Item
+            var category = trackStock
+                ? StockCategory(inventoryService, financialService, measurementId)
+                : ServiceCategory(inventoryService, financialService, measurementId);
+            var item = new Item
             {
-                ItemCategoryId = ServiceCategory(inventoryService, financialService, measurementId).Id,
+                ItemCategoryId = category.Id,
                 Description = name,
                 SellDescription = name,
                 SmallestMeasurementId = measurementId,
                 SellMeasurementId = measurementId
             };
+            if (trackStock)
+            {
+                item.ItemCategory = category;
+                item.ItemCategoryId = category.Id;
+                item.SalesAccountId = category.SalesAccountId;
+                item.InventoryAccountId = category.InventoryAccountId;
+                item.CostOfGoodsSoldAccountId = category.CostOfGoodsSoldAccountId;
+                item.InventoryAdjustmentAccountId = category.AdjustmentAccountId;
+                item.PurchaseMeasurementId = measurementId;
+            }
+            return item;
         }
 
         /// <summary>

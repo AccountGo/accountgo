@@ -21,17 +21,22 @@ export const ItemFormDialog: React.FC<{
   showPrice: boolean;
   /** Purchase cost, shown when the workspace buys. */
   showCost: boolean;
+  /** Whether this workspace can create stock-tracked items. */
+  hasInventoryModule: boolean;
   currencySymbol: string;
   /** The item after it was added, edited, archived or restored. */
   onSaved: (item: CatalogItem) => void;
   onDeleted?: (id: number) => void;
   onClose: () => void;
-}> = ({ item, showPrice, showCost, currencySymbol, onSaved, onDeleted, onClose }) => {
+}> = ({ item, showPrice, showCost, hasInventoryModule, currencySymbol, onSaved, onDeleted, onClose }) => {
   const { authFetch } = useAuth();
   const [name, setName] = useState(item?.name ?? '');
   const [code, setCode] = useState(item?.code ?? '');
   const [price, setPrice] = useState(item?.price != null ? String(item.price) : '');
   const [cost, setCost] = useState(item?.cost != null ? String(item.cost) : '');
+  const [trackStock, setTrackStock] = useState(item?.trackStock ?? false);
+  const [openingQuantity, setOpeningQuantity] = useState('');
+  const [openingUnitCost, setOpeningUnitCost] = useState('');
   const [busy, setBusy] = useState<'save' | 'archive' | 'delete' | null>(null);
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -82,6 +87,9 @@ export const ItemFormDialog: React.FC<{
           // Hidden fields keep their value.
           price: showPrice ? amountOrNull(price) : item?.price ?? null,
           cost: showCost ? amountOrNull(cost) : item?.cost ?? null,
+          trackStock,
+          openingQuantity: trackStock && !item?.trackStock ? amountOrNull(openingQuantity) : null,
+          openingUnitCost: trackStock && !item?.trackStock ? amountOrNull(openingUnitCost) : null,
         }),
       },
       isEdit ? 'The item could not be saved.' : 'The item could not be added.'
@@ -221,6 +229,62 @@ export const ItemFormDialog: React.FC<{
                     onChange={(e) => setCost(e.target.value)}
                     className={`${inputClass} font-mono`}
                   />
+                </div>
+              )}
+            </div>
+          )}
+
+          {hasInventoryModule && (
+            <div className="space-y-3 rounded-xl border border-[var(--border-subtle)] p-4">
+              <label className="flex items-start gap-3 text-sm text-[var(--text-main)]">
+                <input
+                  type="checkbox"
+                  checked={trackStock}
+                  disabled={!hasInventoryModule || (!!item?.trackStock && !!item.hasStockMovements)}
+                  onChange={(e) => setTrackStock(e.target.checked)}
+                  className="mt-0.5 accent-[var(--brand-primary)]"
+                />
+                <span>
+                  <span className="block font-medium">Track stock</span>
+                  <span className="block text-xs text-[var(--text-muted)]">
+                    Count it in and out: bills add stock, invoices use it up.
+                  </span>
+                </span>
+              </label>
+              {item?.trackStock && item.hasStockMovements && (
+                <p className="text-xs text-[var(--text-muted)]">Stock tracking can't be turned off after this item has movements. You can archive it instead.</p>
+              )}
+              {trackStock && !item && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label htmlFor={`${titleId}-opening-quantity`} className={labelClass}>Opening quantity</label>
+                    <input
+                      id={`${titleId}-opening-quantity`}
+                      type="number"
+                      inputMode="decimal"
+                      min="0"
+                      step="0.0001"
+                      placeholder="0"
+                      value={openingQuantity}
+                      onChange={(e) => setOpeningQuantity(e.target.value)}
+                      className={`${inputClass} font-mono`}
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor={`${titleId}-opening-cost`} className={labelClass}>Cost per unit ({currencySymbol})</label>
+                    <input
+                      id={`${titleId}-opening-cost`}
+                      type="number"
+                      inputMode="decimal"
+                      min="0"
+                      step="0.0001"
+                      placeholder="Required when quantity is entered"
+                      value={openingUnitCost}
+                      onChange={(e) => setOpeningUnitCost(e.target.value)}
+                      className={`${inputClass} font-mono`}
+                    />
+                  </div>
+                  <p className="sm:col-span-2 text-xs text-[var(--text-muted)]">Opening stock is recorded as an inventory adjustment when you save.</p>
                 </div>
               )}
             </div>

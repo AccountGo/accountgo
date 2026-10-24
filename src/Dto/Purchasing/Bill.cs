@@ -52,6 +52,8 @@ namespace Dto.Purchasing
         /// <summary>The account the line is booked to; null for the default (the vendor's purchase account).</summary>
         public int? AccountId { get; set; }
         public string? AccountName { get; set; }
+        /// <summary>Whether this line is for a stock item and must use its Inventory account.</summary>
+        public bool IsStockItem { get; set; }
         public decimal Quantity { get; set; } = 1;
         /// <summary>Unit cost.</summary>
         public decimal Amount { get; set; }
@@ -97,5 +99,7 @@ namespace Dto.Purchasing
         public string? Name { get; set; }
         /// <summary>Expense or Asset, to group the picker.</summary>
         public string? Group { get; set; }
+        /// <summary>Whether this is the workspace's Inventory account.</summary>
+        public bool IsInventoryAccount { get; set; }
     }
 }

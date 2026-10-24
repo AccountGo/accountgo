@@ -25,6 +25,7 @@ interface LineDraft {
   itemId: number | null;
   description: string;
   accountId: number | '';
+  isStockItem: boolean;
   quantity: number;
   amount: number;
   discount: number;
@@ -95,7 +96,7 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
   // New lines are booked to Purchase A/C unless another account is picked, the same default the server applies.
   const defaultAccountId = useMemo(() => accounts.find((a) => a.code === '50200')?.id ?? '', [accounts]);
   const blankLine = useCallback(
-    (): LineDraft => ({ key: nextKey++, id: 0, itemId: null, description: '', accountId: defaultAccountId, quantity: 1, amount: 0, discount: 0, taxId: '' }),
+    (): LineDraft => ({ key: nextKey++, id: 0, itemId: null, description: '', accountId: defaultAccountId, isStockItem: false, quantity: 1, amount: 0, discount: 0, taxId: '' }),
     [defaultAccountId]
   );
 
@@ -105,6 +106,7 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
     itemId: line.itemId ?? null,
     description: line.description ?? '',
     accountId: line.accountId ?? '',
+    isStockItem: line.isStockItem ?? false,
     quantity: line.quantity,
     amount: line.amount,
     discount: line.discount ?? 0,
@@ -137,7 +139,14 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
         // Without permission to see the catalog, lines are typed.
         if (catalogRes.ok) {
           const items: CatalogItem[] = await catalogRes.json();
-          setCatalog(items.filter((i) => !i.archived).map((i) => ({ id: i.id, code: i.code ?? undefined, description: i.name, price: i.cost ?? undefined })));
+          setCatalog(items.filter((i) => !i.archived).map((i) => ({
+            id: i.id,
+            code: i.code ?? undefined,
+            description: i.name,
+            price: i.cost ?? undefined,
+            trackStock: i.trackStock,
+            inventoryAccountId: i.inventoryAccountId,
+          })));
         }
 
         const sourceId = isEdit ? billId : duplicateOf;
@@ -167,7 +176,7 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
           }
         } else {
           const defaultAccount = accountList.find((a) => a.code === '50200')?.id ?? '';
-          setLines([{ key: nextKey++, id: 0, itemId: null, description: '', accountId: defaultAccount, quantity: 1, amount: 0, discount: 0, taxId: '' }]);
+          setLines([{ key: nextKey++, id: 0, itemId: null, description: '', accountId: defaultAccount, isStockItem: false, quantity: 1, amount: 0, discount: 0, taxId: '' }]);
         }
       } catch (err: any) {
         if (!cancelled) setError(err.message || 'The bill form could not be loaded.');
@@ -523,7 +532,11 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
                               {linked && (
                                 <button
                                   type="button"
-                                  onClick={() => updateLine(idx, { itemId: null })}
+                                  onClick={() => updateLine(idx, {
+                                    itemId: null,
+                                    isStockItem: false,
+                                    accountId: line.isStockItem ? defaultAccountId : line.accountId,
+                                  })}
                                   title="Unlink from catalog"
                                   aria-label={`Unlink line ${idx + 1} from the catalog`}
                                   className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--text-muted)] transition hover:text-[var(--text-main)] hover:bg-[var(--bg-surface-hover)]"
@@ -540,6 +553,7 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
                           aria-label={`Line ${idx + 1} account`}
                           value={line.accountId}
                           onChange={(e) => updateLine(idx, { accountId: e.target.value ? Number(e.target.value) : '' })}
+                          disabled={line.isStockItem}
                           className={cellClass}
                         >
                           <option value="">Vendor's default</option>
@@ -558,6 +572,7 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
                             ))}
                           </optgroup>
                         </select>
+                        {line.isStockItem && <p className="mt-1 text-[10px] text-[var(--text-muted)]">Stock is always booked to Inventory.</p>}
                       </td>
                       <td className="py-2.5 px-3">
                         <input
@@ -725,7 +740,19 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
           selectedId={pickerItem.itemId}
           formatPrice={formatCurrency}
           onPick={(item) => {
-            updateLine(pickerLine, { itemId: item.id, description: item.description, amount: item.price ?? pickerItem.amount });
+            const isStockItem = item.trackStock === true;
+            const inventoryAccountId = item.inventoryAccountId ?? accounts.find((account) => account.isInventoryAccount)?.id;
+            updateLine(pickerLine, {
+              itemId: item.id,
+              description: item.description,
+              amount: item.price ?? pickerItem.amount,
+              isStockItem,
+              accountId: isStockItem
+                ? inventoryAccountId ?? ''
+                : pickerItem.isStockItem
+                  ? defaultAccountId
+                  : pickerItem.accountId,
+            });
             setPickerLine(null);
           }}
           onAddNew={
@@ -744,11 +771,28 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
         <ItemFormDialog
           showPrice={hasModule('sales')}
           showCost
+          hasInventoryModule={hasModule('inventory')}
           currencySymbol={currencySymbol}
           onSaved={(item) => {
-            const option: ItemOption = { id: item.id, code: item.code ?? undefined, description: item.name, price: item.cost ?? undefined };
+            const option: ItemOption = {
+              id: item.id,
+              code: item.code ?? undefined,
+              description: item.name,
+              price: item.cost ?? undefined,
+              trackStock: item.trackStock,
+              inventoryAccountId: item.inventoryAccountId,
+            };
             setCatalog((prev) => [...prev, option].sort((a, b) => a.description.localeCompare(b.description)));
-            if (lines[newItemLine]) updateLine(newItemLine, { itemId: option.id, description: option.description, amount: option.price ?? lines[newItemLine].amount });
+            if (lines[newItemLine]) {
+              const inventoryAccountId = accounts.find((account) => account.isInventoryAccount)?.id;
+              updateLine(newItemLine, {
+                itemId: option.id,
+                description: option.description,
+                amount: option.price ?? lines[newItemLine].amount,
+                isStockItem: option.trackStock === true,
+                accountId: option.trackStock ? inventoryAccountId ?? '' : defaultAccountId,
+              });
+            }
             setNewItemLine(null);
           }}
           onClose={() => setNewItemLine(null)}
