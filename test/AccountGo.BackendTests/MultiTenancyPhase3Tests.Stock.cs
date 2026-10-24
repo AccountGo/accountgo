@@ -97,7 +97,8 @@ namespace AccountGo.BackendTests
                 warning => warning.GetString() == "Only 11 of Test stock in stock.");
             var oversoldId = oversoldJson.GetProperty("id").GetInt32();
             WithDb(db => Assert.NotNull(db.SalesInvoiceHeaders.Single(i => i.Id == oversoldId).GeneralLedgerHeaderId));
-            AssertStockState(itemId, -1m, 4.73m);
+            // Selling never changes the average, even past zero.
+            AssertStockState(itemId, -1m, 4.7273m);
             AssertStockInvariant(itemId);
 
             SetInventoryModuleEnabled(true);

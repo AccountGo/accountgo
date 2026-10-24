@@ -48,10 +48,8 @@ namespace Services.Inventory
             var quantityAfter = RoundQuantity(quantityBefore + quantity);
 
             item.StockValue = RoundMoney(item.StockValue + totalCost);
-            item.AverageCost = quantityAfter != 0
-                ? RoundUnitCost(item.StockValue / quantityAfter)
-                : unitCost;
             item.QuantityOnHand = quantityAfter;
+            UpdateAverageCost(item, unitCost);
 
             var movement = new InventoryControlJournal
             {
@@ -84,13 +82,12 @@ namespace Services.Inventory
                 throw new ArgumentOutOfRangeException(nameof(quantity), "Issued stock quantity must be more than zero at four decimal places.");
             var unitCost = RoundUnitCost(item.AverageCost);
             // The last issue takes the exact remaining cents, not another rounded multiple of average cost.
-            var totalCost = item.QuantityOnHand > 0 && quantity >= item.QuantityOnHand
+            var totalCost = item.QuantityOnHand > 0 && item.StockValue > 0 && quantity >= item.QuantityOnHand
                 ? item.StockValue + RoundMoney((quantity - item.QuantityOnHand) * unitCost)
                 : RoundMoney(quantity * unitCost);
             item.QuantityOnHand = RoundQuantity(item.QuantityOnHand - quantity);
             item.StockValue = RoundMoney(item.StockValue - totalCost);
-            if (item.QuantityOnHand != 0)
-                item.AverageCost = RoundUnitCost(item.StockValue / item.QuantityOnHand);
+            UpdateAverageCost(item, null);
 
             var movement = new InventoryControlJournal
             {
@@ -132,9 +129,8 @@ namespace Services.Inventory
             var quantityAfter = RoundQuantity(quantityBefore + (inQuantity > 0 ? -quantity : quantity));
 
             item.StockValue = RoundMoney(item.StockValue + (inQuantity > 0 ? -totalCost : totalCost));
-            if (quantityAfter != 0)
-                item.AverageCost = RoundUnitCost(item.StockValue / quantityAfter);
             item.QuantityOnHand = quantityAfter;
+            UpdateAverageCost(item, null);
 
             var movement = new InventoryControlJournal
             {
@@ -236,6 +232,19 @@ namespace Services.Inventory
         {
             var account = _financialService.GetAccounts().FirstOrDefault(a => a.AccountCode == code);
             return account?.Id ?? throw new InvalidOperationException($"This workspace has no {name} account.");
+        }
+
+        /// <summary>
+        /// Average cost is stock value over quantity while both are positive. With no stock, or after selling more than
+        /// was bought, that ratio can be zero or negative, so the average stays as it was, or becomes the cost of the
+        /// stock just received. Stock value stays exact either way, and the last issue settles what is left of it.
+        /// </summary>
+        private static void UpdateAverageCost(Item item, decimal? receivedUnitCost)
+        {
+            if (item.QuantityOnHand > 0 && item.StockValue > 0)
+                item.AverageCost = RoundUnitCost(item.StockValue / item.QuantityOnHand);
+            else if (receivedUnitCost.HasValue)
+                item.AverageCost = receivedUnitCost.Value;
         }
 
         private static decimal RoundQuantity(decimal value) => Math.Round(value, 4, MidpointRounding.ToEven);

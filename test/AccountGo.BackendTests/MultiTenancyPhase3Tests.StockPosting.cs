@@ -7,14 +7,14 @@ using Xunit;
 
 namespace AccountGo.BackendTests
 {
-    // Regression cases from the stock tracking review.
+    // Stock posting edge cases: failed postings, zero quantities, voids with repeated items, rounding and negative stock.
     public partial class MultiTenancyPhase3Tests
     {
-        // Issue 2: a zero-quantity stock line makes posting throw, so the issued invoice is left unposted.
+        // A zero-quantity stock line moves no stock and doesn't stop the invoice from posting.
         [Fact]
-        public async Task Probe_ZeroQuantityStockLine_InvoiceIsStillPosted()
+        public async Task Invoice_ZeroQuantityStockLine_StillPosts()
         {
-            var itemId = CreateStockItem("Probe zero qty");
+            var itemId = CreateStockItem("Zero quantity stock");
             AdjustStock(itemId, 10m, 5m, "Count", "seed");
             var invoice = await NewStockInvoice(itemId, 3m);
             var first = invoice.SalesInvoiceLines.Single();
@@ -28,14 +28,13 @@ namespace AccountGo.BackendTests
             WithDb(db => Assert.NotNull(db.SalesInvoiceHeaders.Single(i => i.Id == id).GeneralLedgerHeaderId));
         }
 
-        // Issue 1: paying an invoice whose posting failed saves its stock issue, again on every payment.
-        // Posting fails here because the second line's item has no Inventory Adjustments account (any failure after
-        // the first line's stock issue does the same).
+        // An invoice whose posting fails keeps its stock, however many payments are recorded on it. Posting fails here
+        // because the second line's item has no Inventory Adjustments account.
         [Fact]
-        public async Task Probe_UnpostedInvoice_PaymentsMustNotMoveStock()
+        public async Task UnpostedInvoice_PaymentsDoNotMoveStock()
         {
-            var itemId = CreateStockItem("Probe unposted");
-            var brokenId = CreateStockItem("Probe broken accounts");
+            var itemId = CreateStockItem("Unposted stock");
+            var brokenId = CreateStockItem("Stock missing accounts");
             WithDb(db =>
             {
                 db.Items.Single(i => i.Id == brokenId).InventoryAdjustmentAccountId = null;
@@ -46,7 +45,7 @@ namespace AccountGo.BackendTests
             var first = invoice.SalesInvoiceLines.Single();
             invoice.SalesInvoiceLines.Add(new Dto.Sales.SalesInvoiceLine
             {
-                ItemId = brokenId, ItemDescription = "Probe broken accounts", Quantity = 1m, Amount = 20m, MeasurementId = first.MeasurementId
+                ItemId = brokenId, ItemDescription = "Stock missing accounts", Quantity = 1m, Amount = 20m, MeasurementId = first.MeasurementId
             });
             var res = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
             Assert.True(res.IsSuccessStatusCode, await res.Content.ReadAsStringAsync());
@@ -69,13 +68,13 @@ namespace AccountGo.BackendTests
             });
         }
 
-        // Issue 3: voiding a bill with two lines of the same item reverses only the first line.
+        // Voiding reverses every line, including repeated lines of the same item, and voiding again changes nothing.
         [Fact]
-        public async Task Probe_VoidBill_WithTwoLinesOfSameStockItem_RemovesAllStock()
+        public async Task VoidBill_WithTwoLinesOfSameStockItem_RemovesAllStock()
         {
-            var itemId = CreateStockItem("Probe dup bill");
-            var vendor = await SaveVendor(new Dto.Purchasing.Supplier { Name = "Probe vendor 1" });
-            var bill = NewBill(vendor.Id, ("Probe dup bill", 4, 5m, null), ("Probe dup bill", 6, 5m, null));
+            var itemId = CreateStockItem("Repeated bill stock");
+            var vendor = await SaveVendor(new Dto.Purchasing.Supplier { Name = "Repeated stock vendor" });
+            var bill = NewBill(vendor.Id, ("Repeated bill stock", 4, 5m, null), ("Repeated bill stock", 6, 5m, null));
             bill.Status = "Open";
             var saved = await SaveBillOk(bill);
             AssertStockState(itemId, 10m, 5m);
@@ -86,11 +85,10 @@ namespace AccountGo.BackendTests
             AssertStockState(itemId, 0m, 5m);
         }
 
-        // Issue 3, invoice side.
         [Fact]
-        public async Task Probe_VoidInvoice_WithTwoLinesOfSameStockItem_RestoresAllStock()
+        public async Task VoidInvoice_WithTwoLinesOfSameStockItem_RestoresAllStock()
         {
-            var itemId = CreateStockItem("Probe dup inv");
+            var itemId = CreateStockItem("Repeated invoice stock");
             AdjustStock(itemId, 10m, 5m, "Count", "seed");
             var invoice = await NewStockInvoice(itemId, 2m);
             var first = invoice.SalesInvoiceLines.Single();
@@ -109,11 +107,11 @@ namespace AccountGo.BackendTests
             AssertStockState(itemId, 10m, 5m);
         }
 
-        // Issue 4: selling all stock leaves rounding pennies in the Inventory account.
+        // Selling everything takes the exact stock value, leaving no rounding cents in Inventory.
         [Fact]
-        public async Task Probe_SellingEverything_LeavesNothingInInventory()
+        public async Task SellingEverything_LeavesNothingInInventory()
         {
-            var itemId = CreateStockItem("Probe pennies");
+            var itemId = CreateStockItem("Rounding stock");
             AdjustStock(itemId, 1m, 1.00m, "Count", "a");
             AdjustStock(itemId, 2m, 1.01m, "Count", "b"); // 3.02 in stock, average 1.0067
             for (var i = 0; i < 3; i++)
@@ -190,6 +188,38 @@ namespace AccountGo.BackendTests
                 Assert.True(paid.IsSuccessStatusCode, await paid.Content.ReadAsStringAsync());
                 AssertStockState(itemId, 7m, 5m);
             }
+            AssertStockInvariant(itemId);
+        }
+
+        // Selling more than is in stock, then receiving less than the shortfall, keeps a positive average cost, so the
+        // next sale costs a positive amount and the stock value still matches Inventory.
+        [Fact]
+        public async Task ReceiptIntoNegativeStock_KeepsAPositiveAverageCost()
+        {
+            var itemId = CreateStockItem("Oversold stock");
+            AdjustStock(itemId, 1m, 10m, "Count", "Seed");
+            var oversold = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", await NewStockInvoice(itemId, 6m));
+            Assert.True(oversold.IsSuccessStatusCode, await oversold.Content.ReadAsStringAsync());
+            AssertStockState(itemId, -5m, 10m);
+
+            var vendor = await SaveVendor(new Dto.Purchasing.Supplier { Name = "Oversold stock vendor" });
+            var bill = NewBill(vendor.Id, ("Oversold stock", 2, 100m, null));
+            bill.Status = "Open";
+            await SaveBillOk(bill);
+            AssertStockState(itemId, -3m, 100m);
+            AssertStockInvariant(itemId);
+
+            var next = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", await NewStockInvoice(itemId, 1m));
+            Assert.True(next.IsSuccessStatusCode, await next.Content.ReadAsStringAsync());
+            var id = (await Json(next)).GetProperty("id").GetInt32();
+            WithDb(db =>
+            {
+                var invoice = db.SalesInvoiceHeaders.Single(i => i.Id == id);
+                Assert.NotNull(invoice.GeneralLedgerHeaderId);
+                Assert.Contains(db.GeneralLedgerLines.Where(l => l.GeneralLedgerHeaderId == invoice.GeneralLedgerHeaderId).ToList(),
+                    line => line.AccountId == AccountIdIn(db, "50300") && line.DrCr == Core.Domain.DrOrCrSide.Dr && line.Amount == 100m);
+            });
+            AssertStockState(itemId, -4m, 100m);
             AssertStockInvariant(itemId);
         }
     }

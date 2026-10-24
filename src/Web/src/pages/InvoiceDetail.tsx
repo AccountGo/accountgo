@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useOutletContext, useParams, useLocation, Link } from 'react-router-dom';
+import { useOutletContext, useParams, useLocation, useNavigate, Link } from 'react-router-dom';
 import {
   ArrowLeft,
   Printer,
@@ -42,6 +42,7 @@ export const InvoiceDetail: React.FC = () => {
   const { authFetch, user } = useAuth();
   const { orgSlug, invoiceId } = useParams<{ orgSlug: string; invoiceId: string }>();
   const location = useLocation();
+  const navigate = useNavigate();
 
   // State
   const [invoice, setInvoice] = useState<Invoice | null>(null);
@@ -51,9 +52,17 @@ export const InvoiceDetail: React.FC = () => {
   const [stockWarnings, setStockWarnings] = useState<string[]>([]);
 
   useEffect(() => {
+    setStockWarnings([]);
+  }, [invoiceId]);
+
+  // Warnings handed over by the invoice editor are shown once: clearing them from history keeps a refresh from
+  // bringing them back.
+  useEffect(() => {
     const warnings = location.state?.stockWarnings;
-    setStockWarnings(Array.isArray(warnings) ? warnings.filter((warning: unknown): warning is string => typeof warning === 'string') : []);
-  }, [invoiceId, location.state]);
+    if (!Array.isArray(warnings)) return;
+    setStockWarnings(warnings.filter((warning: unknown): warning is string => typeof warning === 'string'));
+    navigate(`${location.pathname}${location.search}`, { replace: true, state: null });
+  }, [location.state, location.pathname, location.search, navigate]);
 
   // Payment Modal State
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState<boolean>(false);
