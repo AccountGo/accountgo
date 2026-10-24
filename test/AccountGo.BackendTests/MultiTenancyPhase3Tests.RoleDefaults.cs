@@ -25,8 +25,8 @@ namespace AccountGo.BackendTests
             var expected = RolePermissions(command);
             command.CommandText = @"
                 DELETE FROM ""SecurityRolePermission"" WHERE ""SecurityPermissionId"" IN
-                    (SELECT ""Id"" FROM ""SecurityPermission"" WHERE ""Name"" LIKE 'inventory.%' OR ""Name"" = 'purchases.payments.create');
-                DELETE FROM ""SecurityPermission"" WHERE ""Name"" LIKE 'inventory.%' OR ""Name"" = 'purchases.payments.create';";
+                    (SELECT ""Id"" FROM ""SecurityPermission"" WHERE (""Name"" LIKE 'inventory.%' AND ""Name"" != 'inventory.stock.adjust') OR ""Name"" = 'purchases.payments.create');
+                DELETE FROM ""SecurityPermission"" WHERE (""Name"" LIKE 'inventory.%' AND ""Name"" != 'inventory.stock.adjust') OR ""Name"" = 'purchases.payments.create';";
             command.ExecuteNonQuery();
             Assert.NotEqual(expected, RolePermissions(command));
 
@@ -39,6 +39,38 @@ namespace AccountGo.BackendTests
             command.CommandText = migration;
             command.ExecuteNonQuery();
             Assert.Equal(expected, RolePermissions(command));
+        }
+
+        [Fact]
+        public void StockPermissionMigration_GrantsAdjustToRolesThatManageItems_AndIsIdempotent()
+        {
+            using (var source = new SqliteConnection("Data Source=" + _path))
+            using (var replica = new SqliteConnection("Data Source=:memory:"))
+            {
+                source.Open();
+                replica.Open();
+                source.BackupDatabase(replica);
+                SQLitePCL.raw.sqlite3_limit(replica.Handle, SQLitePCL.raw.SQLITE_LIMIT_COMPOUND_SELECT, 1);
+                using var command = replica.CreateCommand();
+
+                var expected = RolePermissions(command);
+                Assert.Contains("Accountant / inventory.stock.adjust", expected);
+                command.CommandText = @"
+                    DELETE FROM ""SecurityRolePermission"" WHERE ""SecurityPermissionId"" IN
+                        (SELECT ""Id"" FROM ""SecurityPermission"" WHERE ""Name"" = 'inventory.stock.adjust');
+                    DELETE FROM ""SecurityPermission"" WHERE ""Name"" = 'inventory.stock.adjust';";
+                command.ExecuteNonQuery();
+                Assert.NotEqual(expected, RolePermissions(command));
+
+                var migration = File.ReadAllText(Path.Combine(RepoRoot(), "src/Api/d1/migrations/0015_stock_permission.sql"));
+                command.CommandText = migration;
+                command.ExecuteNonQuery();
+                Assert.Equal(expected, RolePermissions(command));
+
+                command.CommandText = migration;
+                command.ExecuteNonQuery();
+                Assert.Equal(expected, RolePermissions(command));
+            }
         }
 
         private static SortedSet<string> RolePermissions(SqliteCommand command)

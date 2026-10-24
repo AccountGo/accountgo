@@ -199,6 +199,7 @@ namespace Services.Security
 
                 ("Inventory", SystemPermissions.InventoryItemsView, "View Items"),
                 ("Inventory", SystemPermissions.InventoryItemsManage, "Manage Items"),
+                ("Inventory", SystemPermissions.InventoryStockAdjust, "Adjust Stock"),
                 ("Inventory", SystemPermissions.InventoryAdjustmentsView, "View Adjustments"),
                 ("Inventory", SystemPermissions.InventoryAdjustmentsPost, "Post Adjustments"),
 
@@ -257,6 +258,7 @@ namespace Services.Security
                     SystemPermissions.PurchasesPaymentsCreate,
                     SystemPermissions.InventoryItemsView,
                     SystemPermissions.InventoryItemsManage,
+                    SystemPermissions.InventoryStockAdjust,
                     SystemPermissions.ReportsView
                 }),
                 ("Sales Representative", "Sales Representative", false, new[]

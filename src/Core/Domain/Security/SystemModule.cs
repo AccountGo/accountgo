@@ -51,6 +51,7 @@ namespace Core.Domain.Security
         // Inventory
         public const string InventoryItemsView = "inventory.items.view";
         public const string InventoryItemsManage = "inventory.items.manage";
+        public const string InventoryStockAdjust = "inventory.stock.adjust";
         public const string InventoryAdjustmentsView = "inventory.adjustments.view";
         public const string InventoryAdjustmentsPost = "inventory.adjustments.post";
 

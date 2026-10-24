@@ -17,6 +17,7 @@ import { Bills } from './pages/Bills';
 import { BillEdit } from './pages/BillEdit';
 import { BillDetail } from './pages/BillDetail';
 import { ProductsServices } from './pages/ProductsServices';
+import Inventory from './pages/Inventory';
 import PlaceholderView from './pages/PlaceholderView';
 import ChartOfAccounts from './pages/ChartOfAccounts';
 import NotFound from './pages/NotFound';
@@ -175,6 +176,22 @@ const router = createBrowserRouter([
             element: (
               <RequiresModule module={['sales', 'purchases']}>
                 <ProductsServices />
+              </RequiresModule>
+            ),
+          },
+          {
+            path: 'inventory',
+            element: (
+              <RequiresModule module="inventory">
+                <Inventory />
+              </RequiresModule>
+            ),
+          },
+          {
+            path: 'inventory/:itemId',
+            element: (
+              <RequiresModule module="inventory">
+                <Inventory />
               </RequiresModule>
             ),
           },

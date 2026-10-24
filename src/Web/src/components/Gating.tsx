@@ -117,7 +117,7 @@ const MODULE_METADATA: Record<ModuleKey, { title: string; desc: string; required
   },
   inventory: {
     title: 'Inventory & Items',
-    desc: 'Track warehouse stock, cost valuations, product variants, and stock adjustments.',
+    desc: 'Track stock on hand and its cost: bills add stock, invoices use it up, adjustments record counts and write-offs.',
     requiredPlan: 'Enterprise',
   },
   reports: {
