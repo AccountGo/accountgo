@@ -14,8 +14,9 @@ namespace Api.Service
     }
 
     /// <summary>
-    /// The email a customer receives with an invoice PDF attached. Table layout with inline styles, since that is what
-    /// Gmail, Outlook and Apple Mail all render the same way. Everything the workspace typed is HTML-encoded.
+    /// The email a customer receives for an invoice. Prefers a signed PDF link (better deliverability);
+    /// attaching the PDF is an advanced opt-in. Table layout with inline styles for Gmail/Outlook/Apple Mail.
+    /// Everything the workspace typed is HTML-encoded.
     /// </summary>
     public static class InvoiceEmailTemplate
     {
@@ -27,32 +28,67 @@ namespace Api.Service
         private const string Brand = "#059669";
         private const string Font = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
 
-        public static InvoiceEmail Build(Dto.Sales.SalesInvoice invoice, string? currencyCode, bool canReply)
+        public static InvoiceEmail Build(
+            Dto.Sales.SalesInvoice invoice,
+            string? currencyCode,
+            bool canReply,
+            string? pdfUrl = null,
+            bool attachPdf = false)
         {
             var ctx = Context(invoice, currencyCode);
             var subject = ctx.PaidInFull || ctx.Due == null
                 ? $"Invoice {ctx.Number} from {ctx.Seller}"
                 : $"Invoice {ctx.Number} from {ctx.Seller}: {ctx.Headline} due {ctx.Due}";
 
-            var intro = ctx.PaidInFull
-                ? $"{ctx.Seller} has sent you invoice {ctx.Number}. It is paid in full, so there is nothing to pay; the PDF is attached for your records."
-                : $"{ctx.Seller} has sent you invoice {ctx.Number} for {ctx.Headline}{(ctx.Due != null ? $", due {ctx.Due}" : "")}. The invoice is attached as a PDF.";
-
-            return Finish(ctx, subject, intro, canReply);
+            var intro = Intro(ctx, followUp: false, hasLink: !string.IsNullOrWhiteSpace(pdfUrl), attachPdf);
+            return Finish(ctx, subject, intro, canReply, pdfUrl, attachPdf);
         }
 
         /// <summary>
-        /// A polite reminder that the invoice is still unpaid. Same layout and PDF attachment as the original send.
+        /// A polite reminder that the invoice is still unpaid. Same layout and PDF access as the original send.
         /// </summary>
-        public static InvoiceEmail BuildFollowUp(Dto.Sales.SalesInvoice invoice, string? currencyCode, bool canReply)
+        public static InvoiceEmail BuildFollowUp(
+            Dto.Sales.SalesInvoice invoice,
+            string? currencyCode,
+            bool canReply,
+            string? pdfUrl = null,
+            bool attachPdf = false)
         {
             var ctx = Context(invoice, currencyCode);
             var subject = $"Following up on Invoice {ctx.Number} from {ctx.Seller}";
-            var intro = ctx.Due != null
-                ? $"Just following up on invoice {ctx.Number} from {ctx.Seller} for {ctx.Headline}, due {ctx.Due}. The invoice is attached as a PDF if you need another copy."
-                : $"Just following up on invoice {ctx.Number} from {ctx.Seller} for {ctx.Headline}. The invoice is attached as a PDF if you need another copy.";
+            var intro = Intro(ctx, followUp: true, hasLink: !string.IsNullOrWhiteSpace(pdfUrl), attachPdf);
+            return Finish(ctx, subject, intro, canReply, pdfUrl, attachPdf);
+        }
 
-            return Finish(ctx, subject, intro, canReply);
+        private static string Intro(EmailContext ctx, bool followUp, bool hasLink, bool attachPdf)
+        {
+            if (followUp)
+            {
+                var baseIntro = ctx.Due != null
+                    ? $"Just following up on invoice {ctx.Number} from {ctx.Seller} for {ctx.Headline}, due {ctx.Due}."
+                    : $"Just following up on invoice {ctx.Number} from {ctx.Seller} for {ctx.Headline}.";
+                if (hasLink)
+                    return attachPdf
+                        ? $"{baseIntro} Open the invoice PDF with the button below (the link expires in 7 days). A copy is also attached."
+                        : $"{baseIntro} Open the invoice PDF with the button below if you need another copy. The link expires in 7 days.";
+                return $"{baseIntro} The invoice is attached as a PDF if you need another copy.";
+            }
+
+            if (ctx.PaidInFull)
+            {
+                if (hasLink)
+                    return attachPdf
+                        ? $"{ctx.Seller} has sent you invoice {ctx.Number}. It is paid in full, so there is nothing to pay. Open the PDF with the button below (expires in 7 days); a copy is also attached."
+                        : $"{ctx.Seller} has sent you invoice {ctx.Number}. It is paid in full, so there is nothing to pay; open the PDF with the button below for your records. The link expires in 7 days.";
+                return $"{ctx.Seller} has sent you invoice {ctx.Number}. It is paid in full, so there is nothing to pay; the PDF is attached for your records.";
+            }
+
+            var dueBit = ctx.Due != null ? $", due {ctx.Due}" : "";
+            if (hasLink)
+                return attachPdf
+                    ? $"{ctx.Seller} has sent you invoice {ctx.Number} for {ctx.Headline}{dueBit}. Open the PDF with the button below (expires in 7 days). A copy is also attached."
+                    : $"{ctx.Seller} has sent you invoice {ctx.Number} for {ctx.Headline}{dueBit}. Open the invoice PDF with the button below. The link expires in 7 days.";
+            return $"{ctx.Seller} has sent you invoice {ctx.Number} for {ctx.Headline}{dueBit}. The invoice is attached as a PDF.";
         }
 
         private sealed class EmailContext
@@ -89,7 +125,7 @@ namespace Api.Service
                 facts.Add(("Due date", due));
             if (!string.IsNullOrWhiteSpace(invoice.ReferenceNo))
                 facts.Add(("Reference / PO", invoice.ReferenceNo.Trim()));
-            // The attached PDF has the lines. The email breaks the total down only when tax or shipping is on top.
+            // The PDF has the lines. The email breaks the total down only when tax or shipping is on top.
             var hasTax = (invoice.TotalTax ?? 0) != 0;
             var hasShipping = invoice.ShippingHandlingCharge != 0;
             var partlyPaid = invoice.PaidAmount > 0 && !paidInFull;
@@ -129,20 +165,27 @@ namespace Api.Service
             };
         }
 
-        private static InvoiceEmail Finish(EmailContext ctx, string subject, string intro, bool canReply)
+        private static InvoiceEmail Finish(
+            EmailContext ctx,
+            string subject,
+            string intro,
+            bool canReply,
+            string? pdfUrl,
+            bool attachPdf)
         {
             var replyLine = canReply ? "Questions about this invoice? Just reply to this email." : null;
             return new InvoiceEmail
             {
                 Subject = OneLine(subject),
-                Html = BuildHtml(ctx.Seller, ctx.Customer, ctx.Number, intro, ctx.PaidInFull ? "Amount paid" : "Amount due", ctx.Headline, ctx.PaidInFull, ctx.Due, ctx.Facts, ctx.Sections, replyLine, ctx.Contact),
-                Text = BuildText(ctx.Seller, ctx.Customer, intro, ctx.Facts, ctx.Sections, replyLine, ctx.Contact),
+                Html = BuildHtml(ctx.Seller, ctx.Customer, ctx.Number, intro, ctx.PaidInFull ? "Amount paid" : "Amount due",
+                    ctx.Headline, ctx.PaidInFull, ctx.Due, ctx.Facts, ctx.Sections, replyLine, ctx.Contact, pdfUrl, attachPdf),
+                Text = BuildText(ctx.Seller, ctx.Customer, intro, ctx.Facts, ctx.Sections, replyLine, ctx.Contact, pdfUrl, attachPdf, ctx.Number),
             };
         }
 
         private static string BuildHtml(string seller, string? customer, string number, string intro, string amountLabel, string amount,
             bool paidInFull, string? due, List<(string Label, string Value)> facts, List<(string Heading, string Body)> sections,
-            string? replyLine, string contact)
+            string? replyLine, string contact, string? pdfUrl, bool attachPdf)
         {
             var h = new StringBuilder();
             h.Append("<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\">")
@@ -187,10 +230,23 @@ namespace Api.Service
             }
             h.Append("</table>");
 
-            // Attachment chip
-            h.Append($"<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin-top:16px;\"><tr><td style=\"padding:10px 14px;border:1px solid {Rule};border-radius:8px;font-size:13px;color:{Secondary};\">")
-             .Append($"&#128206;&nbsp; <strong style=\"color:{Ink};\">{E(PdfFileName(number))}</strong> is attached")
-             .Append("</td></tr></table>");
+            if (!string.IsNullOrWhiteSpace(pdfUrl))
+            {
+                // Bulletproof button for Outlook + modern clients.
+                h.Append("<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin-top:24px;\"><tr>")
+                 .Append($"<td align=\"center\" bgcolor=\"{Brand}\" style=\"border-radius:8px;\">")
+                 .Append($"<a href=\"{E(pdfUrl)}\" target=\"_blank\" rel=\"noopener noreferrer\" ")
+                 .Append($"style=\"display:inline-block;padding:12px 22px;font-size:14px;font-weight:700;color:#FFFFFF;text-decoration:none;\">")
+                 .Append("View invoice PDF</a></td></tr></table>")
+                 .Append($"<p style=\"margin:10px 0 0;font-size:12px;color:{Muted};\">This link expires in 7 days and only works for the email address this message was sent to.</p>");
+            }
+
+            if (attachPdf)
+            {
+                h.Append($"<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin-top:16px;\"><tr><td style=\"padding:10px 14px;border:1px solid {Rule};border-radius:8px;font-size:13px;color:{Secondary};\">")
+                 .Append($"&#128206;&nbsp; <strong style=\"color:{Ink};\">{E(PdfFileName(number))}</strong> is attached")
+                 .Append("</td></tr></table>");
+            }
 
             foreach (var (heading, body) in sections)
             {
@@ -214,13 +270,26 @@ namespace Api.Service
             return h.ToString();
         }
 
-        private static string BuildText(string seller, string? customer, string intro, List<(string Label, string Value)> facts,
-            List<(string Heading, string Body)> sections, string? replyLine, string contact)
+        private static string BuildText(
+            string seller,
+            string? customer,
+            string intro,
+            List<(string Label, string Value)> facts,
+            List<(string Heading, string Body)> sections,
+            string? replyLine,
+            string contact,
+            string? pdfUrl,
+            bool attachPdf,
+            string number)
         {
             var t = new StringBuilder();
             t.AppendLine(customer != null ? $"Hi {customer}," : "Hello,").AppendLine().AppendLine(intro).AppendLine();
             foreach (var (label, value) in facts)
                 t.AppendLine($"{label}: {value}");
+            if (!string.IsNullOrWhiteSpace(pdfUrl))
+                t.AppendLine().AppendLine($"View invoice PDF: {pdfUrl}").AppendLine("(Link expires in 7 days.)");
+            if (attachPdf)
+                t.AppendLine().AppendLine($"Attached: {PdfFileName(number)}");
             foreach (var (heading, body) in sections)
                 t.AppendLine().AppendLine(heading.ToUpperInvariant()).AppendLine(body);
             if (replyLine != null)

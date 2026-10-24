@@ -272,11 +272,12 @@ export const InvoiceDetail: React.FC = () => {
     return data?.no || invoice.no || '';
   };
 
-  const emailInvoice = async (followUp = false): Promise<string> => {
+  const emailInvoice = async (followUp = false, attachPdf = false): Promise<string> => {
     if (!invoice) return '';
+    const attach = attachPdf ? '&attachPdf=true' : '';
     const path = followUp
-      ? `/api/Sales/SendSalesInvoiceFollowUpEmail?id=${invoice.id}`
-      : `/api/Sales/SendSalesInvoiceEmail?id=${invoice.id}`;
+      ? `/api/Sales/SendSalesInvoiceFollowUpEmail?id=${invoice.id}${attach}`
+      : `/api/Sales/SendSalesInvoiceEmail?id=${invoice.id}${attach}`;
     const res = await authFetch(path, {
       method: 'POST',
     });
@@ -321,7 +322,7 @@ export const InvoiceDetail: React.FC = () => {
     }
   };
 
-  const handleSendEmail = async (followUp: boolean) => {
+  const handleSendEmail = async (followUp: boolean, attachPdf = false) => {
     if (!invoice || !sendDialogMode) return;
     const issuing = sendDialogMode === 'issue';
     // Issuing always sends the first invoice email, never a follow-up.
@@ -341,7 +342,7 @@ export const InvoiceDetail: React.FC = () => {
     }
 
     try {
-      const to = await emailInvoice(sendAsFollowUp);
+      const to = await emailInvoice(sendAsFollowUp, attachPdf);
       setSuccessBanner(
         issuing
           ? `${label} has been issued and emailed to ${to}.`

@@ -21,7 +21,7 @@ interface SendInvoiceDialogProps {
   busy: boolean;
   error: string | null;
   onIssueOnly: () => void;
-  onSend: (followUp: boolean) => void;
+  onSend: (followUp: boolean, attachPdf: boolean) => void;
   onCancel: () => void;
 }
 
@@ -53,11 +53,15 @@ export const SendInvoiceDialog: React.FC<SendInvoiceDialogProps> = ({
 
   const [typed, setTyped] = useState('');
   const [markAsFollowUp, setMarkAsFollowUp] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [attachPdf, setAttachPdf] = useState(false);
   const dialogRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const titleId = useId();
   const inputId = useId();
   const followUpToggleId = useId();
+  const advancedToggleId = useId();
+  const attachPdfId = useId();
   const confirmed = normalise(typed) === normalise(invoiceNumber);
   const asFollowUp = followUpFromHistory || markAsFollowUp;
 
@@ -91,7 +95,7 @@ export const SendInvoiceDialog: React.FC<SendInvoiceDialogProps> = ({
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
-    if (confirmed && !busy) onSend(asFollowUp);
+    if (confirmed && !busy) onSend(asFollowUp, attachPdf);
   };
 
   const title =
@@ -179,13 +183,54 @@ export const SendInvoiceDialog: React.FC<SendInvoiceDialogProps> = ({
                 </dd>
               </div>
             )}
-            <div className="flex items-center gap-3 px-4 py-2.5">
-              <dt className="w-12 shrink-0 text-[var(--text-muted)]">
-                <Paperclip className="w-4 h-4" aria-label="Attachment" />
-              </dt>
-              <dd className="min-w-0 break-all text-[var(--text-secondary)]">{invoicePdfFileName(invoiceNumber)}</dd>
+            <div className="flex items-start gap-3 px-4 py-2.5">
+              <dt className="w-12 shrink-0 text-[var(--text-muted)] pt-0.5">PDF</dt>
+              <dd className="min-w-0 text-[var(--text-secondary)]">
+                {attachPdf ? (
+                  <span className="inline-flex items-center gap-1.5 break-all">
+                    <Paperclip className="w-3.5 h-3.5 shrink-0" aria-hidden />
+                    Secure link + {invoicePdfFileName(invoiceNumber)}
+                  </span>
+                ) : (
+                  <span>Secure link in the email (expires in 7 days)</span>
+                )}
+              </dd>
             </div>
           </dl>
+
+          <div className="space-y-2">
+            <button
+              type="button"
+              id={advancedToggleId}
+              disabled={busy}
+              aria-expanded={showAdvanced}
+              onClick={() => setShowAdvanced((open) => !open)}
+              className="text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
+            >
+              {showAdvanced ? 'Hide advanced' : 'Advanced'}
+            </button>
+            {showAdvanced && (
+              <label
+                htmlFor={attachPdfId}
+                className="flex items-start gap-3 p-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-subtle)] cursor-pointer"
+              >
+                <input
+                  id={attachPdfId}
+                  type="checkbox"
+                  checked={attachPdf}
+                  disabled={busy}
+                  onChange={(event) => setAttachPdf(event.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-[var(--border-subtle)] text-[var(--brand-primary)] focus:ring-[var(--brand-primary)]"
+                />
+                <span className="min-w-0 text-sm text-[var(--text-secondary)]">
+                  <span className="font-medium text-[var(--text-main)]">Also attach the PDF</span>
+                  <span className="block mt-0.5 text-xs text-[var(--text-muted)]">
+                    Some mail filters block attachments; prefer the secure link unless the customer needs a file.
+                  </span>
+                </span>
+              </label>
+            )}
+          </div>
 
           <div className="space-y-1.5">
             <label htmlFor={inputId} className="block text-sm text-[var(--text-secondary)]">

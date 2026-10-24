@@ -47,6 +47,7 @@
     "DatabaseProvider": "Sqlite",
     "EMAIL_PROVIDER": "Resend",
     "PUBLIC_WEB_URL": "https://accountgo-web.anter.workers.dev",
+    "PUBLIC_API_URL": "https://accountgo-api.anter.workers.dev",
     "RESEND_EMAIL_FROM": "billing@marvinperez.com",
     "RESEND_FROM_NAME": "AccountGo",
     "JwtSettings__validIssuer": "AccountGo API",

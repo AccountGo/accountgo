@@ -61,6 +61,7 @@ namespace AccountGo.BackendTests
                 builder.UseSetting("ConnectionStrings:SqliteConnection", "Data Source=" + _path);
                 builder.UseSetting("SECRET_KEY", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
                 builder.UseSetting("PUBLIC_WEB_URL", "https://workspace.example");
+                builder.UseSetting("PUBLIC_API_URL", "https://api.example");
                 builder.ConfigureTestServices(services =>
                 {
                     services.RemoveAll<IEmailSender>();
@@ -632,7 +633,7 @@ namespace AccountGo.BackendTests
         }
 
         [Fact]
-        public async Task SendSalesInvoiceEmail_AttachesPdf_BlindCopiesSender_OnlyForIssuedInvoices()
+        public async Task SendSalesInvoiceEmail_LinksPdf_BlindCopiesSender_OnlyForIssuedInvoices()
         {
             var invoice = await NewInvoice("billing@customer.example");
             invoice.Status = "Draft";
@@ -652,9 +653,10 @@ namespace AccountGo.BackendTests
             Assert.Equal("phase3-owner@example.com", message.ReplyTo);
             Assert.EndsWith("via AccountGo", message.FromName);
             Assert.StartsWith("Invoice ", message.Subject);
-            var attachment = Assert.Single(message.Attachments);
-            Assert.Matches(@"^Invoice-[A-Za-z0-9_-]+\.pdf$", attachment.FileName);
-            Assert.Equal("%PDF", Encoding.ASCII.GetString(attachment.Content, 0, 4));
+            Assert.Empty(message.Attachments);
+            Assert.Contains("View invoice PDF", message.Html);
+            Assert.Contains("/api/public/invoices/pdf?", message.Html);
+            Assert.Contains("billing%40customer.example", message.Html);
             Assert.Contains("Real customer", message.Html);
             Assert.False(string.IsNullOrWhiteSpace(message.Text));
 
@@ -690,6 +692,14 @@ namespace AccountGo.BackendTests
                     Assert.StartsWith("fake-", record.ProviderMessageId);
                 }
             }
+
+            // Advanced opt-in still attaches the PDF when asked.
+            Assert.True((await Send(HttpMethod.Post, path + "&attachPdf=true")).IsSuccessStatusCode);
+            var withAttach = _emails.Messages.Last().Raw;
+            var attachment = Assert.Single(withAttach.Attachments);
+            Assert.Matches(@"^Invoice-[A-Za-z0-9_-]+\.pdf$", attachment.FileName);
+            Assert.Equal("%PDF", Encoding.ASCII.GetString(attachment.Content, 0, 4));
+            Assert.Contains("View invoice PDF", withAttach.Html);
         }
 
         [Fact]
@@ -736,7 +746,7 @@ namespace AccountGo.BackendTests
         }
 
         [Fact]
-        public async Task SendSalesInvoiceFollowUpEmail_AttachesPdf_BlindCopiesSender_OnlyForUnpaidIssued()
+        public async Task SendSalesInvoiceFollowUpEmail_LinksPdf_BlindCopiesSender_OnlyForUnpaidIssued()
         {
             var invoice = await NewInvoice("billing@customer.example");
             invoice.Status = "Draft";
@@ -754,9 +764,9 @@ namespace AccountGo.BackendTests
             Assert.Equal("billing@customer.example", message.To);
             Assert.Equal(new[] { "phase3-owner@example.com" }, message.Bcc);
             Assert.StartsWith("Following up on Invoice ", message.Subject);
-            var attachment = Assert.Single(message.Attachments);
-            Assert.Matches(@"^Invoice-[A-Za-z0-9_-]+\.pdf$", attachment.FileName);
-            Assert.Equal("%PDF", Encoding.ASCII.GetString(attachment.Content, 0, 4));
+            Assert.Empty(message.Attachments);
+            Assert.Contains("View invoice PDF", message.Html);
+            Assert.Contains("/api/public/invoices/pdf?", message.Html);
 
             var reloaded = await (await Send(HttpMethod.Get, $"/api/Sales/SalesInvoice?id={invoiceId}")).Content.ReadFromJsonAsync<JsonElement>();
             var emails = reloaded.GetProperty("emails");
