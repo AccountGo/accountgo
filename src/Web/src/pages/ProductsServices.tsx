@@ -3,6 +3,7 @@ import { useOutletContext } from 'react-router-dom';
 import { AlertTriangle, Loader2, Package, Plus, Search, X } from 'lucide-react';
 import { PageHeader, HeaderButton } from '../components/PageHeader';
 import { ItemFormDialog } from '../components/ItemFormDialog';
+import { ItemsTabs } from '../components/ItemsTabs';
 import { usePermissions } from '../components/Gating';
 import { CatalogItem, TenantContextType } from '../types';
 import { useAuth } from '../auth/AuthContext';
@@ -104,6 +105,7 @@ export const ProductsServices: React.FC = () => {
         }
         actions={canManage && <HeaderButton label="New item" icon={Plus} variant="primary" onClick={() => setDialog({})} />}
       />
+      <ItemsTabs orgSlug={currentOrg.slug} />
 
       {error && (
         <div role="alert" className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 text-sm flex items-center justify-between">

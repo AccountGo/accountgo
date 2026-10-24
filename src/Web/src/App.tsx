@@ -1,5 +1,5 @@
 import React from 'react';
-import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom';
+import { createBrowserRouter, RouterProvider, Navigate, useParams } from 'react-router-dom';
 import OrgLayout from './layouts/OrgLayout';
 import Dashboard from './pages/Dashboard';
 import Settings from './pages/Settings';
@@ -61,6 +61,13 @@ const WorkspaceSettings: React.FC = () => {
 const WorkspaceHome: React.FC = () => {
   const { hasModule } = useTenantContext();
   return hasModule('financials') ? <Dashboard /> : <Navigate to="../sales" replace />;
+};
+
+// Inventory moved under Products & services; old links and bookmarks keep working.
+const LegacyInventoryRedirect: React.FC = () => {
+  const { orgSlug, itemId } = useParams();
+  const base = `/org/${orgSlug}/items/inventory`;
+  return <Navigate to={itemId ? `${base}/${itemId}` : base} replace />;
 };
 
 const router = createBrowserRouter([
@@ -180,7 +187,7 @@ const router = createBrowserRouter([
             ),
           },
           {
-            path: 'inventory',
+            path: 'items/inventory',
             element: (
               <RequiresModule module="inventory">
                 <Inventory />
@@ -188,12 +195,20 @@ const router = createBrowserRouter([
             ),
           },
           {
-            path: 'inventory/:itemId',
+            path: 'items/inventory/:itemId',
             element: (
               <RequiresModule module="inventory">
                 <Inventory />
               </RequiresModule>
             ),
+          },
+          {
+            path: 'inventory',
+            element: <LegacyInventoryRedirect />,
+          },
+          {
+            path: 'inventory/:itemId',
+            element: <LegacyInventoryRedirect />,
           },
           {
             path: 'purchases',
