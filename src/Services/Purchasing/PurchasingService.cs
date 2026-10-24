@@ -144,7 +144,7 @@ namespace Services.Purchasing
             {
             }
 
-            GeneralLedgerHeader glHeader = _financialService.CreateGeneralLedgerHeader(DocumentTypes.PurchaseReceipt, purchaseOrderReceipt.Date, string.Empty);
+            GeneralLedgerHeader glHeader = _financialService.CreateGeneralLedgerHeader(DocumentTypes.PurchaseReceipt, purchaseOrderReceipt.Date, string.Empty, purchaseOrderReceipt.Id);
             glHeader.GeneralLedgerLines = glLines;
 
             if (_financialService.ValidateGeneralLedgerEntry(glHeader))
@@ -420,7 +420,7 @@ namespace Services.Purchasing
             }
 
             var description = string.IsNullOrWhiteSpace(bill.VendorInvoiceNo) ? $"Bill from {vendorName}" : $"Bill {bill.VendorInvoiceNo} from {vendorName}";
-            var glHeader = _financialService.CreateGeneralLedgerHeader(DocumentTypes.PurchaseInvoice, bill.Date, description);
+            var glHeader = _financialService.CreateGeneralLedgerHeader(DocumentTypes.PurchaseInvoice, bill.Date, description, bill.Id);
             foreach (var debit in debits.Where(d => d.Value != 0))
             {
                 // A line that lowers the bill, such as a credit or a refund on it, is a credit to its account.
@@ -493,7 +493,7 @@ namespace Services.Purchasing
                 ?? throw new InvalidOperationException("This workspace has no Accounts Payable account.");
 
             var glHeader = _financialService.CreateGeneralLedgerHeader(DocumentTypes.PurchaseInvoicePayment, date,
-                $"Payment to {vendor.Party?.Name ?? "vendor"}" + (string.IsNullOrWhiteSpace(bill.VendorInvoiceNo) ? "" : $" for bill {bill.VendorInvoiceNo}"));
+                $"Payment to {vendor.Party?.Name ?? "vendor"}" + (string.IsNullOrWhiteSpace(bill.VendorInvoiceNo) ? "" : $" for bill {bill.VendorInvoiceNo}"), bill.Id);
             glHeader.GeneralLedgerLines.Add(_financialService.CreateGeneralLedgerLine(DrOrCrSide.Dr, payableAccountId, amount));
             glHeader.GeneralLedgerLines.Add(_financialService.CreateGeneralLedgerLine(DrOrCrSide.Cr, accountId, amount));
             _financialService.ValidateGeneralLedgerEntry(glHeader);

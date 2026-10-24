@@ -47,6 +47,12 @@ namespace AccountGo.ServicesTests
                     Assert.Equal(2L, command.ExecuteScalar());
                     command.CommandText = "SELECT COUNT(*) FROM pragma_table_info('CompanyInvitation') WHERE name IN ('ResendCount','ResendWindowStart')";
                     Assert.Equal(2L, command.ExecuteScalar());
+                    command.CommandText = "SELECT AccountingBasis FROM CompanySetting WHERE CompanyId=1";
+                    Assert.Equal(1L, command.ExecuteScalar());
+                    command.CommandText = "SELECT COUNT(*) FROM pragma_table_info('GeneralLedgerHeader') WHERE name IN ('SourceDocumentId','ReversedGeneralLedgerHeaderId')";
+                    Assert.Equal(2L, command.ExecuteScalar());
+                    command.CommandText = "SELECT COUNT(*) FROM pragma_table_info('CustomerAllocation') WHERE name = 'GeneralLedgerHeaderId'";
+                    Assert.Equal(1L, command.ExecuteScalar());
                 }
             }
         }

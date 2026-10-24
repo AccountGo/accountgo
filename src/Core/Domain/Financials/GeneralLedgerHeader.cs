@@ -28,6 +28,8 @@ namespace Core.Domain.Financials
         public DateTime Date { get; set; }
         public DocumentTypes DocumentType { get; set; }
         public string Description { get; set; }
+        public int? SourceDocumentId { get; set; }
+        public int? ReversedGeneralLedgerHeaderId { get; set; }
 
         public virtual ICollection<GeneralLedgerLine> GeneralLedgerLines { get; set; }
         public virtual ICollection<PurchaseReceiptHeader> PurchaseOrderReceipts { get; set; }

@@ -190,4 +190,10 @@ namespace Core.Domain
         [Display(Name = "Closed - Order Created")]
         ClosedOrderCreated = 5
     }
+
+    public enum AccountingBasis
+    {
+        Accrual = 1,
+        Cash = 2
+    }
 }

@@ -24,6 +24,7 @@ namespace Core.Domain.Sales
         public int CustomerId { get; set; }
         public int SalesInvoiceHeaderId { get; set; }
         public int SalesReceiptHeaderId { get; set; }
+        public int? GeneralLedgerHeaderId { get; set; }
         public DateTime Date { get; set; }
         public decimal Amount { get; set; }
 

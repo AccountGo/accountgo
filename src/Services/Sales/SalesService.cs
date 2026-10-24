@@ -146,7 +146,7 @@ namespace Services.Sales
             var taxes = new List<KeyValuePair<int, decimal>>();
             var sales = new List<KeyValuePair<int, decimal>>();
 
-            var glHeader = _financialService.CreateGeneralLedgerHeader(DocumentTypes.SalesInvoice, salesInvoice.Date, string.Empty);
+            var glHeader = _financialService.CreateGeneralLedgerHeader(DocumentTypes.SalesInvoice, salesInvoice.Date, string.Empty, salesInvoice.Id);
             var customer = GetCustomerById(salesInvoice.CustomerId);
 
             foreach (var lineItem in salesInvoice.SalesInvoiceLines)
@@ -286,7 +286,7 @@ namespace Services.Sales
         public void AddSalesReceipt(SalesReceiptHeader salesReceipt)
         {
             var customer = _customerRepo.GetById(salesReceipt.CustomerId);
-            var glHeader = _financialService.CreateGeneralLedgerHeader(DocumentTypes.SalesReceipt, salesReceipt.Date, string.Empty);
+            var glHeader = _financialService.CreateGeneralLedgerHeader(DocumentTypes.SalesReceipt, salesReceipt.Date, string.Empty, salesReceipt.Id);
             var debit = _financialService.CreateGeneralLedgerLine(DrOrCrSide.Dr, salesReceipt.AccountToDebitId.Value, salesReceipt.SalesReceiptLines.Sum(i => i.AmountPaid));
             var credit = _financialService.CreateGeneralLedgerLine(DrOrCrSide.Cr, customer.AccountsReceivableAccountId.Value, salesReceipt.SalesReceiptLines.Sum(i => i.AmountPaid));
             glHeader.GeneralLedgerLines.Add(debit);
@@ -308,7 +308,7 @@ namespace Services.Sales
         public void AddSalesReceiptNoInvoice(SalesReceiptHeader salesReceipt)
         {
             var customer = _customerRepo.GetById(salesReceipt.CustomerId);
-            var glHeader = _financialService.CreateGeneralLedgerHeader(DocumentTypes.SalesReceipt, salesReceipt.Date, string.Empty);
+            var glHeader = _financialService.CreateGeneralLedgerHeader(DocumentTypes.SalesReceipt, salesReceipt.Date, string.Empty, salesReceipt.Id);
             var debit = _financialService.CreateGeneralLedgerLine(DrOrCrSide.Dr, salesReceipt.AccountToDebitId.Value, salesReceipt.Amount);
             glHeader.GeneralLedgerLines.Add(debit);
 
@@ -553,27 +553,50 @@ namespace Services.Sales
         {
             //Revenue recognition. Debit the customer advances (liability) account and credit the revenue account.
             //In case of allocation, credit the accounts receivable since sales account is already credited from invoice.
-            var invoice = GetSalesInvoiceById(allocation.SalesInvoiceHeaderId);
-            var receipt = GetSalesReceiptById(allocation.SalesReceiptHeaderId);
+            if (allocation == null)
+                throw new ArgumentNullException(nameof(allocation));
+            if (allocation.Amount <= 0m)
+                throw new InvalidOperationException("Allocation amount must be more than zero.");
+
+            var invoice = GetSalesInvoiceById(allocation.SalesInvoiceHeaderId)
+                ?? throw new InvalidOperationException($"Invoice #{allocation.SalesInvoiceHeaderId} was not found.");
+            var receipt = GetSalesReceiptById(allocation.SalesReceiptHeaderId)
+                ?? throw new InvalidOperationException($"Receipt #{allocation.SalesReceiptHeaderId} was not found.");
+
+            var receiptTotal = receipt.SalesReceiptLines != null && receipt.SalesReceiptLines.Any()
+                ? receipt.SalesReceiptLines.Sum(a => a.AmountPaid)
+                : receipt.Amount;
+            var alreadyAllocatedOnReceipt = receipt.CustomerAllocations != null
+                ? receipt.CustomerAllocations.Where(a => a.Id == 0 || a.Id != allocation.Id).Sum(a => a.Amount)
+                : 0m;
+            var availableOnReceipt = receiptTotal - alreadyAllocatedOnReceipt;
+            if (allocation.Amount > availableOnReceipt)
+                throw new InvalidOperationException($"Allocation amount ({allocation.Amount:0.00}) exceeds the unallocated receipt balance ({availableOnReceipt:0.00}).");
 
             var glHeader = _financialService.CreateGeneralLedgerHeader(Core.Domain.DocumentTypes.CustomerAllocation, allocation.Date, string.Empty);
 
-            foreach (var line in receipt.SalesReceiptLines)
-            {
-                Account accountToDebit = invoice.Customer.CustomerAdvancesAccount;
-                var debit = _financialService.CreateGeneralLedgerLine(Core.Domain.DrOrCrSide.Dr, accountToDebit.Id, allocation.Amount);
-                glHeader.GeneralLedgerLines.Add(debit);
-            }
+            var debitAccountId = invoice.Customer?.CustomerAdvancesAccount?.Id
+                ?? invoice.Customer?.CustomerAdvancesAccountId
+                ?? receipt.SalesReceiptLines?.FirstOrDefault(l => l.AccountToCreditId.HasValue)?.AccountToCreditId
+                ?? throw new InvalidOperationException("Customer has no customer advances account configured.");
+            glHeader.GeneralLedgerLines.Add(_financialService.CreateGeneralLedgerLine(Core.Domain.DrOrCrSide.Dr, debitAccountId, allocation.Amount));
 
-            Account accountToCredit = invoice.Customer.AccountsReceivableAccount;
-            var credit = _financialService.CreateGeneralLedgerLine(Core.Domain.DrOrCrSide.Cr, accountToCredit.Id, allocation.Amount);
-            glHeader.GeneralLedgerLines.Add(credit);
+            var creditAccountId = invoice.Customer?.AccountsReceivableAccount?.Id
+                ?? invoice.Customer?.AccountsReceivableAccountId
+                ?? throw new InvalidOperationException("Customer has no accounts receivable account configured.");
+            glHeader.GeneralLedgerLines.Add(_financialService.CreateGeneralLedgerLine(Core.Domain.DrOrCrSide.Cr, creditAccountId, allocation.Amount));
 
             if (_financialService.ValidateGeneralLedgerEntry(glHeader))
             {
-                invoice.GeneralLedgerHeader = glHeader;
+                _financialService.SaveGeneralLedgerEntry(glHeader);
+                allocation.GeneralLedgerHeaderId = glHeader.Id;
                 invoice.CustomerAllocations.Add(allocation);
                 _salesInvoiceRepo.Update(invoice);
+                if (allocation.Id > 0)
+                {
+                    glHeader.SourceDocumentId = allocation.Id;
+                    _financialService.UpdateGeneralLedgerHeader(glHeader);
+                }
             }
         }
 
@@ -605,7 +628,7 @@ namespace Services.Sales
 
         public void AddSalesDelivery(SalesDeliveryHeader salesDelivery, bool toSave)
         {
-            var glHeader = _financialService.CreateGeneralLedgerHeader(DocumentTypes.SalesDelivery, salesDelivery.Date, string.Empty);
+            var glHeader = _financialService.CreateGeneralLedgerHeader(DocumentTypes.SalesDelivery, salesDelivery.Date, string.Empty, salesDelivery.Id);
             // Debit = COGS, Credit = Inventory
             var debitAccounts = new List<KeyValuePair<int, decimal>>();
             var creditAccounts = new List<KeyValuePair<int, decimal>>();
@@ -1019,7 +1042,7 @@ namespace Services.Sales
             var projectedItems = new Dictionary<int, Item>();
             var stockIssues = new List<(SalesInvoiceLine Line, Item Item, InventoryControlJournal Movement)>();
 
-            var glHeader = _financialService.CreateGeneralLedgerHeader(DocumentTypes.SalesInvoice, salesInvoice.Date, string.Empty);
+            var glHeader = _financialService.CreateGeneralLedgerHeader(DocumentTypes.SalesInvoice, salesInvoice.Date, string.Empty, salesInvoice.Id);
             var customer = GetCustomerById(salesInvoice.CustomerId);
 
             foreach (var lineItem in salesInvoice.SalesInvoiceLines)

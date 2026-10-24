@@ -2239,10 +2239,24 @@ namespace Api.Controllers
             }
         }
 
+        public sealed class SaveAllocationLineDto
+        {
+            public int InvoiceId { get; set; }
+            public decimal? AmountToAllocate { get; set; }
+        }
+
+        public sealed class SaveAllocationDto
+        {
+            public int CustomerId { get; set; }
+            public int ReceiptId { get; set; }
+            public DateTime Date { get; set; }
+            public List<SaveAllocationLineDto> AllocationLines { get; set; } = new();
+        }
+
         [HttpPost]
         [Route("SaveAllocation")]
         [RequirePermission(Core.Domain.Security.SystemPermissions.SalesReceiptsCreate)]
-        public IActionResult SaveAllocation([FromBody] dynamic allocationDto)
+        public IActionResult SaveAllocation([FromBody] SaveAllocationDto allocationDto)
         {
             string[]? errors = null;
 
@@ -2257,13 +2271,13 @@ namespace Api.Controllers
                     return new BadRequestObjectResult(errors);
                 }
 
-                _tenantGuard.EnsureOwned<Core.Domain.Sales.Customer>((int)allocationDto.CustomerId, "CustomerId");
-                _tenantGuard.EnsureOwned<Core.Domain.Sales.SalesReceiptHeader>((int)allocationDto.ReceiptId, "ReceiptId");
+                _tenantGuard.EnsureOwned<Core.Domain.Sales.Customer>(allocationDto.CustomerId, "CustomerId");
+                _tenantGuard.EnsureOwned<Core.Domain.Sales.SalesReceiptHeader>(allocationDto.ReceiptId, "ReceiptId");
 
                 foreach (var line in allocationDto.AllocationLines)
                 {
-                    _tenantGuard.EnsureOwned<Core.Domain.Sales.SalesInvoiceHeader>((int)line.InvoiceId, "InvoiceId");
-                    decimal? amount = (decimal?)line.AmountToAllocate;
+                    _tenantGuard.EnsureOwned<Core.Domain.Sales.SalesInvoiceHeader>(line.InvoiceId, "InvoiceId");
+                    decimal? amount = line.AmountToAllocate;
                     if (amount.HasValue)
                     {
                         var allocation = new Core.Domain.Sales.CustomerAllocation();

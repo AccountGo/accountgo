@@ -126,6 +126,7 @@ namespace Api.Data
             builder.Entity<Company>().HasQueryFilter(c => c.DeletedAt == null);
             builder.Entity<Company>().HasIndex(c => c.Slug).IsUnique();
             builder.Entity<CompanySetting>().Property(s => s.Currency).IsRequired().HasMaxLength(3).HasDefaultValue("PHP");
+            builder.Entity<CompanySetting>().Property(s => s.AccountingBasis).HasDefaultValue(AccountingBasis.Accrual);
 
             // Stored as BusinessAddress_* columns on CompanySetting; the SQLite upgrader and D1 0004 use the same names.
             builder.Entity<CompanySetting>().OwnsOne(s => s.BusinessAddress);

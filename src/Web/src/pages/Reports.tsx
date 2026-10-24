@@ -52,6 +52,7 @@ export interface ReportData {
 }
 
 export type Statement = 'trialBalance' | 'income' | 'balanceSheet';
+export type AccountingBasis = 'accrual' | 'cash';
 type Preset = 'month' | 'quarter' | 'year' | 'all' | 'custom';
 export interface DateRange { from: string; to: string }
 export interface StatementRow {
@@ -83,17 +84,19 @@ export function getDateRange(preset: Exclude<Preset, 'custom'>, today: Date, yea
   return { from: localDate(new Date(today.getFullYear(), month, 1)), to };
 }
 
-export function reportQuery(range: DateRange): string {
+export function reportQuery(range: DateRange, basis: AccountingBasis = 'accrual'): string {
   const params = new URLSearchParams();
   if (range.from) params.set('from', `${range.from}T00:00:00`);
   // Include every posting on the selected end date, at DateTime's full precision.
   if (range.to) params.set('to', `${range.to}T23:59:59.9999999`);
+  if (basis === 'cash') params.set('basis', 'Cash');
   return params.size ? `?${params}` : '';
 }
 
 export async function loadReportData(
   fetcher: (url: string) => Promise<Response>,
   range: DateRange,
+  basis: AccountingBasis = 'accrual',
 ): Promise<ReportData> {
   async function read<T>(path: string): Promise<T[]> {
     const response = await fetcher(path);
@@ -102,7 +105,7 @@ export async function loadReportData(
     if (!Array.isArray(data)) throw new Error('The reporting API returned an invalid response.');
     return data;
   }
-  const query = reportQuery(range);
+  const query = reportQuery(range, basis);
   const [trialBalance, income, balanceSheet, years, accounts] = await Promise.all([
     read<TrialBalanceRow>(`/api/Financials/trialbalance${query}`),
     read<IncomeRow>(`/api/Financials/IncomeStatement${query}`),
@@ -196,6 +199,7 @@ export default function Reports() {
   const { authFetch } = useAuth();
   const allowed = hasPermission('reports.view');
   const [statement, setStatement] = useState<Statement>('trialBalance');
+  const [basis, setBasis] = useState<AccountingBasis>('accrual');
   const [preset, setPreset] = useState<Preset>('month');
   const [range, setRange] = useState<DateRange>(() => getDateRange('month', new Date()));
   const [hideZero, setHideZero] = useState(true);
@@ -203,7 +207,7 @@ export default function Reports() {
   const [result, setResult] = useState<{ key: string; slug: string; data: ReportData } | null>(null);
   const [failure, setFailure] = useState<{ key: string; message: string } | null>(null);
   const validRange = !!range.to && (!range.from || range.from <= range.to);
-  const key = JSON.stringify([currentOrg.slug, range.from, range.to, revision]);
+  const key = JSON.stringify([currentOrg.slug, range.from, range.to, basis, revision]);
   const data = result?.key === key ? result.data : null;
   const error = failure?.key === key ? failure.message : null;
   const loading = allowed && validRange && !data && !error;
@@ -215,17 +219,18 @@ export default function Reports() {
   useEffect(() => {
     if (!allowed || !validRange) return;
     let cancelled = false;
-    loadReportData(authFetch, range).then(
+    loadReportData(authFetch, range, basis).then(
       data => { if (!cancelled) { setResult({ key, slug: currentOrg.slug, data }); setFailure(null); } },
       error => { if (!cancelled) setFailure({ key, message: error instanceof Error ? error.message : 'Unable to load financial reports.' }); },
     );
     return () => { cancelled = true; };
-  }, [authFetch, allowed, validRange, key, range, currentOrg.slug]);
+  }, [authFetch, allowed, validRange, key, range, basis, currentOrg.slug]);
 
   if (!allowed) return <PermissionDeniedCard permission="reports.view" />;
 
   const rows = data ? buildStatement(statement, data, hideZero) : [];
   const title = statements.find(s => s.key === statement)!.label;
+  const basisLabel = basis === 'cash' ? 'Cash Basis' : 'Accrual Basis';
   const period = statement === 'balanceSheet' ? `As of ${range.to}` : `${range.from || 'All time'} to ${range.to}`;
   const formatAmount = (value?: number) => value === undefined ? '' :
     `${currencySymbol(currentOrg.currency)}${(value / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -235,13 +240,13 @@ export default function Reports() {
   const exportCsv = () => {
     if (!data || !validRange || error) return;
     const csv = statementCsv(statement, rows, [
-      ['Statement', title], ['Organization', currentOrg.name], ['Currency', currentOrg.currency || DEFAULT_CURRENCY],
+      ['Statement', title], ['Accounting Basis', basisLabel], ['Organization', currentOrg.name], ['Currency', currentOrg.currency || DEFAULT_CURRENCY],
       ['Period', period], ['Financial Year', activeYear?.fiscalYearName || 'No active financial year'],
     ]);
     const url = URL.createObjectURL(new Blob(['\uFEFF', csv], { type: 'text/csv;charset=utf-8;' }));
     const link = document.createElement('a');
     link.href = url;
-    link.download = `${currentOrg.slug}-${statement}-${range.to}.csv`;
+    link.download = `${currentOrg.slug}-${statement}-${basis}-${range.to}.csv`;
     document.body.appendChild(link);
     link.click();
     link.remove();
@@ -262,6 +267,12 @@ export default function Reports() {
         </>}
       />
       <div className="flex flex-wrap items-end gap-4 rounded-2xl bg-[var(--bg-surface)] p-4">
+        <label className="grid gap-1 text-xs text-[var(--text-secondary)]">Accounting Basis
+          <select className={inputClass} value={basis} onChange={event => setBasis(event.target.value as AccountingBasis)}>
+            <option value="accrual">Accrual</option>
+            <option value="cash">Cash</option>
+          </select>
+        </label>
         <label className="grid gap-1 text-xs text-[var(--text-secondary)]">Period
           <select className={inputClass} value={preset} onChange={event => {
             const next = event.target.value as Preset;
@@ -302,7 +313,7 @@ export default function Reports() {
         : loading ? <div role="status" className="flex items-center gap-2 p-6"><Loader2 className="h-5 w-5 animate-spin" />Loading financial reports...</div>
         : data && <section aria-label={title} className="overflow-hidden rounded-2xl bg-[var(--bg-surface)]">
           <div className="flex flex-wrap items-center justify-between gap-3 p-5">
-            <div><h2 className="text-lg font-semibold">{title}</h2><p className="text-sm text-[var(--text-secondary)]">{period} | {currentOrg.currency || DEFAULT_CURRENCY}</p></div>
+            <div><h2 className="text-lg font-semibold">{title}</h2><p className="text-sm text-[var(--text-secondary)]">{period} | {basisLabel} | {currentOrg.currency || DEFAULT_CURRENCY}</p></div>
             {statement !== 'income' && <p role="status" className={difference === 0 ? 'text-emerald-500' : 'text-red-500'}>
               {difference === 0 ? 'In balance' : `Out of balance: ${formatAmount(Math.abs(difference))}`}
             </p>}
