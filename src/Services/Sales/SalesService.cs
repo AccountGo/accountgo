@@ -1011,6 +1011,9 @@ namespace Services.Sales
             var taxes = new List<KeyValuePair<int, decimal>>();
             var sales = new List<KeyValuePair<int, decimal>>();
             var availableTaxes = _financialService.GetTaxes().ToList();
+            // Discounts post to their own account so sales report before them; without one, sales post net.
+            var salesDiscountAccountId = base.GetGeneralLedgerSetting()?.SalesDiscountAccountId;
+            decimal totalDiscount = 0;
             var projectedItems = new Dictionary<int, Item>();
             var stockIssues = new List<(SalesInvoiceLine Line, Item Item, InventoryControlJournal Movement)>();
 
@@ -1025,6 +1028,12 @@ namespace Services.Sales
                     throw new Exception("Item is not correctly setup for financial transaction. Please check if GL accounts are all set.");
 
                 var totalLineAmount = lineItem.Subtotal;
+                if (salesDiscountAccountId.HasValue)
+                {
+                    var grossLineAmount = Math.Round(lineItem.Quantity * lineItem.Amount, 2, MidpointRounding.AwayFromZero);
+                    totalDiscount += grossLineAmount - totalLineAmount;
+                    totalLineAmount = grossLineAmount;
+                }
                 if (lineItem.TaxId.HasValue)
                 {
                     var tax = availableTaxes.SingleOrDefault(t => t.Id == lineItem.TaxId.Value)
@@ -1117,6 +1126,9 @@ namespace Services.Sales
                     glHeader.GeneralLedgerLines.Add(creditSalesTaxAccount);
                 }
             }
+
+            if (totalDiscount != 0)
+                glHeader.GeneralLedgerLines.Add(_financialService.CreateGeneralLedgerLine(DrOrCrSide.Dr, salesDiscountAccountId!.Value, totalDiscount));
 
             if (salesInvoice.ShippingHandlingCharge > 0)
             {

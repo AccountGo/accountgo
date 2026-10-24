@@ -72,8 +72,9 @@ Like bills, the line subtotal is quantity times unit price less discount percent
 zero to cents. Tax is added on top and rounded per line with `PurchaseInvoiceLine.TaxOf`.
 `SalesInvoiceLine.TaxId` and `TaxAmount` are saved server-side; client-sent tax amounts are ignored.
 Views, payments, PDF/email and posting use those stored amounts without recalculating issued tax.
-Receivables debit the subtotal plus tax plus shipping; revenue credits the discounted subtotal,
-tax credits each selected tax's sales account, and shipping credits the configured shipping account.
+Receivables debit the subtotal plus tax plus shipping; revenue credits each line before discount, the
+discounts debit the workspace's Sales Discounts account (net revenue when none is set), tax credits each
+selected tax's sales account, and shipping credits the configured shipping account.
 A selected tax without a sales tax account prevents posting before stock is applied.
 
 D1 `0018_sales_line_tax.sql`, the EF migration and the local SQLite upgrader add nullable `TaxId`

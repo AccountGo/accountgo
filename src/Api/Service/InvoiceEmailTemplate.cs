@@ -55,19 +55,22 @@ namespace Api.Service
                 facts.Add(("Due date", due));
             if (!string.IsNullOrWhiteSpace(invoice.ReferenceNo))
                 facts.Add(("Reference / PO", invoice.ReferenceNo.Trim()));
-            foreach (var line in invoice.SalesInvoiceLines ?? new List<Dto.Sales.SalesInvoiceLine>())
-                facts.Add((line.ItemDescription ?? "Item",
-                    $"{InvoiceFormat.Money(line.LineTotal ?? 0, currency)} + tax {InvoiceFormat.Money(line.TaxAmount ?? 0, currency)}"));
-            facts.Add(("Subtotal", InvoiceFormat.Money(invoice.Amount, currency)));
-            facts.Add(("Tax", InvoiceFormat.Money(invoice.TotalTax ?? 0, currency)));
-            if (invoice.ShippingHandlingCharge != 0)
-                facts.Add(("Shipping", InvoiceFormat.Money(invoice.ShippingHandlingCharge, currency)));
-            facts.Add(("Total", InvoiceFormat.Money(total, currency)));
-            if (invoice.PaidAmount > 0 && !paidInFull)
+            // The attached PDF has the lines. The email breaks the total down only when tax or shipping is on top.
+            var hasTax = (invoice.TotalTax ?? 0) != 0;
+            var hasShipping = invoice.ShippingHandlingCharge != 0;
+            var partlyPaid = invoice.PaidAmount > 0 && !paidInFull;
+            if (hasTax || hasShipping)
             {
-                facts.Add(("Invoice total", InvoiceFormat.Money(total, currency)));
-                facts.Add(("Already paid", InvoiceFormat.Money(invoice.PaidAmount, currency)));
+                facts.Add(("Subtotal", InvoiceFormat.Money(invoice.Amount, currency)));
+                if (hasTax)
+                    facts.Add(("Tax", InvoiceFormat.Money(invoice.TotalTax!.Value, currency)));
+                if (hasShipping)
+                    facts.Add(("Shipping", InvoiceFormat.Money(invoice.ShippingHandlingCharge, currency)));
             }
+            if (hasTax || hasShipping || partlyPaid)
+                facts.Add(("Invoice total", InvoiceFormat.Money(total, currency)));
+            if (partlyPaid)
+                facts.Add(("Already paid", InvoiceFormat.Money(invoice.PaidAmount, currency)));
 
             var sections = new List<(string Heading, string Body)>();
             if (invoice.Display.ShowPaymentInstructions && !string.IsNullOrWhiteSpace(invoice.PaymentInstructions) && !paidInFull)

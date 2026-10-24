@@ -493,7 +493,9 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
       const savedData = await res.json();
       const targetId = savedData.id || invoiceId;
       const warnings = Array.isArray(savedData.warnings) ? savedData.warnings.filter((warning: unknown): warning is string => typeof warning === 'string') : [];
+      const postingError = typeof savedData.postingError === 'string' ? savedData.postingError : null;
       setStockWarnings(warnings);
+      if (postingError) setErrorBanner(`Issued, but not posted to the ledger: ${postingError}`);
 
       setSuccessBanner(
         asDraft
@@ -503,8 +505,8 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
 
       // Navigate to detail view
       setTimeout(() => {
-        navigate(`/org/${orgSlug}/sales/${targetId}`, { state: { stockWarnings: warnings } });
-      }, warnings.length > 0 ? 3500 : 700);
+        navigate(`/org/${orgSlug}/sales/${targetId}`, { state: { stockWarnings: warnings, postingError } });
+      }, warnings.length > 0 || postingError ? 3500 : 700);
     } catch (err: any) {
       console.error('Save invoice error:', err);
       setErrorBanner(err.message || 'An error occurred while saving the invoice.');

@@ -62,7 +62,13 @@ namespace AccountGo.BackendTests
             Assert.True(issued.IsSuccessStatusCode, await issued.Content.ReadAsStringAsync());
             var entry = Ledger(SalesTaxLedgerId(saved.Id));
             Assert.Equal(total, Assert.Single(entry, l => l.DrCr == DrOrCrSide.Dr && l.AccountId == AccountId("10120")).Amount);
-            Assert.Equal(subtotal, Assert.Single(entry, l => l.DrCr == DrOrCrSide.Cr && l.AccountId == AccountId("40100")).Amount);
+            // Sales post before discount; the discount goes to Sales Discounts.
+            var gross = Math.Round(price * quantity, 2, MidpointRounding.AwayFromZero);
+            Assert.Equal(gross, Assert.Single(entry, l => l.DrCr == DrOrCrSide.Cr && l.AccountId == AccountId("40100")).Amount);
+            if (gross != subtotal)
+                Assert.Equal(gross - subtotal, Assert.Single(entry, l => l.DrCr == DrOrCrSide.Dr && l.AccountId == AccountId("40400")).Amount);
+            else
+                Assert.DoesNotContain(entry, l => l.AccountId == AccountId("40400"));
             Assert.Equal(taxAmount, Assert.Single(entry, l => l.DrCr == DrOrCrSide.Cr && l.AccountId == AccountId("20300")).Amount);
             AssertBalancedSalesTax(entry);
         }
@@ -202,14 +208,17 @@ namespace AccountGo.BackendTests
             });
             var saved = await SaveTaxInvoice(invoice);
             Assert.False(saved.Posted);
-            Assert.Contains("Tax Sales tax 12 has no sales tax account", saved.Warnings);
+            Assert.Equal("Tax Sales tax 12 has no sales tax account", saved.PostingError);
+            Assert.DoesNotContain(saved.Warnings, warning => warning.Contains("sales tax account", StringComparison.Ordinal));
             var posted = await Send(HttpMethod.Post, "/api/Sales/PostSalesInvoice", saved);
             Assert.Equal(HttpStatusCode.BadRequest, posted.StatusCode);
             Assert.Contains("Tax Sales tax 12 has no sales tax account", await posted.Content.ReadAsStringAsync());
             var issued = await Send(HttpMethod.Post, $"/api/Sales/IssueSalesInvoice?id={saved.Id}");
             Assert.True(issued.IsSuccessStatusCode, await issued.Content.ReadAsStringAsync());
-            Assert.Contains((await Json(issued)).GetProperty("warnings").EnumerateArray(),
-                warning => warning.GetString() == "Tax Sales tax 12 has no sales tax account");
+            var issuedJson = await Json(issued);
+            Assert.Equal("Tax Sales tax 12 has no sales tax account", issuedJson.GetProperty("postingError").GetString());
+            Assert.DoesNotContain(issuedJson.GetProperty("warnings").EnumerateArray(),
+                warning => warning.GetString()!.Contains("sales tax account", StringComparison.Ordinal));
             AssertStockState(itemId, 10, 5);
             WithDb(db =>
             {
@@ -275,9 +284,12 @@ namespace AccountGo.BackendTests
             Assert.Equal(12m, printed.SalesInvoiceLines.Single().TaxAmount);
             var email = InvoiceEmailTemplate.Build(printed, "USD", canReply: true);
             Assert.Contains("$112.00", email.Subject);
-            Assert.Contains("Taxed consulting: $100.00 + tax $12.00", email.Text);
+            // The PDF carries the lines; the email gives the totals once.
+            Assert.DoesNotContain("Taxed consulting", email.Text);
+            Assert.Contains("Subtotal: $100.00", email.Text);
             Assert.Contains("Tax: $12.00", email.Text);
-            Assert.Contains("Total: $112.00", email.Text);
+            Assert.Contains("Invoice total: $112.00", email.Text);
+            Assert.Single(System.Text.RegularExpressions.Regex.Matches(email.Text, "Invoice total:"));
             Assert.Contains("$12.00", email.Html);
             var pdf = await Send(HttpMethod.Get, $"/api/Sales/SalesInvoicePdf?id={saved.Id}");
             Assert.Equal(HttpStatusCode.OK, pdf.StatusCode);

@@ -1612,15 +1612,13 @@ namespace Api.Controllers
                 tx.Commit();
 
                 // Auto-post to GL if issued (not draft) and not already posted
+                string? postingError = null;
                 if (salesInvoiceDto.Status != "Draft" && salesInvoice.Id > 0 && !salesInvoice.GeneralLedgerHeaderId.HasValue)
-                {
-                    var postingError = TryPostSalesInvoice(salesInvoice.Id);
-                    if (postingError != null)
-                        stockWarnings.Add(postingError);
-                }
+                    postingError = TryPostSalesInvoice(salesInvoice.Id);
 
                 var saved = BuildSalesInvoiceDto(salesInvoice.Id)!;
                 saved.Warnings = stockWarnings;
+                saved.PostingError = postingError;
                 return Ok(saved);
             }
             catch (Exception ex)
@@ -1993,14 +1991,11 @@ namespace Api.Controllers
                 _salesService.UpdateSalesInvoice(invoice);
                 tx.Commit();
 
+                string? postingError = null;
                 if (!invoice.GeneralLedgerHeaderId.HasValue)
-                {
-                    var postingError = TryPostSalesInvoice(invoice.Id);
-                    if (postingError != null)
-                        stockWarnings.Add(postingError);
-                }
+                    postingError = TryPostSalesInvoice(invoice.Id);
 
-                return Ok(new { success = true, invoiceId = invoice.Id, no = invoice.No, status = "Open", warnings = stockWarnings });
+                return Ok(new { success = true, invoiceId = invoice.Id, no = invoice.No, status = "Open", warnings = stockWarnings, postingError });
             }
             catch (Exception ex)
             {

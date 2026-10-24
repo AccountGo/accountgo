@@ -162,6 +162,7 @@ namespace Api.Service
         {
             var lines = _invoice.SalesInvoiceLines ?? new List<Dto.Sales.SalesInvoiceLine>();
             var showDiscount = lines.Any(l => (l.Discount ?? 0) != 0);
+            var showTax = lines.Any(l => (l.TaxAmount ?? 0) != 0);
 
             container.Table(table =>
             {
@@ -173,7 +174,8 @@ namespace Api.Service
                     columns.ConstantColumn(80);
                     if (showDiscount)
                         columns.ConstantColumn(44);
-                    columns.ConstantColumn(64);
+                    if (showTax)
+                        columns.ConstantColumn(64);
                     columns.ConstantColumn(86);
                 });
 
@@ -188,7 +190,8 @@ namespace Api.Service
                     header.Cell().Element(HeaderCell).AlignRight().Text("UNIT PRICE");
                     if (showDiscount)
                         header.Cell().Element(HeaderCell).AlignRight().Text("DISC");
-                    header.Cell().Element(HeaderCell).AlignRight().Text("TAX");
+                    if (showTax)
+                        header.Cell().Element(HeaderCell).AlignRight().Text("TAX");
                     header.Cell().Element(HeaderCell).AlignRight().Text("AMOUNT");
                 });
 
@@ -210,7 +213,8 @@ namespace Api.Service
                     table.Cell().Element(BodyCell).AlignRight().Text(Money(price));
                     if (showDiscount)
                         table.Cell().Element(BodyCell).AlignRight().Text(discount == 0 ? "—" : $"{discount.ToString("0.##", CultureInfo.InvariantCulture)}%");
-                    table.Cell().Element(BodyCell).AlignRight().Text(Money(line.TaxAmount ?? 0));
+                    if (showTax)
+                        table.Cell().Element(BodyCell).AlignRight().Text((line.TaxAmount ?? 0) == 0 ? "—" : Money(line.TaxAmount!.Value));
                     table.Cell().Element(BodyCell).AlignRight().Text(Money(total)).SemiBold();
                 }
             });

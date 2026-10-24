@@ -30,7 +30,10 @@ namespace Dto.Sales
         public IList<SalesInvoiceLine>? SalesInvoiceLines { get; set; }
         public decimal? TotalTax { get; set; }
         public decimal ShippingHandlingCharge { get; set; }
+        /// <summary>Stock warnings from saving or issuing; the invoice was still saved.</summary>
         public List<string> Warnings { get; set; } = new();
+        /// <summary>Why an issued invoice couldn't be posted to the ledger; null when it was posted or is a draft.</summary>
+        public string? PostingError { get; set; }
 
         // Standard Invoicing attributes
         public DateTime? DueDate { get; set; }
