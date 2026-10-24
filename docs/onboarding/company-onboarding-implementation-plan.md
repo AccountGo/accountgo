@@ -389,8 +389,10 @@ Control account codes in `GeneralLedgerSetting` must exist in the chosen templat
 
 ### Acceptance
 
-- [ ] Docs linked and consistent with shipped behavior.  
-- [ ] No open P0 UX bugs from Phase 3 QA list.
+- [x] Docs linked and consistent with shipped behavior.  
+- [ ] No open P0 UX bugs from Phase 3 QA list (the QA script has not been run against a live API yet).
+
+**Status:** Done on branch, pending merge and live QA. Shipped: wizard draft in `localStorage` (cleared on success; a signup-supplied name takes priority), docs cross-links, changelog entry, currency default fixed to **USD**. Not shipped: telemetry events (no analytics stack exists in the repo), and a full a11y audit beyond native radios/labels, focus-to-heading and `role=alert` errors.
 
 ---
 
@@ -441,7 +443,7 @@ Phase 5 may be deferred if product accepts single CoA + stored `CoaTemplateId` f
 - [x] Phase 3 — CreateOrg wizard UI  
 - [x] Phase 4 — Checklist + locks + books-start guard  
 - [x] Phase 5 — CoA template families  
-- [ ] Phase 6 — Polish + docs  
+- [x] Phase 6 — Polish + docs  
 
 Mark each phase **Done** in this file with a two-line summary when merged.
 
@@ -456,4 +458,5 @@ Mark each phase **Done** in this file with a two-line summary when merged.
 | 2026-10-25 | Phase 3 wizard UI implemented on branch, pending merge and live QA |
 | 2026-10-25 | Phase 4 checklist, policy locks and books-start guard implemented on branch |
 | 2026-10-25 | Phase 5 CoA template families implemented on branch |
+| 2026-10-25 | Phase 6 polish and docs implemented on branch; telemetry deferred |
 | 2026-10-25 | Phase 1 marked done on branch; LIFO and FY-coherence checks deferred to Phase 2 |

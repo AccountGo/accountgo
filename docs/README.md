@@ -14,3 +14,4 @@ Please refer to the main [AccountGo Project README](../README.md) at the reposit
 - [Cloudflare Deployment](../README.md#deployment-to-cloudflare)
 - [Company onboarding requirements](./onboarding/company-onboarding-requirements.md)
 - [Company onboarding implementation plan](./onboarding/company-onboarding-implementation-plan.md)
+- [Chart-of-accounts templates](./accounting/coa-register.md#6-chart-of-accounts-templates)

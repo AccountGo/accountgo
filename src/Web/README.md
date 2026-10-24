@@ -33,7 +33,7 @@ src/Web/
 │   │   └── OrgLayout.tsx       # Root layout: captures :orgSlug, validates tenant, injects Outlet context
 │   ├── pages/
 │   │   ├── SelectOrg.tsx       # Root workspace selection
-│   │   ├── CreateOrg/          # /create-org setup wizard (steps/, hooks/, lib/)
+│   │   ├── CreateOrg/          # /create-org setup wizard (steps/, hooks/, lib/); resumes from a localStorage draft
 │   │   ├── Dashboard.tsx       # /org/:orgSlug/dashboard with real-time financial metrics skeleton
 │   │   ├── Settings.tsx        # /org/:orgSlug/settings with tenant profile, currency, fiscal year, danger zone
 │   │   ├── GeneralLedger.tsx   # /org/:orgSlug/financials posted journal register

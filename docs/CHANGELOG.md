@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Company onboarding: a multi-step `/create-org` wizard that captures reporting framework, fiscal year, books start date, tax regime, industry and inventory costing; the API derives the fiscal year and chart-of-accounts template from those choices. Signup no longer creates a workspace.
+- Accounting policy lock: framework, basis, fiscal year and books start freeze after the first journal entry; postings dated before the books start date are rejected.
+- Dashboard "Get books ready" checklist and a Settings accounting policy card.
 - Standard Open Source community health files: `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md` (Contributor Covenant v2.1), `SECURITY.md`.
 - GitHub issue templates for bug reports and feature requests, plus pull request template with comprehensive verification checklist.
 - Technical documentation in `docs/`: `ARCHITECTURE.md`, `DEVELOPMENT.md`, `DEPLOYMENT.md`.

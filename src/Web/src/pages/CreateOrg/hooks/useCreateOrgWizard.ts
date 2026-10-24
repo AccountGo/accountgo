@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../auth/AuthContext';
 import { setPersistedOrgSlug } from '../../../lib/storage';
+import { clearDraft, loadDraft, saveDraft } from '../lib/draft';
 import {
   buildPayload,
   defaultState,
@@ -19,14 +20,20 @@ export type SubmitStatus = 'idle' | 'submitting' | 'success';
 export const useCreateOrgWizard = (prefill: { name?: string; slug?: string }) => {
   const navigate = useNavigate();
   const { authFetch } = useAuth();
-  const [state, setState] = useState<WizardState>(() => defaultState(new Date(), prefill));
-  const [stepIndex, setStepIndex] = useState(() => (prefill.name ? 1 : 0));
+  // A name from signup wins over any saved draft; otherwise resume where the user left off.
+  const [draft] = useState(() => (prefill.name ? null : loadDraft(STEPS.length)));
+  const [state, setState] = useState<WizardState>(() => draft?.state ?? defaultState(new Date(), prefill));
+  const [stepIndex, setStepIndex] = useState(() => draft?.stepIndex ?? (prefill.name ? 1 : 0));
   const [errors, setErrors] = useState<StepErrors>({});
   const [status, setStatus] = useState<SubmitStatus>('idle');
   const [submitError, setSubmitError] = useState<string | null>(null);
   const redirectTimer = useRef<number | undefined>(undefined);
 
   useEffect(() => () => window.clearTimeout(redirectTimer.current), []);
+
+  useEffect(() => {
+    if (status === 'idle') saveDraft({ state, stepIndex });
+  }, [state, stepIndex, status]);
 
   const step: StepId = STEPS[stepIndex];
 
@@ -85,6 +92,7 @@ export const useCreateOrgWizard = (prefill: { name?: string; slug?: string }) =>
       }
       const slug: string = data?.slug || slugify(state.slug || state.name);
       setPersistedOrgSlug(slug);
+      clearDraft();
       setStatus('success');
       redirectTimer.current = window.setTimeout(() => navigate(`/org/${encodeURIComponent(slug)}/dashboard`, { replace: true }), 900);
     } catch {
