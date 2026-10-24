@@ -67,8 +67,9 @@ namespace Api.Service
             var normalizedEmail = email.Trim().ToLowerInvariant();
             var user = await _userManager.FindByEmailAsync(normalizedEmail);
 
-            // User Enumeration Defense: Perform equivalent work and return identical 200 payload
-            if (user == null)
+            // User Enumeration Defense: Perform equivalent work and return identical 200 payload.
+            // A closed account is treated the same way so the address cannot be distinguished, and no code is sent.
+            if (user == null || user.DeletedAt != null)
             {
                 _logger.LogInformation("OTP request for non-existent email {Email} from {IP} - running dummy hash compute.", normalizedEmail, ipAddress);
                 PerformDummyWork(normalizedEmail);
@@ -212,7 +213,7 @@ namespace Api.Service
             var normalizedEmail = email.Trim().ToLowerInvariant();
             var user = await _userManager.FindByEmailAsync(normalizedEmail);
 
-            if (user == null)
+            if (user == null || user.DeletedAt != null)
             {
                 PerformDummyWork(normalizedEmail);
                 return (false, null, null, "Invalid or expired code.");
@@ -301,6 +302,10 @@ namespace Api.Service
             if (session == null)
                 return (false, null, null, "Invalid session token.");
 
+            var account = await _userManager.FindByIdAsync(session.UserId);
+            if (account == null || account.DeletedAt != null)
+                return (false, null, null, "Session has expired or been revoked.");
+
             var now = DateTime.UtcNow;
             if (session.IsRevoked)
             {
@@ -352,7 +357,7 @@ namespace Api.Service
                 return (false, null, null, "Session has expired. Please sign in again.");
 
             var user = await _userManager.FindByIdAsync(session.UserId);
-            if (user == null)
+            if (user == null || user.DeletedAt != null)
                 return (false, null, null, "User account no longer exists.");
 
             var newRawToken = GenerateSecureToken();
@@ -412,6 +417,9 @@ namespace Api.Service
         private async Task<(bool Success, AuthResponse? Response, string? RawRefreshToken, string? Error)> CreateSessionAndAuthResponseAsync(
             ApplicationUser user, string? ipAddress, string? userAgent)
         {
+            if (user.DeletedAt != null)
+                return (false, null, null, "User account no longer exists.");
+
             var tokenResult = await _authService.CreateToken(user, populateExp: false);
 
             var rawRefreshToken = GenerateSecureToken();

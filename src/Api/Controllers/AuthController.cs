@@ -39,6 +39,7 @@ namespace Api.Controllers
         private readonly ApplicationIdentityDbContext _identityContext;
         private readonly ApiDbContext _apiDb;
         private readonly WorkspaceService _workspaces;
+        private readonly AccountDeletionService _accountDeletion;
 
         public AuthController(
             IEmailOtpService otpService,
@@ -49,7 +50,8 @@ namespace Api.Controllers
             ILogger<AuthController> logger,
             ApplicationIdentityDbContext identityContext,
             ApiDbContext apiDb,
-            WorkspaceService workspaces)
+            WorkspaceService workspaces,
+            AccountDeletionService accountDeletion)
         {
             _otpService = otpService;
             _userManager = userManager;
@@ -60,6 +62,7 @@ namespace Api.Controllers
             _identityContext = identityContext;
             _apiDb = apiDb;
             _workspaces = workspaces;
+            _accountDeletion = accountDeletion;
         }
 
         [AllowAnonymous]
@@ -104,6 +107,15 @@ namespace Api.Controllers
                 }
 
                 var user = await _userManager.FindByEmailAsync(payload.Email);
+                if (user != null && user.DeletedAt != null)
+                {
+                    return BadRequest(new ProblemDetails
+                    {
+                        Title = "Account Not Found",
+                        Detail = "No AccountGo profile associated with this Google address. Please contact your administrator.",
+                        Status = StatusCodes.Status400BadRequest
+                    });
+                }
                 if (user == null)
                 {
                     var autoProvision = _configuration.GetValue<bool>("Google:AutoProvision", false);
@@ -674,6 +686,71 @@ namespace Api.Controllers
 
             await _identityContext.SaveChangesAsync();
             return Ok(new { success = true, revokedCount = otherSessions.Count });
+        }
+
+        public class DeleteAccountRequest
+        {
+            public string? ConfirmEmail { get; set; }
+        }
+
+        [Authorize]
+        [HttpGet("account/deletion-blockers")]
+        public async Task<IActionResult> DeletionBlockers()
+        {
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User.FindFirst("sub")?.Value;
+            if (string.IsNullOrEmpty(userId))
+                return Unauthorized();
+            var preview = await _accountDeletion.PreviewAsync(userId);
+            return Ok(new
+            {
+                workspaces = preview.Workspaces.Select(w => new { name = w.Name, slug = w.Slug }),
+                platformAdministrator = preview.PlatformAdministrator
+            });
+        }
+
+        [Authorize]
+        [HttpDelete("account")]
+        public async Task<IActionResult> DeleteAccount([FromBody] DeleteAccountRequest request)
+        {
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User.FindFirst("sub")?.Value;
+            if (string.IsNullOrEmpty(userId))
+                return Unauthorized();
+
+            var outcome = await _accountDeletion.DeleteAsync(userId, request?.ConfirmEmail);
+            if (outcome.Status == AccountDeletionStatus.Missing)
+            {
+                return Unauthorized(new ProblemDetails
+                {
+                    Title = "Account closed",
+                    Detail = "This account has been deleted.",
+                    Status = StatusCodes.Status401Unauthorized
+                });
+            }
+            if (outcome.Status == AccountDeletionStatus.ConfirmationMismatch)
+                return Problem(statusCode: 400, title: AccountDeletionService.ConfirmationTitle);
+            if (outcome.Status == AccountDeletionStatus.Blocked)
+            {
+                var title = outcome.Preview.PlatformAdministrator
+                    ? AccountDeletionService.PlatformAdminBlockTitle
+                    : AccountDeletionService.WorkspaceBlockTitle;
+                return Problem(statusCode: 409, title: title, extensions: BlockerExtensions(outcome.Preview));
+            }
+
+            ClearRefreshTokenCookie();
+            return NoContent();
+        }
+
+        private static Dictionary<string, object?> BlockerExtensions(AccountDeletionPreview preview)
+        {
+            return new Dictionary<string, object?>
+            {
+                ["workspaces"] = preview.Workspaces.Select(w => new Dictionary<string, string>
+                {
+                    ["name"] = w.Name,
+                    ["slug"] = w.Slug
+                }).ToList(),
+                ["platformAdministrator"] = preview.PlatformAdministrator
+            };
         }
 
         [Authorize]

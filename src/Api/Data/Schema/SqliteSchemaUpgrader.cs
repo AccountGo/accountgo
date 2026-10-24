@@ -146,6 +146,7 @@ namespace Api.Data.Schema
                 var columns = new[]
                 {
                     new[] { "Company", "DeletedAt", "TEXT NULL" },
+                    new[] { "AspNetUsers", "DeletedAt", "TEXT NULL" },
                     new[] { "CompanySetting", "Currency", "TEXT NOT NULL DEFAULT 'PHP'" },
                     new[] { "CompanyInvitation", "ResendWindowStart", "TEXT NULL" },
                     new[] { "CompanyInvitation", "ResendCount", "INTEGER NOT NULL DEFAULT 0" },

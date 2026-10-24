@@ -61,6 +61,8 @@ export interface AuthContextType {
   signUp: (payload: SignUpPayload) => Promise<SignUpResponse>;
   verifyOtp: (email: string, otp: string) => Promise<void>;
   logout: () => Promise<void>;
+  /** Drops the in-memory session. Use after the server has already revoked it. */
+  clearSession: () => void;
   authFetch: (url: string, init?: RequestInit) => Promise<Response>;
   refreshUser: () => Promise<void>;
 }

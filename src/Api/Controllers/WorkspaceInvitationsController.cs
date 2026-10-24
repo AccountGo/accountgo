@@ -71,6 +71,8 @@ namespace Api.Controllers
             using (var tx = _db.Database.BeginTransaction(System.Data.IsolationLevel.Serializable))
             {
                 var user = _identity.Users.SingleOrDefault(u => u.NormalizedEmail == email.ToUpperInvariant());
+                if (user != null && user.DeletedAt != null)
+                    return Problem(statusCode: 409, title: AccountDeletionService.ClosedEmailTitle);
                 if (user != null && _db.CompanyMembers.Any(m => m.CompanyId == companyId && m.UserId == user.Id))
                     return Problem(statusCode: 409, title: "User is already a workspace member");
                 var hourAgo = DateTime.UtcNow.AddHours(-1);

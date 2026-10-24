@@ -1,8 +1,10 @@
+using System.Security.Claims;
 using System.Text;
 using Api.Data;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
 
 namespace Api.Extensions
@@ -81,6 +83,22 @@ namespace Api.Extensions
                     ValidIssuer = validIssuer,
                     ValidAudience = validAudience,
                     IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey))
+                };
+                options.Events = new JwtBearerEvents
+                {
+                    OnTokenValidated = async context =>
+                    {
+                        var userId = context.Principal?.FindFirstValue(ClaimTypes.NameIdentifier);
+                        if (string.IsNullOrEmpty(userId))
+                        {
+                            context.Fail("Account deleted");
+                            return;
+                        }
+                        var users = context.HttpContext.RequestServices.GetRequiredService<UserManager<ApplicationUser>>();
+                        var user = await users.FindByIdAsync(userId);
+                        if (user == null || user.DeletedAt != null)
+                            context.Fail("Account deleted");
+                    }
                 };
             });
         }
