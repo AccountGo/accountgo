@@ -213,13 +213,20 @@ Add `CompanyAccountingPolicyService.IsLedgerFrozen(companyId)` → true if any p
 
 ### 2.7 Acceptance
 
-- [ ] `POST /api/organizations` with full payload provisions correct FY dates (test matrix).  
-- [ ] Legacy minimal payload still works with documented defaults.  
-- [ ] Tax regime None vs SalesTax/VatGst seed differs; no PH/US rates forced.  
-- [ ] IFRS* + LIFO rejected (400).  
-- [ ] CashBasis + Accrual rejected; Ifrs + Cash rejected.  
-- [ ] No journal lines after provision.  
-- [ ] Update `SignUpAndOrganizationTests` / backend tests accordingly.
+- [x] `POST /api/organizations` with full payload provisions correct FY dates (test matrix).  
+- [x] Legacy minimal payload still works with documented defaults.  
+- [x] Tax regime None vs SalesTax/VatGst seed differs; no PH/US rates forced.  
+- [x] IFRS* + LIFO rejected (400) — LIFO has no enum value, so any undefined inventory costing value is rejected.  
+- [x] CashBasis + Accrual rejected; Ifrs + Cash rejected.  
+- [x] No journal lines after provision.  
+- [x] Update `SignUpAndOrganizationTests` / backend tests accordingly.
+
+**Status: Done on branch `feat/onboarding-phase-2-provision`, pending merge.**  
+- `POST /api/organizations` accepts the hard-gate payload (enums as strings or numbers). Omitted fields use legacy defaults: IFRS for SMEs, Accrual (Cash when the framework is CashBasis), calendar year, books start = Jan 1 of the current year, no tax, Services, no inventory costing.  
+- Policy is validated by `CompanyAccountingPolicyRules.Validate(CompanyProvisionOptions, today)` (400 `Invalid accounting policy`) and again in `WorkspaceService.Create`. The fiscal year is derived by `FiscalYearCalculator`; `CoaTemplateId` by `CoaTemplates.Resolve` (all ids seed the same CoA until Phase 5).  
+- SalesTax / VatGst seed an inactive zero-rate placeholder tax so the owner must set real rates; None keeps the active NONE tax.  
+- `CompanyAccountingPolicyService.IsLedgerFrozen` is a stub, not enforced until Phase 4.  
+- Signup still creates its workspace with legacy defaults through the shared `WorkspaceService.Create`; policy fields are not yet on the signup DTO (Phase 3 routes signup to the wizard).
 
 ---
 
@@ -400,7 +407,7 @@ Phase 5 may be deferred if product accepts single CoA + stored `CoaTemplateId` f
 ## Implementation checklist (summary)
 
 - [x] Phase 1 — Domain + schema + policy rules  
-- [ ] Phase 2 — API + provisioning + tests  
+- [x] Phase 2 — API + provisioning + tests  
 - [ ] Phase 3 — CreateOrg wizard UI  
 - [ ] Phase 4 — Checklist + locks + books-start guard  
 - [ ] Phase 5 — CoA template families  
@@ -415,4 +422,5 @@ Mark each phase **Done** in this file with a two-line summary when merged.
 | Date | Change |
 |---|---|
 | 2026-10-24 | Initial phased implementation plan |
+| 2026-10-25 | Phase 2 marked done on branch |
 | 2026-10-25 | Phase 1 marked done on branch; LIFO and FY-coherence checks deferred to Phase 2 |

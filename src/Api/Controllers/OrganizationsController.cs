@@ -10,6 +10,8 @@ using Core.Tenancy;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Converters;
 
 namespace Api.Controllers
 {
@@ -49,6 +51,35 @@ namespace Api.Controllers
             public string Slug { get; set; }
             public string Plan { get; set; } = "accounting";
             public string Currency { get; set; } = "USD";
+            public string LegalName { get; set; }
+            [JsonConverter(typeof(StringEnumConverter))] public ReportingFramework? ReportingFramework { get; set; }
+            [JsonConverter(typeof(StringEnumConverter))] public AccountingBasis? AccountingBasis { get; set; }
+            [JsonConverter(typeof(StringEnumConverter))] public FiscalYearPattern? FiscalYearPattern { get; set; }
+            public int? FiscalYearStartMonth { get; set; }
+            public DateTime? BooksStartDate { get; set; }
+            [JsonConverter(typeof(StringEnumConverter))] public TaxRegime? TaxRegime { get; set; }
+            [JsonConverter(typeof(StringEnumConverter))] public IndustryTemplate? IndustryTemplate { get; set; }
+            [JsonConverter(typeof(StringEnumConverter))] public InventoryCostingMethod? InventoryCostingMethod { get; set; }
+        }
+
+        /// <summary>Omitted policy fields fall back to the legacy defaults documented on <see cref="CompanyProvisionOptions"/>.</summary>
+        private static CompanyProvisionOptions ToOptions(CreateOrganizationRequest request)
+        {
+            var options = new CompanyProvisionOptions
+            {
+                LegalName = request.LegalName,
+                FiscalYearStartMonth = request.FiscalYearStartMonth,
+                BooksStartDate = request.BooksStartDate?.Date
+            };
+            if (request.ReportingFramework is ReportingFramework framework) options.ReportingFramework = framework;
+            // Cash basis framework implies Cash basis; every other framework implies Accrual unless the client says otherwise.
+            options.AccountingBasis = request.AccountingBasis
+                ?? (options.ReportingFramework == ReportingFramework.CashBasis ? AccountingBasis.Cash : AccountingBasis.Accrual);
+            if (request.FiscalYearPattern is FiscalYearPattern pattern) options.FiscalYearPattern = pattern;
+            if (request.TaxRegime is TaxRegime regime) options.TaxRegime = regime;
+            if (request.IndustryTemplate is IndustryTemplate industry) options.IndustryTemplate = industry;
+            if (request.InventoryCostingMethod is InventoryCostingMethod costing) options.InventoryCostingMethod = costing;
+            return options;
         }
 
         [TenantFree]
@@ -66,11 +97,16 @@ namespace Api.Controllers
                 !new[] { "invoicing", "accounting", "enterprise" }.Contains(plan))
                 return Problem(statusCode: 400, title: "Invalid workspace settings");
 
+            var options = ToOptions(request);
+            var policyErrors = CompanyAccountingPolicyRules.Validate(options, DateTime.UtcNow);
+            if (policyErrors.Count > 0)
+                return Problem(statusCode: 400, title: "Invalid accounting policy", detail: string.Join(" ", policyErrors));
+
             using (var tx = _db.Database.BeginTransaction(System.Data.IsolationLevel.Serializable))
             {
                 if (_workspaces.SlugExists(slug))
                     return Problem(statusCode: 409, title: "Workspace Slug Already Taken");
-                var company = _workspaces.Create(UserId, request.Name, slug, plan, currency, request.ShortName);
+                var company = _workspaces.Create(UserId, request.Name, slug, plan, currency, request.ShortName, options);
                 tx.Commit();
                 return StatusCode(201, Summary(company, CompanyMemberRole.Owner));
             }

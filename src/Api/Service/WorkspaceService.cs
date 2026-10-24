@@ -9,6 +9,17 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Api.Service
 {
+    public class InvalidAccountingPolicyException : Exception
+    {
+        public System.Collections.Generic.IReadOnlyList<string> Errors { get; }
+
+        public InvalidAccountingPolicyException(System.Collections.Generic.IReadOnlyList<string> errors)
+            : base(string.Join(" ", errors))
+        {
+            Errors = errors;
+        }
+    }
+
     /// <summary>Workspace creation shared by signup and authenticated creation.</summary>
     public class WorkspaceService
     {
@@ -33,8 +44,19 @@ namespace Api.Service
         }
 
         /// <summary>Creates company, ownership and defaults inside the caller's transaction.</summary>
-        public Company Create(string userId, string name, string slug, string plan, string currency, string shortName = null)
+        public Company Create(string userId, string name, string slug, string plan, string currency, string shortName = null,
+            CompanyProvisionOptions options = null)
         {
+            options = options ?? new CompanyProvisionOptions();
+            options.Currency = currency;
+            var errors = CompanyAccountingPolicyRules.Validate(options, DateTime.UtcNow);
+            if (errors.Count > 0)
+                throw new InvalidAccountingPolicyException(errors);
+            if (options.BooksStartDate == null)
+                options.BooksStartDate = new DateTime(DateTime.UtcNow.Year, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+            if (string.IsNullOrWhiteSpace(options.CoaTemplateId))
+                options.CoaTemplateId = CoaTemplates.Resolve(options.IndustryTemplate, options.ReportingFramework);
+
             var company = new Company
             {
                 Name = name.Trim(), Slug = slug,
@@ -49,7 +71,7 @@ namespace Api.Service
                 Status = CompanyMemberStatus.Active, JoinedAt = DateTime.UtcNow
             });
             _db.SaveChanges();
-            _provisioning.Provision(company, currency);
+            _provisioning.Provision(company, options);
             return company;
         }
     }

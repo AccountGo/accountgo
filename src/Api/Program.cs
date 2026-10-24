@@ -83,6 +83,7 @@ else
 builder.Services.AddScoped<IEmailOtpService, EmailOtpService>();
 builder.Services.AddScoped<CompanyProvisioningService>();
 builder.Services.AddScoped<WorkspaceService>();
+builder.Services.AddScoped<CompanyAccountingPolicyService>();
 builder.Services.AddScoped<WorkspaceInvitationService>();
 builder.Services.AddScoped<AccountDeletionService>();
 builder.Services.AddAuthentication();

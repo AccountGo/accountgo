@@ -33,6 +33,17 @@ namespace Api.Service
         /// <summary>Seeds missing defaults. The caller owns the transaction.</summary>
         public void Provision(Company company, string currency = "USD")
         {
+            Provision(company, new CompanyProvisionOptions { Currency = currency });
+        }
+
+        public void Provision(Company company, CompanyProvisionOptions options)
+        {
+            options = options ?? new CompanyProvisionOptions();
+            var booksStart = (options.BooksStartDate ?? new DateTime(DateTime.UtcNow.Year, 1, 1)).Date;
+            var coaTemplateId = string.IsNullOrWhiteSpace(options.CoaTemplateId)
+                ? CoaTemplates.Resolve(options.IndustryTemplate, options.ReportingFramework)
+                : options.CoaTemplateId;
+
             using (_tenant.Impersonate(company.Id, company.Slug, CompanyMemberRole.Owner))
             {
                 var accounts = _db.Accounts.ToDictionary(a => a.AccountCode, StringComparer.Ordinal);
@@ -76,15 +87,12 @@ namespace Api.Service
                         ShippingChargeAccountId = accounts["40500"].Id
                     });
 
-                var year = DateTime.UtcNow.Year;
-                var code = "FY" + year.ToString(CultureInfo.InvariantCulture);
-                if (!_db.FinancialYears.Any(f => f.FiscalYearCode == code))
+                var fy = FiscalYearCalculator.Containing(booksStart, options.FiscalYearPattern, options.FiscalYearStartMonth);
+                if (!_db.FinancialYears.Any(f => f.FiscalYearCode == fy.Code))
                     _db.FinancialYears.Add(new FinancialYear
                     {
-                        CompanyId = company.Id, FiscalYearCode = code, FiscalYearName = code,
-                        StartDate = new DateTime(year, 1, 1, 0, 0, 0, DateTimeKind.Utc),
-                        EndDate = new DateTime(year + 1, 1, 1, 0, 0, 0, DateTimeKind.Utc).AddTicks(-1),
-                        IsActive = true
+                        CompanyId = company.Id, FiscalYearCode = fy.Code, FiscalYearName = fy.Code,
+                        StartDate = fy.Start, EndDate = fy.End, IsActive = true
                     });
 
                 foreach (SequenceNumberTypes type in Enum.GetValues(typeof(SequenceNumberTypes)))
@@ -109,15 +117,35 @@ namespace Api.Service
                         _db.Measurements.Add(new Measurement { CompanyId = company.Id, Code = unit.Key, Description = unit.Value });
 
                 if (!_db.CompanySettings.Any())
-                    _db.CompanySettings.Add(new CompanySetting { CompanyId = company.Id, Currency = currency });
+                    _db.CompanySettings.Add(new CompanySetting
+                    {
+                        CompanyId = company.Id,
+                        Currency = options.Currency,
+                        LegalName = string.IsNullOrWhiteSpace(options.LegalName) ? null : options.LegalName.Trim(),
+                        ReportingFramework = options.ReportingFramework,
+                        AccountingBasis = options.AccountingBasis,
+                        TaxRegime = options.TaxRegime,
+                        FiscalYearPattern = options.FiscalYearPattern,
+                        FiscalYearStartMonth = options.FiscalYearPattern == FiscalYearPattern.Custom ? options.FiscalYearStartMonth : null,
+                        BooksStartDate = booksStart,
+                        IndustryTemplate = options.IndustryTemplate,
+                        InventoryCostingMethod = options.InventoryCostingMethod,
+                        CoaTemplateId = coaTemplateId
+                    });
 
-                // A neutral default avoids imposing another jurisdiction's tax rates on a new workspace.
+                // Neutral defaults avoid imposing another jurisdiction's tax rates; regimes with tax get an inactive zero-rate
+                // placeholder so the owner must set real rates before using it.
                 if (!_db.TaxGroups.Any())
                 {
-                    var group = new TaxGroup { CompanyId = company.Id, Description = "No tax", IsActive = true };
+                    var taxed = options.TaxRegime != TaxRegime.None;
+                    var label = options.TaxRegime == TaxRegime.VatGst ? "VAT/GST" : "Sales tax";
+                    var group = new TaxGroup { CompanyId = company.Id, Description = taxed ? label : "No tax", IsActive = true };
                     var tax = new Tax
                     {
-                        CompanyId = company.Id, TaxCode = "NONE", TaxName = "No tax", Rate = 0, IsActive = true,
+                        CompanyId = company.Id,
+                        TaxCode = !taxed ? "NONE" : options.TaxRegime == TaxRegime.VatGst ? "VAT" : "SALESTAX",
+                        TaxName = taxed ? label + " (set rate)" : "No tax",
+                        Rate = 0, IsActive = !taxed,
                         SalesAccountId = accounts["20300"].Id, PurchasingAccountId = accounts["10160"].Id
                     };
                     tax.TaxGroupTaxes.Add(new TaxGroupTax { CompanyId = company.Id, TaxGroup = group });
