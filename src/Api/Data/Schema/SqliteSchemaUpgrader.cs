@@ -169,6 +169,7 @@ namespace Api.Data.Schema
                     new[] { "Item", "ArchivedAt", "TEXT NULL" },
                     new[] { "Item", "QuantityOnHand", "decimal(18, 4) NOT NULL DEFAULT 0" },
                     new[] { "Item", "AverageCost", "decimal(18, 4) NOT NULL DEFAULT 0" },
+                    new[] { "Item", "StockValue", "decimal(18, 2) NOT NULL DEFAULT 0" },
                     new[] { "InventoryControlJournal", "DocumentId", "INTEGER NULL" },
                     new[] { "InventoryControlJournal", "UnitCost", "decimal(18, 4) NULL" },
                     new[] { "InventoryControlJournal", "Memo", "TEXT NULL" },
@@ -202,6 +203,24 @@ namespace Api.Data.Schema
                     }
                 }
                 // Filled once, when the column arrives, so later invoices only ever get what was recorded at the time.
+                if (added.Contains("Item.StockValue"))
+                {
+                    using (var cmd = connection.CreateCommand())
+                    {
+                        cmd.Transaction = tx;
+                        cmd.CommandText = @"
+                            UPDATE ""Item"" SET ""StockValue"" = ROUND(CASE WHEN NOT EXISTS (
+                                SELECT 1 FROM ""InventoryControlJournal"" j
+                                WHERE j.""ItemId"" = ""Item"".""Id"" AND j.""CompanyId"" = ""Item"".""CompanyId"" AND j.""TotalCost"" IS NULL
+                            ) THEN COALESCE((
+                                SELECT SUM(CASE WHEN COALESCE(j.""INQty"", 0) > 0 THEN j.""TotalCost"" ELSE -j.""TotalCost"" END)
+                                FROM ""InventoryControlJournal"" j
+                                WHERE j.""ItemId"" = ""Item"".""Id"" AND j.""CompanyId"" = ""Item"".""CompanyId""
+                            ), ""QuantityOnHand"" * ""AverageCost"")
+                            ELSE ""QuantityOnHand"" * ""AverageCost"" END, 2);";
+                        cmd.ExecuteNonQuery();
+                    }
+                }
                 if (added.Contains("SalesInvoiceHeader.BillToJson") && added.Contains("SalesInvoiceLine.Description"))
                 {
                     using var cmd = connection.CreateCommand();

@@ -46,8 +46,9 @@ namespace Services.Inventory
             var quantityAfter = RoundQuantity(quantityBefore + quantity);
             var totalCost = RoundMoney(quantity * unitCost);
 
-            item.AverageCost = quantityAfter > 0 && quantityBefore > 0
-                ? RoundUnitCost(((quantityBefore * item.AverageCost) + (quantity * unitCost)) / quantityAfter)
+            item.StockValue = RoundMoney(item.StockValue + totalCost);
+            item.AverageCost = quantityAfter != 0
+                ? RoundUnitCost(item.StockValue / quantityAfter)
                 : unitCost;
             item.QuantityOnHand = quantityAfter;
 
@@ -81,8 +82,14 @@ namespace Services.Inventory
             if (quantity <= 0)
                 throw new ArgumentOutOfRangeException(nameof(quantity), "Issued stock quantity must be more than zero at four decimal places.");
             var unitCost = RoundUnitCost(item.AverageCost);
-            var totalCost = RoundMoney(quantity * unitCost);
+            // The last issue takes the exact remaining cents, not another rounded multiple of average cost.
+            var totalCost = item.QuantityOnHand > 0 && quantity >= item.QuantityOnHand
+                ? item.StockValue + RoundMoney((quantity - item.QuantityOnHand) * unitCost)
+                : RoundMoney(quantity * unitCost);
             item.QuantityOnHand = RoundQuantity(item.QuantityOnHand - quantity);
+            item.StockValue = RoundMoney(item.StockValue - totalCost);
+            if (item.QuantityOnHand != 0)
+                item.AverageCost = RoundUnitCost(item.StockValue / item.QuantityOnHand);
 
             var movement = new InventoryControlJournal
             {
@@ -123,18 +130,9 @@ namespace Services.Inventory
             var quantity = inQuantity > 0 ? inQuantity : outQuantity;
             var quantityAfter = RoundQuantity(quantityBefore + (inQuantity > 0 ? -quantity : quantity));
 
-            if (inQuantity > 0)
-            {
-                if (quantityAfter > 0)
-                    item.AverageCost = RoundUnitCost(Math.Max(0m, (quantityBefore * item.AverageCost - totalCost) / quantityAfter));
-            }
-            else
-            {
-                var positiveQuantityBefore = Math.Max(quantityBefore, 0m);
-                var denominator = positiveQuantityBefore + quantity;
-                if (quantityAfter > 0 && denominator > 0)
-                    item.AverageCost = RoundUnitCost((positiveQuantityBefore * item.AverageCost + totalCost) / denominator);
-            }
+            item.StockValue = RoundMoney(item.StockValue + (inQuantity > 0 ? -totalCost : totalCost));
+            if (quantityAfter != 0)
+                item.AverageCost = RoundUnitCost(item.StockValue / quantityAfter);
             item.QuantityOnHand = quantityAfter;
 
             var movement = new InventoryControlJournal
@@ -196,7 +194,7 @@ namespace Services.Inventory
             };
 
             var amount = movement.TotalCost.GetValueOrDefault();
-            if (amount > 0)
+            if (amount != 0)
             {
                 int inventoryAccountId = item.InventoryAccountId
                     ?? throw new InvalidOperationException("This stock item has no Inventory account.");

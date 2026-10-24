@@ -219,6 +219,11 @@ namespace Api.Data
                 .HasColumnType("decimal(18, 4)")
                 .HasDefaultValue(0m);
 
+            builder.Entity<Item>()
+                .Property(p => p.StockValue)
+                .HasColumnType("decimal(18, 2)")
+                .HasDefaultValue(0m);
+
             builder.Entity<InventoryAdjustment>()
                 .Property(p => p.QuantityChange)
                 .HasColumnType("decimal(18, 4)");

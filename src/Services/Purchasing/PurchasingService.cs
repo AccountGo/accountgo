@@ -437,8 +437,7 @@ namespace Services.Purchasing
             {
                 var item = _inventoryService.GetItemById(line.ItemId);
                 var original = item?.InventoryControlJournals.FirstOrDefault(j => j.Id == line.InventoryControlJournalId.Value);
-                if (original == null || item.InventoryControlJournals.Any(j =>
-                    j.IsReverse && j.DocumentType == original.DocumentType && j.DocumentId == original.DocumentId && j.ItemId == original.ItemId))
+                if (original == null)
                     continue;
 
                 _stockService.Reverse(original, bill.VoidGeneralLedgerHeader?.Date ?? bill.Date,

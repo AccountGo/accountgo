@@ -1,6 +1,7 @@
 -- Add stock movement values, item stock caches, stock adjustments, and their ledger accounts.
 ALTER TABLE "Item" ADD COLUMN "QuantityOnHand" decimal(18, 4) NOT NULL DEFAULT 0;
 ALTER TABLE "Item" ADD COLUMN "AverageCost" decimal(18, 4) NOT NULL DEFAULT 0;
+ALTER TABLE "Item" ADD COLUMN "StockValue" decimal(18, 2) NOT NULL DEFAULT 0;
 ALTER TABLE "InventoryControlJournal" ADD COLUMN "DocumentId" INTEGER NULL;
 ALTER TABLE "InventoryControlJournal" ADD COLUMN "UnitCost" decimal(18, 4) NULL;
 ALTER TABLE "InventoryControlJournal" ADD COLUMN "Memo" TEXT NULL;
@@ -61,3 +62,5 @@ SET "QuantityOnHand" = COALESCE((
         SELECT 1 FROM "ItemCategory" c
         WHERE c."Id" = "Item"."ItemCategoryId" AND c."ItemType" = 2
     ) THEN COALESCE("Item"."Cost", 0) ELSE 0 END;
+
+UPDATE "Item" SET "StockValue" = ROUND("QuantityOnHand" * "AverageCost", 2);
