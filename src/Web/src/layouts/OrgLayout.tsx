@@ -233,13 +233,15 @@ export const OrgLayout: React.FC = () => {
 
   const updateSubscription = async (newPlan: PlanKey, newActiveModules?: ModuleKey[]) => {
     if (!currentOrg) return;
-    const resolvedModules: ModuleKey[] = newActiveModules || (
-      newPlan === 'invoicing'
-        ? ['sales']
-        : newPlan === 'enterprise'
-        ? ['sales', 'financials', 'purchases', 'inventory', 'reports', 'donations', 'audit']
-        : ['sales', 'financials', 'purchases', 'reports']
-    );
+    const planDefaults: Record<PlanKey, ModuleKey[]> = {
+      invoicing: ['sales'],
+      accounting: ['sales', 'financials', 'purchases', 'reports'],
+      enterprise: ['sales', 'financials', 'purchases', 'reports', 'inventory', 'donations', 'audit'],
+    };
+    const allowed = new Set(planDefaults[newPlan] || planDefaults.accounting);
+    const resolvedModules: ModuleKey[] = (newActiveModules || planDefaults[newPlan] || planDefaults.accounting)
+      .filter((moduleKey) => allowed.has(moduleKey));
+    if (!resolvedModules.includes('sales')) resolvedModules.unshift('sales');
     const newSub: SubscriptionInfo = {
       planId: newPlan,
       planName: newPlan.charAt(0).toUpperCase() + newPlan.slice(1),
@@ -256,18 +258,24 @@ export const OrgLayout: React.FC = () => {
       prev.map((o) => (o.id === updated.id ? updated : o))
     );
 
-    try {
-      await authFetch('/api/Subscription/update', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          companyId: Number(currentOrg.id) || undefined,
-          slug: currentOrg.slug,
-          plan: newPlan,
-          activeModules: resolvedModules,
-        }),
-      });
-    } catch {}
+    const response = await authFetch('/api/Subscription/update', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        companyId: Number(currentOrg.id) || undefined,
+        slug: currentOrg.slug,
+        plan: newPlan,
+        activeModules: resolvedModules,
+      }),
+    });
+    if (!response.ok) {
+      let message = `Unable to update subscription (HTTP ${response.status}).`;
+      try {
+        const body = await response.json();
+        if (body?.message) message = body.message;
+      } catch { /* keep default */ }
+      throw new Error(message);
+    }
   };
 
   // 1. Loading Skeleton State (Border-Less)
