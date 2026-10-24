@@ -29,6 +29,48 @@ namespace Api.Service
 
         public static InvoiceEmail Build(Dto.Sales.SalesInvoice invoice, string? currencyCode, bool canReply)
         {
+            var ctx = Context(invoice, currencyCode);
+            var subject = ctx.PaidInFull || ctx.Due == null
+                ? $"Invoice {ctx.Number} from {ctx.Seller}"
+                : $"Invoice {ctx.Number} from {ctx.Seller}: {ctx.Headline} due {ctx.Due}";
+
+            var intro = ctx.PaidInFull
+                ? $"{ctx.Seller} has sent you invoice {ctx.Number}. It is paid in full, so there is nothing to pay; the PDF is attached for your records."
+                : $"{ctx.Seller} has sent you invoice {ctx.Number} for {ctx.Headline}{(ctx.Due != null ? $", due {ctx.Due}" : "")}. The invoice is attached as a PDF.";
+
+            return Finish(ctx, subject, intro, canReply);
+        }
+
+        /// <summary>
+        /// A polite reminder that the invoice is still unpaid. Same layout and PDF attachment as the original send.
+        /// </summary>
+        public static InvoiceEmail BuildFollowUp(Dto.Sales.SalesInvoice invoice, string? currencyCode, bool canReply)
+        {
+            var ctx = Context(invoice, currencyCode);
+            var subject = $"Following up on Invoice {ctx.Number} from {ctx.Seller}";
+            var intro = ctx.Due != null
+                ? $"Just following up on invoice {ctx.Number} from {ctx.Seller} for {ctx.Headline}, due {ctx.Due}. The invoice is attached as a PDF if you need another copy."
+                : $"Just following up on invoice {ctx.Number} from {ctx.Seller} for {ctx.Headline}. The invoice is attached as a PDF if you need another copy.";
+
+            return Finish(ctx, subject, intro, canReply);
+        }
+
+        private sealed class EmailContext
+        {
+            public string Currency { get; init; } = "";
+            public string Number { get; init; } = "";
+            public string Seller { get; init; } = "";
+            public string? Customer { get; init; }
+            public string Headline { get; init; } = "";
+            public string? Due { get; init; }
+            public bool PaidInFull { get; init; }
+            public List<(string Label, string Value)> Facts { get; init; } = new();
+            public List<(string Heading, string Body)> Sections { get; init; } = new();
+            public string Contact { get; init; } = "";
+        }
+
+        private static EmailContext Context(Dto.Sales.SalesInvoice invoice, string? currencyCode)
+        {
             var currency = InvoiceFormat.CurrencyCode(currencyCode);
             var number = InvoiceFormat.Number(invoice);
             var seller = string.IsNullOrWhiteSpace(invoice.Seller.Name) ? "AccountGo" : invoice.Seller.Name.Trim();
@@ -37,14 +79,6 @@ namespace Api.Service
             var paidInFull = invoice.BalanceDue <= 0.005m && total > 0;
             var headline = InvoiceFormat.Money(paidInFull ? total : invoice.BalanceDue, currency);
             var due = invoice.DueDate.HasValue ? InvoiceFormat.Date(invoice.DueDate.Value) : null;
-
-            var subject = paidInFull || due == null
-                ? $"Invoice {number} from {seller}"
-                : $"Invoice {number} from {seller}: {headline} due {due}";
-
-            var intro = paidInFull
-                ? $"{seller} has sent you invoice {number}. It is paid in full, so there is nothing to pay; the PDF is attached for your records."
-                : $"{seller} has sent you invoice {number} for {headline}{(due != null ? $", due {due}" : "")}. The invoice is attached as a PDF.";
 
             var facts = new List<(string Label, string Value)>
             {
@@ -79,13 +113,30 @@ namespace Api.Service
                 sections.Add(("Notes", invoice.Notes.Trim()));
 
             var contact = string.Join(" · ", new[] { invoice.Seller.Email, invoice.Seller.Phone }.Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s!.Trim()));
-            var replyLine = canReply ? "Questions about this invoice? Just reply to this email." : null;
 
+            return new EmailContext
+            {
+                Currency = currency,
+                Number = number,
+                Seller = seller,
+                Customer = customer,
+                Headline = headline,
+                Due = due,
+                PaidInFull = paidInFull,
+                Facts = facts,
+                Sections = sections,
+                Contact = contact,
+            };
+        }
+
+        private static InvoiceEmail Finish(EmailContext ctx, string subject, string intro, bool canReply)
+        {
+            var replyLine = canReply ? "Questions about this invoice? Just reply to this email." : null;
             return new InvoiceEmail
             {
                 Subject = OneLine(subject),
-                Html = BuildHtml(seller, customer, number, intro, paidInFull ? "Amount paid" : "Amount due", headline, paidInFull, due, facts, sections, replyLine, contact),
-                Text = BuildText(seller, customer, intro, facts, sections, replyLine, contact),
+                Html = BuildHtml(ctx.Seller, ctx.Customer, ctx.Number, intro, ctx.PaidInFull ? "Amount paid" : "Amount due", ctx.Headline, ctx.PaidInFull, ctx.Due, ctx.Facts, ctx.Sections, replyLine, ctx.Contact),
+                Text = BuildText(ctx.Seller, ctx.Customer, intro, ctx.Facts, ctx.Sections, replyLine, ctx.Contact),
             };
         }
 

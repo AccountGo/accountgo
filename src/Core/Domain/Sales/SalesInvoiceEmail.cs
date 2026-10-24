@@ -21,10 +21,12 @@ namespace Core.Domain.Sales
     {
         /// <summary>The invoice itself, sent when issued or again later.</summary>
         public const string InvoiceKind = "Invoice";
+        /// <summary>A polite reminder that the invoice is still unpaid.</summary>
+        public const string FollowUpKind = "FollowUp";
 
         public int CompanyId { get; set; }
         public int SalesInvoiceHeaderId { get; set; }
-        /// <summary>What was sent; <see cref="InvoiceKind"/> for now, leaving room for payment reminders.</summary>
+        /// <summary>What was sent; <see cref="InvoiceKind"/> or <see cref="FollowUpKind"/>.</summary>
         [MaxLength(20)]
         public string Kind { get; set; } = InvoiceKind;
         [MaxLength(320)]

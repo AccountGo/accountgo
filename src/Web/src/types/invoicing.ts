@@ -66,7 +66,7 @@ export interface Invoice {
 
 export interface InvoiceEmailItem {
   id: number;
-  kind: 'Invoice' | string;
+  kind: 'Invoice' | 'FollowUp' | string;
   to: string;
   sentAt: string;
   sentBy?: string | null;

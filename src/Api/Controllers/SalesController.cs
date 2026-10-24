@@ -614,15 +614,37 @@ namespace Api.Controllers
         [HttpPost]
         [Route("SendSalesInvoiceEmail")]
         [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesCreate)]
-        public async Task<IActionResult> SendSalesInvoiceEmail(int id,
-            [FromServices] Api.Service.IEmailSender emailSender)
+        public Task<IActionResult> SendSalesInvoiceEmail(int id,
+            [FromServices] Api.Service.IEmailSender emailSender) =>
+            SendInvoiceEmailAsync(id, emailSender, followUp: false);
+
+        /// <summary>
+        /// Sends a follow-up reminder for an unpaid invoice: same PDF and BCC as the original send, different copy.
+        /// </summary>
+        [HttpPost]
+        [Route("SendSalesInvoiceFollowUpEmail")]
+        [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesCreate)]
+        public Task<IActionResult> SendSalesInvoiceFollowUpEmail(int id,
+            [FromServices] Api.Service.IEmailSender emailSender) =>
+            SendInvoiceEmailAsync(id, emailSender, followUp: true);
+
+        private async Task<IActionResult> SendInvoiceEmailAsync(int id, Api.Service.IEmailSender emailSender, bool followUp)
         {
             var invoice = BuildSalesInvoiceDto(id);
             if (invoice == null)
                 return NotFound(new { message = $"Invoice #{id} not found." });
 
-            if (invoice.Status is "Draft" or "Void")
+            if (followUp)
+            {
+                if (invoice.Status is "Draft" or "Void" or "Paid")
+                    return BadRequest(new { message = $"Follow-ups can only be sent for unpaid invoices; this one is {invoice.Status!.ToLowerInvariant()}." });
+                if (invoice.BalanceDue <= 0.005m)
+                    return BadRequest(new { message = "Follow-ups can only be sent when there is a balance due." });
+            }
+            else if (invoice.Status is "Draft" or "Void")
+            {
                 return BadRequest(new { message = $"Only issued invoices can be emailed; this one is {invoice.Status!.ToLowerInvariant()}." });
+            }
 
             // Sent to the customer's address on file now, which may have changed since the invoice was issued.
             var to = ValidEmail(invoice.RecipientEmail);
@@ -640,7 +662,9 @@ namespace Api.Controllers
             var replyTo = ValidEmail(invoice.Seller.Email) ?? senderEmail;
             var currency = _db.CompanySettings.Select(s => s.Currency).FirstOrDefault();
 
-            var content = Api.Service.InvoiceEmailTemplate.Build(invoice, currency, canReply: replyTo != null);
+            var content = followUp
+                ? Api.Service.InvoiceEmailTemplate.BuildFollowUp(invoice, currency, canReply: replyTo != null)
+                : Api.Service.InvoiceEmailTemplate.Build(invoice, currency, canReply: replyTo != null);
             var pdf = QuestPDF.Fluent.GenerateExtensions.GeneratePdf(new Api.Service.InvoicePdfDocument(invoice, currency));
             var number = Api.Service.InvoiceFormat.Number(invoice);
 
@@ -674,7 +698,9 @@ namespace Api.Controllers
             var record = new Core.Domain.Sales.SalesInvoiceEmail
             {
                 SalesInvoiceHeaderId = id,
-                Kind = Core.Domain.Sales.SalesInvoiceEmail.InvoiceKind,
+                Kind = followUp
+                    ? Core.Domain.Sales.SalesInvoiceEmail.FollowUpKind
+                    : Core.Domain.Sales.SalesInvoiceEmail.InvoiceKind,
                 ToEmail = to,
                 BccEmail = message.Bcc.FirstOrDefault(),
                 Subject = message.Subject.Length > 300 ? message.Subject[..300] : message.Subject,
@@ -694,7 +720,11 @@ namespace Api.Controllers
                 _logger.LogError(ex, "Invoice {InvoiceId} was emailed to the customer but the send could not be recorded", id);
             }
 
-            _logger.LogInformation("Invoice {InvoiceId} emailed by {Sender} for workspace {CompanyId}", id, senderEmail, _tenantContext.CompanyId);
+            _logger.LogInformation(
+                followUp
+                    ? "Invoice {InvoiceId} follow-up emailed by {Sender} for workspace {CompanyId}"
+                    : "Invoice {InvoiceId} emailed by {Sender} for workspace {CompanyId}",
+                id, senderEmail, _tenantContext.CompanyId);
             return Ok(new { success = true, to, bcc = message.Bcc, email = ToEmailItem(record) });
         }
 

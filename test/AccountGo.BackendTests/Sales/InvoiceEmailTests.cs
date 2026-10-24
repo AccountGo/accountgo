@@ -92,6 +92,31 @@ public class InvoiceEmailTests
         Assert.DoesNotContain("\n", InvoiceEmailTemplate.Build(invoice, "USD", canReply: true).Subject);
     }
 
+    [Fact]
+    public void BuildFollowUp_SubjectAndIntro_RemindAboutOutstandingBalance()
+    {
+        var email = InvoiceEmailTemplate.BuildFollowUp(Invoice(), "PHP", canReply: true);
+
+        Assert.Equal("Following up on Invoice INV-0042 from Acme \"Studio\"", email.Subject);
+        Assert.Contains("following up", email.Html, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("₱1,250.00", email.Html);
+        Assert.Contains("Nov 22, 2026", email.Html);
+        Assert.Contains("Invoice-INV-0042.pdf", email.Html);
+        Assert.Contains("reply to this email", email.Html);
+        Assert.DoesNotContain("<script>", email.Html);
+        Assert.Contains("Due date: Nov 22, 2026", email.Text);
+        Assert.Contains("HOW TO PAY", email.Text);
+    }
+
+    [Fact]
+    public void BuildFollowUp_SubjectIsAlwaysOneLine()
+    {
+        var invoice = Invoice();
+        invoice.Seller.Name = "Acme\r\nBcc: victim@example.com";
+
+        Assert.DoesNotContain("\n", InvoiceEmailTemplate.BuildFollowUp(invoice, "USD", canReply: true).Subject);
+    }
+
     [Theory]
     [InlineData("INV-0042", "Invoice-INV-0042.pdf")]
     [InlineData("../../etc/passwd", "Invoice-------etc-passwd.pdf")]
