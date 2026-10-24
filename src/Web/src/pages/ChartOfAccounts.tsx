@@ -305,7 +305,10 @@ export const ChartOfAccounts: React.FC = () => {
                         {a.normalBalance === 'NA' ? '—' : a.normalBalance}
                       </td>
                       <td className={`py-2 px-3 text-right font-mono whitespace-nowrap ${abnormal ? 'text-amber-500' : ''}`}>
-                        {formatAmount(rollup)}
+                        {a.canPost && hasPermission('financials.journal.view')
+                          ? <Link className="underline" title={`View ledger for ${a.accountCode}`}
+                            to={`/org/${currentOrg.slug}/financials?${new URLSearchParams({ accountCode: a.accountCode, from: '', to: '' })}`}>{formatAmount(rollup)}</Link>
+                          : formatAmount(rollup)}
                         {abnormal && <span className="sr-only"> (abnormal balance)</span>}
                         {abnormal && <span aria-hidden="true" title="Abnormal balance: opposite to the account's normal side"> !</span>}
                       </td>

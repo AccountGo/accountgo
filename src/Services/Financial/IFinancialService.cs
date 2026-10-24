@@ -29,6 +29,18 @@ namespace Services.Financial
         ICollection<BalanceSheet> BalanceSheet(DateTime? from = null, DateTime? to = null, AccountingBasis basis = AccountingBasis.Accrual);
         ICollection<IncomeStatement> IncomeStatement(DateTime? from = null, DateTime? to = null, AccountingBasis basis = AccountingBasis.Accrual);
         ICollection<MasterGeneralLedger> MasterGeneralLedger(DateTime? from = null, DateTime? to = null, string accountCode = null, int? transactionNo = null);
+        /// <summary>Lists tenant-scoped posted journals, retaining complete entries for account filters.</summary>
+        /// <param name="from">Inclusive posting date start.</param>
+        /// <param name="to">Inclusive posting date end (date-only values expand to end of calendar day).</param>
+        /// <param name="accountCode">Optional account touched by the journal.</param>
+        /// <param name="transactionNo">Optional exact posted header identifier.</param>
+        /// <param name="documentType">Optional source document type.</param>
+        /// <param name="skip">Headers to skip after filtering (default 0).</param>
+        /// <param name="take">Page size (default 100, maximum 500).</param>
+        /// <returns>Paged posted journals ordered by date and identifier descending.</returns>
+        Dto.Financial.GeneralLedgerTransactionPage GetGeneralLedgerTransactions(
+            DateTime? from = null, DateTime? to = null, string accountCode = null, int? transactionNo = null,
+            DocumentTypes? documentType = null, int skip = 0, int take = 100);
         FinancialYear CurrentFiscalYear();
         IEnumerable<Tax> GetTaxes();
         IEnumerable<ItemTaxGroup> GetItemTaxGroups();
