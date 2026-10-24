@@ -26,7 +26,7 @@ test('the reports route renders all statement controls and respects reports.view
           } }),
         }, createElement(Route, { path: 'reports', element: createElement(Reports) }))))));
   const html = render(true);
-  for (const label of ['Trial Balance', 'Profit &amp; Loss', 'Balance Sheet', 'Export CSV', 'Quarter-to-Date', 'Year-to-Date', 'All Time / As-of Date'])
+  for (const label of ['Trial Balance', 'Profit &amp; Loss', 'Balance Sheet', 'Accounting Basis', 'Accrual', 'Cash', 'Export CSV', 'Quarter-to-Date', 'Year-to-Date', 'All Time / As-of Date'])
     assert.ok(html.includes(label), label);
   assert.ok(html.includes('Loading financial reports...'));
   assert.ok(!html.includes('Reconciled'));
@@ -103,19 +103,24 @@ test('presets use local calendar dates and the active fiscal year, including non
   const params = new URLSearchParams(reportQuery({ from: '2026-04-01', to: '2026-04-30' }));
   assert.equal(params.get('from'), '2026-04-01T00:00:00');
   assert.equal(params.get('to'), '2026-04-30T23:59:59.9999999');
+  assert.equal(params.has('basis'), false);
+  const cashParams = new URLSearchParams(reportQuery({ from: '2026-04-01', to: '2026-04-30' }, 'cash'));
+  assert.equal(cashParams.get('basis'), 'Cash');
   assert.equal(new URLSearchParams(reportQuery({ from: '', to: '2026-04-30' })).has('from'), false);
 });
 
-test('all three live endpoints receive changed date filters, with explicit HTTP and shape errors', async () => {
+test('all three live endpoints receive changed date filters and accounting basis, with explicit HTTP and shape errors', async () => {
   const urls = [];
   const fetcher = async url => { urls.push(url); return Response.json([]); };
   await loadReportData(fetcher, { from: '2026-01-01', to: '2026-04-30' });
-  await loadReportData(fetcher, { from: '2026-04-01', to: '2026-04-30' });
+  await loadReportData(fetcher, { from: '2026-04-01', to: '2026-04-30' }, 'cash');
   for (const endpoint of ['trialbalance', 'IncomeStatement', 'BalanceSheet']) {
     const calls = urls.filter(url => url.startsWith(`/api/Financials/${endpoint}`));
     assert.equal(calls.length, 2);
     assert.equal(new URL(calls[0], 'http://test').searchParams.get('from'), '2026-01-01T00:00:00');
+    assert.equal(new URL(calls[0], 'http://test').searchParams.has('basis'), false);
     assert.equal(new URL(calls[1], 'http://test').searchParams.get('from'), '2026-04-01T00:00:00');
+    assert.equal(new URL(calls[1], 'http://test').searchParams.get('basis'), 'Cash');
   }
   await assert.rejects(loadReportData(async () => new Response('', { status: 403 }), { from: '', to: '' }), /HTTP 403/);
   await assert.rejects(loadReportData(async () => Response.json({}), { from: '', to: '' }), /invalid response/);

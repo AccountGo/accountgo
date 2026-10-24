@@ -18,15 +18,16 @@ namespace Services.Financial
     {
         bool ValidateGeneralLedgerEntry(GeneralLedgerHeader glEntry);
         void SaveGeneralLedgerEntry(GeneralLedgerHeader entry);
+        void UpdateGeneralLedgerHeader(GeneralLedgerHeader entry);
         GeneralLedgerLine CreateGeneralLedgerLine(DrOrCrSide DrCr, int accountId, decimal amount);
-        GeneralLedgerHeader CreateGeneralLedgerHeader(DocumentTypes documentType, DateTime Date, string description);
+        GeneralLedgerHeader CreateGeneralLedgerHeader(DocumentTypes documentType, DateTime Date, string description, int? sourceDocumentId = null, int? reversedGeneralLedgerHeaderId = null);
         IEnumerable<Account> GetAccounts();
         IEnumerable<JournalEntryHeader> GetJournalEntries();
         IEnumerable<JournalEntryLine> GetJournalEntryLines();
         void AddJournalEntry(JournalEntryHeader journalEntry);
-        ICollection<TrialBalance> TrialBalance(DateTime? from = null, DateTime? to = null);
-        ICollection<BalanceSheet> BalanceSheet(DateTime? from = null, DateTime? to = null);
-        ICollection<IncomeStatement> IncomeStatement(DateTime? from = null, DateTime? to = null);
+        ICollection<TrialBalance> TrialBalance(DateTime? from = null, DateTime? to = null, AccountingBasis basis = AccountingBasis.Accrual);
+        ICollection<BalanceSheet> BalanceSheet(DateTime? from = null, DateTime? to = null, AccountingBasis basis = AccountingBasis.Accrual);
+        ICollection<IncomeStatement> IncomeStatement(DateTime? from = null, DateTime? to = null, AccountingBasis basis = AccountingBasis.Accrual);
         ICollection<MasterGeneralLedger> MasterGeneralLedger(DateTime? from = null, DateTime? to = null, string accountCode = null, int? transactionNo = null);
         FinancialYear CurrentFiscalYear();
         IEnumerable<Tax> GetTaxes();

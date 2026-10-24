@@ -348,33 +348,42 @@ namespace Api.Controllers
         [HttpGet]
         [Route("trialbalance")]
         [RequirePermission(SystemPermissions.ReportsView)]
-        public ActionResult TrialBalance(DateTime? from = null, DateTime? to = null)
+        public ActionResult TrialBalance(DateTime? from = null, DateTime? to = null, Core.Domain.AccountingBasis basis = Core.Domain.AccountingBasis.Accrual)
         {
+            if (!Enum.IsDefined(typeof(Core.Domain.AccountingBasis), basis)
+                || (ModelState.TryGetValue(nameof(basis), out var basisState) && basisState.Errors.Count > 0))
+                return BadRequest(new { message = "Provide a valid accounting basis: Accrual or Cash." });
             if (!ModelState.IsValid || (from.HasValue && to.HasValue && from.Value > to.Value))
                 return BadRequest(new { message = "Provide a valid date range: from must not be after to." });
-            var Dto = _financialService.TrialBalance(from, to);
+            var Dto = _financialService.TrialBalance(from, to, basis);
             return new ObjectResult(Dto);
         }
 
         [HttpGet]
         [Route("BalanceSheet")]
         [RequirePermission(SystemPermissions.ReportsView)]
-        public ActionResult BalanceSheet(DateTime? from = null, DateTime? to = null)
+        public ActionResult BalanceSheet(DateTime? from = null, DateTime? to = null, Core.Domain.AccountingBasis basis = Core.Domain.AccountingBasis.Accrual)
         {
+            if (!Enum.IsDefined(typeof(Core.Domain.AccountingBasis), basis)
+                || (ModelState.TryGetValue(nameof(basis), out var basisState) && basisState.Errors.Count > 0))
+                return BadRequest(new { message = "Provide a valid accounting basis: Accrual or Cash." });
             if (!ModelState.IsValid || (from.HasValue && to.HasValue && from.Value > to.Value))
                 return BadRequest(new { message = "Provide a valid date range: from must not be after to." });
-            var dto = _financialService.BalanceSheet(from, to).ToList();
+            var dto = _financialService.BalanceSheet(from, to, basis).ToList();
             return new ObjectResult(dto);
         }
 
         [HttpGet]
         [Route("IncomeStatement")]
         [RequirePermission(SystemPermissions.ReportsView)]
-        public IActionResult IncomeStatement(DateTime? from = null, DateTime? to = null)
+        public IActionResult IncomeStatement(DateTime? from = null, DateTime? to = null, Core.Domain.AccountingBasis basis = Core.Domain.AccountingBasis.Accrual)
         {
+            if (!Enum.IsDefined(typeof(Core.Domain.AccountingBasis), basis)
+                || (ModelState.TryGetValue(nameof(basis), out var basisState) && basisState.Errors.Count > 0))
+                return BadRequest(new { message = "Provide a valid accounting basis: Accrual or Cash." });
             if (!ModelState.IsValid || (from.HasValue && to.HasValue && from.Value > to.Value))
                 return BadRequest(new { message = "Provide a valid date range: from must not be after to." });
-            return Ok(_financialService.IncomeStatement(from, to));
+            return Ok(_financialService.IncomeStatement(from, to, basis));
         }
 
         #region CRUD for Accounts

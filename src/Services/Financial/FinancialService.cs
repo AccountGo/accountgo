@@ -44,6 +44,11 @@ namespace Services.Financial
         private readonly IRepository<Customer> _customerRepo;
         private readonly IRepository<Vendor> _vendorRepo;
         private readonly IRepository<GeneralLedgerSetting> _generalLedgerSettingRepo;
+        private readonly IRepository<SalesInvoiceHeader> _salesInvoiceRepo;
+        private readonly IRepository<SalesReceiptHeader> _salesReceiptRepo;
+        private readonly IRepository<CustomerAllocation> _customerAllocationRepo;
+        private readonly IRepository<PurchaseInvoiceHeader> _purchaseInvoiceRepo;
+        private readonly IRepository<VendorPayment> _vendorPaymentRepo;
 
         public FinancialService(IInventoryService inventoryService,
             ITaxService taxService,
@@ -64,7 +69,12 @@ namespace Services.Financial
             IRepository<MainContraAccount> maincontraAccount = null,
             IRepository<Customer> customerRepo = null,
             IRepository<Vendor> vendorRepo = null,
-            IRepository<GeneralLedgerSetting> generalLedgerSettingRepo = null
+            IRepository<GeneralLedgerSetting> generalLedgerSettingRepo = null,
+            IRepository<SalesInvoiceHeader> salesInvoiceRepo = null,
+            IRepository<SalesReceiptHeader> salesReceiptRepo = null,
+            IRepository<CustomerAllocation> customerAllocationRepo = null,
+            IRepository<PurchaseInvoiceHeader> purchaseInvoiceRepo = null,
+            IRepository<VendorPayment> vendorPaymentRepo = null
             )
             : base(null, null, paymentTermRepo, bankRepo)
         {
@@ -88,6 +98,11 @@ namespace Services.Financial
             _customerRepo = customerRepo;
             _vendorRepo = vendorRepo;
             _generalLedgerSettingRepo = generalLedgerSettingRepo;
+            _salesInvoiceRepo = salesInvoiceRepo;
+            _salesReceiptRepo = salesReceiptRepo;
+            _customerAllocationRepo = customerAllocationRepo;
+            _purchaseInvoiceRepo = purchaseInvoiceRepo;
+            _vendorPaymentRepo = vendorPaymentRepo;
         }
 
         public FinancialYear CurrentFiscalYear()
@@ -99,13 +114,15 @@ namespace Services.Financial
             return query;
         }
 
-        public GeneralLedgerHeader CreateGeneralLedgerHeader(DocumentTypes documentType, DateTime date, string description)
+        public GeneralLedgerHeader CreateGeneralLedgerHeader(DocumentTypes documentType, DateTime date, string description, int? sourceDocumentId = null, int? reversedGeneralLedgerHeaderId = null)
         {
             var entry = new GeneralLedgerHeader()
             {
                 DocumentType = documentType,
                 Date = date,
                 Description = description,
+                SourceDocumentId = sourceDocumentId > 0 ? sourceDocumentId : null,
+                ReversedGeneralLedgerHeaderId = reversedGeneralLedgerHeaderId > 0 ? reversedGeneralLedgerHeaderId : null,
             };
             return entry;
         }
@@ -189,6 +206,11 @@ namespace Services.Financial
             }
         }
 
+        public void UpdateGeneralLedgerHeader(GeneralLedgerHeader entry)
+        {
+            _generalLedgerRepository.Update(entry);
+        }
+
         public bool ValidateGeneralLedgerEntry(GeneralLedgerHeader glEntry)
         {
             if (!FinancialHelper.DrCrEqualityValidated(glEntry))
@@ -241,10 +263,13 @@ namespace Services.Financial
             _journalEntryRepo.Insert(journalEntry);
         }
 
-        public ICollection<TrialBalance> TrialBalance(DateTime? from = default(DateTime?), DateTime? to = default(DateTime?))
+        public ICollection<TrialBalance> TrialBalance(DateTime? from = default(DateTime?), DateTime? to = default(DateTime?), AccountingBasis basis = AccountingBasis.Accrual)
         {
             if (from.HasValue && to.HasValue && from.Value > to.Value)
                 throw new ArgumentException("The start date must not be after the end date.");
+
+            if (basis == AccountingBasis.Cash)
+                return CashBasisTrialBalance(from, to);
 
             var lines = _generalLedgerLineRepository.Table;
             if (from.HasValue)
@@ -266,13 +291,428 @@ namespace Services.Financial
                 .ToList();
         }
 
-        public ICollection<BalanceSheet> BalanceSheet(DateTime? from = default(DateTime?), DateTime? to = default(DateTime?))
+        private ICollection<TrialBalance> CashBasisTrialBalance(DateTime? from, DateTime? to)
+        {
+            var accounts = _accountRepo.Table
+                .Select(a => new { a.Id, a.AccountClassId, a.AccountCode, a.AccountName })
+                .ToDictionary(a => a.Id);
+
+            var purchasingTaxAccountIds = _taxRepo?.Table
+                .Where(t => t.PurchasingAccountId.HasValue)
+                .Select(t => t.PurchasingAccountId.Value)
+                .ToHashSet()
+                ?? new HashSet<int>();
+
+            bool IsCapitalizedAssetAccount(int accountId) =>
+                accounts.TryGetValue(accountId, out var acc)
+                && acc.AccountClassId == (int)AccountClasses.Assets
+                && acc.AccountCode != "10160"
+                && !purchasingTaxAccountIds.Contains(accountId);
+
+            var allGlLines = _generalLedgerLineRepository.Table
+                .Select(l => new
+                {
+                    l.Id,
+                    l.GeneralLedgerHeaderId,
+                    HeaderDate = l.GeneralLedgerHeader.Date,
+                    DocumentType = l.GeneralLedgerHeader.DocumentType,
+                    l.AccountId,
+                    l.DrCr,
+                    l.Amount
+                })
+                .ToList();
+
+            var linesByHeader = allGlLines
+                .GroupBy(l => l.GeneralLedgerHeaderId)
+                .ToDictionary(g => g.Key, g => g.OrderBy(l => l.Id).ToList());
+
+            var suppressedLineAmounts = new Dictionary<int, decimal>();
+            var totals = new Dictionary<int, (decimal Debit, decimal Credit)>();
+
+            // Accrual customer-allocation journals reclassify Customer Advances to A/R; cash basis recognizes revenue directly against the receipt credit.
+            foreach (var allocLine in allGlLines.Where(l => l.DocumentType == DocumentTypes.CustomerAllocation))
+                suppressedLineAmounts[allocLine.Id] = allocLine.Amount;
+
+            void AddPosting(int accountId, DrOrCrSide drCr, decimal amount, DateTime date)
+            {
+                if (amount == 0m)
+                    return;
+                if (from.HasValue && date < from.Value)
+                    return;
+                if (to.HasValue && date > to.Value)
+                    return;
+                if (amount < 0m)
+                {
+                    drCr = drCr == DrOrCrSide.Dr ? DrOrCrSide.Cr : DrOrCrSide.Dr;
+                    amount = -amount;
+                }
+                var current = totals.GetValueOrDefault(accountId);
+                if (drCr == DrOrCrSide.Dr)
+                    totals[accountId] = (current.Debit + amount, current.Credit);
+                else if (drCr == DrOrCrSide.Cr)
+                    totals[accountId] = (current.Debit, current.Credit + amount);
+            }
+
+            if (_salesInvoiceRepo != null)
+            {
+                var customerArAccounts = _customerRepo?.Table
+                    .Select(c => new { c.Id, c.AccountsReceivableAccountId })
+                    .ToDictionary(c => c.Id, c => c.AccountsReceivableAccountId)
+                    ?? new Dictionary<int, int?>();
+
+                var receiptGlMap = _salesReceiptRepo?.Table
+                    .Where(r => r.GeneralLedgerHeaderId.HasValue)
+                    .Select(r => new { r.Id, GlHeaderId = r.GeneralLedgerHeaderId.Value })
+                    .ToDictionary(r => r.Id, r => r.GlHeaderId)
+                    ?? new Dictionary<int, int>();
+
+                var allocationsByInvoice = (_customerAllocationRepo?.Table
+                        .Select(a => new { a.Id, a.SalesInvoiceHeaderId, a.SalesReceiptHeaderId, a.GeneralLedgerHeaderId, a.Date, a.Amount })
+                        .ToList() ?? new())
+                    .GroupBy(a => a.SalesInvoiceHeaderId)
+                    .ToDictionary(g => g.Key, g => g.OrderBy(a => a.Date).ThenBy(a => a.Id).ToList());
+
+                var invoices = _salesInvoiceRepo.Table
+                    .Where(i => i.GeneralLedgerHeaderId.HasValue)
+                    .Select(i => new
+                    {
+                        i.Id,
+                        i.CustomerId,
+                        i.Status,
+                        GlHeaderId = i.GeneralLedgerHeaderId.Value,
+                        i.VoidGeneralLedgerHeaderId
+                    })
+                    .ToList();
+
+                foreach (var invoice in invoices)
+                {
+                    if (!linesByHeader.TryGetValue(invoice.GlHeaderId, out var invLines) || invLines.Count == 0)
+                        continue;
+
+                    // Stock-issue pairs (Dr COGS, Cr Inventory) stay on the invoice date; only A/R and its revenue/tax/discount/shipping offsets wait for cash.
+                    var stockLineIds = new HashSet<int>();
+                    foreach (var invCredit in invLines.Where(l => l.DrCr == DrOrCrSide.Cr && accounts.TryGetValue(l.AccountId, out var acc) && acc.AccountClassId == (int)AccountClasses.Assets))
+                    {
+                        var matchingCogs = invLines.FirstOrDefault(l =>
+                            !stockLineIds.Contains(l.Id)
+                            && l.DrCr == DrOrCrSide.Dr
+                            && l.Amount == invCredit.Amount
+                            && accounts.TryGetValue(l.AccountId, out var cogsAcc)
+                            && cogsAcc.AccountClassId == (int)AccountClasses.Expense);
+                        if (matchingCogs != null)
+                        {
+                            stockLineIds.Add(invCredit.Id);
+                            stockLineIds.Add(matchingCogs.Id);
+                        }
+                    }
+
+                    var nonStockLines = invLines.Where(l => !stockLineIds.Contains(l.Id)).ToList();
+                    var expectedArAccountId = customerArAccounts.GetValueOrDefault(invoice.CustomerId);
+                    var arLine = nonStockLines.FirstOrDefault(l => l.DrCr == DrOrCrSide.Dr && expectedArAccountId.HasValue && l.AccountId == expectedArAccountId.Value)
+                        ?? nonStockLines.FirstOrDefault(l => l.DrCr == DrOrCrSide.Dr && accounts.TryGetValue(l.AccountId, out var acc) && acc.AccountClassId == (int)AccountClasses.Assets)
+                        ?? nonStockLines.FirstOrDefault(l => l.DrCr == DrOrCrSide.Dr);
+
+                    if (arLine == null || arLine.Amount <= 0m)
+                        continue;
+
+                    var offsetLines = nonStockLines.Where(l => l.Id != arLine.Id).ToList();
+                    foreach (var line in nonStockLines)
+                        suppressedLineAmounts[line.Id] = line.Amount;
+
+                    if (invoice.VoidGeneralLedgerHeaderId.HasValue && linesByHeader.TryGetValue(invoice.VoidGeneralLedgerHeaderId.Value, out var voidLines))
+                    {
+                        var voidStockIds = new HashSet<int>();
+                        foreach (var invDebit in voidLines.Where(l => l.DrCr == DrOrCrSide.Dr && accounts.TryGetValue(l.AccountId, out var acc) && acc.AccountClassId == (int)AccountClasses.Assets))
+                        {
+                            var matchingCogs = voidLines.FirstOrDefault(l =>
+                                !voidStockIds.Contains(l.Id)
+                                && l.DrCr == DrOrCrSide.Cr
+                                && l.Amount == invDebit.Amount
+                                && accounts.TryGetValue(l.AccountId, out var cogsAcc)
+                                && cogsAcc.AccountClassId == (int)AccountClasses.Expense);
+                            if (matchingCogs != null)
+                            {
+                                voidStockIds.Add(invDebit.Id);
+                                voidStockIds.Add(matchingCogs.Id);
+                            }
+                        }
+                        foreach (var line in voidLines.Where(l => !voidStockIds.Contains(l.Id)))
+                            suppressedLineAmounts[line.Id] = line.Amount;
+                        continue;
+                    }
+
+                    if (invoice.Status == SalesInvoiceStatus.Void || offsetLines.Count == 0)
+                        continue;
+
+                    if (!allocationsByInvoice.TryGetValue(invoice.Id, out var allocations) || allocations.Count == 0)
+                        continue;
+
+                    var invoiceTotal = arLine.Amount;
+                    var signedOffsets = offsetLines
+                        .Select(l => (l.AccountId, SignedAmount: l.DrCr == DrOrCrSide.Cr ? l.Amount : -l.Amount))
+                        .ToList();
+                    var prevCumulativeByLine = new decimal[signedOffsets.Count];
+                    var cumulativePaid = 0m;
+
+                    foreach (var allocation in allocations)
+                    {
+                        if (allocation.GeneralLedgerHeaderId.HasValue
+                            && linesByHeader.TryGetValue(allocation.GeneralLedgerHeaderId.Value, out var allocGlLines))
+                        {
+                            foreach (var allocGlLine in allocGlLines)
+                                suppressedLineAmounts[allocGlLine.Id] = allocGlLine.Amount;
+                        }
+
+                        if (allocation.Amount <= 0m || cumulativePaid >= invoiceTotal)
+                            continue;
+
+                        var desiredSettle = Math.Min(allocation.Amount, invoiceTotal - cumulativePaid);
+                        if (desiredSettle <= 0m)
+                            continue;
+
+                        var settledAmount = desiredSettle;
+                        var recognitionDate = allocation.Date;
+                        if (receiptGlMap.TryGetValue(allocation.SalesReceiptHeaderId, out var receiptGlId)
+                            && linesByHeader.TryGetValue(receiptGlId, out var receiptLines))
+                        {
+                            var receiptCreditLines = receiptLines
+                                .Where(l => l.DrCr == DrOrCrSide.Cr)
+                                .OrderByDescending(l => l.AccountId == arLine.AccountId)
+                                .ThenBy(l => l.Id)
+                                .ToList();
+                            var availableReceiptCredit = receiptCreditLines.Sum(l =>
+                                Math.Max(0m, l.Amount - suppressedLineAmounts.GetValueOrDefault(l.Id)));
+                            settledAmount = Math.Min(desiredSettle, availableReceiptCredit);
+                            if (settledAmount <= 0m)
+                                continue;
+
+                            var toSuppress = settledAmount;
+                            foreach (var creditLine in receiptCreditLines)
+                            {
+                                if (toSuppress <= 0m)
+                                    break;
+                                var lineAvailable = Math.Max(0m, creditLine.Amount - suppressedLineAmounts.GetValueOrDefault(creditLine.Id));
+                                if (lineAvailable <= 0m)
+                                    continue;
+                                var take = Math.Min(toSuppress, lineAvailable);
+                                suppressedLineAmounts[creditLine.Id] = suppressedLineAmounts.GetValueOrDefault(creditLine.Id) + take;
+                                toSuppress -= take;
+                                recognitionDate = creditLine.HeaderDate;
+                            }
+                        }
+
+                        var nextCumulativePaid = cumulativePaid + settledAmount;
+                        var allocatedSumBeforeLast = 0m;
+                        for (var i = 0; i < signedOffsets.Count; i++)
+                        {
+                            decimal delta;
+                            if (i < signedOffsets.Count - 1)
+                            {
+                                var targetCumulative = Math.Round(signedOffsets[i].SignedAmount * nextCumulativePaid / invoiceTotal, 2, MidpointRounding.AwayFromZero);
+                                delta = targetCumulative - prevCumulativeByLine[i];
+                                prevCumulativeByLine[i] = targetCumulative;
+                                allocatedSumBeforeLast += delta;
+                            }
+                            else
+                            {
+                                delta = settledAmount - allocatedSumBeforeLast;
+                                prevCumulativeByLine[i] += delta;
+                            }
+
+                            if (delta > 0m)
+                                AddPosting(signedOffsets[i].AccountId, DrOrCrSide.Cr, delta, recognitionDate);
+                            else if (delta < 0m)
+                                AddPosting(signedOffsets[i].AccountId, DrOrCrSide.Dr, -delta, recognitionDate);
+                        }
+
+                        cumulativePaid = nextCumulativePaid;
+                    }
+                }
+            }
+
+            if (_purchaseInvoiceRepo != null)
+            {
+                var vendorApAccounts = _vendorRepo?.Table
+                    .Select(v => new { v.Id, v.AccountsPayableAccountId })
+                    .ToDictionary(v => v.Id, v => v.AccountsPayableAccountId)
+                    ?? new Dictionary<int, int?>();
+
+                var paymentsByBill = (_vendorPaymentRepo?.Table
+                        .Where(p => p.PurchaseInvoiceHeaderId.HasValue)
+                        .Select(p => new
+                        {
+                            p.Id,
+                            BillId = p.PurchaseInvoiceHeaderId.Value,
+                            p.GeneralLedgerHeaderId,
+                            p.Date,
+                            p.Amount
+                        })
+                        .ToList() ?? new())
+                    .GroupBy(p => p.BillId)
+                    .ToDictionary(g => g.Key, g => g.OrderBy(p => p.Date).ThenBy(p => p.Id).ToList());
+
+                var bills = _purchaseInvoiceRepo.Table
+                    .Where(b => b.GeneralLedgerHeaderId.HasValue)
+                    .Select(b => new
+                    {
+                        b.Id,
+                        b.VendorId,
+                        b.Status,
+                        GlHeaderId = b.GeneralLedgerHeaderId.Value,
+                        b.VoidGeneralLedgerHeaderId
+                    })
+                    .ToList();
+
+                foreach (var bill in bills)
+                {
+                    if (!linesByHeader.TryGetValue(bill.GlHeaderId, out var billLines) || billLines.Count == 0)
+                        continue;
+
+                    var expectedApAccountId = bill.VendorId.HasValue ? vendorApAccounts.GetValueOrDefault(bill.VendorId.Value) : null;
+                    var apLine = billLines.LastOrDefault(l => l.DrCr == DrOrCrSide.Cr && expectedApAccountId.HasValue && l.AccountId == expectedApAccountId.Value)
+                        ?? billLines.Where(l => l.DrCr == DrOrCrSide.Cr && accounts.TryGetValue(l.AccountId, out var acc) && acc.AccountClassId == (int)AccountClasses.Liabilities)
+                            .OrderByDescending(l => l.Amount).FirstOrDefault()
+                        ?? billLines.Where(l => l.DrCr == DrOrCrSide.Cr).OrderByDescending(l => l.Amount).FirstOrDefault();
+
+                    if (apLine == null || apLine.Amount <= 0m)
+                        continue;
+
+                    var offsetLines = billLines.Where(l => l.Id != apLine.Id).ToList();
+                    // Keep balance-sheet asset capitalization (e.g., inventory, fixed assets) on the bill date; defer only P&L and tax lines until payment.
+                    var deferredLines = offsetLines.Where(l => !IsCapitalizedAssetAccount(l.AccountId)).ToList();
+                    var deferredNet = deferredLines.Sum(l => l.DrCr == DrOrCrSide.Dr ? l.Amount : -l.Amount);
+                    foreach (var line in deferredLines)
+                        suppressedLineAmounts[line.Id] = line.Amount;
+                    suppressedLineAmounts[apLine.Id] = Math.Clamp(deferredNet, 0m, apLine.Amount);
+
+                    if (bill.VoidGeneralLedgerHeaderId.HasValue && linesByHeader.TryGetValue(bill.VoidGeneralLedgerHeaderId.Value, out var voidLines))
+                    {
+                        var voidApLine = voidLines.LastOrDefault(l => l.DrCr == DrOrCrSide.Dr && l.AccountId == apLine.AccountId)
+                            ?? voidLines.Where(l => l.DrCr == DrOrCrSide.Dr).OrderByDescending(l => l.Amount).FirstOrDefault();
+                        foreach (var line in voidLines.Where(l => (voidApLine == null || l.Id != voidApLine.Id) && !IsCapitalizedAssetAccount(l.AccountId)))
+                            suppressedLineAmounts[line.Id] = line.Amount;
+                        if (voidApLine != null)
+                            suppressedLineAmounts[voidApLine.Id] = Math.Clamp(deferredNet, 0m, voidApLine.Amount);
+                        continue;
+                    }
+
+                    if (bill.Status == PurchaseInvoiceStatus.Void || deferredLines.Count == 0)
+                        continue;
+
+                    if (!paymentsByBill.TryGetValue(bill.Id, out var payments) || payments.Count == 0)
+                        continue;
+
+                    var billTotal = apLine.Amount;
+                    var signedOffsets = offsetLines
+                        .Select(l => (
+                            l.AccountId,
+                            SignedAmount: l.DrCr == DrOrCrSide.Dr ? l.Amount : -l.Amount,
+                            IsCapitalized: IsCapitalizedAssetAccount(l.AccountId)))
+                        .ToList();
+                    var prevCumulativeByLine = new decimal[signedOffsets.Count];
+                    var cumulativePaid = 0m;
+
+                    foreach (var payment in payments)
+                    {
+                        if (payment.Amount <= 0m || cumulativePaid >= billTotal)
+                            continue;
+
+                        var desiredSettle = Math.Min(payment.Amount, billTotal - cumulativePaid);
+                        if (desiredSettle <= 0m)
+                            continue;
+
+                        var settledAmount = desiredSettle;
+                        var recognitionDate = payment.Date;
+                        int? paymentDrLineId = null;
+                        decimal availablePaymentDebit = 0m;
+                        if (payment.GeneralLedgerHeaderId.HasValue
+                            && linesByHeader.TryGetValue(payment.GeneralLedgerHeaderId.Value, out var paymentLines))
+                        {
+                            var paymentDrLine = paymentLines.FirstOrDefault(l => l.DrCr == DrOrCrSide.Dr && l.AccountId == apLine.AccountId)
+                                ?? paymentLines.FirstOrDefault(l => l.DrCr == DrOrCrSide.Dr);
+                            if (paymentDrLine != null)
+                            {
+                                availablePaymentDebit = Math.Max(0m, paymentDrLine.Amount - suppressedLineAmounts.GetValueOrDefault(paymentDrLine.Id));
+                                settledAmount = Math.Min(desiredSettle, availablePaymentDebit);
+                                if (settledAmount <= 0m)
+                                    continue;
+                                paymentDrLineId = paymentDrLine.Id;
+                                recognitionDate = paymentDrLine.HeaderDate;
+                            }
+                        }
+
+                        var nextCumulativePaid = cumulativePaid + settledAmount;
+                        var allocatedSumBeforeLast = 0m;
+                        var deferredDeltaSum = 0m;
+                        for (var i = 0; i < signedOffsets.Count; i++)
+                        {
+                            decimal delta;
+                            if (i < signedOffsets.Count - 1)
+                            {
+                                var targetCumulative = Math.Round(signedOffsets[i].SignedAmount * nextCumulativePaid / billTotal, 2, MidpointRounding.AwayFromZero);
+                                delta = targetCumulative - prevCumulativeByLine[i];
+                                prevCumulativeByLine[i] = targetCumulative;
+                                allocatedSumBeforeLast += delta;
+                            }
+                            else
+                            {
+                                delta = settledAmount - allocatedSumBeforeLast;
+                                prevCumulativeByLine[i] += delta;
+                            }
+
+                            if (!signedOffsets[i].IsCapitalized)
+                            {
+                                deferredDeltaSum += delta;
+                                if (delta > 0m)
+                                    AddPosting(signedOffsets[i].AccountId, DrOrCrSide.Dr, delta, recognitionDate);
+                                else if (delta < 0m)
+                                    AddPosting(signedOffsets[i].AccountId, DrOrCrSide.Cr, -delta, recognitionDate);
+                            }
+                        }
+
+                        if (paymentDrLineId.HasValue)
+                        {
+                            var suppressDebit = Math.Clamp(deferredDeltaSum, 0m, availablePaymentDebit);
+                            suppressedLineAmounts[paymentDrLineId.Value] = suppressedLineAmounts.GetValueOrDefault(paymentDrLineId.Value) + suppressDebit;
+                        }
+
+                        cumulativePaid = nextCumulativePaid;
+                    }
+                }
+            }
+
+            foreach (var line in allGlLines)
+            {
+                var remaining = line.Amount - suppressedLineAmounts.GetValueOrDefault(line.Id);
+                if (remaining > 0m)
+                    AddPosting(line.AccountId, line.DrCr, remaining, line.HeaderDate);
+            }
+
+            return totals
+                .Where(kvp => (kvp.Value.Debit != 0m || kvp.Value.Credit != 0m) && accounts.ContainsKey(kvp.Key))
+                .Select(kvp =>
+                {
+                    var account = accounts[kvp.Key];
+                    return new TrialBalance
+                    {
+                        AccountId = account.Id,
+                        AccountCode = account.AccountCode,
+                        AccountName = account.AccountName,
+                        Debit = kvp.Value.Debit,
+                        Credit = kvp.Value.Credit
+                    };
+                })
+                .OrderBy(a => a.AccountCode)
+                .ToList();
+        }
+
+        public ICollection<BalanceSheet> BalanceSheet(DateTime? from = default(DateTime?), DateTime? to = default(DateTime?), AccountingBasis basis = AccountingBasis.Accrual)
         {
             if (from.HasValue && to.HasValue && from.Value > to.Value)
                 throw new ArgumentException("The start date must not be after the end date.");
 
             // A position statement includes opening balances, not just movement since 'from'.
-            var balances = TrialBalance(null, to).ToDictionary(a => a.AccountId);
+            var balances = TrialBalance(null, to, basis).ToDictionary(a => a.AccountId);
             var accounts = _accountRepo.Table.Where(a => a.AccountClassId >= 1 && a.AccountClassId <= 5)
                 .Select(a => new { a.Id, a.AccountClassId, a.AccountCode, a.AccountName }).ToList();
             var balanceSheet = accounts.Where(a => a.AccountClassId <= 3)
@@ -305,9 +745,9 @@ namespace Services.Financial
             return balanceSheet;
         }
 
-        public ICollection<IncomeStatement> IncomeStatement(DateTime? from = default(DateTime?), DateTime? to = default(DateTime?))
+        public ICollection<IncomeStatement> IncomeStatement(DateTime? from = default(DateTime?), DateTime? to = default(DateTime?), AccountingBasis basis = AccountingBasis.Accrual)
         {
-            var balances = TrialBalance(from, to).ToDictionary(a => a.AccountId);
+            var balances = TrialBalance(from, to, basis).ToDictionary(a => a.AccountId);
             return _accountRepo.Table.Where(a => a.AccountClassId == 4 || a.AccountClassId == 5)
                 .Select(a => new { a.Id, a.AccountClassId, a.AccountCode, a.AccountName })
                 .ToList()
@@ -572,6 +1012,7 @@ namespace Services.Financial
                         Date = DateTime.Now,
                         DocumentType = DocumentTypes.JournalEntry,
                         Description = journalEntry.Memo,
+                        SourceDocumentId = journalEntry.Id > 0 ? journalEntry.Id : null,
                     };
 
                     foreach (var je in journalEntry.JournalEntryLines)
@@ -620,7 +1061,7 @@ namespace Services.Financial
             var date = _fiscalYearRepo.Table.Any(fy => fy.IsActive && original.Date >= fy.StartDate && original.Date <= fy.EndDate)
                 ? original.Date
                 : DateTime.UtcNow.Date;
-            var reversal = CreateGeneralLedgerHeader(original.DocumentType, date, description);
+            var reversal = CreateGeneralLedgerHeader(original.DocumentType, date, description, original.SourceDocumentId, original.Id);
             foreach (var line in original.GeneralLedgerLines)
                 reversal.GeneralLedgerLines.Add(CreateGeneralLedgerLine(line.DrCr == DrOrCrSide.Dr ? DrOrCrSide.Cr : DrOrCrSide.Dr, line.AccountId, line.Amount));
 

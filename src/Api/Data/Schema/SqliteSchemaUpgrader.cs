@@ -189,7 +189,11 @@ namespace Api.Data.Schema
                     new[] { "VendorPayment", "PaymentMethod", "TEXT NULL" },
                     new[] { "VendorPayment", "ReferenceNo", "TEXT NULL" },
                     new[] { "VendorPayment", "Memo", "TEXT NULL" },
-                    new[] { "SalesInvoiceHeader", "VoidGeneralLedgerHeaderId", "INTEGER NULL" }
+                    new[] { "SalesInvoiceHeader", "VoidGeneralLedgerHeaderId", "INTEGER NULL" },
+                    new[] { "CompanySetting", "AccountingBasis", "INTEGER NOT NULL DEFAULT 1" },
+                    new[] { "GeneralLedgerHeader", "SourceDocumentId", "INTEGER NULL" },
+                    new[] { "GeneralLedgerHeader", "ReversedGeneralLedgerHeaderId", "INTEGER NULL" },
+                    new[] { "CustomerAllocation", "GeneralLedgerHeaderId", "INTEGER NULL" }
                 };
                 var added = new HashSet<string>();
                 foreach (var column in columns)
@@ -238,9 +242,52 @@ namespace Api.Data.Schema
                     cmd.CommandText = BillsBackfillSql;
                     cmd.ExecuteNonQuery();
                 }
+                if (added.Contains("GeneralLedgerHeader.SourceDocumentId") || added.Contains("GeneralLedgerHeader.ReversedGeneralLedgerHeaderId"))
+                {
+                    using var cmd = connection.CreateCommand();
+                    cmd.Transaction = tx;
+                    cmd.CommandText = CashBasisTraceabilityBackfillSql;
+                    cmd.ExecuteNonQuery();
+                }
                 tx.Commit();
             }
         }
+
+        private const string CashBasisTraceabilityBackfillSql = @"
+            UPDATE ""GeneralLedgerHeader"" SET ""SourceDocumentId"" = (
+                SELECT i.""Id"" FROM ""SalesInvoiceHeader"" i WHERE i.""GeneralLedgerHeaderId"" = ""GeneralLedgerHeader"".""Id"")
+            WHERE ""SourceDocumentId"" IS NULL
+              AND EXISTS (SELECT 1 FROM ""SalesInvoiceHeader"" i WHERE i.""GeneralLedgerHeaderId"" = ""GeneralLedgerHeader"".""Id"");
+            UPDATE ""GeneralLedgerHeader"" SET
+                ""SourceDocumentId"" = (SELECT i.""Id"" FROM ""SalesInvoiceHeader"" i WHERE i.""VoidGeneralLedgerHeaderId"" = ""GeneralLedgerHeader"".""Id""),
+                ""ReversedGeneralLedgerHeaderId"" = (SELECT i.""GeneralLedgerHeaderId"" FROM ""SalesInvoiceHeader"" i WHERE i.""VoidGeneralLedgerHeaderId"" = ""GeneralLedgerHeader"".""Id"")
+            WHERE (""SourceDocumentId"" IS NULL OR ""ReversedGeneralLedgerHeaderId"" IS NULL)
+              AND EXISTS (SELECT 1 FROM ""SalesInvoiceHeader"" i WHERE i.""VoidGeneralLedgerHeaderId"" = ""GeneralLedgerHeader"".""Id"");
+            UPDATE ""GeneralLedgerHeader"" SET ""SourceDocumentId"" = (
+                SELECT r.""Id"" FROM ""SalesReceiptHeader"" r WHERE r.""GeneralLedgerHeaderId"" = ""GeneralLedgerHeader"".""Id"")
+            WHERE ""SourceDocumentId"" IS NULL
+              AND EXISTS (SELECT 1 FROM ""SalesReceiptHeader"" r WHERE r.""GeneralLedgerHeaderId"" = ""GeneralLedgerHeader"".""Id"");
+            UPDATE ""GeneralLedgerHeader"" SET ""SourceDocumentId"" = (
+                SELECT b.""Id"" FROM ""PurchaseInvoiceHeader"" b WHERE b.""GeneralLedgerHeaderId"" = ""GeneralLedgerHeader"".""Id"")
+            WHERE ""SourceDocumentId"" IS NULL
+              AND EXISTS (SELECT 1 FROM ""PurchaseInvoiceHeader"" b WHERE b.""GeneralLedgerHeaderId"" = ""GeneralLedgerHeader"".""Id"");
+            UPDATE ""GeneralLedgerHeader"" SET
+                ""SourceDocumentId"" = (SELECT b.""Id"" FROM ""PurchaseInvoiceHeader"" b WHERE b.""VoidGeneralLedgerHeaderId"" = ""GeneralLedgerHeader"".""Id""),
+                ""ReversedGeneralLedgerHeaderId"" = (SELECT b.""GeneralLedgerHeaderId"" FROM ""PurchaseInvoiceHeader"" b WHERE b.""VoidGeneralLedgerHeaderId"" = ""GeneralLedgerHeader"".""Id"")
+            WHERE (""SourceDocumentId"" IS NULL OR ""ReversedGeneralLedgerHeaderId"" IS NULL)
+              AND EXISTS (SELECT 1 FROM ""PurchaseInvoiceHeader"" b WHERE b.""VoidGeneralLedgerHeaderId"" = ""GeneralLedgerHeader"".""Id"");
+            UPDATE ""GeneralLedgerHeader"" SET ""SourceDocumentId"" = (
+                SELECT p.""PurchaseInvoiceHeaderId"" FROM ""VendorPayment"" p WHERE p.""GeneralLedgerHeaderId"" = ""GeneralLedgerHeader"".""Id"")
+            WHERE ""SourceDocumentId"" IS NULL
+              AND EXISTS (SELECT 1 FROM ""VendorPayment"" p WHERE p.""GeneralLedgerHeaderId"" = ""GeneralLedgerHeader"".""Id"" AND p.""PurchaseInvoiceHeaderId"" IS NOT NULL);
+            UPDATE ""GeneralLedgerHeader"" SET ""SourceDocumentId"" = (
+                SELECT j.""Id"" FROM ""JournalEntryHeader"" j WHERE j.""GeneralLedgerHeaderId"" = ""GeneralLedgerHeader"".""Id"")
+            WHERE ""SourceDocumentId"" IS NULL
+              AND EXISTS (SELECT 1 FROM ""JournalEntryHeader"" j WHERE j.""GeneralLedgerHeaderId"" = ""GeneralLedgerHeader"".""Id"");
+            UPDATE ""GeneralLedgerHeader"" SET ""SourceDocumentId"" = (
+                SELECT a.""Id"" FROM ""CustomerAllocation"" a WHERE a.""GeneralLedgerHeaderId"" = ""GeneralLedgerHeader"".""Id"")
+            WHERE ""SourceDocumentId"" IS NULL
+              AND EXISTS (SELECT 1 FROM ""CustomerAllocation"" a WHERE a.""GeneralLedgerHeaderId"" = ""GeneralLedgerHeader"".""Id"");";
 
         // D1 0012_bills.sql, without the permission rows that startup adds. Bills saved before then: posted ones are
         // approved, the rest drafts; lines keep the item's text and posted lines their inventory account. Invoices voided

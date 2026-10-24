@@ -17,6 +17,7 @@ namespace Core.Domain
         public int CompanyId { get; set; }
         public Company Company { get; set; } = null!;
         public string Currency { get; set; } = "USD";
+        public AccountingBasis AccountingBasis { get; set; } = AccountingBasis.Accrual;
 
         /// <summary>Registered or personal name; Company.Name is the trading name.</summary>
         public string? LegalName { get; set; }
