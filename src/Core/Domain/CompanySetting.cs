@@ -7,6 +7,7 @@
 //-----------------------------------------------------------------------
 
 #nullable enable
+using System;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Core.Domain
@@ -18,6 +19,17 @@ namespace Core.Domain
         public Company Company { get; set; } = null!;
         public string Currency { get; set; } = "USD";
         public AccountingBasis AccountingBasis { get; set; } = AccountingBasis.Accrual;
+
+        public ReportingFramework ReportingFramework { get; set; } = ReportingFramework.IfrsForSmes;
+        public TaxRegime TaxRegime { get; set; } = TaxRegime.None;
+        public FiscalYearPattern FiscalYearPattern { get; set; } = FiscalYearPattern.Calendar;
+        public int? FiscalYearStartMonth { get; set; }
+        public DateTime BooksStartDate { get; set; } = DateTime.UtcNow.Date;
+        public IndustryTemplate IndustryTemplate { get; set; } = IndustryTemplate.Services;
+        public InventoryCostingMethod InventoryCostingMethod { get; set; } = InventoryCostingMethod.None;
+        public string CoaTemplateId { get; set; } = "legacy-default";
+        public DateTime? OnboardingChecklistDismissedAt { get; set; }
+        public string? OnboardingChecklistJson { get; set; }
 
         /// <summary>Registered or personal name; Company.Name is the trading name.</summary>
         public string? LegalName { get; set; }

@@ -315,6 +315,16 @@ INSERT INTO Account VALUES(93,6,NULL,0,1,'99999','Income Summary',NULL,0,0,NULL)
 CREATE TABLE IF NOT EXISTS "CompanySetting" (
     "Id" INTEGER NOT NULL CONSTRAINT "PK_CompanySetting" PRIMARY KEY AUTOINCREMENT,
     "CompanyId" INTEGER NOT NULL,
+    "ReportingFramework" INTEGER NOT NULL DEFAULT 1,
+    "TaxRegime" INTEGER NOT NULL DEFAULT 0,
+    "FiscalYearPattern" INTEGER NOT NULL DEFAULT 1,
+    "FiscalYearStartMonth" INTEGER NULL,
+    "BooksStartDate" TEXT NOT NULL DEFAULT '1970-01-01',
+    "IndustryTemplate" INTEGER NOT NULL DEFAULT 1,
+    "InventoryCostingMethod" INTEGER NOT NULL DEFAULT 0,
+    "CoaTemplateId" TEXT NOT NULL DEFAULT 'legacy-default',
+    "OnboardingChecklistDismissedAt" TEXT NULL,
+    "OnboardingChecklistJson" TEXT NULL,
     CONSTRAINT "FK_CompanySetting_Company_CompanyId" FOREIGN KEY ("CompanyId") REFERENCES "Company" ("Id") ON DELETE CASCADE
 );
 CREATE TABLE IF NOT EXISTS "Contact" (

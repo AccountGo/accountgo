@@ -127,6 +127,18 @@ namespace Api.Data
             builder.Entity<Company>().HasIndex(c => c.Slug).IsUnique();
             builder.Entity<CompanySetting>().Property(s => s.Currency).IsRequired().HasMaxLength(3).HasDefaultValue("PHP");
             builder.Entity<CompanySetting>().Property(s => s.AccountingBasis).HasDefaultValue(AccountingBasis.Accrual);
+            builder.Entity<CompanySetting>().Property(s => s.ReportingFramework).HasDefaultValue(ReportingFramework.IfrsForSmes);
+            builder.Entity<CompanySetting>().Property(s => s.TaxRegime).HasDefaultValue(TaxRegime.None);
+            builder.Entity<CompanySetting>().Property(s => s.FiscalYearPattern).HasDefaultValue(FiscalYearPattern.Calendar);
+            builder.Entity<CompanySetting>().Property(s => s.BooksStartDate)
+                .HasColumnType("date")
+                .HasDefaultValue(new System.DateTime(1970, 1, 1));
+            builder.Entity<CompanySetting>().Property(s => s.IndustryTemplate).HasDefaultValue(IndustryTemplate.Services);
+            builder.Entity<CompanySetting>().Property(s => s.InventoryCostingMethod).HasDefaultValue(InventoryCostingMethod.None);
+            builder.Entity<CompanySetting>().Property(s => s.CoaTemplateId)
+                .IsRequired()
+                .HasMaxLength(100)
+                .HasDefaultValue("legacy-default");
 
             // Stored as BusinessAddress_* columns on CompanySetting; the SQLite upgrader and D1 0004 use the same names.
             builder.Entity<CompanySetting>().OwnsOne(s => s.BusinessAddress);

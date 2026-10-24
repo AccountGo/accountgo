@@ -26,6 +26,16 @@ namespace AccountGo.ServicesTests
                         INSERT INTO CompanySetting (CompanyId, Currency) VALUES (1, 'PHP');
                         ALTER TABLE Company DROP COLUMN DeletedAt;
                         ALTER TABLE CompanySetting DROP COLUMN Currency;
+                        ALTER TABLE CompanySetting DROP COLUMN ReportingFramework;
+                        ALTER TABLE CompanySetting DROP COLUMN TaxRegime;
+                        ALTER TABLE CompanySetting DROP COLUMN FiscalYearPattern;
+                        ALTER TABLE CompanySetting DROP COLUMN FiscalYearStartMonth;
+                        ALTER TABLE CompanySetting DROP COLUMN BooksStartDate;
+                        ALTER TABLE CompanySetting DROP COLUMN IndustryTemplate;
+                        ALTER TABLE CompanySetting DROP COLUMN InventoryCostingMethod;
+                        ALTER TABLE CompanySetting DROP COLUMN CoaTemplateId;
+                        ALTER TABLE CompanySetting DROP COLUMN OnboardingChecklistDismissedAt;
+                        ALTER TABLE CompanySetting DROP COLUMN OnboardingChecklistJson;
                         ALTER TABLE CompanyInvitation DROP COLUMN ResendCount;
                         ALTER TABLE CompanyInvitation DROP COLUMN ResendWindowStart;";
                     command.ExecuteNonQuery();
@@ -33,6 +43,8 @@ namespace AccountGo.ServicesTests
                     {
                         var root = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../"));
                         command.CommandText = File.ReadAllText(Path.Combine(root, "src/Api/d1/migrations/0002_workspace_lifecycle.sql"));
+                        command.ExecuteNonQuery();
+                        command.CommandText = File.ReadAllText(Path.Combine(root, "src/Api/d1/migrations/0022_company_accounting_policy.sql"));
                         command.ExecuteNonQuery();
                     }
                     SqliteSchemaUpgrader.Upgrade(connection);
@@ -48,6 +60,27 @@ namespace AccountGo.ServicesTests
                     command.CommandText = "SELECT COUNT(*) FROM pragma_table_info('CompanyInvitation') WHERE name IN ('ResendCount','ResendWindowStart')";
                     Assert.Equal(2L, command.ExecuteScalar());
                     command.CommandText = "SELECT AccountingBasis FROM CompanySetting WHERE CompanyId=1";
+                    Assert.Equal(1L, command.ExecuteScalar());
+                    command.CommandText = "SELECT ReportingFramework FROM CompanySetting WHERE CompanyId=1";
+                    Assert.Equal(1L, command.ExecuteScalar());
+                    command.CommandText = "SELECT TaxRegime FROM CompanySetting WHERE CompanyId=1";
+                    Assert.Equal(0L, command.ExecuteScalar());
+                    command.CommandText = "SELECT FiscalYearPattern FROM CompanySetting WHERE CompanyId=1";
+                    Assert.Equal(1L, command.ExecuteScalar());
+                    command.CommandText = "SELECT IndustryTemplate FROM CompanySetting WHERE CompanyId=1";
+                    Assert.Equal(1L, command.ExecuteScalar());
+                    command.CommandText = "SELECT InventoryCostingMethod FROM CompanySetting WHERE CompanyId=1";
+                    Assert.Equal(0L, command.ExecuteScalar());
+                    command.CommandText = "SELECT CoaTemplateId FROM CompanySetting WHERE CompanyId=1";
+                    Assert.Equal("legacy-default", command.ExecuteScalar());
+                    command.CommandText = @"
+                        SELECT COALESCE(
+                            (SELECT date(f.StartDate) FROM FinancialYear f
+                             WHERE f.CompanyId = CompanySetting.CompanyId
+                             ORDER BY f.IsActive DESC, f.StartDate LIMIT 1),
+                            (SELECT date(c.CreatedAt) FROM Company c WHERE c.Id = CompanySetting.CompanyId),
+                            '1970-01-01') = date(BooksStartDate)
+                        FROM CompanySetting WHERE CompanyId=1";
                     Assert.Equal(1L, command.ExecuteScalar());
                     command.CommandText = "SELECT COUNT(*) FROM pragma_table_info('GeneralLedgerHeader') WHERE name IN ('SourceDocumentId','ReversedGeneralLedgerHeaderId')";
                     Assert.Equal(2L, command.ExecuteScalar());
