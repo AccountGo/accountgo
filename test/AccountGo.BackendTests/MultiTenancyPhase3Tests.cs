@@ -654,7 +654,7 @@ namespace AccountGo.BackendTests
             Assert.EndsWith("via AccountGo", message.FromName);
             Assert.StartsWith("Invoice ", message.Subject);
             Assert.Empty(message.Attachments);
-            Assert.Contains("View invoice PDF", message.Html);
+            Assert.Contains("View invoice", message.Html);
             Assert.Contains("/api/public/invoices/pdf?", message.Html);
             Assert.Contains("billing%40customer.example", message.Html);
             Assert.Contains("Real customer", message.Html);
@@ -699,7 +699,7 @@ namespace AccountGo.BackendTests
             var attachment = Assert.Single(withAttach.Attachments);
             Assert.Matches(@"^Invoice-[A-Za-z0-9_-]+\.pdf$", attachment.FileName);
             Assert.Equal("%PDF", Encoding.ASCII.GetString(attachment.Content, 0, 4));
-            Assert.Contains("View invoice PDF", withAttach.Html);
+            Assert.Contains("View invoice", withAttach.Html);
         }
 
         [Fact]
@@ -763,9 +763,9 @@ namespace AccountGo.BackendTests
             var message = _emails.Messages.Last().Raw;
             Assert.Equal("billing@customer.example", message.To);
             Assert.Equal(new[] { "phase3-owner@example.com" }, message.Bcc);
-            Assert.StartsWith("Following up on Invoice ", message.Subject);
+            Assert.StartsWith("Reminder: Invoice ", message.Subject);
             Assert.Empty(message.Attachments);
-            Assert.Contains("View invoice PDF", message.Html);
+            Assert.Contains("View invoice", message.Html);
             Assert.Contains("/api/public/invoices/pdf?", message.Html);
 
             var reloaded = await (await Send(HttpMethod.Get, $"/api/Sales/SalesInvoice?id={invoiceId}")).Content.ReadFromJsonAsync<JsonElement>();

@@ -38,31 +38,32 @@ public class InvoiceEmailTests
     {
         var email = InvoiceEmailTemplate.Build(Invoice(), "PHP", canReply: true, pdfUrl: SamplePdfUrl);
 
-        Assert.Equal("Invoice INV-0042 from Acme \"Studio\": ₱1,250.00 due Nov 22, 2026", email.Subject);
+        Assert.Equal("Invoice INV-0042 from Acme \"Studio\"", email.Subject);
         Assert.Contains("₱1,250.00", email.Html);
         Assert.Contains("Nov 22, 2026", email.Html);
         Assert.Contains("PO-9", email.Html);
-        Assert.Contains("View invoice PDF", email.Html);
+        Assert.Contains("View invoice", email.Html);
         Assert.Contains(WebUtility.HtmlEncode(SamplePdfUrl), email.Html);
-        Assert.DoesNotContain("is attached", email.Html);
+        Assert.DoesNotContain("Attached:", email.Html);
         Assert.Contains("reply to this email", email.Html);
         Assert.Contains("Thank you!<br>See you again", email.Html);
         Assert.Contains("BDO 1234 &amp; GCash", email.Html);
         Assert.DoesNotContain("<script>", email.Html);
         Assert.Contains("Juan &lt;script&gt;", email.Html);
-        Assert.Contains("Due date: Nov 22, 2026", email.Text);
-        Assert.Contains("HOW TO PAY", email.Text);
+        Assert.Contains("Due: Nov 22, 2026", email.Text);
+        Assert.Contains("PAYMENT", email.Text);
         Assert.Contains(SamplePdfUrl, email.Text);
+        Assert.Contains("has issued invoice", email.Html);
     }
 
     [Fact]
-    public void Build_AttachPdf_ShowsAttachmentChip_AlongsideLink()
+    public void Build_AttachPdf_ShowsAttachmentNote_AlongsideLink()
     {
         var email = InvoiceEmailTemplate.Build(Invoice(), "USD", canReply: true, pdfUrl: SamplePdfUrl, attachPdf: true);
 
-        Assert.Contains("View invoice PDF", email.Html);
+        Assert.Contains("View invoice", email.Html);
         Assert.Contains("Invoice-INV-0042.pdf", email.Html);
-        Assert.Contains("is attached", email.Html);
+        Assert.Contains("Attached:", email.Html);
         Assert.Contains("Attached: Invoice-INV-0042.pdf", email.Text);
     }
 
@@ -86,7 +87,7 @@ public class InvoiceEmailTests
         var email = InvoiceEmailTemplate.Build(Invoice(balanceDue: 0, paid: 1250m), "USD", canReply: true);
 
         Assert.Equal("Invoice INV-0042 from Acme \"Studio\"", email.Subject);
-        Assert.Contains("Paid in full", email.Html);
+        Assert.Contains("paid in full", email.Html);
         Assert.DoesNotContain("BDO", email.Html);
     }
 
@@ -95,8 +96,9 @@ public class InvoiceEmailTests
     {
         var email = InvoiceEmailTemplate.Build(Invoice(balanceDue: 250m, paid: 1000m), "USD", canReply: true);
 
-        Assert.Contains("$250.00 due", email.Subject);
+        Assert.Equal("Invoice INV-0042 from Acme \"Studio\"", email.Subject);
         Assert.Contains("Already paid: $1,000.00", email.Text);
+        Assert.Contains("Amount due: $250.00", email.Text);
     }
 
     [Fact]
@@ -113,17 +115,17 @@ public class InvoiceEmailTests
     {
         var email = InvoiceEmailTemplate.BuildFollowUp(Invoice(), "PHP", canReply: true, pdfUrl: SamplePdfUrl);
 
-        Assert.Equal("Following up on Invoice INV-0042 from Acme \"Studio\"", email.Subject);
-        Assert.Contains("following up", email.Html, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("Reminder: Invoice INV-0042 from Acme \"Studio\"", email.Subject);
+        Assert.Contains("remains unpaid", email.Html, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("₱1,250.00", email.Html);
         Assert.Contains("Nov 22, 2026", email.Html);
-        Assert.Contains("View invoice PDF", email.Html);
+        Assert.Contains("View invoice", email.Html);
         Assert.Contains(WebUtility.HtmlEncode(SamplePdfUrl), email.Html);
-        Assert.DoesNotContain("is attached", email.Html);
+        Assert.DoesNotContain("Attached:", email.Html);
         Assert.Contains("reply to this email", email.Html);
         Assert.DoesNotContain("<script>", email.Html);
-        Assert.Contains("Due date: Nov 22, 2026", email.Text);
-        Assert.Contains("HOW TO PAY", email.Text);
+        Assert.Contains("Due: Nov 22, 2026", email.Text);
+        Assert.Contains("PAYMENT", email.Text);
     }
 
     [Fact]
