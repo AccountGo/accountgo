@@ -64,14 +64,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
       permission: 'sales.invoices.view',
     },
     {
-      name: 'Financials',
-      path: `/org/${currentOrg.slug}/financials`,
-      icon: BookOpen,
-      module: 'financials',
-      permission: 'financials.accounts.view',
-      badge: 'Ledger',
-    },
-    {
       name: 'Purchases & Bills',
       path: `/org/${currentOrg.slug}/purchases`,
       icon: ShoppingBag,
@@ -85,6 +77,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
       icon: Package,
       module: ['sales', 'purchases'],
       permission: 'inventory.items.view',
+    },
+    {
+      name: 'General Ledger',
+      path: `/org/${currentOrg.slug}/financials`,
+      icon: BookOpen,
+      module: 'financials',
+      permission: 'financials.journal.view',
     },
     {
       name: 'Reports',

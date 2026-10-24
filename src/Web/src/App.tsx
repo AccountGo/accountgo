@@ -18,7 +18,8 @@ import { BillEdit } from './pages/BillEdit';
 import { BillDetail } from './pages/BillDetail';
 import { ProductsServices } from './pages/ProductsServices';
 import Inventory from './pages/Inventory';
-import PlaceholderView from './pages/PlaceholderView';
+import GeneralLedger from './pages/GeneralLedger';
+import JournalEntries from './pages/JournalEntries';
 import Reports from './pages/Reports';
 import ChartOfAccounts from './pages/ChartOfAccounts';
 import NotFound from './pages/NotFound';
@@ -119,7 +120,15 @@ const router = createBrowserRouter([
             path: 'financials',
             element: (
               <RequiresModule module="financials">
-                <PlaceholderView />
+                <GeneralLedger />
+              </RequiresModule>
+            ),
+          },
+          {
+            path: 'financials/journals',
+            element: (
+              <RequiresModule module="financials">
+                <JournalEntries />
               </RequiresModule>
             ),
           },

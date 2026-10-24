@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Download, Loader2, RefreshCw } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { PermissionDeniedCard, useTenantContext } from '../components/Gating';
@@ -331,7 +332,11 @@ export default function Reports() {
               <tbody>
                 {rows.filter(row => statement !== 'trialBalance' || row.kind !== 'total').map((row, index) =>
                   <tr key={index} className={`border-t border-[var(--border-subtle)] ${row.kind === 'account' ? '' : 'font-semibold bg-[var(--bg-subtle)]'}`}>
-                    <td className="p-4 font-mono text-[var(--text-muted)]">{row.code}</td><th scope="row" className="p-4 text-left font-[inherit]">{row.label}</th>
+                    <td className="p-4 font-mono text-[var(--text-muted)]">{row.code}</td><th scope="row" className="p-4 text-left font-[inherit]">
+                      {statement === 'trialBalance' && row.kind === 'account' && hasPermission('financials.journal.view')
+                        ? <Link className="underline" to={`/org/${currentOrg.slug}/financials?${new URLSearchParams({ accountCode: row.code, from: range.from, to: range.to })}`}>{row.label}</Link>
+                        : row.label}
+                    </th>
                     {statement === 'trialBalance' ? <><td className="p-4 text-right tabular-nums">{formatAmount(row.debit)}</td><td className="p-4 text-right tabular-nums">{formatAmount(row.credit)}</td></>
                       : <td className="p-4 text-right tabular-nums">{formatAmount(row.amount)}</td>}
                   </tr>)}
