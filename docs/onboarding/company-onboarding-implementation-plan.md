@@ -277,11 +277,28 @@ Reuse existing input/button/token classes from `SelectOrg` / Settings. No new UI
 
 ### 3.5 Acceptance
 
-- [ ] Keyboard-accessible step flow; mobile usable.  
-- [ ] Cannot submit without hard gates.  
-- [ ] Visual match with SelectOrg / Settings (tokens, radii, Lucide).  
-- [ ] Signup with org name prefills Identity; Company created only after wizard submit.  
-- [ ] Manual QA script attached to PR (happy path + Apr–Mar + VAT posture + invoicing plan).
+- [x] Keyboard-accessible step flow; mobile usable (native radio/inputs, focus moves to step heading; layout stacks on small screens — not yet checked on a device).  
+- [x] Cannot submit without hard gates (`validateStep`/`validateAll`, unit-tested).  
+- [x] Visual match with SelectOrg / Settings (same tokens, radii, Lucide).  
+- [x] Signup no longer creates a company; after OTP it routes to `/create-org?name=&slug=`, which prefills Identity.  
+- [x] Manual QA script below (to be run against a live API before merge).
+
+**Status:** Done on branch, pending merge. `pnpm build` and `test/createOrg.test.mjs` (7 tests) pass; no browser run yet.
+
+**Implementation notes**
+
+- `SelectOrg` create modal removed; `?action=new` redirects to `/create-org`. `OrgSwitcher` links there.
+- No slug-availability endpoint exists, so slug conflicts surface as a 409 on submit and return the user to the Identity step.
+- Invitation signups are unchanged.
+
+**Manual QA script**
+
+1. Happy path: `/select-org` → Create → pick Accounting → name + slug → USD, books start 1 Jan current year, Calendar FY → IFRS for SMEs, no tax, Services → Create. Expect dashboard at `/org/{slug}/dashboard`.
+2. Apr–Mar: choose Apr–Mar FY with books start 15 Feb; preview chip must read `FY2025-26 … Open`; confirm the created FY via API/Settings.
+3. VAT posture: choose VAT/GST; confirm an inactive zero-rate placeholder tax exists after creation.
+4. Invoicing plan: framework is collapsed under advanced disclosure with defaults; payload uses defaults.
+5. Gates: leave name empty / Custom FY without month / duplicate slug and confirm Next or submit is blocked with a clear message.
+6. Signup: new signup with an org name → OTP → wizard opens with the name prefilled; no company exists before submit.
 
 ---
 
@@ -408,7 +425,7 @@ Phase 5 may be deferred if product accepts single CoA + stored `CoaTemplateId` f
 
 - [x] Phase 1 — Domain + schema + policy rules  
 - [x] Phase 2 — API + provisioning + tests  
-- [ ] Phase 3 — CreateOrg wizard UI  
+- [x] Phase 3 — CreateOrg wizard UI  
 - [ ] Phase 4 — Checklist + locks + books-start guard  
 - [ ] Phase 5 — CoA template families  
 - [ ] Phase 6 — Polish + docs  
@@ -423,4 +440,5 @@ Mark each phase **Done** in this file with a two-line summary when merged.
 |---|---|
 | 2026-10-24 | Initial phased implementation plan |
 | 2026-10-25 | Phase 2 marked done on branch |
+| 2026-10-25 | Phase 3 wizard UI implemented on branch, pending merge and live QA |
 | 2026-10-25 | Phase 1 marked done on branch; LIFO and FY-coherence checks deferred to Phase 2 |

@@ -181,8 +181,6 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
         firstName: firstName.trim(),
         lastName: lastName.trim(),
         email: email.trim(),
-        organizationName: orgName.trim() || undefined,
-        organizationSlug: orgSlug.trim() || undefined,
         invitationToken: invitationToken || undefined,
       });
 
@@ -257,6 +255,11 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
       if (targetOrgSlug) {
         setPersistedOrgSlug(targetOrgSlug);
         navigate(`/org/${targetOrgSlug}/dashboard`, { replace: true });
+      } else if (orgName.trim()) {
+        // The workspace is created by the setup wizard, which prefills the name typed at signup.
+        const params = new URLSearchParams({ name: orgName.trim() });
+        if (orgSlug.trim()) params.set('slug', orgSlug.trim());
+        navigate(`/create-org?${params.toString()}`, { replace: true });
       } else if (fromPath && fromPath !== '/login' && fromPath !== '/signup') {
         navigate(fromPath, { replace: true });
       } else if (destinationSlug) {

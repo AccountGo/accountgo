@@ -180,7 +180,7 @@ export const OrgSwitcher: React.FC<OrgSwitcherProps> = ({
               role="menuitem"
               onClick={() => {
                 setIsOpen(false);
-                navigate('/select-org?action=new');
+                navigate('/create-org');
               }}
               className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-[var(--brand-primary)] hover:opacity-90 hover:bg-[var(--brand-subtle)] transition-colors cursor-pointer"
             >
