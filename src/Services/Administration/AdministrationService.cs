@@ -15,8 +15,8 @@ using Core.Domain.Financials;
 using Core.Domain.Security;
 using Core.Domain.TaxSystem;
 using Dto.Subscription;
-using Services.Financial;
-using Services.TaxSystem;
+using Core.Domain.Purchases;
+using Core.Domain.Sales;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -26,7 +26,7 @@ using System.Threading.Tasks;
 
 namespace Services.Administration
 {
-    public class AdministrationService : BaseService, IAdministrationService
+    public partial class AdministrationService : BaseService, IAdministrationService
     {
         private readonly IRepository<FinancialYear> _fiscalYearRepo;
         private readonly IRepository<TaxGroup> _taxGroupRepo;
@@ -38,9 +38,9 @@ namespace Services.Administration
         private readonly IRepository<Company> _company;
         private readonly IRepository<Account> _accountRepo;
         private readonly IRepository<AuditLog> _auditLogRepo;
+        private readonly IRepository<SalesInvoiceLine> _salesInvoiceLineRepo;
+        private readonly IRepository<PurchaseInvoiceLine> _purchaseInvoiceLineRepo;
         private readonly ISecurityRepository _securityRepository;
-        private readonly IFinancialService _financialService;
-        private readonly ITaxService _taxService;
         private readonly IMapper _mapper;
         private readonly Core.Tenancy.ITenantContext? _tenantContext;
 
@@ -53,9 +53,9 @@ namespace Services.Administration
             IRepository<GeneralLedgerSetting> generalLedgerSetting,
             IRepository<Account> accountRepo,
             IRepository<AuditLog> auditLogRepo,
+            IRepository<SalesInvoiceLine> salesInvoiceLineRepo,
+            IRepository<PurchaseInvoiceLine> purchaseInvoiceLineRepo,
             ISecurityRepository securityRepository,
-            IFinancialService financialService,
-            ITaxService taxService,
             IMapper mapper,
             IRepository<Company> company = null,
             Core.Tenancy.ITenantContext? tenantContext = null
@@ -72,9 +72,9 @@ namespace Services.Administration
             _company = company;
             _accountRepo = accountRepo;
             _auditLogRepo = auditLogRepo;
+            _salesInvoiceLineRepo = salesInvoiceLineRepo;
+            _purchaseInvoiceLineRepo = purchaseInvoiceLineRepo;
             _securityRepository = securityRepository;
-            _financialService = financialService;
-            _taxService = taxService;
             _mapper = mapper;
             _tenantContext = tenantContext;
         }
@@ -86,63 +86,9 @@ namespace Services.Administration
             return query.ToList();
         }
 
-        public async Task<Result<Dto.TaxSystem.Tax>> CreateTaxAsync(Dto.TaxSystem.TaxForCreation taxForCreationDto)
-        {
-            var query = from f in _taxRepo.Table
-                        where f.TaxName == taxForCreationDto.TaxName || f.TaxCode == taxForCreationDto.TaxCode
-                        select f;
-
-            if (query.Any())
-            {
-                var message = $"Tax with name {taxForCreationDto.TaxName} or code {taxForCreationDto.TaxCode} already exists";
-                return Result<Dto.TaxSystem.Tax>.Failure(Error.ValidationError(message));
-            }
-
-            var salesTaxAccount = _financialService.GetAccountByAccountCode(taxForCreationDto.SalesAccountId.ToString());
-            var purchaseTaxAccount = _financialService.GetAccountByAccountCode(taxForCreationDto.PurchaseAccountId.ToString());
-
-            var taxEntity = _mapper.Map<Core.Domain.TaxSystem.Tax>(taxForCreationDto);
-            taxEntity.SalesAccountId = salesTaxAccount.Id;
-            taxEntity.PurchasingAccountId = purchaseTaxAccount.Id;
-            taxEntity.SalesAccount = salesTaxAccount;
-            taxEntity.PurchasingAccount = purchaseTaxAccount;
-
-            if (taxForCreationDto.TaxGroup != null)
-            {
-                var taxGroupEntity = AddNewTaxGroup(taxForCreationDto.TaxGroup);
-                taxEntity.TaxGroupTaxes.Add(new Core.Domain.TaxSystem.TaxGroupTax
-                {
-                    TaxId = taxEntity.Id,
-                    TaxGroupId = taxGroupEntity.Id,
-                    TaxGroup = taxGroupEntity,
-                });
-            }
-
-            if (taxForCreationDto.ItemTaxGroup != null)
-            {
-                var itemTaxGroupEntity = AddNewItemTaxGroup(taxForCreationDto.ItemTaxGroup);
-                taxEntity.ItemTaxGroupTaxes.Add(new Core.Domain.TaxSystem.ItemTaxGroupTax
-                {
-                    TaxId = taxEntity.Id,
-                    ItemTaxGroupId = itemTaxGroupEntity.Id,
-                    ItemTaxGroup = itemTaxGroupEntity,
-                });
-            }
-
-            await AddNewTaxAsync(taxEntity);
-            var taxToReturn = _mapper.Map<Dto.TaxSystem.Tax>(taxEntity);
-
-            return Result<Dto.TaxSystem.Tax>.Success(taxToReturn);
-        }
-
         public void AddNewTax(Tax tax)
         {
             _taxRepo.Insert(tax);
-        }
-
-        public async Task AddNewTaxAsync(Tax tax)
-        {
-            await _taxRepo.InsertAsync(tax);
         }
 
         public TaxGroup AddNewTaxGroup(Dto.TaxSystem.TaxGroup taxGroupDto)
@@ -167,81 +113,6 @@ namespace Services.Administration
             }
 
             return itemTaxGroupEntity;
-        }
-
-        public async Task<Result<Dto.TaxSystem.Tax>> EditTaxAsync(Dto.TaxSystem.TaxForUpdate taxForUpdateDto)
-        {
-            if (taxForUpdateDto == null || taxForUpdateDto.Tax == null)
-            {
-                return Result<Dto.TaxSystem.Tax>.Failure(Error.ValidationError("Tax data is required."));
-            }
-
-            var taxEntity = _taxService.GetTaxById(taxForUpdateDto.Tax.Id);
-            if (taxEntity is null)
-            {
-                var message = $"Tax with id {taxForUpdateDto.Tax.Id} is not found.";
-                return Result<Dto.TaxSystem.Tax>.Failure(Error.RecordNotFound(message));
-            }
-
-            var salesTaxAccount = _financialService.GetAccountByAccountCode(taxForUpdateDto.SalesAccountId.ToString());
-            var purchaseTaxAccount = _financialService.GetAccountByAccountCode(taxForUpdateDto.PurchaseAccountId.ToString());
-
-            _mapper.Map(taxForUpdateDto, taxEntity);
-            taxEntity.SalesAccountId = salesTaxAccount.Id;
-            taxEntity.PurchasingAccountId = purchaseTaxAccount.Id;
-            taxEntity.SalesAccount = salesTaxAccount;
-            taxEntity.PurchasingAccount = purchaseTaxAccount;
-
-            taxEntity.TaxGroupTaxes.Clear();
-
-            if (taxForUpdateDto.TaxGroup != null)
-            {
-                var taxGroupEntity = AddNewTaxGroup(taxForUpdateDto.TaxGroup);
-                taxEntity.TaxGroupTaxes.Add(new Core.Domain.TaxSystem.TaxGroupTax
-                {
-                    TaxId = taxEntity.Id,
-                    TaxGroupId = taxGroupEntity.Id,
-                    TaxGroup = taxGroupEntity,
-                });
-            }
-
-            taxEntity.ItemTaxGroupTaxes.Clear();
-
-            if (taxForUpdateDto.ItemTaxGroup != null)
-            {
-                var itemTaxGroupEntity = AddNewItemTaxGroup(taxForUpdateDto.ItemTaxGroup);
-                taxEntity.ItemTaxGroupTaxes.Add(new Core.Domain.TaxSystem.ItemTaxGroupTax
-                {
-                    TaxId = taxEntity.Id,
-                    ItemTaxGroupId = itemTaxGroupEntity.Id,
-                    ItemTaxGroup = itemTaxGroupEntity
-                });
-            }
-
-            await UpdateTaxAsync(taxEntity);
-            var taxToRetun = _mapper.Map<Dto.TaxSystem.Tax>(taxEntity);
-
-            return Result<Dto.TaxSystem.Tax>.Success(taxToRetun);
-        }
-
-        public async Task UpdateTaxAsync(Tax tax)
-        {
-            await _taxRepo.UpdateAsync(tax);
-        }
-
-        public async Task<Result<Dto.TaxSystem.Tax>> DeleteTaxAsync(int taxId)
-        {
-            var tax = _taxRepo.GetById(taxId);
-
-            if (tax is null)
-            {
-                var message = $"Tax with id {taxId} not found";
-                return Result<Dto.TaxSystem.Tax>.Failure(Error.RecordNotFound(message));
-            }
-
-            await _taxRepo.DeleteAsync(tax);
-
-            return Result<Dto.TaxSystem.Tax>.Success(null);
         }
 
         public async Task<Result<Dto.TaxSystem.TaxGroup>> DeleteTaxGroupAsync(int taxGroupId)

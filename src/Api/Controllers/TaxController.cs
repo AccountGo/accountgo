@@ -4,8 +4,8 @@ using Services.TaxSystem;
 using System.Collections.Generic;
 using System.Linq;
 using Services.Administration;
-using Services.Financial;
-using Api.ActionFilters;
+using Api.Filters;
+using Core.Domain.Security;
 
 namespace Api.Controllers
 {
@@ -15,13 +15,48 @@ namespace Api.Controllers
     {
         private readonly ITaxService _taxService;
         private readonly IAdministrationService _adminService;
-        private readonly IFinancialService _financialService;
 
-        public TaxController(ITaxService taxService, IAdministrationService adminService, IFinancialService financialService)
+        public TaxController(ITaxService taxService, IAdministrationService adminService)
         {
             _taxService = taxService;
             _adminService = adminService;
-            _financialService = financialService;
+        }
+
+        [HttpGet]
+        public IActionResult List() => Ok(_adminService.ListTaxSettings());
+
+        [HttpPost]
+        [RequirePermission(SystemPermissions.AdminTaxesManage)]
+        public async Task<IActionResult> Create([FromBody] TaxSettingWrite write)
+        {
+            return FromOutcome(await _adminService.CreateTaxSettingAsync(write));
+        }
+
+        [HttpPut("{id:int}")]
+        [RequirePermission(SystemPermissions.AdminTaxesManage)]
+        public async Task<IActionResult> Update(int id, [FromBody] TaxSettingWrite write)
+        {
+            return FromOutcome(await _adminService.UpdateTaxSettingAsync(id, write));
+        }
+
+        [HttpDelete("{id:int}")]
+        [RequirePermission(SystemPermissions.AdminTaxesManage)]
+        public async Task<IActionResult> Delete(int id)
+        {
+            return FromOutcome(await _adminService.DeleteTaxSettingAsync(id));
+        }
+
+        private IActionResult FromOutcome(TaxSettingsOutcome outcome)
+        {
+            if (outcome.StatusCode == 204)
+                return NoContent();
+            if (outcome.StatusCode == 200)
+                return Ok(outcome.Tax);
+            if (outcome.StatusCode == 404)
+                return NotFound(new { message = outcome.Message });
+            if (outcome.StatusCode == 409)
+                return Conflict(new { message = outcome.Message });
+            return BadRequest(new { message = outcome.Message });
         }
 
         /// <summary>
@@ -195,53 +230,6 @@ namespace Api.Controllers
             taxSystemDto.ItemTaxGroups = itemTaxGroupsDto;
 
             return new ObjectResult(taxSystemDto);
-        }
-
-        [HttpPost("addnewtax")]
-        [ServiceFilter(typeof(ValidationFilterAttribute))]
-        public async Task<IActionResult> AddNewTax([FromBody] TaxForCreation taxForCreationDto)
-        {
-            var result = await _adminService.CreateTaxAsync(taxForCreationDto);
-
-            if (result.IsFailure)
-            {
-                return BadRequest(result.Error.Message);
-            }
-
-            var taxToReturn = result.Value;
-
-            return Ok(taxToReturn);
-        }
-
-        [HttpPut("edittax")]
-        [ServiceFilter(typeof(ValidationFilterAttribute))]
-        public async Task<IActionResult> EditTax([FromBody] TaxForUpdate taxForUpdateDto)
-        {
-            var result = await _adminService.EditTaxAsync(taxForUpdateDto);
-
-            if (result.IsFailure)
-            {
-                return BadRequest(result.Error.Message);
-            }
-
-            var taxToReturn = result.Value;
-
-            return Ok(taxToReturn);
-        }
-
-
-        [HttpDelete]
-        [Route("deletetax")]
-        public async Task<IActionResult> DeleteTax([FromQuery] int id)
-        {
-            var result = await _adminService.DeleteTaxAsync(id);
-
-            if (result.IsFailure)
-            {
-                return BadRequest(result.Error.Message);
-            }
-
-            return NoContent();
         }
 
         [HttpDelete]
