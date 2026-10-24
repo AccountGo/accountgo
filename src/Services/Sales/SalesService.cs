@@ -934,6 +934,8 @@ namespace Services.Sales
                     ? taxes.SingleOrDefault(t => t.Id == line.TaxId.Value)
                         ?? throw new InvalidOperationException("The selected tax was not found in this workspace.")
                     : null;
+                if (tax != null && !tax.IsActive)
+                    throw new InvalidOperationException($"{tax.TaxName} is archived. Pick another tax for this line.");
                 line.TaxAmount = Core.Domain.Purchases.PurchaseInvoiceLine.TaxOf(line.Subtotal, tax?.Rate);
             }
 

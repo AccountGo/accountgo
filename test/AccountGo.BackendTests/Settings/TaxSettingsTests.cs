@@ -15,8 +15,10 @@ using Api.Service;
 using Core.Domain;
 using Core.Domain.Financials;
 using Core.Domain.Items;
+using Core.Domain.Purchases;
 using Core.Domain.Sales;
 using Core.Domain.Security;
+using Services.Purchasing;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -145,6 +147,99 @@ namespace AccountGo.BackendTests.Settings
             var ok = await _fixture.Send(HttpMethod.Post, "/api/Tax", new { taxName = "Expense purchase", taxCode = "EXPP", rate = 1, purchaseAccountId = expense }, owner.Token, "tax-acct");
             Assert.Equal(HttpStatusCode.OK, ok.StatusCode);
             Assert.Equal("50700", (await Json(ok)).GetProperty("purchaseAccountCode").GetString());
+        }
+
+        [Fact]
+        public async Task EditWithoutAccountIdsKeepsThem_CreateStillDefaults_AndRateAllowsTwoDecimals()
+        {
+            var owner = await _fixture.CreateUser("keep-owner@example.com");
+            var companyId = await _fixture.CreateWorkspace(owner.Token, "Keep", "tax-keep");
+            int expense;
+            using (var scope = _fixture.Factory.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+                expense = db.Accounts.IgnoreQueryFilters().Single(a => a.CompanyId == companyId && a.AccountCode == "50700").Id;
+            }
+
+            var created = await Json(await _fixture.Send(HttpMethod.Post, "/api/Tax", new { taxName = "Kept", taxCode = "KEPT", rate = 7.25m, purchaseAccountId = expense }, owner.Token, "tax-keep"));
+            var id = created.GetProperty("id").GetInt32();
+            Assert.Equal("20300", created.GetProperty("salesAccountCode").GetString());
+            Assert.Equal("50700", created.GetProperty("purchaseAccountCode").GetString());
+
+            var tooFine = await _fixture.Send(HttpMethod.Post, "/api/Tax", new { taxName = "Fine", taxCode = "FINE", rate = 7.125m }, owner.Token, "tax-keep");
+            Assert.Equal(HttpStatusCode.BadRequest, tooFine.StatusCode);
+            Assert.Equal("Rate can have at most 2 decimal places.", (await Json(tooFine)).GetProperty("message").GetString());
+
+            var archived = await Json(await _fixture.Send(HttpMethod.Put, "/api/Tax/" + id, new { taxName = "Kept", taxCode = "KEPT", rate = 7.25m, isActive = false }, owner.Token, "tax-keep"));
+            Assert.False(archived.GetProperty("isActive").GetBoolean());
+            Assert.Equal("20300", archived.GetProperty("salesAccountCode").GetString());
+            Assert.Equal("50700", archived.GetProperty("purchaseAccountCode").GetString());
+
+            var edited = await Json(await _fixture.Send(HttpMethod.Put, "/api/Tax/" + id, new { taxName = "Kept", taxCode = "KEPT", rate = 8, isActive = true }, owner.Token, "tax-keep"));
+            Assert.Equal("50700", edited.GetProperty("purchaseAccountCode").GetString());
+            Assert.Equal("20300", edited.GetProperty("salesAccountCode").GetString());
+
+            var defaults = await Json(await _fixture.Send(HttpMethod.Post, "/api/Tax", new { taxName = "Defaults", taxCode = "DEFT", rate = 0 }, owner.Token, "tax-keep"));
+            Assert.Equal("20300", defaults.GetProperty("salesAccountCode").GetString());
+            Assert.Equal("10160", defaults.GetProperty("purchaseAccountCode").GetString());
+        }
+
+        [Fact]
+        public async Task SavingAnInvoiceOrBillRejectsAnArchivedTax_AndABillRejectsAnUnknownTax()
+        {
+            var owner = await _fixture.CreateUser("save-owner@example.com");
+            var companyId = await _fixture.CreateWorkspace(owner.Token, "Save", "tax-save");
+            var created = await Json(await _fixture.Send(HttpMethod.Post, "/api/Tax", new { taxName = "VAT 12", taxCode = "VAT12", rate = 12 }, owner.Token, "tax-save"));
+            var id = created.GetProperty("id").GetInt32();
+            var vendor = await Json(await _fixture.Send(HttpMethod.Post, "/api/Purchasing/SaveVendor", new { name = "Paper Co" }, owner.Token, "tax-save"));
+            var vendorId = vendor.GetProperty("id").GetInt32();
+            var bill = new Dto.Purchasing.Bill
+            {
+                VendorId = vendorId,
+                Date = DateTime.Parse("2026-10-24", CultureInfo.InvariantCulture),
+                Status = "Draft",
+                Lines = { new Dto.Purchasing.BillLine { Description = "Paper", Quantity = 1, Amount = 100, TaxId = id } }
+            };
+            var savedBill = await _fixture.Send(HttpMethod.Post, "/api/Purchasing/SaveBill", bill, owner.Token, "tax-save");
+            var savedBillJson = await Json(savedBill);
+            Assert.True(savedBill.IsSuccessStatusCode, savedBillJson.ToString());
+
+            var archived = await _fixture.Send(HttpMethod.Put, "/api/Tax/" + id, new { taxName = "VAT 12", taxCode = "VAT12", rate = 12, isActive = false }, owner.Token, "tax-save");
+            Assert.Equal(HttpStatusCode.OK, archived.StatusCode);
+
+            const string archivedMessage = "VAT 12 is archived. Pick another tax for this line.";
+            bill.Id = savedBillJson.GetProperty("id").GetInt32();
+            bill.Lines[0].Id = savedBillJson.GetProperty("lines")[0].GetProperty("id").GetInt32();
+            var resave = await _fixture.Send(HttpMethod.Post, "/api/Purchasing/SaveBill", bill, owner.Token, "tax-save");
+            Assert.Equal(HttpStatusCode.BadRequest, resave.StatusCode);
+            Assert.Equal(archivedMessage, (await Json(resave)).GetProperty("message").GetString());
+
+            var invoice = await NewInvoice(companyId, "tax-save");
+            invoice.SalesInvoiceLines.Single().TaxId = id;
+            invoice.Status = "Open";
+            var issued = await _fixture.Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice, owner.Token, "tax-save");
+            Assert.Equal(HttpStatusCode.BadRequest, issued.StatusCode);
+            Assert.Contains(archivedMessage, await issued.Content.ReadAsStringAsync());
+
+            bill.Id = 0;
+            bill.Lines[0].Id = 0;
+            bill.Lines[0].TaxId = int.MaxValue;
+            var unknown = await _fixture.Send(HttpMethod.Post, "/api/Purchasing/SaveBill", bill, owner.Token, "tax-save");
+            Assert.Equal(HttpStatusCode.BadRequest, unknown.StatusCode);
+            Assert.Contains("not found", await unknown.Content.ReadAsStringAsync(), StringComparison.OrdinalIgnoreCase);
+
+            using var scope = _fixture.Factory.Services.CreateScope();
+            using (scope.ServiceProvider.GetRequiredService<Core.Tenancy.ITenantContext>().Impersonate(companyId, "tax-save", CompanyMemberRole.Owner))
+            {
+                var purchasing = scope.ServiceProvider.GetRequiredService<IPurchasingService>();
+                var direct = new PurchaseInvoiceHeader
+                {
+                    Date = DateTime.Parse("2026-10-24", CultureInfo.InvariantCulture),
+                    PurchaseInvoiceLines = { new PurchaseInvoiceLine { Quantity = 1, Amount = 10, TaxId = int.MaxValue } }
+                };
+                var ex = Assert.Throws<InvalidOperationException>(() => purchasing.SaveBill(direct));
+                Assert.Equal("The selected tax was not found in this workspace.", ex.Message);
+            }
         }
 
         [Fact]

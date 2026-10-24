@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertCircle, Archive, ArchiveRestore, Pencil, Percent, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 
@@ -87,6 +87,9 @@ export const TaxSettingsTab: React.FC<TaxSettingsTabProps> = ({ canManage, hasFi
   const [pendingDelete, setPendingDelete] = useState<TaxRow | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const nameInputRef = useRef<HTMLInputElement>(null);
+  const dialogOpen = draft != null;
+  const dialogTaxId = draft?.id ?? null;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -106,6 +109,10 @@ export const TaxSettingsTab: React.FC<TaxSettingsTabProps> = ({ canManage, hasFi
   }, [authFetch, hasFinancials]);
 
   useEffect(() => { void load(); }, [load]);
+
+  useEffect(() => {
+    if (dialogOpen) nameInputRef.current?.focus();
+  }, [dialogOpen, dialogTaxId]);
 
   const salesAccounts = useMemo(
     () => accounts.filter((account) => account.canPost && account.accountClassId === 2),
@@ -148,8 +155,10 @@ export const TaxSettingsTab: React.FC<TaxSettingsTabProps> = ({ canManage, hasFi
     };
     if (draft.id) body.isActive = draft.isActive;
     if (hasFinancials) {
-      if (draft.salesAccountId !== '') body.salesAccountId = draft.salesAccountId;
-      if (draft.purchaseAccountId !== '') body.purchaseAccountId = draft.purchaseAccountId;
+      const salesAccountId = draft.salesAccountId !== '' ? draft.salesAccountId : accounts.find((account) => account.accountCode === '20300')?.id;
+      const purchaseAccountId = draft.purchaseAccountId !== '' ? draft.purchaseAccountId : accounts.find((account) => account.accountCode === '10160')?.id;
+      if (salesAccountId) body.salesAccountId = salesAccountId;
+      if (purchaseAccountId) body.purchaseAccountId = purchaseAccountId;
     }
     try {
       const res = await authFetch(draft.id ? `/api/Tax/${draft.id}` : '/api/Tax', {
@@ -312,14 +321,14 @@ export const TaxSettingsTab: React.FC<TaxSettingsTabProps> = ({ canManage, hasFi
           <form role="dialog" aria-modal="true" aria-labelledby="tax-dialog-title" onSubmit={save} className="w-full max-w-lg p-5 rounded-2xl bg-[var(--bg-surface)] shadow-xl space-y-4">
             <h3 id="tax-dialog-title" className="text-base font-bold text-[var(--text-main)]">{draft.id ? 'Edit tax' : 'Add tax'}</h3>
             <label className="block text-xs font-semibold text-[var(--text-secondary)]">Name
-              <input value={draft.taxName} onChange={(event) => setDraft({ ...draft, taxName: event.target.value })} maxLength={50} className={`${fieldClass} mt-1`} required />
+              <input ref={nameInputRef} id="tax-name" autoFocus value={draft.taxName} onChange={(event) => setDraft({ ...draft, taxName: event.target.value })} maxLength={50} className={`${fieldClass} mt-1`} required />
             </label>
             <div className="grid grid-cols-2 gap-3">
               <label className="block text-xs font-semibold text-[var(--text-secondary)]">Code
                 <input value={draft.taxCode} onChange={(event) => setDraft({ ...draft, taxCode: event.target.value })} maxLength={16} className={`${fieldClass} mt-1 font-mono`} required />
               </label>
               <label className="block text-xs font-semibold text-[var(--text-secondary)]">Rate (%)
-                <input type="number" min="0" max="100" step="0.0001" value={draft.rate} onChange={(event) => setDraft({ ...draft, rate: event.target.value })} className={`${fieldClass} mt-1`} required />
+                <input type="number" min="0" max="100" step="0.01" value={draft.rate} onChange={(event) => setDraft({ ...draft, rate: event.target.value })} className={`${fieldClass} mt-1`} required />
               </label>
             </div>
             {hasFinancials && (

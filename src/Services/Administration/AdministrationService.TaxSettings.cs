@@ -40,9 +40,12 @@ namespace Services.Administration
 
         public Task<TaxSettingsOutcome> CreateTaxSettingAsync(TaxSettingWrite write)
         {
-            var error = Validate(write, null, out var name, out var code, out var sales, out var purchase);
+            var error = Validate(write, null, out var name, out var code);
             if (error != null)
                 return Task.FromResult(error);
+            var accounts = ResolveAccounts(write, null, null);
+            if (accounts.Error != null)
+                return Task.FromResult(accounts.Error);
 
             var tax = new TaxEntity
             {
@@ -50,8 +53,8 @@ namespace Services.Administration
                 TaxCode = code,
                 Rate = write.Rate,
                 IsActive = true,
-                SalesAccountId = sales.Id,
-                PurchasingAccountId = purchase.Id
+                SalesAccountId = accounts.SalesId,
+                PurchasingAccountId = accounts.PurchaseId
             };
             _taxRepo.Insert(tax);
             return Task.FromResult(TaxSettingsOutcome.Ok(ToSetting(Reload(tax.Id), false)));
@@ -65,18 +68,22 @@ namespace Services.Administration
             if (IsSystem(tax))
                 return Task.FromResult(TaxSettingsOutcome.Fail(400, SystemTaxMessage));
 
-            var error = Validate(write, id, out var name, out var code, out var sales, out var purchase);
+            var error = Validate(write, id, out var name, out var code);
             if (error != null)
                 return Task.FromResult(error);
+            // A missing account id keeps the account already stored. Create is the path that fills in the defaults.
+            var accounts = ResolveAccounts(write, tax.SalesAccountId, tax.PurchasingAccountId);
+            if (accounts.Error != null)
+                return Task.FromResult(accounts.Error);
 
             tax.TaxName = name;
             tax.TaxCode = code;
             tax.Rate = write.Rate;
             tax.IsActive = write.IsActive;
-            tax.SalesAccountId = sales.Id;
-            tax.PurchasingAccountId = purchase.Id;
+            tax.SalesAccountId = accounts.SalesId;
+            tax.PurchasingAccountId = accounts.PurchaseId;
             _taxRepo.Update(tax);
-            return Task.FromResult(TaxSettingsOutcome.Ok(ToSetting(Reload(tax.Id), UsedTaxIds().Contains(tax.Id))));
+            return Task.FromResult(TaxSettingsOutcome.Ok(ToSetting(Reload(tax.Id), TaxIsUsed(tax.Id))));
         }
 
         public async Task<TaxSettingsOutcome> DeleteTaxSettingAsync(int id)
@@ -86,19 +93,17 @@ namespace Services.Administration
                 return TaxSettingsOutcome.Fail(404, "Tax not found.");
             if (IsSystem(tax))
                 return TaxSettingsOutcome.Fail(400, SystemTaxMessage);
-            if (UsedTaxIds().Contains(tax.Id))
+            if (TaxIsUsed(tax.Id))
                 return TaxSettingsOutcome.Fail(409, TaxInUseMessage);
 
             await _taxRepo.DeleteAsync(tax);
             return TaxSettingsOutcome.Deleted();
         }
 
-        private TaxSettingsOutcome? Validate(TaxSettingWrite write, int? exceptId, out string name, out string code, out Account sales, out Account purchase)
+        private TaxSettingsOutcome? Validate(TaxSettingWrite write, int? exceptId, out string name, out string code)
         {
             name = write?.TaxName?.Trim() ?? "";
             code = write?.TaxCode?.Trim().ToUpperInvariant() ?? "";
-            sales = null!;
-            purchase = null!;
             if (write == null || name.Length == 0)
                 return TaxSettingsOutcome.Fail(400, "Enter a tax name.");
             if (name.Length > 50)
@@ -109,8 +114,9 @@ namespace Services.Administration
                 return TaxSettingsOutcome.Fail(400, "A tax code can be at most 16 characters.");
             if (write.Rate < 0 || write.Rate > 100)
                 return TaxSettingsOutcome.Fail(400, "Rate must be between 0 and 100.");
-            if (decimal.Round(write.Rate, 4) != write.Rate)
-                return TaxSettingsOutcome.Fail(400, "Rate can have at most 4 decimal places.");
+            // The column is decimal(18, 2). A rate it cannot store is rejected rather than rounded.
+            if (decimal.Round(write.Rate, 2) != write.Rate)
+                return TaxSettingsOutcome.Fail(400, "Rate can have at most 2 decimal places.");
 
             var nameKey = name.ToLowerInvariant();
             var codeKey = code.ToLowerInvariant();
@@ -119,14 +125,32 @@ namespace Services.Administration
                 return TaxSettingsOutcome.Fail(400, $"A tax named {name} already exists.");
             if (others.Any(t => t.TaxCode.ToLower() == codeKey))
                 return TaxSettingsOutcome.Fail(400, $"A tax with code {code} already exists.");
-
-            var salesError = ResolveAccount(write.SalesAccountId, SalesAccountCode, AccountClasses.Liabilities, null, out sales);
-            if (salesError != null)
-                return salesError;
-            var purchaseError = ResolveAccount(write.PurchaseAccountId, PurchaseAccountCode, AccountClasses.Assets, AccountClasses.Expense, out purchase);
-            if (purchaseError != null)
-                return purchaseError;
             return null;
+        }
+
+        /// <summary>
+        /// On create, <paramref name="keepSalesId"/> and <paramref name="keepPurchaseId"/> are null, so a missing id
+        /// means the default account. On edit they are the accounts already stored, and a missing id keeps them.
+        /// </summary>
+        private (TaxSettingsOutcome? Error, int SalesId, int PurchaseId) ResolveAccounts(TaxSettingWrite write, int? keepSalesId, int? keepPurchaseId)
+        {
+            var sales = AccountFor(write.SalesAccountId, keepSalesId, SalesAccountCode, AccountClasses.Liabilities, null);
+            if (sales.Error != null)
+                return (sales.Error, 0, 0);
+            var purchase = AccountFor(write.PurchaseAccountId, keepPurchaseId, PurchaseAccountCode, AccountClasses.Assets, AccountClasses.Expense);
+            if (purchase.Error != null)
+                return (purchase.Error, 0, 0);
+            return (null, sales.Id, purchase.Id);
+        }
+
+        private (TaxSettingsOutcome? Error, int Id) AccountFor(int? requestedId, int? keepId, string defaultCode, AccountClasses first, AccountClasses? second)
+        {
+            if (requestedId is not > 0 && keepId is > 0)
+                return (null, keepId.Value);
+            var error = ResolveAccount(requestedId, defaultCode, first, second, out var account);
+            if (error != null)
+                return (error, 0);
+            return (null, account.Id);
         }
 
         private TaxSettingsOutcome? ResolveAccount(int? id, string defaultCode, AccountClasses first, AccountClasses? second, out Account account)
@@ -154,10 +178,13 @@ namespace Services.Administration
 
         private HashSet<int> UsedTaxIds()
         {
-            var ids = _salesInvoiceLineRepo.Table.Where(l => l.TaxId != null).Select(l => l.TaxId ?? 0).Where(taxId => taxId != 0).ToList();
-            ids.AddRange(_purchaseInvoiceLineRepo.Table.Where(l => l.TaxId != null).Select(l => l.TaxId ?? 0).Where(taxId => taxId != 0));
+            var ids = _salesInvoiceLineRepo.Table.Where(l => l.TaxId != null).Select(l => l.TaxId ?? 0).Where(taxId => taxId != 0).Distinct().ToList();
+            ids.AddRange(_purchaseInvoiceLineRepo.Table.Where(l => l.TaxId != null).Select(l => l.TaxId ?? 0).Where(taxId => taxId != 0).Distinct());
             return ids.ToHashSet();
         }
+
+        private bool TaxIsUsed(int id) =>
+            _salesInvoiceLineRepo.Table.Any(l => l.TaxId == id) || _purchaseInvoiceLineRepo.Table.Any(l => l.TaxId == id);
 
         private TaxEntity Reload(int id) =>
             _taxRepo.GetAllIncluding(t => t.SalesAccount, t => t.PurchasingAccount).First(t => t.Id == id);
