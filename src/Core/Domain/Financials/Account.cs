@@ -99,7 +99,10 @@ namespace Core.Domain.Financials
             decimal drAmount = dr.Sum(d => d.Amount);
             decimal crAmount = cr.Sum(c => c.Amount);
 
-            if (AccountClass.NormalBalance == "Dr")
+            bool isDebitNormal = AccountClass?.NormalBalance == "Dr" ||
+                (AccountClass == null && DrOrCrSide == DrOrCrSide.Dr);
+
+            if (isDebitNormal)
             {
                 balance = drAmount - crAmount;
             }

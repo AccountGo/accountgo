@@ -9,6 +9,8 @@ using Api.Data.Repositories;
 using Api.Data.Seed;
 using Api.Extensions;
 using Api.Service;
+using ModelContextProtocol.AspNetCore;
+using ModelContextProtocol.Server;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.RateLimiting;
@@ -148,6 +150,15 @@ builder.Services.AddScoped(typeof(Services.Auditing.IAuditableAttributeService),
 
 //seed the database
 builder.Services.AddScoped<DatabaseSeeder>();
+
+// Model Context Protocol (MCP) Server for AI Agent Integration
+builder.Services
+    .AddMcpServer()
+    .WithHttpTransport(options =>
+    {
+        options.Stateless = true;
+    })
+    .WithTools<Api.Mcp.Tools.FinancialMcpTools>();
 
 // Configure reverse proxy / forwarded headers support
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
@@ -317,6 +328,7 @@ app.UseMiddleware<Api.Middleware.TenantResolutionMiddleware>();
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapMcp("/mcp").RequireAuthorization();
 app.MapGet("/health", () => Results.Ok(new { status = "healthy" })).AllowAnonymous();
 
 Api.Filters.TenantEndpointValidator.ValidateAllEndpoints(typeof(Program).Assembly);
