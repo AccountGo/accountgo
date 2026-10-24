@@ -23,13 +23,19 @@ namespace Api.Controllers
         private readonly ITenantContext _tenant;
         private readonly ApiDbContext _db;
         private readonly WorkspaceService _workspaces;
+        private readonly CompanyAccountingPolicyService _accountingPolicy;
         private string UserId => User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User.FindFirst("sub")?.Value;
 
-        public OrganizationsController(ITenantContext tenant, ApiDbContext db, WorkspaceService workspaces)
+        public OrganizationsController(
+            ITenantContext tenant,
+            ApiDbContext db,
+            WorkspaceService workspaces,
+            CompanyAccountingPolicyService accountingPolicy)
         {
             _tenant = tenant;
             _db = db;
             _workspaces = workspaces;
+            _accountingPolicy = accountingPolicy;
         }
 
         [TenantFree]
@@ -106,9 +112,16 @@ namespace Api.Controllers
             {
                 if (_workspaces.SlugExists(slug))
                     return Problem(statusCode: 409, title: "Workspace Slug Already Taken");
-                var company = _workspaces.Create(UserId, request.Name, slug, plan, currency, request.ShortName, options);
-                tx.Commit();
-                return StatusCode(201, Summary(company, CompanyMemberRole.Owner));
+                try
+                {
+                    var company = _workspaces.Create(UserId, request.Name, slug, plan, currency, request.ShortName, options);
+                    tx.Commit();
+                    return StatusCode(201, Summary(company, CompanyMemberRole.Owner));
+                }
+                catch (InvalidAccountingPolicyException ex)
+                {
+                    return Problem(statusCode: 400, title: "Invalid accounting policy", detail: string.Join(" ", ex.Errors));
+                }
             }
         }
 
@@ -163,6 +176,9 @@ namespace Api.Controllers
                     if (!System.Text.RegularExpressions.Regex.IsMatch(currency, "^[A-Z]{3}$"))
                         return Problem(statusCode: 400, title: "Invalid currency");
                     var setting = _db.CompanySettings.FirstOrDefault();
+                    if (setting != null && setting.Currency != currency && _accountingPolicy.IsLedgerFrozen(company.Id))
+                        return Problem(statusCode: 409, title: "Currency is locked",
+                            detail: "The workspace currency cannot change after the first journal entry is posted.");
                     if (setting == null)
                         _db.CompanySettings.Add(new CompanySetting { CompanyId = company.Id, Currency = currency });
                     else
@@ -333,7 +349,7 @@ namespace Api.Controllers
                 return Problem(statusCode: 400, title: "Accounting policy required");
 
             var setting = GetOrCreateSetting();
-            var result = new CompanyAccountingPolicyService(_db).Apply(setting, new AccountingPolicyChange
+            var result = _accountingPolicy.Apply(setting, new AccountingPolicyChange
             {
                 ReportingFramework = request.ReportingFramework,
                 AccountingBasis = request.AccountingBasis,
@@ -378,7 +394,7 @@ namespace Api.Controllers
             inventoryCostingMethod = s.InventoryCostingMethod.ToString(),
             coaTemplateId = s.CoaTemplateId,
             currency = s.Currency,
-            isLedgerFrozen = new CompanyAccountingPolicyService(_db).IsLedgerFrozen(s.CompanyId),
+            isLedgerFrozen = _accountingPolicy.IsLedgerFrozen(s.CompanyId),
             onboardingChecklistDismissedAt = s.OnboardingChecklistDismissedAt,
         };
 

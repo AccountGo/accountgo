@@ -460,3 +460,4 @@ Mark each phase **Done** in this file with a two-line summary when merged.
 | 2026-10-25 | Phase 5 CoA template families implemented on branch |
 | 2026-10-25 | Phase 6 polish and docs implemented on branch; telemetry deferred |
 | 2026-10-25 | Phase 1 marked done on branch; LIFO and FY-coherence checks deferred to Phase 2 |
+| 2026-10-26 | Review fixes: currency locks with the ledger (409); tax regime change rewrites the untouched seeded tax; books-start guard repo is required; policy service injected; invalid policy on create maps to 400. Signup API still accepts `OrganizationName` as intentional back-compat (minimal legacy policy; the web UI uses the wizard). |

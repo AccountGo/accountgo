@@ -4,6 +4,7 @@ using System.Linq;
 using Api.Data;
 using Core.Domain;
 using Core.Domain.Financials;
+using Core.Domain.TaxSystem;
 
 namespace Api.Service
 {
@@ -76,6 +77,7 @@ namespace Api.Service
             if (errors.Count > 0)
                 return new AccountingPolicyChangeResult { Errors = errors };
 
+            var taxRegimeChanged = options.TaxRegime != setting.TaxRegime;
             var fiscalYearChanged = options.FiscalYearPattern != setting.FiscalYearPattern
                 || options.FiscalYearStartMonth != setting.FiscalYearStartMonth
                 || options.BooksStartDate != setting.BooksStartDate.Date;
@@ -91,8 +93,28 @@ namespace Api.Service
 
             if (fiscalYearChanged)
                 ReplaceActiveFiscalYear(setting);
+            if (taxRegimeChanged)
+                SyncSeededTax(setting.TaxRegime);
 
             return new AccountingPolicyChangeResult();
+        }
+
+        // Only rewrites the untouched seed (a single zero-rate placeholder); real tax setups are left alone.
+        private void SyncSeededTax(TaxRegime regime)
+        {
+            var taxes = _db.Taxes.ToList();
+            var groups = _db.TaxGroups.ToList();
+            if (taxes.Count != 1 || groups.Count != 1)
+                return;
+            var tax = taxes[0];
+            if (tax.Rate != 0 || (tax.TaxCode != "NONE" && tax.TaxCode != "VAT" && tax.TaxCode != "SALESTAX"))
+                return;
+            var taxed = regime != TaxRegime.None;
+            var label = regime == TaxRegime.VatGst ? "VAT/GST" : "Sales tax";
+            tax.TaxCode = !taxed ? "NONE" : regime == TaxRegime.VatGst ? "VAT" : "SALESTAX";
+            tax.TaxName = taxed ? label + " (set rate)" : "No tax";
+            tax.IsActive = !taxed;
+            groups[0].Description = taxed ? label : "No tax";
         }
 
         // Safe only while the ledger is empty: nothing can reference the old year.

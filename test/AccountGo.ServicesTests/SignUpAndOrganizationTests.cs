@@ -48,7 +48,8 @@ public class SignUpAndOrganizationTests : IDisposable
     private OrganizationsController NewController()
     {
         var controller = new OrganizationsController(_tenantContext, _db,
-            new WorkspaceService(_db, new CompanyProvisioningService(_db, _tenantContext)));
+            new WorkspaceService(_db, new CompanyProvisioningService(_db, _tenantContext)),
+            new CompanyAccountingPolicyService(_db));
         controller.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext

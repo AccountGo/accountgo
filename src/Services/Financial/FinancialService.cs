@@ -67,6 +67,7 @@ namespace Services.Financial
             IRepository<Bank> bankRepo,
             IRepository<Item> itemRepo,
             IRepository<GeneralLedgerSetting> glSettingRepo,
+            IRepository<CompanySetting> companySettingRepo,
             IRepository<MainContraAccount> maincontraAccount = null,
             IRepository<Customer> customerRepo = null,
             IRepository<Vendor> vendorRepo = null,
@@ -75,14 +76,13 @@ namespace Services.Financial
             IRepository<SalesReceiptHeader> salesReceiptRepo = null,
             IRepository<CustomerAllocation> customerAllocationRepo = null,
             IRepository<PurchaseInvoiceHeader> purchaseInvoiceRepo = null,
-            IRepository<VendorPayment> vendorPaymentRepo = null,
-            IRepository<CompanySetting> companySettingRepo = null
+            IRepository<VendorPayment> vendorPaymentRepo = null
             )
             : base(null, null, paymentTermRepo, bankRepo)
         {
             _inventoryService = inventoryService;
             _taxService = taxService;
-            _companySettingRepo = companySettingRepo;
+            _companySettingRepo = companySettingRepo ?? throw new ArgumentNullException(nameof(companySettingRepo));
             _generalLedgerRepository = generalLedgerRepository;
             _accountRepo = accountRepo;
             _accountClassRepo = accountClassRepo;
@@ -195,7 +195,7 @@ namespace Services.Financial
         /// <summary>Rejects postings dated before the company's books start date (resolved in the current tenant scope).</summary>
         private void EnsureOnOrAfterBooksStart(DateTime date)
         {
-            var booksStart = _companySettingRepo?.Table.Select(s => (DateTime?)s.BooksStartDate).FirstOrDefault();
+            var booksStart = _companySettingRepo.Table.Select(s => (DateTime?)s.BooksStartDate).FirstOrDefault();
             if (booksStart.HasValue && date.Date < booksStart.Value.Date)
                 throw new BooksStartViolationException(date, booksStart.Value);
         }

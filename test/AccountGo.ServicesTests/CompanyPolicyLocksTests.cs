@@ -38,7 +38,7 @@ public class CompanyPolicyLocksTests : IDisposable
         _company = new Company { Name = "Lock Co", Slug = "lock-co" };
         _db.Companies.Add(_company);
         _db.SaveChanges();
-        _tenant.Impersonate(_company.Id, _company.Slug, CompanyMemberRole.Owner);
+        _tenant.SetTenant(_company.Id, _company.Slug, CompanyMemberRole.Owner, Array.Empty<string>());
         var provisioning = new CompanyProvisioningService(_db, _tenant);
         provisioning.Provision(_company, new CompanyProvisionOptions { BooksStartDate = D("2026-01-01") });
         _db.SaveChanges();
@@ -52,7 +52,11 @@ public class CompanyPolicyLocksTests : IDisposable
 
     private OrganizationsController Controller()
     {
-        var c = new OrganizationsController(_tenant, _db, new WorkspaceService(_db, new CompanyProvisioningService(_db, _tenant)));
+        var c = new OrganizationsController(
+            _tenant,
+            _db,
+            new WorkspaceService(_db, new CompanyProvisioningService(_db, _tenant)),
+            new CompanyAccountingPolicyService(_db));
         c.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
@@ -97,6 +101,27 @@ public class CompanyPolicyLocksTests : IDisposable
 
         Assert.Equal(409, Assert.IsType<ObjectResult>(result).StatusCode);
         Assert.Equal(ReportingFramework.IfrsForSmes, _db.CompanySettings.Single().ReportingFramework);
+    }
+
+    [Fact]
+    public void PatchCurrency_AfterFirstJournal_RejectsWith409()
+    {
+        FreezeLedger();
+        var before = _db.CompanySettings.Single().Currency;
+
+        var result = Controller().Update(new OrganizationsController.UpdateOrganizationRequest { Currency = "EUR" });
+
+        Assert.Equal(409, Assert.IsType<ObjectResult>(result).StatusCode);
+        Assert.Equal(before, _db.CompanySettings.Single().Currency);
+    }
+
+    [Fact]
+    public void PatchCurrency_WhileBooksAreEmpty_Succeeds()
+    {
+        var result = Controller().Update(new OrganizationsController.UpdateOrganizationRequest { Currency = "EUR" });
+
+        Assert.IsType<OkObjectResult>(result);
+        Assert.Equal("EUR", _db.CompanySettings.Single().Currency);
     }
 
     [Fact]
@@ -183,13 +208,40 @@ public class CompanyPolicyLocksTests : IDisposable
         Assert.Contains(errors, e => e.Contains("template"));
     }
 
+    [Fact]
+    public void Update_TaxRegimeChange_RewritesTheUntouchedSeededTax()
+    {
+        Controller().UpdateAccountingPolicy(new OrganizationsController.AccountingPolicyModel { TaxRegime = TaxRegime.VatGst });
+
+        var tax = _db.Taxes.Single();
+        Assert.Equal("VAT", tax.TaxCode);
+        Assert.False(tax.IsActive);
+    }
+
+    [Fact]
+    public void Update_TaxRegimeChange_LeavesRealTaxSetupAlone()
+    {
+        _db.Taxes.Single().Rate = 12;
+        _db.SaveChanges();
+
+        Controller().UpdateAccountingPolicy(new OrganizationsController.AccountingPolicyModel { TaxRegime = TaxRegime.VatGst });
+
+        Assert.Equal("NONE", _db.Taxes.Single().TaxCode);
+    }
+
+    [Fact]
+    public void FinancialService_RequiresCompanySettingRepository()
+    {
+        Assert.Throws<ArgumentNullException>(() =>
+            new Services.Financial.FinancialService(null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null));
+    }
+
     private Services.Financial.FinancialService GuardedFinancialService(DateTime booksStart)
     {
         var settings = new List<CompanySetting> { new() { CompanyId = 1, BooksStartDate = booksStart } };
         var repo = new Mock<IRepository<CompanySetting>>();
         repo.Setup(r => r.Table).Returns(settings.AsQueryable());
-        return new Services.Financial.FinancialService(null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-            companySettingRepo: repo.Object);
+        return new Services.Financial.FinancialService(null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, repo.Object);
     }
 
     [Fact]
