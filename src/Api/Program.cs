@@ -396,7 +396,14 @@ using (var scope = app.Services.CreateScope())
                 Console.WriteLine("✓ RefreshTokens table created.");
             }
 
-            if (isNewDatabase)
+            // On Cloudflare the Worker restores every table from D1 once the container is up, replacing whatever is
+            // here; seeding demo data first only delays start-up (minutes on the smallest container).
+            bool restoredFromD1 = string.Equals(app.Configuration["RESTORE_FROM_D1"], "true", StringComparison.OrdinalIgnoreCase);
+            if (isNewDatabase && restoredFromD1)
+            {
+                Console.WriteLine("Skipping demo seed: data is restored from D1.");
+            }
+            else if (isNewDatabase)
             {
                 var seeder = services.GetRequiredService<DatabaseSeeder>();
                 Console.WriteLine("Seeding SQLite database...");
@@ -404,63 +411,69 @@ using (var scope = app.Services.CreateScope())
                 Console.WriteLine("✓ SQLite database seeding completed successfully.");
             }
 
-            // Ensure security permissions and roles are initialized
-            var securityService = services.GetRequiredService<Services.Security.ISecurityService>();
-            securityService.EnsureDefaultPermissionsAndRoles();
-            Console.WriteLine("✓ Security permissions and default roles verified.");
-
-            // Ensure admin users exist in Identity and Domain
-            var userManager = services.GetRequiredService<Microsoft.AspNetCore.Identity.UserManager<ApplicationUser>>();
-            var adminService = services.GetRequiredService<Services.Administration.IAdministrationService>();
-            var secService = services.GetRequiredService<Services.Security.ISecurityService>();
-            var adminRole = secService.GetRole("SystemAdministrators") ?? secService.GetRole("Administrator");
-
-            var adminEmails = new[]
+            // Start-up writes on Cloudflare never reach D1 (only request writes are synced) and the restore replaces these
+            // tables moments later, so there the default roles and admin users come from D1 and its migrations instead.
+            if (!restoredFromD1)
             {
-                (Email: "admin@accountgo.ph", First: "Admin", Last: "User"),
-                (Email: "marvinperez@gmail.com", First: "Marvin", Last: "Perez"),
-                (Email: "hello@marvinperez.com", First: "Marvin", Last: "Perez")
-            };
+                // Ensure security permissions and roles are initialized
+                var securityService = services.GetRequiredService<Services.Security.ISecurityService>();
+                securityService.EnsureDefaultPermissionsAndRoles();
+                Console.WriteLine("✓ Security permissions and default roles verified.");
 
-            foreach (var (email, first, last) in adminEmails)
-            {
-                var existingUser = userManager.FindByEmailAsync(email).GetAwaiter().GetResult();
-                if (existingUser == null)
-                {
-                    var newUser = new ApplicationUser
-                    {
-                        UserName = email,
-                        Email = email,
-                        EmailConfirmed = true
-                    };
-                    var createResult = userManager.CreateAsync(newUser).GetAwaiter().GetResult();
-                    if (createResult.Succeeded)
-                    {
-                        Console.WriteLine($"✓ Admin user '{email}' initialized in Identity.");
-                    }
-                }
+                // Ensure admin users exist in Identity and Domain
+                var userManager = services.GetRequiredService<Microsoft.AspNetCore.Identity.UserManager<ApplicationUser>>();
+                var adminService = services.GetRequiredService<Services.Administration.IAdministrationService>();
+                var secService = services.GetRequiredService<Services.Security.ISecurityService>();
+                var adminRole = secService.GetRole("SystemAdministrators") ?? secService.GetRole("Administrator");
 
-                var domainUser = secService.GetUser(email);
-                if (domainUser == null)
+                var adminEmails = new[]
                 {
-                    var newDomainUser = new Core.Domain.Security.User
+                    (Email: "admin@accountgo.ph", First: "Admin", Last: "User"),
+                    (Email: "marvinperez@gmail.com", First: "Marvin", Last: "Perez"),
+                    (Email: "hello@marvinperez.com", First: "Marvin", Last: "Perez")
+                };
+
+                foreach (var (email, first, last) in adminEmails)
+                {
+                    var existingUser = userManager.FindByEmailAsync(email).GetAwaiter().GetResult();
+                    if (existingUser == null)
                     {
-                        EmailAddress = email,
-                        UserName = email,
-                        Firstname = first,
-                        Lastname = last
-                    };
-                    adminService.SaveUser(newDomainUser);
-                    if (adminRole != null && email.Equals("marvinperez@gmail.com", StringComparison.OrdinalIgnoreCase))
-                    {
-                        var freshUser = secService.GetUser(email);
-                        if (freshUser != null)
+                        var newUser = new ApplicationUser
                         {
-                            secService.AddUserInRole(freshUser.Id, adminRole.Id);
+                            UserName = email,
+                            Email = email,
+                            EmailConfirmed = true
+                        };
+                        var createResult = userManager.CreateAsync(newUser).GetAwaiter().GetResult();
+                        if (createResult.Succeeded)
+                        {
+                            Console.WriteLine($"✓ Admin user '{email}' initialized in Identity.");
                         }
                     }
-                    Console.WriteLine($"✓ Domain user '{email}' initialized.");
+
+                    var domainUser = secService.GetUser(email);
+                    if (domainUser == null)
+                    {
+                        var newDomainUser = new Core.Domain.Security.User
+                        {
+                            EmailAddress = email,
+                            UserName = email,
+                            Firstname = first,
+                            Lastname = last
+                        };
+                        adminService.SaveUser(newDomainUser);
+                        if (adminRole != null && email.Equals("marvinperez@gmail.com", StringComparison.OrdinalIgnoreCase))
+                        {
+                            var freshUser = secService.GetUser(email);
+                            if (freshUser != null)
+                            {
+                                secService.AddUserInRole(freshUser.Id, adminRole.Id);
+                            }
+                        }
+                        Console.WriteLine($"✓ Domain user '{email}' initialized.");
+                    }
                 }
+
             }
 
             // Run one-time post-seed membership and role backfill -> Version 2

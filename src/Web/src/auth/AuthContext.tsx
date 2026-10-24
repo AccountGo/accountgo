@@ -37,10 +37,24 @@ async function fetchWith503Retry(
   }
 }
 
+// How long to keep retrying a refresh while the API is starting before giving up on the session. A cold start on the
+// smallest container can take several minutes.
+const REFRESH_STARTUP_DEADLINE_MS = 15 * 60 * 1000;
+
+// Only one tab refreshes at a time. Refresh tokens are single-use and every tab shares the cookie, so two tabs
+// refreshing together would present the same token twice.
+function withRefreshLock<T>(work: () => Promise<T>): Promise<T> {
+  const locks = typeof navigator !== 'undefined' ? (navigator as Navigator & { locks?: LockManager }).locks : undefined;
+  return locks ? locks.request('accountgo-session-refresh', work) : work();
+}
+
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<UserDto | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isStarting, setIsStarting] = useState<boolean>(false);
 
   // Ref to hold current token synchronously for fetch interceptor & refresh loops
   const tokenRef = useRef<string | null>(null);
@@ -55,32 +69,49 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return refreshPromiseRef.current;
     }
 
-    refreshPromiseRef.current = (async () => {
+    refreshPromiseRef.current = withRefreshLock(async () => {
+      // Only a refusal from the API ends the session. While the API is starting (503, a gateway timeout) or can't be
+      // reached, keep the session and try again: ending it then would sign everyone out after every update.
+      const deadline = Date.now() + REFRESH_STARTUP_DEADLINE_MS;
       try {
-        const res = await fetch('/api/auth/refresh', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-        });
+        while (true) {
+          let res: Response | null = null;
+          try {
+            res = await fetch('/api/auth/refresh', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'include',
+            });
+          } catch {
+            res = null;
+          }
 
-        if (!res.ok) {
-          setAccessToken(null);
-          setUser(null);
-          return null;
+          if (res?.ok) {
+            const data: AuthResponse = await res.json();
+            setAccessToken(data.accessToken);
+            setUser(data.user);
+            return data.accessToken;
+          }
+          if (res && res.status < 500) {
+            setAccessToken(null);
+            setUser(null);
+            return null;
+          }
+          if (Date.now() >= deadline) {
+            setAccessToken(null);
+            setUser(null);
+            return null;
+          }
+
+          setIsStarting(true);
+          const retryAfter = Number(res?.headers.get('Retry-After'));
+          await wait(Math.min(Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : 5, 10) * 1000);
         }
-
-        const data: AuthResponse = await res.json();
-        setAccessToken(data.accessToken);
-        setUser(data.user);
-        return data.accessToken;
-      } catch (err) {
-        setAccessToken(null);
-        setUser(null);
-        return null;
       } finally {
+        setIsStarting(false);
         refreshPromiseRef.current = null;
       }
-    })();
+    });
 
     return refreshPromiseRef.current;
   }, []);
@@ -278,6 +309,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     accessToken,
     isAuthenticated: !!user && !!accessToken,
     isLoading,
+    isStarting,
     sendOtp,
     signUp,
     verifyOtp,
