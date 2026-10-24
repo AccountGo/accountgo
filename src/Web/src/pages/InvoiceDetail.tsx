@@ -29,6 +29,7 @@ import { useAuth } from '../auth/AuthContext';
 import { currencySymbol as getCurrencySymbol } from '../lib/currency';
 import { SendInvoiceDialog } from '../components/SendInvoiceDialog';
 import { invoiceTitle } from '../lib/invoiceNumber';
+import { localToday } from '../lib/businessDays';
 import { PageHeader, HeaderButton, HeaderMenu, StatusPill } from '../components/PageHeader';
 import { usePermissions } from '../components/Gating';
 
@@ -50,9 +51,7 @@ export const InvoiceDetail: React.FC = () => {
   // Payment Modal State
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState<boolean>(false);
   const [paymentAmount, setPaymentAmount] = useState<string>('');
-  const [paymentDate, setPaymentDate] = useState<string>(
-    new Date().toISOString().split('T')[0]
-  );
+  const [paymentDate, setPaymentDate] = useState<string>(localToday);
   const [paymentMethod, setPaymentMethod] = useState<string>('Bank Transfer');
   const [paymentReference, setPaymentReference] = useState<string>('');
   const [paymentNotes, setPaymentNotes] = useState<string>('');

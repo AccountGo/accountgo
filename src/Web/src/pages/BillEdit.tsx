@@ -10,7 +10,7 @@ import { usePermissions } from '../components/Gating';
 import { Bill, BillAccount, CatalogItem, CustomerOption, ItemOption, PaymentTermOption, TenantContextType, Vendor } from '../types';
 import { useAuth } from '../auth/AuthContext';
 import { currencySymbol as getCurrencySymbol } from '../lib/currency';
-import { addBusinessDays, businessDaysBetween, isValidDate } from '../lib/businessDays';
+import { addBusinessDays, businessDaysBetween, isValidDate, localToday as today } from '../lib/businessDays';
 
 interface TaxOption {
   id: number;
@@ -37,7 +37,6 @@ const cellClass =
   'w-full h-9 px-2.5 text-sm bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-lg focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] transition';
 const labelClass = 'block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1.5';
 
-const today = () => new Date().toISOString().slice(0, 10);
 const round2 = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
 // The same rounding as the server: each line to the cent, tax on top of the line at the tax's rate.
 const lineSubtotal = (line: LineDraft) => round2((Number(line.quantity) || 0) * (Number(line.amount) || 0) * (1 - (Number(line.discount) || 0) / 100));

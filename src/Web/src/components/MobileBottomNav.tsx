@@ -4,6 +4,7 @@ import {
   LayoutDashboard,
   BookOpen,
   Receipt,
+  ShoppingBag,
   Settings,
   Menu,
 } from 'lucide-react';
@@ -43,6 +44,13 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
       icon: Receipt,
       module: 'sales',
       permission: 'sales.invoices.view',
+    },
+    {
+      name: 'Purchases',
+      path: `/org/${currentOrg.slug}/purchases`,
+      icon: ShoppingBag,
+      module: 'purchases',
+      permission: 'purchases.bills.view',
     },
     {
       name: 'Ledger',

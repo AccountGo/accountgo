@@ -23,6 +23,7 @@ import { TenantContextType, Invoice, InvoicingKPIs, RecordPaymentPayload } from 
 import { useAuth } from '../auth/AuthContext';
 import { currencySymbol as getCurrencySymbol } from '../lib/currency';
 import { invoiceTitle } from '../lib/invoiceNumber';
+import { localToday } from '../lib/businessDays';
 
 export const Invoices: React.FC = () => {
   const { currentOrg } = useOutletContext<TenantContextType>();
@@ -47,7 +48,7 @@ export const Invoices: React.FC = () => {
   // Record Payment Modal State
   const [paymentModalInvoice, setPaymentModalInvoice] = useState<Invoice | null>(null);
   const [paymentAmount, setPaymentAmount] = useState<string>('');
-  const [paymentDate, setPaymentDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [paymentDate, setPaymentDate] = useState<string>(localToday);
   const [paymentMethod, setPaymentMethod] = useState<string>('Bank Transfer');
   const [paymentReference, setPaymentReference] = useState<string>('');
   const [paymentNotes, setPaymentNotes] = useState<string>('');
@@ -167,7 +168,7 @@ export const Invoices: React.FC = () => {
   const handleOpenPayment = (inv: Invoice) => {
     setPaymentModalInvoice(inv);
     setPaymentAmount(inv.balanceDue > 0 ? inv.balanceDue.toFixed(2) : inv.amount.toFixed(2));
-    setPaymentDate(new Date().toISOString().split('T')[0]);
+    setPaymentDate(localToday());
     setPaymentMethod('Bank Transfer');
     setPaymentReference('');
     setPaymentNotes('');
@@ -530,7 +531,10 @@ export const Invoices: React.FC = () => {
 
                       {/* Balance Due */}
                       <td className="py-3.5 px-4 text-right whitespace-nowrap">
-                        {inv.balanceDue > 0 ? (
+                        {inv.status === 'Draft' || inv.status === 'Void' ? (
+                          // Nothing is owed on a draft yet, or on a voided invoice any more.
+                          <span className="text-[var(--text-muted)]">—</span>
+                        ) : inv.balanceDue > 0 ? (
                           <span className="font-semibold text-rose-600 dark:text-rose-400">
                             {formatCurrency(inv.balanceDue)}
                           </span>

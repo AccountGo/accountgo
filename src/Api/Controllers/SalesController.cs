@@ -790,6 +790,10 @@ namespace Api.Controllers
                 : dueDate.Date < DateTime.UtcNow.Date && balanceDue > 0.005m ? ("Overdue", Core.Domain.SalesInvoiceStatus.Overdue)
                 : ("Open", Core.Domain.SalesInvoiceStatus.Open);
 
+            // A voided invoice is no longer owed, so nothing is due on it.
+            if (statusId == Core.Domain.SalesInvoiceStatus.Void)
+                balanceDue = 0;
+
             return new InvoiceSummary(tax, grandTotal, allocated, balanceDue, status, statusId);
         }
 
