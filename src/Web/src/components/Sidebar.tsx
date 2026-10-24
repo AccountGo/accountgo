@@ -230,7 +230,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 Invoicing Plan
               </div>
               <p className="text-xs text-[var(--text-secondary)] leading-relaxed mb-2">
-                Need general ledger, bank feeds, or bill payments?
+                Need general ledger, bank feeds, or financial reports?
               </p>
               <Link
                 to={`/org/${currentOrg.slug}/settings?tab=subscription`}

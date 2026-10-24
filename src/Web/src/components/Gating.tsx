@@ -113,7 +113,7 @@ const MODULE_METADATA: Record<ModuleKey, { title: string; desc: string; required
   purchases: {
     title: 'Purchases & Bills',
     desc: 'Track vendors, purchase orders, incoming bills, and outgoing expense payments.',
-    requiredPlan: 'Accounting',
+    requiredPlan: 'Invoicing',
   },
   inventory: {
     title: 'Inventory & Items',

@@ -287,10 +287,12 @@ namespace Services.Administration
                     throw new ArgumentException(
                         $"Module(s) not included in the {company.Plan} plan: {string.Join(", ", disallowed)}.");
 
-                // Keep plan order; sales is always required for every tier.
+                // Keep plan order; force plan-required cores (sales always; purchases on Invoicing).
                 var sanitized = planModules.Where(m =>
-                    string.Equals(m, "sales", StringComparison.OrdinalIgnoreCase)
+                    Company.IsRequiredModule(company.Plan, m)
                     || requested.Contains(m, StringComparer.OrdinalIgnoreCase)).ToList();
+                if (sanitized.Count == 0)
+                    sanitized = planModules.Where(m => Company.IsRequiredModule(company.Plan, m)).ToList();
                 if (sanitized.Count == 0)
                     sanitized = new List<string> { "sales" };
                 company.ActiveModulesJson = System.Text.Json.JsonSerializer.Serialize(sanitized);
@@ -322,7 +324,7 @@ namespace Services.Administration
                 {
                     Key = "invoicing",
                     Name = "Invoicing",
-                    Description = "Everything you need to create quotes, bill clients, and track payments.",
+                    Description = "Quotes, client invoices, payments, and expense bills — without full double-entry accounting.",
                     IncludedModules = Company.ModulesForPlan("invoicing"),
                     MonthlyPrice = 15m
                 },
@@ -330,7 +332,7 @@ namespace Services.Administration
                 {
                     Key = "accounting",
                     Name = "Accounting",
-                    Description = "Full double-entry bookkeeping, banking, purchase bills, and financial statements.",
+                    Description = "Full double-entry bookkeeping, banking, and financial statements.",
                     IncludedModules = Company.ModulesForPlan("accounting"),
                     MonthlyPrice = 39m
                 },

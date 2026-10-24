@@ -34,27 +34,49 @@ namespace Core.Domain
 
         public List<string> GetActiveModules()
         {
+            var planModules = ModulesForPlan(Plan);
+            List<string>? stored = null;
             if (!string.IsNullOrWhiteSpace(ActiveModulesJson))
             {
                 try
                 {
-                    var list = JsonSerializer.Deserialize<List<string>>(ActiveModulesJson);
-                    if (list != null && list.Count > 0)
-                        return list;
+                    stored = JsonSerializer.Deserialize<List<string>>(ActiveModulesJson);
                 }
                 catch { }
             }
 
-            return ModulesForPlan(Plan);
+            if (stored == null || stored.Count == 0)
+                return planModules;
+
+            // Keep stored subset (Accounting can toggle modules), but always force
+            // plan-required cores so legacy Invoicing tenants with ["sales"] get purchases.
+            return planModules
+                .Where(m => IsRequiredModule(Plan, m)
+                    || stored.Contains(m, StringComparer.OrdinalIgnoreCase))
+                .ToList();
         }
 
         /// <summary>Modules included by subscription tier, ordered Invoicing → Accounting → Enterprise.</summary>
         public static List<string> ModulesForPlan(string? plan) => (plan?.ToLowerInvariant()) switch
         {
-            "invoicing" => new List<string> { "sales" },
+            "invoicing" => new List<string> { "sales", "purchases" },
             "enterprise" => new List<string> { "sales", "financials", "purchases", "reports", "inventory", "donations", "audit" },
             _ => new List<string> { "sales", "financials", "purchases", "reports" }
         };
+
+        /// <summary>
+        /// Modules that cannot be turned off for a plan. Sales is always required;
+        /// purchases is required on Invoicing (invoice + expense loop without full accounting).
+        /// </summary>
+        public static bool IsRequiredModule(string? plan, string moduleKey)
+        {
+            if (string.Equals(moduleKey, "sales", StringComparison.OrdinalIgnoreCase))
+                return true;
+            if (string.Equals(moduleKey, "purchases", StringComparison.OrdinalIgnoreCase)
+                && string.Equals(plan, "invoicing", StringComparison.OrdinalIgnoreCase))
+                return true;
+            return false;
+        }
 
         public bool HasModule(string moduleKey)
         {

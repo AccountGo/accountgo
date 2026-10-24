@@ -25,8 +25,8 @@ AccountGo provides three standard subscription tiers and flexible modular add-on
 
 | Tier | Code | Included Modules | Target Audience | Key Capabilities |
 | :--- | :--- | :--- | :--- | :--- |
-| **Invoicing** | `invoicing` | `sales` | Freelancers, Solopreneurs, Contractors | Customers, Quotations, Sales Orders, Invoices, Receipts, and Sales Dashboard. Clean, distraction-free invoicing without double-entry complexity. |
-| **Accounting** | `accounting` | `sales`, `financials`, `purchases`, `reports` | Small to Medium Growing Businesses | Full General Ledger, Chart of Accounts, Cash & Bank, Journal Entries, Vendors, Bills, and Financial Statements (P&L, Balance Sheet, Trial Balance). |
+| **Invoicing** | `invoicing` | `sales`, `purchases` | Freelancers, Solopreneurs, Contractors | Customers, Quotations, Sales Orders, Invoices, Receipts, Vendors, Bills / Expenses, and Payments. Clean money-in / money-out without double-entry complexity. |
+| **Accounting** | `accounting` | `sales`, `financials`, `purchases`, `reports` | Small to Medium Growing Businesses | Full General Ledger, Chart of Accounts, Cash & Bank, Journal Entries, and Financial Statements (P&L, Balance Sheet, Trial Balance). |
 | **Enterprise** | `enterprise` | All modules (`sales`, `financials`, `purchases`, `inventory`, `reports`, `donations`, `audit`) | Established Organizations & Multi-Entity | Inventory stock control, non-profit donation tracking, audit logs, custom roles, and whitelabeling. |
 | **Modular Add-Ons** | *custom* | Any individual module | Any subscriber | Invoicing plan subscribers can selectively add individual modules (e.g. Invoicing + `inventory` or Invoicing + `donations`). |
 
@@ -38,7 +38,7 @@ AccountGo provides three standard subscription tiers and flexible modular add-on
 | :--- | :--- | :--- | :---: | :---: | :---: |
 | `sales` | Invoicing & Sales | Customers, Quotations, Sales Orders, Sales Invoices, Receipts | ✅ Yes | ✅ Yes | ✅ Yes |
 | `financials` | General Ledger & Banking | Chart of Accounts, Cash & Bank, Journal Entries, Balance Sheet | ❌ Add-on | ✅ Yes | ✅ Yes |
-| `purchases` | Purchases & Bills | Vendors, Purchase Orders, Bills / Vendor Invoices, Payments | ❌ Add-on | ✅ Yes | ✅ Yes |
+| `purchases` | Purchases & Bills | Vendors, Purchase Orders, Bills / Vendor Invoices, Payments | ✅ Yes | ✅ Yes | ✅ Yes |
 | `inventory` | Inventory & Items | Products & Services, Stock Items, Inventory Adjustments (ICJ) | ❌ Add-on | ❌ Add-on | ✅ Yes |
 | `reports` | Financial Reports | Aging Reports, Tax Reports, P&L Comparison, Financial Statements | ❌ Add-on | ✅ Yes | ✅ Yes |
 | `donations` | Donations & Non-Profit | Donors, Pledges, Tax Receipts, Donation Invoices | ❌ Add-on | ❌ Add-on | ✅ Yes |
