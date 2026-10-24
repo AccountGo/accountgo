@@ -118,7 +118,7 @@ namespace Api.Service
                     var tax = new Tax
                     {
                         CompanyId = company.Id, TaxCode = "NONE", TaxName = "No tax", Rate = 0, IsActive = true,
-                        SalesAccountId = accounts["20300"].Id, PurchasingAccountId = accounts["50700"].Id
+                        SalesAccountId = accounts["20300"].Id, PurchasingAccountId = accounts["10160"].Id
                     };
                     tax.TaxGroupTaxes.Add(new TaxGroupTax { CompanyId = company.Id, TaxGroup = group });
                     _db.Taxes.Add(tax);

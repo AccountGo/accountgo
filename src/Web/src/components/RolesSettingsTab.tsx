@@ -95,6 +95,7 @@ const PERMISSION_GROUPS: Array<{ group: string; module?: ModuleKey | ModuleKey[]
       { key: 'admin.members.manage', label: 'Manage Team Members' },
       { key: 'admin.roles.manage', label: 'Manage Roles & Permissions' },
       { key: 'admin.subscription.manage', label: 'Manage Subscription & Plan' },
+      { key: 'admin.taxes.manage', label: 'Manage Taxes' },
     ],
   },
 ];
