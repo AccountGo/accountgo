@@ -48,7 +48,7 @@ const MODULES_CATALOG: Array<{
   {
     key: 'inventory',
     name: 'Inventory & Items',
-    description: 'Product catalog, warehouse stock tracking, and inventory adjustments.',
+    description: 'Track stock on hand and its cost: bills add stock, invoices use it up, adjustments record counts and write-offs.',
     icon: Boxes,
   },
   {

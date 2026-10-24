@@ -6,6 +6,7 @@ import {
   Receipt,
   ShoppingBag,
   Package,
+  Boxes,
   BarChart3,
   Settings,
   Users,
@@ -84,6 +85,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
       path: `/org/${currentOrg.slug}/items`,
       icon: Package,
       module: ['sales', 'purchases'],
+      permission: 'inventory.items.view',
+    },
+    {
+      name: 'Inventory',
+      path: `/org/${currentOrg.slug}/inventory`,
+      icon: Boxes,
+      module: 'inventory',
       permission: 'inventory.items.view',
     },
     {

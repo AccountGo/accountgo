@@ -363,7 +363,7 @@ namespace AccountGo.BackendTests
             Assert.DoesNotContain("Customer Beta", custJson);
 
             // Items
-            var itemReq = CreateRequest(HttpMethod.Get, "/api/Inventory/Items", TokenUA, SlugA);
+            var itemReq = CreateRequest(HttpMethod.Get, "/api/Catalog/Items", TokenUA, SlugA);
             var itemRes = await _client.SendAsync(itemReq);
             Assert.Equal(HttpStatusCode.OK, itemRes.StatusCode);
             var itemJson = await itemRes.Content.ReadAsStringAsync();
@@ -419,7 +419,7 @@ namespace AccountGo.BackendTests
             Assert.Equal(HttpStatusCode.NotFound, resCust.StatusCode);
 
             // Item
-            var reqItem = CreateRequest(HttpMethod.Get, $"/api/Inventory/Item?id={ItemBId}", TokenUA, SlugA);
+            var reqItem = CreateRequest(HttpMethod.Get, $"/api/Catalog/Item?id={ItemBId}", TokenUA, SlugA);
             var resItem = await _client.SendAsync(reqItem);
             Assert.Equal(HttpStatusCode.NotFound, resItem.StatusCode);
 

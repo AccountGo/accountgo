@@ -99,6 +99,100 @@ namespace AccountGo.BackendTests
             WithDb(db => Assert.NotNull(db.SalesInvoiceHeaders.Single(i => i.Id == oversoldId).GeneralLedgerHeaderId));
             AssertStockState(itemId, -1m, 4.7273m);
             AssertStockInvariant(itemId);
+
+            SetInventoryModuleEnabled(true);
+            var stockItems = await Json(await Send(HttpMethod.Get, "/api/Stock/Items"));
+            Assert.InRange(
+                Math.Abs(stockItems.GetProperty("totalValue").GetDecimal()
+                    - stockItems.GetProperty("inventoryAccountBalance").GetDecimal()),
+                0m,
+                0.01m);
+
+            var movementResponse = await Json(await Send(HttpMethod.Get, $"/api/Stock/Movements?itemId={itemId}"));
+            var movements = movementResponse.EnumerateArray().ToArray();
+            var movementTypes = movements.Select(movement => movement.GetProperty("type").GetString()).ToArray();
+            Assert.Contains("Bill", movementTypes);
+            Assert.Contains("Invoice", movementTypes);
+            Assert.Contains("Void of Invoice", movementTypes);
+            Assert.Contains("Void of Bill", movementTypes);
+            Assert.Contains("Adjustment", movementTypes);
+            Assert.Contains(movements, movement => movement.GetProperty("linkType").GetString() == "bill");
+            Assert.Contains(movements, movement => movement.GetProperty("linkType").GetString() == "invoice");
+
+            decimal runningQuantity = 0;
+            foreach (var movement in movements.Reverse())
+            {
+                runningQuantity += movement.GetProperty("in").GetDecimal() - movement.GetProperty("out").GetDecimal();
+                Assert.Equal(runningQuantity, movement.GetProperty("runningQuantity").GetDecimal());
+            }
+            Assert.Equal(-1m, movements[0].GetProperty("runningQuantity").GetDecimal());
+        }
+
+        [Fact]
+        public async Task StockApi_RequiresInventoryModuleAndAdjustmentPermission()
+        {
+            SetInventoryModuleEnabled(false);
+            Assert.Equal(HttpStatusCode.Forbidden, (await Send(HttpMethod.Get, "/api/Stock/Items")).StatusCode);
+            Assert.Equal(HttpStatusCode.Forbidden, (await Send(HttpMethod.Get, "/api/Stock/Movements")).StatusCode);
+            Assert.Equal(HttpStatusCode.Forbidden, (await Send(HttpMethod.Post, "/api/Stock/Adjust", new
+            {
+                itemId = 1,
+                quantityChange = 1,
+                unitCost = 1,
+                reason = "Count",
+                date = DateTime.UtcNow.Date
+            })).StatusCode);
+
+            SetInventoryModuleEnabled(true);
+            var item = await SaveItem(new Dto.Inventory.CatalogItem
+            {
+                Name = "Adjustment permission stock",
+                TrackStock = true
+            });
+
+            WithDb(db =>
+            {
+                var member = new CompanyMember
+                {
+                    CompanyId = _companyId,
+                    UserId = _otherId,
+                    Role = CompanyMemberRole.Member,
+                    Status = CompanyMemberStatus.Active,
+                    JoinedAt = DateTime.UtcNow
+                };
+                db.CompanyMembers.Add(member);
+                db.SaveChanges();
+                db.CompanyMemberSecurityRoles.Add(new CompanyMemberSecurityRole
+                {
+                    CompanyMemberId = member.Id,
+                    SecurityRoleId = db.SecurityRoles.Single(role => role.Name == "Sales Representative").Id
+                });
+                db.SaveChanges();
+            });
+
+            Assert.Equal(HttpStatusCode.OK, (await Send(HttpMethod.Get, "/api/Stock/Items", token: _otherToken)).StatusCode);
+            var adjustmentRequest = new
+            {
+                itemId = item.Id,
+                quantityChange = 3m,
+                unitCost = 2m,
+                reason = "Count",
+                date = DateTime.UtcNow.Date,
+                memo = "Counted stock"
+            };
+            Assert.Equal(HttpStatusCode.Forbidden,
+                (await Send(HttpMethod.Post, "/api/Stock/Adjust", adjustmentRequest, token: _otherToken)).StatusCode);
+
+            var posted = await Send(HttpMethod.Post, "/api/Stock/Adjust", adjustmentRequest);
+            Assert.Equal(HttpStatusCode.OK, posted.StatusCode);
+            var movements = await Json(await Send(HttpMethod.Get, $"/api/Stock/Movements?itemId={item.Id}"));
+            var adjustment = Assert.Single(movements.EnumerateArray().ToArray());
+            Assert.Equal("Adjustment", adjustment.GetProperty("type").GetString());
+            Assert.Equal(3m, adjustment.GetProperty("runningQuantity").GetDecimal());
+
+            var stockItems = await Json(await Send(HttpMethod.Get, "/api/Stock/Items"));
+            Assert.Equal(6m, stockItems.GetProperty("totalValue").GetDecimal());
+            Assert.Equal(6m, stockItems.GetProperty("inventoryAccountBalance").GetDecimal());
         }
 
         [Fact]
