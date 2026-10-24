@@ -102,6 +102,86 @@ namespace AccountGo.BackendTests
         }
 
         [Fact]
+        public async Task Catalog_StockCreationIsModuleGated_OpeningStockPosts_AndBillsUseInventory()
+        {
+            var stock = new Dto.Inventory.CatalogItem
+            {
+                Name = "Catalog stock",
+                TrackStock = true,
+                OpeningQuantity = 4m,
+                OpeningUnitCost = 3.25m
+            };
+            Assert.Equal(HttpStatusCode.Forbidden,
+                (await Send(HttpMethod.Post, "/api/Catalog/SaveItem", stock)).StatusCode);
+
+            SetInventoryModuleEnabled(true);
+            var created = await SaveItem(stock);
+            Assert.True(created.TrackStock);
+            Assert.True(created.HasStockMovements);
+            Assert.Equal(4m, created.QuantityOnHand);
+            Assert.Equal(3.25m, created.AverageCost);
+            Assert.Equal(AccountId("10800"), created.InventoryAccountId);
+
+            WithDb(db =>
+            {
+                var item = db.Items.Include(i => i.ItemCategory).Single(i => i.Id == created.Id);
+                Assert.Equal("Stock items", item.ItemCategory.Name);
+                Assert.Equal(ItemTypes.Purchased, item.ItemCategory.ItemType);
+                Assert.Equal(AccountIdIn(db, "40100"), item.SalesAccountId);
+                Assert.Equal(AccountIdIn(db, "10800"), item.InventoryAccountId);
+                Assert.Equal(AccountIdIn(db, "50300"), item.CostOfGoodsSoldAccountId);
+                Assert.Equal(AccountIdIn(db, "50310"), item.InventoryAdjustmentAccountId);
+                var adjustment = db.InventoryAdjustments.Single(a => a.ItemId == item.Id);
+                Assert.Equal("OpeningStock", adjustment.Reason);
+                var openingEntry = db.GeneralLedgerLines.Where(l => l.GeneralLedgerHeaderId == adjustment.GeneralLedgerHeaderId).ToList();
+                Assert.Contains(openingEntry, line => line.AccountId == AccountIdIn(db, "10800") && line.DrCr == DrOrCrSide.Dr && line.Amount == 13m);
+                Assert.Contains(openingEntry, line => line.AccountId == AccountIdIn(db, "30700") && line.DrCr == DrOrCrSide.Cr && line.Amount == 13m);
+            });
+
+            var vendor = await SaveVendor(new Dto.Purchasing.Supplier { Name = "Catalog stock supplier" });
+            var accounts = await (await Send(HttpMethod.Get, "/api/Purchasing/BillAccounts"))
+                .Content.ReadFromJsonAsync<List<Dto.Purchasing.BillAccount>>();
+            Assert.Contains(accounts, account => account.Code == "10800" && account.IsInventoryAccount);
+            var bill = NewBill(vendor.Id, ("Catalog stock", 2m, 5m, AccountId("50200")));
+            bill.Lines[0].ItemId = created.Id;
+            bill.Status = "Open";
+            var approved = await SaveBillOk(bill);
+            Assert.Equal(AccountId("10800"), approved.Lines.Single().AccountId);
+            Assert.True(approved.Lines.Single().IsStockItem);
+            Assert.Contains(Ledger(BillLedgerId(approved.Id)),
+                line => line.AccountId == AccountId("10800") && line.DrCr == DrOrCrSide.Dr && line.Amount == 10m);
+            AssertStockState(created.Id, 6m, 3.8333m);
+
+            var invoice = await NewStockInvoice(created.Id, 2m);
+            invoice.Status = "Open";
+            var issuedResponse = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
+            Assert.True(issuedResponse.IsSuccessStatusCode, await issuedResponse.Content.ReadAsStringAsync());
+            var invoiceId = (await Json(issuedResponse)).GetProperty("id").GetInt32();
+            WithDb(db => Assert.NotNull(db.SalesInvoiceHeaders.Single(i => i.Id == invoiceId).GeneralLedgerHeaderId));
+            AssertStockState(created.Id, 4m, 3.8333m);
+
+            var switchedOff = await Send(HttpMethod.Post, "/api/Catalog/SaveItem",
+                new Dto.Inventory.CatalogItem { Id = created.Id, Name = created.Name, TrackStock = false });
+            Assert.Equal(HttpStatusCode.BadRequest, switchedOff.StatusCode);
+            Assert.Contains("can't stop tracking stock", await switchedOff.Content.ReadAsStringAsync());
+        }
+
+        private void SetInventoryModuleEnabled(bool enabled)
+        {
+            WithDb(db =>
+            {
+                var company = db.Companies.Single(c => c.Id == _companyId);
+                var modules = company.GetActiveModules();
+                if (enabled && !modules.Contains("inventory"))
+                    modules.Add("inventory");
+                if (!enabled)
+                    modules.RemoveAll(m => string.Equals(m, "inventory", StringComparison.OrdinalIgnoreCase));
+                company.ActiveModulesJson = System.Text.Json.JsonSerializer.Serialize(modules);
+                db.SaveChanges();
+            });
+        }
+
+        [Fact]
         public async Task StockMigration_BackfillsExistingWorkspacesAndCanBeReappliedSafely()
         {
             var itemId = CreateStockItem("Legacy stock", 7.5m);

@@ -17,6 +17,7 @@ export interface BillLine {
   /** The account the line is booked to. */
   accountId?: number | null;
   accountName?: string | null;
+  isStockItem?: boolean;
   quantity: number;
   /** Unit cost. */
   amount: number;
@@ -74,4 +75,5 @@ export interface BillAccount {
   code: string;
   name: string;
   group: 'Expense' | 'Asset';
+  isInventoryAccount?: boolean;
 }

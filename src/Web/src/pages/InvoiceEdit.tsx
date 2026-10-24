@@ -51,7 +51,7 @@ interface FormLineItem {
 }
 
 export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
-  const { currentOrg } = useOutletContext<TenantContextType>();
+  const { currentOrg, hasModule } = useOutletContext<TenantContextType>();
   const { authFetch } = useAuth();
   const { hasPermission } = usePermissions();
   const { orgSlug, invoiceId } = useParams<{ orgSlug: string; invoiceId?: string }>();
@@ -100,6 +100,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
   const [isSavingIssue, setIsSavingIssue] = useState<boolean>(false);
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
   const [successBanner, setSuccessBanner] = useState<string | null>(null);
+  const [stockWarnings, setStockWarnings] = useState<string[]>([]);
 
   // Client picker and the add/edit client dialog (editing: the client being edited)
   const [isCustomerPickerOpen, setIsCustomerPickerOpen] = useState<boolean>(false);
@@ -475,6 +476,8 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
 
       const savedData = await res.json();
       const targetId = savedData.id || invoiceId;
+      const warnings = Array.isArray(savedData.warnings) ? savedData.warnings.filter((warning: unknown): warning is string => typeof warning === 'string') : [];
+      setStockWarnings(warnings);
 
       setSuccessBanner(
         asDraft
@@ -485,7 +488,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
       // Navigate to detail view
       setTimeout(() => {
         navigate(`/org/${orgSlug}/sales/${targetId}`);
-      }, 700);
+      }, warnings.length > 0 ? 3500 : 700);
     } catch (err: any) {
       console.error('Save invoice error:', err);
       setErrorBanner(err.message || 'An error occurred while saving the invoice.');
@@ -583,6 +586,20 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
         <div className="mb-6 p-4 bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 rounded-xl flex items-center gap-3">
           <CheckCircle2 className="w-5 h-5 shrink-0" />
           <div className="flex-1 text-sm font-medium">{successBanner}</div>
+        </div>
+      )}
+
+      {stockWarnings.length > 0 && (
+        <div role="status" aria-live="polite" className="mb-6 p-4 bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-300 rounded-xl">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
+            <div className="text-sm">
+              <p className="font-semibold">Stock warning</p>
+              <ul className="mt-1 list-disc pl-5">
+                {stockWarnings.map((warning, index) => <li key={`${index}-${warning}`}>{warning}</li>)}
+              </ul>
+            </div>
+          </div>
         </div>
       )}
 
@@ -1006,9 +1023,19 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
         <ItemFormDialog
           showPrice
           showCost={false}
+          hasInventoryModule={hasModule('inventory')}
           currencySymbol={currencySymbol}
           onSaved={(item) => {
-            const option: ItemOption = { id: item.id, code: item.code ?? undefined, description: item.name, price: item.price ?? undefined };
+            const option: ItemOption = {
+              id: item.id,
+              code: item.code ?? undefined,
+              description: item.name,
+              price: item.price ?? undefined,
+              trackStock: item.trackStock,
+              inventoryAccountId: item.inventoryAccountId,
+              quantityOnHand: item.quantityOnHand,
+              averageCost: item.averageCost,
+            };
             setCatalogItems((prev) => [...prev, option].sort((a, b) => a.description.localeCompare(b.description)));
             if (lines[newItemLine]) handlePickItem(newItemLine, option);
             setNewItemLine(null);

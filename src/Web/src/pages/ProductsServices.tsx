@@ -19,6 +19,7 @@ export const ProductsServices: React.FC = () => {
   const canManage = hasPermission('inventory.items.manage');
   const showPrice = hasModule('sales');
   const showCost = hasModule('purchases');
+  const showStock = hasModule('inventory');
 
   const [items, setItems] = useState<CatalogItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -195,6 +196,8 @@ export const ProductsServices: React.FC = () => {
                   <th className="hidden sm:table-cell py-3 px-4">Code</th>
                   {showPrice && <th className="py-3 px-4 text-right">Selling price</th>}
                   {showCost && <th className="py-3 px-4 text-right">Purchase cost</th>}
+                  {showStock && <th className="hidden sm:table-cell py-3 px-4 text-right">On hand</th>}
+                  {showStock && <th className="hidden sm:table-cell py-3 px-4 text-right">Avg cost</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--border-subtle)]">
@@ -232,6 +235,16 @@ export const ProductsServices: React.FC = () => {
                         {item.cost != null ? formatCurrency(item.cost) : '—'}
                       </td>
                     )}
+                    {showStock && (
+                      <>
+                        <td className={`hidden sm:table-cell py-3.5 px-4 text-right font-mono whitespace-nowrap ${item.trackStock && item.quantityOnHand < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-[var(--text-primary)]'}`}>
+                          {item.trackStock ? item.quantityOnHand.toLocaleString(undefined, { maximumFractionDigits: 4 }) : '—'}
+                        </td>
+                        <td className="hidden sm:table-cell py-3.5 px-4 text-right font-mono text-[var(--text-primary)] whitespace-nowrap">
+                          {item.trackStock ? formatCurrency(item.averageCost) : '—'}
+                        </td>
+                      </>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -245,6 +258,7 @@ export const ProductsServices: React.FC = () => {
           item={dialog.item}
           showPrice={showPrice}
           showCost={showCost}
+          hasInventoryModule={showStock}
           currencySymbol={currencySymbol}
           onSaved={handleSaved}
           onDeleted={(id) => {

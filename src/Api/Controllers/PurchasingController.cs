@@ -519,12 +519,22 @@ namespace Api.Controllers
 
             var vendor = _tenantGuard.EnsureOwned<Vendor>(billDto.VendorId, nameof(billDto.VendorId));
             var lineAccounts = BillAccountsQuery().Select(a => a.Id).ToHashSet();
+            var requestedItemIds = billDto.Lines.Where(l => l.ItemId > 0).Select(l => l.ItemId!.Value).Distinct().ToArray();
+            var stockAccountsByItem = _db.Items
+                .Include(i => i.ItemCategory)
+                .Where(i => requestedItemIds.Contains(i.Id)
+                    && i.ItemCategory != null
+                    && i.ItemCategory.ItemType == Core.Domain.ItemTypes.Purchased
+                    && i.InventoryAccountId.HasValue)
+                .ToDictionary(i => i.Id, i => i.InventoryAccountId!.Value);
             foreach (var line in billDto.Lines)
             {
                 if (line.ItemId > 0)
                     _tenantGuard.EnsureOwned<Core.Domain.Items.Item>(line.ItemId.Value, nameof(line.ItemId));
                 if (line.TaxId > 0)
                     _tenantGuard.EnsureOwned<Core.Domain.TaxSystem.Tax>(line.TaxId.Value, nameof(line.TaxId));
+                if (line.ItemId.HasValue && stockAccountsByItem.TryGetValue(line.ItemId.Value, out var inventoryAccountId))
+                    line.AccountId = inventoryAccountId;
                 if (line.AccountId > 0)
                 {
                     _tenantGuard.EnsureOwned<Core.Domain.Financials.Account>(line.AccountId.Value, nameof(line.AccountId));
@@ -733,7 +743,7 @@ namespace Api.Controllers
 
         private IQueryable<PurchaseInvoiceHeader> BillsQuery() => _db.PurchaseInvoiceHeaders
             .Include(b => b.Vendor).ThenInclude(v => v!.Party)
-            .Include(b => b.PurchaseInvoiceLines).ThenInclude(l => l.Item)
+            .Include(b => b.PurchaseInvoiceLines).ThenInclude(l => l.Item).ThenInclude(i => i!.ItemCategory)
             .Include(b => b.PurchaseInvoiceLines).ThenInclude(l => l.Account)
             .Include(b => b.VendorPayments).ThenInclude(p => p.Account);
 
@@ -756,6 +766,7 @@ namespace Api.Controllers
             Code = account.AccountCode,
             Name = account.AccountName,
             Group = account.AccountClassId == (int)AccountClasses.Expense ? "Expense" : "Asset",
+            IsInventoryAccount = account.AccountCode == "10800",
         };
 
         private static Dto.Purchasing.Bill ToBill(PurchaseInvoiceHeader bill, List<PaymentTerm> terms)
@@ -785,6 +796,8 @@ namespace Api.Controllers
                     Description = l.DisplayDescription,
                     AccountId = l.AccountId,
                     AccountName = l.Account == null ? null : $"{l.Account.AccountCode} · {l.Account.AccountName}",
+                    IsStockItem = l.Item?.ItemCategory?.ItemType == Core.Domain.ItemTypes.Purchased
+                        && l.Item.InventoryAccountId.HasValue,
                     Quantity = l.Quantity,
                     Amount = l.Amount,
                     Discount = l.Discount,

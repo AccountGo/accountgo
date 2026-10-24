@@ -313,7 +313,9 @@ namespace Services.Purchasing
             var taxes = _financialService.GetTaxes().ToList();
             foreach (var line in bill.PurchaseInvoiceLines)
             {
-                line.AccountId ??= DefaultLineAccountId(line.ItemId, vendor);
+                line.AccountId = StockInventoryAccountId(line.ItemId)
+                    ?? line.AccountId
+                    ?? DefaultLineAccountId(line.ItemId, vendor);
                 line.Cost = line.Amount;
                 line.TaxAmount = PurchaseInvoiceLine.TaxOf(line.Subtotal, taxes.FirstOrDefault(t => t.Id == line.TaxId)?.Rate);
             }
@@ -340,6 +342,14 @@ namespace Services.Purchasing
             return vendor?.PurchaseAccountId
                 ?? _accountRepo.Table.Where(a => a.AccountCode == "50200").Select(a => (int?)a.Id).FirstOrDefault()
                 ?? throw new InvalidOperationException("Pick an account for each line: this workspace has no purchase account.");
+        }
+
+        private int? StockInventoryAccountId(int itemId)
+        {
+            var item = itemId > 0 ? _inventoryService.GetItemById(itemId) : null;
+            return item?.ItemCategory?.ItemType == ItemTypes.Purchased
+                ? item.InventoryAccountId
+                : null;
         }
 
         /// <summary>
@@ -374,7 +384,9 @@ namespace Services.Purchasing
             bill.No ??= GetNextNumber(SequenceNumberTypes.PurchaseInvoice).ToString();
             foreach (var line in bill.PurchaseInvoiceLines)
             {
-                var accountId = line.AccountId ?? DefaultLineAccountId(line.ItemId, vendor);
+                var accountId = StockInventoryAccountId(line.ItemId)
+                    ?? line.AccountId
+                    ?? DefaultLineAccountId(line.ItemId, vendor);
                 line.AccountId = accountId;
                 Debit(accountId, line.Subtotal);
 

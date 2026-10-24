@@ -68,12 +68,18 @@ namespace Api.Controllers
         public IActionResult Items()
         {
             var items = _inventoryService.GetAllItems().OrderBy(i => i.Description);
-            ICollection<Item> itemsDto = new HashSet<Item>();
-
-            foreach (var item in items)
-                itemsDto.Add(new Item() { Id = item.Id, Description = item.Description, Code = item.Code, Price = item.Price, SellMeasurementId = item.SellMeasurementId, Archived = item.ArchivedAt.HasValue });
-
-            return new ObjectResult(itemsDto);
+            return new ObjectResult(items.Select(item => new
+            {
+                item.Id,
+                item.Description,
+                item.Code,
+                item.Price,
+                item.SellMeasurementId,
+                Archived = item.ArchivedAt.HasValue,
+                TrackStock = item.ItemCategory?.ItemType == Core.Domain.ItemTypes.Purchased,
+                item.QuantityOnHand,
+                item.AverageCost
+            }).ToList());
         }
 
         [HttpGet]

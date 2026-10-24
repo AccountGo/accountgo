@@ -2,8 +2,13 @@
 using System;
 using System.Linq;
 using Api.Filters;
+using Core.Domain;
+using Core.Domain.Items;
 using Core.Domain.Security;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using Services.Administration;
 using Services.Financial;
 using Services.Inventory;
 
@@ -24,16 +29,22 @@ namespace Api.Controllers
 
         private readonly IInventoryService _inventoryService;
         private readonly IFinancialService _financialService;
+        private readonly IAdministrationService _adminService;
+        private readonly IStockService _stockService;
         private readonly Core.Tenancy.ITenantGuard _tenantGuard;
         private readonly Api.Data.ApiDbContext _db;
 
         public CatalogController(IInventoryService inventoryService,
             IFinancialService financialService,
+            IAdministrationService adminService,
+            IStockService stockService,
             Core.Tenancy.ITenantGuard tenantGuard,
             Api.Data.ApiDbContext db)
         {
             _inventoryService = inventoryService;
             _financialService = financialService;
+            _adminService = adminService;
+            _stockService = stockService;
             _tenantGuard = tenantGuard;
             _db = db;
         }
@@ -41,19 +52,28 @@ namespace Api.Controllers
         [HttpGet]
         [Route("Items")] // api/Catalog/Items
         [RequirePermission(SystemPermissions.InventoryItemsView)]
-        public IActionResult Items() =>
-            Ok(_db.Items.OrderBy(i => i.Description).AsEnumerable().Select(ToCatalogItem).ToList());
+        public IActionResult Items()
+        {
+            var items = _db.Items.Include(i => i.ItemCategory).OrderBy(i => i.Description).ToList();
+            var itemIds = items.Select(i => i.Id).ToArray();
+            var itemsWithMovements = _db.InventoryControlJournals
+                .Where(j => itemIds.Contains(j.ItemId))
+                .Select(j => j.ItemId)
+                .Distinct()
+                .ToHashSet();
+            return Ok(items.Select(item => ToCatalogItem(item, itemsWithMovements.Contains(item.Id))).ToList());
+        }
 
         [HttpGet]
         [Route("Item")] // api/Catalog/Item?id=
         [RequirePermission(SystemPermissions.InventoryItemsView)]
         public IActionResult Item(int id)
         {
-            var item = _db.Items.FirstOrDefault(i => i.Id == id);
+            var item = _db.Items.Include(i => i.ItemCategory).FirstOrDefault(i => i.Id == id);
             if (item == null)
                 return NotFound(new { message = "Item not found." });
 
-            var dto = ToCatalogItem(item);
+            var dto = ToCatalogItem(item, _db.InventoryControlJournals.Any(j => j.ItemId == id));
             dto.CanDelete = !IsUsed(id);
             return Ok(dto);
         }
@@ -73,36 +93,95 @@ namespace Api.Controllers
                 return BadRequest(new { message = $"A code can be at most {CodeMaxLength} characters." });
             if (itemDto.Price < 0 || itemDto.Cost < 0)
                 return BadRequest(new { message = "Prices and costs can't be negative." });
+            if (itemDto.OpeningQuantity < 0)
+                return BadRequest(new { message = "Opening quantity can't be negative." });
+            if (itemDto.OpeningUnitCost < 0)
+                return BadRequest(new { message = "Opening cost can't be negative." });
+            if (itemDto.OpeningQuantity > 0 && !itemDto.TrackStock)
+                return BadRequest(new { message = "Opening stock can only be recorded for a stock-tracked item." });
+            if (itemDto.Id > 0 && (itemDto.OpeningQuantity.HasValue || itemDto.OpeningUnitCost.HasValue))
+                return BadRequest(new { message = "Opening stock can only be recorded when adding an item." });
+            if (itemDto.OpeningQuantity > 0 && itemDto.OpeningUnitCost == null)
+                return BadRequest(new { message = "Enter a cost per unit for opening stock." });
+            if (itemDto.OpeningQuantity > 0 && Math.Round(itemDto.OpeningQuantity.Value, 4, MidpointRounding.ToEven) <= 0)
+                return BadRequest(new { message = "Opening quantity must be at least 0.0001." });
             if (code != null && _db.Items.AsEnumerable().Any(i => i.Id != itemDto.Id && string.Equals(i.Code?.Trim(), code, StringComparison.OrdinalIgnoreCase)))
                 return Conflict(new { message = $"Another item already uses the code {code}." });
 
-            Core.Domain.Items.Item item;
             bool isNew = itemDto.Id == 0;
-            if (isNew)
-            {
-                item = Api.Service.CatalogDefaults.NewItem(_inventoryService, _financialService, name);
-            }
-            else
-            {
+            if (!isNew)
                 _tenantGuard.EnsureOwned<Core.Domain.Items.Item>(itemDto.Id, nameof(itemDto.Id));
-                item = _db.Items.Single(i => i.Id == itemDto.Id);
+            var existingStockItem = !isNew && _db.Items
+                .Include(i => i.ItemCategory)
+                .Any(i => i.Id == itemDto.Id && i.ItemCategory != null && i.ItemCategory.ItemType == ItemTypes.Purchased);
+            if (itemDto.TrackStock && !existingStockItem && !_adminService.IsModuleEnabled("inventory"))
+                return StatusCode(StatusCodes.Status403Forbidden, new { message = "Turn on the Inventory module before changing stock tracking for an item." });
+
+            try
+            {
+                using var tx = _db.Database.BeginTransaction();
+                var item = isNew
+                    ? Api.Service.CatalogDefaults.NewItem(_inventoryService, _financialService, name, itemDto.TrackStock)
+                    : _db.Items.Include(i => i.ItemCategory).Single(i => i.Id == itemDto.Id);
+
+                var wasStockItem = !isNew && item.ItemCategory?.ItemType == ItemTypes.Purchased;
+                var hasStockMovements = !isNew && _db.InventoryControlJournals.Any(j => j.ItemId == item.Id);
+                if (wasStockItem && !itemDto.TrackStock && hasStockMovements)
+                    return BadRequest(new { message = "This item already has stock movements, so it can't stop tracking stock. Archive it instead." });
+
+                if (itemDto.TrackStock)
+                {
+                    var category = Api.Service.CatalogDefaults.StockCategory(
+                        _inventoryService, _financialService, Api.Service.CatalogDefaults.MeasurementId(_inventoryService));
+                    item.ItemCategory = category;
+                    item.ItemCategoryId = category.Id;
+                    item.SalesAccountId = category.SalesAccountId;
+                    item.InventoryAccountId = category.InventoryAccountId;
+                    item.CostOfGoodsSoldAccountId = category.CostOfGoodsSoldAccountId;
+                    item.InventoryAdjustmentAccountId = category.AdjustmentAccountId;
+                    item.PurchaseMeasurementId = category.MeasurementId;
+                }
+                else if (wasStockItem)
+                {
+                    var measurementId = Api.Service.CatalogDefaults.MeasurementId(_inventoryService);
+                    var category = Api.Service.CatalogDefaults.ServiceCategory(_inventoryService, _financialService, measurementId);
+                    item.ItemCategory = category;
+                    item.ItemCategoryId = category.Id;
+                    item.SalesAccountId = category.SalesAccountId;
+                    item.InventoryAccountId = null;
+                    item.CostOfGoodsSoldAccountId = null;
+                    item.InventoryAdjustmentAccountId = null;
+                    item.PurchaseMeasurementId = null;
+                }
+
+                item.Description = name;
+                item.SellDescription = name;
+                item.Code = code;
+                item.Price = itemDto.Price;
+                item.Cost = itemDto.Cost;
+                item.ModifiedBy = GetUserNameFromRequestHeader();
+
+                if (isNew)
+                    _inventoryService.AddItem(item);
+                else
+                    _inventoryService.UpdateItem(item);
+
+                if (isNew && itemDto.TrackStock && itemDto.OpeningQuantity > 0)
+                {
+                    _stockService.Adjust(item, itemDto.OpeningQuantity.Value, itemDto.OpeningUnitCost,
+                        "OpeningStock", DateTime.UtcNow.Date, "Opening stock");
+                    _db.SaveChanges();
+                }
+
+                tx.Commit();
+                var saved = ToCatalogItem(item, _db.InventoryControlJournals.Any(j => j.ItemId == item.Id));
+                saved.CanDelete = isNew || !IsUsed(item.Id);
+                return Ok(saved);
             }
-
-            item.Description = name;
-            item.SellDescription = name;
-            item.Code = code;
-            item.Price = itemDto.Price;
-            item.Cost = itemDto.Cost;
-            item.ModifiedBy = GetUserNameFromRequestHeader();
-
-            if (isNew)
-                _inventoryService.AddItem(item);
-            else
-                _inventoryService.UpdateItem(item);
-
-            var saved = ToCatalogItem(item);
-            saved.CanDelete = isNew || !IsUsed(item.Id);
-            return Ok(saved);
+            catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
         }
 
         [HttpPost]
@@ -111,12 +190,12 @@ namespace Api.Controllers
         public IActionResult ArchiveItem(int id, bool archived = true)
         {
             _tenantGuard.EnsureOwned<Core.Domain.Items.Item>(id, nameof(id));
-            var item = _db.Items.Single(i => i.Id == id);
+            var item = _db.Items.Include(i => i.ItemCategory).Single(i => i.Id == id);
             item.ArchivedAt = archived ? item.ArchivedAt ?? DateTime.UtcNow : null;
             item.ModifiedBy = GetUserNameFromRequestHeader();
             _inventoryService.UpdateItem(item);
 
-            var dto = ToCatalogItem(item);
+            var dto = ToCatalogItem(item, _db.InventoryControlJournals.Any(j => j.ItemId == id));
             dto.CanDelete = !IsUsed(id);
             return Ok(dto);
         }
@@ -138,7 +217,7 @@ namespace Api.Controllers
 
         private static string? Blank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
-        private static Dto.Inventory.CatalogItem ToCatalogItem(Core.Domain.Items.Item item) => new()
+        private static Dto.Inventory.CatalogItem ToCatalogItem(Core.Domain.Items.Item item, bool hasStockMovements = false) => new()
         {
             Id = item.Id,
             Name = item.Description,
@@ -146,6 +225,11 @@ namespace Api.Controllers
             Price = item.Price,
             Cost = item.Cost,
             Archived = item.ArchivedAt.HasValue,
+            TrackStock = item.ItemCategory?.ItemType == ItemTypes.Purchased,
+            InventoryAccountId = item.InventoryAccountId,
+            QuantityOnHand = item.QuantityOnHand,
+            AverageCost = item.AverageCost,
+            HasStockMovements = hasStockMovements,
         };
 
         /// <summary>Whether any document line, receipt or stock movement refers to the item.</summary>

@@ -160,6 +160,10 @@ export interface ItemOption {
   description: string;
   price?: number;
   sellMeasurementId?: number;
+  trackStock?: boolean;
+  inventoryAccountId?: number | null;
+  quantityOnHand?: number;
+  averageCost?: number;
   /** Archived items are left out when picking an item for a line. */
   archived?: boolean;
 }
@@ -174,6 +178,11 @@ export interface CatalogItem {
   /** Default purchase cost; null when there is none. */
   cost?: number | null;
   archived: boolean;
+  trackStock: boolean;
+  inventoryAccountId?: number | null;
+  quantityOnHand: number;
+  averageCost: number;
+  hasStockMovements: boolean;
   /** No document uses it yet, so it can be deleted rather than archived. */
   canDelete?: boolean;
 }

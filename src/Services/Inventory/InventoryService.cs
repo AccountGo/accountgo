@@ -79,10 +79,14 @@ namespace Services.Inventory
             var cogs = _accountRepo.Table.Where(a => a.AccountCode == "50300").FirstOrDefault();
             var assemblyCost = _accountRepo.Table.Where(a => a.AccountCode == "10900").FirstOrDefault();
 
-            item.SalesAccount = sales;
-            item.InventoryAccount = inventory;
-            item.CostOfGoodsSoldAccount = cogs;
-            item.InventoryAdjustmentAccount = invAdjusment;
+            if (!item.SalesAccountId.HasValue)
+                item.SalesAccount = sales;
+            if (!item.InventoryAccountId.HasValue)
+                item.InventoryAccount = inventory;
+            if (!item.CostOfGoodsSoldAccountId.HasValue)
+                item.CostOfGoodsSoldAccount = cogs;
+            if (!item.InventoryAdjustmentAccountId.HasValue)
+                item.InventoryAdjustmentAccount = invAdjusment;
 
             item.ItemTaxGroup = _itemTaxGroup.Table.Where(m => m.Name == "Regular").FirstOrDefault();
             
