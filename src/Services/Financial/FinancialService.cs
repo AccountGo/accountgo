@@ -243,214 +243,87 @@ namespace Services.Financial
 
         public ICollection<TrialBalance> TrialBalance(DateTime? from = default(DateTime?), DateTime? to = default(DateTime?))
         {
-            var allDr = (from dr in _generalLedgerLineRepository.GetAllIncluding(a => a.Account, h => h.GeneralLedgerHeader).AsEnumerable()
-                         where dr.DrCr == DrOrCrSide.Dr
-                         //&& IsDateBetweenFinancialYearStartDateAndEndDate(dr.GLHeader.Date)
-                         group dr by new { dr.AccountId, dr.Account.AccountCode, dr.Account.AccountName, dr.Amount } into tb
-                         select new
-                         {
-                             AccountId = tb.Key.AccountId,
-                             AccountCode = tb.Key.AccountCode,
-                             AccountName = tb.Key.AccountName,
-                             Debit = tb.Sum(d => d.Amount),
-                         });
+            if (from.HasValue && to.HasValue && from.Value > to.Value)
+                throw new ArgumentException("The start date must not be after the end date.");
 
-            var allCr = (from cr in _generalLedgerLineRepository.GetAllIncluding(a => a.Account, h => h.GeneralLedgerHeader).AsEnumerable()
-                         where cr.DrCr == DrOrCrSide.Cr
-                         //&& IsDateBetweenFinancialYearStartDateAndEndDate(cr.GLHeader.Date)
-                         group cr by new { cr.AccountId, cr.Account.AccountCode, cr.Account.AccountName, cr.Amount } into tb
-                         select new
-                         {
-                             AccountId = tb.Key.AccountId,
-                             AccountCode = tb.Key.AccountCode,
-                             AccountName = tb.Key.AccountName,
-                             Credit = tb.Sum(c => c.Amount),
-                         });
+            var lines = _generalLedgerLineRepository.Table;
+            if (from.HasValue)
+                lines = lines.Where(l => l.GeneralLedgerHeader.Date >= from.Value);
+            if (to.HasValue)
+                lines = lines.Where(l => l.GeneralLedgerHeader.Date <= to.Value);
 
-            var allDrcr = (from x in allDr
-                           select new TrialBalance
-                           {
-                               AccountId = x.AccountId,
-                               AccountCode = x.AccountCode,
-                               AccountName = x.AccountName,
-                               Debit = x.Debit,
-                               Credit = (decimal)0,
-                           }
-                          ).Concat(from y in allCr
-                                   select new TrialBalance
-                                   {
-                                       AccountId = y.AccountId,
-                                       AccountCode = y.AccountCode,
-                                       AccountName = y.AccountName,
-                                       Debit = (decimal)0,
-                                       Credit = y.Credit,
-                                   });
-
-            var sortedList = allDrcr
-                .OrderBy(tb => tb.AccountCode)
-                .ToList()
-                .Reverse<TrialBalance>();
-
-            var accounts = sortedList.ToList().GroupBy(a => a.AccountCode)
-                .Select(tb => new TrialBalance
+            return lines
+                .GroupBy(l => new { l.AccountId, l.Account.AccountCode, l.Account.AccountName })
+                .Select(g => new TrialBalance
                 {
-                    AccountId = tb.First().AccountId,
-                    AccountCode = tb.First().AccountCode,
-                    AccountName = tb.First().AccountName,
-                    Credit = tb.Sum(x => x.Credit),
-                    Debit = tb.Sum(y => y.Debit)
-                }).ToList();
-            return accounts;
+                    AccountId = g.Key.AccountId,
+                    AccountCode = g.Key.AccountCode,
+                    AccountName = g.Key.AccountName,
+                    Debit = g.Sum(l => l.DrCr == DrOrCrSide.Dr ? l.Amount : 0m),
+                    Credit = g.Sum(l => l.DrCr == DrOrCrSide.Cr ? l.Amount : 0m)
+                })
+                .OrderBy(a => a.AccountCode)
+                .ToList();
         }
 
-        // TODO: This generates an error
         public ICollection<BalanceSheet> BalanceSheet(DateTime? from = default(DateTime?), DateTime? to = default(DateTime?))
         {
-            var assets = from a in _accountRepo.GetAllIncluding(a => a.AccountClass,
-                a => a.ChildAccounts,
-                a => a.ContraAccounts,
-                a => a.ParentAccount,
-                h => h.GeneralLedgerLines).AsEnumerable()
-                         where a.AccountClassId == 1 && a.ParentAccountId != null && !a.IsContraAccount
-                         select a;
-            var liabilities = from a in _accountRepo.GetAllIncluding(a => a.AccountClass,
-                a => a.ChildAccounts,
-                a => a.ContraAccounts,
-                a => a.ParentAccount,
-                h => h.GeneralLedgerLines).AsEnumerable()
-                              where a.AccountClassId == 2 && a.ParentAccountId != null && !a.IsContraAccount
-                              select a;
-            var equities = from a in _accountRepo.GetAllIncluding(a => a.AccountClass,
-                a => a.ChildAccounts,
-                a => a.ContraAccounts,
-                a => a.ParentAccount,
-                h => h.GeneralLedgerLines).AsEnumerable()
-                           where a.AccountClassId == 3 && a.ParentAccountId != null && !a.IsContraAccount
-                           select a;
+            if (from.HasValue && to.HasValue && from.Value > to.Value)
+                throw new ArgumentException("The start date must not be after the end date.");
 
-            var balanceSheet = new HashSet<BalanceSheet>();
-            foreach (var asset in assets)
-            {
-                balanceSheet.Add(new BalanceSheet()
+            // A position statement includes opening balances, not just movement since 'from'.
+            var balances = TrialBalance(null, to).ToDictionary(a => a.AccountId);
+            var accounts = _accountRepo.Table.Where(a => a.AccountClassId >= 1 && a.AccountClassId <= 5)
+                .Select(a => new { a.Id, a.AccountClassId, a.AccountCode, a.AccountName }).ToList();
+            var balanceSheet = accounts.Where(a => a.AccountClassId <= 3)
+                .Select(a =>
                 {
-                    AccountId = asset.Id,
-                    AccountClassId = asset.AccountClassId,
-                    AccountCode = asset.AccountCode,
-                    AccountName = asset.AccountName,
-                    Amount = asset.Balance - ((asset.IsContraAccount && asset.ContraAccounts.Count > 0) == true ? asset.ContraAccounts.FirstOrDefault().RelatedContraAccount.Balance : 0)
-                });
-            }
-            foreach (var liability in liabilities)
-            {
-                balanceSheet.Add(new BalanceSheet()
-                {
-                    AccountId = liability.Id,
-                    AccountClassId = liability.AccountClassId,
-                    AccountCode = liability.AccountCode,
-                    AccountName = liability.AccountName,
-                    Amount = liability.Balance - ((liability.IsContraAccount && liability.ContraAccounts.Count > 0) == true ? liability.ContraAccounts.FirstOrDefault().RelatedContraAccount.Balance : 0)
-                });
-            }
-            foreach (var equity in equities)
-            {
-                balanceSheet.Add(new BalanceSheet()
-                {
-                    AccountId = equity.Id,
-                    AccountClassId = equity.AccountClassId,
-                    AccountCode = equity.AccountCode,
-                    AccountName = equity.AccountName,
-                    Amount = equity.Balance - ((equity.IsContraAccount && equity.ContraAccounts.Count > 0) == true ? equity.ContraAccounts.FirstOrDefault().RelatedContraAccount.Balance : 0)
-                });
-            }
-
-            // IFRS IAS 1 Presentation: Incorporate current period unclosed net income into equity
-            var incomeStatement = IncomeStatement(from, to);
-            var netIncome = incomeStatement.Where(a => !a.IsExpense).Sum(a => a.Amount) - incomeStatement.Where(a => a.IsExpense).Sum(a => a.Amount);
-
-            if (netIncome > 0)
-            {
-                var profitAccount = balanceSheet.FirstOrDefault(a => a.AccountCode == "30400");
-                if (profitAccount != null)
-                {
-                    profitAccount.Amount += netIncome;
-                }
-                else
-                {
-                    balanceSheet.Add(new BalanceSheet
+                    TrialBalance balance;
+                    var net = balances.TryGetValue(a.Id, out balance) ? balance.Debit - balance.Credit : 0m;
+                    return new BalanceSheet
                     {
-                        AccountId = 0,
-                        AccountClassId = 3,
-                        AccountCode = "30400",
-                        AccountName = "Accumulated Profits",
-                        Amount = netIncome
-                    });
-                }
-            }
-            else if (netIncome < 0)
-            {
-                var lossAccount = balanceSheet.FirstOrDefault(a => a.AccountCode == "30500");
-                if (lossAccount != null)
-                {
-                    lossAccount.Amount += Math.Abs(netIncome);
-                }
-                else
-                {
-                    balanceSheet.Add(new BalanceSheet
-                    {
-                        AccountId = 0,
-                        AccountClassId = 3,
-                        AccountCode = "30500",
-                        AccountName = "Accumulated Losses",
-                        Amount = Math.Abs(netIncome)
-                    });
-                }
-            }
+                        AccountId = a.Id,
+                        AccountClassId = a.AccountClassId,
+                        AccountCode = a.AccountCode,
+                        AccountName = a.AccountName,
+                        Amount = a.AccountClassId == 1 ? net : -net
+                    };
+                }).ToList();
 
+            // Closed income accounts already net to zero; only unclosed earnings are added.
+            var netIncome = accounts.Where(a => a.AccountClassId == 4 || a.AccountClassId == 5)
+                .Sum(a => balances.ContainsKey(a.Id) ? balances[a.Id].Credit - balances[a.Id].Debit : 0m);
+            if (netIncome != 0m)
+                balanceSheet.Add(new BalanceSheet
+                {
+                    AccountId = 0,
+                    AccountClassId = 3,
+                    AccountCode = "",
+                    AccountName = "Retained Surplus / Accumulated Profit (unclosed net income)",
+                    Amount = netIncome
+                });
             return balanceSheet;
         }
 
         public ICollection<IncomeStatement> IncomeStatement(DateTime? from = default(DateTime?), DateTime? to = default(DateTime?))
         {
-            var revenues = from r in _accountRepo.GetAllIncluding(a => a.AccountClass,
-                a => a.ChildAccounts,
-                a => a.ContraAccounts,
-                a => a.ParentAccount,
-                h => h.GeneralLedgerLines).AsEnumerable()
-                           where r.AccountClassId == 4 && r.ParentAccountId != null && !r.IsContraAccount
-                           select r;
-
-            var expenses = from e in _accountRepo.GetAllIncluding(a => a.AccountClass,
-                a => a.ChildAccounts,
-                a => a.ContraAccounts,
-                a => a.ParentAccount,
-                h => h.GeneralLedgerLines).AsEnumerable()
-                           where e.AccountClassId == 5 && e.ParentAccountId != null && !e.IsContraAccount
-                           select e;
-
-            var revenues_expenses = new HashSet<IncomeStatement>();
-            foreach (var revenue in revenues)
-            {
-                revenues_expenses.Add(new IncomeStatement()
+            var balances = TrialBalance(from, to).ToDictionary(a => a.AccountId);
+            return _accountRepo.Table.Where(a => a.AccountClassId == 4 || a.AccountClassId == 5)
+                .Select(a => new { a.Id, a.AccountClassId, a.AccountCode, a.AccountName })
+                .ToList()
+                .Select(a =>
                 {
-                    AccountId = revenue.Id,
-                    AccountCode = revenue.AccountCode,
-                    AccountName = revenue.AccountName,
-                    Amount = revenue.Balance - ((revenue.IsContraAccount && revenue.ContraAccounts.Count > 0) == true ? revenue.ContraAccounts.FirstOrDefault().RelatedContraAccount.Balance : 0),
-                    IsExpense = false
-                });
-            }
-            foreach (var expense in expenses)
-            {
-                revenues_expenses.Add(new IncomeStatement()
-                {
-                    AccountId = expense.Id,
-                    AccountCode = expense.AccountCode,
-                    AccountName = expense.AccountName,
-                    Amount = expense.Balance - ((expense.IsContraAccount && expense.ContraAccounts.Count > 0) == true ? expense.ContraAccounts.FirstOrDefault().RelatedContraAccount.Balance : 0),
-                    IsExpense = true
-                });
-            }
-            return revenues_expenses;
+                    TrialBalance balance;
+                    var net = balances.TryGetValue(a.Id, out balance) ? balance.Debit - balance.Credit : 0m;
+                    return new IncomeStatement
+                    {
+                        AccountId = a.Id,
+                        AccountCode = a.AccountCode,
+                        AccountName = a.AccountName,
+                        IsExpense = a.AccountClassId == 5,
+                        Amount = a.AccountClassId == 5 ? net : -net
+                    };
+                }).OrderBy(a => a.AccountCode).ToList();
         }
 
         public ICollection<MasterGeneralLedger> MasterGeneralLedger(DateTime? from = default(DateTime?),
