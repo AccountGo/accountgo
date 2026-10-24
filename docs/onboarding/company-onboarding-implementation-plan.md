@@ -327,9 +327,20 @@ Reuse existing input/button/token classes from `SelectOrg` / Settings. No new UI
 
 ### 4.4 Acceptance
 
-- [ ] Checklist appears for new orgs; dismiss persists.  
-- [ ] Frozen policy fields cannot PATCH after first JE.  
-- [ ] Books-start enforcement covered by automated tests.
+- [x] Checklist appears for new orgs (admins/owners); dismiss persists (`OnboardingChecklistDismissedAt`).  
+- [x] Frozen policy fields cannot be changed after the first JE (`PUT` returns 409).  
+- [x] Books-start enforcement covered by automated tests.
+
+**Status:** Done on branch, pending merge. 8 new service tests, 4 checklist unit tests; no browser run yet.
+
+**Implementation notes**
+
+- API: `GET/PUT /api/organizations/current/accounting-policy` (PUT is admin-only; implemented as `PUT`, not `PATCH`) and `POST current/onboarding-checklist/dismiss`.
+- Locked after first journal: framework, basis, FY pattern/start month, books start. Always editable: tax regime, inventory method. Currency is not exposed for editing.
+- While the ledger is empty, changing FY or books start deactivates the old fiscal year and activates the derived one.
+- Posting guard: `FinancialService.CreateGeneralLedgerHeader` and manual journal posting throw `BooksStartViolationException` for dates before `BooksStartDate`. It covers every GL header created through the service (sales, purchases, journals). Open-FY enforcement is not added; only the books-start date is checked.
+- Checklist items are links; only "legal name" tracks completion automatically. Opening balances (S6) are omitted.
+- Settings surfacing lives in the Financials tab (`AccountingPolicyCard`); the checklist is `OnboardingChecklist` on the dashboard.
 
 ---
 
@@ -426,7 +437,7 @@ Phase 5 may be deferred if product accepts single CoA + stored `CoaTemplateId` f
 - [x] Phase 1 — Domain + schema + policy rules  
 - [x] Phase 2 — API + provisioning + tests  
 - [x] Phase 3 — CreateOrg wizard UI  
-- [ ] Phase 4 — Checklist + locks + books-start guard  
+- [x] Phase 4 — Checklist + locks + books-start guard  
 - [ ] Phase 5 — CoA template families  
 - [ ] Phase 6 — Polish + docs  
 
@@ -441,4 +452,5 @@ Mark each phase **Done** in this file with a two-line summary when merged.
 | 2026-10-24 | Initial phased implementation plan |
 | 2026-10-25 | Phase 2 marked done on branch |
 | 2026-10-25 | Phase 3 wizard UI implemented on branch, pending merge and live QA |
+| 2026-10-25 | Phase 4 checklist, policy locks and books-start guard implemented on branch |
 | 2026-10-25 | Phase 1 marked done on branch; LIFO and FY-coherence checks deferred to Phase 2 |

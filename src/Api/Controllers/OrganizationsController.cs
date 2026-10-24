@@ -305,6 +305,83 @@ namespace Api.Controllers
             return Ok(ToSalesInvoiceSettingsModel(settings));
         }
 
+        public class AccountingPolicyModel
+        {
+            [JsonConverter(typeof(StringEnumConverter))] public ReportingFramework? ReportingFramework { get; set; }
+            [JsonConverter(typeof(StringEnumConverter))] public AccountingBasis? AccountingBasis { get; set; }
+            [JsonConverter(typeof(StringEnumConverter))] public FiscalYearPattern? FiscalYearPattern { get; set; }
+            public int? FiscalYearStartMonth { get; set; }
+            public DateTime? BooksStartDate { get; set; }
+            [JsonConverter(typeof(StringEnumConverter))] public TaxRegime? TaxRegime { get; set; }
+            [JsonConverter(typeof(StringEnumConverter))] public IndustryTemplate? IndustryTemplate { get; set; }
+            [JsonConverter(typeof(StringEnumConverter))] public InventoryCostingMethod? InventoryCostingMethod { get; set; }
+        }
+
+        [TenantScoped]
+        [HttpGet("current/accounting-policy")]
+        public IActionResult GetAccountingPolicy()
+        {
+            return Ok(ToPolicyResponse(_db.CompanySettings.FirstOrDefault() ?? new CompanySetting { CompanyId = _tenant.RequireCompanyId() }));
+        }
+
+        [TenantScoped]
+        [RequireWorkspaceRole(CompanyMemberRole.Admin)]
+        [HttpPut("current/accounting-policy")]
+        public IActionResult UpdateAccountingPolicy([FromBody] AccountingPolicyModel request)
+        {
+            if (request == null)
+                return Problem(statusCode: 400, title: "Accounting policy required");
+
+            var setting = GetOrCreateSetting();
+            var result = new CompanyAccountingPolicyService(_db).Apply(setting, new AccountingPolicyChange
+            {
+                ReportingFramework = request.ReportingFramework,
+                AccountingBasis = request.AccountingBasis,
+                FiscalYearPattern = request.FiscalYearPattern,
+                FiscalYearStartMonth = request.FiscalYearStartMonth,
+                BooksStartDate = request.BooksStartDate,
+                TaxRegime = request.TaxRegime,
+                IndustryTemplate = request.IndustryTemplate,
+                InventoryCostingMethod = request.InventoryCostingMethod,
+            }, DateTime.UtcNow);
+
+            if (result.Frozen)
+                return Problem(statusCode: 409, title: "Accounting policy is locked",
+                    detail: "Reporting framework, basis, fiscal year and books start date cannot change after the first journal entry is posted.");
+            if (result.Errors.Count > 0)
+                return Problem(statusCode: 400, title: "Invalid accounting policy", detail: string.Join(" ", result.Errors));
+
+            _db.SaveChanges();
+            return Ok(ToPolicyResponse(setting));
+        }
+
+        [TenantScoped]
+        [RequireWorkspaceRole(CompanyMemberRole.Admin)]
+        [HttpPost("current/onboarding-checklist/dismiss")]
+        public IActionResult DismissOnboardingChecklist()
+        {
+            var setting = GetOrCreateSetting();
+            setting.OnboardingChecklistDismissedAt ??= DateTime.UtcNow;
+            _db.SaveChanges();
+            return Ok(ToPolicyResponse(setting));
+        }
+
+        private object ToPolicyResponse(CompanySetting s) => new
+        {
+            reportingFramework = s.ReportingFramework.ToString(),
+            accountingBasis = s.AccountingBasis.ToString(),
+            fiscalYearPattern = s.FiscalYearPattern.ToString(),
+            fiscalYearStartMonth = s.FiscalYearStartMonth,
+            booksStartDate = s.BooksStartDate.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture),
+            taxRegime = s.TaxRegime.ToString(),
+            industryTemplate = s.IndustryTemplate.ToString(),
+            inventoryCostingMethod = s.InventoryCostingMethod.ToString(),
+            coaTemplateId = s.CoaTemplateId,
+            currency = s.Currency,
+            isLedgerFrozen = new CompanyAccountingPolicyService(_db).IsLedgerFrozen(s.CompanyId),
+            onboardingChecklistDismissedAt = s.OnboardingChecklistDismissedAt,
+        };
+
         private CompanySetting GetOrCreateSetting()
         {
             var setting = _db.CompanySettings.FirstOrDefault();
