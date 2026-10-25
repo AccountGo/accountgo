@@ -148,6 +148,174 @@ namespace AccountGo.BackendTests
         }
 
         [Fact]
+        public async Task Bill_Tax_DraftSaveAndRead_PreservesTaxIdAndCalculatesExclusiveTax()
+        {
+            int tax10Id = 0;
+            WithDb(db =>
+            {
+                var tax = new Core.Domain.TaxSystem.Tax { TaxCode = "VAT10", TaxName = "VAT 10%", Rate = 10, IsActive = true, PurchasingAccountId = AccountIdIn(db, "20300") };
+                db.Taxes.Add(tax);
+                db.SaveChanges();
+                tax10Id = tax.Id;
+            });
+
+            var vendor = await SaveVendor(new Dto.Purchasing.Supplier { Name = "Draft Tax Vendor" });
+            var bill = NewBill(vendor.Id, ("Line 1", 2, 100m, null), ("Line 2 Untaxed", 1, 50m, null));
+            bill.Lines[0].TaxId = tax10Id;
+            bill.Lines[0].Discount = 10m; // 2 * 100 = 200, 10% off = 180, tax 10% = 18
+            bill.Lines[1].TaxId = null;   // 1 * 50 = 50, tax = 0
+            bill.Status = "Draft";
+
+            var draft = await SaveBillOk(bill);
+            Assert.Equal("Draft", draft.Status);
+            Assert.False(draft.Approved);
+            Assert.Equal(230m, draft.Subtotal);
+            Assert.Equal(18m, draft.TotalTax);
+            Assert.Equal(248m, draft.Total);
+            Assert.Equal(tax10Id, draft.Lines[0].TaxId);
+            Assert.Equal(18m, draft.Lines[0].TaxAmount);
+            Assert.Null(draft.Lines[1].TaxId);
+            Assert.Equal(0m, draft.Lines[1].TaxAmount);
+
+            // Re-read draft from GET /api/Purchasing/Bill?id=
+            var reopenedResponse = await Send(HttpMethod.Get, $"/api/Purchasing/Bill?id={draft.Id}");
+            var reopened = await BillOk(reopenedResponse);
+            Assert.Equal(230m, reopened.Subtotal);
+            Assert.Equal(18m, reopened.TotalTax);
+            Assert.Equal(248m, reopened.Total);
+            Assert.Equal(tax10Id, reopened.Lines[0].TaxId);
+            Assert.Equal(18m, reopened.Lines[0].TaxAmount);
+            Assert.Null(reopened.Lines[1].TaxId);
+            Assert.Equal(0m, reopened.Lines[1].TaxAmount);
+
+            // Editing draft: set Line 2 to use tax10Id as well, remove discount on Line 1
+            reopened.Lines[0].Discount = null; // 2 * 100 = 200, tax 10% = 20
+            reopened.Lines[1].TaxId = tax10Id; // 50, tax 10% = 5
+            var updated = await SaveBillOk(reopened);
+            Assert.Equal(250m, updated.Subtotal);
+            Assert.Equal(25m, updated.TotalTax);
+            Assert.Equal(275m, updated.Total);
+            Assert.Equal(20m, updated.Lines[0].TaxAmount);
+            Assert.Equal(5m, updated.Lines[1].TaxAmount);
+
+            // Approve the updated draft
+            var approved = await BillOk(await Send(HttpMethod.Post, $"/api/Purchasing/ApproveBill?id={updated.Id}"));
+            Assert.Equal("Open", approved.Status);
+            Assert.True(approved.Approved);
+            Assert.Equal(275m, approved.Total);
+
+            var entry = Ledger(BillLedgerId(approved.Id));
+            Assert.Contains(entry, l => l.DrCr == DrOrCrSide.Dr && l.AccountId == AccountId("20300") && l.Amount == 25m);
+            Assert.Contains(entry, l => l.DrCr == DrOrCrSide.Dr && l.AccountId == AccountId("50200") && l.Amount == 250m);
+            Assert.Contains(entry, l => l.DrCr == DrOrCrSide.Cr && l.AccountId == AccountId("20110") && l.Amount == 275m);
+        }
+
+        [Fact]
+        public async Task Bill_Tax_MixedRatesOnOneBill_PostsClaimableAndNonClaimableToAppropriateAccounts()
+        {
+            int claimableA = 0, claimableB = 0, nonClaimable = 0;
+            WithDb(db =>
+            {
+                // 10160 = Input Tax (purchase), 20300 = Sales Tax Payable — both valid tax accounts; distinct so posting targets are checkable.
+                var taxA = new Core.Domain.TaxSystem.Tax { TaxCode = "CL15", TaxName = "Claimable 15%", Rate = 15, IsActive = true, PurchasingAccountId = AccountIdIn(db, "10160") };
+                var taxB = new Core.Domain.TaxSystem.Tax { TaxCode = "CL5", TaxName = "Claimable 5%", Rate = 5, IsActive = true, PurchasingAccountId = AccountIdIn(db, "20300") };
+                var taxN = new Core.Domain.TaxSystem.Tax { TaxCode = "NC8", TaxName = "Non-Claimable 8%", Rate = 8, IsActive = true, PurchasingAccountId = null };
+                db.Taxes.AddRange(taxA, taxB, taxN);
+                db.SaveChanges();
+                claimableA = taxA.Id;
+                claimableB = taxB.Id;
+                nonClaimable = taxN.Id;
+            });
+
+            var vendor = await SaveVendor(new Dto.Purchasing.Supplier { Name = "Mixed Rates Supplier" });
+            var equipmentAccount = AccountId("13302");
+            var bill = NewBill(vendor.Id,
+                ("Consulting", 1, 1000m, null),
+                ("Supplies", 1, 200m, null),
+                ("Laptop", 1, 500m, equipmentAccount),
+                ("Exempt Service", 1, 300m, null));
+
+            bill.Lines[0].TaxId = claimableA;    // Sub: 1000, Tax: 150 (Claimable to 10160 Input Tax)
+            bill.Lines[1].TaxId = claimableB;    // Sub: 200, Tax: 10 (Claimable to 20300)
+            bill.Lines[2].TaxId = nonClaimable;   // Sub: 500, Tax: 40 (Non-claimable, rolled into 13302)
+            bill.Lines[3].TaxId = null;           // Sub: 300, Tax: 0 (Untaxed)
+            bill.Status = "Open";
+
+            var approved = await SaveBillOk(bill);
+            Assert.Equal(2000m, approved.Subtotal);
+            Assert.Equal(200m, approved.TotalTax);
+            Assert.Equal(2200m, approved.Total);
+            Assert.Equal(new decimal[] { 150m, 10m, 40m, 0m }, approved.Lines.Select(l => l.TaxAmount).ToArray());
+
+            var entry = Ledger(BillLedgerId(approved.Id));
+            // Claimable A → Input Tax
+            Assert.Contains(entry, l => l.DrCr == DrOrCrSide.Dr && l.AccountId == AccountId("10160") && l.Amount == 150m);
+            // Claimable B → distinct tax account
+            Assert.Contains(entry, l => l.DrCr == DrOrCrSide.Dr && l.AccountId == AccountId("20300") && l.Amount == 10m);
+            // Expense lines (1000 + 200 + 300 = 1500)
+            Assert.Contains(entry, l => l.DrCr == DrOrCrSide.Dr && l.AccountId == AccountId("50200") && l.Amount == 1500m);
+            // Asset line: subtotal 500 + non-claimable tax 40 = 540
+            Assert.Contains(entry, l => l.DrCr == DrOrCrSide.Dr && l.AccountId == equipmentAccount && l.Amount == 540m);
+            // Total AP credited: 2200
+            Assert.Contains(entry, l => l.DrCr == DrOrCrSide.Cr && l.AccountId == AccountId("20110") && l.Amount == 2200m);
+            Assert.Equal(entry.Where(l => l.DrCr == DrOrCrSide.Dr).Sum(l => l.Amount), entry.Where(l => l.DrCr == DrOrCrSide.Cr).Sum(l => l.Amount));
+        }
+
+        [Fact]
+        public async Task Bill_Tax_Void_ReversesClaimableTaxAndPayables()
+        {
+            int claimable = 0;
+            WithDb(db =>
+            {
+                var input = new Core.Domain.TaxSystem.Tax { TaxCode = "REV10", TaxName = "Reversible Tax 10%", Rate = 10, IsActive = true, PurchasingAccountId = AccountIdIn(db, "20300") };
+                db.Taxes.Add(input);
+                db.SaveChanges();
+                claimable = input.Id;
+            });
+
+            var vendor = await SaveVendor(new Dto.Purchasing.Supplier { Name = "Void Tax Vendor" });
+            var bill = NewBill(vendor.Id, ("Service", 1, 1000m, null));
+            bill.Lines[0].TaxId = claimable;
+            bill.Status = "Open";
+
+            var approved = await SaveBillOk(bill);
+            Assert.Equal(1100m, approved.Total);
+            Assert.Equal(100m, approved.TotalTax);
+
+            var voided = await BillOk(await Send(HttpMethod.Post, $"/api/Purchasing/VoidBill?id={approved.Id}"));
+            Assert.Equal("Void", voided.Status);
+            Assert.Equal(0m, voided.BalanceDue);
+
+            var both = Ledger(BillLedgerId(approved.Id)).Concat(Ledger(BillVoidLedgerId(approved.Id))).ToList();
+            foreach (var account in both.Select(l => l.AccountId).Distinct())
+                Assert.Equal(0m, both.Where(l => l.AccountId == account).Sum(l => l.DrCr == DrOrCrSide.Dr ? l.Amount : -l.Amount));
+        }
+
+        [Fact]
+        public async Task Bill_Tax_ForeignTax_IsRejectedOnSave()
+        {
+            var vendor = await SaveVendor(new Dto.Purchasing.Supplier { Name = "Foreign Tax Vendor" });
+            var bill = NewBill(vendor.Id, ("Item", 1, 100m, null));
+
+            var org = await Send(HttpMethod.Post, "/api/organizations", new { name = "Foreign tax bill", slug = "foreign-tax-bill" }, scoped: false);
+            Assert.Equal(HttpStatusCode.Created, org.StatusCode);
+            var companyId = int.Parse((await Json(org)).GetProperty("id").GetString(), System.Globalization.CultureInfo.InvariantCulture);
+            var foreignTaxId = 0;
+            using (var scope = _factory.Services.CreateScope())
+            using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(companyId, "foreign-tax-bill", CompanyMemberRole.Owner))
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+                foreignTaxId = db.Taxes.First().Id;
+            }
+
+            bill.Lines[0].TaxId = foreignTaxId;
+            var response = await SaveBill(bill);
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            Assert.Equal("CROSS_TENANT_REFERENCE_DENIED", (await Json(response)).GetProperty("code").GetString());
+            WithDb(db => Assert.DoesNotContain(db.PurchaseInvoiceLines, l => l.TaxId == foreignTaxId));
+        }
+
+        [Fact]
         public async Task SaveBill_ValidatesVendorNumberDatesAndAccounts()
         {
             var vendor = await SaveVendor(new Dto.Purchasing.Supplier { Name = "Validator" });
