@@ -684,14 +684,19 @@ namespace Api.Controllers
                 : Api.Service.InvoiceEmailTemplate.Build(invoice, currency, canReply: replyTo != null, pdfUrl, attachPdf);
             var number = Api.Service.InvoiceFormat.Number(invoice);
 
+            var sellerName = string.IsNullOrWhiteSpace(invoice.Seller.Name)
+                ? "AccountGo Billing"
+                : $"{invoice.Seller.Name} via AccountGo";
+
             var message = new Api.Service.EmailMessage
             {
                 To = to,
                 Subject = content.Subject,
                 Html = content.Html,
                 Text = content.Text,
-                FromName = $"{(string.IsNullOrWhiteSpace(invoice.Seller.Name) ? "AccountGo" : invoice.Seller.Name)} via AccountGo",
-                ReplyTo = replyTo,
+                FromName = sellerName,
+                FromEmail = _configuration["BILLING_EMAIL_FROM"] ?? _configuration["RESEND_EMAIL_FROM"] ?? _configuration["Email:BillingFrom"] ?? "billing@accountgo.dev",
+                ReplyTo = replyTo ?? _configuration["SUPPORT_EMAIL"] ?? _configuration["Email:SupportAddress"] ?? "support@accountgo.dev",
             };
             if (attachPdf)
             {

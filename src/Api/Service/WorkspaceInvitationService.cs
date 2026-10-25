@@ -27,7 +27,10 @@ namespace Api.Service
                 return Convert.ToBase64String(sha.ComputeHash(Encoding.UTF8.GetBytes(token)));
         }
 
-        public async Task SendAsync(CompanyInvitation invitation, Company company, string inviter)
+        public Task SendAsync(CompanyInvitation invitation, Company company, string inviter) =>
+            SendAsync(invitation, company, inviter, null);
+
+        public async Task SendAsync(CompanyInvitation invitation, Company company, string inviter, string? inviterEmail)
         {
             var webUrl = _configuration["PUBLIC_WEB_URL"];
             if (!Uri.TryCreate(webUrl, UriKind.Absolute, out var uri) ||
@@ -40,10 +43,31 @@ namespace Api.Service
             invitation.TokenHash = HashToken(rawToken);
             invitation.ExpiresAt = DateTime.UtcNow.AddDays(7);
             var link = webUrl.TrimEnd('/') + "/invite/" + rawToken;
-            await _email.SendAsync(
-                invitation.Email,
-                $"{inviter} invited you to {company.Name} on AccountGo",
-                BuildHtml(inviter, company.Name, invitation.Role.ToString(), link));
+
+            var safeReplyTo = ValidEmail(inviterEmail)
+                ?? _configuration["SUPPORT_EMAIL"]
+                ?? _configuration["Email:SupportAddress"]
+                ?? "support@accountgo.dev";
+
+            var message = new EmailMessage
+            {
+                To = invitation.Email,
+                Subject = $"{inviter} invited you to {company.Name} on AccountGo",
+                Html = BuildHtml(inviter, company.Name, invitation.Role.ToString(), link),
+                FromName = $"{inviter} via AccountGo",
+                FromEmail = _configuration["INVITES_EMAIL_FROM"] ?? _configuration["Email:InvitesFrom"] ?? "invites@accountgo.dev",
+                ReplyTo = safeReplyTo
+            };
+
+            await _email.SendAsync(message);
+        }
+
+        private static string? ValidEmail(string? value)
+        {
+            var trimmed = value?.Trim();
+            return !string.IsNullOrEmpty(trimmed) && System.Net.Mail.MailAddress.TryCreate(trimmed, out var address) && address.Address == trimmed
+                ? trimmed
+                : null;
         }
 
         /// <summary>Same card layout as the OTP emails: AccountGo header, body, centered action, expiry note.</summary>
