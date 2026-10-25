@@ -22,8 +22,10 @@ namespace Api.Controllers
         // D1 restore emits INSERT OR REPLACE / INSERT / DELETE against quoted identifiers only.
         // Do NOT scan VALUES payloads for keywords like CREATE/DROP — user data often contains those
         // words and falsely rejected restores (503 "Database restore from Cloudflare D1 failed").
+        // Note: do not put \b after the closing quote — next char is usually '(' or whitespace
+        // (both non-word), so \b never matches and every INSERT OR REPLACE is rejected.
         private static readonly Regex AllowedRestoreStatement = new(
-            @"^\s*(?:INSERT\s+OR\s+REPLACE\s+INTO|INSERT\s+INTO|DELETE\s+FROM)\s+""([a-zA-Z0-9_]+)""\b[\s\S]*$",
+            @"^\s*(?:INSERT\s+OR\s+REPLACE\s+INTO|INSERT\s+INTO|DELETE\s+FROM)\s+""([a-zA-Z0-9_]+)""[\s\S]*$",
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
         private static readonly Regex SafeTableName = new(
