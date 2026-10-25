@@ -120,7 +120,7 @@ WHERE LOWER("Email") = 'marvinperez@gmail.com'
 INSERT INTO "CompanyMember" ("CompanyId", "UserId", "Role", "Status", "JoinedAt")
 SELECT 1, "Id", 2, 1, datetime('now')
 FROM "AspNetUsers"
-WHERE LOWER("Email") = 'hello@marvinperez.com'
+WHERE LOWER("Email") = 'support@accountgo.dev'
   AND NOT EXISTS (
       SELECT 1 FROM "CompanyMember"
       WHERE "CompanyId" = 1 AND "UserId" = "AspNetUsers"."Id"

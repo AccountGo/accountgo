@@ -157,7 +157,7 @@ Regenerate the shipped `src/Api/accountgo.db` by running the API locally once ag
 ### 1.4 Backfill memberships for existing data
 
 In the same migration/upgrader step (idempotent, `INSERT … WHERE NOT EXISTS`):
-- `Company 1` memberships per **Decision D1**: `marvinperez@gmail.com` = Owner, `hello@marvinperez.com` = Admin, `admin@accountgo.ph` = Member + `Auditor / Viewer`.
+- `Company 1` memberships per **Decision D1**: `marvinperez@gmail.com` = Owner, `support@accountgo.dev` = Admin, `admin@accountgo.ph` = Member + `Auditor / Viewer`.
 - Remove `SystemAdministrators` from `SecurityUserRole` for every user except the platform-staff list (D2).
 
 ### 1.5 D1 restore must cover everything
@@ -531,8 +531,8 @@ Rollback: redeploy previous worker versions (`wrangler rollback`) — the additi
 
 | # | Question | Decision |
 |---|---|---|
-| D1 | Who owns `ph-financials` (Company 1)? | `marvinperez@gmail.com` = **Owner**; `hello@marvinperez.com` = **Admin**; `admin@accountgo.ph` = **Member** with the `Auditor / Viewer` security role. Reason: `admin@accountgo.ph` is a seeded, publicly advertised demo account (shown on the login page) and must not hold ownership |
-| D2 | Should platform staff (`SystemAdministrators`) see/enter every workspace? | **No implicit access.** Platform staff must be an explicit member. Platform staff list = `marvinperez@gmail.com` only; remove `SystemAdministrators` from `admin@accountgo.ph` and `hello@marvinperez.com` in the backfill. A support-access feature is out of scope |
+| D1 | Who owns `ph-financials` (Company 1)? | `marvinperez@gmail.com` = **Owner**; `support@accountgo.dev` = **Admin**; `admin@accountgo.ph` = **Member** with the `Auditor / Viewer` security role. Reason: `admin@accountgo.ph` is a seeded, publicly advertised demo account (shown on the login page) and must not hold ownership |
+| D2 | Should platform staff (`SystemAdministrators`) see/enter every workspace? | **No implicit access.** Platform staff must be an explicit member. Platform staff list = `marvinperez@gmail.com` only; remove `SystemAdministrators` from `admin@accountgo.ph` and `support@accountgo.dev` in the backfill. A support-access feature is out of scope |
 | D3 | Can Admins invite other Admins, or only Owners? | **Only Owners grant the Admin role** (by invite or promotion). Admins invite/manage Members only. Only Owners transfer ownership, change the subscription, or delete the workspace |
 | D4 | One email can belong to many workspaces? | **Yes** |
 | D5 | Is `ph-financials` data kept in production? | **Yes, kept as-is.** New workspaces get a clean ledger (CoA + settings only, no sample customers/invoices) |

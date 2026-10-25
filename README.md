@@ -352,7 +352,7 @@ Contributions, issues, and feature requests are welcome! We appreciate help maki
 
 **AccountGo** was created and is actively maintained by **Marvin Perez**.
 
-- ✉️ **Email**: [hello@marvinperez.com](mailto:hello@marvinperez.com)
+- ✉️ **Email**: [support@accountgo.dev](mailto:support@accountgo.dev)
 - 🌐 **GitHub**: [@mvperez](https://github.com/mvperez) / [AccountGo](https://github.com/AccountGo)
 
 ---

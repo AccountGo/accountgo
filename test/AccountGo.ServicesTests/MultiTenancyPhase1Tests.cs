@@ -165,16 +165,16 @@ public class MultiTenancyPhase1Tests
             Assert.Equal(1, reader.GetInt32(1)); // Active
         }
 
-        // Verify hello@marvinperez.com is Admin (Role = 2)
+        // Verify support@accountgo.dev is Admin (Role = 2)
         using (var cmd = connection.CreateCommand())
         {
             cmd.CommandText = @"
                 SELECT cm.Role, cm.Status
                 FROM CompanyMember cm
                 JOIN AspNetUsers u ON u.Id = cm.UserId
-                WHERE cm.CompanyId = 1 AND LOWER(u.Email) = 'hello@marvinperez.com';";
+                WHERE cm.CompanyId = 1 AND LOWER(u.Email) = 'support@accountgo.dev';";
             using var reader = cmd.ExecuteReader();
-            Assert.True(reader.Read(), "hello@marvinperez.com should be a member of Company 1");
+            Assert.True(reader.Read(), "support@accountgo.dev should be a member of Company 1");
             Assert.Equal(2, reader.GetInt32(0)); // Admin
             Assert.Equal(1, reader.GetInt32(1)); // Active
         }

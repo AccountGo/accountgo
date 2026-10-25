@@ -8,7 +8,7 @@ Please take a few moments to review these guidelines before getting started.
 
 ## Code of Conduct
 
-All contributors and participants are expected to adhere to the [Code of Conduct](CODE_OF_CONDUCT.md). Please report any violations or inappropriate behavior directly to the project owner at [hello@marvinperez.com](mailto:hello@marvinperez.com).
+All contributors and participants are expected to adhere to the [Code of Conduct](CODE_OF_CONDUCT.md). Please report any violations or inappropriate behavior directly to the project owner at [support@accountgo.dev](mailto:support@accountgo.dev).
 
 ---
 
