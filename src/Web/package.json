@@ -27,6 +27,7 @@
     "deploy": "wrangler deploy"
   },
   "dependencies": {
+    "@anter/ai-chat-sdk": "git+https://github.com/anter-ai/ai-chat-sdk.git#dist",
     "clsx": "^2.1.1",
     "lucide-react": "^1.59.0",
     "react": "^19.3.1",

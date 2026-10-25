@@ -8,6 +8,7 @@ import { Header } from '../components/Header';
 import { MobileBottomNav } from '../components/MobileBottomNav';
 import { useTheme } from '../themes/ThemeContext';
 import { useAuth } from '../auth/AuthContext';
+import { AssistantMount, AssistantProvider } from '../assistant';
 
 export const OrgLayout: React.FC = () => {
   const { orgSlug } = useParams<{ orgSlug: string }>();
@@ -348,55 +349,63 @@ export const OrgLayout: React.FC = () => {
   };
 
   return (
-    <div className="app-shell flex h-screen w-screen overflow-hidden bg-[var(--bg-canvas)] text-[var(--text-main)] transition-colors duration-200">
-      {/* Skip to Main Content Link for Keyboard Users (WCAG 2.4.1) */}
-      <a href="#main-content" className="skip-link">
-        Skip to main content
-      </a>
+    <AssistantProvider sidebarMode={sidebarMode} setSidebarMode={setSidebarMode}>
+      <div className="app-shell flex h-screen w-screen overflow-hidden bg-[var(--bg-canvas)] text-[var(--text-main)] transition-colors duration-200">
+        {/* Skip to Main Content Link for Keyboard Users (WCAG 2.4.1) */}
+        <a href="#main-content" className="skip-link">
+          Skip to main content
+        </a>
 
-      {/* Sidebar with active tenant navigation */}
-      <Sidebar
-        currentOrg={currentOrg}
-        availableOrgs={availableOrgs}
-        user={userProfile}
-        sidebarMode={sidebarMode}
-        isMobileOpen={isMobileOpen}
-        onMobileClose={() => setIsMobileOpen(false)}
-        subscription={subscription}
-        hasModule={hasModule}
-        hasPermission={hasPermission}
-      />
-
-      <div className="app-shell-column flex flex-1 flex-col overflow-hidden min-w-0 transition-all duration-300 ease-in-out relative z-10">
-        {/* Top Header with Breadcrumbs & Tenant Quick-Actions */}
-        <Header
+        {/* Sidebar with active tenant navigation — outside ChatSidepanelLayout */}
+        <Sidebar
           currentOrg={currentOrg}
+          availableOrgs={availableOrgs}
+          user={userProfile}
           sidebarMode={sidebarMode}
-          onToggleSidebar={toggleSidebarCollapse}
-          onMobileToggle={() => setIsMobileOpen(!isMobileOpen)}
-        />
-
-        {/* Dynamic Page Content with context injection & mobile bottom clearance */}
-        <main
-          id="main-content"
-          tabIndex={-1}
-          className={`flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 lg:p-8 pb-20 md:pb-8 bg-[var(--bg-canvas)] smooth-scroll transition-all duration-300 ease-in-out focus:outline-none ${
-            sidebarMode === 'collapsed' ? 'md:pr-20' : sidebarMode === 'closed' ? 'pr-0' : ''
-          }`}
-        >
-          <div className="max-w-7xl mx-auto w-full transition-all duration-300 ease-in-out">
-            <Outlet context={contextValue} />
-          </div>
-        </main>
-
-        {/* Mobile Bottom Navigation Bar */}
-        <MobileBottomNav
-          currentOrg={currentOrg}
-          onOpenMenu={() => setIsMobileOpen(true)}
+          isMobileOpen={isMobileOpen}
+          onMobileClose={() => setIsMobileOpen(false)}
+          subscription={subscription}
+          hasModule={hasModule}
           hasPermission={hasPermission}
         />
+
+        <AssistantMount
+          organizationId={currentOrg.id}
+          companySlug={currentOrg.slug}
+          companyId={currentOrg.id}
+        >
+          <div className="app-shell-column flex flex-1 flex-col overflow-hidden min-w-0 h-full transition-all duration-300 ease-in-out relative z-10">
+            {/* Top Header with Breadcrumbs & Tenant Quick-Actions */}
+            <Header
+              currentOrg={currentOrg}
+              sidebarMode={sidebarMode}
+              onToggleSidebar={toggleSidebarCollapse}
+              onMobileToggle={() => setIsMobileOpen(!isMobileOpen)}
+            />
+
+            {/* Dynamic Page Content with context injection & mobile bottom clearance */}
+            <main
+              id="main-content"
+              tabIndex={-1}
+              className={`flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 lg:p-8 pb-20 md:pb-8 bg-[var(--bg-canvas)] smooth-scroll transition-all duration-300 ease-in-out focus:outline-none ${
+                sidebarMode === 'collapsed' ? 'md:pr-20' : sidebarMode === 'closed' ? 'pr-0' : ''
+              }`}
+            >
+              <div className="max-w-7xl mx-auto w-full transition-all duration-300 ease-in-out">
+                <Outlet context={contextValue} />
+              </div>
+            </main>
+
+            {/* Mobile Bottom Navigation Bar */}
+            <MobileBottomNav
+              currentOrg={currentOrg}
+              onOpenMenu={() => setIsMobileOpen(true)}
+              hasPermission={hasPermission}
+            />
+          </div>
+        </AssistantMount>
       </div>
-    </div>
+    </AssistantProvider>
   );
 };
 
