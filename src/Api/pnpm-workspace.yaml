@@ -1,3 +1,5 @@
 allowBuilds:
   esbuild: true
   workerd: true
+overrides:
+  undici: ^7.30.1
