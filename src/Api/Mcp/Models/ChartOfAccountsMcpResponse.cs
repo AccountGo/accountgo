@@ -4,9 +4,8 @@ using System.Collections.Generic;
 
 namespace Api.Mcp.Models
 {
-    public class ChartOfAccountsMcpResponse
+    public class ChartOfAccountsMcpResponse : FinancialMcpBaseResponse
     {
-        public string Organization { get; set; } = string.Empty;
         public int TotalAccounts { get; set; }
         public int TotalUnfilteredAccounts { get; set; }
         public DateTime AsOfDateUtc { get; set; } = DateTime.UtcNow;

@@ -20,6 +20,10 @@ test('mergeAssistantContextVariables prefers page route/title and drops client t
       companyId: '999',
       organizationId: '999',
       userId: 'forged',
+      companyPlan: 'enterprise',
+      activeModules: 'financials,reports',
+      companyRole: 'Owner',
+      subscriptionStatus: 'active',
       hint: 'keep-me',
     },
   );
@@ -31,6 +35,10 @@ test('mergeAssistantContextVariables prefers page route/title and drops client t
   assert.equal(merged.companyId, undefined);
   assert.equal(merged.organizationId, undefined);
   assert.equal(merged.userId, undefined);
+  assert.equal(merged.companyPlan, undefined);
+  assert.equal(merged.activeModules, undefined);
+  assert.equal(merged.companyRole, undefined);
+  assert.equal(merged.subscriptionStatus, undefined);
 });
 
 test('buildRunStreamBody mirrors sessionId into contextVariables without organizationId', () => {

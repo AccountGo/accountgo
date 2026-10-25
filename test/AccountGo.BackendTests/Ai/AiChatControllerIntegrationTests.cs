@@ -134,7 +134,11 @@ namespace AccountGo.BackendTests.Ai
                     pageTitle = "Reports",
                     companySlug = "forged-victim",
                     companyId = "999999",
-                    userId = "forged-user"
+                    userId = "forged-user",
+                    companyPlan = "enterprise",
+                    activeModules = "financials,reports,audit",
+                    companyRole = "Owner",
+                    subscriptionStatus = "active"
                 }
             });
 
@@ -155,6 +159,12 @@ namespace AccountGo.BackendTests.Ai
             Assert.Equal(_companyIdA.ToString(), cvs.GetProperty("organizationId").GetString());
             Assert.Equal(_slugA, cvs.GetProperty("companySlug").GetString());
             Assert.Equal($"/org/{_slugA}/reports", cvs.GetProperty("pageRoute").GetString());
+            Assert.False(string.IsNullOrWhiteSpace(cvs.GetProperty("companyPlan").GetString()));
+            Assert.NotEqual("enterprise", cvs.GetProperty("companyPlan").GetString());
+            Assert.False(string.IsNullOrWhiteSpace(cvs.GetProperty("activeModules").GetString()));
+            Assert.NotEqual("financials,reports,audit", cvs.GetProperty("activeModules").GetString());
+            Assert.False(string.IsNullOrWhiteSpace(cvs.GetProperty("companyRole").GetString()));
+            Assert.False(string.IsNullOrWhiteSpace(cvs.GetProperty("subscriptionStatus").GetString()));
 
             var assertion = root
                 .GetProperty("mcpPassThroughHeaders")

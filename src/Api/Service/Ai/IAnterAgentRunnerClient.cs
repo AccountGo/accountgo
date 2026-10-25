@@ -19,7 +19,11 @@ namespace Api.Service.Ai
             string? companySlug,
             CancellationToken cancellationToken,
             string? callerAssertion = null,
-            string? accountGoUserId = null);
+            string? accountGoUserId = null,
+            string? companyPlan = null,
+            string? activeModules = null,
+            string? companyRole = null,
+            string? subscriptionStatus = null);
 
         Task<HttpResponseMessage> ListSessionsAsync(string userId, CancellationToken cancellationToken);
 

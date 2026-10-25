@@ -19,8 +19,22 @@ In-app AI sidekick powered by [`@anter/ai-chat-sdk`](https://github.com/anter-ai
 | `panelSizing.ts` | Viewport % → SDK layout % + host floor |
 
 Context variables on every turn:
-- **Server-owned (always overwritten):** `userId` (workspace-scoped `ag_c{companyId}_u_{userId}`), `accountGoUserId`, `sessionId`, `organizationId`, `companyId`, `companySlug` from JWT + resolved `ITenantContext`.
-- **Client-allowed:** `pageRoute`, `pageTitle` (and other non-identity hints). Client-supplied tenant/identity keys are stripped.
+- **Server-owned (always overwritten):** `userId` (workspace-scoped `ag_c{companyId}_u_{userId}`), `accountGoUserId`, `sessionId`, `organizationId`, `companyId`, `companySlug` from JWT + resolved `ITenantContext`; plus entitlement hints `companyPlan`, `activeModules` (comma-separated), `companyRole`, `subscriptionStatus` from `IAdministrationService.GetCurrentSubscription()`.
+- **Client-allowed:** `pageRoute`, `pageTitle` (and other non-identity hints). Client-supplied tenant/identity/entitlement keys are stripped.
+
+Financial MCP tools never throw on plan or permission gates: they return `Status` `PlanRestricted` or `AccessDenied` with a clear `Message` (and empty report payloads) so the agent can explain upgrade paths without tripping Anter’s tool-failure circuit breaker. Unresolved tenant and argument validation still throw.
+
+## Agent prompt (Anter `accountgo-assistant`)
+
+Layer 2 lives in Anter Agent Builder (draft → promote in UI). Paste / merge these rules into the root agent instructions:
+
+1. **Gate on `activeModules`, not `companyPlan` alone.** Call financial MCP tools (`get_chart_of_accounts`, `get_trial_balance`, `get_balance_sheet`, `get_income_statement`, `get_general_ledger_transactions`) only when `activeModules` contains `financials` or `reports`. An Accounting workspace may still have those modules turned off.
+2. **Use `companyPlan` for upgrade copy only** (e.g. Invoicing → Accounting / Enterprise under Settings > Subscription).
+3. **Status-first tool results.** If a financial tool returns `status` of `PlanRestricted` or `AccessDenied`, explain `message` to the user. Do **not** interpret empty `accounts` / `items` / `transactions` as empty books, and do **not** retry sibling financial tools in a loop.
+4. **Invoicing without financial modules:** quotes, invoices, payments, and vendor bills only — no GL, trial balance, balance sheet, or P&L via tools.
+5. **`companyRole`:** Owners/Admins typically have report access; Members need explicit permissions. On `AccessDenied`, tell the user to ask a workspace admin.
+
+See also [assistant-agent-entitlements.md](./assistant-agent-entitlements.md).
 
 ## Backend
 

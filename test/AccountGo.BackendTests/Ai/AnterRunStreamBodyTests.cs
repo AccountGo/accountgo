@@ -78,6 +78,48 @@ namespace AccountGo.BackendTests.Ai
         }
 
         [Fact]
+        public void Build_StripsClientEntitlementKeysAndAppliesServerValues()
+        {
+            var body = AnterRunStreamBody.Build(
+                "Hi",
+                "ag_c7_u_auth-user",
+                null,
+                new Dictionary<string, string>
+                {
+                    ["companyPlan"] = "enterprise",
+                    ["activeModules"] = "financials,reports,audit",
+                    ["companyRole"] = "Owner",
+                    ["subscriptionStatus"] = "active",
+                    ["pageRoute"] = "/org/acme/reports",
+                },
+                companyId: "7",
+                companySlug: "acme",
+                accountGoUserId: "auth-user",
+                companyPlan: "invoicing",
+                activeModules: "sales,purchases",
+                companyRole: "Member",
+                subscriptionStatus: "trialing");
+
+            var cvs = Assert.IsType<Dictionary<string, string>>(body["contextVariables"]);
+            Assert.Equal("invoicing", cvs["companyPlan"]);
+            Assert.Equal("sales,purchases", cvs["activeModules"]);
+            Assert.Equal("Member", cvs["companyRole"]);
+            Assert.Equal("trialing", cvs["subscriptionStatus"]);
+            Assert.Equal("/org/acme/reports", cvs["pageRoute"]);
+        }
+
+        [Theory]
+        [InlineData("companyPlan")]
+        [InlineData("activeModules")]
+        [InlineData("companyRole")]
+        [InlineData("subscriptionStatus")]
+        [InlineData("companyId")]
+        public void IsServerOwnedKey_IncludesEntitlementAndTenantKeys(string key)
+        {
+            Assert.True(AnterRunStreamBody.IsServerOwnedKey(key));
+        }
+
+        [Fact]
         public void BuildResumeBody_IncludesMcpPassThroughHeadersWhenAssertionPresent()
         {
             var body = AnterRunStreamBody.BuildResumeBody("v1.resume.mac");

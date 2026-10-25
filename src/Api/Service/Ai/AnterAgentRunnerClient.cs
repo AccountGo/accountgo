@@ -39,7 +39,11 @@ namespace Api.Service.Ai
             string? companySlug,
             CancellationToken cancellationToken,
             string? callerAssertion = null,
-            string? accountGoUserId = null)
+            string? accountGoUserId = null,
+            string? companyPlan = null,
+            string? activeModules = null,
+            string? companyRole = null,
+            string? subscriptionStatus = null)
         {
             EnsureConfigured();
             var body = AnterRunStreamBody.Build(
@@ -50,7 +54,11 @@ namespace Api.Service.Ai
                 companyId,
                 companySlug,
                 callerAssertion,
-                accountGoUserId);
+                accountGoUserId,
+                companyPlan,
+                activeModules,
+                companyRole,
+                subscriptionStatus);
             var request = new HttpRequestMessage(HttpMethod.Post, AnterAgentRunnerPaths.RunStream(_options.BaseUrl, _options.AgentSlug))
             {
                 Content = new StringContent(JsonSerializer.Serialize(body, JsonOptions), Encoding.UTF8, "application/json"),

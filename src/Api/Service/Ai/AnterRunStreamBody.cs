@@ -6,8 +6,8 @@ namespace Api.Service.Ai
 {
     /// <summary>
     /// Builds the Anter run-stream JSON body. sessionId and userId must live in
-    /// contextVariables (not only as top-level fields). Tenant identity fields are
-    /// always overwritten from the server-resolved workspace.
+    /// contextVariables (not only as top-level fields). Tenant identity and entitlement
+    /// fields are always overwritten from the server-resolved workspace.
     /// </summary>
     public static class AnterRunStreamBody
     {
@@ -21,6 +21,10 @@ namespace Api.Service.Ai
             "organizationId",
             "companyId",
             "companySlug",
+            "companyPlan",
+            "activeModules",
+            "companyRole",
+            "subscriptionStatus",
         };
 
         /// <summary>
@@ -34,6 +38,9 @@ namespace Api.Service.Ai
             return $"ag_c{companyId}_u_{safeUser}";
         }
 
+        public static bool IsServerOwnedKey(string key) =>
+            !string.IsNullOrWhiteSpace(key) && ServerOwnedKeys.Contains(key);
+
         public static Dictionary<string, object?> Build(
             string message,
             string userId,
@@ -42,7 +49,11 @@ namespace Api.Service.Ai
             string? companyId = null,
             string? companySlug = null,
             string? callerAssertion = null,
-            string? accountGoUserId = null)
+            string? accountGoUserId = null,
+            string? companyPlan = null,
+            string? activeModules = null,
+            string? companyRole = null,
+            string? subscriptionStatus = null)
         {
             var merged = new Dictionary<string, string>(StringComparer.Ordinal);
             if (contextVariables != null)
@@ -54,7 +65,7 @@ namespace Api.Service.Ai
                         continue;
                     }
 
-                    // Client must not set identity / tenant keys.
+                    // Client must not set identity / tenant / entitlement keys.
                     if (ServerOwnedKeys.Contains(pair.Key))
                     {
                         continue;
@@ -84,6 +95,26 @@ namespace Api.Service.Ai
             if (!string.IsNullOrWhiteSpace(companySlug))
             {
                 merged["companySlug"] = companySlug;
+            }
+
+            if (!string.IsNullOrWhiteSpace(companyPlan))
+            {
+                merged["companyPlan"] = companyPlan;
+            }
+
+            if (!string.IsNullOrWhiteSpace(activeModules))
+            {
+                merged["activeModules"] = activeModules;
+            }
+
+            if (!string.IsNullOrWhiteSpace(companyRole))
+            {
+                merged["companyRole"] = companyRole;
+            }
+
+            if (!string.IsNullOrWhiteSpace(subscriptionStatus))
+            {
+                merged["subscriptionStatus"] = subscriptionStatus;
             }
 
             var body = new Dictionary<string, object?>

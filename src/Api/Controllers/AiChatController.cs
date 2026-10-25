@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Logging;
+using Services.Administration;
 
 namespace Api.Controllers
 {
@@ -27,6 +28,7 @@ namespace Api.Controllers
         IAnterAgentRunnerClient anterClient,
         IMcpCallerAssertionService assertionService,
         ITenantContext tenantContext,
+        IAdministrationService administrationService,
         ILogger<AiChatController> logger) : BaseController
     {
         private readonly IAnterAgentRunnerClient _anterClient = anterClient
@@ -35,6 +37,8 @@ namespace Api.Controllers
             ?? throw new ArgumentNullException(nameof(assertionService));
         private readonly ITenantContext _tenantContext = tenantContext
             ?? throw new ArgumentNullException(nameof(tenantContext));
+        private readonly IAdministrationService _administrationService = administrationService
+            ?? throw new ArgumentNullException(nameof(administrationService));
         private readonly ILogger<AiChatController> _logger = logger
             ?? throw new ArgumentNullException(nameof(logger));
 
@@ -94,6 +98,11 @@ namespace Api.Controllers
             var scopedUserId = AnterRunStreamBody.BuildScopedUserId(companyId, userId);
             var callerAssertion = _assertionService.MintAssertion(userId, companyId, companySlug);
             var safeContext = SanitizeClientContext(body?.ContextVariables);
+            ResolveEntitlementContext(
+                out var companyPlan,
+                out var activeModules,
+                out var companyRole,
+                out var subscriptionStatus);
 
             HttpResponseMessage upstream;
             try
@@ -107,7 +116,11 @@ namespace Api.Controllers
                     companySlug: companySlug,
                     cancellationToken: cancellationToken,
                     callerAssertion: callerAssertion,
-                    accountGoUserId: userId);
+                    accountGoUserId: userId,
+                    companyPlan: companyPlan,
+                    activeModules: activeModules,
+                    companyRole: companyRole,
+                    subscriptionStatus: subscriptionStatus);
             }
             catch (Exception ex)
             {
@@ -306,8 +319,8 @@ namespace Api.Controllers
         }
 
         /// <summary>
-        /// Keep only non-identity client context (e.g. pageRoute). Tenant and user
-        /// fields are applied later from JWT + ITenantContext.
+        /// Keep only non-identity client context (e.g. pageRoute). Tenant, user, and
+        /// entitlement fields are applied later from JWT + ITenantContext / subscription.
         /// </summary>
         internal static Dictionary<string, string> SanitizeClientContext(
             Dictionary<string, string>? incoming)
@@ -318,7 +331,7 @@ namespace Api.Controllers
             foreach (var pair in incoming)
             {
                 if (string.IsNullOrWhiteSpace(pair.Key) || pair.Value == null) continue;
-                if (IsServerOwnedKey(pair.Key)) continue;
+                if (AnterRunStreamBody.IsServerOwnedKey(pair.Key)) continue;
                 if (pair.Value.Length > 2_000) continue;
                 merged[pair.Key] = pair.Value;
             }
@@ -326,13 +339,38 @@ namespace Api.Controllers
             return merged;
         }
 
-        private static bool IsServerOwnedKey(string key) =>
-            key.Equals("userId", StringComparison.OrdinalIgnoreCase)
-            || key.Equals("accountGoUserId", StringComparison.OrdinalIgnoreCase)
-            || key.Equals("sessionId", StringComparison.OrdinalIgnoreCase)
-            || key.Equals("organizationId", StringComparison.OrdinalIgnoreCase)
-            || key.Equals("companyId", StringComparison.OrdinalIgnoreCase)
-            || key.Equals("companySlug", StringComparison.OrdinalIgnoreCase);
+        private void ResolveEntitlementContext(
+            out string companyPlan,
+            out string activeModules,
+            out string companyRole,
+            out string subscriptionStatus)
+        {
+            companyPlan = "accounting";
+            activeModules = string.Empty;
+            companyRole = _tenantContext.Role?.ToString() ?? "Member";
+            subscriptionStatus = "active";
+
+            try
+            {
+                var subscription = _administrationService.GetCurrentSubscription();
+                companyPlan = string.IsNullOrWhiteSpace(subscription.Plan)
+                    ? "accounting"
+                    : subscription.Plan.Trim().ToLowerInvariant();
+                activeModules = string.Join(
+                    ",",
+                    subscription.ActiveModules ?? new List<string>());
+                subscriptionStatus = string.IsNullOrWhiteSpace(subscription.SubscriptionStatus)
+                    ? "active"
+                    : subscription.SubscriptionStatus.Trim().ToLowerInvariant();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(
+                    ex,
+                    "Could not resolve subscription entitlement context for company {CompanyId}",
+                    _tenantContext.CompanyId);
+            }
+        }
 
         private async Task<bool> EnsureConfiguredAsync(CancellationToken cancellationToken)
         {

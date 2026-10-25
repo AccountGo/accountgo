@@ -288,6 +288,7 @@ namespace AccountGo.BackendTests
             WithDb(db =>
             {
                 var company = db.Companies.Single(c => c.Id == _companyId);
+                company.Plan = enabled ? "enterprise" : "accounting";
                 var modules = company.GetActiveModules();
                 if (enabled && !modules.Contains("inventory"))
                     modules.Add("inventory");
