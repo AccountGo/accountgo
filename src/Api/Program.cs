@@ -174,11 +174,12 @@ builder.Services.PostConfigure<Api.Options.AnterOptions>(options =>
         return null;
     }
 
-    options.ApiKey = Pick(options.ApiKey, builder.Configuration["ANTER_API_KEY"]) ?? options.ApiKey;
+    options.ApiKey = Pick(options.ApiKey, builder.Configuration["ANTER_API_KEY"], builder.Configuration["ANTER_PROJECT_API_KEY"]) ?? options.ApiKey;
     options.ProjectId = Pick(options.ProjectId, builder.Configuration["ANTER_PROJECT_ID"]) ?? options.ProjectId;
     options.AgentSlug = Pick(options.AgentSlug, builder.Configuration["ANTER_AGENT_SLUG"]) ?? options.AgentSlug;
     options.BaseUrl = Pick(options.BaseUrl, builder.Configuration["ANTER_BASE_URL"]) ?? options.BaseUrl;
 });
+builder.Services.AddSingleton<Api.Service.Ai.IMcpCallerAssertionService, Api.Service.Ai.McpCallerAssertionService>();
 builder.Services.AddHttpClient<Api.Service.Ai.IAnterAgentRunnerClient, Api.Service.Ai.AnterAgentRunnerClient>(client =>
 {
     client.Timeout = TimeSpan.FromMinutes(10);

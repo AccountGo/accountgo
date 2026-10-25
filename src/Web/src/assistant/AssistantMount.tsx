@@ -106,6 +106,7 @@ export function AssistantMount({
 
   return (
     <ChatProvider
+      key={orgKey}
       organizationId={orgKey}
       adapter={assistantAdapter}
       config={{

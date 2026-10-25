@@ -25,11 +25,14 @@ namespace Api.Controllers
     [ApiController]
     public class AiChatController(
         IAnterAgentRunnerClient anterClient,
+        IMcpCallerAssertionService assertionService,
         ITenantContext tenantContext,
         ILogger<AiChatController> logger) : BaseController
     {
         private readonly IAnterAgentRunnerClient _anterClient = anterClient
             ?? throw new ArgumentNullException(nameof(anterClient));
+        private readonly IMcpCallerAssertionService _assertionService = assertionService
+            ?? throw new ArgumentNullException(nameof(assertionService));
         private readonly ITenantContext _tenantContext = tenantContext
             ?? throw new ArgumentNullException(nameof(tenantContext));
         private readonly ILogger<AiChatController> _logger = logger
@@ -86,18 +89,25 @@ namespace Api.Controllers
                 return;
             }
 
+            var companyId = _tenantContext.CompanyId.Value;
+            var companySlug = _tenantContext.CompanySlug ?? $"company-{companyId}";
+            var scopedUserId = AnterRunStreamBody.BuildScopedUserId(companyId, userId);
+            var callerAssertion = _assertionService.MintAssertion(userId, companyId, companySlug);
             var safeContext = SanitizeClientContext(body?.ContextVariables);
+
             HttpResponseMessage upstream;
             try
             {
                 upstream = await _anterClient.RunStreamAsync(
                     message,
-                    userId,
+                    scopedUserId,
                     body?.SessionId,
                     safeContext,
-                    companyId: _tenantContext.CompanyId.Value.ToString(),
-                    companySlug: _tenantContext.CompanySlug,
-                    cancellationToken);
+                    companyId: companyId.ToString(),
+                    companySlug: companySlug,
+                    cancellationToken: cancellationToken,
+                    callerAssertion: callerAssertion,
+                    accountGoUserId: userId);
             }
             catch (Exception ex)
             {
@@ -114,10 +124,9 @@ namespace Api.Controllers
         public async Task<IActionResult> ListSessions(CancellationToken cancellationToken)
         {
             if (!EnsureConfiguredResult(out var fail)) return fail!;
-            var userId = CurrentUserId;
-            if (string.IsNullOrWhiteSpace(userId)) return Unauthorized();
+            if (!TryResolveScopedUser(out var scopedUserId, out _, out var authFail)) return authFail!;
 
-            using var upstream = await _anterClient.ListSessionsAsync(userId, cancellationToken);
+            using var upstream = await _anterClient.ListSessionsAsync(scopedUserId, cancellationToken);
             return await ToActionResultAsync(upstream, cancellationToken);
         }
 
@@ -125,10 +134,9 @@ namespace Api.Controllers
         public async Task<IActionResult> GetSession(string sessionId, CancellationToken cancellationToken)
         {
             if (!EnsureConfiguredResult(out var fail)) return fail!;
-            var userId = CurrentUserId;
-            if (string.IsNullOrWhiteSpace(userId)) return Unauthorized();
+            if (!TryResolveScopedUser(out var scopedUserId, out _, out var authFail)) return authFail!;
 
-            using var upstream = await _anterClient.GetSessionAsync(sessionId, userId, cancellationToken);
+            using var upstream = await _anterClient.GetSessionAsync(sessionId, scopedUserId, cancellationToken);
             return await ToActionResultAsync(upstream, cancellationToken);
         }
 
@@ -136,10 +144,9 @@ namespace Api.Controllers
         public async Task<IActionResult> DeleteSession(string sessionId, CancellationToken cancellationToken)
         {
             if (!EnsureConfiguredResult(out var fail)) return fail!;
-            var userId = CurrentUserId;
-            if (string.IsNullOrWhiteSpace(userId)) return Unauthorized();
+            if (!TryResolveScopedUser(out var scopedUserId, out _, out var authFail)) return authFail!;
 
-            using var upstream = await _anterClient.DeleteSessionAsync(sessionId, userId, cancellationToken);
+            using var upstream = await _anterClient.DeleteSessionAsync(sessionId, scopedUserId, cancellationToken);
             if (upstream.StatusCode == System.Net.HttpStatusCode.NotFound)
             {
                 return Ok(new { ok = true });
@@ -165,7 +172,15 @@ namespace Api.Controllers
                 return;
             }
 
+            if (!_tenantContext.IsResolved || !_tenantContext.CompanyId.HasValue)
+            {
+                Response.StatusCode = StatusCodes.Status400BadRequest;
+                await Response.WriteAsJsonAsync(new { detail = "Workspace context is required." }, cancellationToken);
+                return;
+            }
+
             if (resumeFrom < 0) resumeFrom = 0;
+            var scopedUserId = AnterRunStreamBody.BuildScopedUserId(_tenantContext.CompanyId.Value, userId);
 
             HttpResponseMessage upstream;
             try
@@ -173,7 +188,7 @@ namespace Api.Controllers
                 upstream = await _anterClient.GetExecutionStreamAsync(
                     executionId,
                     resumeFrom,
-                    userId,
+                    scopedUserId,
                     cancellationToken);
             }
             catch (Exception ex)
@@ -191,10 +206,9 @@ namespace Api.Controllers
         public async Task<IActionResult> CancelExecution(string executionId, CancellationToken cancellationToken)
         {
             if (!EnsureConfiguredResult(out var fail)) return fail!;
-            var userId = CurrentUserId;
-            if (string.IsNullOrWhiteSpace(userId)) return Unauthorized();
+            if (!TryResolveScopedUser(out var scopedUserId, out _, out var authFail)) return authFail!;
 
-            using var upstream = await _anterClient.CancelExecutionAsync(executionId, userId, cancellationToken);
+            using var upstream = await _anterClient.CancelExecutionAsync(executionId, scopedUserId, cancellationToken);
             return await ToActionResultAsync(upstream, cancellationToken);
         }
 
@@ -209,10 +223,26 @@ namespace Api.Controllers
                 return;
             }
 
+            if (!_tenantContext.IsResolved || !_tenantContext.CompanyId.HasValue)
+            {
+                Response.StatusCode = StatusCodes.Status400BadRequest;
+                await Response.WriteAsJsonAsync(new { detail = "Workspace context is required." }, cancellationToken);
+                return;
+            }
+
+            var companyId = _tenantContext.CompanyId.Value;
+            var companySlug = _tenantContext.CompanySlug ?? $"company-{companyId}";
+            var scopedUserId = AnterRunStreamBody.BuildScopedUserId(companyId, userId);
+            var callerAssertion = _assertionService.MintAssertion(userId, companyId, companySlug);
+
             HttpResponseMessage upstream;
             try
             {
-                upstream = await _anterClient.ResumeExecutionAsync(executionId, userId, cancellationToken);
+                upstream = await _anterClient.ResumeExecutionAsync(
+                    executionId,
+                    scopedUserId,
+                    cancellationToken,
+                    callerAssertion);
             }
             catch (Exception ex)
             {
@@ -233,8 +263,7 @@ namespace Api.Controllers
             CancellationToken cancellationToken)
         {
             if (!EnsureConfiguredResult(out var fail)) return fail!;
-            var userId = CurrentUserId;
-            if (string.IsNullOrWhiteSpace(userId)) return Unauthorized();
+            if (!TryResolveScopedUser(out var scopedUserId, out _, out var authFail)) return authFail!;
 
             var decision = body?.Decision;
             if (decision is not ("approved" or "denied"))
@@ -247,9 +276,33 @@ namespace Api.Controllers
                 toolCallId,
                 decision,
                 body?.Reason,
-                userId,
+                scopedUserId,
                 cancellationToken);
             return await ToActionResultAsync(upstream, cancellationToken);
+        }
+
+        private bool TryResolveScopedUser(
+            out string scopedUserId,
+            out string rawUserId,
+            out IActionResult? failure)
+        {
+            scopedUserId = string.Empty;
+            rawUserId = CurrentUserId ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(rawUserId))
+            {
+                failure = Unauthorized();
+                return false;
+            }
+
+            if (!_tenantContext.IsResolved || !_tenantContext.CompanyId.HasValue)
+            {
+                failure = BadRequest(new { detail = "Workspace context is required." });
+                return false;
+            }
+
+            scopedUserId = AnterRunStreamBody.BuildScopedUserId(_tenantContext.CompanyId.Value, rawUserId);
+            failure = null;
+            return true;
         }
 
         /// <summary>
@@ -275,6 +328,7 @@ namespace Api.Controllers
 
         private static bool IsServerOwnedKey(string key) =>
             key.Equals("userId", StringComparison.OrdinalIgnoreCase)
+            || key.Equals("accountGoUserId", StringComparison.OrdinalIgnoreCase)
             || key.Equals("sessionId", StringComparison.OrdinalIgnoreCase)
             || key.Equals("organizationId", StringComparison.OrdinalIgnoreCase)
             || key.Equals("companyId", StringComparison.OrdinalIgnoreCase)
@@ -358,8 +412,13 @@ namespace Api.Controllers
 
             try
             {
-                using var doc = JsonDocument.Parse(text);
-                return new ObjectResult(doc.RootElement.Clone()) { StatusCode = status };
+                using var _ = JsonDocument.Parse(text);
+                return new ContentResult
+                {
+                    StatusCode = status,
+                    Content = text,
+                    ContentType = "application/json",
+                };
             }
             catch (JsonException)
             {

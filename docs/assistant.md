@@ -1,6 +1,6 @@
 # AccountGo Assistant
 
-In-app AI sidekick powered by [`@anter/ai-chat-sdk`](https://github.com/anter-ai/ai-chat-sdk) and the live Anter agent `accountgo-assistant`.
+In-app AI sidekick powered by [`@anter/ai-chat-sdk`](https://github.com/anter-ai/ai-chat-sdk) and the live Anter agent `accountgo-assistant` (`ragnt_yIhh41xJIIBmPpRc3s9SG` in project `abproj_1hAA2dKHr1L32cGDNgZQy`).
 
 ## UX
 
@@ -13,13 +13,13 @@ In-app AI sidekick powered by [`@anter/ai-chat-sdk`](https://github.com/anter-ai
 
 | Piece | Role |
 |-------|------|
-| `AssistantProvider` | Open/close + sidebar collapse |
-| `AssistantMount` | `ChatProvider` + `ChatSidepanelLayout` |
+| `AssistantProvider` | Open/close + sidebar collapse + synchronous `authFetch` wiring |
+| `AssistantMount` | `ChatProvider` (keyed by workspace `orgKey`) + `ChatSidepanelLayout` |
 | `AssistantAdapter` | `ChatAdapter` → `/api/ai/chat/*` |
 | `panelSizing.ts` | Viewport % → SDK layout % + host floor |
 
 Context variables on every turn:
-- **Server-owned (always overwritten):** `userId`, `sessionId`, `organizationId`, `companyId`, `companySlug` from JWT + resolved `ITenantContext`.
+- **Server-owned (always overwritten):** `userId` (workspace-scoped `ag_c{companyId}_u_{userId}`), `accountGoUserId`, `sessionId`, `organizationId`, `companyId`, `companySlug` from JWT + resolved `ITenantContext`.
 - **Client-allowed:** `pageRoute`, `pageTitle` (and other non-identity hints). Client-supplied tenant/identity keys are stripped.
 
 ## Backend
@@ -29,24 +29,21 @@ Context variables on every turn:
 ```bash
 ANTER_BASE_URL=https://agents.anter.ai
 ANTER_API_KEY=...
-ANTER_PROJECT_ID=abproj_...
+ANTER_PROJECT_ID=abproj_1hAA2dKHr1L32cGDNgZQy
 ANTER_AGENT_SLUG=accountgo-assistant
 ```
 
-Never put Anter credentials in Vite / Cloudflare Workers SPA env. On the API Worker, set secrets (not `vars`):
+Never put Anter credentials in Vite / Cloudflare Workers SPA env. On the API Worker, set `ANTER_API_KEY` as a secret:
 
 ```bash
 cd src/Api
 npx wrangler secret put ANTER_API_KEY
-npx wrangler secret put ANTER_PROJECT_ID
 ```
 
-`ANTER_BASE_URL` and `ANTER_AGENT_SLUG` are plain `vars` in `wrangler.jsonc`.
+`ANTER_BASE_URL`, `ANTER_PROJECT_ID`, and `ANTER_AGENT_SLUG` are configured in `wrangler.jsonc`.
 
-## MCP (Phase 3 readiness)
+## Zero-Trust Multi-Tenant Isolation & MCP Pass-Through
 
-AccountGo already exposes financial MCP tools at `POST/GET /mcp` (auth required). The Anter agent can be connected to that endpoint from the Anter Agent Builder when a stable public API URL and auth model for agent→MCP calls are ready. Until then the assistant runs in advisory mode using user-supplied context and accounting principles.
-
-Suggested context for tool calls once MCP is linked: `companySlug` / `companyId` from `contextVariables`, plus the caller's JWT or a dedicated MCP assertion — mirror AlphaPal's pass-through pattern if needed.
-
-A draft revision of `accountgo-assistant` documents these context variables. Promote that draft in Anter Agent Builder when ready (promotion is UI-only).
+1. **Workspace-Scoped Sessions (`ag_c{companyId}_u_{userId}`):** Every `/api/ai/chat/*` endpoint requires an active, resolved `ITenantContext` and scopes the upstream Anter `userId` to `(companyId, userId)` without colons. Switching companies in the UI (`<ChatProvider key={orgKey}>`) isolates chat sessions per workspace.
+2. **Per-Run Signed Caller Assertion (`X-Mcp-Caller-Assertion`):** On `run-stream` and `executions/{id}/resume`, `AiChatController` mints a short-lived HMAC-SHA256 caller assertion (`v1.<base64url(payload)>.<base64url(hmac)>`) via `IMcpCallerAssertionService` binding `(uid, cid, org, iat, exp)` and forwards it in Anter's `mcpPassThroughHeaders["X-Mcp-Caller-Assertion"]` overlay.
+3. **MCP Endpoint Verification (`/mcp`):** `TenantResolutionMiddleware` validates both direct MCP clients (`Authorization: Bearer <jwt>` + `X-AccountGo-Org`) and shared-agent calls from Anter AI (`Authorization: Bearer <ANTER_API_KEY>` + `X-Mcp-Caller-Assertion`), verifying active membership and permissions in the database on every tool execution.

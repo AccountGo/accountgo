@@ -67,6 +67,10 @@ export function AssistantProvider({
   const sidebarModeRef = useRef(sidebarMode);
   sidebarModeRef.current = sidebarMode;
 
+  // Wire synchronously during render as well as in useEffect so child ChatProvider
+  // effects (e.g. initial listSessions() on mount) never observe an uninitialized fetch.
+  setAssistantAuthFetch(authFetch);
+
   useEffect(() => {
     setAssistantAuthFetch(authFetch);
   }, [authFetch]);

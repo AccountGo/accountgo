@@ -37,7 +37,9 @@ namespace Api.Service.Ai
             IReadOnlyDictionary<string, string>? contextVariables,
             string? companyId,
             string? companySlug,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,
+            string? callerAssertion = null,
+            string? accountGoUserId = null)
         {
             EnsureConfigured();
             var body = AnterRunStreamBody.Build(
@@ -46,7 +48,9 @@ namespace Api.Service.Ai
                 sessionId,
                 contextVariables,
                 companyId,
-                companySlug);
+                companySlug,
+                callerAssertion,
+                accountGoUserId);
             var request = new HttpRequestMessage(HttpMethod.Post, AnterAgentRunnerPaths.RunStream(_options.BaseUrl, _options.AgentSlug))
             {
                 Content = new StringContent(JsonSerializer.Serialize(body, JsonOptions), Encoding.UTF8, "application/json"),
@@ -124,14 +128,16 @@ namespace Api.Service.Ai
         public Task<HttpResponseMessage> ResumeExecutionAsync(
             string executionId,
             string userId,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,
+            string? callerAssertion = null)
         {
             EnsureConfigured();
+            var body = AnterRunStreamBody.BuildResumeBody(callerAssertion);
             var request = new HttpRequestMessage(
                 HttpMethod.Post,
                 AnterAgentRunnerPaths.ExecutionResume(_options.BaseUrl, executionId, userId))
             {
-                Content = new StringContent("{}", Encoding.UTF8, "application/json"),
+                Content = new StringContent(JsonSerializer.Serialize(body, JsonOptions), Encoding.UTF8, "application/json"),
             };
             ApplyAuth(request, acceptEventStream: true);
             return _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);

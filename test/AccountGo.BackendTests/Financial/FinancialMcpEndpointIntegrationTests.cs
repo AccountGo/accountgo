@@ -24,10 +24,13 @@ namespace AccountGo.BackendTests.Financial
 {
     public class FinancialMcpEndpointIntegrationTests : IAsyncLifetime
     {
+        private const string TestAnterApiKey = "proj_api-key_test_anter_mcp_gate_secret";
         private readonly string _path = Path.Combine(Path.GetTempPath(), "accountgo_mcp_" + Guid.NewGuid().ToString("N") + ".db");
         private WebApplicationFactory<Program> _factory;
         private HttpClient _client;
         private string _token;
+        private string _userId;
+        private int _companyId;
         private string _slug;
 
         public async Task InitializeAsync()
@@ -38,6 +41,8 @@ namespace AccountGo.BackendTests.Financial
                 builder.UseSetting("DatabaseProvider", "Sqlite");
                 builder.UseSetting("ConnectionStrings:SqliteConnection", "Data Source=" + _path);
                 builder.UseSetting("SECRET_KEY", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
+                builder.UseSetting("Anter:ApiKey", TestAnterApiKey);
+                builder.UseSetting("ANTER_API_KEY", TestAnterApiKey);
                 builder.UseSetting("PUBLIC_WEB_URL", "https://workspace.example");
                 builder.UseSetting("PUBLIC_API_URL", "https://api.example");
             });
@@ -56,6 +61,7 @@ namespace AccountGo.BackendTests.Financial
                 };
                 var createResult = await userManager.CreateAsync(user);
                 Assert.True(createResult.Succeeded);
+                _userId = user.Id;
 
                 var authService = scope.ServiceProvider.GetRequiredService<IAuthenticationService>();
                 var tokenDto = await authService.CreateToken(user, populateExp: true);
@@ -69,6 +75,12 @@ namespace AccountGo.BackendTests.Financial
             createOrgReq.Content = JsonContent.Create(new { name = "MCP Test Org", slug = _slug });
             var createOrgRes = await _client.SendAsync(createOrgReq);
             Assert.Equal(HttpStatusCode.Created, createOrgRes.StatusCode);
+
+            using var orgDoc = JsonDocument.Parse(await createOrgRes.Content.ReadAsStringAsync());
+            var idProp = orgDoc.RootElement.GetProperty("id");
+            _companyId = idProp.ValueKind == JsonValueKind.String
+                ? int.Parse(idProp.GetString()!)
+                : idProp.GetInt32();
         }
 
         public Task DisposeAsync()
@@ -263,6 +275,52 @@ namespace AccountGo.BackendTests.Financial
             var body = await response.Content.ReadAsStringAsync();
             Assert.Contains(_slug, body);
             Assert.Contains("totalCount", body, StringComparison.OrdinalIgnoreCase);
+        }
+
+        [Fact]
+        public async Task McpEndpoint_WithMcpGateAndValidCallerAssertion_ExecutesToolForAssertedTenant()
+        {
+            using var scope = _factory.Services.CreateScope();
+            var assertionService = scope.ServiceProvider.GetRequiredService<Api.Service.Ai.IMcpCallerAssertionService>();
+            var assertion = assertionService.MintAssertion(_userId, _companyId, _slug);
+
+            using var req = new HttpRequestMessage(HttpMethod.Post, "/mcp");
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", TestAnterApiKey);
+            req.Headers.Add(Api.Service.Ai.McpCallerAssertionService.HeaderName, assertion);
+            req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/event-stream"));
+            req.Content = new StringContent(
+                "{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"tools/call\",\"params\":{\"name\":\"get_chart_of_accounts\",\"arguments\":{}}}",
+                Encoding.UTF8,
+                "application/json");
+
+            var response = await _client.SendAsync(req);
+
+            Assert.True(
+                response.StatusCode == HttpStatusCode.OK ||
+                response.StatusCode == HttpStatusCode.Accepted,
+                $"Expected 200/202 but got {response.StatusCode}");
+
+            var body = await response.Content.ReadAsStringAsync();
+            Assert.Contains(_slug, body);
+            Assert.Contains("totalAccounts", body, StringComparison.OrdinalIgnoreCase);
+        }
+
+        [Fact]
+        public async Task McpEndpoint_WithMcpGateAndTamperedCallerAssertion_ReturnsUnauthorized()
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Post, "/mcp");
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", TestAnterApiKey);
+            req.Headers.Add(Api.Service.Ai.McpCallerAssertionService.HeaderName, "v1.eyJ1aWQiOiJmb3JnZWQifQ.forgedmac");
+            req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            req.Content = new StringContent(
+                "{\"jsonrpc\":\"2.0\",\"id\":8,\"method\":\"tools/call\",\"params\":{\"name\":\"get_chart_of_accounts\",\"arguments\":{}}}",
+                Encoding.UTF8,
+                "application/json");
+
+            var response = await _client.SendAsync(req);
+
+            Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         }
     }
 }

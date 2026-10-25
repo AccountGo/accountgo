@@ -16,11 +16,23 @@ namespace Api.Service.Ai
         private static readonly HashSet<string> ServerOwnedKeys = new(StringComparer.OrdinalIgnoreCase)
         {
             "userId",
+            "accountGoUserId",
             "sessionId",
             "organizationId",
             "companyId",
             "companySlug",
         };
+
+        /// <summary>
+        /// Builds a workspace-scoped Anter user key without colons (<c>:</c>) so Anter's
+        /// Redis session store strictly partitions sessions per <c>(companyId, userId)</c>
+        /// without splitting key segments on colons.
+        /// </summary>
+        public static string BuildScopedUserId(int companyId, string userId)
+        {
+            var safeUser = (userId ?? string.Empty).Trim().Replace(':', '_');
+            return $"ag_c{companyId}_u_{safeUser}";
+        }
 
         public static Dictionary<string, object?> Build(
             string message,
@@ -28,7 +40,9 @@ namespace Api.Service.Ai
             string? sessionId,
             IReadOnlyDictionary<string, string>? contextVariables,
             string? companyId = null,
-            string? companySlug = null)
+            string? companySlug = null,
+            string? callerAssertion = null,
+            string? accountGoUserId = null)
         {
             var merged = new Dictionary<string, string>(StringComparer.Ordinal);
             if (contextVariables != null)
@@ -51,6 +65,11 @@ namespace Api.Service.Ai
             }
 
             merged["userId"] = userId;
+            if (!string.IsNullOrWhiteSpace(accountGoUserId))
+            {
+                merged["accountGoUserId"] = accountGoUserId;
+            }
+
             if (!string.IsNullOrWhiteSpace(sessionId))
             {
                 merged["sessionId"] = sessionId;
@@ -67,11 +86,35 @@ namespace Api.Service.Ai
                 merged["companySlug"] = companySlug;
             }
 
-            return new Dictionary<string, object?>
+            var body = new Dictionary<string, object?>
             {
                 ["message"] = message ?? string.Empty,
                 ["contextVariables"] = merged,
             };
+
+            if (!string.IsNullOrWhiteSpace(callerAssertion))
+            {
+                body["mcpPassThroughHeaders"] = new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    [McpCallerAssertionService.HeaderName] = callerAssertion,
+                };
+            }
+
+            return body;
+        }
+
+        public static Dictionary<string, object?> BuildResumeBody(string? callerAssertion = null)
+        {
+            var body = new Dictionary<string, object?>();
+            if (!string.IsNullOrWhiteSpace(callerAssertion))
+            {
+                body["mcpPassThroughHeaders"] = new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    [McpCallerAssertionService.HeaderName] = callerAssertion,
+                };
+            }
+
+            return body;
         }
     }
 }
