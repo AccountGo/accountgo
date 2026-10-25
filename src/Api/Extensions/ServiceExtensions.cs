@@ -147,9 +147,9 @@ namespace Api.Extensions
             if (provider.Equals("Sqlite", StringComparison.OrdinalIgnoreCase))
             {
                 var sqliteConnection = configuration.GetConnectionString("SqliteConnection")
-                    ?? "Data Source=accountgo.db";
+                    ?? "Data Source=accountgo.db;Foreign Keys=True;Busy Timeout=5000;";
 
-                Console.WriteLine($"[Database Provider] Using SQLite: {sqliteConnection}");
+                Console.WriteLine("[Database Provider] Using SQLite");
 
                 services.AddDbContext<ApiDbContext>(options =>
                 {
@@ -183,7 +183,7 @@ namespace Api.Extensions
                     dbUserID, dbUserPassword, dbName);
             }
 
-            Console.WriteLine("DB Connection String: " + connectionString);
+            Console.WriteLine("[Database Provider] Using SQL Server");
 
             services.AddDbContext<ApiDbContext>
             (

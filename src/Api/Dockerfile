@@ -35,7 +35,7 @@ RUN case "$TARGETARCH" in arm64) RID=linux-arm64 ;; *) RID=linux-x64 ;; esac \
 RUN mkdir -p /app/schema && cd /app/out \
     && SECRET_KEY=$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n') \
        RESTORE_FROM_D1=true DatabaseProvider=Sqlite EMAIL_PROVIDER=Console \
-       ConnectionStrings__SqliteConnection="Data Source=/app/schema/accountgo.db" \
+       ConnectionStrings__SqliteConnection="Data Source=/app/schema/accountgo.db;Foreign Keys=True;Busy Timeout=5000;" \
        dotnet Api.dll --prepare-schema \
     && test -s /app/schema/accountgo.db
 

@@ -744,7 +744,7 @@ namespace AccountGo.BackendTests
         {
             Assert.Equal(HttpStatusCode.NotFound, (await SendJsonAsync(HttpMethod.Get, "/api/Administration/users", TokenUA, SlugA)).StatusCode);
             Assert.Equal(HttpStatusCode.Forbidden, (await SendJsonAsync(HttpMethod.Get, "/api/Administration/GetUser?username=ub@test.com", TokenUA, SlugA)).StatusCode);
-            Assert.Equal(HttpStatusCode.Forbidden, (await SendJsonAsync(HttpMethod.Get, "/api/Administration/clear", TokenUA, SlugA)).StatusCode);
+            Assert.Equal(HttpStatusCode.Forbidden, (await SendJsonAsync(HttpMethod.Post, "/api/Administration/clear", TokenUA, SlugA, new { confirmation = "DELETE_ALL_DATA" })).StatusCode);
             Assert.Equal(HttpStatusCode.NotFound, (await SendJsonAsync(HttpMethod.Post, "/api/Administration/users", TokenUA, SlugA, new { email = "x@test.com" })).StatusCode);
             Assert.Equal(HttpStatusCode.Forbidden, (await SendJsonAsync(HttpMethod.Delete, "/api/Administration/roles/1", TokenUA, SlugA)).StatusCode);
         }

@@ -1,10 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
-using System.Data.Common;
-using System.IO;
-using System.Security.Cryptography;
-using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Api.Data;
 using Microsoft.AspNetCore.Authorization;
@@ -22,6 +19,19 @@ namespace Api.Controllers
     [AllowAnonymous]
     public class InternalSyncController : ControllerBase
     {
+        // D1 restore emits INSERT OR REPLACE / INSERT / DELETE against quoted identifiers only.
+        private static readonly Regex AllowedRestoreStatement = new(
+            @"^\s*(?:INSERT\s+OR\s+REPLACE\s+INTO|INSERT\s+INTO|DELETE\s+FROM)\s+""([a-zA-Z0-9_]+)""\b[\s\S]*$",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+        private static readonly Regex DangerousSql = new(
+            @"\b(ATTACH|DETACH|DROP|ALTER|CREATE|PRAGMA|VACUUM|REINDEX|LOAD_EXTENSION|UNION\s+SELECT)\b",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+        private static readonly Regex SafeTableName = new(
+            @"^[a-zA-Z0-9_]+$",
+            RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
         private readonly ApiDbContext _context;
         private readonly IConfiguration _configuration;
         private readonly ILogger<InternalSyncController> _logger;
@@ -46,15 +56,8 @@ namespace Api.Controllers
         [HttpGet("build")]
         public IActionResult GetBuildInfo()
         {
-            if (!InternalAuthHelper.ValidateInternalKey(_configuration, Request.Headers, out var status, out var message))
-            {
-                if (status == 503)
-                {
-                    _logger.LogError("Internal build endpoint called but SECRET_KEY is not configured.");
-                    return StatusCode(503, new { error = message });
-                }
-                return Unauthorized(new { error = message });
-            }
+            if (!EnsureInternalAccess(out var failure))
+                return failure!;
 
             string sha = "dev";
             var possiblePaths = new[]
@@ -84,15 +87,8 @@ namespace Api.Controllers
         [HttpPost("d1-restore")]
         public async Task<IActionResult> RestoreFromD1([FromBody] RestoreRequest request)
         {
-            if (!InternalAuthHelper.ValidateInternalKey(_configuration, Request.Headers, out var status, out var message))
-            {
-                if (status == 503)
-                {
-                    _logger.LogError("Internal sync endpoint called but SECRET_KEY is not configured.");
-                    return StatusCode(503, new { error = message });
-                }
-                return Unauthorized(new { error = message });
-            }
+            if (!EnsureInternalAccess(out var failure))
+                return failure!;
 
             int executedCount = 0;
             var statements = new List<string>();
@@ -109,7 +105,7 @@ namespace Api.Controllers
                     var trimmed = part.Trim();
                     if (!string.IsNullOrEmpty(trimmed))
                     {
-                        statements.Add(trimmed + ";");
+                        statements.Add(trimmed.EndsWith(';') ? trimmed : trimmed + ";");
                     }
                 }
             }
@@ -118,6 +114,30 @@ namespace Api.Controllers
             if (statements.Count == 0 && !hasTablesToClear)
             {
                 return Ok(new { restored = 0, total = 0, message = "No operations to execute." });
+            }
+
+            if (hasTablesToClear)
+            {
+                foreach (var table in request.TablesToClear!)
+                {
+                    if (string.IsNullOrWhiteSpace(table) || !SafeTableName.IsMatch(table))
+                    {
+                        return BadRequest(new { error = $"Invalid table name in tablesToClear: '{table}'." });
+                    }
+                }
+            }
+
+            for (int i = 0; i < statements.Count; i++)
+            {
+                if (!IsAllowedRestoreStatement(statements[i], out var reason))
+                {
+                    return BadRequest(new
+                    {
+                        error = "Restore statement rejected by allowlist.",
+                        index = i,
+                        reason
+                    });
+                }
             }
 
             var connection = _context.Database.GetDbConnection();
@@ -145,13 +165,10 @@ namespace Api.Controllers
                         {
                             foreach (var table in request.TablesToClear!)
                             {
-                                if (!string.IsNullOrWhiteSpace(table) && System.Text.RegularExpressions.Regex.IsMatch(table, @"^[a-zA-Z0-9_]+$"))
-                                {
-                                    using var delCmd = connection.CreateCommand();
-                                    delCmd.Transaction = dbTx;
-                                    delCmd.CommandText = $"DELETE FROM \"{table}\";";
-                                    await delCmd.ExecuteNonQueryAsync();
-                                }
+                                using var delCmd = connection.CreateCommand();
+                                delCmd.Transaction = dbTx;
+                                delCmd.CommandText = $"DELETE FROM \"{table}\";";
+                                await delCmd.ExecuteNonQueryAsync();
                             }
                         }
 
@@ -208,6 +225,68 @@ namespace Api.Controllers
                     await connection.CloseAsync();
                 }
             }
+        }
+
+        private bool EnsureInternalAccess(out IActionResult? failure)
+        {
+            if (!InternalAuthHelper.IsLoopbackRequest(HttpContext))
+            {
+                _logger.LogWarning(
+                    "Rejected non-loopback call to internal endpoint from {RemoteIp}",
+                    HttpContext.Connection.RemoteIpAddress);
+                failure = NotFound();
+                return false;
+            }
+
+            if (!InternalAuthHelper.ValidateInternalKey(_configuration, Request.Headers, out var status, out var message, _logger))
+            {
+                if (status == 503)
+                {
+                    _logger.LogError("Internal endpoint called but INTERNAL_SYNC_KEY is not configured.");
+                    failure = StatusCode(503, new { error = message });
+                    return false;
+                }
+
+                failure = Unauthorized(new { error = message });
+                return false;
+            }
+
+            failure = null;
+            return true;
+        }
+
+        private static bool IsAllowedRestoreStatement(string statement, out string reason)
+        {
+            reason = string.Empty;
+            if (string.IsNullOrWhiteSpace(statement))
+            {
+                reason = "Empty statement.";
+                return false;
+            }
+
+            var normalized = statement.Trim().TrimEnd(';').Trim();
+
+            if (DangerousSql.IsMatch(normalized))
+            {
+                reason = "Statement contains disallowed SQL constructs.";
+                return false;
+            }
+
+            var match = AllowedRestoreStatement.Match(normalized);
+            if (!match.Success)
+            {
+                reason = "Only INSERT, INSERT OR REPLACE, and DELETE FROM quoted tables are allowed.";
+                return false;
+            }
+
+            var tableName = match.Groups[1].Value;
+            if (!SafeTableName.IsMatch(tableName))
+            {
+                reason = "Table name failed allowlist validation.";
+                return false;
+            }
+
+            return true;
         }
     }
 }

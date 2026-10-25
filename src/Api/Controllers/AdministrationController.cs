@@ -73,17 +73,31 @@ namespace Api.Controllers
             return Ok(new { message = "Workspace defaults initialized." });
         }
 
-        [Authorize(Roles = PlatformAdminRole)]
-        [HttpGet]
-        [Route("clear")]
-        public IActionResult Clear()
+        public class ClearDatabaseRequest
         {
+            /// <summary>Must be the literal string "DELETE_ALL_DATA" to proceed.</summary>
+            public string? Confirmation { get; set; }
+        }
+
+        [Authorize(Roles = PlatformAdminRole)]
+        [HttpPost]
+        [Route("clear")]
+        public IActionResult Clear([FromBody] ClearDatabaseRequest? request)
+        {
+            if (!string.Equals(request?.Confirmation, "DELETE_ALL_DATA", StringComparison.Ordinal))
+            {
+                return BadRequest(new
+                {
+                    message = "Confirmation required. Send JSON body { \"confirmation\": \"DELETE_ALL_DATA\" }."
+                });
+            }
+
             Api.Data.Initializer initializer = new Data.Initializer(_adminService, _financialService, _salesService, _purchasingService, _inventoryService, _securityService);
             bool success = initializer.Clear();
             if (success)
-                return Ok("{ 'message': 'Database is cleared!' }");
+                return Ok(new { message = "Database is cleared!" });
             else
-                return BadRequest("{ 'message': 'Clearing database not successful! Please check the log.' }");
+                return BadRequest(new { message = "Clearing database not successful! Please check the log." });
         }
 
         [HttpGet("company")]

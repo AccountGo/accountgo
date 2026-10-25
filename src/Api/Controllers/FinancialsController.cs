@@ -190,10 +190,11 @@ namespace Api.Controllers
             {
                 if (!ModelState.IsValid)
                 {
-                    errors = new string[ModelState.ErrorCount];
-                    foreach (var val in ModelState.Values)
-                        for (int i = 0; i < ModelState.ErrorCount; i++)
-                            errors[i] = val.Errors[i].ErrorMessage;
+                    // Collect per-error messages; do not index Errors by ModelState.ErrorCount (ArgumentOutOfRange).
+                    errors = ModelState.Values
+                        .SelectMany(v => v.Errors)
+                        .Select(e => e.ErrorMessage)
+                        .ToArray();
 
                     return new BadRequestObjectResult(errors);
                 }

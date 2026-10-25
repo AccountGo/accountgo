@@ -774,7 +774,8 @@ namespace Api.Controllers
             {
                 HttpOnly = true,
                 Secure = isHttps,
-                SameSite = isHttps ? SameSiteMode.None : SameSiteMode.Lax,
+                // Lax: SPA and API share the registrable domain (or same-origin via proxy); avoids CSRF via cross-site cookie send.
+                SameSite = SameSiteMode.Lax,
                 Expires = DateTime.UtcNow.AddDays(7),
                 Path = "/api"
             };
@@ -788,7 +789,7 @@ namespace Api.Controllers
             {
                 HttpOnly = true,
                 Secure = isHttps,
-                SameSite = isHttps ? SameSiteMode.None : SameSiteMode.Lax,
+                SameSite = SameSiteMode.Lax,
                 Path = "/api"
             });
         }

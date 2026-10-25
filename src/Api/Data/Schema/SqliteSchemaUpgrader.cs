@@ -74,6 +74,13 @@ namespace Api.Data.Schema
 
             try
             {
+                // 0. Enable WAL and sane durability before any schema/data work.
+                using (var pragmaCmd = connection.CreateCommand())
+                {
+                    pragmaCmd.CommandText = "PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA foreign_keys=ON;";
+                    pragmaCmd.ExecuteNonQuery();
+                }
+
                 // 1. Ensure __SchemaVersion table exists
                 using (var cmd = connection.CreateCommand())
                 {
