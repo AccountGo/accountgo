@@ -159,6 +159,10 @@ export class AccountGoApiContainer extends Container<Env> {
       });
 
       if (!buildRes.ok) {
+        const errText = await buildRes.text().catch(() => "");
+        console.error(
+          `[worker] Build check failed: status=${buildRes.status} body=${errText.slice(0, 300)}`
+        );
         throw new Error(`Build check failed with status ${buildRes.status}`);
       }
 
