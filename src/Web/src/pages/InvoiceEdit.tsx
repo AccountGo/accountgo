@@ -49,6 +49,13 @@ interface FormLineItem {
   amount: number;
   discount: number;
   taxId: number | '';
+  salesAccountId?: number | null;
+}
+
+interface SalesAccountOption {
+  id: number;
+  code: string;
+  name: string;
 }
 
 const round2 = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
@@ -69,6 +76,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
   const [paymentTerms, setPaymentTerms] = useState<PaymentTermOption[]>([]);
   const [catalogItems, setCatalogItems] = useState<ItemOption[]>([]);
   const [taxes, setTaxes] = useState<WorkspaceTax[]>([]);
+  const [salesAccounts, setSalesAccounts] = useState<SalesAccountOption[]>([]);
   // Line whose catalog picker is open.
   const [pickerLine, setPickerLine] = useState<number | null>(null);
   const [isLoadingRefs, setIsLoadingRefs] = useState<boolean>(true);
@@ -132,11 +140,12 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
   const loadReferenceData = useCallback(async () => {
     setIsLoadingRefs(true);
     try {
-      const [custRes, termsRes, itemsRes, taxesRes] = await Promise.all([
+      const [custRes, termsRes, itemsRes, taxesRes, accountsRes] = await Promise.all([
         authFetch('/api/Sales/Customers'),
         authFetch('/api/Common/PaymentTerms'),
         authFetch('/api/Common/Items'),
         authFetch('/api/Tax/Taxes'),
+        authFetch('/api/Sales/SalesAccounts'),
       ]);
 
       if (custRes.ok) {
@@ -163,6 +172,11 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
       if (!taxesRes.ok) throw new Error('The invoice taxes could not be loaded.');
       const taxData = await taxesRes.json();
       setTaxes((taxData?.taxes ?? []) as WorkspaceTax[]);
+
+      if (accountsRes.ok) {
+        const accList = await accountsRes.json();
+        setSalesAccounts(Array.isArray(accList) ? accList : []);
+      }
     } catch (err: any) {
       console.error('Error loading reference data:', err);
       setErrorBanner(err.message || 'The invoice form could not be loaded.');
@@ -244,6 +258,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
               amount: l.amount || 0,
               discount: l.discount || 0,
               taxId: l.taxId ?? '',
+              salesAccountId: l.salesAccountId ?? null,
             }))
           );
         }
@@ -291,6 +306,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
                 amount: l.amount || 0,
                 discount: l.discount || 0,
                 taxId: l.taxId ?? '',
+                salesAccountId: l.salesAccountId ?? null,
               }))
             );
           }
@@ -364,6 +380,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
         itemId: catalogItem.id,
         itemDescription: catalogItem.description,
         amount: catalogItem.price ?? updated[index].amount,
+        salesAccountId: null,
       };
       return updated;
     });
@@ -471,6 +488,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
           amount: Number(l.amount) || 0,
           discount: Number(l.discount) || 0,
           taxId: l.taxId || null,
+          salesAccountId: l.salesAccountId ? Number(l.salesAccountId) : null,
         })),
       };
 
@@ -884,6 +902,30 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
                           <p className="mt-1 text-xs text-amber-600 dark:text-amber-400" role="status">
                             Only {linked.quantityOnHand?.toLocaleString(undefined, { maximumFractionDigits: 4 })} in stock. You can still issue this invoice.
                           </p>
+                        )}
+                        {linked ? (
+                          <p className="mt-1 text-[11px] text-[var(--text-muted)] truncate" title={linked.salesAccountCode ? `${linked.salesAccountCode} · ${linked.salesAccountName}` : '40100 · Sales'}>
+                            Books to {linked.salesAccountCode ? `${linked.salesAccountCode} · ${linked.salesAccountName}` : '40100 · Sales'}
+                          </p>
+                        ) : (
+                          <div className="mt-1.5 flex items-center gap-1.5">
+                            <span className="text-[11px] text-[var(--text-muted)] whitespace-nowrap">Income account:</span>
+                            <select
+                              aria-label={`Line ${idx + 1} income account`}
+                              value={line.salesAccountId ?? ''}
+                              onChange={(e) =>
+                                handleLineChange(idx, 'salesAccountId', e.target.value ? Number(e.target.value) : null)
+                              }
+                              className="h-6 px-1.5 text-xs bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded text-[var(--text-muted)] hover:text-[var(--text-main)] focus:text-[var(--text-main)] focus:ring-1 focus:ring-[var(--brand-ring)] focus:outline-none transition max-w-[220px]"
+                            >
+                              <option value="">Default (40100 · Sales)</option>
+                              {salesAccounts.map((acc) => (
+                                <option key={acc.id} value={acc.id}>
+                                  {acc.code} · {acc.name}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
                         )}
                       </td>
 

@@ -23,6 +23,7 @@ export const ProductsServices: React.FC = () => {
   const showStock = hasModule('inventory');
 
   const [items, setItems] = useState<CatalogItem[]>([]);
+  const [salesAccounts, setSalesAccounts] = useState<{ id: number; code: string; name: string }[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
@@ -41,10 +42,16 @@ export const ProductsServices: React.FC = () => {
     let cancelled = false;
     (async () => {
       try {
-        const res = await authFetch('/api/Catalog/Items');
-        if (!res.ok) throw new Error(`Products and services could not be loaded (${res.status}).`);
-        const data = await res.json();
+        const promises: Promise<Response>[] = [authFetch('/api/Catalog/Items')];
+        if (showPrice) promises.push(authFetch('/api/Catalog/SalesAccounts'));
+        const [itemsRes, accountsRes] = await Promise.all(promises);
+        if (!itemsRes.ok) throw new Error(`Products and services could not be loaded (${itemsRes.status}).`);
+        const data = await itemsRes.json();
         if (!cancelled) setItems(data);
+        if (accountsRes?.ok) {
+          const accs = await accountsRes.json();
+          if (!cancelled && Array.isArray(accs)) setSalesAccounts(accs);
+        }
       } catch (err: any) {
         if (!cancelled) setError(err.message);
       } finally {
@@ -54,7 +61,7 @@ export const ProductsServices: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [authFetch]);
+  }, [authFetch, showPrice]);
 
   const counts = useMemo(
     () => ({ active: items.filter((i) => !i.archived).length, archived: items.filter((i) => i.archived).length }),
@@ -225,6 +232,11 @@ export const ProductsServices: React.FC = () => {
                       ) : (
                         <span className="block truncate font-medium text-[var(--text-primary)]">{item.name}</span>
                       )}
+                      {showPrice && item.salesAccountCode && (
+                        <span className="block text-xs text-[var(--text-muted)] font-mono">
+                          {item.salesAccountCode}{item.salesAccountName ? ` · ${item.salesAccountName}` : ''}
+                        </span>
+                      )}
                     </td>
                     <td className="hidden sm:table-cell py-3.5 px-4 font-mono text-[var(--text-secondary)] whitespace-nowrap">{item.code || '—'}</td>
                     {showPrice && (
@@ -262,6 +274,7 @@ export const ProductsServices: React.FC = () => {
           showCost={showCost}
           hasInventoryModule={showStock}
           currencySymbol={currencySymbol}
+          salesAccounts={salesAccounts}
           onSaved={handleSaved}
           onDeleted={(id) => {
             setItems((prev) => prev.filter((i) => i.id !== id));

@@ -2244,6 +2244,9 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<decimal>("Quantity")
                         .HasColumnType("decimal(18, 2)");
 
+                    b.Property<int?>("SalesAccountId")
+                        .HasColumnType("int");
+
                     b.Property<int>("SalesInvoiceHeaderId")
                         .HasColumnType("int");
 
@@ -2265,6 +2268,8 @@ namespace Api.Data.Migrations.ApiDb
                     b.HasIndex("ItemId");
 
                     b.HasIndex("MeasurementId");
+
+                    b.HasIndex("SalesAccountId");
 
                     b.HasIndex("SalesInvoiceHeaderId");
 
@@ -3761,6 +3766,11 @@ namespace Api.Data.Migrations.ApiDb
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("Core.Domain.Financials.Account", "SalesAccount")
+                        .WithMany()
+                        .HasForeignKey("SalesAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("Core.Domain.Sales.SalesInvoiceHeader", "SalesInvoiceHeader")
                         .WithMany("SalesInvoiceLines")
                         .HasForeignKey("SalesInvoiceHeaderId")
@@ -3781,6 +3791,8 @@ namespace Api.Data.Migrations.ApiDb
                     b.Navigation("Item");
 
                     b.Navigation("Measurement");
+
+                    b.Navigation("SalesAccount");
 
                     b.Navigation("SalesInvoiceHeader");
 

@@ -24,16 +24,23 @@ export const ItemFormDialog: React.FC<{
   /** Whether this workspace can create stock-tracked items. */
   hasInventoryModule: boolean;
   currencySymbol: string;
+  salesAccounts?: { id: number; code: string; name: string }[];
   /** The item after it was added, edited, archived or restored. */
   onSaved: (item: CatalogItem) => void;
   onDeleted?: (id: number) => void;
   onClose: () => void;
-}> = ({ item, showPrice, showCost, hasInventoryModule, currencySymbol, onSaved, onDeleted, onClose }) => {
+}> = ({ item, showPrice, showCost, hasInventoryModule, currencySymbol, salesAccounts: propSalesAccounts, onSaved, onDeleted, onClose }) => {
   const { authFetch } = useAuth();
   const [name, setName] = useState(item?.name ?? '');
   const [code, setCode] = useState(item?.code ?? '');
   const [price, setPrice] = useState(item?.price != null ? String(item.price) : '');
   const [cost, setCost] = useState(item?.cost != null ? String(item.cost) : '');
+  const [salesAccounts, setSalesAccounts] = useState<{ id: number; code: string; name: string }[]>(
+    propSalesAccounts ?? []
+  );
+  const [salesAccountId, setSalesAccountId] = useState<number | ''>(
+    item?.salesAccountId ?? ''
+  );
   const [trackStock, setTrackStock] = useState(item?.trackStock ?? false);
   const [openingQuantity, setOpeningQuantity] = useState('');
   const [openingUnitCost, setOpeningUnitCost] = useState('');
@@ -44,6 +51,36 @@ export const ItemFormDialog: React.FC<{
   const nameRef = useRef<HTMLInputElement>(null);
   const titleId = useId();
   const isEdit = !!item;
+
+  useEffect(() => {
+    if (propSalesAccounts && propSalesAccounts.length > 0) {
+      setSalesAccounts(propSalesAccounts);
+      return;
+    }
+    if (!showPrice) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await authFetch('/api/Catalog/SalesAccounts');
+        if (res.ok) {
+          const list = await res.json();
+          if (!cancelled && Array.isArray(list)) {
+            setSalesAccounts(list);
+          }
+        }
+      } catch {}
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [authFetch, propSalesAccounts, showPrice]);
+
+  useEffect(() => {
+    if (salesAccountId === '' && salesAccounts.length > 0) {
+      const default40100 = salesAccounts.find((a) => a.code === '40100') ?? salesAccounts[0];
+      if (default40100) setSalesAccountId(default40100.id);
+    }
+  }, [salesAccounts, salesAccountId]);
 
   useEffect(() => {
     const trigger = document.activeElement as HTMLElement | null;
@@ -88,6 +125,7 @@ export const ItemFormDialog: React.FC<{
           // Hidden fields keep their value.
           price: showPrice ? amountOrNull(price) : item?.price ?? null,
           cost: showCost ? amountOrNull(cost) : item?.cost ?? null,
+          salesAccountId: showPrice && salesAccountId !== '' ? Number(salesAccountId) : item?.salesAccountId ?? null,
           trackStock,
           openingQuantity: trackStock && !item ? amountOrNull(openingQuantity) : null,
           openingUnitCost: trackStock && !item ? amountOrNull(openingCostEdited ? openingUnitCost : cost) : null,
@@ -232,6 +270,27 @@ export const ItemFormDialog: React.FC<{
                   />
                 </div>
               )}
+            </div>
+          )}
+
+          {showPrice && salesAccounts.length > 0 && (
+            <div>
+              <label htmlFor={`${titleId}-sales-account`} className={labelClass}>
+                Sales account
+              </label>
+              <select
+                id={`${titleId}-sales-account`}
+                value={salesAccountId}
+                onChange={(e) => setSalesAccountId(e.target.value === '' ? '' : Number(e.target.value))}
+                className={inputClass}
+              >
+                {salesAccounts.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.code} · {a.name}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-[var(--text-muted)]">Sales account controls which P&amp;L revenue account invoices credit.</p>
             </div>
           )}
 

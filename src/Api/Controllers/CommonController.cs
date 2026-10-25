@@ -78,7 +78,10 @@ namespace Api.Controllers
                 Archived = item.ArchivedAt.HasValue,
                 TrackStock = item.ItemCategory?.ItemType == Core.Domain.ItemTypes.Purchased,
                 item.QuantityOnHand,
-                item.AverageCost
+                item.AverageCost,
+                item.SalesAccountId,
+                SalesAccountCode = item.SalesAccount?.AccountCode,
+                SalesAccountName = item.SalesAccount?.AccountName
             }).ToList());
         }
 

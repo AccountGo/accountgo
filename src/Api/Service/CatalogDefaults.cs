@@ -27,7 +27,15 @@ namespace Api.Service
         {
             var category = inventoryService.GetItemCategories().FirstOrDefault(c => c.ItemType == ItemTypes.Service);
             if (category != null)
+            {
+                if (!category.SalesAccountId.HasValue)
+                {
+                    category.SalesAccountId = financialService.GetAccounts().FirstOrDefault(a => a.AccountCode == "40100")?.Id;
+                    if (category.SalesAccountId.HasValue)
+                        inventoryService.SaveItemCategory(category);
+                }
                 return category;
+            }
 
             category = new ItemCategory
             {
@@ -89,7 +97,8 @@ namespace Api.Service
                 Description = name,
                 SellDescription = name,
                 SmallestMeasurementId = measurementId,
-                SellMeasurementId = measurementId
+                SellMeasurementId = measurementId,
+                SalesAccountId = category.SalesAccountId
             };
             if (trackStock)
             {
