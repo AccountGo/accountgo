@@ -173,7 +173,7 @@ namespace Services.Sales
                 var lineTaxAmount = lineTaxes != null && lineTaxes.Count > 0 ? lineTaxes.Sum(t => t.Value) : 0;
                 totalLineAmount = totalLineAmount - lineTaxAmount;
 
-                int salesAccountId = item.SalesAccountId ?? item.SalesAccount?.Id ?? 
+                int salesAccountId = lineItem.SalesAccountId ?? item.SalesAccountId ?? item.SalesAccount?.Id ?? 
                     _financialService.GetAccounts().FirstOrDefault(a => a.AccountCode == "40100")?.Id ?? 
                     _financialService.GetAccounts().FirstOrDefault(a => a.AccountClassId == 4)?.Id ?? 1;
                 sales.Add(new KeyValuePair<int, decimal>(salesAccountId, totalLineAmount));
@@ -354,6 +354,10 @@ namespace Services.Sales
                 {
                     line.Item = _itemRepo.GetById(line.ItemId);
                     line.Measurement = _measurementRepo.GetById(line.MeasurementId);
+                    if (line.SalesAccountId.HasValue)
+                    {
+                        line.SalesAccount = _financialService.GetAccounts().FirstOrDefault(a => a.Id == line.SalesAccountId.Value);
+                    }
                 }
             }
 
@@ -1069,7 +1073,7 @@ namespace Services.Sales
                         taxes.Add(new KeyValuePair<int, decimal>(tax.SalesAccountId.Value, lineItem.TaxAmount));
                 }
 
-                int salesAccountId = item.SalesAccountId ?? item.SalesAccount?.Id ?? 
+                int salesAccountId = lineItem.SalesAccountId ?? item.SalesAccountId ?? item.SalesAccount?.Id ?? 
                     _financialService.GetAccounts().FirstOrDefault(a => a.AccountCode == "40100")?.Id ?? 
                     _financialService.GetAccounts().FirstOrDefault(a => a.AccountClassId == 4)?.Id ?? 1;
                 sales.Add(new KeyValuePair<int, decimal>(salesAccountId, totalLineAmount));

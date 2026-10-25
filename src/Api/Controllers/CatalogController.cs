@@ -54,7 +54,7 @@ namespace Api.Controllers
         [RequirePermission(SystemPermissions.InventoryItemsView)]
         public IActionResult Items()
         {
-            var items = _db.Items.Include(i => i.ItemCategory).OrderBy(i => i.Description).ToList();
+            var items = _db.Items.Include(i => i.ItemCategory).Include(i => i.SalesAccount).OrderBy(i => i.Description).ToList();
             var itemIds = items.Select(i => i.Id).ToArray();
             var itemsWithMovements = _db.InventoryControlJournals
                 .Where(j => itemIds.Contains(j.ItemId))
@@ -69,7 +69,7 @@ namespace Api.Controllers
         [RequirePermission(SystemPermissions.InventoryItemsView)]
         public IActionResult Item(int id)
         {
-            var item = _db.Items.Include(i => i.ItemCategory).FirstOrDefault(i => i.Id == id);
+            var item = _db.Items.Include(i => i.ItemCategory).Include(i => i.SalesAccount).FirstOrDefault(i => i.Id == id);
             if (item == null)
                 return NotFound(new { message = "Item not found." });
 
@@ -77,6 +77,13 @@ namespace Api.Controllers
             dto.CanDelete = !IsUsed(id);
             return Ok(dto);
         }
+
+        /// <summary>The accounts a catalog item or invoice line can credit: postable revenue/income accounts.</summary>
+        [HttpGet]
+        [Route("SalesAccounts")] // api/Catalog/SalesAccounts
+        [RequirePermission(SystemPermissions.InventoryItemsView)]
+        public IActionResult SalesAccounts() =>
+            Ok(Api.Service.CatalogDefaults.GetPostableSalesAccounts(_financialService, _db));
 
         [HttpPost]
         [Route("SaveItem")]
@@ -111,6 +118,12 @@ namespace Api.Controllers
             bool isNew = itemDto.Id == 0;
             if (!isNew)
                 _tenantGuard.EnsureOwned<Core.Domain.Items.Item>(itemDto.Id, nameof(itemDto.Id));
+            if (itemDto.SalesAccountId.HasValue && itemDto.SalesAccountId.Value > 0)
+            {
+                _tenantGuard.EnsureOwned<Core.Domain.Financials.Account>(itemDto.SalesAccountId.Value, nameof(itemDto.SalesAccountId));
+                if (!Api.Service.CatalogDefaults.IsPostableRevenueAccount(_db, itemDto.SalesAccountId.Value))
+                    return BadRequest(new { message = "The selected sales account must be a postable revenue/income account." });
+            }
             var existingStockItem = !isNew && _db.Items
                 .Include(i => i.ItemCategory)
                 .Any(i => i.Id == itemDto.Id && i.ItemCategory != null && i.ItemCategory.ItemType == ItemTypes.Purchased);
@@ -122,7 +135,7 @@ namespace Api.Controllers
                 using var tx = _db.Database.BeginTransaction();
                 var item = isNew
                     ? Api.Service.CatalogDefaults.NewItem(_inventoryService, _financialService, name, itemDto.TrackStock)
-                    : _db.Items.Include(i => i.ItemCategory).Single(i => i.Id == itemDto.Id);
+                    : _db.Items.Include(i => i.ItemCategory).Include(i => i.SalesAccount).Single(i => i.Id == itemDto.Id);
 
                 var wasStockItem = !isNew && item.ItemCategory?.ItemType == ItemTypes.Purchased;
                 var hasStockMovements = !isNew && _db.InventoryControlJournals.Any(j => j.ItemId == item.Id);
@@ -135,7 +148,6 @@ namespace Api.Controllers
                         _inventoryService, _financialService, Api.Service.CatalogDefaults.MeasurementId(_inventoryService));
                     item.ItemCategory = category;
                     item.ItemCategoryId = category.Id;
-                    item.SalesAccountId = category.SalesAccountId;
                     item.InventoryAccountId = category.InventoryAccountId;
                     item.CostOfGoodsSoldAccountId = category.CostOfGoodsSoldAccountId;
                     item.InventoryAdjustmentAccountId = category.AdjustmentAccountId;
@@ -147,11 +159,20 @@ namespace Api.Controllers
                     var category = Api.Service.CatalogDefaults.ServiceCategory(_inventoryService, _financialService, measurementId);
                     item.ItemCategory = category;
                     item.ItemCategoryId = category.Id;
-                    item.SalesAccountId = category.SalesAccountId;
                     item.InventoryAccountId = null;
                     item.CostOfGoodsSoldAccountId = null;
                     item.InventoryAdjustmentAccountId = null;
                     item.PurchaseMeasurementId = null;
+                }
+
+                if (itemDto.SalesAccountId.HasValue && itemDto.SalesAccountId.Value > 0)
+                {
+                    item.SalesAccountId = itemDto.SalesAccountId.Value;
+                }
+                else if (!item.SalesAccountId.HasValue)
+                {
+                    item.SalesAccountId = item.ItemCategory?.SalesAccountId
+                        ?? _financialService.GetAccounts().FirstOrDefault(a => a.AccountCode == "40100")?.Id;
                 }
 
                 item.Description = name;
@@ -174,6 +195,7 @@ namespace Api.Controllers
                 }
 
                 tx.Commit();
+                _db.Entry(item).Reference(i => i.SalesAccount).Load();
                 var saved = ToCatalogItem(item, _db.InventoryControlJournals.Any(j => j.ItemId == item.Id));
                 saved.CanDelete = isNew || !IsUsed(item.Id);
                 return Ok(saved);
@@ -227,6 +249,9 @@ namespace Api.Controllers
             Archived = item.ArchivedAt.HasValue,
             TrackStock = item.ItemCategory?.ItemType == ItemTypes.Purchased,
             InventoryAccountId = item.InventoryAccountId,
+            SalesAccountId = item.SalesAccountId,
+            SalesAccountCode = item.SalesAccount?.AccountCode,
+            SalesAccountName = item.SalesAccount?.AccountName,
             QuantityOnHand = item.QuantityOnHand,
             AverageCost = item.AverageCost,
             HasStockMovements = hasStockMovements,

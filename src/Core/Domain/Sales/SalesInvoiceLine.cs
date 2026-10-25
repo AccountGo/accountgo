@@ -34,6 +34,9 @@ namespace Core.Domain.Sales
         public int? TaxId { get; set; }
         public decimal TaxAmount { get; set; }
         public virtual Tax? Tax { get; set; }
+        /// <summary>The account the line is booked to when overriding the item/category account on a free-text line.</summary>
+        public int? SalesAccountId { get; set; }
+        public virtual Core.Domain.Financials.Account? SalesAccount { get; set; }
 
         [NotMapped]
         public decimal Subtotal => Purchases.PurchaseInvoiceLine.SubtotalOf(Quantity, Amount, Discount);

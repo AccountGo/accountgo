@@ -49,6 +49,15 @@ interface FormLineItem {
   amount: number;
   discount: number;
   taxId: number | '';
+  salesAccountId?: number | null;
+  salesAccountCode?: string | null;
+  salesAccountName?: string | null;
+}
+
+interface SalesAccountOption {
+  id: number;
+  code: string;
+  name: string;
 }
 
 const round2 = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
@@ -69,6 +78,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
   const [paymentTerms, setPaymentTerms] = useState<PaymentTermOption[]>([]);
   const [catalogItems, setCatalogItems] = useState<ItemOption[]>([]);
   const [taxes, setTaxes] = useState<WorkspaceTax[]>([]);
+  const [salesAccounts, setSalesAccounts] = useState<SalesAccountOption[]>([]);
   // Line whose catalog picker is open.
   const [pickerLine, setPickerLine] = useState<number | null>(null);
   const [isLoadingRefs, setIsLoadingRefs] = useState<boolean>(true);
@@ -132,11 +142,12 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
   const loadReferenceData = useCallback(async () => {
     setIsLoadingRefs(true);
     try {
-      const [custRes, termsRes, itemsRes, taxesRes] = await Promise.all([
+      const [custRes, termsRes, itemsRes, taxesRes, accountsRes] = await Promise.all([
         authFetch('/api/Sales/Customers'),
         authFetch('/api/Common/PaymentTerms'),
         authFetch('/api/Common/Items'),
         authFetch('/api/Tax/Taxes'),
+        authFetch('/api/Sales/SalesAccounts'),
       ]);
 
       if (custRes.ok) {
@@ -163,6 +174,11 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
       if (!taxesRes.ok) throw new Error('The invoice taxes could not be loaded.');
       const taxData = await taxesRes.json();
       setTaxes((taxData?.taxes ?? []) as WorkspaceTax[]);
+
+      if (accountsRes.ok) {
+        const accList = await accountsRes.json();
+        setSalesAccounts(Array.isArray(accList) ? accList : []);
+      }
     } catch (err: any) {
       console.error('Error loading reference data:', err);
       setErrorBanner(err.message || 'The invoice form could not be loaded.');
@@ -244,6 +260,9 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
               amount: l.amount || 0,
               discount: l.discount || 0,
               taxId: l.taxId ?? '',
+              salesAccountId: l.salesAccountId ?? null,
+              salesAccountCode: l.salesAccountCode ?? null,
+              salesAccountName: l.salesAccountName ?? null,
             }))
           );
         }
@@ -291,6 +310,9 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
                 amount: l.amount || 0,
                 discount: l.discount || 0,
                 taxId: l.taxId ?? '',
+                salesAccountId: l.salesAccountId ?? null,
+                salesAccountCode: l.salesAccountCode ?? null,
+                salesAccountName: l.salesAccountName ?? null,
               }))
             );
           }
@@ -364,6 +386,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
         itemId: catalogItem.id,
         itemDescription: catalogItem.description,
         amount: catalogItem.price ?? updated[index].amount,
+        salesAccountId: null,
       };
       return updated;
     });
@@ -471,6 +494,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
           amount: Number(l.amount) || 0,
           discount: Number(l.discount) || 0,
           taxId: l.taxId || null,
+          salesAccountId: l.salesAccountId ? Number(l.salesAccountId) : null,
         })),
       };
 
@@ -832,6 +856,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
                 {lines.map((line, idx) => {
                   const lineTotal = invoiceLineAmounts(line.quantity, line.amount, line.discount, 0).subtotal;
                   const linked = line.itemId ? catalogItems.find((ci) => ci.id === line.itemId) : undefined;
+                  const isCatalogLinked = Boolean(linked && linked.description !== 'Service / Product');
                   const requestedQuantity = lines.filter(other => other.itemId === line.itemId)
                     .reduce((total, other) => total + (Number(other.quantity) || 0), 0);
                   const exceedsStock = linked?.trackStock && linked.quantityOnHand != null && requestedQuantity > linked.quantityOnHand;
@@ -848,7 +873,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
                             onChange={(e) =>
                               handleLineChange(idx, 'itemDescription', e.target.value)
                             }
-                            className={`w-full h-9 pl-3 ${linked ? 'pr-[4.25rem]' : catalogItems.length > 0 ? 'pr-10' : 'pr-3'} text-sm bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-lg focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] placeholder-[var(--text-muted)] transition`}
+                            className={`w-full h-9 pl-3 ${isCatalogLinked ? 'pr-[4.25rem]' : catalogItems.length > 0 ? 'pr-10' : 'pr-3'} text-sm bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-lg focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] placeholder-[var(--text-muted)] transition`}
                           />
                           {catalogItems.length > 0 && (
                             <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center">
@@ -856,17 +881,17 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
                               <button
                                 type="button"
                                 onClick={() => setPickerLine(idx)}
-                                title={linked ? `Catalog item: ${linked.code ? `${linked.code} · ` : ''}${linked.description}` : 'Pick from catalog'}
-                                aria-label={linked ? `Line ${idx + 1} is catalog item ${linked.description}; change it` : `Pick line ${idx + 1} from catalog`}
+                                title={isCatalogLinked ? `Catalog item: ${linked!.code ? `${linked!.code} · ` : ''}${linked!.description}` : 'Pick from catalog'}
+                                aria-label={isCatalogLinked ? `Line ${idx + 1} is catalog item ${linked!.description}; change it` : `Pick line ${idx + 1} from catalog`}
                                 className={`inline-flex h-7 w-7 items-center justify-center rounded-md transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] ${
-                                  linked
+                                  isCatalogLinked
                                     ? 'text-[var(--brand-primary)] hover:bg-[var(--brand-subtle)]'
                                     : 'text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-surface-hover)]'
                                 }`}
                               >
                                 <Package className="w-4 h-4" />
                               </button>
-                              {linked && (
+                              {isCatalogLinked && (
                                 <button
                                   type="button"
                                   onClick={() => handleLineChange(idx, 'itemId', null)}
@@ -884,6 +909,46 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
                           <p className="mt-1 text-xs text-amber-600 dark:text-amber-400" role="status">
                             Only {linked.quantityOnHand?.toLocaleString(undefined, { maximumFractionDigits: 4 })} in stock. You can still issue this invoice.
                           </p>
+                        )}
+                        {isCatalogLinked ? (
+                          <p className="mt-1 text-[11px] text-[var(--text-muted)] truncate" title={linked!.salesAccountCode ? `${linked!.salesAccountCode} · ${linked!.salesAccountName}` : '40100 · Sales'}>
+                            Books to {linked!.salesAccountCode ? `${linked!.salesAccountCode} · ${linked!.salesAccountName}` : '40100 · Sales'}
+                          </p>
+                        ) : (
+                          <div className="mt-1.5 flex items-center gap-1.5">
+                            <span className="text-[11px] text-[var(--text-muted)] whitespace-nowrap">Income account:</span>
+                            <select
+                              aria-label={`Line ${idx + 1} income account`}
+                              value={line.salesAccountId ?? ''}
+                              onChange={(e) => {
+                                const val = e.target.value ? Number(e.target.value) : null;
+                                const acc = salesAccounts.find((a) => a.id === val);
+                                setLines((prev) => {
+                                  const updated = [...prev];
+                                  updated[idx] = {
+                                    ...updated[idx],
+                                    salesAccountId: val,
+                                    salesAccountCode: acc?.code ?? null,
+                                    salesAccountName: acc?.name ?? null,
+                                  };
+                                  return updated;
+                                });
+                              }}
+                              className="h-6 px-1.5 text-xs bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded text-[var(--text-muted)] hover:text-[var(--text-main)] focus:text-[var(--text-main)] focus:ring-1 focus:ring-[var(--brand-ring)] focus:outline-none transition max-w-[220px]"
+                            >
+                              <option value="">Default (40100 · Sales)</option>
+                              {line.salesAccountId && !salesAccounts.some((a) => a.id === line.salesAccountId) && (
+                                <option value={line.salesAccountId}>
+                                  {line.salesAccountCode ? `${line.salesAccountCode} · ${line.salesAccountName}` : `Account #${line.salesAccountId}`}
+                                </option>
+                              )}
+                              {salesAccounts.map((acc) => (
+                                <option key={acc.id} value={acc.id}>
+                                  {acc.code} · {acc.name}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
                         )}
                       </td>
 

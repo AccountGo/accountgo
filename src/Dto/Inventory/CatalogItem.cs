@@ -22,6 +22,12 @@ namespace Dto.Inventory
         public bool TrackStock { get; set; }
         /// <summary>The stock item's Inventory account; null for non-stock items.</summary>
         public int? InventoryAccountId { get; set; }
+        /// <summary>The account credited when this item is sold; defaults to 40100 (Sales).</summary>
+        public int? SalesAccountId { get; set; }
+        /// <summary>Code of the sales account, for display.</summary>
+        public string? SalesAccountCode { get; set; }
+        /// <summary>Name of the sales account, for display.</summary>
+        public string? SalesAccountName { get; set; }
         /// <summary>The cached stock quantity, in the item's purchase unit.</summary>
         public decimal QuantityOnHand { get; set; }
         /// <summary>The stock item's current moving-average unit cost.</summary>

@@ -15,6 +15,9 @@ export interface InvoiceLineItem {
   taxRate?: number;
   taxId?: number | null;
   taxAmount?: number;
+  salesAccountId?: number | null;
+  salesAccountCode?: string | null;
+  salesAccountName?: string | null;
 }
 
 export interface InvoicePaymentItem {
@@ -166,6 +169,9 @@ export interface ItemOption {
   inventoryAccountId?: number | null;
   quantityOnHand?: number;
   averageCost?: number;
+  salesAccountId?: number | null;
+  salesAccountCode?: string | null;
+  salesAccountName?: string | null;
   /** Archived items are left out when picking an item for a line. */
   archived?: boolean;
 }
@@ -182,6 +188,10 @@ export interface CatalogItem {
   archived: boolean;
   trackStock: boolean;
   inventoryAccountId?: number | null;
+  /** The account credited when this item is sold; defaults to 40100 (Sales). */
+  salesAccountId?: number | null;
+  salesAccountCode?: string | null;
+  salesAccountName?: string | null;
   quantityOnHand: number;
   averageCost: number;
   hasStockMovements: boolean;

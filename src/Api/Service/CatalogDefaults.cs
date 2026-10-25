@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Api.Data;
 using Core.Domain;
+using Core.Domain.Financials;
 using Core.Domain.Items;
 using Services.Inventory;
 
@@ -27,7 +29,15 @@ namespace Api.Service
         {
             var category = inventoryService.GetItemCategories().FirstOrDefault(c => c.ItemType == ItemTypes.Service);
             if (category != null)
+            {
+                if (!category.SalesAccountId.HasValue)
+                {
+                    category.SalesAccountId = financialService.GetAccounts().FirstOrDefault(a => a.AccountCode == "40100")?.Id;
+                    if (category.SalesAccountId.HasValue)
+                        inventoryService.SaveItemCategory(category);
+                }
                 return category;
+            }
 
             category = new ItemCategory
             {
@@ -89,7 +99,8 @@ namespace Api.Service
                 Description = name,
                 SellDescription = name,
                 SmallestMeasurementId = measurementId,
-                SellMeasurementId = measurementId
+                SellMeasurementId = measurementId,
+                SalesAccountId = category.SalesAccountId
             };
             if (trackStock)
             {
@@ -123,6 +134,30 @@ namespace Api.Service
             inventoryService.AddItem(item);
             items.Add(item);
             return item;
+        }
+
+        public static bool IsPostableRevenueAccount(ApiDbContext db, int accountId)
+        {
+            var salesAccount = db.Accounts.FirstOrDefault(a => a.Id == accountId);
+            return salesAccount != null
+                && (salesAccount.AccountClassId == (int)AccountClasses.Revenue || salesAccount.AccountCode.StartsWith("4"))
+                && !db.Accounts.Any(a => a.ParentAccountId == salesAccount.Id);
+        }
+
+        public static IEnumerable<object> GetPostableSalesAccounts(Services.Financial.IFinancialService financialService, ApiDbContext db)
+        {
+            return financialService.GetAccounts()
+                .Where(a => (a.AccountClassId == (int)AccountClasses.Revenue || a.AccountCode.StartsWith("4"))
+                    && !db.Accounts.Any(child => child.ParentAccountId == a.Id))
+                .OrderBy(a => a.AccountCode)
+                .Select(a => new
+                {
+                    id = a.Id,
+                    code = a.AccountCode,
+                    name = a.AccountName,
+                    accountClassId = a.AccountClassId
+                })
+                .ToList();
         }
     }
 }

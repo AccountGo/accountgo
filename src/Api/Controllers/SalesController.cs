@@ -1040,7 +1040,10 @@ namespace Api.Controllers
                         MeasurementDescription = line.Measurement?.Description ?? "EA",
                         LineTotal = line.Subtotal,
                         TaxId = line.TaxId,
-                        TaxAmount = line.TaxAmount
+                        TaxAmount = line.TaxAmount,
+                        SalesAccountId = line.SalesAccountId,
+                        SalesAccountCode = line.SalesAccount?.AccountCode,
+                        SalesAccountName = line.SalesAccount?.AccountName
                     });
                 }
                 ApplySummary(salesInvoiceDto, Summarize(salesInvoice, dueDate));
@@ -1144,6 +1147,9 @@ namespace Api.Controllers
                         lineDto.LineTotal = line.Subtotal;
                         lineDto.TaxId = line.TaxId;
                         lineDto.TaxAmount = line.TaxAmount;
+                        lineDto.SalesAccountId = line.SalesAccountId;
+                        lineDto.SalesAccountCode = line.SalesAccount?.AccountCode;
+                        lineDto.SalesAccountName = line.SalesAccount?.AccountName;
 
                         invoiceDto.SalesInvoiceLines!.Add(lineDto);
                     }
@@ -1327,6 +1333,11 @@ namespace Api.Controllers
             }
         }
 
+        [HttpGet("SalesAccounts")]
+        [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesCreate)]
+        public IActionResult SalesAccounts() =>
+            Ok(Api.Service.CatalogDefaults.GetPostableSalesAccounts(_financialService, _db));
+
         [HttpPost]
         [Route("SaveSalesInvoice")]
         [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesCreate)]
@@ -1362,7 +1373,15 @@ namespace Api.Controllers
                 if (salesInvoiceDto.PaymentTermId.HasValue && salesInvoiceDto.PaymentTermId.Value > 0)
                     _tenantGuard.EnsureOwned<Core.Domain.PaymentTerm>(salesInvoiceDto.PaymentTermId.Value, nameof(salesInvoiceDto.PaymentTermId));
                 foreach (var line in salesInvoiceDto.SalesInvoiceLines!)
+                {
                     _tenantGuard.EnsureOwned<Core.Domain.TaxSystem.Tax>(line.TaxId, nameof(line.TaxId));
+                    if (line.SalesAccountId.HasValue && line.SalesAccountId.Value > 0)
+                    {
+                        _tenantGuard.EnsureOwned<Core.Domain.Financials.Account>(line.SalesAccountId.Value, nameof(line.SalesAccountId));
+                        if (!Api.Service.CatalogDefaults.IsPostableRevenueAccount(_db, line.SalesAccountId.Value))
+                            return BadRequest(new { message = "The selected sales account must be a postable revenue/income account." });
+                    }
+                }
 
                 // Creating a new invoice
                 if (isNew)
@@ -1434,9 +1453,13 @@ namespace Api.Controllers
                             lineMeasurementId = defaultMeasurement.Value;
                         }
 
+                        var resolvedItem = items.FirstOrDefault(i => i.Id == lineItemId);
+                        bool isFreeText = resolvedItem != null && resolvedItem.Description == Api.Service.CatalogDefaults.GeneralItemName;
+
                         salesInvoiceLine.ItemId = lineItemId;
                         salesInvoiceLine.MeasurementId = lineMeasurementId;
-                        salesInvoiceLine.Description = Core.Domain.Sales.SalesInvoiceLine.DescriptionFor(line.ItemDescription, items.FirstOrDefault(i => i.Id == lineItemId));
+                        salesInvoiceLine.Description = Core.Domain.Sales.SalesInvoiceLine.DescriptionFor(line.ItemDescription, resolvedItem);
+                        salesInvoiceLine.SalesAccountId = isFreeText ? line.SalesAccountId : null;
                         salesInvoice.SalesInvoiceLines.Add(salesInvoiceLine);
 
                         // line.Id here is referring to SalesOrderLineId. It is pre-populated when you create a new sales invoice from sales order.
@@ -1520,6 +1543,9 @@ namespace Api.Controllers
                             lineMeasurementId = defaultMeasurement.Value;
                         }
 
+                        var resolvedItem = items.FirstOrDefault(i => i.Id == lineItemId);
+                        bool isFreeText = resolvedItem != null && resolvedItem.Description == Api.Service.CatalogDefaults.GeneralItemName;
+
                         if (existingLine != null)
                         {
                             existingLine.Amount = line.Amount.GetValueOrDefault();
@@ -1528,7 +1554,8 @@ namespace Api.Controllers
                             existingLine.TaxId = line.TaxId;
                             existingLine.ItemId = lineItemId;
                             existingLine.MeasurementId = lineMeasurementId;
-                            existingLine.Description = Core.Domain.Sales.SalesInvoiceLine.DescriptionFor(line.ItemDescription, items.FirstOrDefault(i => i.Id == lineItemId));
+                            existingLine.Description = Core.Domain.Sales.SalesInvoiceLine.DescriptionFor(line.ItemDescription, resolvedItem);
+                            existingLine.SalesAccountId = isFreeText ? line.SalesAccountId : null;
                         }
                         else
                         {
@@ -1540,7 +1567,8 @@ namespace Api.Controllers
                             salesInvoiceLine.TaxId = line.TaxId;
                             salesInvoiceLine.ItemId = lineItemId;
                             salesInvoiceLine.MeasurementId = lineMeasurementId;
-                            salesInvoiceLine.Description = Core.Domain.Sales.SalesInvoiceLine.DescriptionFor(line.ItemDescription, items.FirstOrDefault(i => i.Id == lineItemId));
+                            salesInvoiceLine.Description = Core.Domain.Sales.SalesInvoiceLine.DescriptionFor(line.ItemDescription, resolvedItem);
+                            salesInvoiceLine.SalesAccountId = isFreeText ? line.SalesAccountId : null;
                             salesInvoice.SalesInvoiceLines.Add(salesInvoiceLine);
 
                             // add a new order line.

@@ -129,7 +129,10 @@ namespace Api.Service
                     MeasurementDescription = line.Measurement?.Description ?? "EA",
                     LineTotal = line.Subtotal,
                     TaxId = line.TaxId,
-                    TaxAmount = line.TaxAmount
+                    TaxAmount = line.TaxAmount,
+                    SalesAccountId = line.SalesAccountId,
+                    SalesAccountCode = line.SalesAccount?.AccountCode,
+                    SalesAccountName = line.SalesAccount?.AccountName
                 });
             }
 

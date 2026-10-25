@@ -379,6 +379,12 @@ namespace Api.Data
                 .HasForeignKey(p => p.TaxId)
                 .OnDelete(DeleteBehavior.Restrict);
 
+            builder.Entity<SalesInvoiceLine>()
+                .HasOne(p => p.SalesAccount)
+                .WithMany()
+                .HasForeignKey(p => p.SalesAccountId)
+                .OnDelete(DeleteBehavior.Restrict);
+
             builder.Entity<SalesOrderLine>()
                 .Property(p => p.Amount)
                 .HasColumnType("decimal(18, 2)");

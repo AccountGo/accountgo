@@ -100,6 +100,10 @@ namespace Dto.Sales
         public decimal? TaxRate { get; set; }
         public int? TaxId { get; set; }
         public decimal? TaxAmount { get; set; }
+        /// <summary>Optional revenue account override for free-text lines; ignored for catalog-linked items.</summary>
+        public int? SalesAccountId { get; set; }
+        public string? SalesAccountCode { get; set; }
+        public string? SalesAccountName { get; set; }
     }
 
     public class InvoiceEmailItemDto
