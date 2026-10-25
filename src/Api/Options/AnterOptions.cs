@@ -16,7 +16,7 @@ namespace Api.Options
         public string ApiKey { get; set; } = string.Empty;
 
         /// <summary>Optional project id header (x-project-id).</summary>
-        public string? ProjectId { get; set; }
+        public string? ProjectId { get; set; } = "abproj_1hAA2dKHr1L32cGDNgZQy";
 
         /// <summary>Agent slug (default accountgo-assistant).</summary>
         public string AgentSlug { get; set; } = "accountgo-assistant";

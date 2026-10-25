@@ -86,6 +86,21 @@ namespace Api.Extensions
                 };
                 options.Events = new JwtBearerEvents
                 {
+                    OnMessageReceived = context =>
+                    {
+                        if (context.HttpContext.Request.Path.StartsWithSegments("/mcp") &&
+                            Api.Middleware.TenantResolutionMiddleware.TryCreateMcpGatePrincipal(
+                                context.HttpContext,
+                                JwtBearerDefaults.AuthenticationScheme,
+                                out var gatePrincipal) &&
+                            gatePrincipal != null)
+                        {
+                            context.Principal = gatePrincipal;
+                            context.Success();
+                        }
+
+                        return Task.CompletedTask;
+                    },
                     OnTokenValidated = async context =>
                     {
                         var userId = context.Principal?.FindFirstValue(ClaimTypes.NameIdentifier);

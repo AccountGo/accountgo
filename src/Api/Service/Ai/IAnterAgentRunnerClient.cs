@@ -17,7 +17,9 @@ namespace Api.Service.Ai
             IReadOnlyDictionary<string, string>? contextVariables,
             string? companyId,
             string? companySlug,
-            CancellationToken cancellationToken);
+            CancellationToken cancellationToken,
+            string? callerAssertion = null,
+            string? accountGoUserId = null);
 
         Task<HttpResponseMessage> ListSessionsAsync(string userId, CancellationToken cancellationToken);
 
@@ -45,7 +47,8 @@ namespace Api.Service.Ai
         Task<HttpResponseMessage> ResumeExecutionAsync(
             string executionId,
             string userId,
-            CancellationToken cancellationToken);
+            CancellationToken cancellationToken,
+            string? callerAssertion = null);
 
         Task<HttpResponseMessage> ResolveApprovalAsync(
             string executionId,
