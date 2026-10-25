@@ -66,6 +66,14 @@ namespace Api.Extensions
                     "Configure a secure key via environment variable 'SECRET_KEY' or user-secrets ('dotnet user-secrets set \"SECRET_KEY\" \"<key>\"').");
             }
 
+            var audiences = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (!string.IsNullOrWhiteSpace(validAudience))
+            {
+                audiences.Add(validAudience);
+            }
+            audiences.Add("https://api.accountgo.dev");
+            audiences.Add("https://accountgo-api.anter.workers.dev");
+
             services.AddAuthentication(opt =>
             {
                 opt.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -82,6 +90,7 @@ namespace Api.Extensions
 
                     ValidIssuer = validIssuer,
                     ValidAudience = validAudience,
+                    ValidAudiences = audiences,
                     IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey))
                 };
                 options.Events = new JwtBearerEvents

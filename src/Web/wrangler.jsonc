@@ -19,7 +19,7 @@
     }
   ],
   "vars": {
-    "API_HOST": "accountgo-api.anter.workers.dev"
+    "API_HOST": "api.accountgo.dev"
   },
   "observability": {
     "enabled": true,

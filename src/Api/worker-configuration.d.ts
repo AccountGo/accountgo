@@ -9,8 +9,9 @@ interface __BaseEnv_Env {
 	DatabaseProvider: "Sqlite";
 	EMAIL_PROVIDER: "Resend";
 	JwtSettings__validIssuer: "AccountGo API";
-	JwtSettings__validAudience: "https://accountgo-api.anter.workers.dev";
-	Cors__AllowedOrigins__0: "https://accountgo.anter.workers.dev";
+	JwtSettings__validAudience: "https://api.accountgo.dev";
+	Cors__AllowedOrigins__0: "https://app.accountgo.dev";
+	Cors__AllowedOrigins__1: "https://accountgo-web.anter.workers.dev";
 	RESEND_API_KEY: string;
 	RESEND_EMAIL_FROM: string;
 	RESEND_WELCOME_EMAIL_FROM: string;
@@ -31,7 +32,7 @@ type StringifyValues<EnvType extends Record<string, unknown>> = {
 	[Binding in keyof EnvType]: EnvType[Binding] extends string ? EnvType[Binding] : string;
 };
 declare namespace NodeJS {
-	interface ProcessEnv extends StringifyValues<Pick<Cloudflare.Env, "ENVIRONMENT" | "CONTAINER_NAME" | "DatabaseProvider" | "EMAIL_PROVIDER" | "JwtSettings__validIssuer" | "JwtSettings__validAudience" | "Cors__AllowedOrigins__0" | "RESEND_API_KEY" | "RESEND_EMAIL_FROM" | "RESEND_WELCOME_EMAIL_FROM" | "RESEND_FROM_NAME" | "RESEND_WELCOME_FROM_NAME" | "SECRET_KEY">> {}
+	interface ProcessEnv extends StringifyValues<Pick<Cloudflare.Env, "ENVIRONMENT" | "CONTAINER_NAME" | "DatabaseProvider" | "EMAIL_PROVIDER" | "JwtSettings__validIssuer" | "JwtSettings__validAudience" | "Cors__AllowedOrigins__0" | "Cors__AllowedOrigins__1" | "RESEND_API_KEY" | "RESEND_EMAIL_FROM" | "RESEND_WELCOME_EMAIL_FROM" | "RESEND_FROM_NAME" | "RESEND_WELCOME_FROM_NAME" | "SECRET_KEY">> {}
 }
 declare module "*.txt" {
 	const value: string;
