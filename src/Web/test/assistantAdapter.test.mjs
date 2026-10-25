@@ -5,7 +5,7 @@ import {
   mergeAssistantContextVariables,
 } from '../src/assistant/contextVariables.ts';
 
-test('mergeAssistantContextVariables fills page/tenant fields without overriding payload', () => {
+test('mergeAssistantContextVariables prefers page route/title and drops client tenant keys', () => {
   const merged = mergeAssistantContextVariables(
     {
       companySlug: 'acme',
@@ -14,27 +14,35 @@ test('mergeAssistantContextVariables fills page/tenant fields without overriding
       companyId: '7',
       organizationId: '7',
     },
-    { pageTitle: 'Custom' },
+    {
+      pageTitle: 'Stale',
+      companySlug: 'victim',
+      companyId: '999',
+      organizationId: '999',
+      userId: 'forged',
+      hint: 'keep-me',
+    },
   );
 
-  assert.equal(merged.companySlug, 'acme');
   assert.equal(merged.pageRoute, '/org/acme/dashboard');
-  assert.equal(merged.pageTitle, 'Custom');
-  assert.equal(merged.companyId, '7');
-  assert.equal(merged.organizationId, '7');
+  assert.equal(merged.pageTitle, 'Dashboard');
+  assert.equal(merged.hint, 'keep-me');
+  assert.equal(merged.companySlug, undefined);
+  assert.equal(merged.companyId, undefined);
+  assert.equal(merged.organizationId, undefined);
+  assert.equal(merged.userId, undefined);
 });
 
-test('buildRunStreamBody mirrors sessionId into contextVariables', () => {
+test('buildRunStreamBody mirrors sessionId into contextVariables without organizationId', () => {
   const body = buildRunStreamBody(
     'What is a trial balance?',
     'session_1',
-    mergeAssistantContextVariables({ companySlug: 'acme' }, {}),
-    '7',
+    mergeAssistantContextVariables({ pageRoute: '/org/acme/dashboard' }, {}),
   );
 
   assert.equal(body.message, 'What is a trial balance?');
   assert.equal(body.sessionId, 'session_1');
-  assert.equal(body.organizationId, '7');
+  assert.equal(body.organizationId, undefined);
   assert.equal(body.contextVariables.sessionId, 'session_1');
-  assert.equal(body.contextVariables.companySlug, 'acme');
+  assert.equal(body.contextVariables.pageRoute, '/org/acme/dashboard');
 });

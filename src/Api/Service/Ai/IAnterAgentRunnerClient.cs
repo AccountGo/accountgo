@@ -15,6 +15,8 @@ namespace Api.Service.Ai
             string userId,
             string? sessionId,
             IReadOnlyDictionary<string, string>? contextVariables,
+            string? companyId,
+            string? companySlug,
             CancellationToken cancellationToken);
 
         Task<HttpResponseMessage> ListSessionsAsync(string userId, CancellationToken cancellationToken);

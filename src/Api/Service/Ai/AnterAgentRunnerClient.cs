@@ -35,10 +35,18 @@ namespace Api.Service.Ai
             string userId,
             string? sessionId,
             IReadOnlyDictionary<string, string>? contextVariables,
+            string? companyId,
+            string? companySlug,
             CancellationToken cancellationToken)
         {
             EnsureConfigured();
-            var body = AnterRunStreamBody.Build(message, userId, sessionId, contextVariables);
+            var body = AnterRunStreamBody.Build(
+                message,
+                userId,
+                sessionId,
+                contextVariables,
+                companyId,
+                companySlug);
             var request = new HttpRequestMessage(HttpMethod.Post, AnterAgentRunnerPaths.RunStream(_options.BaseUrl, _options.AgentSlug))
             {
                 Content = new StringContent(JsonSerializer.Serialize(body, JsonOptions), Encoding.UTF8, "application/json"),

@@ -18,7 +18,9 @@ In-app AI sidekick powered by [`@anter/ai-chat-sdk`](https://github.com/anter-ai
 | `AssistantAdapter` | `ChatAdapter` → `/api/ai/chat/*` |
 | `panelSizing.ts` | Viewport % → SDK layout % + host floor |
 
-Context variables sent on every turn (when known): `userId` (server), `sessionId`, `organizationId`, `companySlug`, `companyId`, `pageRoute`, `pageTitle`.
+Context variables on every turn:
+- **Server-owned (always overwritten):** `userId`, `sessionId`, `organizationId`, `companyId`, `companySlug` from JWT + resolved `ITenantContext`.
+- **Client-allowed:** `pageRoute`, `pageTitle` (and other non-identity hints). Client-supplied tenant/identity keys are stripped.
 
 ## Backend
 
