@@ -147,7 +147,7 @@ namespace Api.Extensions
             if (provider.Equals("Sqlite", StringComparison.OrdinalIgnoreCase))
             {
                 var sqliteConnection = configuration.GetConnectionString("SqliteConnection")
-                    ?? "Data Source=accountgo.db;Foreign Keys=True;Busy Timeout=5000;";
+                    ?? "Data Source=accountgo.db;Foreign Keys=True;";
 
                 Console.WriteLine("[Database Provider] Using SQLite");
 
