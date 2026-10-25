@@ -14,7 +14,10 @@
       "class_name": "AccountGoApiContainer",
       "image": "./Dockerfile",
       "image_build_context": "../..",
-      "max_instances": 5
+      "max_instances": 5,
+      "constraints": {
+        "regions": ["ENAM", "WNAM"]
+      }
     }
   ],
   "durable_objects": {

@@ -20,12 +20,10 @@ namespace Api.Controllers
     public class InternalSyncController : ControllerBase
     {
         // D1 restore emits INSERT OR REPLACE / INSERT / DELETE against quoted identifiers only.
+        // Do NOT scan VALUES payloads for keywords like CREATE/DROP — user data often contains those
+        // words and falsely rejected restores (503 "Database restore from Cloudflare D1 failed").
         private static readonly Regex AllowedRestoreStatement = new(
             @"^\s*(?:INSERT\s+OR\s+REPLACE\s+INTO|INSERT\s+INTO|DELETE\s+FROM)\s+""([a-zA-Z0-9_]+)""\b[\s\S]*$",
-            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
-
-        private static readonly Regex DangerousSql = new(
-            @"\b(ATTACH|DETACH|DROP|ALTER|CREATE|PRAGMA|VACUUM|REINDEX|LOAD_EXTENSION|UNION\s+SELECT)\b",
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
         private static readonly Regex SafeTableName = new(
@@ -263,9 +261,10 @@ namespace Api.Controllers
 
             var normalized = statement.Trim().TrimEnd(';').Trim();
 
-            if (DangerousSql.IsMatch(normalized))
+            // Reject stacked statements (allow a single trailing semicolon only).
+            if (normalized.Contains(';'))
             {
-                reason = "Statement contains disallowed SQL constructs.";
+                reason = "Multiple SQL statements in one payload are not allowed.";
                 return false;
             }
 

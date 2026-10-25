@@ -51,9 +51,9 @@ export class AccountGoApiContainer extends Container<Env> {
     this.loggedMismatch = false;
   }
 
-  async restoreD1ToContainer(): Promise<boolean> {
+  async restoreD1ToContainer(): Promise<void> {
     const db = (this.env as any).DB;
-    if (!db) return true;
+    if (!db) return;
     try {
       const tableRes = await db
         .prepare(
@@ -92,7 +92,9 @@ export class AccountGoApiContainer extends Container<Env> {
       const syncKey = resolveInternalSyncKey(this.env);
       if (!syncKey) {
         console.error("Cold start D1 restore skipped: INTERNAL_SYNC_KEY (or SECRET_KEY fallback) is not configured.");
-        return false;
+        throw new RestoreError(
+          "Database restore skipped: INTERNAL_SYNC_KEY (or SECRET_KEY) is not configured on the Worker."
+        );
       }
 
       const batchSize = 500;
@@ -136,10 +138,12 @@ export class AccountGoApiContainer extends Container<Env> {
           }
         }
       }
-      return true;
     } catch (err) {
       console.error("Cold start D1 restore failed:", err);
-      return false;
+      if (err instanceof RestoreError) throw err;
+      throw new RestoreError(
+        `Database restore from Cloudflare D1 failed: ${err instanceof Error ? err.message : String(err)}`
+      );
     }
   }
 
@@ -182,11 +186,8 @@ export class AccountGoApiContainer extends Container<Env> {
       }
     }
 
-    // D1 restore
-    const restoredOk = await this.restoreD1ToContainer();
-    if (!restoredOk) {
-      throw new RestoreError("Database restore from Cloudflare D1 failed, please retry in a few seconds");
-    }
+    // D1 restore (throws RestoreError with detail on failure)
+    await this.restoreD1ToContainer();
 
     this.restored = true;
   }
@@ -493,7 +494,8 @@ export default {
     }
 
     const id = env.CONTAINER.idFromName(containerName);
-    const stub = env.CONTAINER.get(id);
+    // Prefer US placement for new Durable Objects (existing DO names keep their original region).
+    const stub = env.CONTAINER.get(id, { locationHint: "enam" });
     return stub.fetch(request);
   },
 };
