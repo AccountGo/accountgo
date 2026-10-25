@@ -61,31 +61,26 @@ export class AccountGoApiContainer extends Container<Env> {
         )
         .all();
 
-      const syncTables = (tableRes.results || []).map((r: any) => r.name);
+      const syncTables = (tableRes.results || []).map((r: any) => r.name as string);
 
-      const statements: string[] = [];
+      // Structured rows — never embed cell text into SQL (semicolons/keywords broke allowlists).
+      type RestoreRow = { table: string; data: Record<string, unknown> };
+      const rows: RestoreRow[] = [];
 
       for (const table of syncTables) {
         try {
           const res = await db.prepare(`SELECT * FROM "${table}"`).all();
           if (res.results && res.results.length > 0) {
             for (const row of res.results) {
-              const keys = Object.keys(row);
-              const cols = keys.map((k) => `"${k}"`).join(", ");
-              const vals = keys
-                .map((k) => {
-                  const v = row[k];
-                  if (v === null || v === undefined) return "NULL";
-                  if (typeof v === "number") return String(v);
-                  if (typeof v === "boolean") return v ? "1" : "0";
-                  return `'${String(v).replace(/'/g, "''")}'`;
-                })
-                .join(", ");
-              statements.push(`INSERT OR REPLACE INTO "${table}" (${cols}) VALUES (${vals});`);
+              const data: Record<string, unknown> = {};
+              for (const [key, value] of Object.entries(row as Record<string, unknown>)) {
+                data[key] = normalizeD1Cell(value);
+              }
+              rows.push({ table, data });
             }
           }
-        } catch (tableErr) {
-          // Table might not exist or empty
+        } catch {
+          // Table might not exist or be unreadable
         }
       }
 
@@ -97,8 +92,8 @@ export class AccountGoApiContainer extends Container<Env> {
         );
       }
 
-      const batchSize = 500;
-      if (statements.length === 0) {
+      const batchSize = 200;
+      if (rows.length === 0) {
         if (syncTables.length > 0) {
           const res = await this.containerFetch("http://127.0.0.1:8001/api/internal/d1-restore", {
             method: "POST",
@@ -106,36 +101,37 @@ export class AccountGoApiContainer extends Container<Env> {
               "content-type": "application/json",
               "x-internal-key": syncKey,
             },
-            body: JSON.stringify({ tablesToClear: syncTables, statements: [] }),
+            body: JSON.stringify({ tablesToClear: syncTables, rows: [] }),
           });
           if (!res.ok) {
             const errText = await res.text();
             throw new Error(`Clear tables failed (${res.status}): ${errText}`);
           }
         }
-      } else {
-        for (let i = 0; i < statements.length; i += batchSize) {
-          const batch = statements.slice(i, i + batchSize);
-          const isFirstBatch = i === 0;
-          const res = await this.containerFetch("http://127.0.0.1:8001/api/internal/d1-restore", {
-            method: "POST",
-            headers: {
-              "content-type": "application/json",
-              "x-internal-key": syncKey,
-            },
-            body: JSON.stringify({
-              tablesToClear: isFirstBatch ? syncTables : undefined,
-              statements: batch,
-            }),
-          });
-          if (!res.ok) {
-            const errText = await res.text();
-            throw new Error(`Restore batch ${i / batchSize} failed (${res.status}): ${errText}`);
-          }
-          const result = (await res.json()) as any;
-          if (result.restored !== batch.length) {
-            throw new Error(`Batch count mismatch: restored ${result.restored} of ${batch.length}`);
-          }
+        return;
+      }
+
+      for (let i = 0; i < rows.length; i += batchSize) {
+        const batch = rows.slice(i, i + batchSize);
+        const isFirstBatch = i === 0;
+        const res = await this.containerFetch("http://127.0.0.1:8001/api/internal/d1-restore", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-internal-key": syncKey,
+          },
+          body: JSON.stringify({
+            tablesToClear: isFirstBatch ? syncTables : undefined,
+            rows: batch,
+          }),
+        });
+        if (!res.ok) {
+          const errText = await res.text();
+          throw new Error(`Restore batch ${i / batchSize} failed (${res.status}): ${errText}`);
+        }
+        const result = (await res.json()) as { restored?: number };
+        if (result.restored !== batch.length) {
+          throw new Error(`Batch count mismatch: restored ${result.restored} of ${batch.length}`);
         }
       }
     } catch (err) {
@@ -445,6 +441,25 @@ export interface Env {
 /** Prefer INTERNAL_SYNC_KEY so JWT signing material is not the DB restore credential. */
 function resolveInternalSyncKey(env: Env): string | undefined {
   return env.INTERNAL_SYNC_KEY || env.SECRET_KEY || (env as any).SECRET__key || undefined;
+}
+
+/** JSON-safe cell values for structured restore (no SQL string embedding). */
+function normalizeD1Cell(value: unknown): unknown {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return value;
+  if (typeof ArrayBuffer !== "undefined" && value instanceof ArrayBuffer) {
+    const bytes = new Uint8Array(value);
+    let binary = "";
+    for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]!);
+    return { $b64: btoa(binary) };
+  }
+  if (typeof Uint8Array !== "undefined" && value instanceof Uint8Array) {
+    let binary = "";
+    for (let i = 0; i < value.length; i++) binary += String.fromCharCode(value[i]!);
+    return { $b64: btoa(binary) };
+  }
+  // Fallback: stringify unknown shapes
+  return String(value);
 }
 
 let loggedContainerName = false;

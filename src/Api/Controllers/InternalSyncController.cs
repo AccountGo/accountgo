@@ -10,6 +10,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Newtonsoft.Json.Linq;
 
 namespace Api.Controllers
 {
@@ -19,18 +20,12 @@ namespace Api.Controllers
     [AllowAnonymous]
     public class InternalSyncController : ControllerBase
     {
-        // D1 restore emits INSERT OR REPLACE / INSERT / DELETE against quoted identifiers only.
-        // Do NOT scan VALUES payloads for keywords like CREATE/DROP — user data often contains those
-        // words and falsely rejected restores (503 "Database restore from Cloudflare D1 failed").
-        // Note: do not put \b after the closing quote — next char is usually '(' or whitespace
-        // (both non-word), so \b never matches and every INSERT OR REPLACE is rejected.
-        private static readonly Regex AllowedRestoreStatement = new(
-            @"^\s*(?:INSERT\s+OR\s+REPLACE\s+INTO|INSERT\s+INTO|DELETE\s+FROM)\s+""([a-zA-Z0-9_]+)""[\s\S]*$",
-            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
-
-        private static readonly Regex SafeTableName = new(
-            @"^[a-zA-Z0-9_]+$",
+        private static readonly Regex SafeIdentifier = new(
+            @"^[a-zA-Z_][a-zA-Z0-9_]*$",
             RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+        private const int MaxRowsPerRequest = 1000;
+        private const int MaxColumnsPerRow = 128;
 
         private readonly ApiDbContext _context;
         private readonly IConfiguration _configuration;
@@ -46,11 +41,27 @@ namespace Api.Controllers
             _logger = logger;
         }
 
+        /// <summary>
+        /// Structured D1 → SQLite restore. Prefer <see cref="Rows"/> (parameterized inserts).
+        /// Raw SQL strings are rejected — cell data often contains ';' / SQL keywords and broke allowlists.
+        /// </summary>
         public class RestoreRequest
         {
-            public List<string>? Statements { get; set; }
-            public string? RawSql { get; set; }
             public List<string>? TablesToClear { get; set; }
+            public List<RestoreRow>? Rows { get; set; }
+
+            /// <summary>Deprecated. Ignored; returns 400 if non-empty.</summary>
+            public List<string>? Statements { get; set; }
+
+            /// <summary>Deprecated. Ignored; returns 400 if non-empty.</summary>
+            public string? RawSql { get; set; }
+        }
+
+        public class RestoreRow
+        {
+            public string? Table { get; set; }
+            /// <summary>Column → cell value (Newtonsoft binds JSON primitives / objects here).</summary>
+            public Dictionary<string, object?>? Data { get; set; }
         }
 
         [HttpGet("build")]
@@ -90,53 +101,60 @@ namespace Api.Controllers
             if (!EnsureInternalAccess(out var failure))
                 return failure!;
 
-            int executedCount = 0;
-            var statements = new List<string>();
-
-            if (request.Statements != null && request.Statements.Count > 0)
+            if ((request.Statements != null && request.Statements.Count > 0) ||
+                !string.IsNullOrWhiteSpace(request.RawSql))
             {
-                statements.AddRange(request.Statements);
-            }
-            else if (!string.IsNullOrWhiteSpace(request.RawSql))
-            {
-                var parts = request.RawSql.Split(new[] { ";\n", ";\r\n", ";" }, StringSplitOptions.RemoveEmptyEntries);
-                foreach (var part in parts)
+                return BadRequest(new
                 {
-                    var trimmed = part.Trim();
-                    if (!string.IsNullOrEmpty(trimmed))
-                    {
-                        statements.Add(trimmed.EndsWith(';') ? trimmed : trimmed + ";");
-                    }
-                }
+                    error = "Raw SQL restore is disabled. Send structured rows: { tablesToClear, rows: [{ table, data }] }."
+                });
             }
 
-            bool hasTablesToClear = request.TablesToClear != null && request.TablesToClear.Count > 0;
-            if (statements.Count == 0 && !hasTablesToClear)
+            var tablesToClear = request.TablesToClear ?? new List<string>();
+            var rows = request.Rows ?? new List<RestoreRow>();
+
+            if (tablesToClear.Count == 0 && rows.Count == 0)
             {
                 return Ok(new { restored = 0, total = 0, message = "No operations to execute." });
             }
 
-            if (hasTablesToClear)
+            if (rows.Count > MaxRowsPerRequest)
             {
-                foreach (var table in request.TablesToClear!)
+                return BadRequest(new { error = $"At most {MaxRowsPerRequest} rows per request." });
+            }
+
+            foreach (var table in tablesToClear)
+            {
+                if (string.IsNullOrWhiteSpace(table) || !SafeIdentifier.IsMatch(table))
                 {
-                    if (string.IsNullOrWhiteSpace(table) || !SafeTableName.IsMatch(table))
-                    {
-                        return BadRequest(new { error = $"Invalid table name in tablesToClear: '{table}'." });
-                    }
+                    return BadRequest(new { error = $"Invalid table name in tablesToClear: '{table}'." });
                 }
             }
 
-            for (int i = 0; i < statements.Count; i++)
+            for (int i = 0; i < rows.Count; i++)
             {
-                if (!IsAllowedRestoreStatement(statements[i], out var reason))
+                var row = rows[i];
+                if (string.IsNullOrWhiteSpace(row.Table) || !SafeIdentifier.IsMatch(row.Table))
                 {
-                    return BadRequest(new
+                    return BadRequest(new { error = "Invalid row table name.", index = i });
+                }
+
+                if (row.Data == null || row.Data.Count == 0)
+                {
+                    return BadRequest(new { error = "Row data is required.", index = i });
+                }
+
+                if (row.Data.Count > MaxColumnsPerRow)
+                {
+                    return BadRequest(new { error = $"Row exceeds {MaxColumnsPerRow} columns.", index = i });
+                }
+
+                foreach (var col in row.Data.Keys)
+                {
+                    if (string.IsNullOrWhiteSpace(col) || !SafeIdentifier.IsMatch(col))
                     {
-                        error = "Restore statement rejected by allowlist.",
-                        index = i,
-                        reason
-                    });
+                        return BadRequest(new { error = $"Invalid column name '{col}'.", index = i });
+                    }
                 }
             }
 
@@ -146,6 +164,8 @@ namespace Api.Controllers
             {
                 await connection.OpenAsync();
             }
+
+            int restoredCount = 0;
 
             try
             {
@@ -161,41 +181,40 @@ namespace Api.Controllers
                     var dbTx = transaction.GetDbTransaction();
                     try
                     {
-                        if (hasTablesToClear)
+                        foreach (var table in tablesToClear)
                         {
-                            foreach (var table in request.TablesToClear!)
-                            {
-                                using var delCmd = connection.CreateCommand();
-                                delCmd.Transaction = dbTx;
-                                delCmd.CommandText = $"DELETE FROM \"{table}\";";
-                                await delCmd.ExecuteNonQueryAsync();
-                            }
+                            using var delCmd = connection.CreateCommand();
+                            delCmd.Transaction = dbTx;
+                            delCmd.CommandText = $"DELETE FROM \"{table}\";";
+                            await delCmd.ExecuteNonQueryAsync();
                         }
 
-                        foreach (var stmt in statements)
+                        foreach (var row in rows)
                         {
-                            using var cmd = connection.CreateCommand();
-                            cmd.Transaction = dbTx;
-                            cmd.CommandText = stmt;
-                            await cmd.ExecuteNonQueryAsync();
-                            executedCount++;
+                            await InsertOrReplaceRowAsync(connection, dbTx, row.Table!, row.Data!);
+                            restoredCount++;
                         }
+
 
                         await transaction.CommitAsync();
 
-                        _logger.LogInformation("Restored {Count} statements from Cloudflare D1 into local SQLite.", executedCount);
-                        return Ok(new { restored = executedCount, total = statements.Count });
+                        _logger.LogInformation(
+                            "Restored {Count} parameterized rows from Cloudflare D1 into local SQLite (cleared {ClearCount} tables).",
+                            restoredCount,
+                            tablesToClear.Count);
+
+                        return Ok(new { restored = restoredCount, total = rows.Count, cleared = tablesToClear.Count });
                     }
                     catch (Exception ex)
                     {
                         await transaction.RollbackAsync();
-                        _logger.LogError(ex, "Failed executing restore statement. Transaction rolled back.");
+                        _logger.LogError(ex, "Failed executing structured restore. Transaction rolled back.");
                         return StatusCode(500, new
                         {
-                            error = "Restore failed: statement execution threw an exception.",
+                            error = "Restore failed: row execution threw an exception.",
                             details = ex.Message,
-                            executedBeforeFailure = executedCount,
-                            total = statements.Count
+                            executedBeforeFailure = restoredCount,
+                            total = rows.Count
                         });
                     }
                 }
@@ -227,14 +246,66 @@ namespace Api.Controllers
             }
         }
 
+        private static async Task InsertOrReplaceRowAsync(
+            System.Data.Common.DbConnection connection,
+            System.Data.Common.DbTransaction dbTx,
+            string table,
+            Dictionary<string, object?> data)
+        {
+            var columns = data.Keys.ToList();
+            var colSql = string.Join(", ", columns.Select(c => $"\"{c}\""));
+            var paramSql = string.Join(", ", columns.Select((_, i) => $"$p{i}"));
+
+            using var cmd = connection.CreateCommand();
+            cmd.Transaction = dbTx;
+            cmd.CommandText = $"INSERT OR REPLACE INTO \"{table}\" ({colSql}) VALUES ({paramSql});";
+
+            for (int i = 0; i < columns.Count; i++)
+            {
+                var param = cmd.CreateParameter();
+                param.ParameterName = $"$p{i}";
+                param.Value = CellToDbValue(data[columns[i]]);
+                cmd.Parameters.Add(param);
+            }
+
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        private static object CellToDbValue(object? value)
+        {
+            if (value == null || value is DBNull)
+                return DBNull.Value;
+
+            if (value is JValue jv)
+                return CellToDbValue(jv.Value);
+
+            if (value is JObject jo)
+            {
+                if (jo.TryGetValue("$b64", out var b64Token) && b64Token.Type == JTokenType.String)
+                {
+                    var s = b64Token.Value<string>();
+                    return string.IsNullOrEmpty(s) ? Array.Empty<byte>() : Convert.FromBase64String(s);
+                }
+
+                return jo.ToString(Newtonsoft.Json.Formatting.None);
+            }
+
+            if (value is JArray ja)
+                return ja.ToString(Newtonsoft.Json.Formatting.None);
+
+            if (value is bool b)
+                return b ? 1 : 0;
+
+            if (value is byte[] or string or long or int or short or byte or double or float or decimal)
+                return value;
+
+            return Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture) ?? (object)DBNull.Value;
+        }
+
         private bool EnsureInternalAccess(out IActionResult? failure)
         {
-            // Do not require IPAddress.IsLoopback here. On Cloudflare Containers the Worker calls
-            // http://127.0.0.1:8001 via containerFetch, but the .NET process often sees a non-loopback
-            // remote address — that blocked /api/internal/build + d1-restore and left the API in 503
-            // "starting up" forever. The container is not publicly addressed; the Worker strips
-            // x-internal-key before forwarding browser traffic. Auth is the dedicated sync key
-            // (plus SQL allowlisting on restore).
+            // Cloudflare Containers: Worker containerFetch is not reliably loopback from .NET's view.
+            // Container is not publicly addressed; Worker strips x-internal-key before forwarding browsers.
             if (!InternalAuthHelper.ValidateInternalKey(_configuration, Request.Headers, out var status, out var message, _logger))
             {
                 if (status == 503)
@@ -249,41 +320,6 @@ namespace Api.Controllers
             }
 
             failure = null;
-            return true;
-        }
-
-        private static bool IsAllowedRestoreStatement(string statement, out string reason)
-        {
-            reason = string.Empty;
-            if (string.IsNullOrWhiteSpace(statement))
-            {
-                reason = "Empty statement.";
-                return false;
-            }
-
-            var normalized = statement.Trim().TrimEnd(';').Trim();
-
-            // Reject stacked statements (allow a single trailing semicolon only).
-            if (normalized.Contains(';'))
-            {
-                reason = "Multiple SQL statements in one payload are not allowed.";
-                return false;
-            }
-
-            var match = AllowedRestoreStatement.Match(normalized);
-            if (!match.Success)
-            {
-                reason = "Only INSERT, INSERT OR REPLACE, and DELETE FROM quoted tables are allowed.";
-                return false;
-            }
-
-            var tableName = match.Groups[1].Value;
-            if (!SafeTableName.IsMatch(tableName))
-            {
-                reason = "Table name failed allowlist validation.";
-                return false;
-            }
-
             return true;
         }
     }
