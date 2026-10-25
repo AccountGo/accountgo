@@ -89,9 +89,9 @@ export class AccountGoApiContainer extends Container<Env> {
         }
       }
 
-      const secret = this.env.SECRET_KEY || (this.env as any).SECRET__key;
-      if (!secret) {
-        console.error("Cold start D1 restore skipped: SECRET_KEY is not configured.");
+      const syncKey = resolveInternalSyncKey(this.env);
+      if (!syncKey) {
+        console.error("Cold start D1 restore skipped: INTERNAL_SYNC_KEY (or SECRET_KEY fallback) is not configured.");
         return false;
       }
 
@@ -102,7 +102,7 @@ export class AccountGoApiContainer extends Container<Env> {
             method: "POST",
             headers: {
               "content-type": "application/json",
-              "x-internal-key": secret,
+              "x-internal-key": syncKey,
             },
             body: JSON.stringify({ tablesToClear: syncTables, statements: [] }),
           });
@@ -119,7 +119,7 @@ export class AccountGoApiContainer extends Container<Env> {
             method: "POST",
             headers: {
               "content-type": "application/json",
-              "x-internal-key": secret,
+              "x-internal-key": syncKey,
             },
             body: JSON.stringify({
               tablesToClear: isFirstBatch ? syncTables : undefined,
@@ -144,18 +144,18 @@ export class AccountGoApiContainer extends Container<Env> {
   }
 
   private async initialize(): Promise<void> {
-    const secret = this.env.SECRET_KEY || (this.env as any).SECRET__key;
+    const syncKey = resolveInternalSyncKey(this.env);
 
     // Build check (1.2.4)
     if (this.env.BUILD_SHA) {
-      if (!secret) {
-        console.error("Cold start check failed: SECRET_KEY is not configured.");
-        throw new Error("SECRET_KEY is not configured.");
+      if (!syncKey) {
+        console.error("Cold start check failed: INTERNAL_SYNC_KEY (or SECRET_KEY fallback) is not configured.");
+        throw new Error("INTERNAL_SYNC_KEY is not configured.");
       }
 
       const buildRes = await this.containerFetch("http://127.0.0.1:8001/api/internal/build", {
         method: "GET",
-        headers: { "x-internal-key": secret },
+        headers: { "x-internal-key": syncKey },
       });
 
       if (!buildRes.ok) {
@@ -426,6 +426,8 @@ export interface Env {
   CONTAINER: DurableObjectNamespace<AccountGoApiContainer>;
   ENVIRONMENT?: string;
   CONTAINER_NAME?: string;
+  /** Dedicated key for container-loopback internal sync; prefer over SECRET_KEY. */
+  INTERNAL_SYNC_KEY?: string;
   SECRET_KEY?: string;
   SECRET__key?: string;
   BUILD_SHA?: string;
@@ -433,6 +435,11 @@ export interface Env {
     id: string;
     tag: string;
   };
+}
+
+/** Prefer INTERNAL_SYNC_KEY so JWT signing material is not the DB restore credential. */
+function resolveInternalSyncKey(env: Env): string | undefined {
+  return env.INTERNAL_SYNC_KEY || env.SECRET_KEY || (env as any).SECRET__key || undefined;
 }
 
 let loggedContainerName = false;

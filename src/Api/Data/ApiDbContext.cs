@@ -22,6 +22,7 @@ namespace Api.Data
     {
         private readonly ID1SyncContext? _d1SyncContext;
         private readonly ITenantContext? _tenantContext;
+        private readonly AuditLogHelper _auditLogHelper = new();
 
         public int CurrentTenantCompanyId => _tenantContext?.CompanyId ?? -1;
 
@@ -567,6 +568,7 @@ namespace Api.Data
         private void SaveAuditLog()
         {
             string username = string.Empty;
+            _auditLogHelper.ClearAddedEntities();
 
             var dbEntityEntries = ChangeTracker.Entries().ToList()
                 .Where(p => p.State == EntityState.Modified || p.State == EntityState.Added || p.State == EntityState.Deleted);
@@ -576,7 +578,7 @@ namespace Api.Data
                 try
                 {
                     username = ((BaseEntity)dbEntityEntry.Entity).ModifiedBy;
-                    var auditLogs = AuditLogHelper.GetChangesForAuditLog(dbEntityEntry, username);
+                    var auditLogs = _auditLogHelper.GetChangesForAuditLog(dbEntityEntry, username);
                     foreach (var auditlog in auditLogs)
                         if (auditlog != null)
                             AuditLogs.Add(auditlog);
@@ -590,7 +592,7 @@ namespace Api.Data
 
         private void UpdateAuditLogRecordId()
         {
-            foreach (var entity in AuditLogHelper.addedEntities)
+            foreach (var entity in _auditLogHelper.AddedEntities)
             {
                 if (ChangeTracker.Entries().ToList().Contains(entity.Value))
                 {
@@ -610,6 +612,8 @@ namespace Api.Data
                     }
                 }
             }
+
+            _auditLogHelper.ClearAddedEntities();
         }
         #endregion
     }
