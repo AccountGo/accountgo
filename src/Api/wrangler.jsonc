@@ -52,7 +52,9 @@
     "RESEND_FROM_NAME": "AccountGo",
     "JwtSettings__validIssuer": "AccountGo API",
     "JwtSettings__validAudience": "https://accountgo-api.anter.workers.dev",
-    "Cors__AllowedOrigins__0": "https://accountgo-web.anter.workers.dev"
+    "Cors__AllowedOrigins__0": "https://accountgo-web.anter.workers.dev",
+    "Anter__BaseUrl": "https://agents.anter.ai",
+    "Anter__AgentSlug": "accountgo-assistant"
   },
   "observability": {
     "enabled": true,

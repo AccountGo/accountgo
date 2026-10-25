@@ -161,6 +161,29 @@ builder.Services
     })
     .WithTools<Api.Mcp.Tools.FinancialMcpTools>();
 
+// AccountGo Assistant → Anter external agent-runner (API key stays server-side)
+builder.Services.Configure<Api.Options.AnterOptions>(builder.Configuration.GetSection(Api.Options.AnterOptions.SectionName));
+builder.Services.PostConfigure<Api.Options.AnterOptions>(options =>
+{
+    string? Pick(params string?[] values)
+    {
+        foreach (var value in values)
+        {
+            if (!string.IsNullOrWhiteSpace(value)) return value;
+        }
+        return null;
+    }
+
+    options.ApiKey = Pick(options.ApiKey, builder.Configuration["Anter__ApiKey"], builder.Configuration["ANTER_API_KEY"]) ?? options.ApiKey;
+    options.ProjectId = Pick(options.ProjectId, builder.Configuration["Anter__ProjectId"], builder.Configuration["ANTER_PROJECT_ID"]) ?? options.ProjectId;
+    options.AgentSlug = Pick(options.AgentSlug, builder.Configuration["Anter__AgentSlug"], builder.Configuration["ANTER_AGENT_SLUG"]) ?? options.AgentSlug;
+    options.BaseUrl = Pick(options.BaseUrl, builder.Configuration["Anter__BaseUrl"], builder.Configuration["ANTER_BASE_URL"]) ?? options.BaseUrl;
+});
+builder.Services.AddHttpClient<Api.Service.Ai.IAnterAgentRunnerClient, Api.Service.Ai.AnterAgentRunnerClient>(client =>
+{
+    client.Timeout = TimeSpan.FromMinutes(10);
+});
+
 // Configure reverse proxy / forwarded headers support
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
