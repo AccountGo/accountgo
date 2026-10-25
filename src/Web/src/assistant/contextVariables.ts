@@ -12,11 +12,16 @@ const SERVER_OWNED_KEYS = new Set([
   'organizationId',
   'companyId',
   'companySlug',
+  'accountGoUserId',
+  'companyPlan',
+  'activeModules',
+  'companyRole',
+  'subscriptionStatus',
 ]);
 
 /**
- * Merge SDK payload CVs with page context. Tenant/identity keys are never taken
- * from the SDK payload — the API overwrites them from JWT + ITenantContext.
+ * Merge SDK payload CVs with page context. Tenant/identity/entitlement keys are never
+ * taken from the SDK payload — the API overwrites them from JWT + ITenantContext.
  * Page route/title prefer the live page context over stale payload values.
  */
 export function mergeAssistantContextVariables(

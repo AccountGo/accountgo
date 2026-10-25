@@ -3,12 +3,14 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Api.Mcp.Models;
 using Api.Mcp.Tools;
 using Core.Domain;
 using Core.Domain.Financials;
 using Core.Domain.Security;
 using Core.Tenancy;
 using Dto.Financial;
+using Dto.Subscription;
 using Moq;
 using Services.Administration;
 using Services.Financial;
@@ -32,6 +34,15 @@ namespace AccountGo.BackendTests.Financial
 
             _mockAdmin.Setup(a => a.IsModuleEnabled("financials")).Returns(true);
             _mockAdmin.Setup(a => a.IsModuleEnabled("reports")).Returns(true);
+            _mockAdmin.Setup(a => a.GetCurrentSubscription()).Returns(new TenantSubscriptionDto
+            {
+                CompanyId = 1,
+                CompanyName = "PH Financials",
+                Slug = "ph-financials",
+                Plan = "accounting",
+                SubscriptionStatus = "active",
+                ActiveModules = new List<string> { "sales", "financials", "purchases", "reports" }
+            });
         }
 
         #region Phase 1: Chart of Accounts Tests
@@ -51,17 +62,55 @@ namespace AccountGo.BackendTests.Financial
         }
 
         [Fact]
-        public async Task GetChartOfAccounts_ThrowsWhenSubscriptionModuleDisabled()
+        public async Task GetChartOfAccounts_ReturnsPlanRestrictedWhenSubscriptionModuleDisabled()
         {
             _mockAdmin.Setup(a => a.IsModuleEnabled("financials")).Returns(false);
             _mockAdmin.Setup(a => a.IsModuleEnabled("reports")).Returns(false);
+            _mockAdmin.Setup(a => a.GetCurrentSubscription()).Returns(new TenantSubscriptionDto
+            {
+                CompanyId = 1,
+                Slug = "ph-financials",
+                Plan = "invoicing",
+                ActiveModules = new List<string> { "sales", "purchases" }
+            });
 
             var tools = new FinancialMcpTools(_mockFinancial.Object, _mockAdmin.Object, _mockTenant.Object);
 
-            var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-                tools.GetChartOfAccounts());
+            var response = await tools.GetChartOfAccounts();
 
-            Assert.Contains("subscription plan does not include", ex.Message);
+            Assert.Equal(FinancialMcpStatus.PlanRestricted, response.Status);
+            Assert.Contains("Invoicing", response.Message);
+            Assert.Contains("Settings > Subscription", response.Message);
+            Assert.Equal("accounting", response.UpgradePlanHint);
+            Assert.Equal(new[] { "financials", "reports" }, response.RequiredModules);
+            Assert.Empty(response.Accounts);
+            Assert.Equal(0, response.TotalAccounts);
+            _mockFinancial.Verify(s => s.GetAccounts(), Times.Never);
+        }
+
+        [Fact]
+        public async Task GetChartOfAccounts_ReturnsPlanRestrictedWhenAccountingPlanModulesDisabled()
+        {
+            _mockAdmin.Setup(a => a.IsModuleEnabled("financials")).Returns(false);
+            _mockAdmin.Setup(a => a.IsModuleEnabled("reports")).Returns(false);
+            _mockAdmin.Setup(a => a.GetCurrentSubscription()).Returns(new TenantSubscriptionDto
+            {
+                CompanyId = 1,
+                Slug = "ph-financials",
+                Plan = "accounting",
+                ActiveModules = new List<string> { "sales", "purchases" }
+            });
+
+            var tools = new FinancialMcpTools(_mockFinancial.Object, _mockAdmin.Object, _mockTenant.Object);
+
+            var response = await tools.GetChartOfAccounts();
+
+            Assert.Equal(FinancialMcpStatus.PlanRestricted, response.Status);
+            Assert.Contains("Accounting", response.Message);
+            Assert.Contains("financials", response.Message);
+            Assert.Null(response.UpgradePlanHint);
+            Assert.Empty(response.Accounts);
+            _mockFinancial.Verify(s => s.GetAccounts(), Times.Never);
         }
 
         [Fact]
@@ -107,6 +156,8 @@ namespace AccountGo.BackendTests.Financial
             var result = await tools.GetChartOfAccounts();
 
             Assert.NotNull(result);
+            Assert.Equal(FinancialMcpStatus.Success, result.Status);
+            Assert.Null(result.Message);
             Assert.Equal("ph-financials", result.Organization);
             Assert.Equal(3, result.TotalAccounts);
             Assert.Equal(3, result.TotalUnfilteredAccounts);
@@ -274,17 +325,38 @@ namespace AccountGo.BackendTests.Financial
         }
 
         [Fact]
-        public async Task GetTrialBalance_ThrowsWhenPermissionDenied()
+        public async Task GetTrialBalance_ReturnsAccessDeniedWhenPermissionDenied()
         {
             _mockTenant.Setup(t => t.Role).Returns(CompanyMemberRole.Member);
             _mockTenant.Setup(t => t.Permissions).Returns(new HashSet<string>());
 
             var tools = new FinancialMcpTools(_mockFinancial.Object, _mockAdmin.Object, _mockTenant.Object);
 
-            var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-                tools.GetTrialBalance());
+            var response = await tools.GetTrialBalance();
 
-            Assert.Contains("Access denied", ex.Message);
+            Assert.Equal(FinancialMcpStatus.AccessDenied, response.Status);
+            Assert.Contains("Access denied", response.Message);
+            Assert.Contains(SystemPermissions.ReportsView, response.Message);
+            Assert.Empty(response.Items);
+            _mockFinancial.Verify(
+                s => s.TrialBalance(It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<AccountingBasis>()),
+                Times.Never);
+        }
+
+        [Fact]
+        public async Task GetTrialBalance_OwnerBypassesPermissionCheck()
+        {
+            _mockTenant.Setup(t => t.Role).Returns(CompanyMemberRole.Owner);
+            _mockTenant.Setup(t => t.Permissions).Returns(new HashSet<string>());
+            _mockFinancial.Setup(s => s.TrialBalance(It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), AccountingBasis.Accrual))
+                .Returns(new List<Services.Financial.TrialBalance>());
+
+            var tools = new FinancialMcpTools(_mockFinancial.Object, _mockAdmin.Object, _mockTenant.Object);
+
+            var response = await tools.GetTrialBalance();
+
+            Assert.Equal(FinancialMcpStatus.Success, response.Status);
+            Assert.Empty(response.Items);
         }
 
         [Fact]
@@ -401,17 +473,24 @@ namespace AccountGo.BackendTests.Financial
         }
 
         [Fact]
-        public async Task GetGeneralLedgerTransactions_ThrowsWhenMemberOnlyHasReportsViewPermission()
+        public async Task GetGeneralLedgerTransactions_ReturnsAccessDeniedWhenMemberOnlyHasReportsViewPermission()
         {
             _mockTenant.Setup(t => t.Role).Returns(CompanyMemberRole.Member);
             _mockTenant.Setup(t => t.Permissions).Returns(new HashSet<string> { SystemPermissions.ReportsView });
 
             var tools = new FinancialMcpTools(_mockFinancial.Object, _mockAdmin.Object, _mockTenant.Object);
 
-            var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-                tools.GetGeneralLedgerTransactions());
+            var response = await tools.GetGeneralLedgerTransactions();
 
-            Assert.Contains(SystemPermissions.FinancialsJournalView, ex.Message);
+            Assert.Equal(FinancialMcpStatus.AccessDenied, response.Status);
+            Assert.Contains(SystemPermissions.FinancialsJournalView, response.Message);
+            Assert.Empty(response.Transactions);
+            _mockFinancial.Verify(
+                s => s.GetGeneralLedgerTransactions(
+                    It.IsAny<DateTime?>(), It.IsAny<DateTime?>(),
+                    It.IsAny<string?>(), It.IsAny<int?>(), It.IsAny<DocumentTypes?>(),
+                    It.IsAny<int>(), It.IsAny<int>()),
+                Times.Never);
         }
 
         [Fact]

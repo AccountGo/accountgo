@@ -15,7 +15,7 @@ const {
 } = await server.ssrLoadModule('/src/components/SubscriptionSettingsTab.tsx');
 
 test('modules are ordered by subscription tier and plan inclusion matches the matrix', () => {
-  assert.deepEqual(PLAN_INCLUDED_MODULES.invoicing, ['sales']);
+  assert.deepEqual(PLAN_INCLUDED_MODULES.invoicing, ['sales', 'purchases']);
   assert.deepEqual(PLAN_INCLUDED_MODULES.accounting, ['sales', 'financials', 'purchases', 'reports']);
   assert.deepEqual(PLAN_INCLUDED_MODULES.enterprise, [
     'sales', 'financials', 'purchases', 'reports', 'inventory', 'donations', 'audit',
@@ -26,12 +26,12 @@ test('modules are ordered by subscription tier and plan inclusion matches the ma
   assert.equal(isModuleIncludedInPlan('enterprise', 'audit'), true);
 });
 
-test('sanitizeModulesForPlan drops modules outside the selected tier and keeps sales', () => {
+test('sanitizeModulesForPlan drops modules outside the selected tier and keeps sales and purchases', () => {
   assert.deepEqual(
     sanitizeModulesForPlan('accounting', ['sales', 'financials', 'inventory', 'audit']),
     ['sales', 'financials'],
   );
-  assert.deepEqual(sanitizeModulesForPlan('invoicing', ['financials']), ['sales']);
+  assert.deepEqual(sanitizeModulesForPlan('invoicing', ['financials']), ['sales', 'purchases']);
   assert.deepEqual(
     sanitizeModulesForPlan('enterprise', ['reports', 'donations']),
     ['sales', 'reports', 'donations'],

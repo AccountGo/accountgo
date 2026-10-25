@@ -5,9 +5,8 @@ using Dto.Financial;
 
 namespace Api.Mcp.Models
 {
-    public class GeneralLedgerTransactionsMcpResponse
+    public class GeneralLedgerTransactionsMcpResponse : FinancialMcpBaseResponse
     {
-        public string Organization { get; set; } = string.Empty;
         public int TotalCount { get; set; }
         public int Skip { get; set; }
         public int Take { get; set; }

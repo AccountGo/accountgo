@@ -4,9 +4,8 @@ using System.Collections.Generic;
 
 namespace Api.Mcp.Models
 {
-    public class BalanceSheetMcpResponse
+    public class BalanceSheetMcpResponse : FinancialMcpBaseResponse
     {
-        public string Organization { get; set; } = string.Empty;
         public string AccountingBasis { get; set; } = "Accrual";
         public DateTime? AsOfDate { get; set; }
         public decimal TotalAssets { get; set; }

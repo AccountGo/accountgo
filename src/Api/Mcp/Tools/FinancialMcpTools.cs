@@ -10,6 +10,8 @@ using Api.Mcp.Models;
 using Core.Domain;
 using Core.Domain.Security;
 using Core.Tenancy;
+using Dto.Subscription;
+using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Server;
 using Services.Administration;
 using Services.Financial;
@@ -19,18 +21,23 @@ namespace Api.Mcp.Tools
     [McpServerToolType]
     public class FinancialMcpTools
     {
+        private static readonly string[] FinancialOrReportsModules = { "financials", "reports" };
+
         private readonly IFinancialService _financialService;
         private readonly IAdministrationService _adminService;
         private readonly ITenantContext _tenantContext;
+        private readonly ILogger<FinancialMcpTools> _logger;
 
         public FinancialMcpTools(
             IFinancialService financialService,
             IAdministrationService adminService,
-            ITenantContext tenantContext)
+            ITenantContext tenantContext,
+            ILogger<FinancialMcpTools>? logger = null)
         {
             _financialService = financialService ?? throw new ArgumentNullException(nameof(financialService));
             _adminService = adminService ?? throw new ArgumentNullException(nameof(adminService));
             _tenantContext = tenantContext ?? throw new ArgumentNullException(nameof(tenantContext));
+            _logger = logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<FinancialMcpTools>.Instance;
         }
 
         #region Phase 1: Chart of Accounts
@@ -43,7 +50,7 @@ namespace Api.Mcp.Tools
             Destructive = false,
             OpenWorld = false
         )]
-        [Description("Retrieves the organization's Chart of Accounts (COA) including account codes, names, classifications (Asset, Liability, Equity, Revenue, Expense), normal balances, and current balances.")]
+        [Description("Retrieves the organization's Chart of Accounts (COA) including account codes, names, classifications (Asset, Liability, Equity, Revenue, Expense), normal balances, and current balances. Requires the workspace activeModules to include 'financials' or 'reports'. On plan restriction returns Status PlanRestricted instead of throwing.")]
         public Task<ChartOfAccountsMcpResponse> GetChartOfAccounts(
             [Description("Optional search text to filter accounts by code or name.")] string? filter = null,
             [Description("Optional classification filter (e.g., 'Asset', 'Liability', 'Equity', 'Revenue', 'Expense').")] string? accountClass = null,
@@ -51,7 +58,10 @@ namespace Api.Mcp.Tools
             CancellationToken cancellationToken = default)
         {
             EnsureTenantResolved();
-            EnsureModule("financials", "reports");
+            if (!TryAuthorizeModules(out var denied))
+            {
+                return Task.FromResult(Denied<ChartOfAccountsMcpResponse>(denied));
+            }
 
             var allAccounts = _financialService.GetAccounts()?.ToList() ?? new List<Core.Domain.Financials.Account>();
 
@@ -89,7 +99,8 @@ namespace Api.Mcp.Tools
 
             var response = new ChartOfAccountsMcpResponse
             {
-                Organization = _tenantContext.CompanySlug ?? $"Tenant-{_tenantContext.CompanyId}",
+                Organization = OrgLabel(),
+                Status = FinancialMcpStatus.Success,
                 TotalAccounts = filteredAccounts.Count,
                 TotalUnfilteredAccounts = allAccounts.Count,
                 AsOfDateUtc = DateTime.UtcNow,
@@ -129,7 +140,7 @@ namespace Api.Mcp.Tools
             Destructive = false,
             OpenWorld = false
         )]
-        [Description("Generates a Trial Balance report for the organization across a date range and accounting basis (Accrual or Cash), summarizing total debit and credit balances per account.")]
+        [Description("Generates a Trial Balance report for the organization across a date range and accounting basis (Accrual or Cash), summarizing total debit and credit balances per account. Requires activeModules 'financials' or 'reports' and ReportsView permission. On restriction returns Status PlanRestricted or AccessDenied instead of throwing.")]
         public Task<TrialBalanceMcpResponse> GetTrialBalance(
             [Description("Optional inclusive start date (e.g., '2026-01-01').")] string? fromDate = null,
             [Description("Optional inclusive end date (e.g., '2026-12-31').")] string? toDate = null,
@@ -137,8 +148,15 @@ namespace Api.Mcp.Tools
             CancellationToken cancellationToken = default)
         {
             EnsureTenantResolved();
-            EnsureModule("financials", "reports");
-            EnsurePermission(SystemPermissions.ReportsView);
+            if (!TryAuthorizeModules(out var moduleDenied))
+            {
+                return Task.FromResult(Denied<TrialBalanceMcpResponse>(moduleDenied));
+            }
+
+            if (!TryAuthorizePermission(SystemPermissions.ReportsView, out var permissionDenied))
+            {
+                return Task.FromResult(Denied<TrialBalanceMcpResponse>(permissionDenied));
+            }
 
             var from = ParseDate(fromDate, nameof(fromDate));
             var to = ParseDate(toDate, nameof(toDate), inclusiveEndOfDay: true);
@@ -152,7 +170,8 @@ namespace Api.Mcp.Tools
 
             var response = new TrialBalanceMcpResponse
             {
-                Organization = _tenantContext.CompanySlug ?? $"Tenant-{_tenantContext.CompanyId}",
+                Organization = OrgLabel(),
+                Status = FinancialMcpStatus.Success,
                 AccountingBasis = basis.ToString(),
                 FromDate = from,
                 ToDate = to,
@@ -182,7 +201,7 @@ namespace Api.Mcp.Tools
             Destructive = false,
             OpenWorld = false
         )]
-        [Description("Generates a cumulative Balance Sheet statement (Assets, Liabilities, and Equity) as of a given date and accounting basis (Accrual or Cash).")]
+        [Description("Generates a cumulative Balance Sheet statement (Assets, Liabilities, and Equity) as of a given date and accounting basis (Accrual or Cash). Requires activeModules 'financials' or 'reports' and ReportsView permission. On restriction returns Status PlanRestricted or AccessDenied instead of throwing.")]
         public Task<BalanceSheetMcpResponse> GetBalanceSheet(
             [Description("Optional cumulative as-of date (e.g., '2026-12-31'). Includes all activity up to and including this date.")] string? asOfDate = null,
             [Description("Accounting basis: 'Accrual' (default) or 'Cash'.")] string? accountingBasis = "Accrual",
@@ -190,8 +209,15 @@ namespace Api.Mcp.Tools
             CancellationToken cancellationToken = default)
         {
             EnsureTenantResolved();
-            EnsureModule("financials", "reports");
-            EnsurePermission(SystemPermissions.ReportsView);
+            if (!TryAuthorizeModules(out var moduleDenied))
+            {
+                return Task.FromResult(Denied<BalanceSheetMcpResponse>(moduleDenied));
+            }
+
+            if (!TryAuthorizePermission(SystemPermissions.ReportsView, out var permissionDenied))
+            {
+                return Task.FromResult(Denied<BalanceSheetMcpResponse>(permissionDenied));
+            }
 
             var to = ParseDate(asOfDate, nameof(asOfDate), inclusiveEndOfDay: true);
             var basis = ParseBasis(accountingBasis);
@@ -209,7 +235,8 @@ namespace Api.Mcp.Tools
 
             var response = new BalanceSheetMcpResponse
             {
-                Organization = _tenantContext.CompanySlug ?? $"Tenant-{_tenantContext.CompanyId}",
+                Organization = OrgLabel(),
+                Status = FinancialMcpStatus.Success,
                 AccountingBasis = basis.ToString(),
                 AsOfDate = to,
                 TotalAssets = totalAssets,
@@ -238,7 +265,7 @@ namespace Api.Mcp.Tools
             Destructive = false,
             OpenWorld = false
         )]
-        [Description("Generates an Income Statement (Profit & Loss) for the organization over a date range and accounting basis (Accrual or Cash), calculating total revenues, total expenses, and net income.")]
+        [Description("Generates an Income Statement (Profit & Loss) for the organization over a date range and accounting basis (Accrual or Cash), calculating total revenues, total expenses, and net income. Requires activeModules 'financials' or 'reports' and ReportsView permission. On restriction returns Status PlanRestricted or AccessDenied instead of throwing.")]
         public Task<IncomeStatementMcpResponse> GetIncomeStatement(
             [Description("Optional period start date (e.g., '2026-01-01').")] string? fromDate = null,
             [Description("Optional period end date (e.g., '2026-12-31').")] string? toDate = null,
@@ -247,8 +274,15 @@ namespace Api.Mcp.Tools
             CancellationToken cancellationToken = default)
         {
             EnsureTenantResolved();
-            EnsureModule("financials", "reports");
-            EnsurePermission(SystemPermissions.ReportsView);
+            if (!TryAuthorizeModules(out var moduleDenied))
+            {
+                return Task.FromResult(Denied<IncomeStatementMcpResponse>(moduleDenied));
+            }
+
+            if (!TryAuthorizePermission(SystemPermissions.ReportsView, out var permissionDenied))
+            {
+                return Task.FromResult(Denied<IncomeStatementMcpResponse>(permissionDenied));
+            }
 
             var from = ParseDate(fromDate, nameof(fromDate));
             var to = ParseDate(toDate, nameof(toDate), inclusiveEndOfDay: true);
@@ -266,7 +300,8 @@ namespace Api.Mcp.Tools
 
             var response = new IncomeStatementMcpResponse
             {
-                Organization = _tenantContext.CompanySlug ?? $"Tenant-{_tenantContext.CompanyId}",
+                Organization = OrgLabel(),
+                Status = FinancialMcpStatus.Success,
                 AccountingBasis = basis.ToString(),
                 FromDate = from,
                 ToDate = to,
@@ -294,7 +329,7 @@ namespace Api.Mcp.Tools
             Destructive = false,
             OpenWorld = false
         )]
-        [Description("Retrieves a paged register of posted General Ledger journal transactions with complete lines (accounts, debits, credits, narrations, and document types).")]
+        [Description("Retrieves a paged register of posted General Ledger journal transactions with complete lines (accounts, debits, credits, narrations, and document types). Requires activeModules 'financials' or 'reports' and FinancialsJournalView permission. On restriction returns Status PlanRestricted or AccessDenied instead of throwing.")]
         public Task<GeneralLedgerTransactionsMcpResponse> GetGeneralLedgerTransactions(
             [Description("Optional start date filter (e.g., '2026-01-01').")] string? fromDate = null,
             [Description("Optional end date filter (e.g., '2026-12-31').")] string? toDate = null,
@@ -306,8 +341,15 @@ namespace Api.Mcp.Tools
             CancellationToken cancellationToken = default)
         {
             EnsureTenantResolved();
-            EnsureModule("financials", "reports");
-            EnsurePermission(SystemPermissions.FinancialsJournalView);
+            if (!TryAuthorizeModules(out var moduleDenied))
+            {
+                return Task.FromResult(Denied<GeneralLedgerTransactionsMcpResponse>(moduleDenied));
+            }
+
+            if (!TryAuthorizePermission(SystemPermissions.FinancialsJournalView, out var permissionDenied))
+            {
+                return Task.FromResult(Denied<GeneralLedgerTransactionsMcpResponse>(permissionDenied));
+            }
 
             if (skip < 0)
             {
@@ -347,7 +389,8 @@ namespace Api.Mcp.Tools
 
             var response = new GeneralLedgerTransactionsMcpResponse
             {
-                Organization = _tenantContext.CompanySlug ?? $"Tenant-{_tenantContext.CompanyId}",
+                Organization = OrgLabel(),
+                Status = FinancialMcpStatus.Success,
                 TotalCount = page?.TotalCount ?? 0,
                 Skip = page?.Skip ?? skip,
                 Take = page?.Take ?? take,
@@ -372,31 +415,109 @@ namespace Api.Mcp.Tools
             }
         }
 
-        private void EnsureModule(params string[] moduleKeys)
+        private bool TryAuthorizeModules(out EntitlementDenial denial)
         {
-            if (!Array.Exists(moduleKeys, _adminService.IsModuleEnabled))
+            if (Array.Exists(FinancialOrReportsModules, _adminService.IsModuleEnabled))
             {
-                throw new InvalidOperationException($"The organization's active subscription plan does not include the '{string.Join("' or '", moduleKeys)}' module required for this operation.");
+                denial = default;
+                return true;
             }
+
+            denial = BuildPlanRestrictedDenial(FinancialOrReportsModules);
+            return false;
         }
 
-        private void EnsurePermission(params string[] requiredPermissions)
+        private bool TryAuthorizePermission(string requiredPermission, out EntitlementDenial denial)
         {
             if (_tenantContext.Role == CompanyMemberRole.Owner || _tenantContext.Role == CompanyMemberRole.Admin)
             {
-                return;
+                denial = default;
+                return true;
             }
 
-            foreach (var permission in requiredPermissions)
+            if (_tenantContext.Permissions.Contains(requiredPermission))
             {
-                if (_tenantContext.Permissions.Contains(permission))
-                {
-                    return;
-                }
+                denial = default;
+                return true;
             }
 
-            throw new InvalidOperationException($"Access denied. You do not have the required permission ({string.Join(" or ", requiredPermissions)}) to access this resource.");
+            denial = new EntitlementDenial(
+                FinancialMcpStatus.AccessDenied,
+                $"Access denied. You do not have the required permission ({requiredPermission}) to access this resource.",
+                RequiredModules: null,
+                UpgradePlanHint: null);
+            return false;
         }
+
+        private EntitlementDenial BuildPlanRestrictedDenial(IReadOnlyList<string> requiredModules)
+        {
+            TenantSubscriptionDto? subscription = null;
+            try
+            {
+                subscription = _adminService.GetCurrentSubscription();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Could not load subscription while building PlanRestricted message");
+            }
+
+            var planKey = (subscription?.Plan ?? "unknown").Trim().ToLowerInvariant();
+            var planDisplay = PlanDisplayName(planKey);
+            var org = OrgLabel();
+            var modulesLabel = string.Join("' or '", requiredModules);
+
+            string message;
+            if (string.Equals(planKey, "invoicing", StringComparison.OrdinalIgnoreCase))
+            {
+                message =
+                    $"The active workspace '{org}' is on the {planDisplay} plan, which includes quotes, invoicing, and expenses, but does not include double-entry accounting or financial statements. Upgrade to the Accounting or Enterprise plan under Settings > Subscription to access financial reports and statements.";
+            }
+            else
+            {
+                message =
+                    $"The active workspace '{org}' does not have the '{modulesLabel}' module enabled (plan: {planDisplay}). Enable the required modules or upgrade under Settings > Subscription.";
+            }
+
+            return new EntitlementDenial(
+                FinancialMcpStatus.PlanRestricted,
+                message,
+                RequiredModules: requiredModules,
+                UpgradePlanHint: planKey is "invoicing" or "unknown" ? "accounting" : null);
+        }
+
+        private T Denied<T>(EntitlementDenial denial) where T : FinancialMcpBaseResponse, new()
+        {
+            _logger.LogInformation(
+                "Financial MCP entitlement {Status} for company {CompanyId}",
+                denial.Status,
+                _tenantContext.CompanyId);
+
+            return new T
+            {
+                Organization = OrgLabel(),
+                Status = denial.Status,
+                Message = denial.Message,
+                RequiredModules = denial.RequiredModules,
+                UpgradePlanHint = denial.UpgradePlanHint
+            };
+        }
+
+        private string OrgLabel() =>
+            _tenantContext.CompanySlug ?? $"Tenant-{_tenantContext.CompanyId}";
+
+        private static string PlanDisplayName(string planKey) => planKey switch
+        {
+            "invoicing" => "Invoicing",
+            "accounting" => "Accounting",
+            "enterprise" => "Enterprise",
+            _ => string.IsNullOrWhiteSpace(planKey) ? "unknown" : planKey
+        };
+
+        private readonly record struct EntitlementDenial(
+            string Status,
+            string Message,
+            IReadOnlyList<string>? RequiredModules,
+            string? UpgradePlanHint);
 
         private static DateTime? ParseDate(string? dateStr, string paramName, bool inclusiveEndOfDay = false)
         {
