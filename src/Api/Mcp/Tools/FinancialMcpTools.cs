@@ -322,6 +322,100 @@ namespace Api.Mcp.Tools
         }
 
         [McpServerTool(
+            Name = "get_cash_flow",
+            Title = "Get Statement of Cash Flows",
+            ReadOnly = true,
+            Idempotent = true,
+            Destructive = false,
+            OpenWorld = false
+        )]
+        [Description("Generates a Statement of Cash Flows for the organization over a date range and accounting basis (Accrual or Cash) using the indirect method, calculating Operating, Investing, and Financing cash flows reconciling to cash balances. Requires activeModules 'financials' or 'reports' and ReportsView permission. On restriction returns Status PlanRestricted or AccessDenied instead of throwing.")]
+        public Task<CashFlowStatementMcpResponse> GetCashFlow(
+            [Description("Optional period start date (e.g., '2026-01-01').")] string? fromDate = null,
+            [Description("Optional period end date (e.g., '2026-12-31').")] string? toDate = null,
+            [Description("Accounting basis: 'Accrual' (default) or 'Cash'.")] string? accountingBasis = "Accrual",
+            [Description("Whether to include accounts with zero balances. Defaults to true.")] bool includeZeroBalances = true,
+            CancellationToken cancellationToken = default)
+        {
+            EnsureTenantResolved();
+            if (!TryAuthorizeModules(out var moduleDenied))
+            {
+                return Task.FromResult(Denied<CashFlowStatementMcpResponse>(moduleDenied));
+            }
+
+            if (!TryAuthorizePermission(SystemPermissions.ReportsView, out var permissionDenied))
+            {
+                return Task.FromResult(Denied<CashFlowStatementMcpResponse>(permissionDenied));
+            }
+
+            var from = ParseDate(fromDate, nameof(fromDate));
+            var to = ParseDate(toDate, nameof(toDate), inclusiveEndOfDay: true);
+            ValidateDateRange(from, to);
+            var basis = ParseBasis(accountingBasis);
+
+            var cf = _financialService.CashFlow(from, to, basis);
+
+            var operatingActivities = cf.OperatingActivities.ToList();
+            var investingActivities = cf.InvestingActivities.ToList();
+            var financingActivities = cf.FinancingActivities.ToList();
+
+            if (!includeZeroBalances)
+            {
+                operatingActivities = operatingActivities.Where(a => a.Amount != 0m).ToList();
+                investingActivities = investingActivities.Where(a => a.Amount != 0m).ToList();
+                financingActivities = financingActivities.Where(a => a.Amount != 0m).ToList();
+            }
+
+            var isBalanced = basis == Core.Domain.AccountingBasis.Cash
+                ? Math.Round(cf.StartingCash + cf.NetChangeInCash, 2) == Math.Round(cf.EndingCash, 2)
+                : Math.Round(cf.OperatingCashFlow + cf.InvestingCashFlow + cf.FinancingCashFlow, 2) == Math.Round(cf.NetChangeInCash, 2);
+
+            var response = new CashFlowStatementMcpResponse
+            {
+                Organization = OrgLabel(),
+                Status = FinancialMcpStatus.Success,
+                Message = cf.Message,
+                AccountingBasis = basis.ToString(),
+                FromDate = from,
+                ToDate = to,
+                NetIncome = cf.NetIncome,
+                OperatingCashFlow = cf.OperatingCashFlow,
+                InvestingCashFlow = cf.InvestingCashFlow,
+                FinancingCashFlow = cf.FinancingCashFlow,
+                NetChangeInCash = cf.NetChangeInCash,
+                StartingCash = cf.StartingCash,
+                EndingCash = cf.EndingCash,
+                IsBalanced = isBalanced,
+                OperatingActivities = operatingActivities.Select(a => new CashFlowLineMcp
+                {
+                    AccountId = a.AccountId,
+                    AccountCode = a.AccountCode,
+                    AccountName = a.AccountName,
+                    LineType = a.LineType,
+                    Amount = a.Amount
+                }).ToList(),
+                InvestingActivities = investingActivities.Select(a => new CashFlowLineMcp
+                {
+                    AccountId = a.AccountId,
+                    AccountCode = a.AccountCode,
+                    AccountName = a.AccountName,
+                    LineType = a.LineType,
+                    Amount = a.Amount
+                }).ToList(),
+                FinancingActivities = financingActivities.Select(a => new CashFlowLineMcp
+                {
+                    AccountId = a.AccountId,
+                    AccountCode = a.AccountCode,
+                    AccountName = a.AccountName,
+                    LineType = a.LineType,
+                    Amount = a.Amount
+                }).ToList()
+            };
+
+            return Task.FromResult(response);
+        }
+
+        [McpServerTool(
             Name = "get_general_ledger_transactions",
             Title = "Get General Ledger Transactions",
             ReadOnly = true,

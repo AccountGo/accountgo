@@ -573,6 +573,155 @@ namespace AccountGo.BackendTests.Financial
             Assert.Equal("4010", isResponse.Items[0].AccountCode);
         }
 
+        [Fact]
+        public async Task GetCashFlow_ReturnsBalancedReport()
+        {
+            var cfStatement = new Services.Financial.CashFlowStatement
+            {
+                AccountingBasis = Core.Domain.AccountingBasis.Accrual,
+                FromDate = new DateTime(2026, 1, 1),
+                ToDate = new DateTime(2026, 12, 31, 23, 59, 59, 999),
+                NetIncome = 5000m,
+                OperatingCashFlow = 4500m,
+                InvestingCashFlow = -1500m,
+                FinancingCashFlow = 1000m,
+                StartingCash = 2000m,
+                EndingCash = 6000m,
+                NetChangeInCash = 4000m,
+                OperatingActivities = new List<Services.Financial.CashFlowLine>
+                {
+                    new Services.Financial.CashFlowLine { AccountId = 1, AccountCode = "14001", AccountName = "Depreciation", LineType = "NonCashAdjustment", Amount = 500m },
+                    new Services.Financial.CashFlowLine { AccountId = 2, AccountCode = "10120", AccountName = "Accounts Receivable", LineType = "WorkingCapital", Amount = -1000m }
+                },
+                InvestingActivities = new List<Services.Financial.CashFlowLine>
+                {
+                    new Services.Financial.CashFlowLine { AccountId = 3, AccountCode = "13302", AccountName = "Equipment", LineType = "Investing", Amount = -1500m }
+                },
+                FinancingActivities = new List<Services.Financial.CashFlowLine>
+                {
+                    new Services.Financial.CashFlowLine { AccountId = 4, AccountCode = "30100", AccountName = "Member Capital", LineType = "Financing", Amount = 1000m }
+                }
+            };
+
+            _mockFinancial.Setup(s => s.CashFlow(It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), Core.Domain.AccountingBasis.Accrual))
+                .Returns(cfStatement);
+
+            var tools = new FinancialMcpTools(_mockFinancial.Object, _mockAdmin.Object, _mockTenant.Object);
+
+            var response = await tools.GetCashFlow(fromDate: "2026-01-01", toDate: "2026-12-31");
+
+            Assert.NotNull(response);
+            Assert.Equal(5000m, response.NetIncome);
+            Assert.Equal(4500m, response.OperatingCashFlow);
+            Assert.Equal(-1500m, response.InvestingCashFlow);
+            Assert.Equal(1000m, response.FinancingCashFlow);
+            Assert.Equal(2000m, response.StartingCash);
+            Assert.Equal(6000m, response.EndingCash);
+            Assert.Equal(4000m, response.NetChangeInCash);
+            Assert.True(response.IsBalanced);
+            Assert.Equal(2, response.OperatingActivities.Count);
+            Assert.Single(response.InvestingActivities);
+            Assert.Single(response.FinancingActivities);
+        }
+
+        [Fact]
+        public async Task GetCashFlow_ReturnsAccessDeniedWhenPermissionDenied()
+        {
+            _mockTenant.Setup(t => t.Role).Returns(CompanyMemberRole.Member);
+            _mockTenant.Setup(t => t.Permissions).Returns(new HashSet<string>());
+            var tools = new FinancialMcpTools(_mockFinancial.Object, _mockAdmin.Object, _mockTenant.Object);
+
+            var response = await tools.GetCashFlow();
+
+            Assert.Equal(FinancialMcpStatus.AccessDenied, response.Status);
+            Assert.Contains(SystemPermissions.ReportsView, response.Message);
+        }
+
+        [Fact]
+        public async Task GetCashFlow_FiltersZeroBalances_WhenIncludeZeroBalancesFalse()
+        {
+            var cfStatement = new Services.Financial.CashFlowStatement
+            {
+                AccountingBasis = Core.Domain.AccountingBasis.Accrual,
+                NetIncome = 1000m,
+                OperatingActivities = new List<Services.Financial.CashFlowLine>
+                {
+                    new Services.Financial.CashFlowLine { AccountId = 1, AccountCode = "10120", AccountName = "AR", Amount = 500m },
+                    new Services.Financial.CashFlowLine { AccountId = 2, AccountCode = "10130", AccountName = "Unused", Amount = 0m }
+                },
+                InvestingActivities = new List<Services.Financial.CashFlowLine>
+                {
+                    new Services.Financial.CashFlowLine { AccountId = 3, AccountCode = "13301", AccountName = "Furniture", Amount = 0m }
+                },
+                FinancingActivities = new List<Services.Financial.CashFlowLine>()
+            };
+
+            _mockFinancial.Setup(s => s.CashFlow(It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), Core.Domain.AccountingBasis.Accrual))
+                .Returns(cfStatement);
+
+            var tools = new FinancialMcpTools(_mockFinancial.Object, _mockAdmin.Object, _mockTenant.Object);
+
+            var response = await tools.GetCashFlow(includeZeroBalances: false);
+
+            Assert.Single(response.OperatingActivities);
+            Assert.Equal("10120", response.OperatingActivities[0].AccountCode);
+            Assert.Empty(response.InvestingActivities);
+        }
+
+        [Fact]
+        public async Task GetCashFlow_DocumentsCashBasisBehavior()
+        {
+            var cfStatement = new Services.Financial.CashFlowStatement
+            {
+                AccountingBasis = Core.Domain.AccountingBasis.Cash,
+                StartingCash = 1000m,
+                EndingCash = 1500m,
+                NetChangeInCash = 500m,
+                Message = "Statement of Cash Flows is designed for Accrual basis to reconcile accrual net income to cash flows."
+            };
+
+            _mockFinancial.Setup(s => s.CashFlow(It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), Core.Domain.AccountingBasis.Cash))
+                .Returns(cfStatement);
+
+            var tools = new FinancialMcpTools(_mockFinancial.Object, _mockAdmin.Object, _mockTenant.Object);
+
+            var response = await tools.GetCashFlow(accountingBasis: "Cash");
+
+            Assert.Equal("Cash", response.AccountingBasis);
+            Assert.NotNull(response.Message);
+            Assert.Contains("designed for Accrual basis", response.Message);
+            Assert.Equal(1000m, response.StartingCash);
+            Assert.Equal(1500m, response.EndingCash);
+            Assert.Equal(500m, response.NetChangeInCash);
+        }
+
+        [Fact]
+        public async Task GetCashFlow_ThrowsOnUndefinedNumericAccountingBasis()
+        {
+            var tools = new FinancialMcpTools(_mockFinancial.Object, _mockAdmin.Object, _mockTenant.Object);
+
+            var ex = await Assert.ThrowsAsync<ArgumentException>(() =>
+                tools.GetCashFlow(accountingBasis: "999"));
+
+            Assert.Contains("Invalid accounting basis", ex.Message);
+        }
+
+        [Fact]
+        public async Task GetCashFlow_ExpandsDateOnlyEndDateToEndOfDay()
+        {
+            DateTime? capturedTo = null;
+            _mockFinancial.Setup(s => s.CashFlow(It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), Core.Domain.AccountingBasis.Accrual))
+                .Callback<DateTime?, DateTime?, Core.Domain.AccountingBasis>((f, t, b) => capturedTo = t)
+                .Returns(new Services.Financial.CashFlowStatement());
+
+            var tools = new FinancialMcpTools(_mockFinancial.Object, _mockAdmin.Object, _mockTenant.Object);
+
+            await tools.GetCashFlow(fromDate: "2026-01-01", toDate: "2026-01-01");
+
+            Assert.NotNull(capturedTo);
+            Assert.Equal(new DateTime(2026, 1, 1, 23, 59, 59, 999).AddTicks(9999), capturedTo.Value);
+        }
+
         #endregion
     }
 }

@@ -131,6 +131,7 @@ namespace AccountGo.BackendTests.Financial
             Assert.Contains("get_trial_balance", body);
             Assert.Contains("get_balance_sheet", body);
             Assert.Contains("get_income_statement", body);
+            Assert.Contains("get_cash_flow", body);
             Assert.Contains("get_general_ledger_transactions", body);
         }
 
@@ -250,6 +251,31 @@ namespace AccountGo.BackendTests.Financial
             var body = await response.Content.ReadAsStringAsync();
             Assert.Contains(_slug, body);
             Assert.Contains("netIncome", body, StringComparison.OrdinalIgnoreCase);
+        }
+
+        [Fact]
+        public async Task McpEndpoint_ToolsCall_ReturnsCashFlow()
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Post, "/mcp");
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _token);
+            req.Headers.Add("X-AccountGo-Org", _slug);
+            req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/event-stream"));
+            req.Content = new StringContent(
+                "{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"tools/call\",\"params\":{\"name\":\"get_cash_flow\",\"arguments\":{}}}",
+                Encoding.UTF8,
+                "application/json");
+
+            var response = await _client.SendAsync(req);
+
+            Assert.True(
+                response.StatusCode == HttpStatusCode.OK ||
+                response.StatusCode == HttpStatusCode.Accepted,
+                $"Expected 200/202 but got {response.StatusCode}");
+
+            var body = await response.Content.ReadAsStringAsync();
+            Assert.Contains(_slug, body);
+            Assert.Contains("operatingCashFlow", body, StringComparison.OrdinalIgnoreCase);
         }
 
         [Fact]

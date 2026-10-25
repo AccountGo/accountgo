@@ -64,6 +64,22 @@ namespace AccountGo.BackendTests
             Assert.Contains(balance, a => a.GetProperty("accountCode").GetString() == "TEST-CONTRA" && a.GetProperty("amount").GetDecimal() == -30m);
             Assert.Contains(balance, a => a.GetProperty("accountId").GetInt32() == 0 && a.GetProperty("amount").GetDecimal() == 170m);
 
+            var cashFlowResponse = await Send(HttpMethod.Get, "/api/Financials/CashFlow" + query);
+            Assert.Equal(HttpStatusCode.OK, cashFlowResponse.StatusCode);
+            var cashFlow = await Json(cashFlowResponse);
+            Assert.Equal(170m, cashFlow.GetProperty("netIncome").GetDecimal());
+            Assert.Equal(0m, cashFlow.GetProperty("startingCash").GetDecimal());
+            Assert.Equal(0m, cashFlow.GetProperty("endingCash").GetDecimal());
+            Assert.Equal(0m, cashFlow.GetProperty("netChangeInCash").GetDecimal());
+            Assert.Equal(0m, cashFlow.GetProperty("operatingCashFlow").GetDecimal());
+            Assert.Equal(0m, cashFlow.GetProperty("investingCashFlow").GetDecimal());
+            Assert.Equal(0m, cashFlow.GetProperty("financingCashFlow").GetDecimal());
+            var opActivities = cashFlow.GetProperty("operatingActivities").EnumerateArray().ToList();
+            Assert.Contains(opActivities, a => a.GetProperty("accountCode").GetString() == "TEST-CONTRA" && a.GetProperty("amount").GetDecimal() == 30m);
+            Assert.Contains(opActivities, a => a.GetProperty("accountCode").GetString() == "15000" && a.GetProperty("amount").GetDecimal() == -200m);
+            var invActivities = cashFlow.GetProperty("investingActivities").EnumerateArray().ToList();
+            Assert.Empty(invActivities);
+
             Assert.Equal(HttpStatusCode.OK, (await Send(HttpMethod.Get, "/api/Financials/Accounts")).StatusCode);
             Assert.Equal(HttpStatusCode.OK, (await Send(HttpMethod.Get, "/api/Administration/financialyears")).StatusCode);
             Assert.Equal(HttpStatusCode.Forbidden, (await Send(HttpMethod.Post, "/api/Financials/AddAccount", new { accountCode = "forbidden" })).StatusCode);
@@ -103,6 +119,7 @@ namespace AccountGo.BackendTests
         [InlineData("trialbalance")]
         [InlineData("IncomeStatement")]
         [InlineData("BalanceSheet")]
+        [InlineData("CashFlow")]
         public async Task Reports_RequireReportsView_AndRejectInvalidDates(string action)
         {
             WithDb(db =>
@@ -449,7 +466,7 @@ namespace AccountGo.BackendTests
                 var sales = db.Accounts.Single(a => a.AccountCode == "40100");
                 var discount = db.Accounts.Single(a => a.AccountCode == "40400");
                 var cogs = db.Accounts.Single(a => a.AccountCode == "50300");
-                var adjustment = db.Accounts.Single(a => a.AccountCode == "50500");
+                var adjustment = db.Accounts.SingleOrDefault(a => a.AccountCode == "50500") ?? db.Accounts.Single(a => a.AccountCode == "50310");
                 var measurement = db.Measurements.First();
 
                 cashAccountId = cash.Id;
