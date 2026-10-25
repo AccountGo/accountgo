@@ -29,8 +29,7 @@
     {
       "binding": "DB",
       "database_name": "accountgo-db",
-      // Local/dev placeholder. Production D1 id lives only in AccountGo/accountgo-ops.
-      "database_id": "00000000-0000-0000-0000-000000000001",
+      "database_id": "15c6ce9e-a459-49c5-9a03-d8ba9a63233b",
       "migrations_dir": "d1/migrations"
     }
   ],
@@ -43,23 +42,24 @@
     }
   ],
   "vars": {
-    "ENVIRONMENT": "Development",
-    "CONTAINER_NAME": "local",
+    "ENVIRONMENT": "Production",
+    "CONTAINER_NAME": "v7",
     "DatabaseProvider": "Sqlite",
-    "EMAIL_PROVIDER": "Console",
-    "PUBLIC_WEB_URL": "http://localhost:3000",
-    "PUBLIC_API_URL": "http://localhost:8001",
-    "RESEND_EMAIL_FROM": "billing@example.com",
-    "RESEND_FROM_NAME": "AccountGo",
-    "AUTH_EMAIL_FROM": "auth@example.com",
-    "SECURITY_EMAIL_FROM": "security@example.com",
-    "INVITES_EMAIL_FROM": "invites@example.com",
-    "SUPPORT_EMAIL": "support@example.com",
+    "EMAIL_PROVIDER": "Resend",
+    "PUBLIC_WEB_URL": "https://app.accountgo.dev",
+    "PUBLIC_API_URL": "https://api.accountgo.dev",
+    "RESEND_EMAIL_FROM": "billing@accountgo.dev",
+    "RESEND_FROM_NAME": "AccountGo Billing",
+    "AUTH_EMAIL_FROM": "auth@accountgo.dev",
+    "SECURITY_EMAIL_FROM": "security@accountgo.dev",
+    "INVITES_EMAIL_FROM": "invites@accountgo.dev",
+    "SUPPORT_EMAIL": "support@accountgo.dev",
     "JwtSettings__validIssuer": "AccountGo API",
-    "JwtSettings__validAudience": "http://localhost:8001",
-    "Cors__AllowedOrigins__0": "http://localhost:3000",
-    "Cors__AllowedOrigins__1": "http://localhost:5173",
+    "JwtSettings__validAudience": "https://api.accountgo.dev",
+    "Cors__AllowedOrigins__0": "https://app.accountgo.dev",
+    "Cors__AllowedOrigins__1": "https://accountgo-web.anter.workers.dev",
     "ANTER_BASE_URL": "https://agents.anter.ai",
+    "ANTER_PROJECT_ID": "abproj_1hAA2dKHr1L32cGDNgZQy",
     "ANTER_AGENT_SLUG": "accountgo-assistant"
   },
   "observability": {

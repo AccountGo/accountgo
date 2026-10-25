@@ -4,14 +4,14 @@
 interface __BaseEnv_Env {
 	DB: D1Database;
 	CF_VERSION_METADATA: WorkerVersionMetadata;
-	ENVIRONMENT: string;
-	CONTAINER_NAME: string;
-	DatabaseProvider: string;
-	EMAIL_PROVIDER: string;
-	JwtSettings__validIssuer: string;
-	JwtSettings__validAudience: string;
-	Cors__AllowedOrigins__0: string;
-	Cors__AllowedOrigins__1: string;
+	ENVIRONMENT: "Production";
+	CONTAINER_NAME: "v7";
+	DatabaseProvider: "Sqlite";
+	EMAIL_PROVIDER: "Resend";
+	JwtSettings__validIssuer: "AccountGo API";
+	JwtSettings__validAudience: "https://api.accountgo.dev";
+	Cors__AllowedOrigins__0: "https://app.accountgo.dev";
+	Cors__AllowedOrigins__1: "https://accountgo-web.anter.workers.dev";
 	RESEND_API_KEY: string;
 	RESEND_EMAIL_FROM: string;
 	RESEND_WELCOME_EMAIL_FROM: string;

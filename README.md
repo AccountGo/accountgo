@@ -9,7 +9,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/AccountGo/accountgo/actions/workflows/ci.yml"><img src="https://github.com/AccountGo/accountgo/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+  <a href="https://github.com/AccountGo/accountgo/actions/workflows/api.yml"><img src="https://github.com/AccountGo/accountgo/actions/workflows/api.yml/badge.svg" alt="Deploy API" /></a>
+  <a href="https://github.com/AccountGo/accountgo/actions/workflows/web.yml"><img src="https://github.com/AccountGo/accountgo/actions/workflows/web.yml/badge.svg" alt="Deploy Web" /></a>
   <img src="https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet" alt=".NET 10" />
   <img src="https://img.shields.io/badge/React-19-61DAFB?logo=react" alt="React 19" />
   <img src="https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript" alt="TypeScript" />
@@ -149,7 +150,7 @@ User profile management, credential administration, active device/session monito
 | **Security & Auth**| ASP.NET Core Identity, JWT Bearer, HTTP-only Refresh Cookies, Rate Limiting |
 | **Orchestration** | .NET Aspire (`src.AppHost`, `src.ServiceDefaults`) |
 | **Edge Compute** | Cloudflare Workers, Cloudflare Containers, Durable Objects |
-| **CI / CD** | GitHub Actions CI (public); hosted Cloudflare deploy via private ops |
+| **CI / CD** | GitHub Actions with automated Cloudflare deployments |
 
 ---
 
@@ -157,9 +158,9 @@ User profile management, credential administration, active device/session monito
 
 ```
 accountgo/
-├── .github/workflows/          # Public CI + notify hosted ops (no prod resource IDs)
-│   ├── ci.yml                  # Build API + Web
-│   └── notify-ops.yml          # Triggers private AccountGo Cloud deploy
+├── .github/workflows/          # GitHub Actions CI/CD workflows
+│   ├── api.yml                 # Cloudflare Container deployment for API
+│   └── web.yml                 # Cloudflare Workers deployment for Web SPA
 ├── docs/                       # Project documentation & screenshots
 │   └── screenshots/            # High-resolution application screenshots
 ├── src/
@@ -186,8 +187,7 @@ Comprehensive architecture, development, and operational guides are available in
 
 - 🏛️ [System Architecture](docs/ARCHITECTURE.md) — Multi-tenant domain model, Clean Architecture, and Cloudflare edge design.
 - 💻 [Development Guide](docs/DEVELOPMENT.md) — Local workstation setup, running services, debugging, and testing.
-- 🚀 [Deployment Guide](docs/DEPLOYMENT.md) — Self-host on Cloudflare Workers and Containers.
-- 🔒 [Security](docs/SECURITY.md) — Disclosure and hosting posture.
+- 🚀 [Deployment Guide](docs/DEPLOYMENT.md) — Production deployment to Cloudflare Workers and Containers.
 - 📒 [Chart of Accounts & Posting Rules](docs/accounting/coa-register.md) — COA register, posting rules, and GAAP/IFRS controls.
 - 🧾 [General Ledger Redesign](docs/accounting/general-ledger-redesign.md) — Financials page as posted journal register (implementation brief).
 - 🧪 [Double-Entry Accounting Tests](docs/accounting/double-entry-tests.md) — 7 Accuracy Guarantees and automated ledger verification suite.
@@ -319,16 +319,21 @@ pnpm run build
 
 ## Deployment to Cloudflare
 
-**AccountGo Cloud** (`*.accountgo.dev`) is deployed from a private ops repository. This public repo runs CI only and notifies ops on `main` changes.
+Deployments are fully automated via GitHub Actions on every push to `main`:
 
-**Self-host:** copy `src/*/wrangler.example.jsonc` → `wrangler.jsonc`, fill your D1 id and domains, then:
+- **API**: Packaged into a container and deployed to Cloudflare Containers via Wrangler.
+- **Web**: Built with Vite and deployed to Cloudflare Workers Static Assets via Wrangler.
 
+To deploy manually with Wrangler:
 ```bash
-cd src/Api && pnpm install && npx wrangler deploy
-cd src/Web && pnpm install && pnpm build && pnpm run deploy
-```
+# Deploy Backend API
+cd src/Api
+pnpm run deploy
 
-See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+# Deploy Frontend Web SPA
+cd src/Web
+pnpm run deploy
+```
 
 ---
 

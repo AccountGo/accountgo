@@ -1,0 +1,64 @@
+name: Deploy API to Cloudflare
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'src/Api/**'
+      - 'src/Core/**'
+      - 'src/Dto/**'
+      - 'src/Services/**'
+      - 'src/Infrastructure/**'
+      - 'src/src.ServiceDefaults/**'
+      - '.github/workflows/api.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: cloudflare-api-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy API (.NET 10 Container)
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+          cache-dependency-path: 'src/Api/pnpm-lock.yaml'
+
+      - name: Install Dependencies
+        working-directory: src/Api
+        run: pnpm install --frozen-lockfile
+
+      - name: Apply D1 migrations
+        working-directory: src/Api
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler d1 migrations apply accountgo-db --remote
+
+      - name: Write BUILD_SHA
+        run: echo "${GITHUB_SHA}" > src/Api/BUILD_SHA
+
+      - name: Deploy API Container to Cloudflare
+        working-directory: src/Api
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler deploy --var BUILD_SHA:${GITHUB_SHA}
