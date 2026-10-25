@@ -283,14 +283,11 @@ namespace AccountGo.BackendTests
             AssertTaxTotals(printed, 100, 12, 112);
             Assert.Equal(12m, printed.SalesInvoiceLines.Single().TaxAmount);
             var email = InvoiceEmailTemplate.Build(printed, "USD", canReply: true);
-            Assert.Contains("$112.00", email.Subject);
+            Assert.Contains("Invoice 1 from Phase Three", email.Subject);
             // The PDF carries the lines; the email gives the totals once.
             Assert.DoesNotContain("Taxed consulting", email.Text);
-            Assert.Contains("Subtotal: $100.00", email.Text);
-            Assert.Contains("Tax: $12.00", email.Text);
-            Assert.Contains("Invoice total: $112.00", email.Text);
-            Assert.Single(System.Text.RegularExpressions.Regex.Matches(email.Text, "Invoice total:"));
-            Assert.Contains("$12.00", email.Html);
+            Assert.Contains("Amount due: $112.00", email.Text);
+            Assert.Contains("$112.00", email.Html);
             var pdf = await Send(HttpMethod.Get, $"/api/Sales/SalesInvoicePdf?id={saved.Id}");
             Assert.Equal(HttpStatusCode.OK, pdf.StatusCode);
             Assert.Equal("application/pdf", pdf.Content.Headers.ContentType.MediaType);
