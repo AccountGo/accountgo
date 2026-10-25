@@ -100,7 +100,7 @@ Configure the following environment variables in production:
 | `EMAIL_PROVIDER` | Email provider selection (`Resend` or dev fallback) | `Resend` |
 | `ConnectionStrings__DefaultConnection` | Database connection string (ASP.NET hierarchy) | `Data Source=accountgo.db` or MSSQL connection string |
 | `JwtSettings__validIssuer` | Token issuer domain (ASP.NET hierarchy) | `AccountGo API` |
-| `JwtSettings__validAudience` | Token audience domain (ASP.NET hierarchy) | `https://accountgo-api.anter.workers.dev` |
+| `JwtSettings__validAudience` | Token audience domain (ASP.NET hierarchy) | `https://api.accountgo.dev` |
 
 > [!CAUTION]
 > Never commit actual secret keys or credentials to the git repository. Store all credentials in Cloudflare Secrets (`wrangler secret put <KEY>`) or GitHub Repository Secrets.

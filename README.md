@@ -24,8 +24,8 @@
 
 ## Live Deployments
 
-- **Web Application (SPA)**: [https://accountgo-web.anter.workers.dev](https://accountgo-web.anter.workers.dev)
-- **Backend API & Containers**: [https://accountgo-api.anter.workers.dev](https://accountgo-api.anter.workers.dev)
+- **Web Application (SPA)**: [https://app.accountgo.dev](https://app.accountgo.dev)
+- **Backend API & Containers**: [https://api.accountgo.dev](https://api.accountgo.dev)
 
 ---
 
@@ -123,14 +123,14 @@ User profile management, credential administration, active device/session monito
                           ┌──────────────────────────────────────┐
                           │         Cloudflare Workers           │
                           │   (React 19 SPA Static Assets)       │
-                          │   accountgo-web.anter.workers.dev    │
+                          │          app.accountgo.dev           │
                           └──────────────────┬───────────────────┘
                                              │  /api/* Proxy
                                              ▼
                           ┌──────────────────────────────────────┐
                           │        Cloudflare Containers         │
                           │   (.NET 10 ASP.NET Core Web API)     │
-                          │   accountgo-api.anter.workers.dev    │
+                          │          api.accountgo.dev           │
                           └──────────────────┬───────────────────┘
                                              │
                       ┌──────────────────────┴──────────────────────┐
