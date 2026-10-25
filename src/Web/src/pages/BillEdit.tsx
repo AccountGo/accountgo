@@ -306,10 +306,6 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
   const expenseAccounts = accounts.filter((a) => a.group === 'Expense');
   const assetAccounts = accounts.filter((a) => a.group === 'Asset');
   const selectableTaxCount = taxes.filter(isSelectableTax).length;
-  const showTaxColumn = selectableTaxCount > 0 || lines.some((line) => taxes.some((tax) => tax.id === line.taxId && !tax.isActive));
-  const manageTaxes = selectableTaxCount === 0 && hasPermission('admin.taxes.manage') ? (
-    <Link to={`/org/${orgSlug}/settings?tab=taxes`} className="normal-case tracking-normal font-semibold text-[var(--brand-primary)]">Manage taxes</Link>
-  ) : null;
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 pb-24 text-[var(--text-main)]">
@@ -488,7 +484,7 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
         <div>
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
-              <span className="inline-flex items-center gap-2">Lines {!showTaxColumn && manageTaxes}</span>
+              Lines
             </h3>
             <span className="hidden sm:inline text-xs text-[var(--text-muted)]">Each line is booked to the account you pick: an expense, or an asset such as equipment.</span>
           </div>
@@ -502,11 +498,14 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
                   <th className="py-3 px-3 w-20 text-right">Qty</th>
                   <th className="py-3 px-3 w-28 text-right">Unit cost</th>
                   <th className="py-3 px-3 w-20 text-right">Disc %</th>
-                  {showTaxColumn && (
-                    <th className="py-3 px-3 min-w-[130px]">
-                      <span className="inline-flex items-center gap-2">Tax {manageTaxes}</span>
-                    </th>
-                  )}
+                  <th className="py-3 px-3 min-w-[130px] text-right">
+                    <span className="inline-flex items-center justify-end gap-2">
+                      Tax
+                      {selectableTaxCount === 0 && hasPermission('admin.taxes.manage') && (
+                        <Link to={`/org/${orgSlug}/settings?tab=taxes`} className="normal-case tracking-normal font-semibold text-[var(--brand-primary)]">Manage taxes</Link>
+                      )}
+                    </span>
+                  </th>
                   <th className="py-3 px-4 w-28 text-right">Amount</th>
                   <th className="py-3 px-2 w-12">
                     <span className="sr-only">Remove</span>
@@ -619,23 +618,21 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
                           className={`${cellClass} text-right`}
                         />
                       </td>
-                      {showTaxColumn && (
-                        <td className="py-2.5 px-3">
-                          <select
-                            aria-label={`Line ${idx + 1} tax`}
-                            value={line.taxId}
-                            onChange={(e) => updateLine(idx, { taxId: e.target.value ? Number(e.target.value) : '' })}
-                            className={cellClass}
-                          >
-                            <option value="">No tax</option>
-                            {lineTaxChoices(taxes, line.taxId).map((t) => (
-                              <option key={t.id} value={t.id}>
-                                {taxChoiceLabel(t)}
-                              </option>
-                            ))}
-                          </select>
-                        </td>
-                      )}
+                      <td className="py-2.5 px-3">
+                        <select
+                          aria-label={`Line ${idx + 1} tax`}
+                          value={line.taxId}
+                          onChange={(e) => updateLine(idx, { taxId: e.target.value ? Number(e.target.value) : '' })}
+                          className={cellClass}
+                        >
+                          <option value="">No tax</option>
+                          {lineTaxChoices(taxes, line.taxId).map((t) => (
+                            <option key={t.id} value={t.id}>
+                              {taxChoiceLabel(t)}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
                       <td className="py-2.5 px-4 text-right font-medium font-mono text-[var(--text-main)] whitespace-nowrap">
                         {formatCurrency(lineSubtotal(line))}
                       </td>
