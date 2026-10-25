@@ -19,7 +19,7 @@
     }
   ],
   "vars": {
-    "API_HOST": "api.accountgo.dev"
+    "API_HOST": "localhost:8001"
   },
   "observability": {
     "enabled": true,
