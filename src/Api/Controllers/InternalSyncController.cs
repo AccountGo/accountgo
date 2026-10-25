@@ -229,15 +229,12 @@ namespace Api.Controllers
 
         private bool EnsureInternalAccess(out IActionResult? failure)
         {
-            if (!InternalAuthHelper.IsLoopbackRequest(HttpContext))
-            {
-                _logger.LogWarning(
-                    "Rejected non-loopback call to internal endpoint from {RemoteIp}",
-                    HttpContext.Connection.RemoteIpAddress);
-                failure = NotFound();
-                return false;
-            }
-
+            // Do not require IPAddress.IsLoopback here. On Cloudflare Containers the Worker calls
+            // http://127.0.0.1:8001 via containerFetch, but the .NET process often sees a non-loopback
+            // remote address — that blocked /api/internal/build + d1-restore and left the API in 503
+            // "starting up" forever. The container is not publicly addressed; the Worker strips
+            // x-internal-key before forwarding browser traffic. Auth is the dedicated sync key
+            // (plus SQL allowlisting on restore).
             if (!InternalAuthHelper.ValidateInternalKey(_configuration, Request.Headers, out var status, out var message, _logger))
             {
                 if (status == 503)
