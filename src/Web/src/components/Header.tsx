@@ -10,8 +10,10 @@ import {
   Download,
   PanelLeft,
   PanelLeftClose,
+  Sparkles,
 } from 'lucide-react';
 import { OrgDetails, SidebarMode } from '../types';
+import { useAssistant } from '../assistant';
 
 interface HeaderProps {
   currentOrg: OrgDetails;
@@ -27,6 +29,7 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const location = useLocation();
   const [installPrompt, setInstallPrompt] = useState<any>(null);
+  const { isOpen: isAssistantOpen, toggle: toggleAssistant } = useAssistant();
 
   // Capture PWA beforeinstallprompt event
   useEffect(() => {
@@ -154,6 +157,22 @@ export const Header: React.FC<HeaderProps> = ({
           <kbd className="ml-1 font-mono text-[10px] px-1.5 py-0.5 rounded bg-[var(--bg-canvas)] text-[var(--text-secondary)]">
             ⌘K
           </kbd>
+        </button>
+
+        {/* AccountGo Assistant */}
+        <button
+          type="button"
+          onClick={toggleAssistant}
+          className={`relative p-2 rounded-xl active:scale-95 transition-all min-h-[44px] min-w-[44px] flex items-center justify-center cursor-pointer ${
+            isAssistantOpen
+              ? 'text-[var(--brand-primary)] bg-[var(--brand-subtle)]'
+              : 'text-[var(--text-secondary)] hover:text-[var(--text-main)] hover:bg-[var(--bg-surface-hover)]'
+          }`}
+          aria-label={isAssistantOpen ? 'Close AccountGo Assistant' : 'Open AccountGo Assistant'}
+          aria-pressed={isAssistantOpen}
+          title="AccountGo Assistant"
+        >
+          <Sparkles className="w-4 h-4" />
         </button>
 
         {/* Notifications */}
