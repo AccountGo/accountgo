@@ -17,7 +17,7 @@ If you discover a security vulnerability in AccountGo, please report it responsi
 
 ### How to Report
 
-1. **Email**: Send vulnerability details directly to the project creator at [hello@marvinperez.com](mailto:hello@marvinperez.com).
+1. **Email**: Send vulnerability details directly to the project creator at [support@accountgo.dev](mailto:support@accountgo.dev).
 2. **GitHub Security Advisory**: You may also privately report vulnerabilities through GitHub's [Private Vulnerability Reporting](https://github.com/AccountGo/accountgo/security/advisories/new) interface.
 
 ### Information to Include

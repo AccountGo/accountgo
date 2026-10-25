@@ -491,7 +491,7 @@ using (var scope = app.Services.CreateScope())
                 {
                     (Email: "admin@accountgo.ph", First: "Admin", Last: "User"),
                     (Email: "marvinperez@gmail.com", First: "Marvin", Last: "Perez"),
-                    (Email: "hello@marvinperez.com", First: "Marvin", Last: "Perez")
+                    (Email: "support@accountgo.dev", First: "Marvin", Last: "Perez")
                 };
 
                 foreach (var (email, first, last) in adminEmails)

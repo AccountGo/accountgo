@@ -690,7 +690,7 @@ namespace Api.Data.Schema
                 }
             }
 
-            // D1: hello@marvinperez.com = Admin (2)
+            // D1: support@accountgo.dev = Admin (2)
             using (var cmd = connection.CreateCommand())
             {
                 cmd.Transaction = tx;
@@ -698,7 +698,7 @@ namespace Api.Data.Schema
                     INSERT INTO ""CompanyMember"" (""CompanyId"", ""UserId"", ""Role"", ""Status"", ""JoinedAt"")
                     SELECT 1, ""Id"", 2, 1, $now
                     FROM ""AspNetUsers""
-                    WHERE LOWER(""Email"") = 'hello@marvinperez.com'
+                    WHERE LOWER(""Email"") = 'support@accountgo.dev'
                       AND NOT EXISTS (
                           SELECT 1 FROM ""CompanyMember""
                           WHERE ""CompanyId"" = 1 AND ""UserId"" = ""AspNetUsers"".""Id""
@@ -710,7 +710,7 @@ namespace Api.Data.Schema
                 int inserted = cmd.ExecuteNonQuery();
                 if (inserted > 0)
                 {
-                    logger?.LogInformation("✓ Backfilled Admin membership for hello@marvinperez.com in Company 1.");
+                    logger?.LogInformation("✓ Backfilled Admin membership for support@accountgo.dev in Company 1.");
                 }
             }
 
