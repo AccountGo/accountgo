@@ -1335,22 +1335,8 @@ namespace Api.Controllers
 
         [HttpGet("SalesAccounts")]
         [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesCreate)]
-        public IActionResult SalesAccounts()
-        {
-            var accounts = _financialService.GetAccounts()
-                .Where(a => (a.AccountClassId == (int)AccountClasses.Revenue || a.AccountCode.StartsWith("4"))
-                    && !_db.Accounts.Any(child => child.ParentAccountId == a.Id))
-                .OrderBy(a => a.AccountCode)
-                .Select(a => new
-                {
-                    id = a.Id,
-                    code = a.AccountCode,
-                    name = a.AccountName,
-                    accountClassId = a.AccountClassId
-                })
-                .ToList();
-            return Ok(accounts);
-        }
+        public IActionResult SalesAccounts() =>
+            Ok(Api.Service.CatalogDefaults.GetPostableSalesAccounts(_financialService, _db));
 
         [HttpPost]
         [Route("SaveSalesInvoice")]
@@ -1392,11 +1378,7 @@ namespace Api.Controllers
                     if (line.SalesAccountId.HasValue && line.SalesAccountId.Value > 0)
                     {
                         _tenantGuard.EnsureOwned<Core.Domain.Financials.Account>(line.SalesAccountId.Value, nameof(line.SalesAccountId));
-                        var salesAccount = _db.Accounts.FirstOrDefault(a => a.Id == line.SalesAccountId.Value);
-                        bool isPostableRevenue = salesAccount != null
-                            && (salesAccount.AccountClassId == (int)AccountClasses.Revenue || salesAccount.AccountCode.StartsWith("4"))
-                            && !_db.Accounts.Any(a => a.ParentAccountId == salesAccount.Id);
-                        if (!isPostableRevenue)
+                        if (!Api.Service.CatalogDefaults.IsPostableRevenueAccount(_db, line.SalesAccountId.Value))
                             return BadRequest(new { message = "The selected sales account must be a postable revenue/income account." });
                     }
                 }
@@ -1459,7 +1441,6 @@ namespace Api.Controllers
 
                         int lineItemId = line.ItemId.GetValueOrDefault();
                         int lineMeasurementId = line.MeasurementId.GetValueOrDefault();
-                        bool isFreeText = lineItemId == 0;
 
                         if (lineItemId == 0)
                         {
@@ -1467,22 +1448,17 @@ namespace Api.Controllers
                             lineItemId = lineItem.Id;
                             lineMeasurementId = lineItem.SellMeasurementId ?? lineItem.SmallestMeasurementId ?? defaultMeasurement.Value;
                         }
-                        else
-                        {
-                            var item = items.FirstOrDefault(i => i.Id == lineItemId);
-                            if (item != null && item.Description == Api.Service.CatalogDefaults.GeneralItemName)
-                            {
-                                isFreeText = true;
-                            }
-                        }
                         if (lineMeasurementId == 0)
                         {
                             lineMeasurementId = defaultMeasurement.Value;
                         }
 
+                        var resolvedItem = items.FirstOrDefault(i => i.Id == lineItemId);
+                        bool isFreeText = resolvedItem != null && resolvedItem.Description == Api.Service.CatalogDefaults.GeneralItemName;
+
                         salesInvoiceLine.ItemId = lineItemId;
                         salesInvoiceLine.MeasurementId = lineMeasurementId;
-                        salesInvoiceLine.Description = Core.Domain.Sales.SalesInvoiceLine.DescriptionFor(line.ItemDescription, items.FirstOrDefault(i => i.Id == lineItemId));
+                        salesInvoiceLine.Description = Core.Domain.Sales.SalesInvoiceLine.DescriptionFor(line.ItemDescription, resolvedItem);
                         salesInvoiceLine.SalesAccountId = isFreeText ? line.SalesAccountId : null;
                         salesInvoice.SalesInvoiceLines.Add(salesInvoiceLine);
 
@@ -1555,7 +1531,6 @@ namespace Api.Controllers
 
                         int lineItemId = line.ItemId.GetValueOrDefault();
                         int lineMeasurementId = line.MeasurementId.GetValueOrDefault();
-                        bool isFreeText = lineItemId == 0;
 
                         if (lineItemId == 0)
                         {
@@ -1563,18 +1538,13 @@ namespace Api.Controllers
                             lineItemId = lineItem.Id;
                             lineMeasurementId = lineItem.SellMeasurementId ?? lineItem.SmallestMeasurementId ?? defaultMeasurement.Value;
                         }
-                        else
-                        {
-                            var item = items.FirstOrDefault(i => i.Id == lineItemId);
-                            if (item != null && item.Description == Api.Service.CatalogDefaults.GeneralItemName)
-                            {
-                                isFreeText = true;
-                            }
-                        }
                         if (lineMeasurementId == 0)
                         {
                             lineMeasurementId = defaultMeasurement.Value;
                         }
+
+                        var resolvedItem = items.FirstOrDefault(i => i.Id == lineItemId);
+                        bool isFreeText = resolvedItem != null && resolvedItem.Description == Api.Service.CatalogDefaults.GeneralItemName;
 
                         if (existingLine != null)
                         {
@@ -1584,7 +1554,7 @@ namespace Api.Controllers
                             existingLine.TaxId = line.TaxId;
                             existingLine.ItemId = lineItemId;
                             existingLine.MeasurementId = lineMeasurementId;
-                            existingLine.Description = Core.Domain.Sales.SalesInvoiceLine.DescriptionFor(line.ItemDescription, items.FirstOrDefault(i => i.Id == lineItemId));
+                            existingLine.Description = Core.Domain.Sales.SalesInvoiceLine.DescriptionFor(line.ItemDescription, resolvedItem);
                             existingLine.SalesAccountId = isFreeText ? line.SalesAccountId : null;
                         }
                         else
@@ -1597,7 +1567,7 @@ namespace Api.Controllers
                             salesInvoiceLine.TaxId = line.TaxId;
                             salesInvoiceLine.ItemId = lineItemId;
                             salesInvoiceLine.MeasurementId = lineMeasurementId;
-                            salesInvoiceLine.Description = Core.Domain.Sales.SalesInvoiceLine.DescriptionFor(line.ItemDescription, items.FirstOrDefault(i => i.Id == lineItemId));
+                            salesInvoiceLine.Description = Core.Domain.Sales.SalesInvoiceLine.DescriptionFor(line.ItemDescription, resolvedItem);
                             salesInvoiceLine.SalesAccountId = isFreeText ? line.SalesAccountId : null;
                             salesInvoice.SalesInvoiceLines.Add(salesInvoiceLine);
 

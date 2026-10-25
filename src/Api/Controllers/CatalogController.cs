@@ -83,12 +83,7 @@ namespace Api.Controllers
         [Route("SalesAccounts")] // api/Catalog/SalesAccounts
         [RequirePermission(SystemPermissions.InventoryItemsView)]
         public IActionResult SalesAccounts() =>
-            Ok(_db.Accounts
-                .Where(a => (a.AccountClassId == (int)AccountClasses.Revenue || a.AccountCode.StartsWith("4"))
-                    && !a.ChildAccounts.Any())
-                .OrderBy(a => a.AccountCode)
-                .Select(a => new { a.Id, Code = a.AccountCode, Name = a.AccountName })
-                .ToList());
+            Ok(Api.Service.CatalogDefaults.GetPostableSalesAccounts(_financialService, _db));
 
         [HttpPost]
         [Route("SaveItem")]
@@ -126,11 +121,7 @@ namespace Api.Controllers
             if (itemDto.SalesAccountId.HasValue && itemDto.SalesAccountId.Value > 0)
             {
                 _tenantGuard.EnsureOwned<Core.Domain.Financials.Account>(itemDto.SalesAccountId.Value, nameof(itemDto.SalesAccountId));
-                var salesAccount = _db.Accounts.FirstOrDefault(a => a.Id == itemDto.SalesAccountId.Value);
-                bool isPostableRevenue = salesAccount != null
-                    && (salesAccount.AccountClassId == (int)AccountClasses.Revenue || salesAccount.AccountCode.StartsWith("4"))
-                    && !_db.Accounts.Any(a => a.ParentAccountId == salesAccount.Id);
-                if (!isPostableRevenue)
+                if (!Api.Service.CatalogDefaults.IsPostableRevenueAccount(_db, itemDto.SalesAccountId.Value))
                     return BadRequest(new { message = "The selected sales account must be a postable revenue/income account." });
             }
             var existingStockItem = !isNew && _db.Items

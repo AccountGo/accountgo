@@ -236,10 +236,70 @@ namespace AccountGo.BackendTests
             var reloadedLine = reloaded.SalesInvoiceLines.Single();
             Assert.Equal(otherIncomeId, reloadedLine.SalesAccountId);
             Assert.Equal("40600", reloadedLine.SalesAccountCode);
+
+            // Assert that reloaded item is the shared GeneralItemName ("Service / Product")
+            WithDb(db =>
+            {
+                var generalItem = db.Items.FirstOrDefault(i => i.Description == "Service / Product");
+                Assert.NotNull(generalItem);
+                Assert.Equal(generalItem.Id, reloadedLine.ItemId);
+            });
+
+            // Update draft with a different sales account (40100) and verify it remains editable
+            var defaultSalesId = AccountId("40100");
+            reloadedLine.SalesAccountId = defaultSalesId;
+            var updateRes = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", reloaded);
+            Assert.True(updateRes.IsSuccessStatusCode, await updateRes.Content.ReadAsStringAsync());
+
+            var reloaded2 = await (await Send(HttpMethod.Get, $"/api/Sales/SalesInvoice?id={savedInvoice.Id}"))
+                .Content.ReadFromJsonAsync<Dto.Sales.SalesInvoice>();
+            Assert.Equal(defaultSalesId, reloaded2.SalesInvoiceLines.Single().SalesAccountId);
+            Assert.Equal("40100", reloaded2.SalesInvoiceLines.Single().SalesAccountCode);
         }
 
         [Fact]
-        public async Task SalesInvoice_PostInvoice_WithCatalogLineAndFreeTextOverride_SplitsRevenueCorrectly()
+        public async Task SalesInvoice_SalesAccount_FreeTextLine_ResolvingToCatalogItem_IgnoresLineOverride()
+        {
+            var defaultSalesId = AccountId("40100");
+            var otherIncomeId = AccountId("40600");
+
+            var catalogItem = await SaveItem(new Dto.Inventory.CatalogItem
+            {
+                Name = "Direct Name Matched Item",
+                Price = 90m,
+                SalesAccountId = defaultSalesId
+            });
+
+            var invoice = await NewInvoice();
+            invoice.Status = "Open";
+            var line = invoice.SalesInvoiceLines.Single();
+            // Free-text style: ItemId is null, but Description matches the catalog item name
+            line.ItemId = null;
+            line.ItemDescription = "Direct Name Matched Item";
+            line.Amount = 90m;
+            line.Quantity = 1;
+            line.SalesAccountId = otherIncomeId; // Attempt to override
+
+            var saveRes = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoice);
+            Assert.True(saveRes.IsSuccessStatusCode, await saveRes.Content.ReadAsStringAsync());
+            var invoiceId = (await Json(saveRes)).GetProperty("id").GetInt32();
+
+            int glHeaderId = 0;
+            WithDb(db =>
+            {
+                var posted = db.SalesInvoiceHeaders.Single(i => i.Id == invoiceId);
+                Assert.NotNull(posted.GeneralLedgerHeaderId);
+                glHeaderId = posted.GeneralLedgerHeaderId.Value;
+            });
+
+            var entries = Ledger(glHeaderId);
+            // Because line resolved to a real catalog item, line override is ignored and credit hits item's 40100
+            Assert.Contains(entries, l => l.AccountId == defaultSalesId && l.DrCr == DrOrCrSide.Cr && l.Amount == 90m);
+            Assert.DoesNotContain(entries, l => l.AccountId == otherIncomeId);
+        }
+
+        [Fact]
+        public async Task SalesInvoice_SalesAccount_PostInvoice_WithCatalogLineAndFreeTextOverride_SplitsRevenueCorrectly()
         {
             var otherIncomeId = AccountId("40600");
             var defaultSalesId = AccountId("40100");
@@ -299,7 +359,7 @@ namespace AccountGo.BackendTests
         }
 
         [Fact]
-        public async Task SalesInvoice_FreeTextLine_WithoutOverride_CreditsDefault40100()
+        public async Task SalesInvoice_SalesAccount_FreeTextLine_WithoutOverride_CreditsDefault40100()
         {
             var defaultSalesId = AccountId("40100");
             var invoice = await NewInvoice();
@@ -331,7 +391,7 @@ namespace AccountGo.BackendTests
         }
 
         [Fact]
-        public async Task SalesInvoice_FreeTextOverride_DoesNotMutateSharedGeneralItem()
+        public async Task SalesInvoice_SalesAccount_FreeTextOverride_DoesNotMutateSharedGeneralItem()
         {
             var defaultSalesId = AccountId("40100");
             var otherIncomeId = AccountId("40600");
@@ -371,7 +431,7 @@ namespace AccountGo.BackendTests
         }
 
         [Fact]
-        public async Task SalesInvoice_Save_RejectsNonIncomeAccounts_AndCrossTenantLineAccount()
+        public async Task SalesInvoice_SalesAccount_Save_RejectsNonIncomeAccounts_AndCrossTenantLineAccount()
         {
             // 1. Reject expense account (50200) on invoice line
             var invoice1 = await NewInvoice();
@@ -410,7 +470,7 @@ namespace AccountGo.BackendTests
         }
 
         [Fact]
-        public async Task SalesInvoice_PdfGeneration_Succeeds_AndDoesNotLeakAccountInfo()
+        public async Task SalesInvoice_SalesAccount_PdfGeneration_Succeeds_AndDoesNotLeakAccountInfo()
         {
             var invoice = await NewInvoice();
             invoice.Status = "Open";
@@ -429,6 +489,29 @@ namespace AccountGo.BackendTests
             Assert.Equal("application/pdf", pdfRes.Content.Headers.ContentType?.MediaType);
             var bytes = await pdfRes.Content.ReadAsByteArrayAsync();
             Assert.NotEmpty(bytes);
+
+            // Fetch the invoice DTO to test customer-facing email templates
+            var getRes = await Send(HttpMethod.Get, $"/api/Sales/SalesInvoice?id={invoiceId}");
+            var invoiceDto = await getRes.Content.ReadFromJsonAsync<Dto.Sales.SalesInvoice>();
+            Assert.NotNull(invoiceDto);
+
+            // Assert customer email templates do not leak internal revenue account code or name
+            var email = Api.Service.InvoiceEmailTemplate.Build(invoiceDto, "USD", canReply: true, "https://example.com/pdf", attachPdf: true);
+            Assert.DoesNotContain("40600", email.Html);
+            Assert.DoesNotContain("Other Income", email.Html);
+            Assert.DoesNotContain("40600", email.Text);
+            Assert.DoesNotContain("Other Income", email.Text);
+
+            var followUp = Api.Service.InvoiceEmailTemplate.BuildFollowUp(invoiceDto, "USD", canReply: true, "https://example.com/pdf", attachPdf: true);
+            Assert.DoesNotContain("40600", followUp.Html);
+            Assert.DoesNotContain("Other Income", followUp.Html);
+            Assert.DoesNotContain("40600", followUp.Text);
+            Assert.DoesNotContain("Other Income", followUp.Text);
+
+            // Assert raw uncompressed text streams in PDF do not contain the account code or name
+            var pdfAscii = System.Text.Encoding.Latin1.GetString(bytes);
+            Assert.DoesNotContain("40600", pdfAscii);
+            Assert.DoesNotContain("Other Income", pdfAscii);
         }
 
         private class SalesAccountOptionDto
