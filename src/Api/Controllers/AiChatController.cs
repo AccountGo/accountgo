@@ -1,7 +1,6 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Net.Http;
 using System.Security.Claims;
 using System.Text.Json;
@@ -11,6 +10,7 @@ using Api.Service.Ai;
 using Core.Tenancy;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Logging;
 
 namespace Api.Controllers
@@ -20,14 +20,18 @@ namespace Api.Controllers
     /// Anter API keys never leave the server.
     /// </summary>
     [TenantScoped]
+    [EnableRateLimiting("ai-chat")]
     [Route("api/ai/chat")]
     [ApiController]
     public class AiChatController(
         IAnterAgentRunnerClient anterClient,
+        ITenantContext tenantContext,
         ILogger<AiChatController> logger) : BaseController
     {
         private readonly IAnterAgentRunnerClient _anterClient = anterClient
             ?? throw new ArgumentNullException(nameof(anterClient));
+        private readonly ITenantContext _tenantContext = tenantContext
+            ?? throw new ArgumentNullException(nameof(tenantContext));
         private readonly ILogger<AiChatController> _logger = logger
             ?? throw new ArgumentNullException(nameof(logger));
 
@@ -35,7 +39,6 @@ namespace Api.Controllers
         {
             public string? Message { get; set; }
             public string? SessionId { get; set; }
-            public string? OrganizationId { get; set; }
             public Dictionary<string, string>? ContextVariables { get; set; }
         }
 
@@ -59,6 +62,13 @@ namespace Api.Controllers
                 return;
             }
 
+            if (!_tenantContext.IsResolved || !_tenantContext.CompanyId.HasValue)
+            {
+                Response.StatusCode = StatusCodes.Status400BadRequest;
+                await Response.WriteAsJsonAsync(new { detail = "Workspace context is required." }, cancellationToken);
+                return;
+            }
+
             var message = body?.Message ?? string.Empty;
             if (string.IsNullOrWhiteSpace(message))
             {
@@ -67,7 +77,16 @@ namespace Api.Controllers
                 return;
             }
 
-            var context = MergeTenantContext(body?.ContextVariables, body?.OrganizationId);
+            if (message.Length > AnterRunStreamBody.MaxMessageLength)
+            {
+                Response.StatusCode = StatusCodes.Status400BadRequest;
+                await Response.WriteAsJsonAsync(
+                    new { detail = $"message must be at most {AnterRunStreamBody.MaxMessageLength} characters." },
+                    cancellationToken);
+                return;
+            }
+
+            var safeContext = SanitizeClientContext(body?.ContextVariables);
             HttpResponseMessage upstream;
             try
             {
@@ -75,14 +94,16 @@ namespace Api.Controllers
                     message,
                     userId,
                     body?.SessionId,
-                    context,
+                    safeContext,
+                    companyId: _tenantContext.CompanyId.Value.ToString(),
+                    companySlug: _tenantContext.CompanySlug,
                     cancellationToken);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Anter run-stream failed");
                 Response.StatusCode = StatusCodes.Status502BadGateway;
-                await Response.WriteAsJsonAsync(new { detail = "Could not reach Anter AI." }, cancellationToken);
+                await Response.WriteAsJsonAsync(new { detail = "Could not reach the assistant service." }, cancellationToken);
                 return;
             }
 
@@ -159,7 +180,7 @@ namespace Api.Controllers
             {
                 _logger.LogError(ex, "Anter execution stream failed");
                 Response.StatusCode = StatusCodes.Status502BadGateway;
-                await Response.WriteAsJsonAsync(new { detail = "Could not reach Anter AI." }, cancellationToken);
+                await Response.WriteAsJsonAsync(new { detail = "Could not reach the assistant service." }, cancellationToken);
                 return;
             }
 
@@ -197,7 +218,7 @@ namespace Api.Controllers
             {
                 _logger.LogError(ex, "Anter resume failed");
                 Response.StatusCode = StatusCodes.Status502BadGateway;
-                await Response.WriteAsJsonAsync(new { detail = "Could not reach Anter AI." }, cancellationToken);
+                await Response.WriteAsJsonAsync(new { detail = "Could not reach the assistant service." }, cancellationToken);
                 return;
             }
 
@@ -231,29 +252,33 @@ namespace Api.Controllers
             return await ToActionResultAsync(upstream, cancellationToken);
         }
 
-        private Dictionary<string, string> MergeTenantContext(
-            Dictionary<string, string>? incoming,
-            string? organizationId)
+        /// <summary>
+        /// Keep only non-identity client context (e.g. pageRoute). Tenant and user
+        /// fields are applied later from JWT + ITenantContext.
+        /// </summary>
+        internal static Dictionary<string, string> SanitizeClientContext(
+            Dictionary<string, string>? incoming)
         {
             var merged = new Dictionary<string, string>(StringComparer.Ordinal);
-            if (incoming != null)
-            {
-                foreach (var pair in incoming)
-                {
-                    if (!string.IsNullOrWhiteSpace(pair.Key) && pair.Value != null)
-                    {
-                        merged[pair.Key] = pair.Value;
-                    }
-                }
-            }
+            if (incoming == null) return merged;
 
-            if (!string.IsNullOrWhiteSpace(organizationId) && !merged.ContainsKey("organizationId"))
+            foreach (var pair in incoming)
             {
-                merged["organizationId"] = organizationId;
+                if (string.IsNullOrWhiteSpace(pair.Key) || pair.Value == null) continue;
+                if (IsServerOwnedKey(pair.Key)) continue;
+                if (pair.Value.Length > 2_000) continue;
+                merged[pair.Key] = pair.Value;
             }
 
             return merged;
         }
+
+        private static bool IsServerOwnedKey(string key) =>
+            key.Equals("userId", StringComparison.OrdinalIgnoreCase)
+            || key.Equals("sessionId", StringComparison.OrdinalIgnoreCase)
+            || key.Equals("organizationId", StringComparison.OrdinalIgnoreCase)
+            || key.Equals("companyId", StringComparison.OrdinalIgnoreCase)
+            || key.Equals("companySlug", StringComparison.OrdinalIgnoreCase);
 
         private async Task<bool> EnsureConfiguredAsync(CancellationToken cancellationToken)
         {
@@ -261,7 +286,7 @@ namespace Api.Controllers
             Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
             await Response.WriteAsJsonAsync(new
             {
-                detail = "AccountGo Assistant is not configured. Set Anter__ApiKey on the API."
+                detail = "AccountGo Assistant is not configured on this deployment."
             }, cancellationToken);
             return false;
         }
@@ -276,7 +301,7 @@ namespace Api.Controllers
 
             result = StatusCode(
                 StatusCodes.Status503ServiceUnavailable,
-                new { detail = "AccountGo Assistant is not configured. Set Anter__ApiKey on the API." });
+                new { detail = "AccountGo Assistant is not configured on this deployment." });
             return false;
         }
 
@@ -288,18 +313,16 @@ namespace Api.Controllers
 
                 if ((int)upstream.StatusCode >= 400)
                 {
-                    var errorText = await upstream.Content.ReadAsStringAsync(cancellationToken);
+                    // Do not forward raw upstream bodies (may leak provider internals).
+                    var upstreamBody = await upstream.Content.ReadAsStringAsync(cancellationToken);
+                    _logger.LogWarning(
+                        "Anter chat upstream returned {Status}. Body length={Length}",
+                        (int)upstream.StatusCode,
+                        upstreamBody?.Length ?? 0);
                     Response.ContentType = "application/json";
-                    if (string.IsNullOrWhiteSpace(errorText))
-                    {
-                        await Response.WriteAsJsonAsync(
-                            new { detail = "Anter AI rejected the request." },
-                            cancellationToken);
-                    }
-                    else
-                    {
-                        await Response.WriteAsync(errorText, cancellationToken);
-                    }
+                    await Response.WriteAsJsonAsync(
+                        new { detail = "The assistant service rejected the request." },
+                        cancellationToken);
                     return;
                 }
 
@@ -320,6 +343,14 @@ namespace Api.Controllers
         {
             var status = (int)upstream.StatusCode;
             var text = await upstream.Content.ReadAsStringAsync(cancellationToken);
+            if (status >= 400)
+            {
+                return new ObjectResult(new { detail = "The assistant service rejected the request." })
+                {
+                    StatusCode = status,
+                };
+            }
+
             if (string.IsNullOrWhiteSpace(text))
             {
                 return new StatusCodeResult(status);

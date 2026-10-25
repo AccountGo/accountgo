@@ -174,10 +174,10 @@ builder.Services.PostConfigure<Api.Options.AnterOptions>(options =>
         return null;
     }
 
-    options.ApiKey = Pick(options.ApiKey, builder.Configuration["Anter__ApiKey"], builder.Configuration["ANTER_API_KEY"]) ?? options.ApiKey;
-    options.ProjectId = Pick(options.ProjectId, builder.Configuration["Anter__ProjectId"], builder.Configuration["ANTER_PROJECT_ID"]) ?? options.ProjectId;
-    options.AgentSlug = Pick(options.AgentSlug, builder.Configuration["Anter__AgentSlug"], builder.Configuration["ANTER_AGENT_SLUG"]) ?? options.AgentSlug;
-    options.BaseUrl = Pick(options.BaseUrl, builder.Configuration["Anter__BaseUrl"], builder.Configuration["ANTER_BASE_URL"]) ?? options.BaseUrl;
+    options.ApiKey = Pick(options.ApiKey, builder.Configuration["ANTER_API_KEY"]) ?? options.ApiKey;
+    options.ProjectId = Pick(options.ProjectId, builder.Configuration["ANTER_PROJECT_ID"]) ?? options.ProjectId;
+    options.AgentSlug = Pick(options.AgentSlug, builder.Configuration["ANTER_AGENT_SLUG"]) ?? options.AgentSlug;
+    options.BaseUrl = Pick(options.BaseUrl, builder.Configuration["ANTER_BASE_URL"]) ?? options.BaseUrl;
 });
 builder.Services.AddHttpClient<Api.Service.Ai.IAnterAgentRunnerClient, Api.Service.Ai.AnterAgentRunnerClient>(client =>
 {
@@ -273,6 +273,23 @@ builder.Services.AddRateLimiter(options =>
         {
             PermitLimit = builder.Environment.IsDevelopment() ? 100 : 10,
             Window = TimeSpan.FromMinutes(15),
+            QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+            QueueLimit = 0
+        });
+    });
+
+    // AccountGo Assistant: per-user budget on the shared Anter project key.
+    options.AddPolicy("ai-chat", httpContext =>
+    {
+        var userId = httpContext.User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+            ?? httpContext.User?.FindFirst("sub")?.Value
+            ?? httpContext.Connection.RemoteIpAddress?.ToString()
+            ?? "anonymous";
+
+        return RateLimitPartition.GetFixedWindowLimiter($"ai_chat_{userId}", _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = builder.Environment.IsDevelopment() ? 300 : 60,
+            Window = TimeSpan.FromMinutes(1),
             QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
             QueueLimit = 0
         });

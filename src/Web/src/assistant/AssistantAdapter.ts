@@ -155,12 +155,8 @@ export class AssistantAdapter implements ChatAdapter {
       payload.contextVariables,
     );
 
-    const body = buildRunStreamBody(
-      payload.message,
-      sessionId,
-      contextVariables,
-      payload.organizationId,
-    );
+    // Tenant ids are applied server-side from ITenantContext — do not send them here.
+    const body = buildRunStreamBody(payload.message, sessionId, contextVariables);
 
     return assistantFetchStream('/api/ai/chat/run-stream', {
       method: 'POST',

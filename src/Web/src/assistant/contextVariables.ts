@@ -6,18 +6,32 @@ export type AssistantPageContext = {
   companyId?: string;
 };
 
-/** Merge SDK payload CVs with the current page/tenant context for Anter. */
+const SERVER_OWNED_KEYS = new Set([
+  'userId',
+  'sessionId',
+  'organizationId',
+  'companyId',
+  'companySlug',
+]);
+
+/**
+ * Merge SDK payload CVs with page context. Tenant/identity keys are never taken
+ * from the SDK payload — the API overwrites them from JWT + ITenantContext.
+ * Page route/title prefer the live page context over stale payload values.
+ */
 export function mergeAssistantContextVariables(
   pageContext: AssistantPageContext,
   payloadVars?: Record<string, string>,
 ): Record<string, string> {
-  const merged: Record<string, string> = { ...(payloadVars || {}) };
-  const ctx = pageContext;
-  if (ctx.pageRoute && !merged.pageRoute) merged.pageRoute = ctx.pageRoute;
-  if (ctx.pageTitle && !merged.pageTitle) merged.pageTitle = ctx.pageTitle;
-  if (ctx.organizationId && !merged.organizationId) merged.organizationId = ctx.organizationId;
-  if (ctx.companySlug && !merged.companySlug) merged.companySlug = ctx.companySlug;
-  if (ctx.companyId && !merged.companyId) merged.companyId = ctx.companyId;
+  const merged: Record<string, string> = {};
+  for (const [key, value] of Object.entries(payloadVars || {})) {
+    if (!key || value == null) continue;
+    if (SERVER_OWNED_KEYS.has(key)) continue;
+    merged[key] = value;
+  }
+
+  if (pageContext.pageRoute) merged.pageRoute = pageContext.pageRoute;
+  if (pageContext.pageTitle) merged.pageTitle = pageContext.pageTitle;
   return merged;
 }
 
@@ -25,7 +39,6 @@ export function buildRunStreamBody(
   message: string,
   sessionId: string | undefined,
   contextVariables: Record<string, string>,
-  organizationId?: string,
 ): Record<string, unknown> {
   const cvs = { ...contextVariables };
   if (sessionId) {
@@ -37,9 +50,6 @@ export function buildRunStreamBody(
   };
   if (sessionId) {
     body.sessionId = sessionId;
-  }
-  if (organizationId) {
-    body.organizationId = organizationId;
   }
   return body;
 }
