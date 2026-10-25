@@ -27,21 +27,21 @@ Context variables on every turn:
 `AiChatController` proxies to `https://agents.anter.ai/api/v1/external/agent-runner/...` with the project API key. Configure in `src/Api/.env`:
 
 ```bash
-Anter__BaseUrl=https://agents.anter.ai
-Anter__ApiKey=...
-Anter__ProjectId=abproj_...
-Anter__AgentSlug=accountgo-assistant
+ANTER_BASE_URL=https://agents.anter.ai
+ANTER_API_KEY=...
+ANTER_PROJECT_ID=abproj_...
+ANTER_AGENT_SLUG=accountgo-assistant
 ```
 
 Never put Anter credentials in Vite / Cloudflare Workers SPA env. On the API Worker, set secrets (not `vars`):
 
 ```bash
 cd src/Api
-npx wrangler secret put Anter__ApiKey
-npx wrangler secret put Anter__ProjectId
+npx wrangler secret put ANTER_API_KEY
+npx wrangler secret put ANTER_PROJECT_ID
 ```
 
-`Anter__BaseUrl` and `Anter__AgentSlug` are plain `vars` in `wrangler.jsonc`.
+`ANTER_BASE_URL` and `ANTER_AGENT_SLUG` are plain `vars` in `wrangler.jsonc`.
 
 ## MCP (Phase 3 readiness)
 
