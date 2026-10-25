@@ -24,6 +24,8 @@ namespace Api.Service
         public string? Text { get; set; }
         /// <summary>Display name shown before the configured sending address; the address itself never changes.</summary>
         public string? FromName { get; set; }
+        /// <summary>Specific sender email address (e.g. auth@accountgo.dev, invites@accountgo.dev). Falls back to default sending address if not set.</summary>
+        public string? FromEmail { get; set; }
         public string? ReplyTo { get; set; }
         public List<string> Bcc { get; set; } = new();
         public List<EmailAttachment> Attachments { get; set; } = new();

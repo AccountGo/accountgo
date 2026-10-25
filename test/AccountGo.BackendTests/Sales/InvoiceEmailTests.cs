@@ -193,6 +193,35 @@ public class InvoiceEmailTests
     }
 
     [Fact]
+    public async Task ResendSender_UsesMessageFromEmailAndDefaultReplyTo()
+    {
+        string? capturedBody = null;
+        var sender = Sender(req =>
+        {
+            capturedBody = req.Content?.ReadAsStringAsync().GetAwaiter().GetResult();
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("{\"id\":\"msg_123\"}")
+            };
+        });
+
+        await sender.SendAsync(new EmailMessage
+        {
+            To = "user@example.com",
+            Subject = "Test OTP",
+            Html = "<p>Code</p>",
+            FromName = "AccountGo Security",
+            FromEmail = "auth@accountgo.dev",
+            ReplyTo = "support@accountgo.dev"
+        });
+
+        Assert.NotNull(capturedBody);
+        using var doc = JsonDocument.Parse(capturedBody!);
+        Assert.Equal("\"AccountGo Security\" <auth@accountgo.dev>", doc.RootElement.GetProperty("from").GetString());
+        Assert.Equal("support@accountgo.dev", doc.RootElement.GetProperty("reply_to").GetString());
+    }
+
+    [Fact]
     public async Task ResendSender_Rejection_ReportsResendsReason()
     {
         var sender = Sender(_ => new HttpResponseMessage(HttpStatusCode.Forbidden)

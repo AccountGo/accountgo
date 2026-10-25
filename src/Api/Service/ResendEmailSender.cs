@@ -48,16 +48,25 @@ namespace Api.Service
                 throw new InvalidOperationException("Resend API key is not configured.");
             }
 
-            var fromEmail = _configuration["RESEND_EMAIL_FROM"]
+            var fromEmail = message.FromEmail
+                            ?? _configuration["RESEND_EMAIL_FROM"]
                             ?? _configuration["Email:FromAddress"]
-                            ?? "billing@marvinperez.com";
+                            ?? "billing@accountgo.dev";
 
             var fromName = SafeDisplayName(message.FromName)
-                           ?? _configuration["RESEND_FROM_NAME"]
-                           ?? _configuration["Email:FromName"]
-                           ?? "AccountGo";
+                           ?? (string.IsNullOrWhiteSpace(message.FromEmail)
+                                ? (_configuration["RESEND_FROM_NAME"] ?? _configuration["Email:FromName"] ?? "AccountGo")
+                                : null);
 
             var formattedFrom = string.IsNullOrWhiteSpace(fromName) ? fromEmail : $"{fromName} <{fromEmail}>";
+
+            var defaultReplyTo = _configuration["SUPPORT_EMAIL"]
+                                 ?? _configuration["Email:SupportAddress"]
+                                 ?? "support@accountgo.dev";
+            if (string.IsNullOrWhiteSpace(message.ReplyTo) && !string.IsNullOrWhiteSpace(defaultReplyTo))
+            {
+                message.ReplyTo = defaultReplyTo;
+            }
 
             return await DispatchEmailAsync(apiKey, formattedFrom, message, ct);
         }

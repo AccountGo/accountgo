@@ -132,9 +132,19 @@ namespace Api.Service
   <p style=""color: #64748b; font-size: 13px; line-height: 1.4;"">This code will expire in <strong>5 minutes</strong>. If you did not request this login code, you can safely ignore this email.</p>
 </div>";
 
+            var message = new EmailMessage
+            {
+                To = user.Email ?? normalizedEmail,
+                Subject = emailSubject,
+                Html = emailBody,
+                FromName = "AccountGo Security",
+                FromEmail = _configuration["AUTH_EMAIL_FROM"] ?? _configuration["Email:AuthFrom"] ?? "auth@accountgo.dev",
+                ReplyTo = _configuration["SUPPORT_EMAIL"] ?? _configuration["Email:SupportAddress"] ?? "support@accountgo.dev"
+            };
+
             try
             {
-                await _emailSender.SendAsync(user.Email ?? normalizedEmail, emailSubject, emailBody);
+                await _emailSender.SendAsync(message);
             }
             catch (Exception ex)
             {
@@ -191,9 +201,19 @@ namespace Api.Service
   <p style=""color: #64748b; font-size: 13px; line-height: 1.4;"">This single-use code will expire in <strong>5 minutes</strong>. If you did not create an account on AccountGo, please disregard this email.</p>
 </div>";
 
+            var message = new EmailMessage
+            {
+                To = normalizedEmail,
+                Subject = emailSubject,
+                Html = emailBody,
+                FromName = "AccountGo",
+                FromEmail = _configuration["SECURITY_EMAIL_FROM"] ?? _configuration["Email:SecurityFrom"] ?? "security@accountgo.dev",
+                ReplyTo = _configuration["SUPPORT_EMAIL"] ?? _configuration["Email:SupportAddress"] ?? "support@accountgo.dev"
+            };
+
             try
             {
-                await _emailSender.SendAsync(normalizedEmail, emailSubject, emailBody);
+                await _emailSender.SendAsync(message);
             }
             catch (Exception ex)
             {

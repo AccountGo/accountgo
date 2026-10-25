@@ -150,7 +150,7 @@ namespace Api.Controllers
             var email = _identity.Users.Where(u => u.Id == UserId).Select(u => u.Email).Single();
             var profile = _db.Users.FirstOrDefault(u => u.EmailAddress == email);
             var name = profile == null ? email : (profile.Firstname + " " + profile.Lastname).Trim();
-            return _invitations.SendAsync(invitation, company, name);
+            return _invitations.SendAsync(invitation, company, name, email);
         }
     }
 }
