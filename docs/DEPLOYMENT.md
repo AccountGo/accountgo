@@ -1,6 +1,7 @@
 # Deployment Guide
 
-This guide covers deploying **AccountGo** to production environments, with a focus on Cloudflare Workers, Cloudflare Containers, and containerized Docker environments.
+This guide covers **self-hosting** AccountGo (Cloudflare Workers / Containers / D1, or Docker).  
+**AccountGo Cloud** (the hosted product at `*.accountgo.dev`) is deployed from a private ops control plane and is not documented with production resource IDs here.
 
 ---
 
@@ -27,90 +28,80 @@ flowchart LR
 
 ---
 
-## 2. Deploying Frontend Web to Cloudflare Workers
+## 2. Self-host: Frontend (Web)
 
-The frontend Single Page Application is packaged and deployed using Cloudflare Wrangler.
-
-### Prerequisites:
-- Cloudflare account with API token.
-- Wrangler CLI installed (`npm install -g wrangler` or via `pnpm dlx wrangler`).
-
-### Deployment Steps:
 ```bash
 cd src/Web
+cp wrangler.example.jsonc wrangler.jsonc   # if you need a fresh template
+# Edit wrangler.jsonc: Worker name, API service binding, API_HOST
 
-# 1. Install dependencies
 pnpm install
-
-# 2. Build production assets
 pnpm build
-
-# 3. Deploy via Wrangler
 pnpm wrangler deploy
 ```
 
-The output URL will be published to your Workers domain (e.g., `https://accountgo-web.<your-subdomain>.workers.dev`).
+Use your own Cloudflare account. Do not reuse AccountGo Cloud resource IDs.
 
 ---
 
-## 3. Deploying Backend API (.NET 10)
+## 3. Self-host: Backend API (.NET 10)
 
-The backend API is containerized using Docker and deployed to Cloudflare Containers or any container host (e.g., AWS ECS, Google Cloud Run, Azure Container Apps, Kubernetes).
+### 3.1 Wrangler / Cloudflare Containers
 
-### Docker Build & Run:
+```bash
+cd src/Api
+cp wrangler.example.jsonc wrangler.jsonc
+# Set d1_databases[0].database_id to YOUR D1 database id
+# Set vars (PUBLIC_* URLs, CORS, email from-addresses) for your domain
+# Put secrets via: npx wrangler secret put SECRET_KEY
+#                  npx wrangler secret put INTERNAL_SYNC_KEY
+#                  npx wrangler secret put RESEND_API_KEY  (if using Resend)
 
-1. **Build Container Image**:
-   ```bash
-   docker build -t accountgo-api:latest -f src/Api/Dockerfile .
-   ```
+pnpm install
+npx wrangler d1 migrations apply <your-db-name> --remote
+npx wrangler deploy
+```
 
-2. **Run Container Locally**:
-   ```bash
-   docker run -d \
-     -p 8001:8001 \
-     -e ASPNETCORE_ENVIRONMENT=Production \
-     -e ASPNETCORE_URLS=http://+:8001 \
-     --name accountgo-api \
-     accountgo-api:latest
-   ```
+### 3.2 Docker (any host)
 
-3. **Deploying to Cloudflare Containers**:
-   ```bash
-   # Push image to container registry
-   docker tag accountgo-api:latest registry.cloudflare.com/<your-account>/accountgo-api:latest
-   docker push registry.cloudflare.com/<your-account>/accountgo-api:latest
-
-   # Deploy worker container configuration via Wrangler
-   cd src/Api
-   wrangler deploy
-   ```
+```bash
+docker build -t accountgo-api:latest -f src/Api/Dockerfile .
+docker run -d \
+  -p 8001:8001 \
+  -e ASPNETCORE_ENVIRONMENT=Production \
+  -e ASPNETCORE_URLS=http://+:8001 \
+  -e SECRET_KEY="$(openssl rand -hex 32)" \
+  --name accountgo-api \
+  accountgo-api:latest
+```
 
 ---
 
 ## 4. Environment Variables & Secrets
 
-Configure the following environment variables in production:
-
-| Variable | Description | Example / Default |
-| -------- | ----------- | ----------------- |
-| `ASPNETCORE_ENVIRONMENT` | Application environment | `Production` |
-| `ASPNETCORE_URLS` | Binding URLs and ports | `http://+:8001` |
-| `SECRET_KEY` | 256-bit cryptographic secret for JWT signing & OTP verification | 256-bit secure secret key |
-| `RESEND_API_KEY` | API key for Resend email service | `re_123456789...` |
-| `EMAIL_PROVIDER` | Email provider selection (`Resend` or dev fallback) | `Resend` |
-| `ConnectionStrings__DefaultConnection` | Database connection string (ASP.NET hierarchy) | `Data Source=accountgo.db` or MSSQL connection string |
-| `JwtSettings__validIssuer` | Token issuer domain (ASP.NET hierarchy) | `AccountGo API` |
-| `JwtSettings__validAudience` | Token audience domain (ASP.NET hierarchy) | `https://api.accountgo.dev` |
+| Variable | Description |
+| -------- | ----------- |
+| `SECRET_KEY` | ≥32-byte secret for JWT / OTP (Cloudflare Worker secret) |
+| `INTERNAL_SYNC_KEY` | Dedicated key for `/api/internal/*` (must differ from `SECRET_KEY`) |
+| `RESEND_API_KEY` | Resend API key when `EMAIL_PROVIDER=Resend` |
+| `ANTER_API_KEY` / `ANTER_PROJECT_ID` | Optional AccountGo Assistant; set via secrets / env — do not commit |
+| `JwtSettings__validIssuer` / `validAudience` | Match your public API origin |
 
 > [!CAUTION]
-> Never commit actual secret keys or credentials to the git repository. Store all credentials in Cloudflare Secrets (`wrangler secret put <KEY>`) or GitHub Repository Secrets.
+> Never commit real secret keys, D1 database IDs for production SaaS, or Cloudflare API tokens to a public repository.
+
+See `src/Api/.env.example` for local development placeholders.
 
 ---
 
-## 5. Automated CI/CD Workflows
+## 5. CI on the public repository
 
-AccountGo includes automated GitHub Actions workflows in `.github/workflows/`:
+Public GitHub Actions (`.github/workflows/`):
 
-- **`.github/workflows/api.yml`**: Automatically builds, tests, creates Docker containers, and deploys the backend API on pushes to `main`.
-- **`.github/workflows/web.yml`**: Validates TypeScript compilation, builds the Vite production bundle, and deploys the Web SPA to Cloudflare Workers on pushes to `main`.
-- **`.github/dependabot.yml`**: Keeps NuGet packages, GitHub Actions, and npm dependencies continuously updated with automated security PRs.
+| Workflow | Purpose |
+|---|---|
+| `ci.yml` | Build API + Web on PRs and `main` (no production deploy) |
+| `notify-ops.yml` | Notifies the private ops repo to deploy **AccountGo Cloud** only |
+| `dependabot.yml` | Dependency update PRs |
+
+Self-hosters: wire your own deploy pipeline; do not expect `notify-ops` to deploy your account.

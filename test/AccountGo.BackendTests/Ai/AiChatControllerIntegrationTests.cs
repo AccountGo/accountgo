@@ -47,7 +47,7 @@ namespace AccountGo.BackendTests.Ai
                 builder.UseSetting("ConnectionStrings:SqliteConnection", "Data Source=" + _path);
                 builder.UseSetting("SECRET_KEY", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
                 builder.UseSetting("Anter:ApiKey", "proj_api-key_test_secret");
-                builder.UseSetting("Anter:ProjectId", "abproj_1hAA2dKHr1L32cGDNgZQy");
+                builder.UseSetting("Anter:ProjectId", "test-anter-project");
                 builder.UseSetting("Anter:AgentSlug", "accountgo-assistant");
                 builder.UseSetting("PUBLIC_WEB_URL", "https://workspace.example");
                 builder.UseSetting("PUBLIC_API_URL", "https://api.example");
@@ -209,7 +209,7 @@ namespace AccountGo.BackendTests.Ai
         public async Task LiveAnterRoundTrip_WhenApiKeyPresent_StreamsFromLiveAccountGoAssistant()
         {
             var liveKey = Environment.GetEnvironmentVariable("ANTER_PROJECT_API_KEY");
-            var liveProject = Environment.GetEnvironmentVariable("ANTER_PROJECT_ID") ?? "abproj_1hAA2dKHr1L32cGDNgZQy";
+            var liveProject = Environment.GetEnvironmentVariable("ANTER_PROJECT_ID") ?? "test-anter-project";
             if (string.IsNullOrWhiteSpace(liveKey))
             {
                 return;
