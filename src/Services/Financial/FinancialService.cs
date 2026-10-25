@@ -853,6 +853,266 @@ namespace Services.Financial
                 }).OrderBy(a => a.AccountCode).ToList();
         }
 
+        public CashFlowStatement CashFlow(DateTime? from = default(DateTime?), DateTime? to = default(DateTime?), AccountingBasis basis = AccountingBasis.Accrual)
+        {
+            if (from.HasValue && to.HasValue && from.Value > to.Value)
+                throw new ArgumentException("The start date must not be after the end date.");
+
+            var accounts = _accountRepo.Table
+                .Where(a => a.AccountClassId >= 1 && a.AccountClassId <= 5)
+                .ToList();
+
+            var accountLookup = accounts.ToDictionary(a => a.Id);
+
+            bool IsCashAccount(Account a) =>
+                a.IsCash || (a.ParentAccountId.HasValue && accountLookup.TryGetValue(a.ParentAccountId.Value, out var parent) && parent.IsCash);
+
+            // Closing balances as of 'to' (position statement valuation rules)
+            var closingBalances = TrialBalance(null, to, basis).ToDictionary(a => a.AccountId);
+
+            // Opening cash = closing cash as of day before 'from' (or zero if no prior activity / no 'from')
+            var openingBalances = from.HasValue
+                ? TrialBalance(null, from.Value.AddTicks(-1), basis).ToDictionary(a => a.AccountId)
+                : new Dictionary<int, TrialBalance>();
+
+            var startingCash = accounts
+                .Where(IsCashAccount)
+                .Sum(a => openingBalances.TryGetValue(a.Id, out var b) ? b.Debit - b.Credit : 0m);
+
+            var endingCash = accounts
+                .Where(IsCashAccount)
+                .Sum(a => closingBalances.TryGetValue(a.Id, out var b) ? b.Debit - b.Credit : 0m);
+
+            var netChangeInCash = endingCash - startingCash;
+
+            var result = new CashFlowStatement
+            {
+                FromDate = from,
+                ToDate = to,
+                AccountingBasis = basis,
+                StartingCash = startingCash,
+                EndingCash = endingCash,
+                NetChangeInCash = netChangeInCash
+            };
+
+            if (basis == AccountingBasis.Cash)
+            {
+                result.Message = "Statement of Cash Flows is designed for Accrual basis to reconcile accrual net income to cash flows. Under Cash basis, operating activities already mirror cash collections and disbursements.";
+                return result;
+            }
+
+            // Period activity between 'from' and 'to'
+            var periodBalances = TrialBalance(from, to, basis).ToDictionary(a => a.AccountId);
+
+            // 1. Period Net Income (same basis rules as IncomeStatement)
+            var incomeItems = IncomeStatement(from, to, basis);
+            var totalRevenue = incomeItems.Where(i => !i.IsExpense).Sum(i => i.Amount);
+            var totalExpense = incomeItems.Where(i => i.IsExpense).Sum(i => i.Amount);
+            var netIncome = totalRevenue - totalExpense;
+            result.NetIncome = netIncome;
+
+            var glSetting = GetGeneralLedgerSetting();
+
+            // Classify non-cash balance sheet accounts
+            foreach (var account in accounts.Where(a => a.AccountClassId <= 3 && !IsCashAccount(a)).OrderBy(a => a.AccountCode))
+            {
+                if (!periodBalances.TryGetValue(account.Id, out var pBal))
+                    continue;
+
+                // In double-entry accounting, non-cash balance sheet cash contribution is Credit - Debit.
+                var cashContribution = pBal.Credit - pBal.Debit;
+                if (cashContribution == 0m)
+                    continue;
+
+                var (category, lineType) = ClassifyCashFlowAccount(account, accountLookup, glSetting);
+                var line = new CashFlowLine
+                {
+                    AccountId = account.Id,
+                    AccountCode = account.AccountCode,
+                    AccountName = account.AccountName,
+                    LineType = lineType,
+                    Amount = cashContribution
+                };
+
+                switch (category)
+                {
+                    case CashFlowCategory.OperatingNonCash:
+                    case CashFlowCategory.OperatingWorkingCapital:
+                    case CashFlowCategory.OperatingRetainedEarnings:
+                        result.OperatingActivities.Add(line);
+                        break;
+                    case CashFlowCategory.Investing:
+                        result.InvestingActivities.Add(line);
+                        break;
+                    case CashFlowCategory.Financing:
+                        result.FinancingActivities.Add(line);
+                        break;
+                }
+            }
+
+            result.OperatingCashFlow = netIncome + result.OperatingActivities.Sum(a => a.Amount);
+            result.InvestingCashFlow = result.InvestingActivities.Sum(a => a.Amount);
+            result.FinancingCashFlow = result.FinancingActivities.Sum(a => a.Amount);
+
+            return result;
+        }
+
+        private enum CashFlowCategory
+        {
+            OperatingNonCash,
+            OperatingWorkingCapital,
+            OperatingRetainedEarnings,
+            Investing,
+            Financing
+        }
+
+        private static bool IsDescendantOf(Account a, string ancestorCode, IReadOnlyDictionary<int, Account> lookup)
+        {
+            var current = a;
+            while (current.ParentAccountId.HasValue && lookup.TryGetValue(current.ParentAccountId.Value, out var parent))
+            {
+                if (string.Equals(parent.AccountCode, ancestorCode, StringComparison.OrdinalIgnoreCase))
+                    return true;
+                current = parent;
+            }
+            return false;
+        }
+
+        private static bool HasAncestorMatching(Account a, Func<Account, bool> predicate, IReadOnlyDictionary<int, Account> lookup)
+        {
+            var current = a;
+            while (current.ParentAccountId.HasValue && lookup.TryGetValue(current.ParentAccountId.Value, out var parent))
+            {
+                if (predicate(parent))
+                    return true;
+                current = parent;
+            }
+            return false;
+        }
+
+        private static (CashFlowCategory Category, string LineType) ClassifyCashFlowAccount(
+            Account account,
+            IReadOnlyDictionary<int, Account> accountLookup,
+            GeneralLedgerSetting glSetting)
+        {
+            var code = account.AccountCode ?? string.Empty;
+            var name = account.AccountName?.ToLowerInvariant() ?? string.Empty;
+
+            // 1. Contra-assets / Non-cash depreciation & amortization adjustments
+            if (account.IsContraAccount
+                || HasAncestorMatching(account, p => p.IsContraAccount || p.AccountCode == "14000", accountLookup)
+                || code.StartsWith("14")
+                || name.Contains("depreciation")
+                || name.Contains("amortization")
+                || name.Contains("allowance for doubtful")
+                || name.Contains("allowance for bad"))
+            {
+                return (CashFlowCategory.OperatingNonCash, CashFlowLineTypes.NonCashAdjustment);
+            }
+
+            // 2. Assets (AccountClassId == 1)
+            if (account.AccountClassId == 1)
+            {
+                // Current assets (10100 parent or working capital) are operating
+                bool isUnderCurrentAssets = IsDescendantOf(account, "10100", accountLookup);
+
+                // Investing assets: Noncurrent / Fixed assets (10200 / 10300) or explicit capital assets
+                bool isUnderFixedOrNoncurrent = IsDescendantOf(account, "10300", accountLookup)
+                    || IsDescendantOf(account, "10200", accountLookup)
+                    || HasAncestorMatching(account, p =>
+                    {
+                        var pName = p.AccountName?.ToLowerInvariant() ?? string.Empty;
+                        return pName.Contains("fixed asset") || pName.Contains("noncurrent") || pName.Contains("non-current");
+                    }, accountLookup);
+
+                if (!isUnderCurrentAssets && (isUnderFixedOrNoncurrent
+                    || code.StartsWith("13")
+                    || code.StartsWith("103")
+                    || name.Contains("fixed asset")
+                    || name.Contains("plant")
+                    || name.Contains("equipment")
+                    || name.Contains("machinery")
+                    || name.Contains("furniture")
+                    || name.Contains("vehicle")
+                    || name.Contains("building")
+                    || name.Contains("land")
+                    || name.Contains("property")
+                    || name.Contains("long-term investment")
+                    || name.Contains("non-current investment")
+                    || name.Contains("intangible asset")
+                    || name.Contains("patent")
+                    || name.Contains("trademark")))
+                {
+                    return (CashFlowCategory.Investing, CashFlowLineTypes.Investing);
+                }
+
+                // Working capital assets (receivables, inventory, prepaid, advances, clearing, 15000 other assets, etc.)
+                return (CashFlowCategory.OperatingWorkingCapital, CashFlowLineTypes.WorkingCapital);
+            }
+
+            // 3. Liabilities (AccountClassId == 2)
+            if (account.AccountClassId == 2)
+            {
+                // Current liabilities (20100 parent, trade payables, accrued expenses, taxes, etc.) are working capital
+                bool isUnderCurrentLiabilities = IsDescendantOf(account, "20100", accountLookup);
+
+                // Financing liabilities: Non-current liabilities (20500, 20600) or explicit long-term borrowings
+                bool isUnderLongTerm = IsDescendantOf(account, "20500", accountLookup)
+                    || IsDescendantOf(account, "20600", accountLookup)
+                    || HasAncestorMatching(account, p =>
+                    {
+                        var pName = p.AccountName?.ToLowerInvariant() ?? string.Empty;
+                        return pName.Contains("non-current") || pName.Contains("noncurrent") || pName.Contains("long-term") || pName.Contains("long term");
+                    }, accountLookup);
+
+                if (!isUnderCurrentLiabilities && (isUnderLongTerm
+                    || code.StartsWith("205")
+                    || code.StartsWith("206")
+                    || name.Contains("long-term")
+                    || name.Contains("long term")
+                    || name.Contains("bonds payable")
+                    || name.Contains("mortgage")
+                    || name.Contains("term loan")
+                    || name.Contains("debenture")))
+                {
+                    return (CashFlowCategory.Financing, CashFlowLineTypes.Financing);
+                }
+
+                // Working capital liabilities: payables, accruals, customer advances, sales tax, other current liabilities
+                return (CashFlowCategory.OperatingWorkingCapital, CashFlowLineTypes.WorkingCapital);
+            }
+
+            // 4. Equity (AccountClassId == 3)
+            // Retained Earnings / Permanent Account / Income Summary: period-close of net income belongs
+            // in operating (indirect method), not financing.
+            //
+            // FOLLOW-UP (market / IAS 7 & ASC 230 bar): cash dividends and owner distributions that
+            // debit retained earnings (or equivalent permanent equity) are still classified here as
+            // Operating. Standards require those outflows under Financing. Split closing vs
+            // distribution movements (e.g. dividend / draw accounts, or tagged closing journals)
+            // before marketing this as a fully standards-complete Statement of Cash Flows.
+            bool isRetainedEarningsOrSummary =
+                (glSetting != null && glSetting.PermanentAccountId.HasValue && account.Id == glSetting.PermanentAccountId.Value)
+                || (glSetting != null && glSetting.IncomeSummaryAccountId.HasValue && account.Id == glSetting.IncomeSummaryAccountId.Value)
+                || code == "30300"
+                || code == "30400"
+                || code == "30500"
+                || code == "99999"
+                || name.Contains("retained surplus")
+                || name.Contains("retained earnings")
+                || name.Contains("accumulated profit")
+                || name.Contains("accumulated loss")
+                || name.Contains("income summary");
+
+            if (isRetainedEarningsOrSummary)
+            {
+                return (CashFlowCategory.OperatingRetainedEarnings, CashFlowLineTypes.Operating);
+            }
+
+            // Financing equity: Member capital, capital surplus, share capital, owner draws, capital contributions
+            return (CashFlowCategory.Financing, CashFlowLineTypes.Financing);
+        }
+
         public ICollection<MasterGeneralLedger> MasterGeneralLedger(DateTime? from = default(DateTime?),
             DateTime? to = default(DateTime?),
             string accountCode = null,

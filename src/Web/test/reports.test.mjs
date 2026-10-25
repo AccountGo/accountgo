@@ -11,7 +11,26 @@ const { default: Reports, buildStatement, getDateRange, loadReportData, reportQu
   await server.ssrLoadModule('/src/pages/Reports.tsx');
 const { AuthProvider } = await server.ssrLoadModule('/src/auth/AuthContext.tsx');
 
-const empty = () => ({ trialBalance: [], income: [], balanceSheet: [], accounts: [], years: [] });
+const empty = () => ({
+  trialBalance: [],
+  income: [],
+  balanceSheet: [],
+  cashFlow: {
+    accountingBasis: 'Accrual',
+    netIncome: 0,
+    operatingCashFlow: 0,
+    investingCashFlow: 0,
+    financingCashFlow: 0,
+    netChangeInCash: 0,
+    startingCash: 0,
+    endingCash: 0,
+    operatingActivities: [],
+    investingActivities: [],
+    financingActivities: [],
+  },
+  accounts: [],
+  years: []
+});
 const total = (rows, label) => rows.find(row => row.label === label);
 
 test('the reports route renders all statement controls and respects reports.view', () => {
@@ -26,7 +45,7 @@ test('the reports route renders all statement controls and respects reports.view
           } }),
         }, createElement(Route, { path: 'reports', element: createElement(Reports) }))))));
   const html = render(true);
-  for (const label of ['Trial Balance', 'Profit &amp; Loss', 'Balance Sheet', 'Accounting Basis', 'Accrual', 'Cash', 'Export CSV', 'Quarter-to-Date', 'Year-to-Date', 'All Time / As-of Date'])
+  for (const label of ['Trial Balance', 'Profit &amp; Loss', 'Balance Sheet', 'Cash Flow', 'Accounting Basis', 'Accrual', 'Cash', 'Export CSV', 'Quarter-to-Date', 'Year-to-Date', 'All Time / As-of Date'])
     assert.ok(html.includes(label), label);
   assert.ok(html.includes('Loading financial reports...'));
   assert.ok(!html.includes('Reconciled'));
@@ -92,6 +111,57 @@ test('balance sheet keeps contra assets and unclosed losses signed in equity', (
   assert.equal(total(rows, 'Difference').amount, 0);
 });
 
+test('cash flow reconciles operating, investing, and financing cash flows to net change in cash', () => {
+  const data = empty();
+  data.cashFlow = {
+    accountingBasis: 'Accrual',
+    netIncome: 500,
+    operatingCashFlow: 450,
+    investingCashFlow: -200,
+    financingCashFlow: 100,
+    netChangeInCash: 350,
+    startingCash: 1000,
+    endingCash: 1350,
+    operatingActivities: [
+      { accountCode: '14001', accountName: 'Depreciation add-back', lineType: 'NonCashAdjustment', amount: 50 },
+      { accountCode: '10120', accountName: 'Accounts Receivable', lineType: 'WorkingCapital', amount: -100 },
+      { accountCode: '99999', accountName: 'Unused', lineType: 'WorkingCapital', amount: 0 },
+    ],
+    investingActivities: [
+      { accountCode: '13302', accountName: 'Equipment Purchase', lineType: 'Investing', amount: -200 },
+    ],
+    financingActivities: [
+      { accountCode: '30100', accountName: 'Member Capital Contribution', lineType: 'Financing', amount: 100 },
+    ],
+  };
+  const rows = buildStatement('cashFlow', data);
+  assert.equal(total(rows, 'Net cash provided by operating activities').amount, 45000);
+  assert.equal(total(rows, 'Net cash provided by investing activities').amount, -20000);
+  assert.equal(total(rows, 'Net cash provided by financing activities').amount, 10000);
+  assert.equal(total(rows, 'Net increase / (decrease) in cash').amount, 35000);
+  assert.equal(total(rows, 'Cash at beginning of period').amount, 100000);
+  assert.equal(total(rows, 'Cash at end of period').amount, 135000);
+  assert.equal(total(rows, 'Difference').amount, 0);
+  assert.ok(!rows.some(r => r.label === 'Unused'));
+  assert.ok(buildStatement('cashFlow', data, false).some(r => r.label === 'Unused'));
+
+  // Cash basis message handling
+  const cashBasisData = empty();
+  cashBasisData.cashFlow = {
+    accountingBasis: 'Cash',
+    message: 'Statement of Cash Flows is designed for Accrual basis.',
+    netIncome: 0, operatingCashFlow: 0, investingCashFlow: 0, financingCashFlow: 0,
+    netChangeInCash: 0, startingCash: 500, endingCash: 500,
+    operatingActivities: [], investingActivities: [], financingActivities: [],
+  };
+  const cashRows = buildStatement('cashFlow', cashBasisData);
+  assert.ok(cashRows.some(r => r.label.includes('designed for Accrual basis')));
+  assert.equal(total(cashRows, 'Cash at beginning of period').amount, 50000);
+  assert.equal(total(cashRows, 'Cash at end of period').amount, 50000);
+  assert.equal(total(cashRows, 'Net increase / (decrease) in cash').amount, 0);
+  assert.equal(total(cashRows, 'Difference').amount, 0);
+});
+
 test('presets use local calendar dates and the active fiscal year, including non-calendar years', () => {
   const today = new Date(2026, 9, 24, 12);
   assert.deepEqual(getDateRange('month', today), { from: '2026-10-01', to: '2026-10-24' });
@@ -109,12 +179,23 @@ test('presets use local calendar dates and the active fiscal year, including non
   assert.equal(new URLSearchParams(reportQuery({ from: '', to: '2026-04-30' })).has('from'), false);
 });
 
-test('all three live endpoints receive changed date filters and accounting basis, with explicit HTTP and shape errors', async () => {
+test('all four live endpoints receive changed date filters and accounting basis, with explicit HTTP and shape errors', async () => {
   const urls = [];
-  const fetcher = async url => { urls.push(url); return Response.json([]); };
+  const fetcher = async url => {
+    urls.push(url);
+    if (url.startsWith('/api/Financials/CashFlow')) {
+      return Response.json({
+        accountingBasis: 'Accrual',
+        netIncome: 0, operatingCashFlow: 0, investingCashFlow: 0, financingCashFlow: 0,
+        netChangeInCash: 0, startingCash: 0, endingCash: 0,
+        operatingActivities: [], investingActivities: [], financingActivities: []
+      });
+    }
+    return Response.json([]);
+  };
   await loadReportData(fetcher, { from: '2026-01-01', to: '2026-04-30' });
   await loadReportData(fetcher, { from: '2026-04-01', to: '2026-04-30' }, 'cash');
-  for (const endpoint of ['trialbalance', 'IncomeStatement', 'BalanceSheet']) {
+  for (const endpoint of ['trialbalance', 'IncomeStatement', 'BalanceSheet', 'CashFlow']) {
     const calls = urls.filter(url => url.startsWith(`/api/Financials/${endpoint}`));
     assert.equal(calls.length, 2);
     assert.equal(new URL(calls[0], 'http://test').searchParams.get('from'), '2026-01-01T00:00:00');
@@ -124,11 +205,24 @@ test('all three live endpoints receive changed date filters and accounting basis
   }
   await assert.rejects(loadReportData(async () => new Response('', { status: 403 }), { from: '', to: '' }), /HTTP 403/);
   await assert.rejects(loadReportData(async () => Response.json({}), { from: '', to: '' }), /invalid response/);
-  await assert.rejects(loadReportData(async url => Response.json(url.includes('trialbalance') ? [{ debit: '100', credit: 0 }] : []), { from: '', to: '' }), /invalid monetary amount/);
+  await assert.rejects(loadReportData(async url => Response.json(
+    url.includes('CashFlow') ? {
+      accountingBasis: 'Accrual', netIncome: 0, operatingCashFlow: 0, investingCashFlow: 0, financingCashFlow: 0,
+      netChangeInCash: 0, startingCash: 0, endingCash: 0,
+      operatingActivities: [], investingActivities: [], financingActivities: []
+    } : url.includes('trialbalance') ? [{ debit: '100', credit: 0 }] : []
+  ), { from: '', to: '' }), /invalid monetary amount/);
+  await assert.rejects(loadReportData(async url => Response.json(
+    url.includes('CashFlow') ? {
+      accountingBasis: 'Accrual', netIncome: 'invalid', operatingCashFlow: 0, investingCashFlow: 0, financingCashFlow: 0,
+      netChangeInCash: 0, startingCash: 0, endingCash: 0,
+      operatingActivities: [], investingActivities: [], financingActivities: []
+    } : []
+  ), { from: '', to: '' }), /invalid monetary amount/);
 });
 
 test('CSV exports every selected statement, escapes text and guards formula injection', () => {
-  for (const statement of ['trialBalance', 'income', 'balanceSheet']) {
+  for (const statement of ['trialBalance', 'income', 'balanceSheet', 'cashFlow']) {
     const rows = [
       { code: '001', label: 'Bank, "main"\naccount', kind: 'account', debit: 12345, credit: 0, amount: 12345 },
       { code: '=1+1', label: '@SUM(A1)', kind: 'account', amount: -500 },

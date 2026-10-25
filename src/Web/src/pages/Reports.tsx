@@ -44,15 +44,41 @@ interface BalanceRow {
   amount: number;
 }
 
+export interface CashFlowLineDto {
+  accountId: number;
+  accountCode: string;
+  accountName: string;
+  lineType: string;
+  amount: number;
+}
+
+export interface CashFlowStatementDto {
+  fromDate?: string;
+  toDate?: string;
+  accountingBasis: string;
+  netIncome: number;
+  operatingCashFlow: number;
+  investingCashFlow: number;
+  financingCashFlow: number;
+  netChangeInCash: number;
+  startingCash: number;
+  endingCash: number;
+  operatingActivities: CashFlowLineDto[];
+  investingActivities: CashFlowLineDto[];
+  financingActivities: CashFlowLineDto[];
+  message?: string;
+}
+
 export interface ReportData {
   trialBalance: TrialBalanceRow[];
   income: IncomeRow[];
   balanceSheet: BalanceRow[];
+  cashFlow: CashFlowStatementDto;
   years: FinancialYear[];
   accounts: Account[];
 }
 
-export type Statement = 'trialBalance' | 'income' | 'balanceSheet';
+export type Statement = 'trialBalance' | 'income' | 'balanceSheet' | 'cashFlow';
 export type AccountingBasis = 'accrual' | 'cash';
 type Preset = 'month' | 'quarter' | 'year' | 'all' | 'custom';
 export interface DateRange { from: string; to: string }
@@ -69,6 +95,7 @@ const statements: { key: Statement; label: string }[] = [
   { key: 'trialBalance', label: 'Trial Balance' },
   { key: 'income', label: 'Profit & Loss' },
   { key: 'balanceSheet', label: 'Balance Sheet' },
+  { key: 'cashFlow', label: 'Cash Flow' },
 ];
 const localDate = (date: Date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -106,17 +133,39 @@ export async function loadReportData(
     if (!Array.isArray(data)) throw new Error('The reporting API returned an invalid response.');
     return data;
   }
+  async function readObject<T>(path: string): Promise<T> {
+    const response = await fetcher(path);
+    if (!response.ok) throw new Error(`Unable to load financial reports (HTTP ${response.status}).`);
+    const data: T = await response.json();
+    if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('The reporting API returned an invalid response.');
+    return data;
+  }
   const query = reportQuery(range, basis);
-  const [trialBalance, income, balanceSheet, years, accounts] = await Promise.all([
+  const [trialBalance, income, balanceSheet, cashFlow, years, accounts] = await Promise.all([
     read<TrialBalanceRow>(`/api/Financials/trialbalance${query}`),
     read<IncomeRow>(`/api/Financials/IncomeStatement${query}`),
     read<BalanceRow>(`/api/Financials/BalanceSheet${query}`),
+    readObject<CashFlowStatementDto>(`/api/Financials/CashFlow${query}`),
     read<FinancialYear>('/api/Administration/financialyears'),
     read<Account>('/api/Financials/Accounts'),
   ]);
   for (const row of trialBalance) { minorUnits(row.debit); minorUnits(row.credit); }
   for (const row of [...income, ...balanceSheet]) minorUnits(row.amount);
-  return { trialBalance, income, balanceSheet, years, accounts };
+  minorUnits(cashFlow.netIncome ?? 0);
+  minorUnits(cashFlow.operatingCashFlow ?? 0);
+  minorUnits(cashFlow.investingCashFlow ?? 0);
+  minorUnits(cashFlow.financingCashFlow ?? 0);
+  minorUnits(cashFlow.netChangeInCash ?? 0);
+  minorUnits(cashFlow.startingCash ?? 0);
+  minorUnits(cashFlow.endingCash ?? 0);
+  for (const row of [
+    ...(cashFlow.operatingActivities || []),
+    ...(cashFlow.investingActivities || []),
+    ...(cashFlow.financingActivities || []),
+  ]) {
+    minorUnits(row.amount);
+  }
+  return { trialBalance, income, balanceSheet, cashFlow, years, accounts };
 }
 
 function minorUnits(amount: number): number {
@@ -168,6 +217,47 @@ export function buildStatement(statement: Statement, data: ReportData, hideZero 
     rows.push({ code: '', label: 'Gross Profit', kind: 'total', amount: revenues - costs });
     const expenses = section('Operating Expenses', data.income.filter(a => a.isExpense && !costIds.has(a.accountId)));
     rows.push({ code: '', label: 'Net Profit', kind: 'total', amount: revenues - costs - expenses });
+  } else if (statement === 'cashFlow') {
+    const cf = data.cashFlow;
+    if (cf?.message) {
+      rows.push({ code: '', label: cf.message, kind: 'section' });
+    } else {
+      // Cash flows from operating activities
+      rows.push({ code: '', label: 'Cash flows from operating activities', kind: 'section' });
+      rows.push({ code: '', label: 'Net Profit', kind: 'account', amount: minorUnits(cf?.netIncome ?? 0) });
+      const opVisible = byCode(cf?.operatingActivities || []).filter(a => !hideZero || minorUnits(a.amount) !== 0);
+      rows.push(...opVisible.map(a => ({
+        code: a.accountCode, label: a.accountName, kind: 'account' as const, amount: minorUnits(a.amount),
+      })));
+      rows.push({ code: '', label: 'Net cash provided by operating activities', kind: 'total', amount: minorUnits(cf?.operatingCashFlow ?? 0) });
+
+      // Cash flows from investing activities
+      rows.push({ code: '', label: 'Cash flows from investing activities', kind: 'section' });
+      const invVisible = byCode(cf?.investingActivities || []).filter(a => !hideZero || minorUnits(a.amount) !== 0);
+      rows.push(...invVisible.map(a => ({
+        code: a.accountCode, label: a.accountName, kind: 'account' as const, amount: minorUnits(a.amount),
+      })));
+      rows.push({ code: '', label: 'Net cash provided by investing activities', kind: 'total', amount: minorUnits(cf?.investingCashFlow ?? 0) });
+
+      // Cash flows from financing activities
+      rows.push({ code: '', label: 'Cash flows from financing activities', kind: 'section' });
+      const finVisible = byCode(cf?.financingActivities || []).filter(a => !hideZero || minorUnits(a.amount) !== 0);
+      rows.push(...finVisible.map(a => ({
+        code: a.accountCode, label: a.accountName, kind: 'account' as const, amount: minorUnits(a.amount),
+      })));
+      rows.push({ code: '', label: 'Net cash provided by financing activities', kind: 'total', amount: minorUnits(cf?.financingCashFlow ?? 0) });
+    }
+
+    // Cash reconciliation summary bridge (rendered for both Accrual and Cash basis)
+    rows.push({ code: '', label: 'Cash and cash equivalents', kind: 'section' });
+    rows.push({ code: '', label: 'Net increase / (decrease) in cash', kind: 'total', amount: minorUnits(cf?.netChangeInCash ?? 0) });
+    rows.push({ code: '', label: 'Cash at beginning of period', kind: 'account', amount: minorUnits(cf?.startingCash ?? 0) });
+    rows.push({ code: '', label: 'Cash at end of period', kind: 'total', amount: minorUnits(cf?.endingCash ?? 0) });
+
+    const diff = cf?.message
+      ? (minorUnits(cf?.startingCash ?? 0) + minorUnits(cf?.netChangeInCash ?? 0)) - minorUnits(cf?.endingCash ?? 0)
+      : (minorUnits(cf?.operatingCashFlow ?? 0) + minorUnits(cf?.investingCashFlow ?? 0) + minorUnits(cf?.financingCashFlow ?? 0)) - minorUnits(cf?.netChangeInCash ?? 0);
+    rows.push({ code: '', label: 'Difference', kind: 'total', amount: diff });
   } else {
     const assets = section('Assets', data.balanceSheet.filter(a => a.accountClassId === 1));
     const liabilities = section('Liabilities', data.balanceSheet.filter(a => a.accountClassId === 2));
@@ -320,7 +410,8 @@ export default function Reports() {
             </p>}
           </div>
           {statement === 'balanceSheet' && <p className="px-5 pb-4 text-sm text-[var(--text-muted)]">Cumulative balances through the as-of date, including opening balances and unclosed earnings.</p>}
-          {!rows.some(row => row.kind === 'account') && <p className="px-5 pb-4 text-sm text-[var(--text-muted)]">No ledger activity for the selected dates and filters.</p>}
+          {statement === 'cashFlow' && basis === 'cash' && data.cashFlow?.message && <p className="px-5 pb-4 text-sm text-[var(--text-muted)]">{data.cashFlow.message}</p>}
+          {!rows.some(row => row.kind === 'account') && (!data.cashFlow?.message || statement !== 'cashFlow') && <p className="px-5 pb-4 text-sm text-[var(--text-muted)]">No ledger activity for the selected dates and filters.</p>}
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <caption className="sr-only">{title}, {period}, {currentOrg.currency || DEFAULT_CURRENCY}</caption>

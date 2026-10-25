@@ -411,6 +411,19 @@ namespace Api.Controllers
             return Ok(_financialService.IncomeStatement(from, to, basis));
         }
 
+        [HttpGet]
+        [Route("CashFlow")]
+        [RequirePermission(SystemPermissions.ReportsView)]
+        public IActionResult CashFlow(DateTime? from = null, DateTime? to = null, Core.Domain.AccountingBasis basis = Core.Domain.AccountingBasis.Accrual)
+        {
+            if (!Enum.IsDefined(typeof(Core.Domain.AccountingBasis), basis)
+                || (ModelState.TryGetValue(nameof(basis), out var basisState) && basisState.Errors.Count > 0))
+                return BadRequest(new { message = "Provide a valid accounting basis: Accrual or Cash." });
+            if (!ModelState.IsValid || (from.HasValue && to.HasValue && from.Value > to.Value))
+                return BadRequest(new { message = "Provide a valid date range: from must not be after to." });
+            return Ok(_financialService.CashFlow(from, to, basis));
+        }
+
         #region CRUD for Accounts
 
         [HttpGet]
