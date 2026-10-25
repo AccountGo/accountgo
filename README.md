@@ -159,7 +159,7 @@ User profile management, credential administration, active device/session monito
 accountgo/
 ├── .github/workflows/          # Public CI + notify hosted ops (no prod resource IDs)
 │   ├── ci.yml                  # Build API + Web
-│   └── notify-ops.yml          # Triggers private AccountGo Cloud deploy
+│   └── notify-ops.yml          # Manual notify → private AccountGo Cloud deploy
 ├── docs/                       # Project documentation & screenshots
 │   └── screenshots/            # High-resolution application screenshots
 ├── src/
@@ -319,7 +319,7 @@ pnpm run build
 
 ## Deployment to Cloudflare
 
-**AccountGo Cloud** (`*.accountgo.dev`) is deployed from a private ops repository. This public repo runs CI only and notifies ops on `main` changes.
+**AccountGo Cloud** (`*.accountgo.dev`) is deployed from a private ops repository. This public repo runs CI only; hosted deploys are triggered manually (ops SHA deploy or Actions → Notify ops to deploy).
 
 **Self-host:** copy `src/*/wrangler.example.jsonc` → `wrangler.jsonc`, fill your D1 id and domains, then:
 
