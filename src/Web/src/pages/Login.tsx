@@ -348,38 +348,6 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
               </p>
             )}
 
-            {/* Segmented Mode Selector: Sign In vs Create Account */}
-            <div className="grid grid-cols-2 p-1 rounded-xl bg-[var(--bg-canvas)] shadow-inner ring-1 ring-white/10">
-              <button
-                type="button"
-                onClick={() => {
-                  setMode('signin');
-                  setErrorMessage(null);
-                }}
-                className={`py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
-                  mode === 'signin'
-                    ? 'bg-[var(--brand-primary)] text-[var(--brand-text)] shadow-sm'
-                    : 'text-[var(--text-secondary)] hover:text-[var(--text-main)]'
-                }`}
-              >
-                Sign In
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setMode('signup');
-                  setErrorMessage(null);
-                  if (email === 'admin@accountgo.ph') setEmail('');
-                }}
-                className={`py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
-                  mode === 'signup'
-                    ? 'bg-[var(--brand-primary)] text-[var(--brand-text)] shadow-sm'
-                    : 'text-[var(--text-secondary)] hover:text-[var(--text-main)]'
-                }`}
-              >
-                Create Account
-              </button>
-            </div>
 
             {/* Heading & Subtitle */}
             <div className="space-y-1.5">
