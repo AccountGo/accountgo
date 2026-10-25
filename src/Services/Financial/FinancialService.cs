@@ -913,10 +913,11 @@ namespace Services.Financial
 
             var glSetting = GetGeneralLedgerSetting();
 
-            // Classify non-cash balance sheet accounts (retained-earnings family is journal-split below)
+            // Classify non-cash balance sheet accounts (RE and accum. depreciation are journal-split below)
             foreach (var account in accounts.Where(a => a.AccountClassId <= 3 && !IsCashAccount(a)).OrderBy(a => a.AccountCode))
             {
-                if (IsRetainedEarningsOrSummaryAccount(account, glSetting))
+                if (IsRetainedEarningsOrSummaryAccount(account, glSetting)
+                    || IsAccumulatedDepreciationOrAmortizationAccount(account, accountLookup))
                     continue;
 
                 if (!periodBalances.TryGetValue(account.Id, out var pBal))
@@ -954,6 +955,7 @@ namespace Services.Financial
             }
 
             AddRetainedEarningsClosingAndDistributionLines(result, accounts, glSetting, from, to);
+            AddAccumulatedDepreciationCashFlowLines(result, accounts, accountLookup, from, to);
             ReclassifyDisposalGainsAndLosses(result, incomeItems);
 
             result.OperatingCashFlow = netIncome + result.OperatingActivities.Sum(a => a.Amount);
@@ -1115,16 +1117,46 @@ namespace Services.Financial
                 || name.Contains("income summary");
         }
 
+        private static bool IsAccumulatedDepreciationOrAmortizationAccount(
+            Account account,
+            IReadOnlyDictionary<int, Account> accountLookup)
+        {
+            var code = account.AccountCode ?? string.Empty;
+            var name = account.AccountName?.ToLowerInvariant() ?? string.Empty;
+            return account.IsContraAccount
+                && (code.StartsWith("14")
+                    || HasAncestorMatching(account, p => p.AccountCode == "14000", accountLookup)
+                    || name.Contains("accumulated depreciation")
+                    || name.Contains("accum depreciation")
+                    || name.Contains("accumulated amortisation")
+                    || name.Contains("accumulated amortization"));
+        }
+
+        /// <summary>
+        /// True for gains/losses on disposal of long-lived / investing assets (ASC 230 / IAS 7).
+        /// Excludes inventory and trading gains that belong in operating cash flows.
+        /// </summary>
         private static bool IsDisposalGainOrLossAccount(string accountName, bool isExpense)
         {
             var name = accountName?.ToLowerInvariant() ?? string.Empty;
-            if (isExpense)
-                return name.Contains("loss on disposal")
-                    || name.Contains("loss on sale")
-                    || name.Contains("loss on asset");
-            return name.Contains("gain on disposal")
-                || name.Contains("gain on sale")
-                || name.Contains("gain on asset");
+            if (name.Contains("inventory") || name.Contains("merchandise") || name.Contains("trading"))
+                return false;
+
+            var stem = isExpense ? "loss on" : "gain on";
+            if (!name.Contains(stem))
+                return false;
+
+            return name.Contains("disposal")
+                || name.Contains("fixed asset")
+                || name.Contains("equipment")
+                || name.Contains("vehicle")
+                || name.Contains("building")
+                || name.Contains("land")
+                || name.Contains("plant")
+                || name.Contains("ppe")
+                || name.Contains("property")
+                || name.Contains("investment")
+                || name.Contains("asset");
         }
 
         /// <summary>
@@ -1234,8 +1266,105 @@ namespace Services.Financial
         }
 
         /// <summary>
-        /// Indirect method: remove gains (add back losses) on asset disposal from operating and
-        /// shift them into investing so investing reflects cash proceeds.
+        /// Accumulated depreciation/amortization: credits from periodic depreciation (paired with
+        /// expense) are operating add-backs; debits/credits on disposal journals (no expense line)
+        /// belong in investing so net investing equals cash proceeds (ASC 230 / IAS 7).
+        /// </summary>
+        private void AddAccumulatedDepreciationCashFlowLines(
+            CashFlowStatement result,
+            IList<Account> accounts,
+            IReadOnlyDictionary<int, Account> accountLookup,
+            DateTime? from,
+            DateTime? to)
+        {
+            var accumAccounts = accounts
+                .Where(a => IsAccumulatedDepreciationOrAmortizationAccount(a, accountLookup))
+                .OrderBy(a => a.AccountCode)
+                .ToList();
+            if (accumAccounts.Count == 0)
+                return;
+
+            var accumIds = accumAccounts.Select(a => a.Id).ToHashSet();
+
+            var lines = _generalLedgerLineRepository.Table.AsQueryable();
+            if (from.HasValue)
+                lines = lines.Where(l => l.GeneralLedgerHeader.Date >= from.Value);
+            if (to.HasValue)
+                lines = lines.Where(l => l.GeneralLedgerHeader.Date <= to.Value);
+
+            var periodLines = lines
+                .Where(l => accumIds.Contains(l.AccountId)
+                    || l.Account.AccountClassId == (int)AccountClasses.Expense
+                    || l.Account.AccountClassId == (int)AccountClasses.Revenue
+                    || l.Account.AccountClassId == (int)AccountClasses.Assets)
+                .Select(l => new
+                {
+                    l.GeneralLedgerHeaderId,
+                    l.AccountId,
+                    l.DrCr,
+                    l.Amount,
+                    AccountClassId = l.Account.AccountClassId
+                })
+                .ToList();
+
+            var linesByHeader = periodLines.GroupBy(l => l.GeneralLedgerHeaderId)
+                .ToDictionary(g => g.Key, g => g.ToList());
+
+            foreach (var account in accumAccounts)
+            {
+                decimal operatingContribution = 0m;
+                decimal investingContribution = 0m;
+
+                foreach (var headerGroup in linesByHeader)
+                {
+                    var headerLines = headerGroup.Value;
+                    var accumLines = headerLines.Where(l => l.AccountId == account.Id).ToList();
+                    if (accumLines.Count == 0)
+                        continue;
+
+                    var contribution = accumLines.Sum(l => l.DrCr == DrOrCrSide.Cr ? l.Amount : -l.Amount);
+                    if (contribution == 0m)
+                        continue;
+
+                    // Depreciation/amortization entry pairs accum. credit with an expense debit.
+                    var isPeriodicDepreciation = headerLines.Any(l =>
+                        l.AccountClassId == (int)AccountClasses.Expense && l.AccountId != account.Id);
+
+                    if (isPeriodicDepreciation)
+                        operatingContribution += contribution;
+                    else
+                        investingContribution += contribution;
+                }
+
+                if (operatingContribution != 0m)
+                {
+                    result.OperatingActivities.Add(new CashFlowLine
+                    {
+                        AccountId = account.Id,
+                        AccountCode = account.AccountCode,
+                        AccountName = account.AccountName,
+                        LineType = CashFlowLineTypes.NonCashAdjustment,
+                        Amount = operatingContribution
+                    });
+                }
+
+                if (investingContribution != 0m)
+                {
+                    result.InvestingActivities.Add(new CashFlowLine
+                    {
+                        AccountId = account.Id,
+                        AccountCode = account.AccountCode,
+                        AccountName = account.AccountName,
+                        LineType = CashFlowLineTypes.Investing,
+                        Amount = investingContribution
+                    });
+                }
+            }
+        }
+
+        /// <summary>
+        /// Indirect method: remove gains (add back losses) on long-lived asset disposal from operating
+        /// and shift them into investing so investing reflects cash proceeds.
         /// </summary>
         private static void ReclassifyDisposalGainsAndLosses(
             CashFlowStatement result,

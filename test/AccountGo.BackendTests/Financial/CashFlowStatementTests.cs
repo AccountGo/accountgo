@@ -566,6 +566,120 @@ namespace AccountGo.BackendTests.Financial
         }
 
         [Fact]
+        public void CashFlow_AccrualBasis_DisposalWithAccumulatedDepreciation_NetsInvestingToCashProceeds()
+        {
+            var noncurrent = new Account { Id = 10, AccountCode = "10200", AccountName = "Noncurrent Assets", AccountClassId = 1 };
+            var fixedAssets = new Account { Id = 11, AccountCode = "10300", AccountName = "Fixed Assets", AccountClassId = 1, ParentAccountId = 10 };
+            var cash = new Account { Id = 1, AccountCode = "10111", AccountName = "Cash in Bank", AccountClassId = 1, IsCash = true };
+            var equipment = new Account { Id = 2, AccountCode = "13302", AccountName = "Office Equipment", AccountClassId = 1, ParentAccountId = 11 };
+            var accumDep = new Account { Id = 3, AccountCode = "14002", AccountName = "Accumulated Depreciation-Equipment", AccountClassId = 1, ParentAccountId = 11, IsContraAccount = true };
+            var gainOnSale = new Account { Id = 4, AccountCode = "40200", AccountName = "Gain on Sale of Assets", AccountClassId = 4 };
+            var depExpense = new Account { Id = 5, AccountCode = "50116", AccountName = "Depreciation Expense", AccountClassId = 5 };
+            var capital = new Account { Id = 6, AccountCode = "30100", AccountName = "Member Capital", AccountClassId = 3 };
+
+            var accounts = new List<Account> { noncurrent, fixedAssets, cash, equipment, accumDep, gainOnSale, depExpense, capital };
+            var mockAccountRepo = new Mock<IRepository<Account>>();
+            mockAccountRepo.Setup(r => r.Table).Returns(accounts.AsQueryable());
+
+            var startDate = new DateTime(2026, 5, 1, 0, 0, 0, DateTimeKind.Utc);
+            var endDate = new DateTime(2026, 5, 31, 23, 59, 59, DateTimeKind.Utc);
+            var glLines = new List<GeneralLedgerLine>();
+            int headerId = 1, lineId = 1;
+
+            void Post(DateTime date, params (Account Account, DrOrCrSide Side, decimal Amount)[] lines)
+            {
+                var header = new GeneralLedgerHeader { Id = headerId++, Date = date, CompanyId = 1 };
+                foreach (var line in lines)
+                    glLines.Add(new GeneralLedgerLine { Id = lineId++, GeneralLedgerHeader = header, GeneralLedgerHeaderId = header.Id, Account = line.Account, AccountId = line.Account.Id, DrCr = line.Side, Amount = line.Amount });
+            }
+
+            // Prior: buy equipment 1000; prior depreciation 600 (opening accum)
+            Post(startDate.AddDays(-20), (equipment, DrOrCrSide.Dr, 1000m), (capital, DrOrCrSide.Cr, 1000m));
+            Post(startDate.AddDays(-10), (depExpense, DrOrCrSide.Dr, 600m), (accumDep, DrOrCrSide.Cr, 600m));
+            // In period: depreciation 50, then dispose NBV 350 for cash 450 → gain 100
+            // Opening NBV at period start = 1000-600 = 400; after period dep 50, NBV 350; sell 450 → gain 100
+            Post(startDate.AddDays(2), (depExpense, DrOrCrSide.Dr, 50m), (accumDep, DrOrCrSide.Cr, 50m));
+            Post(startDate.AddDays(10),
+                (cash, DrOrCrSide.Dr, 450m),
+                (accumDep, DrOrCrSide.Dr, 650m),
+                (equipment, DrOrCrSide.Cr, 1000m),
+                (gainOnSale, DrOrCrSide.Cr, 100m));
+
+            var mockGlLineRepo = new Mock<IRepository<GeneralLedgerLine>>();
+            mockGlLineRepo.Setup(r => r.Table).Returns(glLines.AsQueryable());
+            var financialService = CreateFinancialService(
+                mockAccountRepo.Object,
+                new Mock<IRepository<GeneralLedgerHeader>>().Object,
+                mockGlLineRepo.Object);
+
+            var report = financialService.CashFlow(startDate, endDate, AccountingBasis.Accrual);
+
+            // NI = gain 100 - dep expense 50 = 50
+            Assert.Equal(50m, report.NetIncome);
+            // Operating: NI 50 + dep add-back 50 + remove gain (-100) = 0
+            Assert.Equal(0m, report.OperatingCashFlow);
+            Assert.Contains(report.OperatingActivities, a => a.AccountCode == "14002" && a.Amount == 50m && a.LineType == CashFlowLineTypes.NonCashAdjustment);
+            Assert.DoesNotContain(report.OperatingActivities, a => a.AccountCode == "14002" && a.Amount == -650m);
+            // Investing = cash proceeds 450 (asset/accum disposal + gain reclass)
+            Assert.Equal(450m, report.InvestingCashFlow);
+            Assert.Equal(450m, report.NetChangeInCash);
+            Assert.True(report.IsBalanced);
+        }
+
+        [Fact]
+        public void CashFlow_AccrualBasis_InventoryGainOnSale_StaysInOperating_NotReclassifiedToInvesting()
+        {
+            var cash = new Account { Id = 1, AccountCode = "10111", AccountName = "Cash in Bank", AccountClassId = 1, IsCash = true };
+            var inventory = new Account { Id = 2, AccountCode = "10800", AccountName = "Inventory", AccountClassId = 1 };
+            var gainOnSale = new Account { Id = 3, AccountCode = "40250", AccountName = "Gain on Sale of Inventory", AccountClassId = 4 };
+            var capital = new Account { Id = 4, AccountCode = "30100", AccountName = "Member Capital", AccountClassId = 3 };
+
+            // Put inventory under current assets hierarchy
+            var current = new Account { Id = 10, AccountCode = "10100", AccountName = "Current Assets", AccountClassId = 1 };
+            inventory.ParentAccountId = 10;
+
+            var accounts = new List<Account> { cash, inventory, gainOnSale, capital, current };
+            var mockAccountRepo = new Mock<IRepository<Account>>();
+            mockAccountRepo.Setup(r => r.Table).Returns(accounts.AsQueryable());
+
+            var startDate = new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc);
+            var endDate = new DateTime(2026, 6, 30, 23, 59, 59, DateTimeKind.Utc);
+            var glLines = new List<GeneralLedgerLine>();
+            int headerId = 1, lineId = 1;
+
+            void Post(DateTime date, params (Account Account, DrOrCrSide Side, decimal Amount)[] lines)
+            {
+                var header = new GeneralLedgerHeader { Id = headerId++, Date = date, CompanyId = 1 };
+                foreach (var line in lines)
+                    glLines.Add(new GeneralLedgerLine { Id = lineId++, GeneralLedgerHeader = header, GeneralLedgerHeaderId = header.Id, Account = line.Account, AccountId = line.Account.Id, DrCr = line.Side, Amount = line.Amount });
+            }
+
+            Post(startDate.AddDays(-1), (inventory, DrOrCrSide.Dr, 80m), (capital, DrOrCrSide.Cr, 80m));
+            Post(startDate.AddDays(3),
+                (cash, DrOrCrSide.Dr, 100m),
+                (inventory, DrOrCrSide.Cr, 80m),
+                (gainOnSale, DrOrCrSide.Cr, 20m));
+
+            var mockGlLineRepo = new Mock<IRepository<GeneralLedgerLine>>();
+            mockGlLineRepo.Setup(r => r.Table).Returns(glLines.AsQueryable());
+            var financialService = CreateFinancialService(
+                mockAccountRepo.Object,
+                new Mock<IRepository<GeneralLedgerHeader>>().Object,
+                mockGlLineRepo.Object);
+
+            var report = financialService.CashFlow(startDate, endDate, AccountingBasis.Accrual);
+
+            Assert.Equal(20m, report.NetIncome);
+            // Inventory Δ and gain remain operating — not shifted to investing
+            Assert.Equal(100m, report.OperatingCashFlow);
+            Assert.Equal(0m, report.InvestingCashFlow);
+            Assert.DoesNotContain(report.OperatingActivities, a => a.AccountCode == "40250");
+            Assert.DoesNotContain(report.InvestingActivities, a => a.AccountCode == "40250");
+            Assert.Equal(100m, report.NetChangeInCash);
+            Assert.True(report.IsBalanced);
+        }
+
+        [Fact]
         public void CashFlow_ThrowsWhenFromDateAfterToDate()
         {
             var mockAccountRepo = new Mock<IRepository<Account>>();
