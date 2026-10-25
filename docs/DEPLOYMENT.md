@@ -101,7 +101,7 @@ Public GitHub Actions (`.github/workflows/`):
 | Workflow | Purpose |
 |---|---|
 | `ci.yml` | Build API + Web on PRs and `main` (no production deploy) |
-| `notify-ops.yml` | Notifies the private ops repo to deploy **AccountGo Cloud** only |
+| `notify-ops.yml` | **Manual only** — optionally notifies private ops to deploy AccountGo Cloud (`workflow_dispatch`) |
 | `dependabot.yml` | Dependency update PRs |
 
 Self-hosters: wire your own deploy pipeline; do not expect `notify-ops` to deploy your account.

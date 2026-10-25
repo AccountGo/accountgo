@@ -1,21 +1,10 @@
 name: Notify ops to deploy
 
-# Hosted production deploy runs in the private AccountGo/accountgo-ops repo.
-# Requires repo secret OPS_DISPATCH_TOKEN (see accountgo-ops docs/SECRETS-SETUP.md).
+# Manual only. Hosted production deploy runs in private AccountGo/accountgo-ops.
+# Requires repo secret OPS_DISPATCH_TOKEN (see accountgo-ops docs/GH-SECRETS.md).
+# Prefer deploying directly from accountgo-ops with a main SHA if the dispatch token is unset.
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'src/Api/**'
-      - 'src/Core/**'
-      - 'src/Dto/**'
-      - 'src/Services/**'
-      - 'src/Infrastructure/**'
-      - 'src/src.ServiceDefaults/**'
-      - 'src/Web/**'
-      - '.github/workflows/notify-ops.yml'
   workflow_dispatch:
     inputs:
       component:
@@ -27,54 +16,39 @@ on:
           - both
           - api
           - web
+      sha:
+        description: Optional product git SHA to deploy (default = this workflow run's commit / current main tip when run from Actions UI on main)
+        required: false
+        type: string
 
 concurrency:
-  group: notify-ops-${{ github.sha }}
+  group: notify-ops-${{ inputs.sha || github.sha }}
   cancel-in-progress: false
 
 jobs:
-  changes:
-    name: Detect changes
+  resolve:
+    name: Resolve targets
     runs-on: ubuntu-latest
     outputs:
       api: ${{ steps.out.outputs.api }}
       web: ${{ steps.out.outputs.web }}
+      sha: ${{ steps.out.outputs.sha }}
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: dorny/paths-filter@v3
-        id: filter
-        if: github.event_name != 'workflow_dispatch'
-        with:
-          filters: |
-            api:
-              - 'src/Api/**'
-              - 'src/Core/**'
-              - 'src/Dto/**'
-              - 'src/Services/**'
-              - 'src/Infrastructure/**'
-              - 'src/src.ServiceDefaults/**'
-              - '.github/workflows/notify-ops.yml'
-            web:
-              - 'src/Web/**'
-              - '.github/workflows/notify-ops.yml'
-
       - name: Set outputs
         id: out
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            c="${{ inputs.component }}"
-            if [ "$c" = "api" ] || [ "$c" = "both" ]; then echo "api=true" >> "$GITHUB_OUTPUT"; else echo "api=false" >> "$GITHUB_OUTPUT"; fi
-            if [ "$c" = "web" ] || [ "$c" = "both" ]; then echo "web=true" >> "$GITHUB_OUTPUT"; else echo "web=false" >> "$GITHUB_OUTPUT"; fi
-          else
-            echo "api=${{ steps.filter.outputs.api }}" >> "$GITHUB_OUTPUT"
-            echo "web=${{ steps.filter.outputs.web }}" >> "$GITHUB_OUTPUT"
-          fi
+          c="${{ inputs.component }}"
+          if [ "$c" = "api" ] || [ "$c" = "both" ]; then echo "api=true" >> "$GITHUB_OUTPUT"; else echo "api=false" >> "$GITHUB_OUTPUT"; fi
+          if [ "$c" = "web" ] || [ "$c" = "both" ]; then echo "web=true" >> "$GITHUB_OUTPUT"; else echo "web=false" >> "$GITHUB_OUTPUT"; fi
+          SHA="${{ inputs.sha }}"
+          if [ -z "$SHA" ]; then SHA="${{ github.sha }}"; fi
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "Deploying component=$c sha=$SHA"
 
   dispatch-api:
     name: Dispatch API deploy
-    needs: changes
-    if: needs.changes.outputs.api == 'true'
+    needs: resolve
+    if: needs.resolve.outputs.api == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: repository_dispatch → accountgo-ops (deploy-api)
@@ -82,19 +56,19 @@ jobs:
           GH_TOKEN: ${{ secrets.OPS_DISPATCH_TOKEN }}
         run: |
           if [ -z "$GH_TOKEN" ]; then
-            echo "OPS_DISPATCH_TOKEN is not set. Hosted deploy cannot be notified." >&2
-            echo "See private repo AccountGo/accountgo-ops docs/SECRETS-SETUP.md" >&2
+            echo "OPS_DISPATCH_TOKEN is not set. Deploy manually from AccountGo/accountgo-ops instead:" >&2
+            echo "  gh workflow run deploy-api.yml -R AccountGo/accountgo-ops -f sha=${{ needs.resolve.outputs.sha }}" >&2
             exit 1
           fi
           gh api repos/AccountGo/accountgo-ops/dispatches \
             -f event_type='deploy-api' \
-            -f "client_payload[sha]=${{ github.sha }}" \
+            -f "client_payload[sha]=${{ needs.resolve.outputs.sha }}" \
             -f "client_payload[component]=api"
 
   dispatch-web:
     name: Dispatch Web deploy
-    needs: changes
-    if: needs.changes.outputs.web == 'true'
+    needs: resolve
+    if: needs.resolve.outputs.web == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: repository_dispatch → accountgo-ops (deploy-web)
@@ -102,11 +76,11 @@ jobs:
           GH_TOKEN: ${{ secrets.OPS_DISPATCH_TOKEN }}
         run: |
           if [ -z "$GH_TOKEN" ]; then
-            echo "OPS_DISPATCH_TOKEN is not set. Hosted deploy cannot be notified." >&2
-            echo "See private repo AccountGo/accountgo-ops docs/SECRETS-SETUP.md" >&2
+            echo "OPS_DISPATCH_TOKEN is not set. Deploy manually from AccountGo/accountgo-ops instead:" >&2
+            echo "  gh workflow run deploy-web.yml -R AccountGo/accountgo-ops -f sha=${{ needs.resolve.outputs.sha }}" >&2
             exit 1
           fi
           gh api repos/AccountGo/accountgo-ops/dispatches \
             -f event_type='deploy-web' \
-            -f "client_payload[sha]=${{ github.sha }}" \
+            -f "client_payload[sha]=${{ needs.resolve.outputs.sha }}" \
             -f "client_payload[component]=web"
