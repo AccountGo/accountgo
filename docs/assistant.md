@@ -1,6 +1,6 @@
 # AccountGo Assistant
 
-In-app AI sidekick powered by [`@anter/ai-chat-sdk`](https://github.com/anter-ai/ai-chat-sdk) and the live Anter agent `accountgo-assistant` (`ragnt_yIhh41xJIIBmPpRc3s9SG` in project `abproj_1hAA2dKHr1L32cGDNgZQy`).
+In-app AI sidekick powered by [`@anter/ai-chat-sdk`](https://github.com/anter-ai/ai-chat-sdk) and an Anter agent (default slug `accountgo-assistant`). Configure your own Anter project id and API key via environment / Worker secrets — do not commit production IDs.
 
 ## UX
 
@@ -43,9 +43,10 @@ See also [assistant-agent-entitlements.md](./assistant-agent-entitlements.md).
 ```bash
 ANTER_BASE_URL=https://agents.anter.ai
 ANTER_API_KEY=...
-ANTER_PROJECT_ID=abproj_1hAA2dKHr1L32cGDNgZQy
+ANTER_PROJECT_ID=...
 ANTER_AGENT_SLUG=accountgo-assistant
 ```
+
 
 Never put Anter credentials in Vite / Cloudflare Workers SPA env. On the API Worker, set `ANTER_API_KEY` as a secret:
 
@@ -54,7 +55,7 @@ cd src/Api
 npx wrangler secret put ANTER_API_KEY
 ```
 
-`ANTER_BASE_URL`, `ANTER_PROJECT_ID`, and `ANTER_AGENT_SLUG` are configured in `wrangler.jsonc`.
+`ANTER_BASE_URL` and `ANTER_AGENT_SLUG` can be set in `wrangler.jsonc` vars (or environment). Set `ANTER_PROJECT_ID` via environment / Worker vars for your own Anter project — do not commit production project IDs.
 
 ## Zero-Trust Multi-Tenant Isolation & MCP Pass-Through
 
