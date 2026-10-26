@@ -40,6 +40,10 @@ namespace Core.Domain
 
         public string? SalesInvoiceSettingsJson { get; set; }
 
+        public MfaPolicy MfaPolicy { get; set; } = MfaPolicy.Optional;
+        public DateTime? MfaGracePeriodEndsAt { get; set; }
+        public bool RequireMfaEveryLogin { get; set; } = false;
+
         public SalesInvoiceSettings GetSalesInvoiceSettings() => SalesInvoiceSettings.FromJson(SalesInvoiceSettingsJson);
 
         public void SetSalesInvoiceSettings(SalesInvoiceSettings settings) => SalesInvoiceSettingsJson = settings.ToJson();

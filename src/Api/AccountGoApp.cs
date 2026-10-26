@@ -119,6 +119,7 @@ public static class AccountGoApp
         builder.Services.AddScoped<AccountDeletionService>();
         builder.Services.AddAuthentication();
         builder.Services.ConfigureIdentity();
+        builder.Services.ConfigureDataProtection(builder.Configuration, builder.Environment);
         builder.Services.ConfigureJWT(builder.Configuration);
 
         builder.Services.AddAuthorization(options =>
@@ -140,6 +141,7 @@ public static class AccountGoApp
         builder.Services.AddSingleton<Microsoft.AspNetCore.Authorization.IAuthorizationMiddlewareResultHandler, Api.Filters.MfaAuthorizationMiddlewareResultHandler>();
 
         builder.Services.AddScoped<ISessionService, SessionService>();
+        builder.Services.AddScoped<ISecurityAuditService, SecurityAuditService>();
         builder.Services.AddScoped<IMfaGate, CommunityMfaGate>();
         builder.Services.AddScoped<ISecurityCapabilities, CommunitySecurityCapabilities>();
 
@@ -523,9 +525,6 @@ public static class AccountGoApp
                         Console.WriteLine("✓ ApiDbContext tables created.");
                     }
 
-                    // Apply SQLite schema upgrader (multi-tenancy columns, tables, indexes)
-                    Api.Data.Schema.SqliteSchemaUpgrader.Upgrade(apiDbContext.Database.GetDbConnection());
-
                     var connection = identityDbContext.Database.GetDbConnection();
                     bool identityTablesExist = false;
                     if (connection.State != System.Data.ConnectionState.Open)
@@ -544,34 +543,8 @@ public static class AccountGoApp
                         Console.WriteLine("✓ ApplicationIdentityDbContext tables created.");
                     }
 
-                    // Ensure RefreshTokens table exists
-                    bool refreshTokensTableExists = false;
-                    using (var cmd = connection.CreateCommand())
-                    {
-                        cmd.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='RefreshTokens';";
-                        var count = Convert.ToInt32(cmd.ExecuteScalar());
-                        refreshTokensTableExists = (count > 0);
-                    }
-                    if (!refreshTokensTableExists)
-                    {
-                        Console.WriteLine("Creating RefreshTokens table in SQLite...");
-                        identityDbContext.Database.ExecuteSqlRaw(@"
-                            CREATE TABLE IF NOT EXISTS ""RefreshTokens"" (
-                                ""Id"" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-                                ""UserId"" TEXT NOT NULL,
-                                ""TokenHash"" TEXT NOT NULL,
-                                ""ExpiresAt"" TEXT NOT NULL,
-                                ""CreatedAt"" TEXT NOT NULL,
-                                ""CreatedByIp"" TEXT NULL,
-                                ""RevokedAt"" TEXT NULL,
-                                ""ReplacedByTokenHash"" TEXT NULL,
-                                ""UserAgent"" TEXT NULL
-                            );
-                            CREATE INDEX IF NOT EXISTS ""IX_RefreshTokens_TokenHash"" ON ""RefreshTokens"" (""TokenHash"");
-                            CREATE INDEX IF NOT EXISTS ""IX_RefreshTokens_UserId"" ON ""RefreshTokens"" (""UserId"");
-                        ");
-                        Console.WriteLine("✓ RefreshTokens table created.");
-                    }
+                    // Apply SQLite schema upgrader (multi-tenancy columns, tables, indexes, security tables)
+                    Api.Data.Schema.SqliteSchemaUpgrader.Upgrade(apiDbContext.Database.GetDbConnection());
 
                     // On Cloudflare the Worker restores every table from D1 once the container is up, replacing whatever is
                     // here; seeding demo data first only delays start-up (minutes on the smallest container).

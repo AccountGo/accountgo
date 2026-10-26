@@ -17,6 +17,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -185,5 +186,97 @@ public class MfaSeamTests
         // 2. Allowlisted /api/auth/me is NOT blocked by middleware (passes to controller -> 200 OK)
         var meResponse = await client.GetAsync("/api/auth/me");
         Assert.Equal(HttpStatusCode.OK, meResponse.StatusCode);
+    }
+
+    [Fact]
+    public void InertSchema_AllSecurityTablesAndColumns_ExistOnColdStart()
+    {
+        var dbPath = Path.Combine(Path.GetTempPath(), "accountgo_mfa_schema_" + Path.GetRandomFileName() + ".db");
+        using var factory = CreateFactory(dbPath);
+        using var scope = factory.Services.CreateScope();
+        var identityContext = scope.ServiceProvider.GetRequiredService<ApplicationIdentityDbContext>();
+        var conn = identityContext.Database.GetDbConnection();
+        if (conn.State != System.Data.ConnectionState.Open)
+            conn.Open();
+
+        var expectedTables = new[]
+        {
+            "RefreshTokens",
+            "DataProtectionKeys",
+            "SecurityAuditEvents",
+            "UserRecoveryCodes",
+            "TrustedDevices",
+            "UserWebAuthnCredentials",
+            "WebAuthnChallenges"
+        };
+
+        foreach (var tbl in expectedTables)
+        {
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = $"SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='{tbl}';";
+            var count = Convert.ToInt32(cmd.ExecuteScalar());
+            Assert.True(count > 0, $"Table {tbl} must exist in SQLite database.");
+        }
+
+        // Verify columns on AspNetUsers
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = "SELECT COUNT(*) FROM pragma_table_info('AspNetUsers') WHERE name='MfaReEnrollRequired';";
+            Assert.True(Convert.ToInt32(cmd.ExecuteScalar()) > 0, "AspNetUsers.MfaReEnrollRequired column must exist.");
+        }
+
+        // Verify columns on CompanySetting
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = "SELECT COUNT(*) FROM pragma_table_info('CompanySetting') WHERE name IN ('MfaPolicy', 'MfaGracePeriodEndsAt', 'RequireMfaEveryLogin');";
+            Assert.Equal(3, Convert.ToInt32(cmd.ExecuteScalar()));
+        }
+
+        // Verify columns on RefreshTokens
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = "SELECT COUNT(*) FROM pragma_table_info('RefreshTokens') WHERE name IN ('MfaMethod', 'Amr', 'TrustedDeviceId');";
+            Assert.Equal(3, Convert.ToInt32(cmd.ExecuteScalar()));
+        }
+    }
+
+    [Fact]
+    public void DbXmlRepository_StoresAndRetrievesDataProtectionKeys()
+    {
+        var dbPath = Path.Combine(Path.GetTempPath(), "accountgo_mfa_dp_" + Path.GetRandomFileName() + ".db");
+        using var factory = CreateFactory(dbPath);
+        using var scope = factory.Services.CreateScope();
+
+        var repo = scope.ServiceProvider.GetRequiredService<Microsoft.AspNetCore.DataProtection.Repositories.IXmlRepository>();
+        var friendlyName = "key-" + Guid.NewGuid().ToString("N");
+        var xmlElement = new System.Xml.Linq.XElement("key",
+            new System.Xml.Linq.XAttribute("id", friendlyName),
+            new System.Xml.Linq.XElement("creationDate", DateTime.UtcNow.ToString("O")),
+            new System.Xml.Linq.XElement("descriptor", "test-descriptor"));
+
+        repo.StoreElement(xmlElement, friendlyName);
+
+        var elements = repo.GetAllElements();
+        Assert.Contains(elements, e => e.Attribute("id")?.Value == friendlyName);
+    }
+
+    [Fact]
+    public async Task SecurityAuditService_PersistsAuditEvent()
+    {
+        var dbPath = Path.Combine(Path.GetTempPath(), "accountgo_mfa_audit_" + Path.GetRandomFileName() + ".db");
+        using var factory = CreateFactory(dbPath);
+        using var scope = factory.Services.CreateScope();
+
+        var auditService = scope.ServiceProvider.GetRequiredService<ISecurityAuditService>();
+        var identityContext = scope.ServiceProvider.GetRequiredService<ApplicationIdentityDbContext>();
+
+        await auditService.LogEventAsync("test_event", "user-42", 1, "127.0.0.1", "TestAgent", new { action = "test" });
+
+        var evt = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.FirstOrDefaultAsync(
+            identityContext.SecurityAuditEvents, e => e.EventType == "test_event");
+        Assert.NotNull(evt);
+        Assert.Equal("user-42", evt.UserId);
+        Assert.Equal(1, evt.CompanyId);
+        Assert.Equal("127.0.0.1", evt.IpAddress);
     }
 }

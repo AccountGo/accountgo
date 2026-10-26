@@ -140,6 +140,8 @@ namespace Api.Data
                 .IsRequired()
                 .HasMaxLength(100)
                 .HasDefaultValue("legacy-default");
+            builder.Entity<CompanySetting>().Property(s => s.MfaPolicy).HasDefaultValue(MfaPolicy.Optional);
+            builder.Entity<CompanySetting>().Property(s => s.RequireMfaEveryLogin).HasDefaultValue(false);
 
             // Stored as BusinessAddress_* columns on CompanySetting; the SQLite upgrader and D1 0004 use the same names.
             builder.Entity<CompanySetting>().OwnsOne(s => s.BusinessAddress);

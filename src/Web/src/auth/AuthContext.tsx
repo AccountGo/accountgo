@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
-import { UserDto, AuthResponse, OtpSendResponse, SignUpPayload, SignUpResponse, AuthContextType } from '../types/auth';
+import { UserDto, AuthResponse, OtpSendResponse, SignUpPayload, SignUpResponse, AuthContextType, VerifyOtpResult, MfaRequiredResponse, MfaEnrollmentRequiredResponse } from '../types/auth';
 import { announceEntitlementDenial } from '../lib/entitlementEvents';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -204,8 +204,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
-  // Verify OTP code & establish session
-  const verifyOtp = useCallback(async (email: string, otp: string): Promise<void> => {
+  // Verify OTP code & establish session (or return MFA challenge)
+  const verifyOtp = useCallback(async (email: string, otp: string): Promise<VerifyOtpResult> => {
     const res = await fetchWith503Retry('/api/auth/verify-otp', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -226,10 +226,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       throw new Error(errorMsg);
     }
 
+    if (data?.status === 'mfa_required') {
+      return { type: 'mfa_required', data: data as MfaRequiredResponse };
+    }
+
+    if (data?.status === 'mfa_enrollment_required') {
+      return { type: 'mfa_enrollment_required', data: data as MfaEnrollmentRequiredResponse };
+    }
+
     const authData = data as AuthResponse;
     tokenRef.current = authData.accessToken;
     setAccessToken(authData.accessToken);
     setUser(authData.user);
+    return { type: 'success', data: authData };
+  }, []);
+
+  const completeSession = useCallback((authData: AuthResponse) => {
+    tokenRef.current = authData.accessToken;
+    setAccessToken(authData.accessToken);
+    setUser(authData.user);
+  }, []);
+
+  const completeStepUp = useCallback((newToken: string) => {
+    tokenRef.current = newToken;
+    setAccessToken(newToken);
   }, []);
 
   // Logout session
@@ -323,6 +343,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     sendOtp,
     signUp,
     verifyOtp,
+    completeSession,
+    completeStepUp,
     logout,
     clearSession,
     authFetch,

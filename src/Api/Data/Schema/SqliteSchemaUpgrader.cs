@@ -137,6 +137,7 @@ namespace Api.Data.Schema
                 EnsureAllIndexes(connection, logger);
                 EnsureLifecycleColumns(connection);
                 EnsureTables(connection);
+                EnsureSecurityTables(connection);
             }
             finally
             {
@@ -214,7 +215,14 @@ namespace Api.Data.Schema
                     new[] { "GeneralLedgerHeader", "ReversedGeneralLedgerHeaderId", "INTEGER NULL" },
                     new[] { "CustomerAllocation", "GeneralLedgerHeaderId", "INTEGER NULL" },
                     new[] { "Company", "Tier", "TEXT NULL" },
-                    new[] { "Account", "ArchivedAt", "TEXT NULL" }
+                    new[] { "Account", "ArchivedAt", "TEXT NULL" },
+                    new[] { "CompanySetting", "MfaPolicy", "INTEGER NOT NULL DEFAULT 0" },
+                    new[] { "CompanySetting", "MfaGracePeriodEndsAt", "TEXT NULL" },
+                    new[] { "CompanySetting", "RequireMfaEveryLogin", "INTEGER NOT NULL DEFAULT 0" },
+                    new[] { "AspNetUsers", "MfaReEnrollRequired", "INTEGER NOT NULL DEFAULT 0" },
+                    new[] { "RefreshTokens", "MfaMethod", "TEXT NULL" },
+                    new[] { "RefreshTokens", "Amr", "TEXT NULL" },
+                    new[] { "RefreshTokens", "TrustedDeviceId", "INTEGER NULL" }
                 };
                 var added = new HashSet<string>();
                 foreach (var column in columns)
@@ -393,6 +401,105 @@ namespace Api.Data.Schema
             cmd.CommandText = EntitlementUsageTableSql;
             cmd.ExecuteNonQuery();
         }
+
+        // D1 0026_security_schema.sql
+        private static void EnsureSecurityTables(DbConnection connection)
+        {
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = SecurityTablesSql;
+            cmd.ExecuteNonQuery();
+        }
+
+        private const string SecurityTablesSql = @"
+            CREATE TABLE IF NOT EXISTS ""RefreshTokens"" (
+                ""Id"" INTEGER NOT NULL CONSTRAINT ""PK_RefreshTokens"" PRIMARY KEY AUTOINCREMENT,
+                ""UserId"" TEXT NOT NULL,
+                ""TokenHash"" TEXT NOT NULL,
+                ""ExpiresAt"" TEXT NOT NULL,
+                ""CreatedAt"" TEXT NOT NULL,
+                ""CreatedByIp"" TEXT NULL,
+                ""RevokedAt"" TEXT NULL,
+                ""ReplacedByTokenHash"" TEXT NULL,
+                ""UserAgent"" TEXT NULL,
+                ""MfaMethod"" TEXT NULL,
+                ""Amr"" TEXT NULL,
+                ""TrustedDeviceId"" INTEGER NULL
+            );
+            CREATE INDEX IF NOT EXISTS ""IX_RefreshTokens_TokenHash"" ON ""RefreshTokens"" (""TokenHash"");
+            CREATE INDEX IF NOT EXISTS ""IX_RefreshTokens_UserId"" ON ""RefreshTokens"" (""UserId"");
+
+            CREATE TABLE IF NOT EXISTS ""DataProtectionKeys"" (
+                ""Id"" INTEGER NOT NULL CONSTRAINT ""PK_DataProtectionKeys"" PRIMARY KEY AUTOINCREMENT,
+                ""FriendlyName"" TEXT NOT NULL,
+                ""Xml"" TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS ""IX_DataProtectionKeys_FriendlyName"" ON ""DataProtectionKeys"" (""FriendlyName"");
+
+            CREATE TABLE IF NOT EXISTS ""SecurityAuditEvents"" (
+                ""Id"" INTEGER NOT NULL CONSTRAINT ""PK_SecurityAuditEvents"" PRIMARY KEY AUTOINCREMENT,
+                ""UserId"" TEXT NULL,
+                ""CompanyId"" INTEGER NULL,
+                ""EventType"" TEXT NOT NULL,
+                ""IpAddress"" TEXT NULL,
+                ""UserAgent"" TEXT NULL,
+                ""MetadataJson"" TEXT NULL,
+                ""CreatedAt"" TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS ""IX_SecurityAuditEvents_EventType"" ON ""SecurityAuditEvents"" (""EventType"");
+            CREATE INDEX IF NOT EXISTS ""IX_SecurityAuditEvents_UserId_CreatedAt"" ON ""SecurityAuditEvents"" (""UserId"", ""CreatedAt"");
+
+            CREATE TABLE IF NOT EXISTS ""UserRecoveryCodes"" (
+                ""Id"" INTEGER NOT NULL CONSTRAINT ""PK_UserRecoveryCodes"" PRIMARY KEY AUTOINCREMENT,
+                ""UserId"" TEXT NOT NULL,
+                ""CodeHash"" TEXT NOT NULL,
+                ""CreatedAt"" TEXT NOT NULL,
+                ""ConsumedAt"" TEXT NULL
+            );
+            CREATE INDEX IF NOT EXISTS ""IX_UserRecoveryCodes_UserId"" ON ""UserRecoveryCodes"" (""UserId"");
+            CREATE INDEX IF NOT EXISTS ""IX_UserRecoveryCodes_CodeHash"" ON ""UserRecoveryCodes"" (""CodeHash"");
+
+            CREATE TABLE IF NOT EXISTS ""TrustedDevices"" (
+                ""Id"" INTEGER NOT NULL CONSTRAINT ""PK_TrustedDevices"" PRIMARY KEY AUTOINCREMENT,
+                ""UserId"" TEXT NOT NULL,
+                ""TokenHash"" TEXT NOT NULL,
+                ""Label"" TEXT NULL,
+                ""UserAgent"" TEXT NULL,
+                ""CreatedByIp"" TEXT NULL,
+                ""CreatedAt"" TEXT NOT NULL,
+                ""ExpiresAt"" TEXT NOT NULL,
+                ""LastSeenAt"" TEXT NOT NULL,
+                ""RevokedAt"" TEXT NULL
+            );
+            CREATE INDEX IF NOT EXISTS ""IX_TrustedDevices_UserId"" ON ""TrustedDevices"" (""UserId"");
+            CREATE UNIQUE INDEX IF NOT EXISTS ""IX_TrustedDevices_TokenHash"" ON ""TrustedDevices"" (""TokenHash"");
+
+            CREATE TABLE IF NOT EXISTS ""UserWebAuthnCredentials"" (
+                ""Id"" INTEGER NOT NULL CONSTRAINT ""PK_UserWebAuthnCredentials"" PRIMARY KEY AUTOINCREMENT,
+                ""UserId"" TEXT NOT NULL,
+                ""CredentialId"" BLOB NOT NULL,
+                ""PublicKey"" BLOB NOT NULL,
+                ""UserHandle"" BLOB NOT NULL,
+                ""SignatureCounter"" INTEGER NOT NULL,
+                ""CredType"" TEXT NULL,
+                ""AaGuid"" TEXT NOT NULL,
+                ""Nickname"" TEXT NOT NULL,
+                ""CreatedAt"" TEXT NOT NULL,
+                ""LastUsedAt"" TEXT NULL,
+                ""Transports"" TEXT NULL
+            );
+            CREATE INDEX IF NOT EXISTS ""IX_UserWebAuthnCredentials_UserId"" ON ""UserWebAuthnCredentials"" (""UserId"");
+            CREATE UNIQUE INDEX IF NOT EXISTS ""IX_UserWebAuthnCredentials_CredentialId"" ON ""UserWebAuthnCredentials"" (""CredentialId"");
+
+            CREATE TABLE IF NOT EXISTS ""WebAuthnChallenges"" (
+                ""Id"" INTEGER NOT NULL CONSTRAINT ""PK_WebAuthnChallenges"" PRIMARY KEY AUTOINCREMENT,
+                ""UserId"" TEXT NOT NULL,
+                ""Purpose"" TEXT NOT NULL,
+                ""JsonPayload"" TEXT NOT NULL,
+                ""CreatedAt"" TEXT NOT NULL,
+                ""ExpiresAt"" TEXT NOT NULL
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS ""IX_WebAuthnChallenges_UserId_Purpose"" ON ""WebAuthnChallenges"" (""UserId"", ""Purpose"");
+        ";
 
         // D1 0024_entitlements.sql
         private const string EntitlementUsageTableSql = @"

@@ -14,6 +14,10 @@ namespace Api.Data
         public string? ReplacedByTokenHash { get; set; }
         public string? UserAgent { get; set; }
 
+        public string? MfaMethod { get; set; }
+        public string? Amr { get; set; }
+        public int? TrustedDeviceId { get; set; }
+
         public bool IsExpired => DateTime.UtcNow >= ExpiresAt;
         public bool IsRevoked => RevokedAt != null;
         public bool IsActive => !IsRevoked && !IsExpired;

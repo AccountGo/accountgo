@@ -1,16 +1,46 @@
+using System.IO;
 using System.Security.Claims;
 using System.Text;
 using Api.Data;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.IdentityModel.Tokens;
 
 namespace Api.Extensions
 {
     public static class ServiceExtensions
     {
+        public static void ConfigureDataProtection(this IServiceCollection services, IConfiguration configuration, IHostEnvironment environment)
+        {
+            var keyDirectory = configuration["DataProtection:KeyDirectory"] ?? Environment.GetEnvironmentVariable("DATAPROTECTION_KEY_DIRECTORY");
+
+            var dpBuilder = services.AddDataProtection()
+                .SetApplicationName("AccountGo");
+
+            if (!string.IsNullOrWhiteSpace(keyDirectory))
+            {
+                var dir = new DirectoryInfo(keyDirectory);
+                if (!dir.Exists)
+                {
+                    dir.Create();
+                }
+                dpBuilder.PersistKeysToFileSystem(dir);
+            }
+            else
+            {
+                services.AddSingleton<Microsoft.AspNetCore.DataProtection.Repositories.IXmlRepository, Api.Data.DataProtection.DbXmlRepository>();
+                services.AddOptions<Microsoft.AspNetCore.DataProtection.KeyManagement.KeyManagementOptions>()
+                    .Configure<IServiceProvider>((options, sp) =>
+                    {
+                        options.XmlRepository = sp.GetRequiredService<Microsoft.AspNetCore.DataProtection.Repositories.IXmlRepository>();
+                    });
+            }
+        }
+
         public static void ConfigureCors(this IServiceCollection services, IConfiguration configuration)
         {
             var allowedOrigins = configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()

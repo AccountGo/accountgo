@@ -3,6 +3,9 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { getPersistedOrgSlug, setPersistedOrgSlug } from '../lib/storage';
 import { clearInvitationToken, getInvitationToken, storeInvitationToken } from '../lib/invitationStorage';
+import { MfaChallenge } from '../components/mfa/MfaChallenge';
+import { MfaEnrollWizard } from '../components/mfa/MfaEnrollWizard';
+import { MfaRequiredResponse, MfaEnrollmentRequiredResponse } from '../types/auth';
 import {
   Mail,
   User,
@@ -23,7 +26,7 @@ interface LoginProps {
 export const Login: React.FC<LoginProps> = ({ initialMode }) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { isAuthenticated, isLoading: isAuthLoading, sendOtp, signUp, verifyOtp, authFetch } = useAuth();
+  const { isAuthenticated, isLoading: isAuthLoading, sendOtp, signUp, verifyOtp, completeSession, authFetch } = useAuth();
   const queryInviteToken = new URLSearchParams(location.search).get('invite');
   const [invitationToken, setInvitationToken] = useState<string | null>(
     () => queryInviteToken || getInvitationToken()
@@ -38,8 +41,10 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
     return 'signin';
   });
 
-  // Step state: 1 = Credentials request, 2 = 6-digit OTP verification
-  const [step, setStep] = useState<1 | 2>(1);
+  // Step state: 1 = Credentials request, 2 = 6-digit OTP verification, 'mfa_challenge' = Factor B challenge, 'mfa_enroll' = Factor B enrollment
+  const [step, setStep] = useState<1 | 2 | 'mfa_challenge' | 'mfa_enroll'>(1);
+  const [mfaChallengeData, setMfaChallengeData] = useState<MfaRequiredResponse | null>(null);
+  const [mfaEnrollData, setMfaEnrollData] = useState<MfaEnrollmentRequiredResponse | null>(null);
 
   // Form fields
   const [email, setEmail] = useState<string>(() => (import.meta.env.DEV ? 'admin@accountgo.ph' : ''));
@@ -205,6 +210,59 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
     }
   };
 
+  // Common post-authentication routing (invitation acceptance or dashboard redirection)
+  const handlePostAuthSuccess = async (targetSlugOverride?: string | null) => {
+    const pendingToken = invitationToken || getInvitationToken();
+    if (pendingToken) {
+      const acceptResponse = await authFetch(`/api/invitations/${encodeURIComponent(pendingToken)}/accept`, {
+        method: 'POST',
+      });
+      if (acceptResponse.status === 403) {
+        throw new Error('This invitation was sent to a different email. Use the invited email address and try again.');
+      }
+      if (acceptResponse.status === 410) {
+        clearInvitationToken();
+        setInvitationToken(null);
+        throw new Error('This invitation has expired or has already been accepted.');
+      }
+      if (acceptResponse.status === 404) {
+        clearInvitationToken();
+        setInvitationToken(null);
+        throw new Error('This invitation is invalid or has been revoked.');
+      }
+      if (!acceptResponse.ok) {
+        throw new Error('We could not accept this invitation. You can try again from Pending invitations.');
+      }
+      const accepted = (await acceptResponse.json()) as { slug: string };
+      clearInvitationToken();
+      setInvitationToken(null);
+      setPersistedOrgSlug(accepted.slug);
+      navigate(`/org/${encodeURIComponent(accepted.slug)}/dashboard`, { replace: true });
+      return;
+    }
+
+    // Successfully authenticated! Route to target organization or org selector
+    const fromPath = (location.state as any)?.from?.pathname;
+    const destinationSlug = targetSlugOverride || targetOrgSlug || getPersistedOrgSlug();
+
+    if (targetSlugOverride || targetOrgSlug) {
+      const slug = targetSlugOverride || targetOrgSlug;
+      setPersistedOrgSlug(slug!);
+      navigate(`/org/${slug}/dashboard`, { replace: true });
+    } else if (orgName.trim()) {
+      // The workspace is created by the setup wizard, which prefills the name typed at signup.
+      const params = new URLSearchParams({ name: orgName.trim() });
+      if (orgSlug.trim()) params.set('slug', orgSlug.trim());
+      navigate(`/create-org?${params.toString()}`, { replace: true });
+    } else if (fromPath && fromPath !== '/login' && fromPath !== '/signup') {
+      navigate(fromPath, { replace: true });
+    } else if (destinationSlug) {
+      navigate(`/org/${destinationSlug}/dashboard`, { replace: true });
+    } else {
+      navigate('/select-org', { replace: true, state: { fromSignIn: true } });
+    }
+  };
+
   // Submit Step 2: Verify OTP code
   const handleVerifyCode = async (codeToVerify?: string) => {
     const code = codeToVerify || otp.join('');
@@ -216,57 +274,24 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
     let verified = false;
 
     try {
-      await verifyOtp(email, code);
-      verified = true;
+      const result = await verifyOtp(email, code);
 
-      const pendingToken = invitationToken || getInvitationToken();
-      if (pendingToken) {
-        const acceptResponse = await authFetch(`/api/invitations/${encodeURIComponent(pendingToken)}/accept`, {
-          method: 'POST',
-        });
-        if (acceptResponse.status === 403) {
-          throw new Error('This invitation was sent to a different email. Use the invited email address and try again.');
-        }
-        if (acceptResponse.status === 410) {
-          clearInvitationToken();
-          setInvitationToken(null);
-          throw new Error('This invitation has expired or has already been accepted.');
-        }
-        if (acceptResponse.status === 404) {
-          clearInvitationToken();
-          setInvitationToken(null);
-          throw new Error('This invitation is invalid or has been revoked.');
-        }
-        if (!acceptResponse.ok) {
-          throw new Error('We could not accept this invitation. You can try again from Pending invitations.');
-        }
-        const accepted = await acceptResponse.json() as { slug: string };
-        clearInvitationToken();
-        setInvitationToken(null);
-        setPersistedOrgSlug(accepted.slug);
-        navigate(`/org/${encodeURIComponent(accepted.slug)}/dashboard`, { replace: true });
+      if (result.type === 'mfa_required') {
+        setMfaChallengeData(result.data);
+        setStep('mfa_challenge');
+        verificationOwnsNavigation.current = false;
         return;
       }
 
-      // Successfully authenticated! Route to target organization or org selector
-      const fromPath = (location.state as any)?.from?.pathname;
-      const destinationSlug = targetOrgSlug || getPersistedOrgSlug();
-
-      if (targetOrgSlug) {
-        setPersistedOrgSlug(targetOrgSlug);
-        navigate(`/org/${targetOrgSlug}/dashboard`, { replace: true });
-      } else if (orgName.trim()) {
-        // The workspace is created by the setup wizard, which prefills the name typed at signup.
-        const params = new URLSearchParams({ name: orgName.trim() });
-        if (orgSlug.trim()) params.set('slug', orgSlug.trim());
-        navigate(`/create-org?${params.toString()}`, { replace: true });
-      } else if (fromPath && fromPath !== '/login' && fromPath !== '/signup') {
-        navigate(fromPath, { replace: true });
-      } else if (destinationSlug) {
-        navigate(`/org/${destinationSlug}/dashboard`, { replace: true });
-      } else {
-        navigate('/select-org', { replace: true, state: { fromSignIn: true } });
+      if (result.type === 'mfa_enrollment_required') {
+        setMfaEnrollData(result.data);
+        setStep('mfa_enroll');
+        verificationOwnsNavigation.current = false;
+        return;
       }
+
+      verified = true;
+      await handlePostAuthSuccess();
     } catch (err: any) {
       setErrorMessage(err.message || 'Invalid or expired verification code.');
     } finally {
@@ -772,6 +797,39 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
               </div>
             )}
           </div>
+        )}
+
+        {/* Step: MFA Challenge */}
+        {step === 'mfa_challenge' && mfaChallengeData && (
+          <MfaChallenge
+            mfaToken={mfaChallengeData.mfaToken}
+            methods={mfaChallengeData.methods}
+            onSuccess={async (authResponse) => {
+              completeSession(authResponse);
+              await handlePostAuthSuccess();
+            }}
+            onCancel={() => {
+              setStep(2);
+              setMfaChallengeData(null);
+              setErrorMessage(null);
+            }}
+          />
+        )}
+
+        {/* Step: MFA Enrollment Wizard (forced by policy) */}
+        {step === 'mfa_enroll' && mfaEnrollData && (
+          <MfaEnrollWizard
+            enrollToken={mfaEnrollData.mfaToken}
+            onSuccess={async (authResponse) => {
+              completeSession(authResponse);
+              await handlePostAuthSuccess();
+            }}
+            onCancel={() => {
+              setStep(2);
+              setMfaEnrollData(null);
+              setErrorMessage(null);
+            }}
+          />
         )}
       </div>
     </div>

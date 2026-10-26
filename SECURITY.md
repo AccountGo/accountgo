@@ -11,6 +11,10 @@ We provide security updates and patches for the following versions:
 | 1.0.x   | :white_check_mark: | .NET 10 / React 19  |
 | < 1.0   | :x:                | Deprecated / Legacy |
 
+## Authentication & Access Control
+
+Self-hosted AccountGo uses email one-time codes and Google sign-in. For additional access protection in self-hosted deployments, we recommend enforcing Google 2-Step Verification for your domain or placing AccountGo behind an identity-aware proxy (such as Cloudflare Access or Tailscale). Hosted AccountGo Cloud offers additional sign-in protection on paid plans.
+
 ## Reporting a Vulnerability
 
 If you discover a security vulnerability in AccountGo, please report it responsibly rather than opening a public issue on GitHub.

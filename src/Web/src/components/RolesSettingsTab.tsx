@@ -1,14 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import {
   Shield,
+  ShieldCheck,
   Check,
   Lock,
   Users,
   Search,
   RefreshCw,
+  AlertCircle,
+  Save,
 } from 'lucide-react';
 import { ModuleKey, TenantContextType } from '../types';
 import { useAuth } from '../auth/AuthContext';
+import { SecurityCapabilities } from '../types/auth';
 
 interface RolesSettingsTabProps {
   tenantContext: TenantContextType;
@@ -115,8 +119,48 @@ export const RolesSettingsTab: React.FC<RolesSettingsTabProps> = ({ tenantContex
   const [searchQuery, setSearchQuery] = useState('');
   const [loadFailed, setLoadFailed] = useState(false);
 
+  // Security capabilities (open-core gating)
+  const [capabilities, setCapabilities] = useState<SecurityCapabilities | null>(null);
+
+  // Workspace MFA Policy State
+  const [mfaPolicy, setMfaPolicy] = useState<'Optional' | 'RequiredForAdmins' | 'RequiredForAll'>('Optional');
+  const [gracePeriodDays, setGracePeriodDays] = useState<number>(0);
+  const [requireMfaEveryLogin, setRequireMfaEveryLogin] = useState<boolean>(false);
+  const [isLoadingPolicy, setIsLoadingPolicy] = useState(false);
+  const [isSavingPolicy, setIsSavingPolicy] = useState(false);
+  const [policySuccess, setPolicySuccess] = useState<string | null>(null);
+  const [policyError, setPolicyError] = useState<string | null>(null);
+
   useEffect(() => {
     let mounted = true;
+
+    authFetch('/api/security/capabilities')
+      .then(async (res) => {
+        if (res.ok && mounted) {
+          const caps: SecurityCapabilities = await res.json();
+          setCapabilities(caps);
+          if (caps.mfaAvailable) {
+            fetchPolicy();
+          }
+        }
+      })
+      .catch(() => {});
+
+    const fetchPolicy = async () => {
+      setIsLoadingPolicy(true);
+      try {
+        const res = await authFetch('/api/security/policy');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.mfaPolicy && mounted) setMfaPolicy(data.mfaPolicy);
+          if (data.requireMfaEveryLogin !== undefined && mounted) setRequireMfaEveryLogin(data.requireMfaEveryLogin);
+        }
+      } catch (err) {
+        console.error('Failed to load security policy:', err);
+      } finally {
+        if (mounted) setIsLoadingPolicy(false);
+      }
+    };
     const fetchRoles = async () => {
       try {
         // Workspace-safe role templates (platform roles excluded); memberCount is per workspace.
@@ -157,6 +201,35 @@ export const RolesSettingsTab: React.FC<RolesSettingsTabProps> = ({ tenantContex
   }, [authFetch]);
 
   const selectedRole = roles.find((r) => r.id === selectedRoleId) || roles[0];
+
+  const handleSavePolicy = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingPolicy(true);
+    setPolicySuccess(null);
+    setPolicyError(null);
+    try {
+      const res = await authFetch('/api/security/policy', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mfaPolicy,
+          gracePeriodDays: Number(gracePeriodDays),
+          requireMfaEveryLogin,
+        }),
+      });
+      if (res.ok) {
+        setPolicySuccess('Workspace security policy updated successfully.');
+        setTimeout(() => setPolicySuccess(null), 4000);
+      } else {
+        const err = await res.json().catch(() => null);
+        setPolicyError(err?.detail || 'Failed to update security policy.');
+      }
+    } catch (err: any) {
+      setPolicyError(err.message || 'Network error saving security policy.');
+    } finally {
+      setIsSavingPolicy(false);
+    }
+  };
 
   if (loadFailed) {
     return (
@@ -318,6 +391,130 @@ export const RolesSettingsTab: React.FC<RolesSettingsTabProps> = ({ tenantContex
           })}
         </div>
       </div>
+
+      {/* Workspace Multi-Factor Authentication (MFA) Policy Card - Capability Gated */}
+      {capabilities?.mfaAvailable && (
+        <div className="p-6 rounded-2xl bg-[var(--bg-surface)] backdrop-blur-md shadow-md space-y-4">
+          <div className="flex items-center gap-2.5 pb-2 border-b border-[var(--border-subtle)]">
+            <ShieldCheck className="w-5 h-5 text-emerald-400" />
+            <div>
+              <h2 className="text-base font-bold text-[var(--text-main)]">
+                Workspace MFA Enforcement Policy
+              </h2>
+              <p className="text-xs text-[var(--text-muted)]">
+                Require Multi-Factor Authentication for members of this workspace.
+              </p>
+            </div>
+          </div>
+
+          {policySuccess && (
+            <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs flex items-center gap-2">
+              <Check className="w-4 h-4 shrink-0" />
+              <span>{policySuccess}</span>
+            </div>
+          )}
+
+          {policyError && (
+            <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>{policyError}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleSavePolicy} className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-[var(--text-main)]">Enforcement Level</label>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {[
+                  { value: 'Optional', label: 'Optional (Default)', desc: 'Users choose whether to enable MFA' },
+                  { value: 'RequiredForAdmins', label: 'Required for Admins', desc: 'Workspace Owners and Admins must enable MFA' },
+                  { value: 'RequiredForAll', label: 'Required for All', desc: 'All workspace members must enable MFA to access' },
+                ].map((opt) => (
+                  <label
+                    key={opt.value}
+                    className={`p-3.5 rounded-xl border cursor-pointer transition-all flex flex-col justify-between gap-1.5 ${
+                      mfaPolicy === opt.value
+                        ? 'border-[var(--brand-primary)] bg-[var(--brand-subtle)]/30 text-[var(--text-main)]'
+                        : 'border-[var(--border-subtle)] bg-[var(--bg-subtle)] text-[var(--text-secondary)] hover:bg-[var(--bg-surface-hover)]'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold">{opt.label}</span>
+                      <input
+                        type="radio"
+                        name="mfaPolicy"
+                        value={opt.value}
+                        checked={mfaPolicy === opt.value}
+                        onChange={() => setMfaPolicy(opt.value as any)}
+                        className="accent-[var(--brand-primary)]"
+                      />
+                    </div>
+                    <span className="text-[11px] text-[var(--text-muted)] leading-tight">{opt.desc}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {mfaPolicy !== 'Optional' && (
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-[var(--text-main)]">Grace Period for Existing Members</label>
+                <select
+                  value={gracePeriodDays}
+                  onChange={(e) => setGracePeriodDays(Number(e.target.value))}
+                  className="w-full sm:w-64 h-10 px-3 rounded-xl bg-[var(--bg-subtle)] text-xs text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--brand-ring)]"
+                >
+                  <option value={0}>Immediate (Enforce upon next login)</option>
+                  <option value={3}>3 Days Grace Period</option>
+                  <option value={7}>7 Days Grace Period</option>
+                  <option value={14}>14 Days Grace Period</option>
+                </select>
+                <p className="text-[11px] text-[var(--text-muted)]">
+                  Members logging in during the grace period will be allowed in without enrollment. Once expired, they are redirected to MFA enrollment.
+                </p>
+              </div>
+            )}
+
+            <div className="pt-2 border-t border-[var(--border-subtle)]">
+              <label className="flex items-start gap-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={requireMfaEveryLogin}
+                  onChange={(e) => setRequireMfaEveryLogin(e.target.checked)}
+                  className="mt-0.5 rounded accent-[var(--brand-primary)]"
+                />
+                <div>
+                  <span className="text-xs font-semibold text-[var(--text-main)]">
+                    Require MFA code on every login
+                  </span>
+                  <p className="text-[11px] text-[var(--text-muted)]">
+                    Disable the 30-day &quot;Remember this device&quot; bypass for all workspace members.
+                  </p>
+                </div>
+              </label>
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <button
+                type="submit"
+                disabled={isSavingPolicy || isLoadingPolicy}
+                className="h-10 px-5 rounded-xl bg-[var(--brand-primary)] hover:brightness-110 text-white text-xs font-semibold transition-all shadow-md active:scale-[0.98] flex items-center gap-2 cursor-pointer disabled:opacity-50"
+              >
+                {isSavingPolicy ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-3.5 h-3.5" />
+                    <span>Save Security Policy</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 };
