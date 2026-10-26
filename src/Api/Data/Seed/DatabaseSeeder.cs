@@ -25,6 +25,8 @@ namespace Api.Data.Seed
             using var scope = _serviceProvider.CreateScope();
             var tenantContext = scope.ServiceProvider.GetRequiredService<Core.Tenancy.ITenantContext>();
             using (tenantContext.Impersonate(1, "ph-financials", Core.Domain.CompanyMemberRole.Owner))
+            // The demo books create many invoices, bills and banks; plan limits don't apply to seeding.
+            using (scope.ServiceProvider.GetService<Core.Entitlements.IEntitlementService>()?.Bypass())
             {
                 var adminService = scope.ServiceProvider.GetRequiredService<IAdministrationService>();
                 var financialService = scope.ServiceProvider.GetRequiredService<IFinancialService>();

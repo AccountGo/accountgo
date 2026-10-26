@@ -143,6 +143,11 @@ namespace Api.Data
 
             // Stored as BusinessAddress_* columns on CompanySetting; the SQLite upgrader and D1 0004 use the same names.
             builder.Entity<CompanySetting>().OwnsOne(s => s.BusinessAddress);
+            builder.Entity<EntitlementUsage>(entity =>
+            {
+                entity.Property(e => e.Resource).IsRequired().HasMaxLength(50);
+                entity.HasIndex(e => new { e.CompanyId, e.Resource, e.OccurredAt });
+            });
 
             foreach (var entityType in builder.Model.GetEntityTypes())
             {
@@ -521,6 +526,7 @@ namespace Api.Data
         public virtual DbSet<Customer> Customers { get; set; }
         public virtual DbSet<CustomerAllocation> CustomerAllocations { get; set; }
         public virtual DbSet<Donor> Donors { get; set; }
+        public virtual DbSet<EntitlementUsage> EntitlementUsages { get; set; }
         public virtual DbSet<FinancialYear> FinancialYears { get; set; }
         public virtual DbSet<GeneralLedgerHeader> GeneralLedgerHeaders { get; set; }
         public virtual DbSet<GeneralLedgerLine> GeneralLedgerLines { get; set; }

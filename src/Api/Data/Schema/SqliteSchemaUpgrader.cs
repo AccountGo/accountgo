@@ -22,6 +22,7 @@ namespace Api.Data.Schema
             "DonationInvoiceHeader",
             "DonationInvoiceLine",
             "Donors",
+            "EntitlementUsage",
             "FinancialYear",
             "GeneralLedgerHeader",
             "GeneralLedgerLine",
@@ -211,7 +212,8 @@ namespace Api.Data.Schema
                     new[] { "CompanySetting", "AccountingBasis", "INTEGER NOT NULL DEFAULT 1" },
                     new[] { "GeneralLedgerHeader", "SourceDocumentId", "INTEGER NULL" },
                     new[] { "GeneralLedgerHeader", "ReversedGeneralLedgerHeaderId", "INTEGER NULL" },
-                    new[] { "CustomerAllocation", "GeneralLedgerHeaderId", "INTEGER NULL" }
+                    new[] { "CustomerAllocation", "GeneralLedgerHeaderId", "INTEGER NULL" },
+                    new[] { "Company", "Tier", "TEXT NULL" }
                 };
                 var added = new HashSet<string>();
                 foreach (var column in columns)
@@ -387,7 +389,20 @@ namespace Api.Data.Schema
             cmd.ExecuteNonQuery();
             cmd.CommandText = InventoryAdjustmentTableSql;
             cmd.ExecuteNonQuery();
+            cmd.CommandText = EntitlementUsageTableSql;
+            cmd.ExecuteNonQuery();
         }
+
+        // D1 0024_entitlements.sql
+        private const string EntitlementUsageTableSql = @"
+            CREATE TABLE IF NOT EXISTS ""EntitlementUsage"" (
+                ""Id"" INTEGER NOT NULL CONSTRAINT ""PK_EntitlementUsage"" PRIMARY KEY AUTOINCREMENT,
+                ""CompanyId"" INTEGER NOT NULL,
+                ""Resource"" TEXT NOT NULL,
+                ""EntityId"" INTEGER NULL,
+                ""OccurredAt"" TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS ""IX_EntitlementUsage_CompanyId_Resource_OccurredAt"" ON ""EntitlementUsage"" (""CompanyId"", ""Resource"", ""OccurredAt"");";
 
         // D1 0006_invoice_emails.sql
         private const string SalesInvoiceEmailTableSql = @"

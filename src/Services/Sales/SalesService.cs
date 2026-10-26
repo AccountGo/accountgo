@@ -23,11 +23,13 @@ using AutoMapper;
 using Core.Domain.Error;
 using System.Threading.Tasks;
 using System.Globalization;
+using Core.Entitlements;
 
 namespace Services.Sales
 {
     public partial class SalesService : BaseService, ISalesService
     {
+        private readonly IEntitlementService _entitlements;
         private readonly IFinancialService _financialService;
         private readonly IInventoryService _inventoryService;
         private readonly IStockService _stockService;
@@ -78,9 +80,11 @@ namespace Services.Sales
             IRepository<CustomerContact> customerContactRepo,
             IRepository<VendorContact> vendorContactRepo,
             ILogger<SalesService> logger,
-            IMapper mapper)
+            IMapper mapper,
+            IEntitlementService entitlements = null)
             : base(sequenceNumberRepo, generalLedgerSetting, paymentTermRepo, bankRepo)
         {
+            _entitlements = entitlements;
             _financialService = financialService;
             _inventoryService = inventoryService;
             _stockService = stockService;
@@ -749,8 +753,10 @@ namespace Services.Sales
 
         public void AddSalesQuote(SalesQuoteHeader salesQuoteHeader)
         {
+            _entitlements?.EnsureCanCreate(MeteredResource.SalesDocuments);
             salesQuoteHeader.No = GetNextNumber(SequenceNumberTypes.SalesQuote).ToString();
             _salesQuoteRepo.Insert(salesQuoteHeader);
+            _entitlements?.Record(MeteredResource.SalesDocuments, salesQuoteHeader.Id);
         }
 
         public void UpdateSalesQuote(SalesQuoteHeader salesQuoteHeader)
@@ -920,6 +926,11 @@ namespace Services.Sales
             if (salesInvoice.GeneralLedgerHeaderId.HasValue)
                 throw new InvalidOperationException("Invoice is already posted. Update is not allowed.");
 
+            // Checked before anything is written, so a blocked invoice leaves no sales order behind.
+            var isNewInvoice = salesInvoice.Id == 0;
+            if (isNewInvoice)
+                _entitlements?.EnsureCanCreate(MeteredResource.SalesDocuments);
+
             var taxes = _financialService.GetTaxes().ToList();
             foreach (var line in salesInvoice.SalesInvoiceLines)
             {
@@ -953,6 +964,8 @@ namespace Services.Sales
                 if (salesInvoice.Id == 0)
                 {
                     _salesInvoiceRepo.Insert(salesInvoice);
+                    if (isNewInvoice)
+                        _entitlements?.Record(MeteredResource.SalesDocuments, salesInvoice.Id);
                 }
                 else
                 {

@@ -176,6 +176,9 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<DateTime?>("SubscriptionValidUntil")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("Tier")
+                        .HasColumnType("nvarchar(max)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("Slug")
@@ -650,6 +653,35 @@ namespace Api.Data.Migrations.ApiDb
                             Street = "480 Cedar Avenue",
                             Telephone = "604-555-0102"
                         });
+                });
+
+            modelBuilder.Entity("Core.Domain.EntitlementUsage", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("EntityId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("OccurredAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Resource")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyId", "Resource", "OccurredAt");
+
+                    b.ToTable("EntitlementUsage");
                 });
 
             modelBuilder.Entity("Core.Domain.Financials.Account", b =>

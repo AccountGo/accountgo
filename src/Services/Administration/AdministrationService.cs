@@ -44,6 +44,7 @@ namespace Services.Administration
         private readonly ISecurityRepository _securityRepository;
         private readonly IMapper _mapper;
         private readonly Core.Tenancy.ITenantContext? _tenantContext;
+        private readonly Core.Entitlements.IEntitlementService? _entitlements;
 
         public AdministrationService(IRepository<FinancialYear> fiscalYearRepo,
             IRepository<TaxGroup> taxGroupRepo,
@@ -59,10 +60,12 @@ namespace Services.Administration
             ISecurityRepository securityRepository,
             IMapper mapper,
             IRepository<Company> company = null,
-            Core.Tenancy.ITenantContext? tenantContext = null
+            Core.Tenancy.ITenantContext? tenantContext = null,
+            Core.Entitlements.IEntitlementService? entitlements = null
             )
             : base(null, generalLedgerSetting, paymentTermRepo, bankRepo)
         {
+            _entitlements = entitlements;
             _fiscalYearRepo = fiscalYearRepo;
             _taxGroupRepo = taxGroupRepo;
             _itemTaxGroupRepo = itemTaxGroupRepo;
@@ -279,7 +282,13 @@ namespace Services.Administration
             {
                 if (!Company.IsKnownPlan(dto.Plan))
                     throw new ArgumentException($"Unknown plan '{dto.Plan}'.");
-                company.Plan = dto.Plan.Trim().ToLowerInvariant();
+                var newPlan = dto.Plan.Trim().ToLowerInvariant();
+                // Staying on a plan is always allowed (e.g. toggling modules on an ops-assigned plan);
+                // switching needs a self-service plan unless ops manages the workspace (comp tier).
+                if (!string.Equals(newPlan, company.Plan, StringComparison.OrdinalIgnoreCase)
+                    && Core.Entitlements.CompanyTiers.Normalize(company.Tier) != Core.Entitlements.CompanyTiers.Comp)
+                    _entitlements?.EnsureSelfServicePlan(newPlan);
+                company.Plan = newPlan;
             }
             company.Plan ??= "accounting";
             var planModules = Company.ModulesForPlan(company.Plan);

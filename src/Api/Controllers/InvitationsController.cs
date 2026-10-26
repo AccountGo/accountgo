@@ -23,12 +23,15 @@ namespace Api.Controllers
     {
         private readonly ApiDbContext _db;
         private readonly ApplicationIdentityDbContext _identity;
+        private readonly Core.Entitlements.IEntitlementService _entitlements;
         private string UserId => User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User.FindFirst("sub")?.Value;
 
-        public InvitationsController(ApiDbContext db, ApplicationIdentityDbContext identity)
+        public InvitationsController(ApiDbContext db, ApplicationIdentityDbContext identity,
+            Core.Entitlements.IEntitlementService entitlements = null)
         {
             _db = db;
             _identity = identity;
+            _entitlements = entitlements;
         }
 
         [HttpGet("pending")]
@@ -100,6 +103,9 @@ namespace Api.Controllers
                     return Problem(statusCode: 409, title: "Invitation security roles are no longer available", detail: "Ask the workspace administrator for a new invitation.");
                 if (_db.CompanyMembers.Any(m => m.CompanyId == invitation.CompanyId && m.UserId == user.Id))
                     return Problem(statusCode: 409, title: "You are already a workspace member");
+                // The pending invitation already holds a seat, so this only fails when the workspace is over its limit
+                // (e.g. invitations sent before limits applied).
+                _entitlements?.EnsureCanCreate(invitation.CompanyId, Core.Entitlements.MeteredResource.Seats, count: 0);
                 var member = new CompanyMember
                 {
                     CompanyId = invitation.CompanyId, UserId = user.Id, Role = invitation.Role,

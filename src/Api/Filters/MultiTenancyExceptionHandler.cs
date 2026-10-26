@@ -2,10 +2,12 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Core.Entitlements;
 using Core.Tenancy;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Api.Filters
 {
@@ -60,7 +62,53 @@ namespace Api.Filters
                 return true;
             }
 
+            if (exception is QuotaExceededException quotaEx)
+            {
+                var problem = new ProblemDetails
+                {
+                    Type = "https://accountgo.dev/errors/quota-exceeded",
+                    Title = "Plan limit reached",
+                    Detail = quotaEx.Message,
+                    Status = StatusCodes.Status403Forbidden
+                };
+                problem.Extensions["code"] = "QUOTA_EXCEEDED";
+                problem.Extensions["resource"] = MeteredResources.Key(quotaEx.Resource);
+                problem.Extensions["limit"] = quotaEx.Limit;
+                problem.Extensions["used"] = quotaEx.Used;
+                problem.Extensions["period"] = quotaEx.Monthly ? "month" : null;
+                problem.Extensions["upgradeAvailable"] = false;
+                problem.Extensions["contact"] = SupportEmail(httpContext);
+                await WriteForbiddenAsync(httpContext, problem, cancellationToken);
+                return true;
+            }
+
+            if (exception is PlanNotAvailableException planEx)
+            {
+                var problem = new ProblemDetails
+                {
+                    Type = "https://accountgo.dev/errors/plan-not-available",
+                    Title = "Plan not available",
+                    Detail = planEx.Message,
+                    Status = StatusCodes.Status403Forbidden
+                };
+                problem.Extensions["code"] = "PLAN_NOT_AVAILABLE";
+                problem.Extensions["plan"] = planEx.Plan;
+                problem.Extensions["contact"] = SupportEmail(httpContext);
+                await WriteForbiddenAsync(httpContext, problem, cancellationToken);
+                return true;
+            }
+
             return false;
+        }
+
+        private static string? SupportEmail(HttpContext httpContext) =>
+            httpContext.RequestServices.GetService<EntitlementsOptions>()?.SupportEmail;
+
+        private static async Task WriteForbiddenAsync(HttpContext httpContext, ProblemDetails problem, CancellationToken cancellationToken)
+        {
+            httpContext.Response.StatusCode = StatusCodes.Status403Forbidden;
+            httpContext.Response.ContentType = "application/problem+json";
+            await httpContext.Response.WriteAsJsonAsync(problem, cancellationToken);
         }
     }
 }

@@ -30,6 +30,8 @@ namespace Dto.Subscription
         public List<string> IncludedModules { get; set; } = new();
         /// <summary>Included modules that cannot be switched off on this plan.</summary>
         public List<string> RequiredModules { get; set; } = new();
+        /// <summary>Whether users may pick this plan themselves (false = assigned by the operator).</summary>
+        public bool SelfService { get; set; } = true;
         public decimal MonthlyPrice { get; set; }
     }
 

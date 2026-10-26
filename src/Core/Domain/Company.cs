@@ -26,6 +26,8 @@ namespace Core.Domain
         public string? CRA { get; set; }
 
         public string? Plan { get; set; } = "accounting";
+        /// <summary>Pricing tier within the plan: null/"free", "pro", or "comp" (see Core.Entitlements.CompanyTiers).</summary>
+        public string? Tier { get; set; }
         public string? ActiveModulesJson { get; set; }
         public string? SubscriptionStatus { get; set; } = "active";
         public DateTime? SubscriptionValidUntil { get; set; }

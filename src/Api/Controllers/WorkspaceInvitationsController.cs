@@ -28,14 +28,17 @@ namespace Api.Controllers
         private readonly ApplicationIdentityDbContext _identity;
         private readonly ITenantContext _tenant;
         private readonly WorkspaceInvitationService _invitations;
+        private readonly Core.Entitlements.IEntitlementService _entitlements;
         private string UserId => User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User.FindFirst("sub")?.Value;
 
-        public WorkspaceInvitationsController(ApiDbContext db, ApplicationIdentityDbContext identity, ITenantContext tenant, WorkspaceInvitationService invitations)
+        public WorkspaceInvitationsController(ApiDbContext db, ApplicationIdentityDbContext identity, ITenantContext tenant, WorkspaceInvitationService invitations,
+            Core.Entitlements.IEntitlementService entitlements = null)
         {
             _db = db;
             _identity = identity;
             _tenant = tenant;
             _invitations = invitations;
+            _entitlements = entitlements;
         }
 
         [HttpGet]
@@ -82,6 +85,9 @@ namespace Api.Controllers
                 // Admins cannot replace an Owner's Admin invitation with a different role.
                 if (_tenant.Role != CompanyMemberRole.Owner && pending.Any(i => i.Role == CompanyMemberRole.Admin))
                     return Problem(statusCode: 403, title: "Only Owners can manage Admin invitations");
+                // Re-inviting the same address replaces its pending invitation, so it takes no extra seat.
+                _entitlements?.EnsureCanCreate(companyId, Core.Entitlements.MeteredResource.Seats,
+                    count: pending.Any(i => i.ExpiresAt > DateTime.UtcNow) ? 0 : 1);
                 foreach (var previous in pending)
                     previous.RevokedAt = DateTime.UtcNow;
                 var invitation = new CompanyInvitation

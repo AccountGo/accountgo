@@ -24,6 +24,7 @@ namespace Services.Financial
 {
     public partial class FinancialService : BaseService, IFinancialService
     {
+        private readonly Core.Entitlements.IEntitlementService _entitlements;
         private readonly IInventoryService _inventoryService;
         private readonly ITaxService _taxService;
 
@@ -77,10 +78,12 @@ namespace Services.Financial
             IRepository<SalesReceiptHeader> salesReceiptRepo = null,
             IRepository<CustomerAllocation> customerAllocationRepo = null,
             IRepository<PurchaseInvoiceHeader> purchaseInvoiceRepo = null,
-            IRepository<VendorPayment> vendorPaymentRepo = null
+            IRepository<VendorPayment> vendorPaymentRepo = null,
+            Core.Entitlements.IEntitlementService entitlements = null
             )
             : base(null, null, paymentTermRepo, bankRepo)
         {
+            _entitlements = entitlements;
             _inventoryService = inventoryService;
             _taxService = taxService;
             _companySettingRepo = companySettingRepo ?? throw new ArgumentNullException(nameof(companySettingRepo));
@@ -1807,7 +1810,10 @@ namespace Services.Financial
         public void SaveBank(Bank bank)
         {
             if (bank.Id == 0)
+            {
+                _entitlements?.EnsureCanCreate(Core.Entitlements.MeteredResource.BankAccounts);
                 _bankRepo.Insert(bank);
+            }
             else
                 _bankRepo.Update(bank);
         }

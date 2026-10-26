@@ -25,11 +25,14 @@ namespace Api.Service
     {
         private readonly ApiDbContext _db;
         private readonly CompanyProvisioningService _provisioning;
+        private readonly Core.Entitlements.IEntitlementService _entitlements;
 
-        public WorkspaceService(ApiDbContext db, CompanyProvisioningService provisioning)
+        public WorkspaceService(ApiDbContext db, CompanyProvisioningService provisioning,
+            Core.Entitlements.IEntitlementService entitlements = null)
         {
             _db = db ?? throw new ArgumentNullException(nameof(db));
             _provisioning = provisioning ?? throw new ArgumentNullException(nameof(provisioning));
+            _entitlements = entitlements;
         }
 
         public static string NormalizeSlug(string value)
@@ -48,6 +51,8 @@ namespace Api.Service
             CompanyProvisionOptions options = null)
         {
             options = options ?? new CompanyProvisionOptions();
+            _entitlements?.EnsureSelfServicePlan(plan);
+            _entitlements?.EnsureCanOwnAnotherWorkspace(userId);
             options.Currency = currency;
             var errors = CompanyAccountingPolicyRules.Validate(options, DateTime.UtcNow);
             if (errors.Count > 0)

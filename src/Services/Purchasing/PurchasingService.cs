@@ -20,11 +20,13 @@ using System;
 using System.Threading;
 using Microsoft.Extensions.Logging;
 using Services.Sales;
+using Core.Entitlements;
 
 namespace Services.Purchasing
 {
     public partial class PurchasingService : BaseService, IPurchasingService
     {
+        private readonly IEntitlementService _entitlements;
         private readonly IFinancialService _financialService;
         private readonly IInventoryService _inventoryService;
         private readonly IStockService _stockService;
@@ -65,10 +67,12 @@ namespace Services.Purchasing
             IRepository<Bank> bankRepo,
             IRepository<Contact> contactRepo,
             IPurchaseOrderRepository purchaseOrderHeaderRepository,
-            ILogger<PurchasingService> logger
+            ILogger<PurchasingService> logger,
+            IEntitlementService entitlements = null
             )
             : base(sequenceNumberRepo, generalLedgerSettingRepo, paymentTermRepo, bankRepo)
         {
+            _entitlements = entitlements;
             _financialService = financialService;
             _inventoryService = inventoryService;
             _stockService = stockService;
@@ -309,6 +313,8 @@ namespace Services.Purchasing
         {
             if (bill.GeneralLedgerHeaderId.HasValue)
                 throw new InvalidOperationException("This bill is approved, so it can't be changed. Void it and enter it again instead.");
+            if (bill.Id == 0)
+                _entitlements?.EnsureCanCreate(MeteredResource.Bills);
 
             var vendor = bill.VendorId.HasValue ? _vendorRepo.GetById(bill.VendorId.Value) : null;
             var taxes = _financialService.GetTaxes().ToList();
@@ -330,7 +336,10 @@ namespace Services.Purchasing
             bill.VendorInvoiceNo ??= "";
             bill.Status ??= PurchaseInvoiceStatus.Draft;
             if (bill.Id == 0)
+            {
                 _purchaseInvoiceRepo.Insert(bill);
+                _entitlements?.Record(MeteredResource.Bills, bill.Id);
+            }
             else
                 _purchaseInvoiceRepo.Update(bill);
         }

@@ -15,10 +15,12 @@ namespace Api.Controllers
     public class SubscriptionController : BaseController
     {
         private readonly IAdministrationService _adminService;
+        private readonly Core.Entitlements.EntitlementsOptions _entitlements;
 
-        public SubscriptionController(IAdministrationService adminService)
+        public SubscriptionController(IAdministrationService adminService, Core.Entitlements.EntitlementsOptions entitlements)
         {
             _adminService = adminService;
+            _entitlements = entitlements;
         }
 
         // GET /api/Subscription/companies was removed in Phase 2: it listed every workspace.
@@ -60,6 +62,8 @@ namespace Api.Controllers
         public IActionResult GetPlans()
         {
             var plans = _adminService.GetPlanDefinitions();
+            foreach (var plan in plans)
+                plan.SelfService = _entitlements.IsSelfServicePlan(plan.Key);
             return Ok(plans);
         }
 
