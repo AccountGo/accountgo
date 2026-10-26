@@ -74,6 +74,19 @@ public static class AccountGoApp
             }
         }
 
+        // Verify required modules if configured
+        var requiredModulesStr = builder.Configuration["REQUIRED_MODULES"] ?? Environment.GetEnvironmentVariable("REQUIRED_MODULES");
+        if (!string.IsNullOrWhiteSpace(requiredModulesStr))
+        {
+            var required = requiredModulesStr.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            var registered = new HashSet<string>(modules.Select(m => m.Name), StringComparer.OrdinalIgnoreCase);
+            var missing = required.Where(r => !registered.Contains(r)).ToList();
+            if (missing.Count > 0)
+            {
+                throw new InvalidOperationException($"Missing required module(s): {string.Join(", ", missing)}. Registered modules: {string.Join(", ", registered)}");
+            }
+        }
+
         // Add database context and provide builder environment information to the extended method for debugging purpose
         builder.Services.ConfigureSqlContext(builder.Configuration, builder.Environment);
 
