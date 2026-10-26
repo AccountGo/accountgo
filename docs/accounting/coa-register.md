@@ -3,6 +3,7 @@
 **Project:** AccountGo ERP & Accounting Platform  
 **Architecture Standard:** Double-Entry General Ledger Engine (`saas-accounting-system`)  
 **Scope:** Multi-Tenant Enterprise General Ledger, Subledgers, and Control Accounts  
+**Related:** [COA import, export & lifecycle requirements](./coa-import-export-requirements.md)
 
 ---
 
