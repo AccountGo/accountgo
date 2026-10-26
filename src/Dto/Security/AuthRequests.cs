@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
@@ -42,7 +43,9 @@ namespace Dto.Security
         IEnumerable<string> Roles,
         IEnumerable<string>? Permissions = null,
         string? PhoneNumber = null,
-        bool HasPassword = false
+        bool HasPassword = false,
+        bool MfaReEnrollRequired = false,
+        DateTime? MfaGracePeriodEndsAt = null
     );
 
     public record UpdateProfileRequest(

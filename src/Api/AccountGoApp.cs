@@ -128,7 +128,20 @@ public static class AccountGoApp
             options.FallbackPolicy = new AuthorizationPolicyBuilder()
                 .RequireAuthenticatedUser()
                 .Build();
+
+            options.AddPolicy("MfaStepUp", policy =>
+            {
+                policy.RequireAuthenticatedUser();
+                policy.Requirements.Add(new Api.Filters.MfaStepUpRequirement());
+            });
         });
+
+        builder.Services.AddSingleton<Microsoft.AspNetCore.Authorization.IAuthorizationHandler, Api.Filters.CommunityStepUpHandler>();
+        builder.Services.AddSingleton<Microsoft.AspNetCore.Authorization.IAuthorizationMiddlewareResultHandler, Api.Filters.MfaAuthorizationMiddlewareResultHandler>();
+
+        builder.Services.AddScoped<ISessionService, SessionService>();
+        builder.Services.AddScoped<IMfaGate, CommunityMfaGate>();
+        builder.Services.AddScoped<ISecurityCapabilities, CommunitySecurityCapabilities>();
 
         builder.Services.AddScoped<IFinancialService, FinancialService>();
         builder.Services.AddSingleton<Api.Service.Import.ICoaFormatAdapter, Api.Service.Import.AccountGoV1CoaFormatAdapter>();
@@ -421,6 +434,41 @@ public static class AccountGoApp
         app.UseAuthentication();
         app.UseMiddleware<Api.Middleware.TenantResolutionMiddleware>();
         app.UseAuthorization();
+
+        // Pending-token blocking middleware (covers controllers and /mcp)
+        app.Use(async (context, next) =>
+        {
+            var user = context.User;
+            if (user?.Identity?.IsAuthenticated == true)
+            {
+                var purpose = user.FindFirst("purpose")?.Value;
+                if (!string.IsNullOrEmpty(purpose) && (purpose == "mfa_pending" || purpose == "mfa_enroll"))
+                {
+                    var path = context.Request.Path.Value ?? string.Empty;
+                    var isAllowlisted =
+                        path.StartsWith("/api/auth/mfa", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(path, "/api/auth/logout", StringComparison.OrdinalIgnoreCase) ||
+                        (string.Equals(path, "/api/auth/me", StringComparison.OrdinalIgnoreCase) && purpose == "mfa_enroll");
+
+                    if (!isAllowlisted)
+                    {
+                        var code = purpose == "mfa_pending" ? "mfa_challenge_required" : "mfa_enrollment_required";
+                        context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                        context.Response.ContentType = "application/problem+json";
+                        var problem = new Microsoft.AspNetCore.Mvc.ProblemDetails
+                        {
+                            Title = "Forbidden",
+                            Detail = $"Access token with purpose '{purpose}' is not authorized to access this resource.",
+                            Status = StatusCodes.Status403Forbidden
+                        };
+                        problem.Extensions["code"] = code;
+                        await context.Response.WriteAsJsonAsync(problem);
+                        return;
+                    }
+                }
+            }
+            await next();
+        });
 
         app.MapControllers();
         app.MapMcp("/mcp").RequireAuthorization();

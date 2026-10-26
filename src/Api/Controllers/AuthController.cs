@@ -31,6 +31,9 @@ namespace Api.Controllers
         private const string RefreshCookieName = "accountgo_refresh_token";
 
         private readonly IEmailOtpService _otpService;
+        private readonly IAuthenticationService _authService;
+        private readonly ISessionService _sessionService;
+        private readonly IMfaGate _mfaGate;
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly ISecurityService _securityService;
         private readonly IAdministrationService _adminService;
@@ -43,6 +46,9 @@ namespace Api.Controllers
 
         public AuthController(
             IEmailOtpService otpService,
+            IAuthenticationService authService,
+            ISessionService sessionService,
+            IMfaGate mfaGate,
             UserManager<ApplicationUser> userManager,
             ISecurityService securityService,
             IAdministrationService adminService,
@@ -54,6 +60,9 @@ namespace Api.Controllers
             AccountDeletionService accountDeletion)
         {
             _otpService = otpService;
+            _authService = authService;
+            _sessionService = sessionService;
+            _mfaGate = mfaGate;
             _userManager = userManager;
             _securityService = securityService;
             _adminService = adminService;
@@ -154,9 +163,44 @@ namespace Api.Controllers
                     await _userManager.AddLoginAsync(user, new UserLoginInfo("Google", payload.Subject, "Google"));
                 }
 
+                Request.Cookies.TryGetValue("ag_td", out var agTdToken);
+                var mfaDecision = await _mfaGate.EvaluateAfterFactorAAsync(user, "google", agTdToken);
+                if (mfaDecision.Result == MfaGateResult.Challenge)
+                {
+                    var pendingToken = await _authService.CreateToken(user, purpose: "mfa_pending");
+                    return Ok(new
+                    {
+                        status = "mfa_required",
+                        mfaToken = pendingToken.AccessToken,
+                        methods = mfaDecision.Methods,
+                        policy = mfaDecision.Policy
+                    });
+                }
+                if (mfaDecision.Result == MfaGateResult.Enrollment)
+                {
+                    var enrollToken = await _authService.CreateToken(user, purpose: "mfa_enroll");
+                    return Ok(new
+                    {
+                        status = "mfa_enrollment_required",
+                        mfaToken = enrollToken.AccessToken,
+                        methods = mfaDecision.Methods,
+                        policy = mfaDecision.Policy
+                    });
+                }
+
                 var ip = HttpContext.Connection.RemoteIpAddress?.ToString();
                 var userAgent = Request.Headers.UserAgent.ToString();
-                var result = await _otpService.CreateSessionForUserAsync(user, ip, userAgent);
+                var result = await _sessionService.CreateSessionForUserAsync(user, ip, userAgent, amr: "google");
+
+                if (!result.Success || result.Response == null)
+                {
+                    return BadRequest(new ProblemDetails
+                    {
+                        Title = "Session Creation Failed",
+                        Detail = result.Error ?? "Unable to create session.",
+                        Status = StatusCodes.Status400BadRequest
+                    });
+                }
 
                 if (!string.IsNullOrEmpty(result.RawRefreshToken))
                 {
@@ -320,9 +364,42 @@ namespace Api.Controllers
             var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
             var userAgent = Request.Headers.UserAgent.ToString();
 
-            var result = await _otpService.VerifyOtpAsync(request.Email, request.Otp, ipAddress, userAgent);
+            Request.Cookies.TryGetValue("ag_td", out var agTdToken);
+            var result = await _otpService.VerifyOtpAsync(request.Email, request.Otp, ipAddress, userAgent, agTdToken);
 
-            if (!result.Success || result.Response == null)
+            if (!result.Success)
+            {
+                return BadRequest(new ProblemDetails
+                {
+                    Title = "Verification Failed",
+                    Detail = result.Error ?? "Invalid or expired code.",
+                    Status = StatusCodes.Status400BadRequest
+                });
+            }
+
+            if (result.Status == "mfa_required")
+            {
+                return Ok(new
+                {
+                    status = "mfa_required",
+                    mfaToken = result.MfaToken,
+                    methods = result.Methods,
+                    policy = result.Policy
+                });
+            }
+
+            if (result.Status == "mfa_enrollment_required")
+            {
+                return Ok(new
+                {
+                    status = "mfa_enrollment_required",
+                    mfaToken = result.MfaToken,
+                    methods = result.Methods,
+                    policy = result.Policy
+                });
+            }
+
+            if (result.Response == null)
             {
                 return BadRequest(new ProblemDetails
                 {
@@ -709,6 +786,7 @@ namespace Api.Controllers
         }
 
         [Authorize]
+        [Authorize(Policy = "MfaStepUp")]
         [HttpDelete("account")]
         public async Task<IActionResult> DeleteAccount([FromBody] DeleteAccountRequest request)
         {

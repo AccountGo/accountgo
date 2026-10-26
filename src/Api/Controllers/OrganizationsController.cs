@@ -197,6 +197,7 @@ namespace Api.Controllers
 
         [TenantScoped]
         [RequireWorkspaceRole(CompanyMemberRole.Owner)]
+        [Authorize(Policy = "MfaStepUp")]
         [HttpDelete("current")]
         public IActionResult Delete([FromBody] DeleteOrganizationRequest request)
         {

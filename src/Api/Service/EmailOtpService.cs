@@ -29,7 +29,8 @@ namespace Api.Service
         private readonly ApplicationIdentityDbContext _identityContext;
         private readonly IEmailSender _emailSender;
         private readonly IAuthenticationService _authService;
-        private readonly ISecurityService _securityService;
+        private readonly ISessionService _sessionService;
+        private readonly IMfaGate _mfaGate;
         private readonly IConfiguration _configuration;
         private readonly IHostEnvironment _environment;
         private readonly ILogger<EmailOtpService> _logger;
@@ -40,7 +41,8 @@ namespace Api.Service
             ApplicationIdentityDbContext identityContext,
             IEmailSender emailSender,
             IAuthenticationService authService,
-            ISecurityService securityService,
+            ISessionService sessionService,
+            IMfaGate mfaGate,
             IConfiguration configuration,
             IHostEnvironment environment,
             ILogger<EmailOtpService> logger)
@@ -49,7 +51,8 @@ namespace Api.Service
             _identityContext = identityContext;
             _emailSender = emailSender;
             _authService = authService;
-            _securityService = securityService;
+            _sessionService = sessionService;
+            _mfaGate = mfaGate;
             _configuration = configuration;
             _environment = environment;
             _logger = logger;
@@ -227,8 +230,8 @@ namespace Api.Service
             return (true, "Welcome! A 6-digit verification code has been sent to your email.", OtpExpirySeconds, null, devCode);
         }
 
-        public async Task<(bool Success, AuthResponse? Response, string? RawRefreshToken, string? Error)> VerifyOtpAsync(
-            string email, string code, string? ipAddress, string? userAgent)
+        public async Task<OtpVerificationResult> VerifyOtpAsync(
+            string email, string code, string? ipAddress, string? userAgent, string? agTdRawToken = null)
         {
             var normalizedEmail = email.Trim().ToLowerInvariant();
             var user = await _userManager.FindByEmailAsync(normalizedEmail);
@@ -236,13 +239,13 @@ namespace Api.Service
             if (user == null || user.DeletedAt != null)
             {
                 PerformDummyWork(normalizedEmail);
-                return (false, null, null, "Invalid or expired code.");
+                return new OtpVerificationResult(false, null, null, "Invalid or expired code.");
             }
 
             var tokenJson = await _userManager.GetAuthenticationTokenAsync(user, TokenProvider, TokenPurpose);
             if (string.IsNullOrEmpty(tokenJson))
             {
-                return (false, null, null, "Invalid or expired code.");
+                return new OtpVerificationResult(false, null, null, "Invalid or expired code.");
             }
 
             OtpPayload? payload;
@@ -253,27 +256,27 @@ namespace Api.Service
             catch
             {
                 await _userManager.RemoveAuthenticationTokenAsync(user, TokenProvider, TokenPurpose);
-                return (false, null, null, "Invalid or expired code.");
+                return new OtpVerificationResult(false, null, null, "Invalid or expired code.");
             }
 
             if (payload == null)
             {
                 await _userManager.RemoveAuthenticationTokenAsync(user, TokenProvider, TokenPurpose);
-                return (false, null, null, "Invalid or expired code.");
+                return new OtpVerificationResult(false, null, null, "Invalid or expired code.");
             }
 
             // Expiry Check
             if (DateTime.UtcNow >= payload.ExpiresAt)
             {
                 await _userManager.RemoveAuthenticationTokenAsync(user, TokenProvider, TokenPurpose);
-                return (false, null, null, "Invalid or expired code.");
+                return new OtpVerificationResult(false, null, null, "Invalid or expired code.");
             }
 
             // Failed Attempts Limit Check (Max 5 attempts)
             if (payload.FailedAttempts >= MaxFailedAttempts)
             {
                 await _userManager.RemoveAuthenticationTokenAsync(user, TokenProvider, TokenPurpose);
-                return (false, null, null, "Code locked due to too many failed attempts. Please request a new code.");
+                return new OtpVerificationResult(false, null, null, "Code locked due to too many failed attempts. Please request a new code.");
             }
 
             // Constant-Time HMAC Comparison
@@ -294,7 +297,7 @@ namespace Api.Service
                     await _userManager.SetAuthenticationTokenAsync(user, TokenProvider, TokenPurpose, JsonSerializer.Serialize(payload));
                 }
 
-                return (false, null, null, "Invalid or expired code.");
+                return new OtpVerificationResult(false, null, null, "Invalid or expired code.");
             }
 
             // Successful match - Invalidate single-use code immediately
@@ -306,201 +309,61 @@ namespace Api.Service
                 await _userManager.UpdateAsync(user);
             }
 
+            // Ceremony hook: evaluate Factor B / enrollment
+            var mfaDecision = await _mfaGate.EvaluateAfterFactorAAsync(user, "otp", agTdRawToken);
+            if (mfaDecision.Result == MfaGateResult.Challenge)
+            {
+                var pendingToken = await _authService.CreateToken(user, purpose: "mfa_pending");
+                return new OtpVerificationResult(
+                    Success: true,
+                    Response: null,
+                    RawRefreshToken: null,
+                    Error: null,
+                    Status: "mfa_required",
+                    MfaToken: pendingToken.AccessToken,
+                    Methods: mfaDecision.Methods,
+                    Policy: mfaDecision.Policy);
+            }
+
+            if (mfaDecision.Result == MfaGateResult.Enrollment)
+            {
+                var enrollToken = await _authService.CreateToken(user, purpose: "mfa_enroll");
+                return new OtpVerificationResult(
+                    Success: true,
+                    Response: null,
+                    RawRefreshToken: null,
+                    Error: null,
+                    Status: "mfa_enrollment_required",
+                    MfaToken: enrollToken.AccessToken,
+                    Methods: mfaDecision.Methods,
+                    Policy: mfaDecision.Policy);
+            }
+
             // Mint JWT & Session
-            return await CreateSessionAndAuthResponseAsync(user, ipAddress, userAgent);
+            var (sessSuccess, sessResp, sessRefresh, sessErr) = await _sessionService.CreateSessionForUserAsync(user, ipAddress, userAgent, amr: "otp");
+            if (!sessSuccess)
+            {
+                return new OtpVerificationResult(false, null, null, sessErr ?? "Failed to create session.");
+            }
+
+            return new OtpVerificationResult(true, sessResp, sessRefresh, null);
         }
 
-        public async Task<(bool Success, AuthResponse? Response, string? NewRawRefreshToken, string? Error)> RefreshSessionAsync(
+        public Task<(bool Success, AuthResponse? Response, string? NewRawRefreshToken, string? Error)> RefreshSessionAsync(
             string rawRefreshToken, string? ipAddress, string? userAgent)
         {
-            if (string.IsNullOrWhiteSpace(rawRefreshToken))
-                return (false, null, null, "Missing refresh token.");
-
-            var tokenHash = ComputeSha256(rawRefreshToken);
-            var session = await _identityContext.RefreshTokens.FirstOrDefaultAsync(t => t.TokenHash == tokenHash);
-
-            if (session == null)
-                return (false, null, null, "Invalid session token.");
-
-            var account = await _userManager.FindByIdAsync(session.UserId);
-            if (account == null || account.DeletedAt != null)
-                return (false, null, null, "Session has expired or been revoked.");
-
-            var now = DateTime.UtcNow;
-            if (session.IsRevoked)
-            {
-                // A token rotated moments ago comes back when the response carrying its replacement never reached the
-                // browser (a timeout while the API was starting) or when two tabs refreshed at once. That is not theft:
-                // within the grace period the session carries on from it, and the replacement nobody received is revoked.
-                if (session.ReplacedByTokenHash != null && session.RevokedAt > now - RotationGracePeriod)
-                {
-                    var replacement = await _identityContext.RefreshTokens.FirstOrDefaultAsync(t => t.TokenHash == session.ReplacedByTokenHash);
-                    if (replacement is { RevokedAt: null })
-                        replacement.RevokedAt = now;
-                    return await RotateAsync(session, ipAddress, userAgent, now);
-                }
-
-                // REUSE DETECTION (Compromise protection): an older revoked token revokes the ENTIRE chain for this user
-                _logger.LogWarning("SECURITY ALERT: Revoked refresh token reuse detected for User {UserId}! Revoking all sessions.", session.UserId);
-                var activeSessions = await _identityContext.RefreshTokens
-                    .Where(t => t.UserId == session.UserId && t.RevokedAt == null)
-                    .ToListAsync();
-
-                foreach (var s in activeSessions)
-                {
-                    s.RevokedAt = DateTime.UtcNow;
-                }
-
-                await _identityContext.SaveChangesAsync();
-                return (false, null, null, "Session security violation detected. Please sign in again.");
-            }
-
-            if (session.IsExpired)
-            {
-                return (false, null, null, "Session has expired. Please sign in again.");
-            }
-
-            return await RotateAsync(session, ipAddress, userAgent, now);
+            return _sessionService.RefreshSessionAsync(rawRefreshToken, ipAddress, userAgent);
         }
 
-        /// <summary>
-        /// How long after a refresh token is rotated it is still accepted once more: long enough for a browser to retry
-        /// a refresh whose response was lost while the API was starting.
-        /// </summary>
-        private static readonly TimeSpan RotationGracePeriod = TimeSpan.FromMinutes(5);
-
-        /// <summary>Replaces a session's refresh token with a new one and mints a fresh access token.</summary>
-        private async Task<(bool Success, AuthResponse? Response, string? NewRawRefreshToken, string? Error)> RotateAsync(
-            RefreshTokenSession session, string? ipAddress, string? userAgent, DateTime now)
+        public Task<bool> RevokeSessionAsync(string rawRefreshToken)
         {
-            if (session.IsExpired)
-                return (false, null, null, "Session has expired. Please sign in again.");
-
-            var user = await _userManager.FindByIdAsync(session.UserId);
-            if (user == null || user.DeletedAt != null)
-                return (false, null, null, "User account no longer exists.");
-
-            var newRawToken = GenerateSecureToken();
-            var newTokenHash = ComputeSha256(newRawToken);
-
-            // A token already rotated keeps its first rotation time, so the grace period runs from then.
-            session.RevokedAt ??= now;
-            session.ReplacedByTokenHash = newTokenHash;
-
-            var newSession = new RefreshTokenSession
-            {
-                UserId = user.Id,
-                TokenHash = newTokenHash,
-                CreatedAt = now,
-                ExpiresAt = now.AddDays(7),
-                CreatedByIp = ipAddress,
-                UserAgent = userAgent
-            };
-
-            _identityContext.RefreshTokens.Add(newSession);
-            await _identityContext.SaveChangesAsync();
-
-            // Mint fresh JWT Access Token
-            var tokenResult = await _authService.CreateToken(user, populateExp: false);
-            var userDto = await BuildUserDtoAsync(user);
-            var expiresInSeconds = 15 * 60; // 15 mins
-
-            var authResponse = new AuthResponse(
-                tokenResult.AccessToken,
-                expiresInSeconds,
-                userDto);
-
-            return (true, authResponse, newRawToken, null);
-        }
-
-        public async Task<bool> RevokeSessionAsync(string rawRefreshToken)
-        {
-            if (string.IsNullOrWhiteSpace(rawRefreshToken))
-                return false;
-
-            var tokenHash = ComputeSha256(rawRefreshToken);
-            var session = await _identityContext.RefreshTokens.FirstOrDefaultAsync(t => t.TokenHash == tokenHash);
-            if (session == null || session.IsRevoked)
-                return false;
-
-            session.RevokedAt = DateTime.UtcNow;
-            await _identityContext.SaveChangesAsync();
-            return true;
+            return _sessionService.RevokeSessionAsync(rawRefreshToken);
         }
 
         public Task<(bool Success, AuthResponse? Response, string? RawRefreshToken, string? Error)> CreateSessionForUserAsync(
             ApplicationUser user, string? ipAddress, string? userAgent)
         {
-            return CreateSessionAndAuthResponseAsync(user, ipAddress, userAgent);
-        }
-
-        private async Task<(bool Success, AuthResponse? Response, string? RawRefreshToken, string? Error)> CreateSessionAndAuthResponseAsync(
-            ApplicationUser user, string? ipAddress, string? userAgent)
-        {
-            if (user.DeletedAt != null)
-                return (false, null, null, "User account no longer exists.");
-
-            var tokenResult = await _authService.CreateToken(user, populateExp: false);
-
-            var rawRefreshToken = GenerateSecureToken();
-            var tokenHash = ComputeSha256(rawRefreshToken);
-
-            var session = new RefreshTokenSession
-            {
-                UserId = user.Id,
-                TokenHash = tokenHash,
-                CreatedAt = DateTime.UtcNow,
-                ExpiresAt = DateTime.UtcNow.AddDays(7),
-                CreatedByIp = ipAddress,
-                UserAgent = userAgent
-            };
-
-            _identityContext.RefreshTokens.Add(session);
-            await _identityContext.SaveChangesAsync();
-
-            var userDto = await BuildUserDtoAsync(user);
-            var expiresInSeconds = 15 * 60; // 15 mins
-
-            var authResponse = new AuthResponse(
-                tokenResult.AccessToken,
-                expiresInSeconds,
-                userDto);
-
-            return (true, authResponse, rawRefreshToken, null);
-        }
-
-        private async Task<UserDto> BuildUserDtoAsync(ApplicationUser user)
-        {
-            var roles = new HashSet<string>(await _userManager.GetRolesAsync(user));
-            var domainUser = _securityService.GetUser(user.UserName ?? user.Email ?? string.Empty);
-            string firstName = string.Empty;
-            string lastName = string.Empty;
-
-            if (domainUser != null)
-            {
-                firstName = domainUser.Firstname ?? string.Empty;
-                lastName = domainUser.Lastname ?? string.Empty;
-                if (domainUser.Roles != null)
-                {
-                    foreach (var r in domainUser.Roles)
-                    {
-                        if (r?.SecurityRole?.Name != null)
-                            roles.Add(r.SecurityRole.Name);
-                    }
-                }
-            }
-
-            var permissions = _securityService.GetPermissionsForUser(user.UserName ?? user.Email ?? string.Empty);
-
-            return new UserDto(
-                user.Id,
-                user.Email ?? user.UserName ?? string.Empty,
-                firstName,
-                lastName,
-                roles,
-                permissions,
-                user.PhoneNumber,
-                !string.IsNullOrEmpty(user.PasswordHash));
+            return _sessionService.CreateSessionForUserAsync(user, ipAddress, userAgent);
         }
 
         private string ComputeHmac(string input)
@@ -508,21 +371,6 @@ namespace Api.Service
             using var hmac = new HMACSHA256(_hmacKey);
             var hash = hmac.ComputeHash(Encoding.UTF8.GetBytes(input));
             return Convert.ToBase64String(hash);
-        }
-
-        private static string ComputeSha256(string input)
-        {
-            using var sha = SHA256.Create();
-            var bytes = sha.ComputeHash(Encoding.UTF8.GetBytes(input));
-            return Convert.ToBase64String(bytes);
-        }
-
-        private static string GenerateSecureToken()
-        {
-            var bytes = new byte[48];
-            using var rng = RandomNumberGenerator.Create();
-            rng.GetBytes(bytes);
-            return Convert.ToBase64String(bytes).Replace("+", "-").Replace("/", "_").TrimEnd('=');
         }
 
         private void PerformDummyWork(string input)

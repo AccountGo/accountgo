@@ -137,6 +137,7 @@ namespace Api.Controllers
         }
 
         [RequireWorkspaceRole(CompanyMemberRole.Owner)]
+        [Authorize(Policy = "MfaStepUp")]
         [HttpPost("transfer-ownership")]
         public IActionResult Transfer([FromBody] TransferRequest request)
         {
