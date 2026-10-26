@@ -1,24 +1,47 @@
-﻿using System.Text;
+using System.Security.Claims;
+using System.Text;
 using Api.Data;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
 
 namespace Api.Extensions
 {
     public static class ServiceExtensions
     {
-        public static void ConfigureCors(this IServiceCollection services)
+        public static void ConfigureCors(this IServiceCollection services, IConfiguration configuration)
         {
+            var allowedOrigins = configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
+                ?? new[]
+                {
+                    "http://localhost:8000",
+                    "https://localhost:8000",
+                    "http://localhost:5173",
+                    "https://localhost:5173",
+                    "http://localhost:3000"
+                };
+
             services.AddCors(options =>
             {
+                options.AddPolicy(name: "Frontend",
+                    policy =>
+                    {
+                        policy.WithOrigins(allowedOrigins)
+                            .AllowAnyMethod()
+                            .AllowAnyHeader()
+                            .AllowCredentials();
+                    });
+
+                // Backwards compatibility alias
                 options.AddPolicy(name: "AllowAll",
                     policy =>
                     {
-                        policy.AllowAnyOrigin()
+                        policy.WithOrigins(allowedOrigins)
                             .AllowAnyMethod()
-                            .AllowAnyHeader();
+                            .AllowAnyHeader()
+                            .AllowCredentials();
                     });
             });
         }
@@ -34,7 +57,22 @@ namespace Api.Extensions
         {
             var validIssuer = configuration["JwtSettings:validIssuer"];
             var validAudience = configuration["JwtSettings:validAudience"];
-            var secretKey = configuration["SECRET:key"];
+            var secretKey = configuration["SECRET_KEY"] ?? configuration["SECRET:key"] ?? configuration["SECRET__key"] ?? Environment.GetEnvironmentVariable("SECRET_KEY");
+
+            if (string.IsNullOrWhiteSpace(secretKey) || Encoding.UTF8.GetByteCount(secretKey) < 32)
+            {
+                throw new InvalidOperationException(
+                    "FATAL SECURITY CONFIGURATION: 'SECRET_KEY' (or 'SECRET:key') is missing or shorter than 32 bytes (256 bits). " +
+                    "Configure a secure key via environment variable 'SECRET_KEY' or user-secrets ('dotnet user-secrets set \"SECRET_KEY\" \"<key>\"').");
+            }
+
+            var audiences = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (!string.IsNullOrWhiteSpace(validAudience))
+            {
+                audiences.Add(validAudience);
+            }
+            audiences.Add("https://api.accountgo.dev");
+            audiences.Add("https://accountgo-api.anter.workers.dev");
 
             services.AddAuthentication(opt =>
             {
@@ -48,10 +86,43 @@ namespace Api.Extensions
                     ValidateAudience = true,
                     ValidateLifetime = true,
                     ValidateIssuerSigningKey = true,
+                    ClockSkew = TimeSpan.FromMinutes(1),
 
                     ValidIssuer = validIssuer,
                     ValidAudience = validAudience,
-                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey!))
+                    ValidAudiences = audiences,
+                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey))
+                };
+                options.Events = new JwtBearerEvents
+                {
+                    OnMessageReceived = context =>
+                    {
+                        if (context.HttpContext.Request.Path.StartsWithSegments("/mcp") &&
+                            Api.Middleware.TenantResolutionMiddleware.TryCreateMcpGatePrincipal(
+                                context.HttpContext,
+                                JwtBearerDefaults.AuthenticationScheme,
+                                out var gatePrincipal) &&
+                            gatePrincipal != null)
+                        {
+                            context.Principal = gatePrincipal;
+                            context.Success();
+                        }
+
+                        return Task.CompletedTask;
+                    },
+                    OnTokenValidated = async context =>
+                    {
+                        var userId = context.Principal?.FindFirstValue(ClaimTypes.NameIdentifier);
+                        if (string.IsNullOrEmpty(userId))
+                        {
+                            context.Fail("Account deleted");
+                            return;
+                        }
+                        var users = context.HttpContext.RequestServices.GetRequiredService<UserManager<ApplicationUser>>();
+                        var user = await users.FindByIdAsync(userId);
+                        if (user == null || user.DeletedAt != null)
+                            context.Fail("Account deleted");
+                    }
                 };
             });
         }
@@ -69,6 +140,33 @@ namespace Api.Extensions
         public static void ConfigureSqlContext(this IServiceCollection services, IConfiguration configuration,
             IHostEnvironment environment)
         {
+            var provider = System.Environment.GetEnvironmentVariable("DBPROVIDER")
+                ?? configuration["DatabaseProvider"]
+                ?? "Sqlite";
+
+            if (provider.Equals("Sqlite", StringComparison.OrdinalIgnoreCase))
+            {
+                var sqliteConnection = configuration.GetConnectionString("SqliteConnection")
+                    ?? "Data Source=accountgo.db;Foreign Keys=True;";
+
+                Console.WriteLine("[Database Provider] Using SQLite");
+
+                services.AddDbContext<ApiDbContext>(options =>
+                {
+                    options.UseSqlite(sqliteConnection);
+                    if (environment.IsDevelopment())
+                    {
+                        options.EnableSensitiveDataLogging();
+                        options.EnableDetailedErrors();
+                    }
+                });
+
+                services.AddDbContext<ApplicationIdentityDbContext>(options =>
+                    options.UseSqlite(sqliteConnection));
+
+                return;
+            }
+
             string dbServer, dbUserID, dbUserPassword, dbName = string.Empty;
 
             var connectionString = configuration.GetConnectionString("gdb-db") ?? null;
@@ -85,7 +183,7 @@ namespace Api.Extensions
                     dbUserID, dbUserPassword, dbName);
             }
 
-            Console.WriteLine("DB Connection String: " + connectionString);
+            Console.WriteLine("[Database Provider] Using SQL Server");
 
             services.AddDbContext<ApiDbContext>
             (

@@ -1,6 +1,7 @@
 //-----------------------------------------------------------------------
 // <copyright file="Item.cs" company="AccountGo">
-// Copyright (c) AccountGo. All rights reserved.
+// Copyright (c) 2015-2026 Marvin Perez and AccountGo contributors.
+// SPDX-License-Identifier: AGPL-3.0-only
 // <author>Marvin Perez</author>
 // <date>1/11/2015 9:48:38 AM</date>
 // </copyright>
@@ -17,7 +18,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Core.Domain.Items
 {
     [Table("Item")]
-    public partial class Item : BaseEntity
+    public partial class Item : BaseEntity, ICompanyOwned
     {
         public Item()
         {
@@ -26,7 +27,10 @@ namespace Core.Domain.Items
             PurchaseReceiptLines = new HashSet<PurchaseReceiptLine>();
             PurchaseInvoiceLines = new HashSet<PurchaseInvoiceLine>();
             InventoryControlJournals = new HashSet<InventoryControlJournal>();
+            InventoryAdjustments = new HashSet<InventoryAdjustment>();
         }
+
+        public int CompanyId { get; set; }
 
         public int? ItemCategoryId { get; set; }
         public int? SmallestMeasurementId { get; set; }
@@ -45,6 +49,12 @@ namespace Core.Domain.Items
         public string SellDescription { get; set; }
         public decimal? Cost { get; set; }
         public decimal? Price { get; set; }
+        public decimal QuantityOnHand { get; set; }
+        public decimal AverageCost { get; set; }
+        /// <summary>The inventory ledger value, retained exactly to the cent across rounded issues.</summary>
+        public decimal StockValue { get; set; }
+        /// <summary>When it was archived: hidden when picking an item for a line, past lines untouched. Null while active.</summary>
+        public DateTime? ArchivedAt { get; set; }
         public virtual ItemCategory ItemCategory { get; set; }
         public virtual ItemTaxGroup ItemTaxGroup { get; set; }
         public virtual Vendor PreferredVendor { get; set; }
@@ -61,6 +71,7 @@ namespace Core.Domain.Items
         public virtual ICollection<PurchaseReceiptLine> PurchaseReceiptLines { get; set; }
         public virtual ICollection<PurchaseInvoiceLine> PurchaseInvoiceLines { get; set; }
         public virtual ICollection<InventoryControlJournal> InventoryControlJournals { get; set; }
+        public virtual ICollection<InventoryAdjustment> InventoryAdjustments { get; set; }
 
         #region Not Mapped
         [NotMapped]
@@ -114,7 +125,7 @@ namespace Core.Domain.Items
             var invControlJOurnals = InventoryControlJournals.GetEnumerator();
             while (invControlJOurnals.MoveNext())
             {
-                inQty += (invControlJOurnals.Current.INQty.HasValue && invControlJOurnals.Current.IsReverse == false) ? invControlJOurnals.Current.INQty.Value : 0;
+                inQty += invControlJOurnals.Current.INQty.GetValueOrDefault();
                 outQty += invControlJOurnals.Current.OUTQty.HasValue ? invControlJOurnals.Current.OUTQty.Value : 0;
             }
             return inQty - outQty;
@@ -122,17 +133,17 @@ namespace Core.Domain.Items
 
         public bool GLAccountsValidated()
         {
-            bool validated = true;
-
-            if (this.CostOfGoodsSoldAccount == null
-                || this.InventoryAccount == null
-                || this.InventoryAdjustmentAccount == null
-                || this.SalesAccount == null)
+            // For service items, only sales account is required as there is no physical inventory or COGS
+            if (this.ItemCategory != null && this.ItemCategory.ItemType == ItemTypes.Service)
             {
-                validated = false;
+                return this.SalesAccount != null || this.SalesAccountId.HasValue;
             }
 
-            return validated;
+            // For inventory / manufactured / purchased items, all 4 accounts are required
+            return (this.CostOfGoodsSoldAccount != null || this.CostOfGoodsSoldAccountId.HasValue)
+                && (this.InventoryAccount != null || this.InventoryAccountId.HasValue)
+                && (this.InventoryAdjustmentAccount != null || this.InventoryAdjustmentAccountId.HasValue)
+                && (this.SalesAccount != null || this.SalesAccountId.HasValue);
         }
     }
 }

@@ -1,6 +1,7 @@
 //-----------------------------------------------------------------------
 // <copyright file="JournalEntryHeader.cs" company="AccountGo">
-// Copyright (c) AccountGo. All rights reserved.
+// Copyright (c) 2015-2026 Marvin Perez and AccountGo contributors.
+// SPDX-License-Identifier: AGPL-3.0-only
 // <author>Marvin Perez</author>
 // <date>1/11/2015 9:48:38 AM</date>
 // </copyright>
@@ -13,12 +14,14 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Core.Domain.Financials
 {
     [Table("JournalEntryHeader")]
-    public partial class JournalEntryHeader : BaseEntity
+    public partial class JournalEntryHeader : BaseEntity, ICompanyOwned
     {
         public JournalEntryHeader()
         {
             JournalEntryLines = new HashSet<JournalEntryLine>();
         }
+
+        public int CompanyId { get; set; }
 
         public int? GeneralLedgerHeaderId { get; set; }
         public int? PartyId { get; set; }

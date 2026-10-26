@@ -1,6 +1,9 @@
 using Dto.Administration;
 using Dto.Security;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Identity;
 using Services.Administration;
 using Services.Financial;
 using Services.Inventory;
@@ -12,26 +15,39 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Security.Claims;
+using System.Security.Cryptography;
 using System.Text;
+using System.Threading.Tasks;
+using Api.Data;
 
 namespace Api.Controllers
 {
+    [Core.Tenancy.TenantScoped]
+    [ApiController]
     [Route("api/[controller]")]
     public class AdministrationController : BaseController
     {
+        // Global role-template management is platform-staff only. User CRUD routes are retired.
+        private const string PlatformAdminRole = "SystemAdministrators";
+
         private readonly IAdministrationService _adminService;
         private readonly IFinancialService _financialService;
         private readonly ISalesService _salesService;
         private readonly IPurchasingService _purchasingService;
         private readonly IInventoryService _inventoryService;
         private readonly ISecurityService _securityService;
+        private readonly UserManager<ApplicationUser> _userManager;
+        private readonly Core.Tenancy.ITenantContext _tenantContext;
 
         public AdministrationController(IAdministrationService adminService,
             IFinancialService financialService,
             ISalesService salesService,
             IPurchasingService purchasingService,
             IInventoryService inventoryService,
-            ISecurityService securityService)
+            ISecurityService securityService,
+            UserManager<ApplicationUser> userManager,
+            Core.Tenancy.ITenantContext tenantContext)
         {
             _adminService = adminService;
             _financialService = financialService;
@@ -39,38 +55,108 @@ namespace Api.Controllers
             _purchasingService = purchasingService;
             _inventoryService = inventoryService;
             _securityService = securityService;
+            _userManager = userManager;
+            _tenantContext = tenantContext;
         }
 
+        [Api.Filters.RequireWorkspaceRole(Core.Domain.CompanyMemberRole.Owner)]
         [HttpGet]
         [Route("Setup")]
-        public IActionResult Setup()
+        public IActionResult Setup([FromServices] Api.Service.CompanyProvisioningService provisioning, [FromServices] ApiDbContext db)
         {
-            Api.Data.Initializer initializer = new Data.Initializer(_adminService, _financialService, _salesService, _purchasingService, _inventoryService, _securityService);
-            bool success = initializer.Setup();
-            if (success)
-                return Ok("{ 'message': 'Initialization completed!' }");
-            else
-                return BadRequest("{ 'message': 'Initialization not successful! Please check the log.' }");
+            var company = db.Companies.Single(c => c.Id == _tenantContext.RequireCompanyId());
+            using (var tx = db.Database.BeginTransaction())
+            {
+                provisioning.Provision(company);
+                tx.Commit();
+            }
+            return Ok(new { message = "Workspace defaults initialized." });
         }
 
-        [HttpGet]
-        [Route("clear")]
-        public IActionResult Clear()
+        public class ClearDatabaseRequest
         {
+            /// <summary>Must be the literal string "DELETE_ALL_DATA" to proceed.</summary>
+            public string? Confirmation { get; set; }
+        }
+
+        [Authorize(Roles = PlatformAdminRole)]
+        [HttpPost]
+        [Route("clear")]
+        public IActionResult Clear([FromBody] ClearDatabaseRequest? request)
+        {
+            if (!string.Equals(request?.Confirmation, "DELETE_ALL_DATA", StringComparison.Ordinal))
+            {
+                return BadRequest(new
+                {
+                    message = "Confirmation required. Send JSON body { \"confirmation\": \"DELETE_ALL_DATA\" }."
+                });
+            }
+
             Api.Data.Initializer initializer = new Data.Initializer(_adminService, _financialService, _salesService, _purchasingService, _inventoryService, _securityService);
             bool success = initializer.Clear();
             if (success)
-                return Ok("{ 'message': 'Database is cleared!' }");
+                return Ok(new { message = "Database is cleared!" });
             else
-                return BadRequest("{ 'message': 'Clearing database not successful! Please check the log.' }");
+                return BadRequest(new { message = "Clearing database not successful! Please check the log." });
         }
 
-        [HttpGet]
-        [Route("company")]
-        public IActionResult Company(string companyCode)
+        [HttpGet("company")]
+        public IActionResult Company([FromQuery] string? slug = null, [FromQuery] string? companyCode = null, [FromQuery] int? id = null)
         {
-            return new ObjectResult(_adminService.GetDefaultCompany());
+            var companyId = _tenantContext.RequireCompanyId();
+            var company = _adminService.GetCompanies().FirstOrDefault(c => c.Id == companyId);
+
+            if (company == null)
+            {
+                return NotFound(new { message = "Company not found." });
+            }
+
+            return Ok(new
+            {
+                id = company.Id,
+                name = company.Name,
+                shortName = company.ShortName,
+                slug = string.IsNullOrWhiteSpace(company.Slug) ? (company.ShortName?.ToLowerInvariant() ?? $"org-{company.Id}") : company.Slug,
+                companyCode = company.CompanyCode,
+                cra = company.CRA,
+                plan = company.Plan ?? "accounting",
+                subscriptionStatus = company.SubscriptionStatus ?? "active",
+                subscriptionValidUntil = company.SubscriptionValidUntil,
+                activeModules = company.GetActiveModules()
+            });
         }
+
+        [HttpGet("financialyears")]
+        public IActionResult FinancialYears()
+        {
+            var years = _adminService.GetFinancialYears();
+            return Ok(years.Select(f => new
+            {
+                id = f.Id,
+                fiscalYearCode = f.FiscalYearCode,
+                fiscalYearName = f.FiscalYearName,
+                startDate = f.StartDate,
+                endDate = f.EndDate,
+                isActive = f.IsActive
+            }));
+        }
+
+        [HttpGet("paymentterms")]
+        public IActionResult PaymentTerms()
+        {
+            var terms = _adminService.GetPaymentTerms();
+            return Ok(terms.Select(p => new
+            {
+                id = p.Id,
+                description = p.Description,
+                paymentType = p.PaymentType.ToString(),
+                dueAfterDays = p.DueAfterDays,
+                isActive = p.IsActive
+            }));
+        }
+
+        // GET companies (listed every workspace) and POST company were removed in Phase 2.
+        // Use GET/POST /api/organizations, which only lists the caller's memberships and makes the creator Owner.
 
         [HttpGet]
         [Route("auditlogs")] // api/Administration/AuditLogs
@@ -93,42 +179,8 @@ namespace Api.Controllers
             return new ObjectResult(auditLogsDto);
         }
 
-        [HttpGet]
-        [Route("users")] // api/Administration/Users
-        public IActionResult Users()
-        {
-            var users = _securityService.GetAllUser();
-            var usersDto = new List<User>();
-
-            foreach (var user in users)
-            {
-                var userDto = new User
-                {
-                    Id = user.Id,
-                    FirstName = user.Firstname,
-                    LastName = user.Lastname,
-                    Email = user.EmailAddress,
-                    UserName = user.UserName
-                };
-
-                foreach (var role in user.Roles)
-                {
-                    var roleDto = new Role
-                    {
-                        Id = role.Id,
-                        Name = role.SecurityRole.Name,
-                        DisplayName = role.SecurityRole.DisplayName
-                    };
-
-                    userDto.Roles.Add(roleDto);
-                }
-
-                usersDto.Add(userDto);
-            }
-
-            return new ObjectResult(usersDto);
-        }
-
+        // Global role templates incl. the platform role; workspaces use /api/organizations/current/security-roles.
+        [Authorize(Roles = PlatformAdminRole)]
         [HttpGet]
         [Route("roles")] // api/Administration/Roles
         public IActionResult Roles()
@@ -142,27 +194,105 @@ namespace Api.Controllers
                 {
                     Id = role.Id,
                     Name = role.Name,
-                    DisplayName = role.DisplayName
+                    DisplayName = role.DisplayName,
+                    SysAdmin = role.SysAdmin
                 };
 
-                foreach (var permission in role.Permissions)
+                if (role.Permissions != null)
                 {
-                    var permissionDto = new Permission
+                    foreach (var permission in role.Permissions)
                     {
-                        Id = permission.Id,
-                        Name = permission.SecurityPermission.Name,
-                        DisplayName = permission.SecurityPermission.DisplayName
-                    };
+                        if (permission?.SecurityPermission == null) continue;
+                        var permissionDto = new Permission
+                        {
+                            Id = permission.SecurityPermissionId,
+                            Name = permission.SecurityPermission.Name,
+                            DisplayName = permission.SecurityPermission.DisplayName
+                        };
 
-                    roleDto.Permissions.Add(permissionDto);
+                        roleDto.Permissions.Add(permissionDto);
+                    }
                 }
 
                 rolesDto.Add(roleDto);
             }
 
-            return new ObjectResult(rolesDto);
+            return Ok(rolesDto);
         }
 
+        public class SaveRoleRequest
+        {
+            public int Id { get; set; }
+            public string Name { get; set; } = string.Empty;
+            public string? DisplayName { get; set; }
+            public List<int>? PermissionIds { get; set; }
+        }
+
+        [Authorize(Roles = PlatformAdminRole)]
+        [HttpPost("roles")]
+        public IActionResult SaveRole([FromBody] SaveRoleRequest request)
+        {
+            if (string.IsNullOrWhiteSpace(request?.Name))
+                return BadRequest(new ProblemDetails { Title = "Invalid Role", Detail = "Role name is required.", Status = StatusCodes.Status400BadRequest });
+
+            var displayName = !string.IsNullOrWhiteSpace(request.DisplayName) ? request.DisplayName.Trim() : request.Name.Trim();
+            _securityService.SaveRoleWithPermissions(request.Id, request.Name.Trim(), displayName, request.PermissionIds ?? new List<int>());
+
+            return Ok(new { success = true });
+        }
+
+        [Authorize(Roles = PlatformAdminRole)]
+        [HttpDelete("roles/{id:int}")]
+        public IActionResult DeleteRole(int id)
+        {
+            var role = _securityService.GetSecurityRole(id);
+            if (role == null)
+                return NotFound(new ProblemDetails { Title = "Role Not Found", Detail = $"Role with ID {id} was not found.", Status = StatusCodes.Status404NotFound });
+
+            if (role.SysAdmin || role.Name == "SystemAdministrators" || role.Name == "GeneralUsers")
+            {
+                return BadRequest(new ProblemDetails
+                {
+                    Title = "Action Denied",
+                    Detail = "System-critical roles cannot be deleted.",
+                    Status = StatusCodes.Status400BadRequest
+                });
+            }
+
+            _securityService.DeleteRole(id);
+            return Ok(new { success = true, message = "Role deleted successfully." });
+        }
+
+        private static User MapToUserDto(Core.Domain.Security.User user)
+        {
+            var dto = new User
+            {
+                Id = user.Id,
+                FirstName = user.Firstname,
+                LastName = user.Lastname,
+                Email = user.EmailAddress,
+                UserName = user.UserName
+            };
+
+            if (user.Roles != null)
+            {
+                foreach (var r in user.Roles)
+                {
+                    if (r?.SecurityRole == null) continue;
+                    dto.Roles.Add(new Role
+                    {
+                        Id = r.SecurityRoleId,
+                        Name = r.SecurityRole.Name,
+                        DisplayName = r.SecurityRole.DisplayName,
+                        SysAdmin = r.SecurityRole.SysAdmin
+                    });
+                }
+            }
+
+            return dto;
+        }
+
+        [Authorize(Roles = PlatformAdminRole)]
         [HttpGet]
         [Route("groups")]
         // TODO: generates exception
@@ -198,6 +328,7 @@ namespace Api.Controllers
             return new ObjectResult(groupsDto);
         }
 
+        [Authorize(Roles = PlatformAdminRole)]
         [HttpGet]
         [Route("GetUser")]
         public IActionResult GetUser(string username)
@@ -241,40 +372,60 @@ namespace Api.Controllers
             return new ObjectResult(userDto);
         }
 
-        [HttpPost]
-        [Route("SaveCompany")]
-        public IActionResult SaveCompany([FromBody]Company companyDto)
+        public class UpdateCompanyRequest
         {
-            string[] errors;
-            try
+            public int? Id { get; set; }
+            public string? Name { get; set; }
+            public string? ShortName { get; set; }
+            public string? Slug { get; set; }
+            public string? CompanyCode { get; set; }
+            public string? CRA { get; set; }
+        }
+
+        [Api.Filters.RequireWorkspaceRole(Core.Domain.CompanyMemberRole.Admin)]
+        [HttpPost("SaveCompany")]
+        [HttpPut("company")]
+        public IActionResult SaveCompany([FromBody] UpdateCompanyRequest request)
+        {
+            if (request == null)
+                return BadRequest(new { message = "Invalid company update request." });
+
+            var companyId = _tenantContext.RequireCompanyId();
+            var company = _adminService.GetCompanies().FirstOrDefault(c => c.Id == companyId);
+            if (company == null)
             {
-                if (!ModelState.IsValid)
-                {
-                    errors = new string[ModelState.ErrorCount];
-                    foreach (var val in ModelState.Values)
-                        for (var i = 0; i < ModelState.ErrorCount; i++)
-                            errors[i] = val.Errors[i].ErrorMessage;
-                    return new BadRequestObjectResult(errors);
-                }
-
-                Core.Domain.Company company = companyDto.Id == 0
-                    ? new Core.Domain.Company()
-                    : _adminService.GetDefaultCompany();
-
-                company.CompanyCode = companyDto.CompanyCode;
-                company.Name = companyDto.Name;
-                company.ShortName = companyDto.ShortName;
-                company.CRA = companyDto.CRA;
-
-                _adminService.SaveCompany(company);
-
-                return new ObjectResult(Ok());
+                return NotFound(new { message = "Company not found." });
             }
-            catch (Exception ex)
+
+            if (!string.IsNullOrWhiteSpace(request.Name))
+                company.Name = request.Name.Trim();
+
+            if (!string.IsNullOrWhiteSpace(request.ShortName))
+                company.ShortName = request.ShortName.Trim();
+
+            if (!string.IsNullOrWhiteSpace(request.Slug))
+                company.Slug = request.Slug.Trim().ToLowerInvariant();
+
+            if (request.CompanyCode != null)
+                company.CompanyCode = request.CompanyCode.Trim();
+
+            if (request.CRA != null)
+                company.CRA = request.CRA.Trim();
+
+            _adminService.SaveCompany(company);
+
+            return Ok(new
             {
-                errors = new[] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
-                return new BadRequestObjectResult(errors);
-            }
+                id = company.Id,
+                name = company.Name,
+                shortName = company.ShortName,
+                slug = company.Slug,
+                companyCode = company.CompanyCode,
+                cra = company.CRA,
+                plan = company.Plan,
+                subscriptionStatus = company.SubscriptionStatus,
+                activeModules = company.GetActiveModules()
+            });
         }
     }
 }

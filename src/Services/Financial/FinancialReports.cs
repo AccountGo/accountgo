@@ -1,12 +1,15 @@
 //-----------------------------------------------------------------------
 // <copyright file="FinancialReports.cs" company="AccountGo">
-// Copyright (c) AccountGo. All rights reserved.
+// Copyright (c) 2015-2026 Marvin Perez and AccountGo contributors.
+// SPDX-License-Identifier: AGPL-3.0-only
 // <author>Marvin Perez</author>
 // <date>1/11/2015 9:48:38 AM</date>
 // </copyright>
 //-----------------------------------------------------------------------
 
 using System;
+using System.Collections.Generic;
+using Core.Domain;
 
 namespace Services.Financial
 {
@@ -34,6 +37,52 @@ namespace Services.Financial
         public bool IsExpense { get; set; }
         public string AccountCode { get; set; }
         public string AccountName { get; set; }
+        public decimal Amount { get; set; }
+    }
+
+    /// <summary>
+    /// Indirect Statement of Cash Flows (ASC 230 / IAS 7 style). Accrual is primary; Cash basis returns
+    /// the cash bridge plus a notice. Closing of net income into retained earnings is operating;
+    /// dividends/distributions from permanent equity are financing; long-lived asset disposal gains/losses
+    /// and accumulated-depreciation write-offs on disposal are presented in investing so investing equals
+    /// cash proceeds; inventory/trading gains remain operating.
+    /// </summary>
+    public class CashFlowStatement
+    {
+        public DateTime? FromDate { get; set; }
+        public DateTime? ToDate { get; set; }
+        public AccountingBasis AccountingBasis { get; set; }
+        public decimal NetIncome { get; set; }
+        public decimal OperatingCashFlow { get; set; }
+        public decimal InvestingCashFlow { get; set; }
+        public decimal FinancingCashFlow { get; set; }
+        public decimal NetChangeInCash { get; set; }
+        public decimal StartingCash { get; set; }
+        public decimal EndingCash { get; set; }
+        public ICollection<CashFlowLine> OperatingActivities { get; set; } = new List<CashFlowLine>();
+        public ICollection<CashFlowLine> InvestingActivities { get; set; } = new List<CashFlowLine>();
+        public ICollection<CashFlowLine> FinancingActivities { get; set; } = new List<CashFlowLine>();
+        public string Message { get; set; }
+        public bool IsBalanced => AccountingBasis == AccountingBasis.Cash
+            ? StartingCash + NetChangeInCash == EndingCash
+            : OperatingCashFlow + InvestingCashFlow + FinancingCashFlow == NetChangeInCash;
+    }
+
+    public static class CashFlowLineTypes
+    {
+        public const string NonCashAdjustment = "NonCashAdjustment";
+        public const string WorkingCapital = "WorkingCapital";
+        public const string Operating = "Operating";
+        public const string Investing = "Investing";
+        public const string Financing = "Financing";
+    }
+
+    public class CashFlowLine
+    {
+        public int AccountId { get; set; }
+        public string AccountCode { get; set; }
+        public string AccountName { get; set; }
+        public string LineType { get; set; }
         public decimal Amount { get; set; }
     }
 

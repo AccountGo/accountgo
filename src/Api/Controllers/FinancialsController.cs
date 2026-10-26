@@ -1,4 +1,6 @@
-﻿using Dto.Financial;
+using Api.Filters;
+using Core.Domain.Security;
+using Dto.Financial;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Services.Administration;
@@ -9,20 +11,26 @@ using System.Linq;
 
 namespace Api.Controllers
 {
+    [Core.Tenancy.TenantScoped]
     [Route("api/[controller]")]
+    [RequireModule("financials", "reports")]
     //[Authorize]
     public class FinancialsController : BaseController
     {
         private readonly IAdministrationService _adminService;
         private readonly IFinancialService _financialService;
         private readonly IAccountService _accountService;
+        private readonly Core.Tenancy.ITenantGuard _tenantGuard;
 
         public FinancialsController(IAdministrationService adminService,
-            IFinancialService financialService, IAccountService accountService)
+            IFinancialService financialService,
+            IAccountService accountService,
+            Core.Tenancy.ITenantGuard tenantGuard)
         {
             _adminService = adminService;
             _financialService = financialService;
             _accountService = accountService;
+            _tenantGuard = tenantGuard;
         }
 
         [HttpGet]
@@ -63,6 +71,8 @@ namespace Api.Controllers
         public IActionResult Account(int id)
         {
             var account = _financialService.GetAccount(id);
+            if (account == null)
+                return NotFound(new { message = $"Account #{id} not found." });
 
             var accountDto = new Dto.Financial.Account()
             {
@@ -86,6 +96,7 @@ namespace Api.Controllers
 
         [HttpGet]
         [Route("JournalEntries")] // api/Financials/JournalEntries
+        [RequirePermission(SystemPermissions.FinancialsJournalView)]
         public IActionResult JournalEntries()
         {
             var journalEntries = _financialService.GetJournalEntries();
@@ -100,7 +111,7 @@ namespace Api.Controllers
                     Memo = je.Memo,
                     ReferenceNo = je.ReferenceNo,
                     VoucherType = (int)je.VoucherType.GetValueOrDefault(),
-                    Posted = je.Posted
+                    Posted = je.Posted == true || je.GeneralLedgerHeaderId.HasValue
                 };
 
                 foreach (var line in je.JournalEntryLines)
@@ -125,9 +136,12 @@ namespace Api.Controllers
 
         [HttpGet]
         [Route("JournalEntry")]
+        [RequirePermission(SystemPermissions.FinancialsJournalView)]
         public IActionResult JournalEntry(int id)
         {
             var je = _financialService.GetJournalEntry(id);
+            if (je == null)
+                return NotFound(new { message = $"Journal entry #{id} not found." });
 
             var journalEntryDto = new JournalEntry()
             {
@@ -136,7 +150,7 @@ namespace Api.Controllers
                 Memo = je.Memo,
                 ReferenceNo = je.ReferenceNo,
                 VoucherType = (int)je.VoucherType.GetValueOrDefault(),
-                Posted = je.Posted
+                Posted = je.Posted == true || je.GeneralLedgerHeaderId.HasValue
             };
 
             foreach (var line in je.JournalEntryLines)
@@ -166,6 +180,8 @@ namespace Api.Controllers
 
         [HttpPost]
         [Route("PostJournalEntry")]
+        [RequireModule("financials")]
+        [RequirePermission(SystemPermissions.FinancialsJournalPost)]
         public IActionResult PostJournalEntry([FromBody] JournalEntry journalEntryDto)
         {
             string[]? errors = null;
@@ -174,15 +190,18 @@ namespace Api.Controllers
             {
                 if (!ModelState.IsValid)
                 {
-                    errors = new string[ModelState.ErrorCount];
-                    foreach (var val in ModelState.Values)
-                        for (int i = 0; i < ModelState.ErrorCount; i++)
-                            errors[i] = val.Errors[i].ErrorMessage;
+                    // Collect per-error messages; do not index Errors by ModelState.ErrorCount (ArgumentOutOfRange).
+                    errors = ModelState.Values
+                        .SelectMany(v => v.Errors)
+                        .Select(e => e.ErrorMessage)
+                        .ToArray();
 
                     return new BadRequestObjectResult(errors);
                 }
 
                 var je = _financialService.GetJournalEntry(journalEntryDto.Id, false);
+                if (je == null)
+                    return NotFound(new { message = "Journal entry not found." });
 
                 _financialService.UpdateJournalEntry(je, true);
 
@@ -190,6 +209,7 @@ namespace Api.Controllers
             }
             catch (Exception ex)
             {
+                if (ex is Core.Tenancy.TenantException) throw;
                 errors = new string[1] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
                 return new BadRequestObjectResult(errors);
             }
@@ -197,6 +217,8 @@ namespace Api.Controllers
 
         [HttpPost]
         [Route("SaveJournalEntry")]
+        [RequireModule("financials")]
+        [RequirePermission(SystemPermissions.FinancialsJournalCreate)]
         public IActionResult SaveJournalEntry([FromBody] JournalEntry journalEntryDto)
         {
             string[]? errors = null;
@@ -222,9 +244,12 @@ namespace Api.Controllers
                     return new BadRequestObjectResult(errors);
                 }
 
-                var anyDuplicate = journalEntryDto.JournalEntryLines.GroupBy(x => x.AccountId).Any(g => g.Count() > 1);
-                if (anyDuplicate)
-                    throw new Exception("One or more journal entry lines has duplicate account.");
+                // Split lines to the same account (different memos) are allowed; Dr/Cr balance is enforced on post.
+                if (journalEntryDto.JournalEntryLines.Count < 2
+                    || journalEntryDto.JournalEntryLines.Any(l => !l.AccountId.HasValue || l.Amount.GetValueOrDefault() <= 0
+                        || (l.DrCr != 1 && l.DrCr != 2))
+                    || !Enum.IsDefined(typeof(Core.Domain.JournalVoucherTypes), journalEntryDto.VoucherType.GetValueOrDefault()))
+                    return BadRequest(new { message = "Provide a voucher type and at least two positive debit or credit lines with valid accounts." });
 
                 bool isNew = journalEntryDto.Id == 0;
                 Core.Domain.Financials.JournalEntryHeader? journalEntry = null;
@@ -235,9 +260,11 @@ namespace Api.Controllers
                 }
                 else
                 {
-                    journalEntry = _financialService.GetJournalEntry(journalEntryDto.Id, false);
+                    journalEntry = _financialService.GetJournalEntry(journalEntryDto.Id);
                     if (journalEntry == null)
-                        throw new Exception("Journal entry not found.");
+                        return NotFound(new { message = "Journal entry not found." });
+                    if (journalEntry.Posted == true || journalEntry.GeneralLedgerHeaderId.HasValue)
+                        return BadRequest(new { message = "Posted journal entries cannot be edited." });
 
                     var dtoLineIds = journalEntryDto.JournalEntryLines
                         .Where(l => l.Id != 0)
@@ -261,6 +288,8 @@ namespace Api.Controllers
 
                 foreach (var line in journalEntryDto.JournalEntryLines)
                 {
+                    _tenantGuard.EnsureOwned<Core.Domain.Financials.Account>(line.AccountId, nameof(line.AccountId));
+
                     if (!isNew)
                     {
                         var existingLine = journalEntry.JournalEntryLines
@@ -304,10 +333,11 @@ namespace Api.Controllers
                     _financialService.UpdateJournalEntry(journalEntry, false);
                 }
 
-                return new OkObjectResult(Ok());
+                return Ok(new { id = journalEntry.Id });
             }
             catch (Exception ex)
             {
+                if (ex is Core.Tenancy.TenantException) throw;
                 errors = new string[1] { ex.InnerException != null ? ex.InnerException.Message : ex.Message };
                 return new BadRequestObjectResult(errors);
             }
@@ -315,75 +345,83 @@ namespace Api.Controllers
 
         [HttpGet]
         [Route("GeneralLedger")]
+        [RequirePermission(SystemPermissions.FinancialsJournalView)]
         public ActionResult GeneralLedger(DateTime? from = default(DateTime?),
             DateTime? to = default(DateTime?),
             string? accountCode = null,
-            int? transactionNo = null)
+            int? transactionNo = null,
+            Core.Domain.DocumentTypes? documentType = null,
+            int skip = 0,
+            int take = Services.Financial.FinancialService.GeneralLedgerDefaultPageSize)
         {
-            var Dto = _financialService.MasterGeneralLedger(from, to, accountCode, transactionNo);
-
-            //goi
-            var generalLedgerTree = BuildMasterGeneralLedger(Dto);
-
-            return new ObjectResult(generalLedgerTree);
-
+            if (!ModelState.IsValid || (from.HasValue && to.HasValue && from.Value > to.Value))
+                return BadRequest(new { message = "Provide a valid date range and filters: from must not be after to." });
+            if (documentType.HasValue && !Enum.IsDefined(typeof(Core.Domain.DocumentTypes), documentType.Value))
+                return BadRequest(new { message = "Provide a valid document type." });
+            if (skip < 0 || take < 1 || take > Services.Financial.FinancialService.GeneralLedgerMaxPageSize)
+                return BadRequest(new { message = $"Provide skip >= 0 and take between 1 and {Services.Financial.FinancialService.GeneralLedgerMaxPageSize}." });
+            try
+            {
+                return Ok(_financialService.GetGeneralLedgerTransactions(from, to, accountCode, transactionNo, documentType, skip, take));
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
         }
 
         [HttpGet]
         [Route("trialbalance")]
-        public ActionResult TrialBalance()
+        [RequirePermission(SystemPermissions.ReportsView)]
+        public ActionResult TrialBalance(DateTime? from = null, DateTime? to = null, Core.Domain.AccountingBasis basis = Core.Domain.AccountingBasis.Accrual)
         {
-            var Dto = _financialService.TrialBalance();
+            if (!Enum.IsDefined(typeof(Core.Domain.AccountingBasis), basis)
+                || (ModelState.TryGetValue(nameof(basis), out var basisState) && basisState.Errors.Count > 0))
+                return BadRequest(new { message = "Provide a valid accounting basis: Accrual or Cash." });
+            if (!ModelState.IsValid || (from.HasValue && to.HasValue && from.Value > to.Value))
+                return BadRequest(new { message = "Provide a valid date range: from must not be after to." });
+            var Dto = _financialService.TrialBalance(from, to, basis);
             return new ObjectResult(Dto);
         }
 
         [HttpGet]
         [Route("BalanceSheet")]
-        // TODO: this generates an error a.ContraAccounts' is invalid inside an 'Include' operation
-        public ActionResult BalanceSheet()
+        [RequirePermission(SystemPermissions.ReportsView)]
+        public ActionResult BalanceSheet(DateTime? from = null, DateTime? to = null, Core.Domain.AccountingBasis basis = Core.Domain.AccountingBasis.Accrual)
         {
-            var Dto = _financialService.BalanceSheet().ToList();
-            var dt = Helpers.CollectionHelper.ConvertTo<BalanceSheet>(Dto);
-            var incomestatement = _financialService.IncomeStatement();
-            var netincome = incomestatement.Where(a => a.IsExpense == false).Sum(a => a.Amount) - incomestatement.Where(a => a.IsExpense == true).Sum(a => a.Amount);
-
-            // TODO: Add logic to get the correct account for accumulated profit/loss. Currently, the account code is hard-coded here.
-            // Solution 1: Add two columns in general ledger setting for the account id of accumulated profit and loss.
-            // Solution 2: Add column to Account table to flag if account is net income (profit and loss)
-            //if (netincome < 0)
-            //{
-            //    var loss = Dto.Where(a => a.AccountCode == "30500").FirstOrDefault();
-            //    loss.Amount = netincome;
-            //}
-            //else
-            //{
-            //    var profit = Dto.Where(a => a.AccountCode == "30400").FirstOrDefault();
-            //    profit.Amount = netincome;
-            //}
-
-            return new ObjectResult(Dto);
+            if (!Enum.IsDefined(typeof(Core.Domain.AccountingBasis), basis)
+                || (ModelState.TryGetValue(nameof(basis), out var basisState) && basisState.Errors.Count > 0))
+                return BadRequest(new { message = "Provide a valid accounting basis: Accrual or Cash." });
+            if (!ModelState.IsValid || (from.HasValue && to.HasValue && from.Value > to.Value))
+                return BadRequest(new { message = "Provide a valid date range: from must not be after to." });
+            var dto = _financialService.BalanceSheet(from, to, basis).ToList();
+            return new ObjectResult(dto);
         }
 
         [HttpGet]
         [Route("IncomeStatement")]
-        public IActionResult IncomeStatement()
+        [RequirePermission(SystemPermissions.ReportsView)]
+        public IActionResult IncomeStatement(DateTime? from = null, DateTime? to = null, Core.Domain.AccountingBasis basis = Core.Domain.AccountingBasis.Accrual)
         {
-            try
-            {
-                var incomeStatementData = _financialService.IncomeStatement();
+            if (!Enum.IsDefined(typeof(Core.Domain.AccountingBasis), basis)
+                || (ModelState.TryGetValue(nameof(basis), out var basisState) && basisState.Errors.Count > 0))
+                return BadRequest(new { message = "Provide a valid accounting basis: Accrual or Cash." });
+            if (!ModelState.IsValid || (from.HasValue && to.HasValue && from.Value > to.Value))
+                return BadRequest(new { message = "Provide a valid date range: from must not be after to." });
+            return Ok(_financialService.IncomeStatement(from, to, basis));
+        }
 
-                // Ensure the data is not null
-                if (incomeStatementData == null)
-                {
-                    incomeStatementData = new List<IncomeStatement>();
-                }
-
-                return Ok(incomeStatementData);
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(new { message = "Error fetching income statement", details = ex.Message });
-            }
+        [HttpGet]
+        [Route("CashFlow")]
+        [RequirePermission(SystemPermissions.ReportsView)]
+        public IActionResult CashFlow(DateTime? from = null, DateTime? to = null, Core.Domain.AccountingBasis basis = Core.Domain.AccountingBasis.Accrual)
+        {
+            if (!Enum.IsDefined(typeof(Core.Domain.AccountingBasis), basis)
+                || (ModelState.TryGetValue(nameof(basis), out var basisState) && basisState.Errors.Count > 0))
+                return BadRequest(new { message = "Provide a valid accounting basis: Accrual or Cash." });
+            if (!ModelState.IsValid || (from.HasValue && to.HasValue && from.Value > to.Value))
+                return BadRequest(new { message = "Provide a valid date range: from must not be after to." });
+            return Ok(_financialService.CashFlow(from, to, basis));
         }
 
         #region CRUD for Accounts
@@ -410,10 +448,13 @@ namespace Api.Controllers
 
         [HttpPost]
         [Route("AddAccount")]
+        [RequireModule("financials")]
         public async Task<IActionResult> AddAccount([FromBody] Account newAccountDto)
         {
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
+
+            _tenantGuard.EnsureOwned<Core.Domain.Financials.Account>(newAccountDto.ParentAccountId, nameof(newAccountDto.ParentAccountId));
 
             var newAccount = new Core.Domain.Financials.Account
             {
@@ -450,6 +491,7 @@ namespace Api.Controllers
 
         [HttpPut]
         [Route("UpdateAccount/{accountCode}")]
+        [RequireModule("financials")]
         public async Task<IActionResult> UpdateAccount(string accountCode, [FromBody] Account updatedAccountDto)
         {
             if (!ModelState.IsValid)
@@ -488,6 +530,7 @@ namespace Api.Controllers
 
         [HttpDelete]
         [Route("DeleteAccount/{accountCode}")]
+        [RequireModule("financials")]
         public async Task<IActionResult> DeleteAccount(string accountCode)
         {
             var (account, errorMessage) = await _accountService.DeleteAccountAsync(accountCode);
@@ -527,6 +570,9 @@ namespace Api.Controllers
                     Description = account.Description,
                     IsCash = account.IsCash,
                     IsContraAccount = account.IsContraAccount,
+                    NormalBalance = account.DrOrCrSide.ToString(),
+                    AccountClassName = account.AccountClass?.Name,
+                    CanPost = account.CanPost(),
                     Balance = account.Balance,
                     DebitBalance = account.DebitBalance,
                     CreditBalance = account.CreditBalance
@@ -537,49 +583,6 @@ namespace Api.Controllers
             }
 
             return accountTree;
-        }
-
-
-        private IList<Dto.Financial.MasterGeneralLedger> BuildMasterGeneralLedger(ICollection<Services.Financial.MasterGeneralLedger> allLedger)
-        {
-            var ledgerTree = new List<Dto.Financial.MasterGeneralLedger>();
-
-
-            var parentLedger = allLedger.Select(a => a.TransactionNo).Distinct();
-            var childLedgers = new List<Dto.Financial.MasterGeneralLedger>();
-            parentLedger.ToList().ForEach(a =>
-            {
-                var childrenLedger = allLedger.Where(x => x.TransactionNo == a);
-
-                var secondChild = new Dto.Financial.MasterGeneralLedger();
-                var thirdChildren = new List<Dto.Financial.MasterGeneralLedger>();
-                secondChild.GroupId = a;
-                secondChild.TransactionNo = null;
-                secondChild.Credit = null;
-                secondChild.Debit = null;
-                secondChild.Date = null;
-                foreach (var ledger in childrenLedger)
-                {
-                    var thirdChild = new Dto.Financial.MasterGeneralLedger();
-                    thirdChild.Id = ledger.Id;
-                    thirdChild.TransactionNo = ledger.TransactionNo;
-                    thirdChild.AccountId = ledger.AccountId;
-                    thirdChild.AccountName = ledger.AccountName;
-                    thirdChild.AccountCode = ledger.AccountCode;
-                    thirdChild.CurrencyId = ledger.CurrencyId;
-                    thirdChild.Date = ledger.Date;
-                    thirdChild.Debit = ledger.Debit;
-                    thirdChild.Credit = ledger.Credit;
-                    thirdChildren.Add(thirdChild);
-                    secondChild.ChildMasterGeneralLedger = thirdChildren;
-                }
-
-                childLedgers.Add(secondChild);
-
-
-            });
-
-            return childLedgers;
         }
         #endregion
 
@@ -607,12 +610,14 @@ namespace Api.Controllers
             }
             catch (Exception ex)
             {
+                if (ex is Core.Tenancy.TenantException) throw;
                 return BadRequest(new { message = ex.Message });
             }
         }
 
         [HttpPost]
         [Route("Bank")] // api/Financials/Bank
+        [RequireModule("financials")]
         public IActionResult CreateBank([FromBody] Dto.Financial.Bank bankDto)
         {
             try
@@ -620,6 +625,7 @@ namespace Api.Controllers
                 if (!ModelState.IsValid)
                     return BadRequest(ModelState);
 
+                _tenantGuard.EnsureOwned<Core.Domain.Financials.Account>(bankDto.AccountId, nameof(bankDto.AccountId));
                 var account = GetEligibleBankAccount(bankDto.AccountId);
                 if (account == null)
                     return BadRequest(new { message = "Select an account with a code between 10100 and 10999." });
@@ -649,12 +655,14 @@ namespace Api.Controllers
             }
             catch (Exception ex)
             {
+                if (ex is Core.Tenancy.TenantException) throw;
                 return BadRequest(new { message = ex.Message });
             }
         }
 
         [HttpPut]
         [Route("Bank/{id}")] // api/Financials/Bank/1
+        [RequireModule("financials")]
         public IActionResult UpdateBank(int id, [FromBody] Dto.Financial.Bank bankDto)
         {
             try
@@ -662,13 +670,12 @@ namespace Api.Controllers
                 if (!ModelState.IsValid)
                     return BadRequest(ModelState);
 
+                _tenantGuard.EnsureOwned<Core.Domain.Financials.Account>(bankDto.AccountId, nameof(bankDto.AccountId));
                 var account = GetEligibleBankAccount(bankDto.AccountId);
                 if (account == null)
                     return BadRequest(new { message = "Select an account with a code between 10100 and 10999." });
 
-                var bank = _financialService.GetBank(id);
-                if (bank == null)
-                    return NotFound(new { message = "Bank not found" });
+                var bank = _tenantGuard.EnsureOwned<Core.Domain.Financials.Bank>(id, nameof(id));
 
                 bank.Name = account.AccountName;
                 bank.BankName = bankDto.BankName;
@@ -690,12 +697,14 @@ namespace Api.Controllers
             }
             catch (Exception ex)
             {
+                if (ex is Core.Tenancy.TenantException) throw;
                 return BadRequest(new { message = ex.Message });
             }
         }
 
         [HttpDelete]
         [Route("Bank/{id}")] // api/Financials/Bank/1
+        [RequireModule("financials")]
         public IActionResult DeleteBank(int id)
         {
             try
@@ -710,6 +719,7 @@ namespace Api.Controllers
             }
             catch (Exception ex)
             {
+                if (ex is Core.Tenancy.TenantException) throw;
                 return BadRequest(new { message = ex.Message });
             }
         }

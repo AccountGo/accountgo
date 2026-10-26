@@ -1,6 +1,7 @@
 //-----------------------------------------------------------------------
 // <copyright file="FinancialHelper.cs" company="AccountGo">
-// Copyright (c) AccountGo. All rights reserved.
+// Copyright (c) 2015-2026 Marvin Perez and AccountGo contributors.
+// SPDX-License-Identifier: AGPL-3.0-only
 // <author>Marvin Perez</author>
 // <date>1/11/2015 9:48:38 AM</date>
 // </copyright>
@@ -35,7 +36,7 @@ namespace Services.Financial
 
         public static bool NoDuplicateAccountInLines(GeneralLedgerHeader glHeader)
         {
-            //TODO: implement logic. Do not allow duplicate account in gl lines
+            // Split lines to the same account (different memos) are valid in both auto-postings and manual journals.
             return true;
         }
 

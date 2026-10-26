@@ -1,6 +1,7 @@
 //-----------------------------------------------------------------------
 // <copyright file="ISalesService.cs" company="AccountGo">
-// Copyright (c) AccountGo. All rights reserved.
+// Copyright (c) 2015-2026 Marvin Perez and AccountGo contributors.
+// SPDX-License-Identifier: AGPL-3.0-only
 // <author>Marvin Perez</author>
 // <date>1/11/2015 9:48:38 AM</date>
 // </copyright>
@@ -26,6 +27,8 @@ namespace Services.Sales
         SalesInvoiceHeader GetSalesInvoiceById(int id);
         SalesInvoiceHeader GetSalesInvoiceByNo(string no);
         void UpdateSalesInvoice(SalesInvoiceHeader salesInvoice);
+        /// <summary>The number the next issued invoice will take, without taking it.</summary>
+        string PeekNextInvoiceNumber();
         IEnumerable<SalesReceiptHeader> GetSalesReceipts();
         SalesReceiptHeader GetSalesReceiptById(int id);
         void UpdateSalesReceipt(SalesReceiptHeader salesReceipt);
@@ -40,8 +43,6 @@ namespace Services.Sales
         SalesOrderHeader GetSalesOrderById(int id);
         SalesOrderLine GetSalesOrderLineById(int id);
         SalesDeliveryHeader GetSalesDeliveryById(int id);
-        IEnumerable<Contact> GetContacts();
-        void SaveContact(Contact contact);
         ICollection<SalesInvoiceHeader> GetSalesInvoicesByCustomerId(int customerId, SalesInvoiceStatus status);
         ICollection<CustomerAllocation> GetCustomerAllocations(int customerId);
         void AddSalesQuote(SalesQuoteHeader salesQuoteHeader);
@@ -54,8 +55,8 @@ namespace Services.Sales
         Result<Dto.Sales.SalesInvoice> UpdateSalesInvoice(Dto.Sales.SalesInvoice salesInvoiceDto);
         Task<Result<Dto.Sales.SalesInvoice>> DeleteSalesInvoiceAsync(int id);
         void PostSalesInvoice(int invoiceId);
+        void VoidSalesInvoiceStock(SalesInvoiceHeader invoice);
+        List<string> GetSalesInvoiceStockWarnings(SalesInvoiceHeader invoice);
         Contact GetContacyById(int id);
-        CustomerContact GetCustomerContact(int id);
-        void BookQuotation(int id);
     }
 }

@@ -1,6 +1,7 @@
 //-----------------------------------------------------------------------
 // <copyright file="Customer.cs" company="AccountGo">
-// Copyright (c) AccountGo. All rights reserved.
+// Copyright (c) 2015-2026 Marvin Perez and AccountGo contributors.
+// SPDX-License-Identifier: AGPL-3.0-only
 // <author>Marvin Perez</author>
 // <date>1/11/2015 9:48:38 AM</date>
 // </copyright>
@@ -14,7 +15,7 @@ using System.Linq;
 namespace Core.Domain.Sales
 {
     [Table("Customer")]
-    public partial class Customer : BaseEntity
+    public partial class Customer : BaseEntity, ICompanyOwned
     {
         public Customer()
         {
@@ -24,6 +25,7 @@ namespace Core.Domain.Sales
             CustomerAllocations = new HashSet<CustomerAllocation>();
         }
 
+        public int CompanyId { get; set; }
         public string No { get; set; }
         public int? PartyId { get; set; }
         public int? PrimaryContactId { get; set; }
@@ -34,6 +36,8 @@ namespace Core.Domain.Sales
         public int? PromptPaymentDiscountAccountId { get; set; }
         public int? PaymentTermId { get; set; }
         public int? CustomerAdvancesAccountId { get; set; }
+        /// <summary>When it was archived: hidden when picking a client, its invoices untouched. Null while active.</summary>
+        public System.DateTime? ArchivedAt { get; set; }
 
         public virtual Party Party { get; set; }
         public virtual TaxGroup TaxGroup { get; set; }
@@ -60,7 +64,10 @@ namespace Core.Domain.Sales
             decimal totalInvoiceAmount = 0;
             decimal totalReceiptAmount = 0;
 
-            totalInvoiceAmount = SalesInvoices.Sum(i => i.SalesInvoiceLines.Sum(l => l.Amount * l.Quantity));
+            // Drafts and voided invoices were never issued, so they are not receivables.
+            totalInvoiceAmount = SalesInvoices
+                .Where(i => i.Status != SalesInvoiceStatus.Void && (i.Status != SalesInvoiceStatus.Draft || i.GeneralLedgerHeaderId.HasValue))
+                .Sum(i => i.SalesInvoiceLines.Sum(l => l.Amount * l.Quantity));
             totalReceiptAmount = SalesReceipts.Sum(r => r.SalesReceiptLines.Sum(l => l.Amount.GetValueOrDefault() * l.Quantity.GetValueOrDefault()));
 
             balance = totalInvoiceAmount - totalReceiptAmount;

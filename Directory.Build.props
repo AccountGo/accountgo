@@ -3,11 +3,13 @@
   <PropertyGroup>
     <Authors>Marvin Perez</Authors>
     <Product>AccountGo</Product>
+    <Description>Modern, Cloud-Native, Multi-Tenant Accounting &amp; ERP Platform</Description>
     <Copyright>Copyright © AccountGo</Copyright>
     <NeutralLanguage>en-US</NeutralLanguage>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
     <RepoRoot>$(MSBuildThisFileDirectory)</RepoRoot>
-    <PackageLicenseUrl>https://opensource.org/licenses/MIT</PackageLicenseUrl>
+    <PackageLicenseExpression>AGPL-3.0-only</PackageLicenseExpression>
+    <PackageLicenseUrl>https://www.gnu.org/licenses/agpl-3.0.html</PackageLicenseUrl>
     <PackageProjectUrl>https://github.com/AccountGo/accountgo</PackageProjectUrl>
     <RepositoryUrl>https://github.com/AccountGo/accountgo.git</RepositoryUrl>
     <RepositoryType>git</RepositoryType>

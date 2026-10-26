@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "skills": {
+    "dotnet-api-security": {
+      "source": "wshaddix/dotnet-skills",
+      "sourceType": "github",
+      "skillPath": "skills/dotnet-api-security/SKILL.md",
+      "computedHash": "0c6fb8822a1e85085fec61d220669356fd3c5ee88ee998c6692e8647f91eb067"
+    },
+    "security-scan": {
+      "source": "codewithmukesh/dotnet-claude-kit",
+      "sourceType": "github",
+      "skillPath": "skills/security-scan/SKILL.md",
+      "computedHash": "1fc9e2724d5aca0bb3c6a30e47560eadfdaf81ed59aad9b68a5eb84787b90000"
+    }
+  }
+}

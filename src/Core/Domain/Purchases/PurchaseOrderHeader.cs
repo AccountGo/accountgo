@@ -1,12 +1,13 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Core.Domain.Purchases
 {
     [Table("PurchaseOrderHeader")]
-    public class PurchaseOrderHeader : BaseEntity
+    public class PurchaseOrderHeader : BaseEntity, ICompanyOwned
     {
+        public int CompanyId { get; set; }
         public int? VendorId { get; set; }
         public string No { get; set; }
         public DateTime Date { get; set; }

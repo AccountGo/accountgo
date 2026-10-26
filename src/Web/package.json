@@ -1,0 +1,53 @@
+{
+  "name": "accountgo-web",
+  "description": "AccountGo modern web frontend built with React 19, TypeScript, Vite, and Tailwind CSS v4",
+  "version": "1.0.0",
+  "author": "Marvin Perez <support@accountgo.dev>",
+  "license": "AGPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AccountGo/accountgo.git",
+    "directory": "src/Web"
+  },
+  "keywords": [
+    "accounting",
+    "erp",
+    "react",
+    "typescript",
+    "tailwindcss",
+    "multi-tenant",
+    "financials"
+  ],
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "test": "node --experimental-strip-types --test test/*.test.mjs",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "@anter/ai-chat-sdk": "git+https://github.com/anter-ai/ai-chat-sdk.git#dist",
+    "clsx": "^2.1.1",
+    "lucide-react": "^1.59.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "react-router-dom": "^7.18.4",
+    "tailwind-merge": "^3.7.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261019.1",
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/node": "^26.6.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.4",
+    "wrangler": "^4.151.2"
+  },
+  "overrides": {
+    "undici": "^7.30.1"
+  }
+}

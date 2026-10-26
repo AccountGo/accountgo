@@ -1,6 +1,7 @@
 //-----------------------------------------------------------------------
 // <copyright file="ItemCategory.cs" company="AccountGo">
-// Copyright (c) AccountGo. All rights reserved.
+// Copyright (c) 2015-2026 Marvin Perez and AccountGo contributors.
+// SPDX-License-Identifier: AGPL-3.0-only
 // <author>Marvin Perez</author>
 // <date>1/11/2015 9:48:38 AM</date>
 // </copyright>
@@ -14,13 +15,14 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Core.Domain.Items
 {
     [Table("ItemCategory")]
-    public partial class ItemCategory : BaseEntity
+    public partial class ItemCategory : BaseEntity, ICompanyOwned
     {
         public ItemCategory()
         {
             Items = new HashSet<Item>();
         }        
         
+        public int CompanyId { get; set; }
         public ItemTypes ItemType { get; set; }
         public int? MeasurementId { get; set; }        
         public int? SalesAccountId { get; set; }

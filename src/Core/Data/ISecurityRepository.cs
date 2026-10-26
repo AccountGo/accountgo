@@ -1,4 +1,4 @@
-﻿using Core.Domain.Security;
+using Core.Domain.Security;
 using System.Collections.Generic;
 
 namespace Core.Data
@@ -11,7 +11,9 @@ namespace Core.Data
     {
         void AddUser(User user);
         User GetUser(string username);
+        User GetUserById(int id);
         IEnumerable<User> GetAllUsers();
+        void DeleteUser(int id);
     }
 
     public interface IRoleRepository<SecurityRole>

@@ -1,7 +1,0 @@
-﻿@using AccountGoWeb.Components.Pages.Contact
-@{
-    var partyId = Context.Request.Query["partyId"].ToString();
-    var partyType = Context.Request.Query["partyType"].ToString();
-}
-
-<component type="typeof(Contacts)" render-mode="Server" />

@@ -3,6 +3,7 @@ using Services.Dashboard;
 
 namespace Api.Controllers
 {
+    [Core.Tenancy.TenantScoped]
     [Route("api/[controller]")]
     public class DashboardController : BaseController
     {

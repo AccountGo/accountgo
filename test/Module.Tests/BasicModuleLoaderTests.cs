@@ -18,7 +18,7 @@ namespace Module.Tests
         {
             //Given
             Constants.CodeBaseRootPath = GetExecutingDirectorybyAppDomain();
-            var path = Path.Combine(Constants.CodeBaseRootPath + "Modules" + "\\SampleNetStandard20\\Debug\\netstandard2.0\\", "SampleNetStandard20.dll");
+            var path = Path.Combine(Constants.CodeBaseRootPath, "SampleNetStandard20.dll");
             var assembly = new CustomAssemblyLoadContext().LoadFromAssemblyPath(path);
             var type = assembly.GetType("SampleNetStandard20.Class1");
             //When
@@ -33,6 +33,7 @@ namespace Module.Tests
         {
             //Given
             Constants.CodeBaseRootPath = GetExecutingDirectorybyAppDomain();
+            Directory.CreateDirectory(Path.Combine(Constants.CodeBaseRootPath, "modules", "SampleNetStandard20"));
             AssemblyLoaderManager loader = new AssemblyLoaderManager();
             //When
             var (modules, plugins) = loader.GetAssembliesToRegister();
@@ -45,6 +46,7 @@ namespace Module.Tests
         {
             //Given
             Constants.CodeBaseRootPath = GetExecutingDirectorybyAppDomain();
+            Directory.CreateDirectory(Path.Combine(Constants.CodeBaseRootPath, "modules", "SampleNetStandard20"));
             var services = new ServiceCollection();
             services.AddModulesToCollection(Constants.CodeBaseRootPath);
             var sp = services.BuildServiceProvider();
