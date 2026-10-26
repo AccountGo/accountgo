@@ -49,3 +49,14 @@ notice, which is retained as that license requires:
 
 Third-party components bundled with or referenced by AccountGo are subject to
 their own licenses.
+
+-------------------------------------------------------------------------------
+Trademarks
+-------------------------------------------------------------------------------
+
+"AccountGo", "AccountGo Cloud", and the AccountGo logos are trademarks of
+Marvin Perez. The AGPL-3.0 license does not grant any rights to use these
+trademarks; per section 7(e) of the AGPL, those rights are withheld. See
+TRADEMARKS.md for the trademark policy, including the requirement that
+modified versions and third-party hosted services use a different name and
+remove the AccountGo logos.
