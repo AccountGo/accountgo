@@ -21,6 +21,7 @@ build/
 bld/
 [Bb]in/
 [Oo]bj/
+/modules/
 node_modules/
 
 # Roslyn cache directories
@@ -163,6 +164,7 @@ ClientBin/
 *.dbproj.schemaview
 *.pfx
 *.publishsettings
+/modules/
 node_modules/
 
 # RIA/Silverlight projects
@@ -210,9 +212,6 @@ FakesAssemblies/
 .build/
 .ionide/
 
-/src/test/Module.Tests/Modules/*
-/src/Api/Modules/*
-/src/Api/Plugins/*
 # /src/Api/Data/Migrations
 
 .vscode

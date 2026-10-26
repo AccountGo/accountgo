@@ -71,7 +71,12 @@ namespace Core.Entitlements
         IReadOnlyList<string> Modules,
         IReadOnlyList<string> SelfServicePlans,
         IReadOnlyList<ResourceUsage> Usage,
-        string? SupportEmail);
+        string? SupportEmail,
+        IReadOnlySet<string>? Features = null)
+    {
+        public IReadOnlySet<string> Features { get; init; } = Features ?? System.Collections.Immutable.ImmutableHashSet<string>.Empty;
+        public bool HasFeature(string feature) => Features.Contains(feature);
+    }
 
     /// <summary>Central entitlement gate: what a workspace may use and how much of it.</summary>
     public interface IEntitlementService
@@ -80,6 +85,9 @@ namespace Core.Entitlements
 
         /// <summary>Plan, tier, modules and usage for the workspace.</summary>
         EntitlementSnapshot Get(int companyId);
+
+        /// <summary>Checks whether the workspace is entitled to the given feature key (e.g. "mfa").</summary>
+        bool HasFeature(int companyId, string feature) => Get(companyId).HasFeature(feature);
 
         /// <summary>Throws <see cref="QuotaExceededException"/> when creating <paramref name="count"/> more would pass the limit.
         /// <paramref name="count"/> 0 checks that the workspace is not already over it.</summary>
