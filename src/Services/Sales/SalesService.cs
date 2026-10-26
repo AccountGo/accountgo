@@ -734,41 +734,6 @@ namespace Services.Sales
             return _salesDeliveryRepo.GetById(id);
         }
 
-        public IEnumerable<Contact> GetContacts()
-        {
-            var query = from f in _contactRepo.Table
-                        select f;
-            return query;
-        }
-
-        //public int SaveContact(Contact contact)
-        //{
-        //    _contactRepo.Insert(contact);
-        //    return contact.Id;
-        //}
-
-        public void SaveContact(Contact contact)
-        {
-            try
-            {
-                if (contact.Id > 0)
-                {
-                    _contactRepo.Update(contact);
-
-                }
-                else
-                {
-                    _contactRepo.Insert(contact);
-                }
-
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex.Message);
-            }
-
-        }
-
         public ICollection<SalesInvoiceHeader> GetSalesInvoicesByCustomerId(int customerId, SalesInvoiceStatus status)
         {
             var query = from invoice in _salesInvoiceRepo.Table
@@ -1235,22 +1200,5 @@ namespace Services.Sales
                 .FirstOrDefault();
             return contact;
         }
-
-        public CustomerContact GetCustomerContact(int id)
-        {
-            return _customerContactRepo.GetById(id);
-
-
-        }
-
-        public void BookQuotation(int id)
-        {
-            var quoatation = _salesQuoteRepo.GetById(id);
-
-            quoatation.Status = SalesQuoteStatus.Open;
-            _salesQuoteRepo.Update(quoatation);
-
-        }
-
     }
 }
