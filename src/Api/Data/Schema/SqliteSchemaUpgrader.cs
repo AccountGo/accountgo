@@ -213,7 +213,8 @@ namespace Api.Data.Schema
                     new[] { "GeneralLedgerHeader", "SourceDocumentId", "INTEGER NULL" },
                     new[] { "GeneralLedgerHeader", "ReversedGeneralLedgerHeaderId", "INTEGER NULL" },
                     new[] { "CustomerAllocation", "GeneralLedgerHeaderId", "INTEGER NULL" },
-                    new[] { "Company", "Tier", "TEXT NULL" }
+                    new[] { "Company", "Tier", "TEXT NULL" },
+                    new[] { "Account", "ArchivedAt", "TEXT NULL" }
                 };
                 var added = new HashSet<string>();
                 foreach (var column in columns)

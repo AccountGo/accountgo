@@ -38,6 +38,7 @@ namespace Core.Domain.Financials
         public string Description { get; set; }
         public bool IsCash { get; set; }
         public bool IsContraAccount { get; set; }
+        public DateTime? ArchivedAt { get; set; }
         [Column(TypeName = "timestamp")]
         [DatabaseGenerated(DatabaseGeneratedOption.Computed)]
         [MaxLength(8)]

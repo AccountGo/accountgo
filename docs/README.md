@@ -17,4 +17,5 @@ Please refer to the main [AccountGo Project README](../README.md) at the reposit
 - [Company onboarding implementation plan](./onboarding/company-onboarding-implementation-plan.md)
 - [Chart-of-accounts templates](./accounting/coa-register.md#6-chart-of-accounts-templates)
 - [Chart of accounts import, export & lifecycle requirements](./accounting/coa-import-export-requirements.md)
+- [COA format adapters (AccountGo / Xero / QBO)](./accounting/format-adapters.md)
 - [AccountGo Assistant (AI chat)](./assistant.md)

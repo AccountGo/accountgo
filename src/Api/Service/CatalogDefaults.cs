@@ -147,7 +147,8 @@ namespace Api.Service
         public static IEnumerable<object> GetPostableSalesAccounts(Services.Financial.IFinancialService financialService, ApiDbContext db)
         {
             return financialService.GetAccounts()
-                .Where(a => (a.AccountClassId == (int)AccountClasses.Revenue || a.AccountCode.StartsWith("4"))
+                .Where(a => a.ArchivedAt == null
+                    && (a.AccountClassId == (int)AccountClasses.Revenue || a.AccountCode.StartsWith("4"))
                     && !db.Accounts.Any(child => child.ParentAccountId == a.Id))
                 .OrderBy(a => a.AccountCode)
                 .Select(a => new

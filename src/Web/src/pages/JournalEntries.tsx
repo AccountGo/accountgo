@@ -17,7 +17,7 @@ export interface JournalEntry {
   posted: boolean | null;
   journalEntryLines: JournalLine[];
 }
-interface JournalAccount { id: number; accountCode: string; accountName: string; canPost: boolean; childAccounts: JournalAccount[] }
+interface JournalAccount { id: number; accountCode: string; accountName: string; canPost: boolean; archived?: boolean; childAccounts: JournalAccount[] }
 type Fetcher = (url: string, init?: RequestInit) => Promise<Response>;
 
 export function journalTotals(entry: JournalEntry) {
@@ -84,7 +84,7 @@ export function JournalEditor({ initial, accounts, canCreate, canPost, fetcher, 
           <tbody>{entry.journalEntryLines.map((line, index) => <tr key={index}>
             <td className="min-w-56 p-2"><select aria-label={`Account line ${index + 1}`} required disabled={!editable} className={inputClass} value={line.accountId || ''}
               onChange={event => updateLine(index, { accountId: Number(event.target.value) })}>
-              <option value="">Select account</option>{accounts.filter(a => a.canPost || a.id === line.accountId).map(account =>
+              <option value="">Select account</option>{accounts.filter(a => (a.canPost || a.id === line.accountId) && (!a.archived || a.id === line.accountId)).map(account =>
                 <option key={account.id} value={account.id}>{account.accountCode} - {account.accountName}</option>)}
             </select></td>
             <td className="p-2"><select aria-label={`Side line ${index + 1}`} disabled={!editable} className={inputClass} value={line.drCr} onChange={event => updateLine(index, { drCr: Number(event.target.value) })}>

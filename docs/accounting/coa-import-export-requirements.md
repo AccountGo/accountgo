@@ -240,11 +240,11 @@ After first post: Replace disabled with reason.
 - **Export Snapshot** — current balances (evolves today’s export).  
 - Prefer **server-side** generation for consistency, tenancy, and audit (client-only export may remain interim only during early phases).
 
-### 7.7 Future format adapters
+### 7.7 Format adapters
 
-- v1 ships **AccountGo Structure only**.  
-- Design import pipeline behind a **format adapter** interface (`Detect` → `MapToCanonical` → shared validate/commit).  
-- Xero / QuickBooks Online column maps are **documented stubs** in a later phase; full parsers are not required to close this epic.
+- Production import uses **AccountGo Structure** via `AccountGoV1CoaFormatAdapter`.  
+- Pipeline: **format adapter** interface (`Detect` → `MapToCanonical` → shared validate/commit). See [format-adapters.md](./format-adapters.md).  
+- Xero / QuickBooks Online are **detection stubs** (not installed); full parsers are out of epic scope.
 
 ---
 
@@ -312,11 +312,11 @@ Progressive disclosure: SME sees Add / Archive / Export; Import and Replace sit 
 
 | Phase | Deliverable | Done |
 |---|---|---|
-| **P0** | Structure export + sample template + `AccountGo-COA-v1` marker; Snapshot export (balances) | |
-| **P1** | `Archived` (or equivalent) on `Account`; filter pickers; Add / Edit / Archive / Delete UI; protected-account messaging | |
-| **P2** | Append + Upsert import with validate/preview/commit; harden delete so required controls are never nulled silently | |
-| **P3** | Replace (empty books) + control remapping; Owner gate; empty-books banner | |
-| **P4** | Format-adapter interface + stub docs for Xero/QBO column maps | |
+| **P0** | Structure export + sample template + `AccountGo-COA-v1` marker; Snapshot export (balances) | **Done**<br>Server-side Structure CSV (`# AccountGo-COA-v1`) without balances, sample Structure template, and Snapshot CSV (`# AccountGo-COA-Snapshot-v1`) with balances.<br>Integrated into export menu on `/financials/accounts` and backed by API endpoints with `financials.accounts.view`/`manage` permission gating. |
+| **P1** | `Archived` (or equivalent) on `Account`; filter pickers; Add / Edit / Archive / Delete UI; protected-account messaging | **Done**<br>Added `ArchivedAt` schema & endpoints, hardened delete against silent FK nulling (GLS, Tax, Bank, children, party references), and filtered out archived accounts in doc/line pickers.<br>Added Add/Edit modal dialogs, Archive/Unarchive actions, safe delete flows, actionable protection block dialogs, and status badges on Chart of Accounts page. |
+| **P2** | Append + Upsert import with validate/preview/commit; harden delete so required controls are never nulled silently | **Done**<br>Implemented server-side Validate and atomic Commit endpoints supporting Append and Upsert modes with format verification, class change & protected archive blocks, and cycle detection.<br>Built multi-step Web Import Wizard modal with preview badges, file/row validation, error report CSV download, treegrid refresh, and permissions gating (`financials.accounts.manage`). |
+| **P3** | Replace (empty books) + control remapping; Owner gate; empty-books banner | **Done**<br>Implemented atomic empty-books Replace mode hard-blocked on posted transactions, comprehensive control remapping (GLS, active/inactive Taxes & Banks), doomed account FK validation against catalog & parties, and Owner-only gating for Replace and Upsert Retire-Missing.<br>Added Empty-Books banner and Replace mode affordances, Owner-only Retire-Missing option, and required Control Role Remapping table grid in Web Import Wizard. |
+| **P4** | Format-adapter interface + stub docs for Xero/QBO column maps | **Done**<br>Introduced `ICoaFormatAdapter` / registry Detect→MapToCanonical seam; production `AccountGo-COA-v1` adapter; Xero & QBO detection stubs with “adapter not installed” errors.<br>Documented column/class maps in [format-adapters.md](./format-adapters.md); import pipeline still rejects Snapshot/balance files per §8. |
 | **Later** | Opening-balance / conversion import epic | |
 
 Mark a phase **Done** in this table with a two-line summary when that phase ships.

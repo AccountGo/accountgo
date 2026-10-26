@@ -750,7 +750,8 @@ namespace Api.Controllers
         private IQueryable<Core.Domain.Financials.Account> BillAccountsQuery()
         {
             var receivables = _db.Customers.Where(c => c.AccountsReceivableAccountId != null).Select(c => c.AccountsReceivableAccountId!.Value);
-            return _db.Accounts.Where(a => (a.AccountClassId == (int)AccountClasses.Expense || a.AccountClassId == (int)AccountClasses.Assets)
+            return _db.Accounts.Where(a => a.ArchivedAt == null
+                && (a.AccountClassId == (int)AccountClasses.Expense || a.AccountClassId == (int)AccountClasses.Assets)
                 && !a.ChildAccounts.Any()
                 && !a.IsCash && !(a.ParentAccount != null && a.ParentAccount.IsCash)
                 && a.AccountCode != "10120" && !receivables.Contains(a.Id));
@@ -758,7 +759,7 @@ namespace Api.Controllers
 
         // Summary accounts such as 10110 can't take postings, so only postable cash accounts qualify.
         private IQueryable<Core.Domain.Financials.Account> PaymentAccountsQuery() =>
-            _db.Accounts.Where(a => !a.ChildAccounts.Any() && (a.IsCash || (a.ParentAccount != null && a.ParentAccount.IsCash)));
+            _db.Accounts.Where(a => a.ArchivedAt == null && !a.ChildAccounts.Any() && (a.IsCash || (a.ParentAccount != null && a.ParentAccount.IsCash)));
 
         private static Dto.Purchasing.BillAccount ToBillAccount(Core.Domain.Financials.Account account) => new()
         {

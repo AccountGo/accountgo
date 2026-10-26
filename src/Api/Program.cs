@@ -100,6 +100,10 @@ builder.Services.AddAuthorization(options =>
 });
 
 builder.Services.AddScoped<IFinancialService, FinancialService>();
+builder.Services.AddSingleton<Api.Service.Import.ICoaFormatAdapter, Api.Service.Import.AccountGoV1CoaFormatAdapter>();
+builder.Services.AddSingleton<Api.Service.Import.ICoaFormatAdapter, Api.Service.Import.XeroCoaFormatAdapter>();
+builder.Services.AddSingleton<Api.Service.Import.ICoaFormatAdapter, Api.Service.Import.QboCoaFormatAdapter>();
+builder.Services.AddSingleton<Api.Service.Import.ICoaFormatAdapterRegistry, Api.Service.Import.CoaFormatAdapterRegistry>();
 builder.Services.AddScoped<IAccountService, AccountService>();
 builder.Services.AddScoped<Api.Service.SalesInvoicePresentation>();
 builder.Services.AddScoped<Api.Service.D1Sync.ID1SyncContext, Api.Service.D1Sync.D1SyncContext>();

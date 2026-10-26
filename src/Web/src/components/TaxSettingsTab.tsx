@@ -24,6 +24,7 @@ interface AccountNode {
   accountName: string;
   accountClassId: number;
   canPost: boolean;
+  archived?: boolean;
   childAccounts?: AccountNode[];
 }
 
@@ -115,12 +116,12 @@ export const TaxSettingsTab: React.FC<TaxSettingsTabProps> = ({ canManage, hasFi
   }, [dialogOpen, dialogTaxId]);
 
   const salesAccounts = useMemo(
-    () => accounts.filter((account) => account.canPost && account.accountClassId === 2),
-    [accounts]
+    () => accounts.filter((account) => account.canPost && account.accountClassId === 2 && (!account.archived || account.id === draft?.salesAccountId)),
+    [accounts, draft?.salesAccountId]
   );
   const purchaseAccounts = useMemo(
-    () => accounts.filter((account) => account.canPost && (account.accountClassId === 1 || account.accountClassId === 5)),
-    [accounts]
+    () => accounts.filter((account) => account.canPost && (account.accountClassId === 1 || account.accountClassId === 5) && (!account.archived || account.id === draft?.purchaseAccountId)),
+    [accounts, draft?.purchaseAccountId]
   );
   const rows = useMemo(
     () => [...taxes].sort((a, b) => Number(a.isSystem) - Number(b.isSystem) || a.taxName.localeCompare(b.taxName)),
