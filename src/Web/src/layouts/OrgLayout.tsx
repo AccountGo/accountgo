@@ -234,43 +234,13 @@ export const OrgLayout: React.FC = () => {
 
   const updateSubscription = async (newPlan: PlanKey, newActiveModules?: ModuleKey[]) => {
     if (!currentOrg) return;
-    const planDefaults: Record<PlanKey, ModuleKey[]> = {
-      invoicing: ['sales', 'purchases'],
-      accounting: ['sales', 'financials', 'purchases', 'reports'],
-      enterprise: ['sales', 'financials', 'purchases', 'reports', 'inventory', 'donations', 'audit'],
-    };
-    const allowed = new Set(planDefaults[newPlan] || planDefaults.accounting);
-    const resolvedModules: ModuleKey[] = (newActiveModules || planDefaults[newPlan] || planDefaults.accounting)
-      .filter((moduleKey) => allowed.has(moduleKey));
-    if (!resolvedModules.includes('sales')) resolvedModules.unshift('sales');
-    // Invoicing always includes purchases (invoice + expense loop).
-    if (newPlan === 'invoicing' && !resolvedModules.includes('purchases')) {
-      resolvedModules.push('purchases');
-    }
-    const newSub: SubscriptionInfo = {
-      planId: newPlan,
-      planName: newPlan.charAt(0).toUpperCase() + newPlan.slice(1),
-      status: 'active',
-      activeModules: resolvedModules,
-    };
-    const updated = {
-      ...currentOrg,
-      plan: newPlan,
-      subscription: newSub,
-    };
-    setCurrentOrg(updated);
-    setAvailableOrgs((prev) =>
-      prev.map((o) => (o.id === updated.id ? updated : o))
-    );
-
+    // The server owns the plan → module rules: send the request, then apply only what it returns.
     const response = await authFetch('/api/Subscription/update', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        companyId: Number(currentOrg.id) || undefined,
-        slug: currentOrg.slug,
         plan: newPlan,
-        activeModules: resolvedModules,
+        activeModules: newActiveModules,
       }),
     });
     if (!response.ok) {
@@ -278,9 +248,30 @@ export const OrgLayout: React.FC = () => {
       try {
         const body = await response.json();
         if (body?.message) message = body.message;
+        else if (body?.detail) message = body.detail;
       } catch { /* keep default */ }
       throw new Error(message);
     }
+    const saved = await response.json() as {
+      plan: PlanKey;
+      subscriptionStatus: SubscriptionInfo['status'];
+      activeModules: ModuleKey[];
+    };
+    const newSub: SubscriptionInfo = {
+      planId: saved.plan,
+      planName: saved.plan.charAt(0).toUpperCase() + saved.plan.slice(1),
+      status: saved.subscriptionStatus,
+      activeModules: saved.activeModules,
+    };
+    const updated = {
+      ...currentOrg,
+      plan: saved.plan,
+      subscription: newSub,
+    };
+    setCurrentOrg(updated);
+    setAvailableOrgs((prev) =>
+      prev.map((o) => (o.id === updated.id ? updated : o))
+    );
   };
 
   // 1. Loading Skeleton State (Border-Less)

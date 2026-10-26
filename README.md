@@ -166,7 +166,6 @@ accountgo/
 │   ├── Api/                    # ASP.NET Core Web API (.NET 10) & Worker adapter
 │   ├── Core/                   # Domain entities, value objects, and interfaces
 │   ├── Dto/                    # Data Transfer Objects for API contracts
-│   ├── Infrastructure/         # Assembly loading, module extensions, shared utilities
 │   ├── MigrationService/       # EF Core automated database migration runner
 │   ├── Services/               # Business logic, repositories, and domain services
 │   ├── src.AppHost/            # .NET Aspire local orchestration host
@@ -174,8 +173,7 @@ accountgo/
 │   └── Web/                    # React 19 + TypeScript + Vite + Tailwind CSS v4 SPA
 └── test/
     ├── AccountGo.BackendTests/ # Domain and accounting logic tests
-    ├── AccountGo.ServicesTests/# Security, Administration, and Donations service tests
-    └── Module.Tests/           # Dynamic module loader and plugin tests
+    └── AccountGo.ServicesTests/# Security, Administration, and Donations service tests
 ```
 
 ---

@@ -7,49 +7,29 @@ import { renderToStaticMarkup } from 'react-dom/server';
 const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false }, appType: 'custom' });
 after(() => server.close());
 
-const {
-  PLAN_INCLUDED_MODULES,
-  isModuleIncludedInPlan,
-  sanitizeModulesForPlan,
-  SubscriptionSettingsTab,
-} = await server.ssrLoadModule('/src/components/SubscriptionSettingsTab.tsx');
+const { SubscriptionSettingsTab } = await server.ssrLoadModule('/src/components/SubscriptionSettingsTab.tsx');
+const { primePlanCatalog } = await server.ssrLoadModule('/src/lib/usePlanCatalog.ts');
+const { AuthProvider } = await server.ssrLoadModule('/src/auth/AuthContext.tsx');
 
-test('modules are ordered by subscription tier and plan inclusion matches the matrix', () => {
-  assert.deepEqual(PLAN_INCLUDED_MODULES.invoicing, ['sales', 'purchases']);
-  assert.deepEqual(PLAN_INCLUDED_MODULES.accounting, ['sales', 'financials', 'purchases', 'reports']);
-  assert.deepEqual(PLAN_INCLUDED_MODULES.enterprise, [
-    'sales', 'financials', 'purchases', 'reports', 'inventory', 'donations', 'audit',
-  ]);
-  assert.equal(isModuleIncludedInPlan('accounting', 'reports'), true);
-  assert.equal(isModuleIncludedInPlan('accounting', 'inventory'), false);
-  assert.equal(isModuleIncludedInPlan('invoicing', 'financials'), false);
-  assert.equal(isModuleIncludedInPlan('enterprise', 'audit'), true);
-});
+// Shape of GET /api/Subscription/plans. The plan → module matrix itself is tested server-side
+// (SubscriptionPlanTests, CompanyModulesTests); the SPA only renders what the server returns.
+const CATALOG = [
+  { key: 'invoicing', name: 'Invoicing', description: 'Invoices and bills.', includedModules: ['sales', 'purchases'], requiredModules: ['sales', 'purchases'], monthlyPrice: 15 },
+  { key: 'accounting', name: 'Accounting', description: 'Full bookkeeping.', includedModules: ['sales', 'financials', 'purchases', 'reports'], requiredModules: ['sales'], monthlyPrice: 39 },
+  { key: 'enterprise', name: 'Enterprise', description: 'Everything.', includedModules: ['sales', 'financials', 'purchases', 'reports', 'inventory', 'donations', 'audit'], requiredModules: ['sales'], monthlyPrice: 99 },
+];
 
-test('sanitizeModulesForPlan drops modules outside the selected tier and keeps sales and purchases', () => {
-  assert.deepEqual(
-    sanitizeModulesForPlan('accounting', ['sales', 'financials', 'inventory', 'audit']),
-    ['sales', 'financials'],
-  );
-  assert.deepEqual(sanitizeModulesForPlan('invoicing', ['financials']), ['sales', 'purchases']);
-  assert.deepEqual(
-    sanitizeModulesForPlan('enterprise', ['reports', 'donations']),
-    ['sales', 'reports', 'donations'],
-  );
-});
-
-test('subscription settings locks modules outside the current plan', () => {
-  const html = renderToStaticMarkup(createElement(SubscriptionSettingsTab, {
+const render = (planId, activeModules) => renderToStaticMarkup(createElement(AuthProvider, null,
+  createElement(SubscriptionSettingsTab, {
     tenantContext: {
-      subscription: {
-        planId: 'accounting',
-        planName: 'Accounting',
-        status: 'active',
-        activeModules: ['sales', 'financials', 'purchases', 'reports'],
-      },
+      subscription: { planId, planName: planId, status: 'active', activeModules },
       updateSubscription: async () => {},
     },
-  }));
+  })));
+
+test('subscription settings locks modules outside the current plan', () => {
+  primePlanCatalog(CATALOG);
+  const html = render('accounting', ['sales', 'financials', 'purchases', 'reports']);
   assert.match(html, /General Ledger &amp; Banking[\s\S]*?Financial Reports[\s\S]*?Inventory &amp; Items/);
   assert.match(html, /Inventory &amp; Items[\s\S]*?Upgrade/);
   assert.match(html, /Donations &amp; Non-Profit[\s\S]*?Upgrade/);
@@ -57,4 +37,19 @@ test('subscription settings locks modules outside the current plan', () => {
   assert.match(html, /Inventory &amp; Items[\s\S]*?aria-disabled="true"/);
   assert.match(html, /General Ledger &amp; Banking[\s\S]*?aria-disabled="false"/);
   assert.ok(html.includes('of 4 plan modules active'));
+});
+
+test('required modules from the server catalog stay on even when client state omits them', () => {
+  primePlanCatalog(CATALOG);
+  const html = render('invoicing', ['sales']);
+  assert.ok(html.includes('<strong>2</strong> of 2 plan modules active'));
+  assert.match(html, /aria-label="Purchases &amp; Bills is always on"/);
+});
+
+test('plan cards come from the server catalog', () => {
+  primePlanCatalog(CATALOG.filter((plan) => plan.key !== 'enterprise'));
+  const html = render('accounting', ['sales', 'financials', 'purchases', 'reports']);
+  assert.ok(html.includes('Switch to Invoicing'));
+  assert.ok(!html.includes('Switch to Enterprise'));
+  primePlanCatalog(null);
 });

@@ -57,6 +57,12 @@ namespace Core.Domain
                 .ToList();
         }
 
+        /// <summary>Every plan key the product knows. Anything else is rejected rather than silently mapped.</summary>
+        public static readonly IReadOnlyList<string> KnownPlans = new[] { "invoicing", "accounting", "enterprise" };
+
+        public static bool IsKnownPlan(string? plan) =>
+            plan != null && KnownPlans.Contains(plan.Trim(), StringComparer.OrdinalIgnoreCase);
+
         /// <summary>Modules included by subscription tier, ordered Invoicing → Accounting → Enterprise.</summary>
         public static List<string> ModulesForPlan(string? plan) => (plan?.ToLowerInvariant()) switch
         {

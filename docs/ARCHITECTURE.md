@@ -23,7 +23,7 @@ flowchart TD
     subgraph Backend[".NET 10 Backend Core"]
         API["AccountGo.Api (REST Controllers & Middleware)"]
         Core["AccountGo.Core (Domain Entities & Business Services)"]
-        Infra["AccountGo.Infrastructure (EF Core & Data Access)"]
+        Infra["AccountGo.Services (Business Services & EF Core Data Access)"]
         ServiceDefaults["AccountGo.ServiceDefaults (OpenTelemetry & Health)"]
     end
 
@@ -55,14 +55,14 @@ The backend follows the principles of **Clean Architecture** and **Domain-Driven
 src/
 ├── Api/                 # Presentation layer: ASP.NET Core controllers, middleware, auth handlers
 ├── Core/                # Domain layer: Entities, value objects, domain interfaces, business rules
-├── Infrastructure/      # Data access layer: EF Core DbContext, repositories, external integrations
+├── Services/            # Application services and repositories over EF Core (SQLite, Cloudflare D1, SQL Server)
 ├── Aspire/              # Orchestration & App Host (.NET Aspire 10)
 └── src.ServiceDefaults/ # Shared telemetry, OpenTelemetry, logging, and health check endpoints
 ```
 
 ### Dependency Rules
 - **AccountGo.Core**: Has **zero** external dependencies on databases or UI frameworks. Contains core accounting rules (double-entry bookkeeping, ledger validation, tax calculation, financial year boundaries).
-- **AccountGo.Infrastructure**: Implements domain repository interfaces using Entity Framework Core. Handles connection multiplexing across SQLite, Cloudflare D1, and SQL Server.
+- **AccountGo.Services**: Implements business services and repositories using Entity Framework Core. Handles connection multiplexing across SQLite, Cloudflare D1, and SQL Server.
 - **AccountGo.Api**: Orchestrates incoming HTTP requests, performs authentication and claims resolution, binds multi-tenant context, and delegates business operations to domain services.
 
 ---

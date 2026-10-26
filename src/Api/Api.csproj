@@ -13,7 +13,6 @@
     <ProjectReference Include="../Dto/Dto.csproj" />
     <ProjectReference Include="../Services/Services.csproj" />
     <ProjectReference Include="../src.ServiceDefaults/src.ServiceDefaults.csproj" />
-    <ProjectReference Include="../Infrastructure/Infrastructure.csproj" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="AutoMapper.Extensions.Microsoft.DependencyInjection" Version="12.0.1" />

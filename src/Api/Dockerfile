@@ -10,7 +10,6 @@ COPY src/Api/Api.csproj src/Api/
 COPY src/Core/Core.csproj src/Core/
 COPY src/Dto/Dto.csproj src/Dto/
 COPY src/Services/Services.csproj src/Services/
-COPY src/Infrastructure/Infrastructure.csproj src/Infrastructure/
 COPY src/src.ServiceDefaults/src.ServiceDefaults.csproj src/src.ServiceDefaults/
 
 # Restore dependencies
@@ -21,7 +20,6 @@ COPY src/Api/ src/Api/
 COPY src/Core/ src/Core/
 COPY src/Dto/ src/Dto/
 COPY src/Services/ src/Services/
-COPY src/Infrastructure/ src/Infrastructure/
 COPY src/src.ServiceDefaults/ src/src.ServiceDefaults/
 
 # Publish release artifacts, compiled ahead of time (ReadyToRun) for the target platform: the container starts on a

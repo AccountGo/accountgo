@@ -98,9 +98,9 @@ namespace Api.Controllers
                 return Problem(statusCode: 400, title: "Company Name Required", detail: "Company name is required.");
             var slug = WorkspaceService.NormalizeSlug(string.IsNullOrWhiteSpace(request.Slug) ? request.Name : request.Slug);
             var currency = (request.Currency ?? "USD").Trim().ToUpperInvariant();
-            var plan = (request.Plan ?? "accounting").ToLowerInvariant();
+            var plan = (request.Plan ?? "accounting").Trim().ToLowerInvariant();
             if (slug.Length == 0 || slug.Length > 100 || !System.Text.RegularExpressions.Regex.IsMatch(currency, "^[A-Z]{3}$") ||
-                !new[] { "invoicing", "accounting", "enterprise" }.Contains(plan))
+                !Company.IsKnownPlan(plan))
                 return Problem(statusCode: 400, title: "Invalid workspace settings");
 
             var options = ToOptions(request);

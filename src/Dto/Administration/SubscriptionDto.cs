@@ -18,7 +18,7 @@ namespace Dto.Subscription
     {
         public int? CompanyId { get; set; }
         public string? Slug { get; set; }
-        public string Plan { get; set; } = "invoicing";
+        public string? Plan { get; set; }
         public List<string>? ActiveModules { get; set; }
     }
 
@@ -28,6 +28,8 @@ namespace Dto.Subscription
         public string Name { get; set; } = string.Empty;
         public string Description { get; set; } = string.Empty;
         public List<string> IncludedModules { get; set; } = new();
+        /// <summary>Included modules that cannot be switched off on this plan.</summary>
+        public List<string> RequiredModules { get; set; } = new();
         public decimal MonthlyPrice { get; set; }
     }
 

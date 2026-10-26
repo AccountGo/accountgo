@@ -15,6 +15,7 @@ import {
   Lock,
 } from 'lucide-react';
 import { ModuleKey, PlanKey, TenantContextType } from '../types';
+import { usePlanCatalog } from '../lib/usePlanCatalog';
 
 interface SubscriptionSettingsTabProps {
   tenantContext: TenantContextType;
@@ -22,19 +23,6 @@ interface SubscriptionSettingsTabProps {
 
 /** First subscription tier that includes the module (Invoicing → Accounting → Enterprise). */
 export type ModuleTier = 'invoicing' | 'accounting' | 'enterprise';
-
-export const PLAN_INCLUDED_MODULES: Record<PlanKey, ModuleKey[]> = {
-  invoicing: ['sales', 'purchases'],
-  accounting: ['sales', 'financials', 'purchases', 'reports'],
-  enterprise: ['sales', 'financials', 'purchases', 'reports', 'inventory', 'donations', 'audit'],
-};
-
-/** Modules that cannot be turned off for a given plan (mirrors Company.IsRequiredModule). */
-export function isRequiredModuleForPlan(plan: PlanKey, moduleKey: ModuleKey): boolean {
-  if (moduleKey === 'sales') return true;
-  if (moduleKey === 'purchases' && plan === 'invoicing') return true;
-  return false;
-}
 
 const TIER_LABEL: Record<ModuleTier, string> = {
   invoicing: 'Invoicing',
@@ -103,56 +91,21 @@ const MODULES_CATALOG: Array<{
   },
 ];
 
-const PLANS: Array<{
-  key: PlanKey;
-  name: string;
-  price: string;
-  description: string;
-  badge?: string;
-}> = [
-  {
-    key: 'invoicing',
-    name: 'Invoicing',
-    price: '$15',
-    description: 'Invoices and expense bills for freelancers and solopreneurs — without full accounting.',
-  },
-  {
-    key: 'accounting',
-    name: 'Accounting',
-    price: '$39',
-    description: 'Full double-entry bookkeeping, bank reconciliation, and tax reports.',
-    badge: 'Most Popular',
-  },
-  {
-    key: 'enterprise',
-    name: 'Enterprise',
-    price: '$99',
-    description: 'Complete ERP suite with inventory, non-profit tools, audit logs, and whitelabeling.',
-  },
-];
-
-export function isModuleIncludedInPlan(plan: PlanKey, moduleKey: ModuleKey): boolean {
-  return PLAN_INCLUDED_MODULES[plan]?.includes(moduleKey) ?? false;
-}
-
-export function sanitizeModulesForPlan(plan: PlanKey, modules: ModuleKey[]): ModuleKey[] {
-  const allowed = new Set(PLAN_INCLUDED_MODULES[plan] || PLAN_INCLUDED_MODULES.accounting);
-  const next = PLAN_INCLUDED_MODULES[plan].filter(
-    (key) => isRequiredModuleForPlan(plan, key) || modules.includes(key),
-  ).filter((key) => allowed.has(key));
-  return next.length ? next : PLAN_INCLUDED_MODULES[plan].filter((key) => isRequiredModuleForPlan(plan, key));
-}
+/** Display-only extras; names, descriptions, modules and prices come from the server catalog. */
+const PLAN_BADGES: Partial<Record<PlanKey, string>> = {
+  accounting: 'Most Popular',
+};
 
 export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = ({
   tenantContext,
 }) => {
   const { subscription, updateSubscription } = tenantContext;
+  const catalog = usePlanCatalog();
   const currentPlan = subscription?.planId || 'accounting';
-  const planModules = PLAN_INCLUDED_MODULES[currentPlan] || PLAN_INCLUDED_MODULES.accounting;
-  // Always surface plan-required cores (sales; purchases on Invoicing) even if client state lags.
-  const activeModules = sanitizeModulesForPlan(
-    currentPlan,
-    (subscription?.activeModules || []).filter((m) => isModuleIncludedInPlan(currentPlan, m)),
+  const planModules = catalog.includedModules(currentPlan);
+  // Plan-required cores always show as on; the server enforces the same rule.
+  const activeModules = planModules.filter(
+    (m) => catalog.isRequired(currentPlan, m) || (subscription?.activeModules || []).includes(m),
   );
 
   const [saving, setSaving] = useState(false);
@@ -160,18 +113,15 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleToggleModule = async (moduleKey: ModuleKey) => {
-    if (isRequiredModuleForPlan(currentPlan, moduleKey)) return;
-    if (!isModuleIncludedInPlan(currentPlan, moduleKey)) return;
+    if (catalog.isRequired(currentPlan, moduleKey)) return;
+    if (!catalog.isIncluded(currentPlan, moduleKey)) return;
     if (!updateSubscription) return;
 
     setSaving(true);
     setErrorMessage(null);
-    const newModules = sanitizeModulesForPlan(
-      currentPlan,
-      activeModules.includes(moduleKey)
-        ? activeModules.filter((m) => m !== moduleKey)
-        : [...activeModules, moduleKey],
-    );
+    const newModules = activeModules.includes(moduleKey)
+      ? activeModules.filter((m) => m !== moduleKey)
+      : [...activeModules, moduleKey];
 
     try {
       await updateSubscription(currentPlan, newModules);
@@ -190,8 +140,8 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
     setErrorMessage(null);
 
     try {
-      // Switching plans resets to that tier's included modules.
-      await updateSubscription(planKey, [...PLAN_INCLUDED_MODULES[planKey]]);
+      // No module list: the server resets to that plan's included modules.
+      await updateSubscription(planKey);
       setSuccessMessage(`Switched to the ${planKey.toUpperCase()} plan.`);
       setTimeout(() => setSuccessMessage(null), 2500);
     } catch (error) {
@@ -263,9 +213,9 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
           {MODULES_CATALOG.map((mod) => {
             const Icon = mod.icon;
-            const inPlan = isModuleIncludedInPlan(currentPlan, mod.key);
+            const inPlan = catalog.isIncluded(currentPlan, mod.key);
             const locked = !inPlan;
-            const required = isRequiredModuleForPlan(currentPlan, mod.key);
+            const required = catalog.isRequired(currentPlan, mod.key);
             const isEnabled = inPlan && (activeModules.includes(mod.key) || required);
             const toggleDisabled = locked || mod.isCore || required || saving;
 
@@ -361,10 +311,16 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
           </p>
         </div>
 
+        {catalog.error && (
+          <div role="alert" className="p-3 rounded-xl bg-red-500/10 text-red-400 text-xs font-semibold">
+            {catalog.error}
+          </div>
+        )}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
-          {PLANS.map((plan) => {
+          {(catalog.plans || []).map((plan) => {
             const isCurrent = currentPlan === plan.key;
-            const includedModules = PLAN_INCLUDED_MODULES[plan.key];
+            const includedModules = plan.includedModules;
+            const badge = PLAN_BADGES[plan.key];
 
             return (
               <div
@@ -375,9 +331,9 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
                     : 'bg-[var(--bg-subtle)] hover:bg-[var(--bg-surface-hover)] border border-transparent'
                 }`}
               >
-                {plan.badge && (
+                {badge && (
                   <div className="absolute -top-2.5 right-4 px-2 py-0.5 rounded-full bg-[var(--brand-primary)] text-white text-[10px] font-bold uppercase tracking-wider shadow">
-                    {plan.badge}
+                    {badge}
                   </div>
                 )}
 
@@ -385,7 +341,7 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
                   <div className="flex items-baseline justify-between mb-2">
                     <h4 className="text-sm font-bold text-[var(--text-main)]">{plan.name}</h4>
                     <span className="text-lg font-extrabold text-[var(--text-main)]">
-                      {plan.price}
+                      ${plan.monthlyPrice}
                       <span className="text-xs font-normal text-[var(--text-muted)]">/mo</span>
                     </span>
                   </div>

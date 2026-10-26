@@ -1,7 +1,0 @@
-<Project>
-  <ItemGroup>
-    <Content Include="modules.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-  </ItemGroup>
-</Project>

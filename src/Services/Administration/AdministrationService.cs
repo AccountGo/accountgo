@@ -274,7 +274,14 @@ namespace Services.Administration
                 throw new Core.Tenancy.TenantEntityNotFoundException(nameof(Company), companyId);
             }
 
-            company.Plan = dto.Plan?.ToLowerInvariant() ?? "invoicing";
+            // Null/blank plan = keep the current plan and only change modules. Unknown plans are rejected.
+            if (!string.IsNullOrWhiteSpace(dto.Plan))
+            {
+                if (!Company.IsKnownPlan(dto.Plan))
+                    throw new ArgumentException($"Unknown plan '{dto.Plan}'.");
+                company.Plan = dto.Plan.Trim().ToLowerInvariant();
+            }
+            company.Plan ??= "accounting";
             var planModules = Company.ModulesForPlan(company.Plan);
             if (dto.ActiveModules != null && dto.ActiveModules.Count > 0)
             {
@@ -319,7 +326,7 @@ namespace Services.Administration
 
         public List<PlanDefinitionDto> GetPlanDefinitions()
         {
-            return new List<PlanDefinitionDto>
+            var plans = new List<PlanDefinitionDto>
             {
                 new PlanDefinitionDto
                 {
@@ -346,6 +353,9 @@ namespace Services.Administration
                     MonthlyPrice = 99m
                 }
             };
+            foreach (var plan in plans)
+                plan.RequiredModules = plan.IncludedModules.Where(m => Company.IsRequiredModule(plan.Key, m)).ToList();
+            return plans;
         }
 
         public List<ModuleDefinitionDto> GetModuleDefinitions()

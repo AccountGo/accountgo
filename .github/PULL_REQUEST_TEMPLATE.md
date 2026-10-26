@@ -18,7 +18,7 @@ Closes # (issue number if applicable)
 
 - [ ] Backend API (`src/Api`)
 - [ ] Core Domain & Services (`src/Core`)
-- [ ] Infrastructure & Persistence (`src/Infrastructure`)
+- [ ] Services & Persistence (`src/Services`, `src/Api/Data`)
 - [ ] Frontend Web SPA (`src/Web`)
 - [ ] Documentation (`docs/`)
 - [ ] Cloudflare / Deployment configurations

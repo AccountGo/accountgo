@@ -14,7 +14,7 @@ export function useSubscription() {
     hasModule,
     updateSubscription,
     activeModules: subscription?.activeModules || [],
-    planId: subscription?.planId || 'invoicing',
+    planId: subscription?.planId || 'accounting',
   };
 }
 
