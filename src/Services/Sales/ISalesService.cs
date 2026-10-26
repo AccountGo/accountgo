@@ -42,8 +42,6 @@ namespace Services.Sales
         SalesOrderHeader GetSalesOrderById(int id);
         SalesOrderLine GetSalesOrderLineById(int id);
         SalesDeliveryHeader GetSalesDeliveryById(int id);
-        IEnumerable<Contact> GetContacts();
-        void SaveContact(Contact contact);
         ICollection<SalesInvoiceHeader> GetSalesInvoicesByCustomerId(int customerId, SalesInvoiceStatus status);
         ICollection<CustomerAllocation> GetCustomerAllocations(int customerId);
         void AddSalesQuote(SalesQuoteHeader salesQuoteHeader);
@@ -59,7 +57,5 @@ namespace Services.Sales
         void VoidSalesInvoiceStock(SalesInvoiceHeader invoice);
         List<string> GetSalesInvoiceStockWarnings(SalesInvoiceHeader invoice);
         Contact GetContacyById(int id);
-        CustomerContact GetCustomerContact(int id);
-        void BookQuotation(int id);
     }
 }

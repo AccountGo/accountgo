@@ -2309,46 +2309,6 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("GetMonthlySales")] // api/Sales/GetMonthlySales
-        public IActionResult GetMonthlySales()
-        {
-            var salesOrders = _salesService.GetSalesInvoices().Where(a => a.GeneralLedgerHeaderId != null);
-
-            IList<Dto.Sales.MonthlySales> monthlySalesDto = new List<Dto.Sales.MonthlySales>();
-
-            IList<Dto.Sales.MonthlySales> finalmonthlySalesDto = new List<Dto.Sales.MonthlySales>();
-
-            foreach (var item in salesOrders)
-            {
-                foreach (var line in item.SalesInvoiceLines)
-                {
-                    var dtoSales = new MonthlySales();
-                    dtoSales.Month = item.Date.Month.ToString();
-                    dtoSales.Amount = line.Amount * line.Quantity;
-                    monthlySalesDto.Add(dtoSales);
-                }
-            }
-
-            var totalSales = monthlySalesDto.ToList().GroupBy(a => a.Month)
-            .Select(ms => new MonthlySales
-            {
-                Month = ms.First().Month,
-                Amount = ms.Sum(x => x.Amount),
-            }).ToList();
-
-            for (int i = 1; i <= DateTime.Now.Month; i++)
-            {
-                var sales = new MonthlySales();
-                var month = i + "/1/" + DateTime.Now.Year;
-                sales.Month = Convert.ToDateTime(month).ToString("MMMMM");
-                sales.Amount = totalSales.Where(a => a.Month == i.ToString()).Select(x => x.Amount).FirstOrDefault();
-                finalmonthlySalesDto.Add(sales);
-            }
-
-            return Json(finalmonthlySalesDto);
-        }
-
-        [HttpGet]
         [Route("SalesInvoiceForPrinting")]
         public IActionResult SalesInvoiceForPrinting(int id)
         {
@@ -2356,22 +2316,6 @@ namespace Api.Controllers
             return invoice == null
                 ? NotFound(new { message = $"Invoice #{id} not found." })
                 : Ok(invoice);
-        }
-
-        [HttpPost]
-        [Route("BookQuotation")]
-        [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesCreate)]
-        public IActionResult BookQuotation(int id)
-        {
-            try
-            {
-                _salesService.BookQuotation(id);
-                return new ObjectResult(Ok());
-            }
-            catch (Exception ex)
-            {
-                return new BadRequestObjectResult(ex.Message);
-            }
         }
     }
 }

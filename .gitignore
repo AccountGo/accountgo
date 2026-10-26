@@ -203,7 +203,6 @@ FakesAssemblies/
 **/src/[Ww]eb[Aa]pp/wwwroot/node_modules/*
 /src/Api/project.fragment.lock.json
 /src/Api/project.lock.json
-/wrap/Dto/project.json
 /global.json
 .DS_Store
 /src/out

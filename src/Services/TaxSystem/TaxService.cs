@@ -365,19 +365,5 @@ namespace Services.TaxSystem
 
             return taxes;
         }
-
-
-        public decimal GetSalesLineTaxAmount(decimal quantity, decimal amount, decimal discount, IEnumerable<Tax> taxes)
-        {
-            decimal lineTaxTotal = 0;
-            var gross = amount * quantity;
-            amount = gross - (discount > 0 ? gross * discount / 100m : 0);
-            foreach (var tax in taxes)
-            {
-                lineTaxTotal = lineTaxTotal + (amount - (amount / (1 + (tax.Rate / 100))));
-            }
-
-            return Math.Round(lineTaxTotal, 2, MidpointRounding.AwayFromZero);
-        }
     }
 }
