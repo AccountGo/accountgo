@@ -147,4 +147,4 @@ public async Task AsyncTest_Should_Work()
 
 ## License
 
-Copyright (c) AccountGo. All rights reserved.
+Part of AccountGo, licensed under [AGPL-3.0-only](../../LICENSE). See [NOTICE](../../NOTICE).

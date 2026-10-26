@@ -119,7 +119,7 @@ namespace Api.Service
             var emailBody = $@"
 <div style=""font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 8px; background-color: #ffffff;"">
   <div style=""text-align: center; margin-bottom: 24px;"">
-    <h2 style=""color: #0f172a; margin: 0; font-size: 24px; font-weight: 700;"">AccountGo</h2>
+    <h2 style=""color: #0f172a; margin: 0; font-size: 24px; font-weight: 700;"">AccountGo&trade;</h2>
     <p style=""color: #64748b; font-size: 14px; margin-top: 4px;"">Passwordless Sign-In Verification</p>
   </div>
   <p style=""color: #334155; font-size: 15px; line-height: 1.5;"">Hello,</p>
@@ -187,7 +187,7 @@ namespace Api.Service
             var emailBody = $@"
 <div style=""font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; padding: 28px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;"">
   <div style=""text-align: center; margin-bottom: 24px;"">
-    <h2 style=""color: #0f172a; margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.5px;"">AccountGo</h2>
+    <h2 style=""color: #0f172a; margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.5px;"">AccountGo&trade;</h2>
     <p style=""color: #64748b; font-size: 14px; margin-top: 4px;"">Welcome to your financial accounting workspace</p>
   </div>
   <p style=""color: #334155; font-size: 15px; line-height: 1.5;"">Hello {System.Net.WebUtility.HtmlEncode(firstName)},</p>

@@ -81,7 +81,7 @@ namespace Api.Service
             return $@"
 <div style=""font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 8px; background-color: #ffffff;"">
   <div style=""text-align: center; margin-bottom: 24px;"">
-    <h2 style=""color: #0f172a; margin: 0; font-size: 24px; font-weight: 700;"">AccountGo</h2>
+    <h2 style=""color: #0f172a; margin: 0; font-size: 24px; font-weight: 700;"">AccountGo&trade;</h2>
     <p style=""color: #64748b; font-size: 14px; margin-top: 4px;"">Workspace invitation</p>
   </div>
   <p style=""color: #334155; font-size: 15px; line-height: 1.5;"">Hello,</p>

@@ -631,7 +631,7 @@ export const Login: React.FC<LoginProps> = ({ initialMode }) => {
                 title="Change details"
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
-                <span>AccountGo Cloud</span>
+                <span>AccountGo Cloud™</span>
               </button>
             </div>
 
