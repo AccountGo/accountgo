@@ -16,7 +16,7 @@
   <img src="https://img.shields.io/badge/Vite-8.3-646CFF?logo=vite" alt="Vite" />
   <img src="https://img.shields.io/badge/TailwindCSS-v4-06B6D4?logo=tailwindcss" alt="Tailwind CSS v4" />
   <img src="https://img.shields.io/badge/Cloudflare-Workers_%26_Containers-F38020?logo=cloudflare" alt="Cloudflare" />
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-emerald.svg" alt="License: MIT" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-AGPL--3.0-emerald.svg" alt="License: AGPL-3.0" /></a>
 </p>
 
 ---
@@ -354,4 +354,6 @@ Contributions, issues, and feature requests are welcome! We appreciate help maki
 
 ## License
 
-This project is licensed under the **MIT License**. See the [LICENSE](LICENSE) file for the full license text.
+This project is licensed under the **GNU Affero General Public License v3.0 only (AGPL-3.0-only)**. See the [LICENSE](LICENSE) file for the full license text and [NOTICE](NOTICE) for copyright and license history.
+
+If you modify AccountGo and let users interact with it over a network, the AGPL requires you to offer those users the corresponding source code of your modified version.

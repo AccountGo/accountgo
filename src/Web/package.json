@@ -3,7 +3,7 @@
   "description": "AccountGo modern web frontend built with React 19, TypeScript, Vite, and Tailwind CSS v4",
   "version": "1.0.0",
   "author": "Marvin Perez <support@accountgo.dev>",
-  "license": "MIT",
+  "license": "AGPL-3.0-only",
   "repository": {
     "type": "git",
     "url": "https://github.com/AccountGo/accountgo.git",

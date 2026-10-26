@@ -180,4 +180,10 @@ pnpm build
 4. **Code Review**: At least one maintainer review is required. Address reviewer feedback constructively and push follow-up commits to your branch.
 5. **Merge**: Once approved and checks pass, maintainers will squash-and-merge your contribution into `main`.
 
+---
+
+## License of Contributions
+
+AccountGo is licensed under the [GNU Affero General Public License v3.0 only](LICENSE) (AGPL-3.0-only). By submitting a contribution, you agree that it is licensed under AGPL-3.0-only. Contributors will be asked to sign a Contributor License Agreement (CLA) before their first pull request is merged.
+
 Thank you for helping make AccountGo better for everyone!
