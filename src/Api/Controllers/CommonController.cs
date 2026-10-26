@@ -146,26 +146,6 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        [Route("SalesQuotationStatus")] // api/Common/SalesQuotationStatus
-        public IActionResult SalesQuotationStatus()
-        {
-
-            List<int> quoteStatuses = new List<int>(new int[] { 0, 1, 3 });
-
-            var salesQuotationsDto = new List<Dto.Common.Status>();
-            foreach (var item in Enum.GetValues(typeof(SalesQuoteStatus)))
-            {
-                if (quoteStatuses.Contains((int)item))
-                {
-                    salesQuotationsDto.Add(new Dto.Common.Status { Id = (int)item, Description = Enum.GetName(typeof(SalesQuoteStatus), item) });
-                }
-
-            }
-            return Json(salesQuotationsDto);
-
-        }
-
-        [HttpGet]
         [Route("PaymentMethods")] // api/Common/PaymentMethods
         public IActionResult PaymentMethods()
         {
