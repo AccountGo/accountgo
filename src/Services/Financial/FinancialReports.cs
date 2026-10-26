@@ -40,9 +40,11 @@ namespace Services.Financial
     }
 
     /// <summary>
-    /// Indirect Statement of Cash Flows. Accrual is primary; Cash basis returns the cash bridge plus a notice.
-    /// Known gap before standards-complete marketing: dividends/distributions posted against retained
-    /// earnings still flow through Operating (see ClassifyCashFlowAccount follow-up in FinancialService).
+    /// Indirect Statement of Cash Flows (ASC 230 / IAS 7 style). Accrual is primary; Cash basis returns
+    /// the cash bridge plus a notice. Closing of net income into retained earnings is operating;
+    /// dividends/distributions from permanent equity are financing; long-lived asset disposal gains/losses
+    /// and accumulated-depreciation write-offs on disposal are presented in investing so investing equals
+    /// cash proceeds; inventory/trading gains remain operating.
     /// </summary>
     public class CashFlowStatement
     {

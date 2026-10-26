@@ -913,9 +913,13 @@ namespace Services.Financial
 
             var glSetting = GetGeneralLedgerSetting();
 
-            // Classify non-cash balance sheet accounts
+            // Classify non-cash balance sheet accounts (RE and accum. depreciation are journal-split below)
             foreach (var account in accounts.Where(a => a.AccountClassId <= 3 && !IsCashAccount(a)).OrderBy(a => a.AccountCode))
             {
+                if (IsRetainedEarningsOrSummaryAccount(account, glSetting)
+                    || IsAccumulatedDepreciationOrAmortizationAccount(account, accountLookup))
+                    continue;
+
                 if (!periodBalances.TryGetValue(account.Id, out var pBal))
                     continue;
 
@@ -949,6 +953,10 @@ namespace Services.Financial
                         break;
                 }
             }
+
+            AddRetainedEarningsClosingAndDistributionLines(result, accounts, glSetting, from, to);
+            AddAccumulatedDepreciationCashFlowLines(result, accounts, accountLookup, from, to);
+            ReclassifyDisposalGainsAndLosses(result, incomeItems);
 
             result.OperatingCashFlow = netIncome + result.OperatingActivities.Sum(a => a.Amount);
             result.InvestingCashFlow = result.InvestingActivities.Sum(a => a.Amount);
@@ -1083,16 +1091,20 @@ namespace Services.Financial
             }
 
             // 4. Equity (AccountClassId == 3)
-            // Retained Earnings / Permanent Account / Income Summary: period-close of net income belongs
-            // in operating (indirect method), not financing.
-            //
-            // FOLLOW-UP (market / IAS 7 & ASC 230 bar): cash dividends and owner distributions that
-            // debit retained earnings (or equivalent permanent equity) are still classified here as
-            // Operating. Standards require those outflows under Financing. Split closing vs
-            // distribution movements (e.g. dividend / draw accounts, or tagged closing journals)
-            // before marketing this as a fully standards-complete Statement of Cash Flows.
-            bool isRetainedEarningsOrSummary =
-                (glSetting != null && glSetting.PermanentAccountId.HasValue && account.Id == glSetting.PermanentAccountId.Value)
+            // Retained-earnings family is handled in AddRetainedEarningsClosingAndDistributionLines
+            // (closing → operating; dividends/distributions → financing). Fallback if reached:
+            if (IsRetainedEarningsOrSummaryAccount(account, glSetting))
+                return (CashFlowCategory.OperatingRetainedEarnings, CashFlowLineTypes.Operating);
+
+            // Financing equity: Member capital, capital surplus, share capital, owner draws, capital contributions
+            return (CashFlowCategory.Financing, CashFlowLineTypes.Financing);
+        }
+
+        private static bool IsRetainedEarningsOrSummaryAccount(Account account, GeneralLedgerSetting glSetting)
+        {
+            var code = account.AccountCode ?? string.Empty;
+            var name = account.AccountName?.ToLowerInvariant() ?? string.Empty;
+            return (glSetting != null && glSetting.PermanentAccountId.HasValue && account.Id == glSetting.PermanentAccountId.Value)
                 || (glSetting != null && glSetting.IncomeSummaryAccountId.HasValue && account.Id == glSetting.IncomeSummaryAccountId.Value)
                 || code == "30300"
                 || code == "30400"
@@ -1103,14 +1115,305 @@ namespace Services.Financial
                 || name.Contains("accumulated profit")
                 || name.Contains("accumulated loss")
                 || name.Contains("income summary");
+        }
 
-            if (isRetainedEarningsOrSummary)
+        private static bool IsAccumulatedDepreciationOrAmortizationAccount(
+            Account account,
+            IReadOnlyDictionary<int, Account> accountLookup)
+        {
+            var code = account.AccountCode ?? string.Empty;
+            var name = account.AccountName?.ToLowerInvariant() ?? string.Empty;
+            return account.IsContraAccount
+                && (code.StartsWith("14")
+                    || HasAncestorMatching(account, p => p.AccountCode == "14000", accountLookup)
+                    || name.Contains("accumulated depreciation")
+                    || name.Contains("accum depreciation")
+                    || name.Contains("accumulated amortisation")
+                    || name.Contains("accumulated amortization"));
+        }
+
+        /// <summary>
+        /// True for gains/losses on disposal of long-lived / investing assets (ASC 230 / IAS 7).
+        /// Excludes inventory and trading gains that belong in operating cash flows.
+        /// </summary>
+        private static bool IsDisposalGainOrLossAccount(string accountName, bool isExpense)
+        {
+            var name = accountName?.ToLowerInvariant() ?? string.Empty;
+            if (name.Contains("inventory") || name.Contains("merchandise") || name.Contains("trading"))
+                return false;
+
+            var stem = isExpense ? "loss on" : "gain on";
+            if (!name.Contains(stem))
+                return false;
+
+            return name.Contains("disposal")
+                || name.Contains("fixed asset")
+                || name.Contains("equipment")
+                || name.Contains("vehicle")
+                || name.Contains("building")
+                || name.Contains("land")
+                || name.Contains("plant")
+                || name.Contains("ppe")
+                || name.Contains("property")
+                || name.Contains("investment")
+                || name.Contains("asset");
+        }
+
+        /// <summary>
+        /// IAS 7 / ASC 230: period-close of earnings into RE is operating; cash dividends and
+        /// other distributions that debit permanent equity without touching P&amp;L are financing.
+        /// Closing journals are detected when the same GL header also posts to revenue, expense,
+        /// or income summary (or the journal voucher type is ClosingEntries).
+        /// </summary>
+        private void AddRetainedEarningsClosingAndDistributionLines(
+            CashFlowStatement result,
+            IList<Account> accounts,
+            GeneralLedgerSetting glSetting,
+            DateTime? from,
+            DateTime? to)
+        {
+            var retainedAccounts = accounts
+                .Where(a => IsRetainedEarningsOrSummaryAccount(a, glSetting))
+                .OrderBy(a => a.AccountCode)
+                .ToList();
+            if (retainedAccounts.Count == 0)
+                return;
+
+            var retainedIds = retainedAccounts.Select(a => a.Id).ToHashSet();
+            var incomeSummaryId = glSetting?.IncomeSummaryAccountId;
+
+            var closingGlHeaderIds = (_journalEntryRepo?.Table ?? Enumerable.Empty<JournalEntryHeader>().AsQueryable())
+                .Where(j => j.VoucherType == JournalVoucherTypes.ClosingEntries && j.GeneralLedgerHeaderId.HasValue)
+                .Select(j => j.GeneralLedgerHeaderId.Value)
+                .ToHashSet();
+
+            var lines = _generalLedgerLineRepository.Table.AsQueryable();
+            if (from.HasValue)
+                lines = lines.Where(l => l.GeneralLedgerHeader.Date >= from.Value);
+            if (to.HasValue)
+                lines = lines.Where(l => l.GeneralLedgerHeader.Date <= to.Value);
+
+            var periodLines = lines
+                .Where(l => retainedIds.Contains(l.AccountId)
+                    || l.Account.AccountClassId == (int)AccountClasses.Revenue
+                    || l.Account.AccountClassId == (int)AccountClasses.Expense
+                    || (incomeSummaryId.HasValue && l.AccountId == incomeSummaryId.Value))
+                .Select(l => new
+                {
+                    l.GeneralLedgerHeaderId,
+                    l.AccountId,
+                    l.DrCr,
+                    l.Amount,
+                    AccountClassId = l.Account.AccountClassId
+                })
+                .ToList();
+
+            var linesByHeader = periodLines.GroupBy(l => l.GeneralLedgerHeaderId)
+                .ToDictionary(g => g.Key, g => g.ToList());
+
+            foreach (var account in retainedAccounts)
             {
-                return (CashFlowCategory.OperatingRetainedEarnings, CashFlowLineTypes.Operating);
-            }
+                decimal closingContribution = 0m;
+                decimal distributionContribution = 0m;
 
-            // Financing equity: Member capital, capital surplus, share capital, owner draws, capital contributions
-            return (CashFlowCategory.Financing, CashFlowLineTypes.Financing);
+                foreach (var headerGroup in linesByHeader)
+                {
+                    var headerLines = headerGroup.Value;
+                    var reLines = headerLines.Where(l => l.AccountId == account.Id).ToList();
+                    if (reLines.Count == 0)
+                        continue;
+
+                    var contribution = reLines.Sum(l => l.DrCr == DrOrCrSide.Cr ? l.Amount : -l.Amount);
+                    if (contribution == 0m)
+                        continue;
+
+                    var isClosing = closingGlHeaderIds.Contains(headerGroup.Key)
+                        || headerLines.Any(l =>
+                            l.AccountClassId == (int)AccountClasses.Revenue
+                            || l.AccountClassId == (int)AccountClasses.Expense
+                            || (incomeSummaryId.HasValue && l.AccountId == incomeSummaryId.Value));
+
+                    if (isClosing)
+                        closingContribution += contribution;
+                    else
+                        distributionContribution += contribution;
+                }
+
+                if (closingContribution != 0m)
+                {
+                    result.OperatingActivities.Add(new CashFlowLine
+                    {
+                        AccountId = account.Id,
+                        AccountCode = account.AccountCode,
+                        AccountName = account.AccountName,
+                        LineType = CashFlowLineTypes.Operating,
+                        Amount = closingContribution
+                    });
+                }
+
+                if (distributionContribution != 0m)
+                {
+                    result.FinancingActivities.Add(new CashFlowLine
+                    {
+                        AccountId = account.Id,
+                        AccountCode = account.AccountCode,
+                        AccountName = account.AccountName,
+                        LineType = CashFlowLineTypes.Financing,
+                        Amount = distributionContribution
+                    });
+                }
+            }
+        }
+
+        /// <summary>
+        /// Accumulated depreciation/amortization: credits from periodic depreciation (paired with
+        /// expense) are operating add-backs; debits/credits on disposal journals (no expense line)
+        /// belong in investing so net investing equals cash proceeds (ASC 230 / IAS 7).
+        /// </summary>
+        private void AddAccumulatedDepreciationCashFlowLines(
+            CashFlowStatement result,
+            IList<Account> accounts,
+            IReadOnlyDictionary<int, Account> accountLookup,
+            DateTime? from,
+            DateTime? to)
+        {
+            var accumAccounts = accounts
+                .Where(a => IsAccumulatedDepreciationOrAmortizationAccount(a, accountLookup))
+                .OrderBy(a => a.AccountCode)
+                .ToList();
+            if (accumAccounts.Count == 0)
+                return;
+
+            var accumIds = accumAccounts.Select(a => a.Id).ToHashSet();
+
+            var lines = _generalLedgerLineRepository.Table.AsQueryable();
+            if (from.HasValue)
+                lines = lines.Where(l => l.GeneralLedgerHeader.Date >= from.Value);
+            if (to.HasValue)
+                lines = lines.Where(l => l.GeneralLedgerHeader.Date <= to.Value);
+
+            var periodLines = lines
+                .Where(l => accumIds.Contains(l.AccountId)
+                    || l.Account.AccountClassId == (int)AccountClasses.Expense
+                    || l.Account.AccountClassId == (int)AccountClasses.Revenue
+                    || l.Account.AccountClassId == (int)AccountClasses.Assets)
+                .Select(l => new
+                {
+                    l.GeneralLedgerHeaderId,
+                    l.AccountId,
+                    l.DrCr,
+                    l.Amount,
+                    AccountClassId = l.Account.AccountClassId
+                })
+                .ToList();
+
+            var linesByHeader = periodLines.GroupBy(l => l.GeneralLedgerHeaderId)
+                .ToDictionary(g => g.Key, g => g.ToList());
+
+            foreach (var account in accumAccounts)
+            {
+                decimal operatingContribution = 0m;
+                decimal investingContribution = 0m;
+
+                foreach (var headerGroup in linesByHeader)
+                {
+                    var headerLines = headerGroup.Value;
+                    var accumLines = headerLines.Where(l => l.AccountId == account.Id).ToList();
+                    if (accumLines.Count == 0)
+                        continue;
+
+                    var contribution = accumLines.Sum(l => l.DrCr == DrOrCrSide.Cr ? l.Amount : -l.Amount);
+                    if (contribution == 0m)
+                        continue;
+
+                    // Depreciation/amortization entry pairs accum. credit with an expense debit.
+                    var isPeriodicDepreciation = headerLines.Any(l =>
+                        l.AccountClassId == (int)AccountClasses.Expense && l.AccountId != account.Id);
+
+                    if (isPeriodicDepreciation)
+                        operatingContribution += contribution;
+                    else
+                        investingContribution += contribution;
+                }
+
+                if (operatingContribution != 0m)
+                {
+                    result.OperatingActivities.Add(new CashFlowLine
+                    {
+                        AccountId = account.Id,
+                        AccountCode = account.AccountCode,
+                        AccountName = account.AccountName,
+                        LineType = CashFlowLineTypes.NonCashAdjustment,
+                        Amount = operatingContribution
+                    });
+                }
+
+                if (investingContribution != 0m)
+                {
+                    result.InvestingActivities.Add(new CashFlowLine
+                    {
+                        AccountId = account.Id,
+                        AccountCode = account.AccountCode,
+                        AccountName = account.AccountName,
+                        LineType = CashFlowLineTypes.Investing,
+                        Amount = investingContribution
+                    });
+                }
+            }
+        }
+
+        /// <summary>
+        /// Indirect method: remove gains (add back losses) on long-lived asset disposal from operating
+        /// and shift them into investing so investing reflects cash proceeds.
+        /// </summary>
+        private static void ReclassifyDisposalGainsAndLosses(
+            CashFlowStatement result,
+            ICollection<IncomeStatement> incomeItems)
+        {
+            foreach (var item in incomeItems)
+            {
+                if (item.Amount == 0m || !IsDisposalGainOrLossAccount(item.AccountName, item.IsExpense))
+                    continue;
+
+                if (!item.IsExpense)
+                {
+                    result.OperatingActivities.Add(new CashFlowLine
+                    {
+                        AccountId = item.AccountId,
+                        AccountCode = item.AccountCode,
+                        AccountName = item.AccountName,
+                        LineType = CashFlowLineTypes.NonCashAdjustment,
+                        Amount = -item.Amount
+                    });
+                    result.InvestingActivities.Add(new CashFlowLine
+                    {
+                        AccountId = item.AccountId,
+                        AccountCode = item.AccountCode,
+                        AccountName = item.AccountName,
+                        LineType = CashFlowLineTypes.Investing,
+                        Amount = item.Amount
+                    });
+                }
+                else
+                {
+                    result.OperatingActivities.Add(new CashFlowLine
+                    {
+                        AccountId = item.AccountId,
+                        AccountCode = item.AccountCode,
+                        AccountName = item.AccountName,
+                        LineType = CashFlowLineTypes.NonCashAdjustment,
+                        Amount = item.Amount
+                    });
+                    result.InvestingActivities.Add(new CashFlowLine
+                    {
+                        AccountId = item.AccountId,
+                        AccountCode = item.AccountCode,
+                        AccountName = item.AccountName,
+                        LineType = CashFlowLineTypes.Investing,
+                        Amount = -item.Amount
+                    });
+                }
+            }
         }
 
         public ICollection<MasterGeneralLedger> MasterGeneralLedger(DateTime? from = default(DateTime?),
