@@ -1,6 +1,8 @@
 -- Security and MFA schema: DataProtection keys, audit events, recovery codes, trusted devices, WebAuthn credentials & challenges
 -- Mirrors SqliteSchemaUpgrader and EF IdentityDb/ApiDb migrations.
 
+-- Base shape only. MFA columns are added in 0027 via ALTER — CREATE TABLE IF NOT EXISTS
+-- is a no-op when RefreshTokens already exists (hosted D1), so columns must not live only here.
 CREATE TABLE IF NOT EXISTS "RefreshTokens" (
     "Id" INTEGER NOT NULL CONSTRAINT "PK_RefreshTokens" PRIMARY KEY AUTOINCREMENT,
     "UserId" TEXT NOT NULL,
@@ -10,10 +12,7 @@ CREATE TABLE IF NOT EXISTS "RefreshTokens" (
     "CreatedByIp" TEXT NULL,
     "RevokedAt" TEXT NULL,
     "ReplacedByTokenHash" TEXT NULL,
-    "UserAgent" TEXT NULL,
-    "MfaMethod" TEXT NULL,
-    "Amr" TEXT NULL,
-    "TrustedDeviceId" INTEGER NULL
+    "UserAgent" TEXT NULL
 );
 CREATE INDEX IF NOT EXISTS "IX_RefreshTokens_TokenHash" ON "RefreshTokens" ("TokenHash");
 CREATE INDEX IF NOT EXISTS "IX_RefreshTokens_UserId" ON "RefreshTokens" ("UserId");
