@@ -76,6 +76,9 @@
       "enabled": true,
       "invocation_logs": true,
       "persist": true
+    },
+    "issues": {
+      "enabled": true
     }
   }
 }

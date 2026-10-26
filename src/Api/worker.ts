@@ -1,9 +1,15 @@
 import { Container, StopParams } from "@cloudflare/containers";
+import { errorText, isTransientContainerError } from "./container-errors";
 import { constantTimeEqual, parseSyncSqlHeaders } from "./sync-utils";
 
 export { constantTimeEqual, parseSyncSqlHeaders };
+export { errorText, isTransientContainerError } from "./container-errors";
 
 const CONTAINER_PORT = 8001;
+const PORT_READY_TIMEOUT_MS = 90_000;
+/** Retries for transient container proxy/start races during cold start and D1 restore. */
+const CONTAINER_RETRY_ATTEMPTS = 4;
+const CONTAINER_RETRY_BASE_DELAY_MS = 750;
 
 class BuildMismatchError extends Error {
   constructor(message: string) {
@@ -19,6 +25,27 @@ class RestoreError extends Error {
   }
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function serviceUnavailable(detail: string, retryAfterSec = 5): Response {
+  return new Response(
+    JSON.stringify({
+      title: "Service Unavailable",
+      status: 503,
+      detail,
+    }),
+    {
+      status: 503,
+      headers: {
+        "content-type": "application/problem+json",
+        "Retry-After": String(retryAfterSec),
+      },
+    }
+  );
+}
+
 export class AccountGoApiContainer extends Container<Env> {
   restored = false;
   private initPromise: Promise<void> | null = null;
@@ -27,7 +54,8 @@ export class AccountGoApiContainer extends Container<Env> {
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx as any, env);
     this.defaultPort = CONTAINER_PORT;
-    this.sleepAfter = "10m";
+    // Keep warm longer: cold start + D1 restore is 30–80s and was surfacing as 503 on /api/auth/refresh.
+    this.sleepAfter = "30m";
     this.enableInternet = true;
 
     const envVars: Record<string, string> = {
@@ -49,6 +77,45 @@ export class AccountGoApiContainer extends Container<Env> {
     this.restored = false;
     this.initPromise = null;
     this.loggedMismatch = false;
+  }
+
+  private async ensurePortsReady(): Promise<void> {
+    await this.startAndWaitForPorts({
+      ports: CONTAINER_PORT,
+      cancellationOptions: { portReadyTimeoutMS: PORT_READY_TIMEOUT_MS },
+    });
+  }
+
+  /**
+   * containerFetch after ensuring the port is listening. Retries transient
+   * "not running" / "just exited" races that show up during cold start and D1 restore.
+   */
+  private async containerFetchWithRetry(
+    input: string | Request,
+    init: RequestInit | undefined,
+    label: string
+  ): Promise<Response> {
+    let lastErr: unknown;
+    for (let attempt = 1; attempt <= CONTAINER_RETRY_ATTEMPTS; attempt++) {
+      try {
+        await this.ensurePortsReady();
+        if (typeof input === "string") {
+          return await this.containerFetch(input, init);
+        }
+        return await this.containerFetch(input);
+      } catch (err) {
+        lastErr = err;
+        const transient = isTransientContainerError(err);
+        console.warn(
+          `[worker] ${label} attempt ${attempt}/${CONTAINER_RETRY_ATTEMPTS} failed transient=${transient}: ${errorText(err)}`
+        );
+        if (!transient || attempt === CONTAINER_RETRY_ATTEMPTS) {
+          break;
+        }
+        await sleep(CONTAINER_RETRY_BASE_DELAY_MS * attempt);
+      }
+    }
+    throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
   }
 
   async restoreD1ToContainer(): Promise<void> {
@@ -95,14 +162,18 @@ export class AccountGoApiContainer extends Container<Env> {
       const batchSize = 200;
       if (rows.length === 0) {
         if (syncTables.length > 0) {
-          const res = await this.containerFetch("http://127.0.0.1:8001/api/internal/d1-restore", {
-            method: "POST",
-            headers: {
-              "content-type": "application/json",
-              "x-internal-key": syncKey,
+          const res = await this.containerFetchWithRetry(
+            "http://127.0.0.1:8001/api/internal/d1-restore",
+            {
+              method: "POST",
+              headers: {
+                "content-type": "application/json",
+                "x-internal-key": syncKey,
+              },
+              body: JSON.stringify({ tablesToClear: syncTables, rows: [] }),
             },
-            body: JSON.stringify({ tablesToClear: syncTables, rows: [] }),
-          });
+            "d1-restore-clear"
+          );
           if (!res.ok) {
             const errText = await res.text();
             throw new Error(`Clear tables failed (${res.status}): ${errText}`);
@@ -114,17 +185,21 @@ export class AccountGoApiContainer extends Container<Env> {
       for (let i = 0; i < rows.length; i += batchSize) {
         const batch = rows.slice(i, i + batchSize);
         const isFirstBatch = i === 0;
-        const res = await this.containerFetch("http://127.0.0.1:8001/api/internal/d1-restore", {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "x-internal-key": syncKey,
+        const res = await this.containerFetchWithRetry(
+          "http://127.0.0.1:8001/api/internal/d1-restore",
+          {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              "x-internal-key": syncKey,
+            },
+            body: JSON.stringify({
+              tablesToClear: isFirstBatch ? syncTables : undefined,
+              rows: batch,
+            }),
           },
-          body: JSON.stringify({
-            tablesToClear: isFirstBatch ? syncTables : undefined,
-            rows: batch,
-          }),
-        });
+          `d1-restore-batch-${i / batchSize}`
+        );
         if (!res.ok) {
           const errText = await res.text();
           throw new Error(`Restore batch ${i / batchSize} failed (${res.status}): ${errText}`);
@@ -153,10 +228,14 @@ export class AccountGoApiContainer extends Container<Env> {
         throw new Error("INTERNAL_SYNC_KEY is not configured.");
       }
 
-      const buildRes = await this.containerFetch("http://127.0.0.1:8001/api/internal/build", {
-        method: "GET",
-        headers: { "x-internal-key": syncKey },
-      });
+      const buildRes = await this.containerFetchWithRetry(
+        "http://127.0.0.1:8001/api/internal/build",
+        {
+          method: "GET",
+          headers: { "x-internal-key": syncKey },
+        },
+        "build-check"
+      );
 
       if (!buildRes.ok) {
         const errText = await buildRes.text().catch(() => "");
@@ -186,6 +265,42 @@ export class AccountGoApiContainer extends Container<Env> {
     await this.restoreD1ToContainer();
 
     this.restored = true;
+  }
+
+  /** Single-flight init with one full retry after a transient container death. */
+  private async ensureInitialized(): Promise<void> {
+    if (this.restored) return;
+
+    const runOnce = async (): Promise<void> => {
+      const p = (this.initPromise ??= this.initialize());
+      try {
+        await p;
+      } catch (err) {
+        if (this.initPromise === p) {
+          this.initPromise = null;
+        }
+        this.restored = false;
+        throw err;
+      }
+    };
+
+    try {
+      await runOnce();
+    } catch (err) {
+      // RestoreError wraps the underlying proxy message; match either form.
+      const transient =
+        isTransientContainerError(err) ||
+        (err instanceof RestoreError && isTransientContainerError(err.message));
+      if (!transient) {
+        throw err;
+      }
+      console.warn(`[worker] initialize retry after transient failure: ${errorText(err)}`);
+      this.initPromise = null;
+      this.restored = false;
+      await sleep(CONTAINER_RETRY_BASE_DELAY_MS);
+      await this.ensurePortsReady();
+      await runOnce();
+    }
   }
 
   override async fetch(request: Request): Promise<Response> {
@@ -228,91 +343,31 @@ export class AccountGoApiContainer extends Container<Env> {
       });
     }
 
-    // 1. Wait for container to be ready
+    // 1. Wait for container to be ready (with retries for start races)
     try {
-      await this.startAndWaitForPorts({
-        ports: CONTAINER_PORT,
-        cancellationOptions: { portReadyTimeoutMS: 90_000 },
-      });
+      await this.ensurePortsReady();
     } catch (err) {
       console.error("[worker] Container startup timed out or failed:", err);
-      return new Response(
-        JSON.stringify({
-          title: "Service Unavailable",
-          status: 503,
-          detail: "Service is starting up, please retry in a few seconds",
-        }),
-        {
-          status: 503,
-          headers: {
-            "content-type": "application/problem+json",
-            "Retry-After": "5",
-          },
-        }
-      );
+      return serviceUnavailable("Service is starting up, please retry in a few seconds", 5);
     }
 
     // 2. Build check and D1 restore (single-flight across concurrent requests)
     if (!this.restored) {
-      const p = (this.initPromise ??= this.initialize());
-
       try {
-        await p;
+        await this.ensureInitialized();
       } catch (prepErr: any) {
-        if (this.initPromise === p) {
-          this.initPromise = null;
-        }
-        this.restored = false;
-
         if (prepErr instanceof BuildMismatchError) {
-          return new Response(
-            JSON.stringify({
-              title: "Service Unavailable",
-              status: 503,
-              detail: prepErr.message,
-            }),
-            {
-              status: 503,
-              headers: {
-                "content-type": "application/problem+json",
-                "Retry-After": "5",
-              },
-            }
-          );
+          return serviceUnavailable(prepErr.message, 5);
         }
 
         if (prepErr instanceof RestoreError) {
-          return new Response(
-            JSON.stringify({
-              title: "Service Unavailable",
-              status: 503,
-              detail: prepErr.message,
-            }),
-            {
-              status: 503,
-              headers: {
-                "content-type": "application/problem+json",
-                "Retry-After": "5",
-              },
-            }
-          );
+          // Transient restore races should ask the client to retry, not look like a permanent outage.
+          const retryAfter = isTransientContainerError(prepErr) || isTransientContainerError(prepErr.message) ? 5 : 8;
+          return serviceUnavailable(prepErr.message, retryAfter);
         }
 
         console.error("[worker] Container initialization failed:", prepErr);
-        return new Response(
-          JSON.stringify({
-            title: "Service Unavailable",
-            status: 503,
-            detail: "Service is starting up, please retry in a few seconds",
-          }),
-          {
-            status: 503,
-            headers: {
-              "content-type": "application/problem+json",
-              "Retry-After": "5",
-            },
-          }
-        );
+        return serviceUnavailable("Service is starting up, please retry in a few seconds", 5);
       }
     }
 
@@ -332,7 +387,7 @@ export class AccountGoApiContainer extends Container<Env> {
     } as any);
 
     try {
-      const containerRes = await this.containerFetch(containerReq);
+      const containerRes = await this.containerFetchWithRetry(containerReq, undefined, `proxy ${request.method} ${url.pathname}`);
 
       // Handle mutation SQL sync
       let syncStatements: string[] = [];
@@ -349,20 +404,7 @@ export class AccountGoApiContainer extends Container<Env> {
         }
         this.restored = false;
         this.initPromise = null;
-        return new Response(
-          JSON.stringify({
-            title: "Change not saved",
-            status: 503,
-            detail: "Your change could not be saved. Please retry.",
-          }),
-          {
-            status: 503,
-            headers: {
-              "content-type": "application/problem+json",
-              "Retry-After": "5",
-            },
-          }
-        );
+        return serviceUnavailable("Your change could not be saved. Please retry.", 5);
       }
 
       if (syncStatements.length > 0 && (this.env as any).DB) {
@@ -384,20 +426,7 @@ export class AccountGoApiContainer extends Container<Env> {
           }
           this.restored = false;
           this.initPromise = null;
-          return new Response(
-            JSON.stringify({
-              title: "Change not saved",
-              status: 503,
-              detail: "Your change could not be saved. Please retry.",
-            }),
-            {
-              status: 503,
-              headers: {
-                "content-type": "application/problem+json",
-                "Retry-After": "5",
-              },
-            }
-          );
+          return serviceUnavailable("Your change could not be saved. Please retry.", 5);
         }
       }
 
@@ -415,9 +444,18 @@ export class AccountGoApiContainer extends Container<Env> {
         headers: responseHeaders,
       });
     } catch (err) {
+      // Never rethrow: uncaught DO exceptions become Issues "failed invocation" with no Retry-After.
+      console.error(
+        `[worker] Proxy failed method=${request.method} path=${url.pathname}: ${errorText(err)}`
+      );
       this.restored = false;
       this.initPromise = null;
-      throw err;
+      return serviceUnavailable(
+        isTransientContainerError(err)
+          ? "Service is starting up, please retry in a few seconds"
+          : "Upstream container error, please retry",
+        5
+      );
     }
   }
 }
